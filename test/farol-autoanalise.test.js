@@ -13,7 +13,6 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 const { executar } = await import('../tools/farol-autoanalise.js');
 const { CONFIG_FILE } = await import('../lib/paths.js');
-const { gravarCasca, apagarCasca } = await import('../lib/engine/casca-arquivo.js');
 const { DEFAULT_PORT } = await import('../lib/constants.js');
 
 after(() => { fs.rmSync(HOME, { recursive: true, force: true }); });
@@ -102,7 +101,7 @@ test('motor fora do ar diz a porta tentada, sem vazar a credencial', async () =>
   assert.equal(erro.texto.join('').includes(TOKEN), false);
 });
 
-test('a porta vem do casca.json, senão do config.json, senão a padrão', async () => {
+test('a porta vem do config.json, senão a padrão', async () => {
   const alvoCom = async () => {
     const falso = fetchFalso();
     await executar(['listar'], fluxo(), fluxo(), { fetch: falso.fetch, token: TOKEN });
@@ -111,9 +110,6 @@ test('a porta vem do casca.json, senão do config.json, senão a padrão', async
   assert.equal(await alvoCom(), String(DEFAULT_PORT));
   fs.writeFileSync(CONFIG_FILE, JSON.stringify({ port: 47123 }));
   assert.equal(await alvoCom(), '47123');
-  gravarCasca({ porta: 47124, pid: process.pid, versao: '0', codigoPareamento: '', iniciadoEm: 0 });
-  assert.equal(await alvoCom(), '47124');
-  apagarCasca();
 });
 
 async function alvoComBind(bind, porta = 47200) {
@@ -134,10 +130,8 @@ test('escuta em tudo vai ao loopback, e sem bind fica em 127.0.0.1', async () =>
   assert.equal(await alvoComBind(undefined), 'http://127.0.0.1:47200/api/self-review/agent/list');
 });
 
-test('com bind, a porta continua vindo do casca.json', async () => {
-  gravarCasca({ porta: 47124, pid: process.pid, versao: '0', codigoPareamento: '', iniciadoEm: 0 });
-  assert.equal(new URL(await alvoComBind('[::1]', 47123)).port, '47124');
-  apagarCasca();
+test('com bind, a porta continua vindo do config.json', async () => {
+  assert.equal(new URL(await alvoComBind('[::1]', 47123)).port, '47123');
 });
 
 test('motor fora do ar com bind diz o host:porta tentado', async () => {

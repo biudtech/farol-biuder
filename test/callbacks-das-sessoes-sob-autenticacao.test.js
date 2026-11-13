@@ -1,18 +1,16 @@
-// No modo casca a A4 é sempre exigida, mas as sessões de IA falam de volta com o motor sem
+// Com a A4 exigida (config.localAuth 'exigir'), as sessões de IA falam de volta com o motor sem
 // Bearer: o curl de postagem (terminal e chat) leva `x-farol-review-cap`, e o trap EXIT do
 // script de terminal chama /api/session-exit. Cada uma vale como credencial de escopo único,
-// só na própria rota (revisão final do plano 1, I1). FAROL_SHELL antes dos imports.
+// só na própria rota (revisão final do plano 1, I1).
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
 
-const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-casca-callbacks-'));
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-callbacks-'));
 process.env.FAROL_HOME = HOME;
 process.env.HOME = HOME;
 process.env.USERPROFILE = HOME;
-process.env.FAROL_SHELL = 'mac';
-process.env.FAROL_SHELL_VERSION = '3.0.0';
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,6 +22,7 @@ let engine, server, porta;
 
 before(async () => {
   engine = new Engine();
+  engine.config.localAuth = 'exigir';
   engine.config.port = 0;
   server = await new Promise((resolve, reject) => {
     const s = startServer(engine, (url, err) => (err ? reject(err) : resolve(s)));

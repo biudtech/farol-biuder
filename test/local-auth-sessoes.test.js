@@ -11,6 +11,8 @@ process.env.FAROL_HOME = HOME;
 import { test, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 const { emitirSessao, verificarSessao, revogarTodas, sessoesPath, listarSessoes, revogarSessao } = await import('../lib/local-auth/sessoes.js');
+const { criarCodigo } = await import('../lib/local-auth/pareamento.js');
+const { parear } = (await import('../lib/local-auth/acesso.js')).default;
 const crypto = await import('node:crypto');
 const { LOCAL_AUTH_DIR } = await import('../lib/paths.js');
 const { TEMPOS } = await import('../lib/constants.js');
@@ -117,4 +119,18 @@ test('a sessão da autoanálise aparece na lista com a classe, vence pelo prazo 
   const outro = emitirSessao('agente', T0, { classe: 'autoanalise' });
   assert.equal(revogarSessao(listarSessoes({ agora: T0 + 1 }).at(-1).id, T0 + 1), true);
   assert.equal(verificarSessao(outro, T0 + 2, 'autoanalise'), false, 'revogada');
+});
+
+test('código de pareamento comum gera sessão comum, de uso único e com prazo', () => {
+  const agora = Date.now();
+  const codigo = criarCodigo(agora);
+  const r = parear({ codigo, rotulo: 'navegador' });
+  assert.equal(r.ok, true);
+  const sessao = listarSessoes().at(-1);
+  assert.equal(sessao.rotulo, 'navegador');
+  assert.equal(sessao.classe, '', 'sessão comum não leva classe');
+  assert.equal(parear({ codigo }).ok, false, 'uso único');
+  assert.equal(verificarSessao(r.token, agora + TEMPOS.SESSAO_LOCAL_ABSOLUTA_MS + 1), false, 'vence no limite absoluto');
+  const vencido = criarCodigo(agora - TEMPOS.PAREAMENTO_VALIDADE_MS - 1);
+  assert.equal(parear({ codigo: vencido }).ok, false, 'código vencido não pareia');
 });
