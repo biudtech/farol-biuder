@@ -23,7 +23,6 @@ import assert from 'node:assert/strict';
 
 const io = (await import('../lib/io.js')).default;
 const { Engine } = await import('../server.js');
-const { IS_WIN } = await import('../lib/paths.js');
 
 const BIN = path.join(BASE, 'bin');
 const REGISTRO = path.join(BASE, 'registro.jsonl');
@@ -90,7 +89,6 @@ function registros() {
 // deles for gravável e não tiver um `claude` de verdade. É preparação do ambiente de teste,
 // não mexe no produto, e o `after` desinstala.
 async function instalarOndeOLoginEnxerga() {
-  if (IS_WIN) return;
   const r = await io.runShell('echo "$PATH"');
   for (const dir of String(r.stdout || '').trim().split(path.delimiter)) {
     if (!dir || !path.isAbsolute(dir)) continue;
@@ -115,11 +113,7 @@ const LANCADOR = `#!/bin/sh\nexec "${process.execPath}" "${path.join(BIN, 'claud
 before(async () => {
   fs.mkdirSync(BIN, { recursive: true });
   fs.writeFileSync(path.join(BIN, 'claude-falso.cjs'), FALSO);
-  if (IS_WIN) {
-    fs.writeFileSync(path.join(BIN, 'claude.cmd'), `@"${process.execPath}" "%~dp0claude-falso.cjs" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(BIN, 'claude'), LANCADOR, { mode: 0o755 });
-  }
+  fs.writeFileSync(path.join(BIN, 'claude'), LANCADOR, { mode: 0o755 });
   process.env.PATH = BIN + path.delimiter + process.env.PATH;
   await instalarOndeOLoginEnxerga();
   process.env.FAROL_TESTE_REGISTRO = REGISTRO;
@@ -153,7 +147,6 @@ function engineCom(config) {
 // PATH sobrevive, ou o instalado no diretório do PATH de login. Qualquer outro caminho não
 // prova nada e é pulado com o motivo, nunca aprovado.
 async function falsoResolve(t) {
-  if (IS_WIN) return true;
   const r = await io.runShell('command -v claude', { env: { ...process.env } });
   const achado = r.stdout.trim();
   const nossos = [path.join(BIN, 'claude'), ...INSTALADOS];
@@ -202,10 +195,9 @@ test('a cópia efêmera nunca recebe a credencial, e leva o settings.json', asyn
   }
   assert.equal(vistos.length, 1);
   assert.deepEqual(vistos[0].arquivos, ['settings.json']);
-  if (!IS_WIN) assert.equal(vistos[0].modo, 0o700, 'a cópia é privada');
+  assert.equal(vistos[0].modo, 0o700, 'a cópia é privada');
 });
 
-// No Windows o modo POSIX não é observável no disco; a chamada é, nos dois sistemas.
 test('a cópia efêmera é restringida (chmod 0700) antes de receber arquivo', async (t) => {
   if (!await falsoResolve(t)) return;
   const dir = path.join(BASE, 'perfil-d');

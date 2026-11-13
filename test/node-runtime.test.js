@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { packageNodeRequirement, nodeVersionSatisfies, assertExternalNodeRuntime } from '../lib/node-runtime.js';
+import { packageNodeRequirement, nodeVersionSatisfies, assertExternalNodeRuntime, plataformaSuportada } from '../lib/node-runtime.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-node-runtime-'));
@@ -47,4 +47,13 @@ test('lockfile, versão local e CI preservam o piso e o Linux', () => {
   assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 2);
   assert.doesNotMatch(workflow, /windows-latest|macos-latest/);
   assert.match(workflow, /needs: \[gate\]/);
+});
+
+test('o motor roda só em Linux: win32 e darwin são recusados', () => {
+  assert.equal(plataformaSuportada('win32'), false);
+  assert.equal(plataformaSuportada('darwin'), false);
+  assert.equal(plataformaSuportada('linux'), true);
+  assert.throws(() => assertExternalNodeRuntime({ version: '24.22.1', plataforma: 'win32' }), /O motor do Farol roda só em Linux\./);
+  assert.throws(() => assertExternalNodeRuntime({ version: '24.22.1', plataforma: 'darwin' }), /O motor do Farol roda só em Linux\./);
+  assert.equal(assertExternalNodeRuntime({ version: '24.22.1', plataforma: 'linux' }), '24.22.1');
 });

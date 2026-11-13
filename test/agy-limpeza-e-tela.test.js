@@ -72,14 +72,14 @@ test('diagnóstico: versão do agy e cota por perfil, sem conta e sem pasta', ()
       { id: 'gx', label: 'Gemini X', login: true, cota: { ok: true, conta: 'wa***@x.com', grupos: [{ nome: 'Gemini Models', grupo: 'gemini', restante: 0.21, esgotado: false, reset: 0 }] } },
       { id: 'gy', label: 'Gemini Y', login: false, cota: null },
     ],
-  }, { windows: false });
+  });
   const agy = linhas.filter((l) => /Antigravity/.test(l.label));
   assert.deepEqual(agy.map((l) => l.ok), [true, true, false]);
   assert.match(agy[1].detalhe, /Gemini Models 21%/);
   assert.equal(agy[2].detalhe, 'sem login');
   assert.ok(!JSON.stringify(linhas).includes('wa***'), 'a conta não entra no diagnóstico');
   assert.ok(!JSON.stringify(linhas).includes(AGY_DIR), 'nem a pasta');
-  assert.equal(ambienteDoDoctor({}, { windows: false }).some((l) => /Antigravity/.test(l.label)), false, 'sem perfil e sem agy, sem linha');
+  assert.equal(ambienteDoDoctor({}).some((l) => /Antigravity/.test(l.label)), false, 'sem perfil e sem agy, sem linha');
 });
 
 test('runtime: agy ausente e perfil sem login viram aviso', () => {

@@ -26,8 +26,8 @@
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 410,
-    "emptyCatch": 5,
+    "maxLines": 208,
+    "emptyCatch": 1,
     "jsonParseCru": 3,
     "processEnvDireto": 2,
     "ternarioAninhado": 1,
@@ -49,9 +49,6 @@
     "jsonStringifyCru": 1,
     "profundidadeExcedida": 15
   },
-  "lib/io.js": {
-    "processEnvDireto": 3
-  },
   "lib/parse.js": {
     "profundidadeExcedida": 2
   },
@@ -59,7 +56,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 877,
+    "maxLines": 851,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,

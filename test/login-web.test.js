@@ -149,7 +149,7 @@ test('o painel mostra o link só se for https, e o comando de terminal como alte
 // Revisão do PR #262. `/bin/sh -lc` lê /etc/profile e ~/.profile DEPOIS do ambiente limpo:
 // um profile que exporte CLAUDE_CONFIG_DIR ou ANTHROPIC_* gravava o login no lugar errado.
 // Prova num shell de login de verdade, com um `claude` falso que imprime o que recebeu.
-test('o shell de login não deixa o ~/.profile trocar a pasta nem vazar chave', { skip: process.platform === 'win32' }, async () => {
+test('o shell de login não deixa o ~/.profile trocar a pasta nem vazar chave', async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');

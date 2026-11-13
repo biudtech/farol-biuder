@@ -11,7 +11,6 @@ process.env.FAROL_HOME = HOME;
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 const cred = await import('../lib/sync/credentials.js');
-const { IS_WIN } = await import('../lib/paths.js');
 const {
   credentialsPath, readSyncCredential, setSyncCredential, updateRefreshToken, removeSyncCredential, hasSyncCredential,
 } = cred;
@@ -92,7 +91,7 @@ test('removeSyncCredential apaga o arquivo e devolve se havia o que apagar', () 
   assert.equal(removeSyncCredential(), false);
 });
 
-test('toda gravação deixa o arquivo legível só pelo dono (0600)', { skip: IS_WIN }, () => {
+test('toda gravação deixa o arquivo legível só pelo dono (0600)', () => {
   setSyncCredential(LOGIN);
   assert.equal(fs.statSync(credentialsPath()).mode & 0o777, 0o600);
   updateRefreshToken('rt-3');

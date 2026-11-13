@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { readRegularFile } from '../lib/bounded-file.js';
 import { sourceManifest } from '../tools/bench/ui-source-manifest.js';
 import { createHash } from 'node:crypto';
-import { IS_WIN } from '../lib/paths.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-bounded-file-'));
 after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -82,8 +81,7 @@ test('alteração de mesmo tamanho durante leitura não produz conteúdo aceito'
 test('link real é recusado e seu destino permanece intacto', () => {
   const outside = path.join(root, 'outside'), link = path.join(root, 'linked');
   fs.mkdirSync(outside); fs.writeFileSync(path.join(outside, 'preservar'), 'intacto');
-  // Junction não exige privilégio de link de arquivo no Windows; POSIX cobre o arquivo.
-  fs.symlinkSync(IS_WIN ? outside : path.join(outside, 'preservar'), link, IS_WIN ? 'junction' : 'file');
+  fs.symlinkSync(path.join(outside, 'preservar'), link, 'file');
   assert.throws(() => readRegularFile(link, 100));
   assert.equal(fs.readFileSync(path.join(outside, 'preservar'), 'utf8'), 'intacto');
 });

@@ -119,12 +119,9 @@ test('protocolo do terminal usa somente writer local e recebe capability efêmer
   assert.doesNotMatch(workspaceProtocol, /Sem inline,\s*direto:/i, 'instrução antiga de bypass não pode voltar');
   assert.doesNotMatch(workspaceProtocol, /Postar com inline:/i, 'instrução antiga de gh api não pode voltar');
 
-  const windowsScript = engine.buildSessionScript('/pr-review https://github.com/acme/repo/pull/688', 'eu', 'cap-terminal');
-  const macScript = engine.buildSessionScriptMac('/pr-review https://github.com/acme/repo/pull/688', 't1', 'eu', 'cap-terminal');
-  assert.match(windowsScript, /set "FAROL_PORT=47891"/);
-  assert.match(windowsScript, /set "FAROL_REVIEW_CAP=cap-terminal"/);
-  assert.match(macScript, /export FAROL_PORT='47891'/);
-  assert.match(macScript, /export FAROL_REVIEW_CAP='cap-terminal'/);
+  const script = engine.buildSessionScript('/pr-review https://github.com/acme/repo/pull/688', 't1', 'eu', 'cap-terminal');
+  assert.match(script, /export FAROL_PORT='47891'/);
+  assert.match(script, /export FAROL_REVIEW_CAP='cap-terminal'/);
 });
 
 /* ---------- verificação empírica em paralelo (subagentes claim-verifier) ---------- */

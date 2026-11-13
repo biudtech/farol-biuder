@@ -8,7 +8,7 @@ import { envGitLimpo } from './helpers/git-limpo.js';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-managed-materials-'));
 process.env.FAROL_HOME = home;
-const { STATE_DIR, IS_WIN } = await import('../lib/paths.js');
+const { STATE_DIR } = await import('../lib/paths.js');
 const root = path.join(STATE_DIR, 'technical-review');
 const life = await import('../lib/technical-review/cleanup.js');
 const records = await import('../lib/technical-review/material-record.js');
@@ -79,24 +79,6 @@ test('arquivo preso gera retry persistido e coleta posterior sem outra revisão'
     blocked = false; await collectAll(pending.retryAt + 1);
     assert.equal(fs.existsSync(snapshot), false); assert.equal(records.readRecord(snapshot).state, 'removed');
   } finally { life.remocao.rm = original; }
-});
-test('arquivo realmente aberto sem compartilhamento de exclusão no Windows é preservado até liberar', { skip: !IS_WIN }, async () => {
-  const snapshot = material(), locked = path.join(snapshot, 'codigo.js');
-  const entered = path.join(home, 'lock-ready'), resume = path.join(home, 'lock-release');
-  const quote = value => "'" + value.replaceAll("'", "''") + "'";
-  const script = `$ErrorActionPreference='Stop';$f=[IO.File]::Open(${quote(locked)},[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);try{[IO.File]::WriteAllText(${quote(entered)},'ok');while(-not [IO.File]::Exists(${quote(resume)})){Start-Sleep -Milliseconds 10}}finally{$f.Dispose()}`;
-  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, stdio: 'ignore' });
-  const finished = new Promise(resolve => child.once('exit', resolve));
-  try {
-    const limit = Date.now() + 10000;
-    while (!fs.existsSync(entered) && child.exitCode === null && Date.now() < limit) await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal(fs.existsSync(entered), true);
-    await life.cleanup({ snapshot });
-    assert.equal(fs.existsSync(locked), true); assert.equal(records.readRecord(snapshot).state, 'removal-pending');
-    const retryAt = records.readRecord(snapshot).retryAt;
-    fs.writeFileSync(resume, 'ok'); assert.equal(await finished, 0);
-    await collectAll(retryAt + 1); assert.equal(fs.existsSync(snapshot), false);
-  } finally { if (child.exitCode === null) child.kill(); }
 });
 test('remoção extensa é aguardada sem bloquear o loop e consumidor novo é recusado após liberação', async () => {
   const snapshot = material(), original = life.remocao.rm;

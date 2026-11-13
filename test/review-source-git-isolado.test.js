@@ -61,14 +61,8 @@ before(async () => {
   await fs.writeFile(path.join(origin, '.gitattributes'), 'grande.bin filter=lfs\nfiltrado.txt filter=mal\n');
   await fs.writeFile(path.join(origin, 'grande.bin'), 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 3\n');
   await fs.writeFile(path.join(origin, 'filtrado.txt'), 'texto cru\n');
-  // caminho acima de 260 caracteres dentro do material: sem core.longpaths o `status` acusa ` D`
-  if (process.platform === 'win32') {
-    const fundo = path.join(origin, ...Array.from({ length: 6 }, (_, i) => `pasta-bem-comprida-numero-${i}-${'x'.repeat(30)}`));
-    await fs.mkdir(fundo, { recursive: true });
-    await fs.writeFile(path.join(fundo, 'arquivo-no-fundo.txt'), 'fundo\n');
-  }
-  execFileSync('git', ['-c', 'core.longpaths=true', 'add', '.'], { cwd: origin, env: envGitLimpo(), windowsHide: true });
-  execFileSync('git', ['-c', 'core.longpaths=true', 'commit', '--quiet', '-m', 'base'], { cwd: origin, env: envGitLimpo(), windowsHide: true });
+  execFileSync('git', ['add', '.'], { cwd: origin, env: envGitLimpo(), windowsHide: true });
+  execFileSync('git', ['commit', '--quiet', '-m', 'base'], { cwd: origin, env: envGitLimpo(), windowsHide: true });
   base = git(['rev-parse', 'HEAD']);
   await fs.writeFile(path.join(origin, 'source.js'), 'export const x = 2;\n');
   git(['add', '.']); git(['commit', '--quiet', '-m', 'head']); head = git(['rev-parse', 'HEAD']);
@@ -159,7 +153,7 @@ test('o ambiente não leva o que executa comando ou passa por cima das travas', 
   assert.equal(env.GIT_CONFIG_NOSYSTEM, '1');
   assert.equal(env.GIT_LFS_SKIP_SMUDGE, '1');
   assert.equal(env.GIT_TERMINAL_PROMPT, '0');
-  assert.equal(env.GIT_CONFIG_GLOBAL, process.platform === 'win32' ? 'nul' : '/dev/null');
+  assert.equal(env.GIT_CONFIG_GLOBAL, '/dev/null');
   assert.equal(env.HOME, process.env.HOME, 'o `gh` do helper continua achando a casa dele');
 });
 

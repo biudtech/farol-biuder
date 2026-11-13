@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { SourceStore } from '../lib/review-source/store.js';
 import { recoveryBoot } from '../lib/review-source/recovery-boot.js';
-import { recoveryProcesses, windowsGit, posixGit } from '../lib/review-source/recovery-owner.js';
+import { recoveryProcesses, posixGit } from '../lib/review-source/recovery-owner.js';
 import { processProbe } from '../lib/technical-review/material-process.js';
 import { criarMaterial } from '../lib/technical-review/cleanup.js';
 import { readRecord, updateRecord } from '../lib/technical-review/material-record.js';
@@ -175,10 +175,6 @@ test('mesmo boot revalida a interrupção sob a trava antes de recuperar', async
 });
 
 test('lista de Git do SO reconhece só a família git e marca início desconhecido', () => {
-  const win = windowsGit(['git.exe|10|1793043600000', 'GitHubDesktop.exe|11|1', 'git-remote-https.exe|12|-1', ''].join('\r\n'));
-  assert.deepEqual(win.map(r => r.name), ['git.exe', 'git-remote-https.exe']);
-  assert.equal(win[0].born, 1793043600000);
-  assert.ok(Number.isNaN(win[1].born));
   const now = 1793050000000;
   const posix = posixGit(['  10 01:05 /usr/bin/git fetch --quiet origin', '  11 1-02:00:00 /Applications/GitHub Desktop.app/x/github',
     '  12 00:03 /usr/lib/git-core/git-remote-https origin https://github.com/o/r', '  13 00:01 node server.js', 'linha sem formato', ''].join('\n'), now);

@@ -187,10 +187,8 @@ test('o terminal grava o escopo, passa escopo= e abre o claude com as guardas', 
   for (const skipPermissions of [false, true]) {
     e.config.skipPermissions = skipPermissions;
     const flag = skipPermissions ? ' --dangerously-skip-permissions' : '';
-    const win = e.buildSessionScript(abertos[0].slash, 'fixture', 'cap');
-    assert.ok(win.includes(`claude${flag} --settings "${ARQUIVO_DE_GUARDAS}" "${abertos[0].slash}"`), win);
-    const mac = e.buildSessionScriptMac(abertos[0].slash, 't1', 'fixture', 'cap');
-    assert.ok(mac.includes(`claude${flag} --settings '${ARQUIVO_DE_GUARDAS}' '${abertos[0].slash}'`), mac);
+    const script = e.buildSessionScript(abertos[0].slash, 't1', 'fixture', 'cap');
+    assert.ok(script.includes(`claude${flag} --settings '${ARQUIVO_DE_GUARDAS}' '${abertos[0].slash}'`), script);
   }
 });
 
