@@ -1449,7 +1449,7 @@ class Engine extends EventEmitter {
   toolRunSet(name, scope, run) { return toolsMod.toolRunSet(this, name, scope, run); }
   async launchTool(name, scope) { return toolsMod.launchTool(this, name, scope); }
   clearTool(name, scope) { return toolsMod.clearTool(this, name, scope); }
-  clearLog() { return toolsMod.clearLog(this); }
+  clearLog() { return diagnosticoMod.clearLog(this); }
 
   ignore(key) {
     this.markSeen(key);

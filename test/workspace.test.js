@@ -1,5 +1,5 @@
 // lib/workspace.js: leitura dos artefatos que o Claude escreve no workspace (destaques,
-// dossiês por autor, log de falhas). Estava com ZERO teste, apesar de as três funções
+// dossiês por autor). Estava com ZERO teste, apesar de as três funções
 // serem servidas direto em /api/highlights, /api/team e /api/log, ou seja, tudo que a
 // aba Destaques e a aba Time mostram passa por aqui.
 //
@@ -15,8 +15,8 @@ process.env.FAROL_HOME = FAROL_HOME;
 
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-const { STATE_DIR, LOG_FILE } = await import('../lib/paths.js');
-const { parseHighlights, parseTeam, tailLog } = await import('../lib/workspace.js');
+const { STATE_DIR } = await import('../lib/paths.js');
+const { parseHighlights, parseTeam } = await import('../lib/workspace.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -134,29 +134,4 @@ test('parseTeam: ignora arquivo que não é .md', () => {
   fs.writeFileSync(path.join(AUTHORS, 'alice.md'), '# alice\n\n## 2026-07-30 · b#2 · ok\n- y\n');
   fs.writeFileSync(path.join(AUTHORS, 'notas.txt'), 'nada a ver');
   assert.deepEqual(parseTeam().map(p => p.login), ['alice']);
-});
-
-/* ---------- tailLog ---------- */
-
-test('tailLog: sem arquivo devolve lista vazia, não lança', () => {
-  assert.deepEqual(tailLog(), []);
-});
-
-test('tailLog: devolve as últimas N linhas, sem as vazias', () => {
-  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-  fs.writeFileSync(LOG_FILE, ['l1', 'l2', '', 'l3', 'l4', ''].join('\n'));
-  assert.deepEqual(tailLog(2), ['l3', 'l4']);
-  assert.deepEqual(tailLog(), ['l1', 'l2', 'l3', 'l4']);
-});
-
-test('tailLog: pedir mais linhas do que existe devolve tudo', () => {
-  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-  fs.writeFileSync(LOG_FILE, 'unica\n');
-  assert.deepEqual(tailLog(500), ['unica']);
-});
-
-test('tailLog: aceita CRLF (log gravado no Windows)', () => {
-  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-  fs.writeFileSync(LOG_FILE, 'a\r\nb\r\nc\r\n');
-  assert.deepEqual(tailLog(), ['a', 'b', 'c']);
 });
