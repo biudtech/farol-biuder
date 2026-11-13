@@ -32,15 +32,13 @@ import { gravarLinhaDeLog } from './lib/log-arquivo.js';
 import { ACCOUNT_PALETTE } from './lib/taxonomy.js'; // resto da taxonomia é usado nos colaboradores (review/pushback)
 import {
   parseAccounts, parsePeople, migrateSeniorityToPeople,
-  sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv, claudeAuthShellLines,
-  sanitizeClaudeModel, sanitizeClaudeEffort, sanitizeCodexModel, sanitizeCodexEffort, sanitizeAgyModel, sanitizeAgyEffort, AGY_MODELO_PADRAO,
+  normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv, claudeAuthShellLines,
+  sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
-import cadeiaMod from './lib/engine/cadeia-perfis.js';
-import { provedoresParaTela } from './lib/engine/provedores.js';
 import decisionMod from './lib/engine/decision.js';
 import arbitragemMod from './lib/engine/postagem-arbitragem.js';
 import ghMod from './lib/engine/gh-queries.js';
@@ -50,10 +48,7 @@ import contasGh from './lib/engine/contas-gh.js';
 import contasConfig from './lib/engine/contas-config.js';
 import contaQueAge from './lib/engine/conta-que-age.js';
 import versaoClaude from './lib/engine/versao-claude.js';
-import codexAuth from './lib/codex/auth.js';
-import agyDoctor from './lib/agy/doctor.js';
 import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
-import { sincronizarModelos } from './lib/model-selection.js';
 import sessionMod from './lib/engine/session.js';
 import selfMod from './lib/engine/selfpr.js';
 import meusPrsBase from './lib/engine/meus-prs-base.js';
@@ -69,7 +64,7 @@ import retomadaVarredura from './lib/engine/retomada-varredura.js';
 
 // Resolve o shape de auth a partir de um perfil já escolhido (sem cascata de conta). Mora em
 // lib/engine/perfil-claude.js desde a A2: o aviso de perfil quebrado lê a MESMA regra.
-import perfilMod, { authFromProfile } from './lib/engine/perfil-claude.js';
+import perfilMod from './lib/engine/perfil-claude.js';
 import fileProofMod from './lib/engine/file-proof.js';
 import wsTmpMod from './lib/engine/workspace-tmp.js';
 import skipMod from './lib/engine/skip-review.js';
@@ -103,7 +98,7 @@ function aplicarPathDoBoot(extras, sempre = []) {
   process.env.PATH = priorizarNoPath(prependPathDirs(atual, extras, fs.existsSync) || atual, sempre);
 }
 
-// App aberto pelo Finder/Dock ou atalho herda PATH reduzido (gh/claude/codex somem). O ~/.local/bin do instalador
+// App aberto pelo Finder/Dock ou atalho herda PATH reduzido (gh/claude somem). O ~/.local/bin do instalador
 // do claude vai SEMPRE na frente, exista ou não, para nenhum claude antigo ganhar dele (celular, 26/09/2026).
 const extras = ['/usr/local/bin',
   path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), 'bin')];
@@ -126,10 +121,9 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 // continua puro (sem importar meio mundo) e existe UM lugar só onde a lista de
 // parsers usada por preferência é montada.
 const PARSERS = {
-  parseAccounts, parsePeople, sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId,
-  sanitizeClaudeModel, sanitizeClaudeEffort, sanitizeCodexModel, sanitizeCodexEffort, sanitizeAgyModel, sanitizeAgyEffort,
+  parseAccounts, parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
+  sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, parseSyncConfig, sanearBind,
-  normalizarCadeia: cadeiaMod.normalizarCadeia,
 };
 
 // carência anti-lag do índice de busca do GitHub: logo após EU postar um review, o PR
@@ -163,27 +157,10 @@ class Engine extends EventEmitter {
     // resolveClaudeConfigDir/allClaudeAuthInfo/ghEnv, quebrando toda busca de PR).
     this.config.claudeProfiles = normalizeClaudeProfiles(this.config.claudeProfiles);
     this.config.claudeProfileId = normalizeClaudeProfileId(this.config.claudeProfileId);
-    cadeiaMod.reconciliar(this.config); // cadeia de perfis: nasce do perfil padrão (migração)
-    this.config.claudeConfigDir = sanitizeClaudeDir(this.config.claudeConfigDir);
-    // Cada CLI mantém seus IDs e esforços próprios. Depois do saneamento, a política
-    // de equivalência concilia os modelos sem mandar um alias ao executor errado.
-    // Config antiga com GPT migra pro Codex; o effort compartilhado vira o ponto de
-    // partida dos dois provedores. Invalidos caem no padrao (nao passa flag).
-    const modeloCodexLegado = sanitizeCodexModel(this.config.reviewModel) || '';
-    const esforcoCodexLegado = sanitizeCodexEffort(this.config.reviewEffort) || '';
-    const temModeloCodex = Object.hasOwn(configSalva, 'codexReviewModel');
-    const temEsforcoCodex = Object.hasOwn(configSalva, 'codexReviewEffort');
-    this.config.codexReviewModel = temModeloCodex
-      ? (sanitizeCodexModel(this.config.codexReviewModel) || '') : modeloCodexLegado;
-    this.config.codexReviewEffort = temEsforcoCodex
-      ? (sanitizeCodexEffort(this.config.codexReviewEffort) || '') : esforcoCodexLegado;
+    // config antiga com chaves de formatos que saíram (corte 09) não derruba o boot: chave sem
+    // leitor é ignorada, e perfil que não é de chave de API cai fora no normalizeClaudeProfiles
     this.config.reviewModel = sanitizeClaudeModel(this.config.reviewModel) || '';
     this.config.reviewEffort = sanitizeClaudeEffort(this.config.reviewEffort) || '';
-    // o Antigravity também: config com modelo recusado (v2.79.10, os fracos demais para
-    // ambiguidade) mostraria na tela um modelo que não roda
-    if (this.config.agyReviewModel) this.config.agyReviewModel = sanitizeAgyModel(this.config.agyReviewModel) || AGY_MODELO_PADRAO;
-    const modelosMigrados = sincronizarModelos(this.config);
-    if (modelosMigrados?.semEquivalente) warn('Modelo personalizado sem equivalência conhecida; seleções preservadas.');
     // sincronização entre dispositivos: opt-in que segura revisão quando ligado, então
     // config.json editado à mão passa pelo mesmo saneador do caminho HTTP antes de
     // qualquer coisa ler `enabled`. Base nos defaults: no boot não há valor anterior.
@@ -731,8 +708,8 @@ class Engine extends EventEmitter {
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
     env.FAROL_PORT = String(this.config.port || DEFAULT_PORT);
-    // assinatura do Claude que o Farol usa pra esta conta: ver resolveClaudeAuth
-    // (perfil por conta > perfil padrão do Farol > claudeConfigDir legado).
+    // chave de API do Claude que o Farol usa pra esta conta: ver resolveClaudeAuth
+    // (perfil por conta > perfil padrão do Farol > primeiro perfil utilizável).
     applyClaudeAuthEnv(env, this.resolveClaudeAuth(user));
     return env;
   }
@@ -1203,12 +1180,6 @@ class Engine extends EventEmitter {
   sessionExit(id) { return sessionMod.sessionExit(this, id); }
   spawnConsole(slash, label, keys = [], account) { return sessionMod.spawnConsole(this, slash, label, keys, account); }
   handleSessionExit(opts) { return sessionMod.handleSessionExit(this, opts); }
-  buildLoginScript(dir, id, segredo = '') { return sessionMod.buildLoginScript(this, dir, id, [], segredo); }
-  buildCodexLoginScript(id, segredo = '') { return sessionMod.buildCodexLoginScript(this, id, segredo); }
-  spawnLoginConsoleLinux(dir) { return sessionMod.spawnLoginConsoleLinux(this, dir); }
-  spawnLoginConsole(dir) { return sessionMod.spawnLoginConsole(this, dir); }
-  spawnCodexLoginConsoleLinux() { return sessionMod.spawnCodexLoginConsoleLinux(this); }
-  spawnCodexLoginConsole() { return sessionMod.spawnCodexLoginConsole(this); }
 
   // Pipeline de revisão headless: colaborador lib/engine/review.js (gate intacto, Onda 2).
   prFromUrl(url) { return reviewMod.prFromUrl(this, url); }
@@ -1366,7 +1337,7 @@ class Engine extends EventEmitter {
   async mergeSelfPR(url, opts = {}) { return selfMod.mergeSelfPR(this, url, opts); }
   selfPromptFor(url) { return selfMod.selfPromptFor(this, url); }
   parseSelfResult(raw) { return selfMod.parseSelfResult(this, raw); }
-  async launchSelfAnalysis(url, isolation = undefined, codexProfileId = undefined, agente = false) { return selfMod.launchSelfAnalysis(this, url, { isolation, codexProfileId, agente }); }
+  async launchSelfAnalysis(url, isolation = undefined, agente = false) { return selfMod.launchSelfAnalysis(this, url, { isolation, agente }); }
   cancelSelfAnalysis(key) { return selfMod.cancelSelfAnalysis(this, key); }
   async runSelfAnalysis(pr) { return selfMod.runSelfAnalysis(this, pr); }
 
@@ -1420,7 +1391,6 @@ class Engine extends EventEmitter {
     });
   }
   claudeTestarPerfil(dados) { return perfilMod.testarPerfil(this, dados); }
-  claudeAdotarLegado(dados) { return perfilMod.adotarLegado(this, dados); }
   ignore(key) {
     this.markSeen(key);
     this.marcarIgnorado(key);
@@ -1434,106 +1404,23 @@ class Engine extends EventEmitter {
     this.checkNow();
   }
 
-  // qual AUTENTICAÇÃO (não só dir) usar pras sessões desta conta GitHub. Cascata:
-  // 1) accounts[].claudeProfileId da própria conta; 2) claudeProfileId global (padrão do
-  // Farol); 3) sem profiles configurados (ou id não encontrado/perfil sem o campo
-  // obrigatório do seu kind), cai no claudeConfigDir legado (sempre kind dir).
-  resolveClaudeAuth(user) { return cadeiaMod.authDaConta(this, user); }
+  // qual AUTENTICAÇÃO usar pras sessões desta conta GitHub. Cascata: 1) accounts[].claudeProfileId
+  // da própria conta; 2) claudeProfileId global (padrão do Farol); 3) o primeiro perfil de chave
+  // de API utilizável. null = sem perfil utilizável (a sessão não abre; lib/engine/perfil-claude.js).
+  resolveClaudeAuth(user) { return perfilMod.authDaConta(this.config, user); }
 
-  // compat: quem só quer "o dir, se houver" (nenhum call site de produção deveria
-  // sobrar depois da migração das Tasks 2/3/5, mas mantido por garantia). Devolve ''
-  // quando o resolvido for kind apikey/openrouter - nunca confunde com dir.
-  resolveClaudeConfigDir(user) {
-    const auth = this.resolveClaudeAuth(user);
-    return (auth.kind === 'apikey' || auth.kind === 'openrouter') ? '' : (auth.dir || '');
-  }
-
-  // dir de um perfil ESPECÍFICO pelo id, pra "abrir sessão de login" sem depender de
-  // conta GitHub nenhuma (é uma escolha direta de assinatura, não uma revisão de PR).
-  // profileId vazio ou não encontrado cai no mesmo fallback de resolveClaudeConfigDir
-  // (claudeConfigDir legado), pra logar no "Padrão da máquina" também funcionar.
-  resolveConfigDirForLogin(profileId) {
-    const profiles = this.config.claudeProfiles || [];
-    const p = profileId ? profiles.find(x => x.id === profileId) : null;
-    if (p?.dir || p?.kind === 'maquina') return p.dir || '';
-    return this.config.claudeConfigDir || '';
-  }
-
-  // mesma cascata de resolveConfigDirForLogin, mas devolvendo o perfil INTEIRO (com kind),
-  // pra openClaudeLoginSession decidir se o perfil resolvido pode logar.
-  resolveAuthForLogin(profileId) {
-    const profiles = this.config.claudeProfiles || [];
-    const p = profileId ? profiles.find(x => x.id === profileId) : null;
-    const resolved = authFromProfile(p);
-    if (resolved) {
-      // login não precisa do id no shape (openClaudeLoginSession só olha kind/dir)
-      if (resolved.kind === 'dir') return { kind: 'dir', dir: resolved.dir };
-      if (resolved.kind === 'codex' || resolved.kind === 'agy') return { kind: resolved.kind, id: resolved.id };
-      return { kind: resolved.kind, apiKey: resolved.apiKey, baseUrl: resolved.baseUrl || '' };
-    }
-    return { kind: 'dir', dir: this.config.claudeConfigDir || '' };
-  }
-
-  // abre a sessão de terminal SÓ pra login (ver Fix 2, lib/engine/session.js). Perfil de
-  // chave de API / OpenRouter não tem fluxo de claude login (a chave já é a credencial):
-  // nem chega a chamar spawnLoginConsole. A UI já esconde o botão nesse caso, isto é o
-  // segundo lado da defesa.
-  openClaudeLoginSession(profileId) {
-    const auth = this.resolveAuthForLogin(profileId);
-    if (auth.kind === 'apikey' || auth.kind === 'openrouter') return { ok: false, error: 'perfis de chave de API não usam login: a chave já é a credencial' };
-    if (auth.kind === 'codex') return this.spawnCodexLoginConsole();
-    // Antigravity: o login é sempre pela tela (lib/agy/login.js), com o comando como alternativa
-    if (auth.kind === 'agy') return { ok: true, comando: agyDoctor.comandoManual(auth.id), onde: 'terminal' };
-    return this.spawnLoginConsole(auth.dir);
-  }
-
-  // --- diagnostico de pre-requisitos ---
-  // assinatura do Claude que as sessões do Farol usam (best-effort, sem segredo):
-  // qual config dir e qual conta OAuth está logada ali, pra o doctor/badges mostrarem.
-  // Sem argumento, mantém o comportamento legado (lê o claudeConfigDir global); passe um
-  // dir explícito (inclusive '') pra checar um perfil específico (ver allClaudeAuthInfo).
-  claudeAuthInfo(dir) {
-    const d = String(dir != null ? dir : (this.config.claudeConfigDir || '')).trim();
-    const jsonPath = d ? path.join(d, '.claude.json') : path.join(os.homedir(), '.claude.json');
-    const info = { configDir: d || null, account: null, ready: true };
-    try {
-      const j = readJson(jsonPath, {});
-      info.account = (j && j.oauthAccount && j.oauthAccount.emailAddress) || null;
-      // dir próprio precisa do login feito (credencial OAuth). A padrão a gente assume ok.
-      if (d) info.ready = fs.existsSync(path.join(d, '.credentials.json')) || !!info.account;
-    } catch { /* best-effort */ }
-    return info;
-  }
-
-  // status de TODOS os perfis salvos, mais uma entrada sintética "Padrão" pro fallback
-  // legado (claudeConfigDir global). Essa entrada '' é incluída SEMPRE, mesmo quando já
-  // existem perfis salvos: é o que sobra visível quando o perfil padrão do Farol está
-  // vazio ("Padrão da máquina" no dropdown) ou uma conta não tem override próprio, sem
-  // ela o badge de quem usa esse fallback não tinha nenhum dado pra mostrar (achado da
-  // revisão final: legado ficava invisível na UI depois que a Task 6 tirou o campo texto).
-  // Perfil apikey não tem OAuth pra ler (claudeAuthInfo lê .credentials.json, que só
-  // existe pro caminho dir): status sintético baseado só em "a chave está preenchida?",
-  // sem tocar disco.
+  // status de TODOS os perfis de chave de API salvos, pro doctor mostrar quem está pronto.
+  // Não toca disco nem rede: "pronto" é "a chave está preenchida".
   allClaudeAuthInfo() {
-    const profiles = this.config.claudeProfiles || [];
-    const legacy = { id: '', label: 'Padrão', ...this.claudeAuthInfo() };
-    if (!profiles.length) return [legacy];
-    const authEntry = (p) => {
-      if (p.kind === 'apikey') return { configDir: null, account: null, ready: !!p.apiKey, apiKeyMode: true };
-      if (p.kind === 'openrouter') return { configDir: null, account: null, ready: !!p.apiKey, openrouterMode: true };
-      if (p.kind === 'codex') return { configDir: null, account: null, ready: true, codexMode: true };
-      if (p.kind === 'agy') return { configDir: null, account: null, ready: agyDoctor.temLogin(p.id), agyMode: true };
-      return this.claudeAuthInfo(p.dir || ''); // '' é o perfil `maquina`: lê ~/.claude.json
-    };
-    return [legacy, ...profiles.map(p => ({
+    return (this.config.claudeProfiles || []).map(p => ({
       id: p.id,
       label: p.label,
       // orcamento (blocked/today/sinceCutoff) NAO viaja mais aqui: o doctor e um
       // cache (boot/Verificar agora/salvar perfis) e congelava o cartao da aba
       // Consumo enquanto o gate real recalculava ao vivo. A fonte unica do
       // orcamento e usageSummary().budgets, refeita a cada pushState (v2.40.0).
-      ...authEntry(p)
-    }))];
+      ready: !!p.apiKey, apiKeyMode: true,
+    }));
   }
 
   async doctor({ forcarVersaoClaude = false } = {}) {
@@ -1541,11 +1428,9 @@ class Engine extends EventEmitter {
     this.doctorLeitura = leitura;
     const primary = this.primaryUser();
     const tokenArgs = primary ? ['auth', 'token', '--user', primary] : ['auth', 'token'];
-    const [gh, claude, codex, codexLogin, auth, agy] = await Promise.all([
+    const [gh, claude, auth] = await Promise.all([
       io.run('gh', ['--version']),
       io.runShell('claude --version'),
-      io.runShell('codex --version'),
-      io.runShell('codex login status'),
       // o probe roda no MESMO env que o engine usa, e nao no herdado: `gh auth
       // token` SEM --user honra o GH_TOKEN do ambiente, entao sem conta primaria
       // o check ficava verde por um token que o ghEnv recusa, e o doctor mentia
@@ -1553,19 +1438,12 @@ class Engine extends EventEmitter {
       // ja lia o keyring; passar o env mantem os dois casos falando da mesma
       // identidade. ghEnv() sem user nunca lanca (o contrato legado do doctor).
       io.run('gh', tokenArgs, { env: this.ghEnv() }),
-      agyDoctor.versao(),
     ]);
     if (this.doctorLeitura !== leitura) return this.doctorInfo;
-    // a leitura do `codex login status` mora em lib/codex/auth.js, junto da regra do plano
-    const loginCodex = codexAuth.leituraDoLogin(codexLogin);
     this.doctorInfo = {
       node: process.version,
       gh: gh.ok ? gh.stdout.split('\n')[0].trim() : null,
       claude: claude.ok ? claude.stdout.trim().split('\n')[0] : null,
-      codex: codex.ok ? codex.stdout.trim().split('\n')[0] : null,
-      codexChatGPT: loginCodex.chatGPT,
-      codexLoginDetail: loginCodex.detalhe,
-      agy, agyPerfis: agyDoctor.perfis(this), // versão do Antigravity CLI e login e cota de cada perfil
       ghAuth: auth.ok && !!auth.stdout.trim(),
       // rodar como root quebra a revisão autônoma INTEIRA, e não é opção de
       // config: o `--dangerously-skip-permissions` do headless é fixo na linha
@@ -1576,7 +1454,8 @@ class Engine extends EventEmitter {
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
       home: HOME,
       workspace: WORKSPACE,
-      claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil de assinatura Claude salvo
+      claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil de chave de API salvo
+      claudePerfilPronto: perfilMod.temPerfilUtilizavel(this.config), // há perfil de chave de API utilizável?
       checkedAt: Date.now()
     };
     if (forcarVersaoClaude || this.claudeVersao) {
@@ -1628,10 +1507,7 @@ class Engine extends EventEmitter {
       if (k === 'ghUser') userChanged = userChanged || v !== this.config.ghUser;
       this.config[k] = v;
     }
-    const modelosSincronizados = sincronizarModelos(this.config, patch || {});
-    if (modelosSincronizados?.semEquivalente) this.log('WARN', 'Modelo personalizado sem equivalência conhecida; seleções preservadas.');
     contasConfig.normalizarDepoisDeAplicar(this, patch);
-    cadeiaMod.reconciliar(this.config, patch); // perfil removido sai da cadeia, padrão derivado
     // a guarda do celular depende de localAuth, que pode ter mudado no mesmo patch
     this.config.sync = this.syncComGuardaDoCelular(this.config.sync);
     try { this.saveConfig(); }
@@ -1643,13 +1519,13 @@ class Engine extends EventEmitter {
     if ('sync' in (patch || {})) this.syncAplicarConfig();
     if (userChanged) { this.token = null; this.tokenOk = false; this.tokens = {}; }
     if (intervalChanged || userChanged) this.checkNow();
-    // perfil (lista ou padrão global) mudou: o badge de assinatura Claude (doctor.claudeAuth)
+    // perfil (lista ou padrão global) mudou: o badge do perfil de chave de API (doctor.claudeAuth)
     // fica desatualizado até o próximo boot ou clique em "Reverificar" - recalcula na hora
     // pra badge refletir o estado real logo após salvar. NÃO inclui 'accounts': editar
     // cor/rótulo/tipo/org/claudeProfileId de uma conta não muda o resultado de
     // allClaudeAuthInfo() (ela só lê claudeProfiles), então redisparar doctor() aqui só
     // gastava 3 subprocessos à toa (achado da revisão final).
-    if ('claudeProfiles' in patch || 'claudeProfileId' in patch || 'cadeiaPerfis' in patch) {
+    if ('claudeProfiles' in patch || 'claudeProfileId' in patch) {
       this.doctor().catch(() => {});
     }
     this.emit('settings-changed', this.config);
@@ -1744,8 +1620,7 @@ class Engine extends EventEmitter {
       // catálogo de seleções (lib/modelos.js), de onde a tela monta os seletores, é outra coisa
       app: { name: APP_NAME, version: APP_VERSION, platform: process.platform },
       modelos: catalogoDeModelos(this.claudeVersao || null),
-      cadeiaPerfis: cadeiaMod.cadeiaParaTela(this), provedores: provedoresParaTela(this.config),
-      // perfil apontado que a cascata não usa (A2): a queda para o legado deixou de ser silenciosa
+      // perfil apontado que a resolução não usa (A2): a queda não é silenciosa
       claudePerfis: { problemas: perfilMod.problemasDePerfil(this.config) },
       // capacidade implementada que NÃO está valendo: a tela não pode prometer o que o engine não aplica
       capacidades: this.estadoDasCapacidades(),
@@ -1870,11 +1745,11 @@ class Engine extends EventEmitter {
   grupoSegura(acct) { return consumoGrupoMod.grupoSegura(this, acct); }
   grupoDaConta(acct) { return consumoGrupoMod.grupoDaConta(this, acct); }
 
-  // perfil Claude efetivo de uma conta GitHub. Legado (sem perfil configurado) devolve
-  // null: não há a quem atribuir teto nem cota.
+  // perfil Claude efetivo de uma conta GitHub. Sem perfil utilizável devolve null: não há a
+  // quem atribuir teto nem cota.
   profileOfAccount(acct) {
     const auth = this.resolveClaudeAuth(acct);
-    if (!auth.id) return null;
+    if (!auth || !auth.id) return null;
     return (this.config.claudeProfiles || []).find(x => x.id === auth.id) || null;
   }
 
@@ -2074,10 +1949,10 @@ function start(onReady) {
 }
 
 const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
-  sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
+  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
 export default farol;
 export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
-  sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
+  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
 
 // execucao direta: modo servidor (`node server.js`)
 if (executadoDireto(import.meta.url)) {

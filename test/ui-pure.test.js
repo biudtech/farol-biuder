@@ -1640,17 +1640,6 @@ test('Consumo: resumo vazio vira mensagem de vazio, não markup quebrado', () =>
   assert.match(P.usageSessionsHtml({}), /Nenhuma sessão/);
 });
 
-test('Consumo: perfil Codex explica tokens, custo zero e plano ChatGPT sem fingir orçamento em US$', () => {
-  const html = P.usageBudgetHtml({ budgets: [{
-    id: 'cx1', label: 'Codex ChatGPT', kind: 'codex', blocked: false,
-    today: 0, sinceCutoff: 0, budgetDaily: 10, budgetTotal: null,
-  }] });
-  assert.match(html, /Codex · plano ChatGPT/);
-  assert.match(html, /tokens das sessões autônomas/);
-  assert.match(html, /US\$ 0,00/);
-  assert.doesNotMatch(html, /usage-meter/, 'teto em dólar não se aplica ao plano ChatGPT');
-});
-
 test('usageMatrixHtml: a legenda acompanha a métrica escolhida', () => {
   // guarda-corpo antes das asserções: se o fixture parar de produzir matriz (nome
   // de campo errado, dia fora da janela), a função cai no early return, a legenda
@@ -1835,44 +1824,38 @@ test('panoramaRowHtml: o selo da conta só aparece no escopo "todas"', () => {
    `hint.hidden` do fim dos perfis, que o listener do seletor desfaz. */
 
 const CTX_SIS = {
-  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', dir: '/home/x/.claude' }], claudeProfileId: 'p1' },
+  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-ant-x', baseUrl: '' }], claudeProfileId: 'p1' },
   usage: { budgets: [] },
-  doctor: { claudeAuth: [{ id: 'p1', ready: true, account: 'alice' }, { id: '', ready: true }] },
+  doctor: { claudeAuth: [{ id: 'p1', ready: true, apiKeyMode: true }] },
   ehWin: true,
   accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
   acct: { alice: { label: 'Pessoal', color: '#f80' } },
 };
 
-test('claudeAuthBadge: acha o perfil, cai no padrão da máquina, e some sem dado', () => {
-  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /alice/);
-  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha a entrada do padrão');
+test('claudeAuthBadge: acha o perfil, cai no primeiro com chave, e some sem dado', () => {
+  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /chave configurada/);
+  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha o primeiro perfil com chave');
   assert.equal(P.claudeAuthBadge('p1', { doctor: {} }), '', 'sem doctor não inventa selo');
 });
 
-test('claudeAuthBadge: perfil Codex mostra a causa real quando o login ChatGPT nao confirmou', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: false,
-      codexLoginDetail: 'Logged in using API key',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  const html = P.claudeAuthBadge('codex', ctx);
-  assert.match(html, /SEM CODEX/);
-  assert.match(html, /Logged in using API key/);
+test('claudeAuthBadge: sem perfil nenhum diz SEM PERFIL, e perfil sem chave diz SEM CHAVE', () => {
+  assert.match(P.claudeAuthBadge('', { doctor: { claudeAuth: [] } }), /SEM PERFIL/);
+  assert.match(P.claudeAuthBadge('k', { doctor: { claudeAuth: [{ id: 'k', ready: false, apiKeyMode: true }] } }), /SEM CHAVE/);
 });
 
-test('claudeAuthBadge: perfil Codex confirma ChatGPT quando o doctor confirma', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: true,
-      codexLoginDetail: 'Logged in using ChatGPT',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  assert.match(P.claudeAuthBadge('codex', ctx), /Codex ChatGPT/);
+test('Consumo: o cartão do perfil é de chave de API, com teto e nota quando falta teto', () => {
+  const html = P.usageBudgetHtml({ budgets: [{ id: 'k1', label: 'Chave A', kind: 'apikey', blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }] });
+  assert.match(html, /Chave de API/);
+  assert.match(html, /Nenhum teto definido/);
+  assert.doesNotMatch(html, /assinatura|plano ChatGPT/i);
+});
+
+test('runtimeChecks: perfil de chave de API apontado que não resolve vira check do Diagnóstico', () => {
+  const checks = P.runtimeChecks({ root: false }, {}, { problemas: [{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-invalido' }] });
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].label, 'Perfil de chave de API');
+  assert.equal(checks[0].ok, false);
+  assert.match(checks[0].detail, /incompleto \(falta a chave\)/);
 });
 
 test('painel Sistema: os três construtores desenham com ctx cheio e com ctx vazio', () => {
@@ -1895,55 +1878,11 @@ test('accountsManagerHtml: conta silenciada muda rótulo e classe do botão', ()
   assert.match(html, /silenciada/, 'o estado aparece no texto de autenticação');
 });
 
-test('claudeProfilesHtml: sem perfil e com diretório legado oferece a migração', () => {
-  const legado = { ...CTX_SIS, config: { claudeProfiles: [], claudeConfigDir: '/home/x/.claude' } };
-  assert.match(P.claudeProfilesHtml(legado), /primeiro perfil/);
-  assert.doesNotMatch(P.claudeProfilesHtml(CTX_SIS), /primeiro perfil/, 'com perfil salvo, some');
-});
-
 test('claudeProfilesHtml: perfil de chave de API mostra os campos de teto', () => {
   const api = { ...CTX_SIS, config: { claudeProfiles: [{ id: 'p2', label: 'API', kind: 'apikey', apiKey: 'k', budgetDaily: 10 }], claudeProfileId: 'p2' } };
   const html = P.claudeProfilesHtml(api);
   assert.match(html, /cp-budget-daily/);
   assert.match(html, /value="10"/, 'o teto salvo aparece preenchido');
-});
-
-test('claudeProfilesHtml: perfil OpenRouter mostra campos de chave e hint do Skin', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: {
-      claudeProfiles: [{
-        id: 'or', label: 'OR', kind: 'openrouter', apiKey: 'sk-or-1',
-        baseUrl: 'https://openrouter.ai/api',
-      }],
-      claudeProfileId: 'or',
-    },
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /OpenRouter/);
-  assert.match(html, /data-kind="openrouter"/);
-  assert.doesNotMatch(html, /cp-login" data-id="or"/, 'OpenRouter não oferece login OAuth');
-  assert.match(html, /Anthropic Skin/);
-});
-
-test('claudeAuthBadge: perfil OpenRouter pronto', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  assert.match(P.claudeAuthBadge('or', ctx), /OpenRouter/);
-});
-
-test('claudeProfilesHtml: perfil Codex tambem oferece abrir sessao de login', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }], claudeProfileId: 'codex' },
-    doctor: { codexChatGPT: false, claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /class="btn sm cp-login" data-id="codex"/);
-  assert.match(html, /Abrir sessão de login/);
 });
 
 /* ---------- onda 5, sexto passo: o banner do topo ----------
@@ -2238,27 +2177,6 @@ test('runtimeChecks: sem root não inventa linha (Windows nem tem uid)', () => {
   assert.deepEqual(P.runtimeChecks({}), []);
   assert.deepEqual(P.runtimeChecks(null), [], 'doctor ainda não carregado não pode derrubar a tela');
   assert.deepEqual(P.runtimeChecks(undefined), []);
-});
-
-test('runtimeChecks: perfil Codex aparece na Visao geral com CLI e login separados', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: 'codex-cli 0.150.0', codexChatGPT: true, codexLoginDetail: 'Logged in using ChatGPT' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks.length, 2);
-  assert.deepEqual(checks.map(c => [c.label, c.ok]), [['Codex CLI', true], ['Login Codex', true]]);
-  assert.ok(checks.every(c => c.goto === 'sys:plans:#claudeProfilesManager'));
-});
-
-test('runtimeChecks: perfil Codex denuncia quando o app nao acha o codex do terminal', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: null, codexChatGPT: false, codexLoginDetail: 'codex login status falhou (código 1)' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks[0].ok, false);
-  assert.match(checks[0].detail, /PATH/);
-  assert.equal(checks[1].ok, false);
-  assert.match(checks[1].detail, /codex login status falhou/);
 });
 
 /* ---------- quarta porta: a UI não reconstrói a autoridade do merge ----------

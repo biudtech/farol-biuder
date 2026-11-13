@@ -1,24 +1,19 @@
 /* Plano e chaves (A2, brief B2 item 2.2): o resultado do teste de um perfil e o aviso de
-   perfil apontado que a cascata não usa. PURAS.
+   perfil apontado que a resolução não usa. PURAS.
 
-   A regra desta tela é a ORIGEM: cada informação diz se foi informada por você, detectada
-   num arquivo, validada pelo Claude Code, inferida ou desconhecida. Sem isso, "conta:
-   fulano" parece o mesmo dado quer tenha vindo do CLI, quer tenha sido lido de um arquivo
-   que pode estar velho. O nome comercial do plano nunca aparece: nada do que o CLI devolve
-   o prova, e a tela diz isso em vez de calar. */
+   A regra desta tela é a ORIGEM: cada informação diz se foi informada por você ou é
+   desconhecida. A chave nunca é validada (isso exigiria uma chamada paga), e a tela diz
+   isso em vez de calar. O nome comercial do plano nunca aparece. */
 import { esc, fmtClock } from './comum.js';
 
 const ROTULOS = {
-  configDir: 'Pasta de configuração',
   login: 'Login',
   email: 'Conta',
   tipoAuth: 'Tipo de autenticação',
   plano: 'Plano',
   chave: 'Chave',
-  contaConfere: 'Conta esperada',
-  cota: 'Cota do plano',
 };
-const ORDEM = ['configDir', 'chave', 'login', 'email', 'contaConfere', 'tipoAuth', 'plano', 'cota'];
+const ORDEM = ['chave', 'login', 'email', 'tipoAuth', 'plano'];
 const SIM_NAO = { true: 'ativo', false: 'sem login' };
 
 function valorLegivel(campo) {
@@ -62,10 +57,10 @@ function perfilTesteHtml(dados = {}) {
 
 const TEXTO_DO_PROBLEMA = {
   'perfil-inexistente': (id) => `aponta para o perfil "${id}", que não existe mais`,
-  'perfil-invalido': (id) => `aponta para o perfil "${id}", que está incompleto (falta a pasta ou a chave)`,
+  'perfil-invalido': (id) => `aponta para o perfil "${id}", que está incompleto (falta a chave)`,
 };
 
-/** O aviso de perfil apontado que a cascata não consegue usar (A2): erro, nunca silêncio. */
+/** O aviso de perfil apontado que a resolução não consegue usar (A2): erro, nunca silêncio. */
 function perfilProblemasHtml(problemas) {
   const lista = Array.isArray(problemas) ? problemas : [];
   if (!lista.length) return '';
@@ -76,7 +71,7 @@ function perfilProblemasHtml(problemas) {
   }).join('');
   return `<div class="banner cp-problemas" role="alert">
     <ul class="cp-problemas-lista">${linhas}</ul>
-    <span class="cp-problemas-fim">Enquanto isso, as sessões dessas contas usam a assinatura legada desta máquina. Escolha outro perfil abaixo.</span>
+    <span class="cp-problemas-fim">Enquanto isso, as sessões dessas contas não usam esse perfil. Escolha outro perfil abaixo.</span>
   </div>`;
 }
 

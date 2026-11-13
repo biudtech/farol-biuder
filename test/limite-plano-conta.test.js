@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const { LIMITE_PLANO_FILE } = await import('../lib/paths.js');
-const { comPerfilDaSessao } = await import('../lib/engine/limite-na-cadeia.js');
+const { comPerfilDaSessao } = await import('../lib/engine/limite-plano.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
 
@@ -36,7 +36,7 @@ function engineBase() {
   e.tokens = { eu: 't1', colega: 't2', outra: 't3' };
   e.log = () => { };
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });
-  e.resolveClaudeAuth = (u) => ({ kind: 'dir', id: '', dir: u === 'outra' ? '/perfis/b' : '/perfis/a' });
+  e.resolveClaudeAuth = (u) => ({ kind: 'apikey', id: u === 'outra' ? 'kb' : 'ka', apiKey: 'sk-fixture', baseUrl: '' });
   e.prState = async () => 'OPEN';
   return e;
 }
@@ -113,7 +113,7 @@ test('o limite sobrevive a reinício: o Farol que reabre não dispara a fila int
 test('limite vencido não sobrevive: ao carregar, o que já passou é descartado', async () => {
   const e = engineBase();
   fs.mkdirSync(path.dirname(LIMITE_PLANO_FILE), { recursive: true });
-  fs.writeFileSync(LIMITE_PLANO_FILE, JSON.stringify({ 'dir:/perfis/a': { ate: Date.now() - 1000, em: Date.now() - 5000 } }));
+  fs.writeFileSync(LIMITE_PLANO_FILE, JSON.stringify({ 'apikey:ka': { ate: Date.now() - 1000, em: Date.now() - 5000 } }));
   const depois = new Engine();
   depois.resolveClaudeAuth = e.resolveClaudeAuth;
   assert.equal(depois.limiteDoPlanoAte('eu'), 0);
@@ -127,10 +127,9 @@ test('o relançamento também respeita o limite da assinatura, mesmo com a esper
   assert.deepEqual(e.retryTargets(new Set(), new Set()).map((p) => p.key), []);
 });
 
-// Decisão de 20/10/2026 (cadeia de perfis): sem hora citada, a assinatura fica travada por um
-// prazo ESTIMADO de uma hora, marcado como estimado. Antes ela não era registrada, e cada PR
-// descobria o limite sozinho a cada ciclo; com a cadeia isso seria a fila inteira batendo no
-// mesmo perfil em vez de seguir para o próximo.
+// Decisão de 20/10/2026: sem hora citada, a assinatura fica travada por um prazo ESTIMADO de
+// uma hora, marcado como estimado. Antes ela não era registrada, e cada PR descobria o limite
+// sozinho a cada ciclo.
 test('limite sem hora de reset trava a assinatura por um prazo estimado de uma hora', async () => {
   const e = engineBase();
   const antes = Date.now();

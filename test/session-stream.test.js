@@ -23,7 +23,6 @@ childProcess.spawn = function mockableSpawn(...args) {
 };
 
 const { runClaudeStream, cancelSession, parseEnvelope } = await import('../lib/engine/session.js');
-const { escolheModelo } = await import('../lib/engine/model-router.js');
 const { prepareSelfIsolation } = await import('../lib/engine/self-isolation.js');
 const io = (await import('../lib/io.js')).default;
 
@@ -51,8 +50,8 @@ function engineFalso() {
     running: new Map(),
     killTree() { },
     recordUsage() { },
-    // padrão: sem perfil de chave de API (legado), authProfileId fica vazio
-    resolveClaudeAuth: () => ({ kind: 'dir', id: '' }),
+    // padrão: sem chave de API (claude de mentira), authProfileId fica vazio
+    resolveClaudeAuth: () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' }),
     toolSummary: () => '',
     parseEnvelope(raw) { return parseEnvelope(this, raw); },
   };
@@ -66,7 +65,7 @@ test('modo restrito cancelado durante --help não inicia modelo nem fallback', a
   const selfIsolation = await prepareSelfIsolation({ source }, { base: path.join(FAROL_HOME, 'isolated') });
   const e = engineFalso();
   e.activeReviews = new Map([['s-cancel', { mode: 'self', cancellable: true }]]);
-  e.resolveClaudeAuth = () => ({ kind: 'dir', dir: path.join(FAROL_HOME, 'profile') });
+  e.resolveClaudeAuth = () => ({ kind: 'apikey', id: 'perfil', apiKey: 'sk-fixture-restrito', baseUrl: '' });
   e.ghEnv = () => ({ PATH: root });
   let release, started; const arrived = new Promise(resolve => { started = resolve; });
   const original = io.run; let spawns = 0;
@@ -94,7 +93,7 @@ test('Claude restrito exige init válido no stream real, preserva modelo e recus
   try {
     for (const tools of [null, ['Read', 'Grep', 'Glob', 'Bash'], ['Read', 'Grep', 'Glob']]) {
       const e = engineFalso(); e.config = { reviewModel: 'sonnet', reviewEffort: 'high' };
-      e.resolveClaudeAuth = () => ({ kind: 'dir', dir: path.join(FAROL_HOME, 'profile') });
+      e.resolveClaudeAuth = () => ({ kind: 'apikey', id: 'perfil', apiKey: 'sk-fixture-restrito', baseUrl: '' });
       e.ghEnv = () => ({ PATH: root });
       e.killTree = () => { throw new Error('fixture de interrupção recusada'); };
       spawnImpl = (_command, args) => {
@@ -109,45 +108,9 @@ test('Claude restrito exige init válido no stream real, preserva modelo e recus
         return child;
       };
       const running = runClaudeStream(e, 'fixture', { id: 's-init', operationKind: 'self', selfIsolation, extraArgs: [],
-        model: 'gpt-6.1-sol', modelRoutes: { claude: { model: 'sonnet', effort: 'high', fast: false } } });
+        model: 'opus', modelRoutes: { claude: { model: 'sonnet', effort: 'high', fast: false } } });
       if (tools?.length === 3) assert.equal((await running).text, 'ok');
       else await assert.rejects(running, /restrit/);
-    }
-  } finally { io.run = original; spawnImpl = null; }
-});
-
-test('Codex restrito rejeita comando e MCP inesperado no stream, sem engolir falha de protocolo', async () => {
-  const root = path.join(FAROL_HOME, 'cli-codex'); fs.mkdirSync(root);
-  fs.writeFileSync(path.join(root, 'codex'), 'fixture');
-  const source = { status: 'complete', manifest: { H: 'a'.repeat(40), files: [] },
-    reader: { tree: async () => ({ complete: true, entries: [] }) } };
-  const selfIsolation = await prepareSelfIsolation({ source }, { base: path.join(FAROL_HOME, 'codex-snapshots') });
-  const original = io.run;
-  io.run = async () => ({ ok: true, stdout: '--ignore-user-config --ignore-rules --ephemeral --sandbox' });
-  try {
-    for (const item of [{ type: 'command_execution', command: 'forbidden' },
-      { type: 'mcp_tool_call', server: 'foreign', tool: 'post_message', status: 'in_progress' }]) {
-      const e = engineFalso(); e.resolveClaudeAuth = () => ({ kind: 'codex', id: 'configured-profile' });
-      e.config = { codexReviewModel: 'auto', codexReviewEffort: 'low' };
-      e.ghEnv = () => ({ PATH: root });
-      e.killTree = () => { throw new Error('fixture de interrupção recusada'); };
-      spawnImpl = (_command, args) => {
-        const child = filhoStream();
-        setImmediate(() => {
-          if (args.includes('login')) child.stdout.write('Logged in using ChatGPT');
-          else {
-            assert.ok(args.includes('--ignore-user-config')); assert.ok(args.includes('default_permissions="farol_read"'));
-            assert.equal(args[args.indexOf('--model') + 1], 'gpt-6.1-sol');
-            assert.ok(args.includes('model_reasoning_effort="xhigh"'));
-            child.stdout.write(JSON.stringify({ type: 'item.started', item }) + '\n');
-          }
-          child.emit('close', 0);
-        });
-        return child;
-      };
-      await assert.rejects(runClaudeStream(e, 'fixture', { id: 's-codex', operationKind: 'self', selfIsolation, extraArgs: [],
-        model: 'opus', modelRoutes: { codex: { model: 'gpt-6.1-sol', effort: 'xhigh', fast: false } } }), /fora do contrato/);
-      assert.equal(e.running.size, 0);
     }
   } finally { io.run = original; spawnImpl = null; }
 });
@@ -318,7 +281,7 @@ test('runClaudeStream: chama recordUsage mesmo quando a sessão termina em erro 
   // em recordUsage mesmo no caminho de erro
   engine.resolveClaudeAuth = (account) => account === 'bob'
     ? { kind: 'apikey', id: 'chave-bob' }
-    : { kind: 'dir', id: '' };
+    : { kind: 'apikey', id: '' };
   // FAROL_HEADLESS_CMD (stub) precisa devolver um envelope com is_error:true E usage
   // preenchido, simulando uma sessão que gastou token nos turnos anteriores e falhou
   // só no evento final (o cenário real do incidente).
@@ -380,138 +343,6 @@ test('runClaudeStream: repassa opts.ref pra recordUsage (Task 4, plumbing PR/cha
   }
   assert.equal(chamadas.length, 1);
   assert.equal(chamadas[0].ref, 'biudtech/farol#88', 'opts.ref precisa chegar em recordUsage');
-});
-
-test('runClaudeStream: perfil Codex confirma ChatGPT, limpa API key e registra tokens sem custo', async () => {
-  const chamadasSpawn = [];
-  const filhos = [];
-  spawnImpl = (cmd, args, opcoes) => {
-    const child = filhoStream();
-    chamadasSpawn.push({ cmd, args, opcoes, child });
-    filhos.push(child);
-    return child;
-  };
-  const chamadasUso = [];
-  const engine = engineFalso();
-  engine.config = {
-    reviewModel: 'opus', reviewEffort: 'low',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'high',
-  };
-  engine.ghEnv = () => ({ PATH: process.env.PATH, OPENAI_API_KEY: 'nao-usar', CODEX_API_KEY: 'nao-usar' });
-  engine.resolveClaudeAuth = () => ({ kind: 'codex', id: 'codex-oss' });
-  engine.recordUsage = (id, account, resultEvent, model, profileId, ref) => {
-    chamadasUso.push({ id, account, resultEvent, model, profileId, ref });
-  };
-  const p = runClaudeStream(engine, 'prompt', { id: 'a1', account: 'trabalho', ref: 'o/r#1' });
-  await new Promise(r => setImmediate(r));
-  filhos[0].stdout.write('Logged in using ChatGPT\n');
-  filhos[0].stdout.end();
-  filhos[0].emit('close', 0);
-  await new Promise(r => setImmediate(r));
-  filhos[1].stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'ct1' }) + '\n');
-  filhos[1].stdout.write(JSON.stringify({ type: 'turn.started' }) + '\n');
-  filhos[1].stdout.write(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok codex' } }) + '\n');
-  filhos[1].stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 12, cached_input_tokens: 3, output_tokens: 4 } }) + '\n');
-  filhos[1].stdout.end();
-  filhos[1].emit('close', 0);
-  spawnImpl = null;
-
-  const res = await p;
-  assert.equal(res.text, 'ok codex');
-  assert.equal(res.sessionId, 'ct1');
-  assert.deepEqual(chamadasSpawn[0].args, ['login', 'status']);
-  assert.equal(chamadasSpawn[0].opcoes.env.OPENAI_API_KEY, undefined);
-  assert.equal(chamadasSpawn[1].args.includes('--model'), true);
-  assert.equal(chamadasSpawn[1].args[chamadasSpawn[1].args.indexOf('--model') + 1], 'gpt-5.6-terra');
-  assert.equal(chamadasSpawn[1].opcoes.env.CODEX_API_KEY, undefined);
-  assert.equal(chamadasUso.length, 1);
-  assert.equal(chamadasUso[0].profileId, 'codex-oss');
-  assert.equal(chamadasUso[0].model, 'gpt-5.6-terra', 'Consumo registra o modelo enviado ao Codex, nunca o alias Claude');
-  assert.equal(chamadasUso[0].resultEvent.usage.input_tokens, 12);
-  assert.equal(chamadasUso[0].resultEvent.total_cost_usd, 0);
-});
-
-test('runClaudeStream: rota Auto do Codex chega ao processo e ao consumo com modelo e xhigh', async () => {
-  const chamadas = [];
-  const filhos = [];
-  spawnImpl = (cmd, args) => {
-    const child = filhoStream();
-    chamadas.push({ cmd, args });
-    filhos.push(child);
-    return child;
-  };
-  const engine = engineFalso();
-  engine.config = { reviewModel: 'auto', codexReviewModel: 'auto', codexReviewEffort: 'low', reviewFast: true };
-  engine.resolveClaudeAuth = () => ({ kind: 'codex', id: 'codex-auto' });
-  const usos = [];
-  engine.recordUsage = (...args) => usos.push(args);
-  const metrics = { lines: 5, changedFiles: 1, files: [{ path: 'src/auth/token.js' }] };
-  const modelRoutes = { claude: escolheModelo(metrics, engine.config), codex: escolheModelo(metrics, engine.config, { provedor: 'codex' }) };
-  // A preparação viu Claude; a sessão passou ao Codex antes do spawn.
-  const p = runClaudeStream(engine, 'revisar', { ...modelRoutes.claude, modelRoutes, id: 'codex-auto', account: 'trabalho' });
-  try {
-    await new Promise(r => setImmediate(r));
-    filhos[0].stdout.write('Logged in using ChatGPT\n');
-    filhos[0].stdout.end();
-    filhos[0].emit('close', 0);
-    await new Promise(r => setImmediate(r));
-    filhos[1].stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } }) + '\n');
-    filhos[1].stdout.end();
-    filhos[1].emit('close', 0);
-    await p;
-    const args = chamadas[1].args;
-    assert.equal(args[args.indexOf('--model') + 1], 'gpt-6.1-sol');
-    assert.ok(args.includes('model_reasoning_effort="xhigh"'));
-    assert.equal(args.includes('auto'), false);
-    assert.equal(args.includes('opus'), false);
-    assert.equal(usos[0][3], 'gpt-6.1-sol');
-  } finally {
-    spawnImpl = null;
-  }
-});
-
-test('runClaudeStream: perfil Codex recusa login por API key antes do prompt', async () => {
-  const filhos = [];
-  spawnImpl = () => {
-    const child = filhoStream();
-    filhos.push(child);
-    return child;
-  };
-  const engine = engineFalso();
-  engine.resolveClaudeAuth = () => ({ kind: 'codex', id: 'codex-oss' });
-  const p = runClaudeStream(engine, 'prompt', { id: 'a1' });
-  await new Promise(r => setImmediate(r));
-  filhos[0].stdout.write('Logged in using an API key\n');
-  filhos[0].stdout.end();
-  filhos[0].emit('close', 0);
-  spawnImpl = null;
-
-  await assert.rejects(p, /login ativo nao usa o plano ChatGPT/);
-  assert.equal(filhos.length, 1, 'nao deve iniciar o modelo quando o preflight falha');
-});
-
-test('runClaudeStream: cancelamento durante preflight Codex nao tenta matar child ausente', async () => {
-  const filhos = [];
-  spawnImpl = () => {
-    const child = filhoStream();
-    filhos.push(child);
-    return child;
-  };
-  const engine = engineFalso();
-  engine.resolveClaudeAuth = () => ({ kind: 'codex', id: 'codex-oss' });
-  const p = runClaudeStream(engine, 'prompt', { id: 'a1' });
-  await new Promise(r => setImmediate(r));
-  assert.equal(cancelSession(engine, 'a1').ok, true);
-  filhos[0].stdout.write('Logged in using ChatGPT\n');
-  filhos[0].stdout.end();
-  filhos[0].emit('close', 0);
-  spawnImpl = null;
-
-  await assert.rejects(p, (err) => {
-    assert.equal(err.cancelled, true);
-    return true;
-  });
-  assert.equal(filhos.length, 1);
 });
 
 test('runClaudeStream: erro após api_retry ganha sufixo de reconexão e err.sessionId (Task 1)', async () => {

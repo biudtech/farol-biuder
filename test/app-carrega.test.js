@@ -44,7 +44,7 @@ const ESTADO = {
     ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }],
     intervalSeconds: 300, autoReview: true, autoApproveAll: false,
     parallelReviews: 1, theme: 'dark', autoPushback: true,
-    reviewModel: '', reviewEffort: '', codexReviewModel: '', codexReviewEffort: '',
+    reviewModel: '', reviewEffort: '',
     mergeBlockedRepos: [], soundEnabled: true,
     people: { bob: { papel: 'senior' } }, claudeProfiles: [], claudeProfileId: '',
   },
@@ -188,7 +188,7 @@ test('aba Sistema ativa: doctor, contas e perfis desenham sem explodir', () => {
   const comSistema = {
     ...ESTADO,
     doctor: { gh: { ok: true, detail: 'ok' }, claude: { ok: true, detail: 'ok' }, account: { ok: true, detail: 'alice' } },
-    config: { ...ESTADO.config, claudeProfiles: [{ id: 'p1', label: 'Pessoal', dir: '/tmp/x' }], claudeProfileId: 'p1' },
+    config: { ...ESTADO.config, claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-x', baseUrl: '' }], claudeProfileId: 'p1' },
   };
   assert.equal(emitir('state', comSistema), 1);
   document.querySelector('#tab-sistema').classList.remove('active');

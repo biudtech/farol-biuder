@@ -88,7 +88,6 @@ test('o catálogo da tela é só dado, sem regex, e traz o esforço de cada sele
   assert.deepEqual(c.claude.map((s) => s.valor), M.SELECOES_CLAUDE.map((s) => s.valor));
   assert.equal(c.claude.find((s) => s.valor === 'auto').aceitaEsforco, false);
   assert.equal(c.claude.find((s) => s.valor === 'auto').rotulo, M.rotuloDoAuto());
-  assert.ok(c.codex.length > 1);
 });
 
 test('as opções do seletor saem do catálogo, escapadas', () => {
@@ -166,7 +165,7 @@ test('nenhum modelo é escrito à mão fora do catálogo', () => {
 
 test('o seletor da tela não tem opção fixa no HTML: todas vêm do catálogo', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'ui', 'index.html'), 'utf8');
-  for (const id of ['setReviewModel', 'setCodexReviewModel']) {
+  for (const id of ['setReviewModel']) {
     const m = new RegExp(`<select id="${id}"[^>]*>([\\s\\S]*?)</select>`).exec(html);
     assert.ok(m, `#${id} existe`);
     assert.doesNotMatch(m[1], /<option/, `#${id} com opção fixa no HTML volta a ser uma segunda lista`);

@@ -48,14 +48,6 @@ const CONGELADA = [
   "resolvidasHoje",
   "rodapeDasRecentes",
   "resumoPraMimHtml",
-  // o Antigravity em Plano e chaves (20/10/2026, ui/pure/agy.js): a cota ao vivo e o cartão
-  "camposAgyHtml",
-  "cotaAgyHtml",
-  // cadeia de perfis em Plano e chaves (20/10/2026, ui/pure/cadeia.js)
-  "alternarNaCadeia",
-  "cadeiaHtml",
-  "estadoDaCadeiaTexto",
-  "moverNaCadeia",
   // a URL reflete a tela (18/10/2026): ui/pure/rota.js traduz endereço <-> rota; desde
   // 20/10/2026 a rota mora no caminho, e enderecoDaPagina converte o hash antigo
   "enderecoDaPagina",
@@ -256,7 +248,6 @@ const CONGELADA = [
   "logSummaryLines",
   "logSummaryShort",
   "logTailLines",
-  "loginWebHtml",
   "md",
   "mergeToastKind",
   "mesclarListaRemota",

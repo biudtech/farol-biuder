@@ -43,7 +43,7 @@ function filho() {
   return c;
 }
 
-function engineFalso(registros, auth = { kind: 'dir', id: 'p1' }) {
+function engineFalso(registros, auth = { kind: 'apikey', id: 'p1', apiKey: 'sk-fixture', baseUrl: '' }) {
   return {
     config: {}, running: new Map(), killTree() { },
     ghEnv: () => ({ PATH: '' }), resolveClaudeAuth: () => auth,
@@ -97,30 +97,6 @@ test('falha no spawn (evento error) também fecha a tentativa', async () => {
   c.emit('error', new Error('ENOENT'));
   await assert.rejects(p, /ENOENT/);
   assert.deepEqual(diario(), []);
-});
-
-test('sessão Codex: tentativa aberta antes do provedor e fechada depois do registro da falha', async () => {
-  const registros = [];
-  process.env.FAROL_HEADLESS_CMD = 'stub-do-teste';
-  const criado = new Promise((resolve) => { spawnImpl = () => { const c = filho(); resolve(c); return c; }; });
-  const p = runClaudeStream(engineFalso(registros, { kind: 'codex', id: 'cx1' }), 'prompt', { id: 'a-fio-cx', ref: 'o/r#2' });
-  try {
-    const c = await criado;
-    spawnImpl = null;
-    const [aberta] = diario();
-    assert.equal(aberta.provedor, 'codex');
-    c.stdout.write(JSON.stringify({ type: 'turn.failed', error: { message: 'recusado' } }) + '\n');
-    await tick();
-    c.stdout.once('end', () => c.emit('close', 1));
-    c.stdout.end();
-    await assert.rejects(p, (err) => err.attemptId === aberta.attemptId);
-    assert.equal(registros.at(-1).ev.farol_attempt, aberta.attemptId);
-    assert.equal(registros.at(-1).ev.farol_custo_desconhecido, true);
-    assert.deepEqual(diario(), []);
-  } finally {
-    spawnImpl = null;
-    delete process.env.FAROL_HEADLESS_CMD;
-  }
 });
 
 test('boot da Engine reconcilia a tentativa que sobrou', () => {

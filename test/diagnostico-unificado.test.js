@@ -38,7 +38,7 @@ before(async () => {
   engine.log = () => { };
   engine.pushState = () => { };
   engine.config.port = 0;
-  engine.doctorInfo = { node: 'v24.0.0', gh: 'gh version 2.0.0', ghAuth: true, claude: '1.0.0 (Claude Code)', codex: null, root: false, claudeAuth: [{ id: '', label: 'Padrão', ready: true, account: 'pessoa@exemplo.com' }] };
+  engine.doctorInfo = { node: 'v24.0.0', gh: 'gh version 2.0.0', ghAuth: true, claude: '1.0.0 (Claude Code)', root: false, claudeAuth: [{ id: 'k1', label: 'Chave', ready: true, apiKeyMode: true }] };
   engine.registrarFalha({ sessionId: 'a-diag', kind: 'review', ref: 'acme/repo#7 <b>x</b>', motivo: MALICIOSO });
   await new Promise((resolve, reject) => {
     server = startServer(engine, (url, err) => (err ? reject(err) : resolve()));
