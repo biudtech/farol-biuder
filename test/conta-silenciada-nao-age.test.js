@@ -43,8 +43,8 @@ after(() => {
 
 beforeEach(() => { chamadas.length = 0; });
 
-test('silenciar durante terminal/chat permite concluir pela identidade admitida, mas não abrir outra sessão', async () => {
-  for (const source of ['terminal', 'chat']) {
+test('silenciar durante terminal permite concluir pela identidade admitida, mas não abrir outra sessão', async () => {
+  for (const source of ['terminal']) {
     const e = engineDoIncidente();
     e.config.accounts[0].muted = false;
     const cap = e.createReviewPostCapability([KEY_76], SILENCIADA, source, 'em-curso');
@@ -136,7 +136,6 @@ function engineDoIncidente(contas) {
   e.refreshToken = async () => { };
   e.log = () => { };
   e.pushState = () => { };
-  e.saveChats = () => { };
   e.saveDecisions = () => { };
   e.toasts = [];
   e.on('toast', (t) => e.toasts.push(t));
@@ -162,7 +161,7 @@ const escritas = () => chamadas.filter((c) => {
 test('accountForOwner: silenciada listada antes da ativa na mesma org, vence a ativa', () => {
   const e = engineDoIncidente();
   assert.equal(e.accountForOwner('biudtech'), ATIVA);
-  assert.equal(e.accountForPr({ key: KEY_76 }), ATIVA, 'PR sem conta marcada (URL avulsa, chat) também');
+  assert.equal(e.accountForPr({ key: KEY_76 }), ATIVA, 'PR sem conta marcada (URL avulsa) também');
 });
 
 test('accountForOwner: ativa sem token perde para a ativa com token; sem nenhuma com token, fica a ativa', () => {
@@ -260,28 +259,6 @@ test('panorama: primeira conta sem token perde para a segunda capaz', async () =
 
 /* ---------- 4: os caminhos de escrita por clique recusam a conta silenciada ---------- */
 
-test('chat: conta do PR silenciada recusa sem abrir sessão (que rodaria com o GH_TOKEN dela)', async () => {
-  const e = engineSoSilenciada();
-  let abriu = false;
-  e.runClaudeStream = async () => { abriu = true; return { text: 'x' }; };
-  const r = await e.chatSend(KEY_76, URL_76, 'dispensa o review e pede de novo');
-  assert.equal(r.ok, false);
-  assert.equal(r.blocked, 'conta_silenciada');
-  assert.match(r.error, /conta wandersonbiuder está silenciada e não age; reative a conta ou use outra/);
-  assert.equal(abriu, false);
-  assert.equal(chamadas.length, 0, 'nenhum gh');
-});
-
-test('chat: no cenário do incidente, a conversa abre com a ativa', async () => {
-  const e = engineDoIncidente();
-  let captured = null;
-  e.runClaudeStream = async (prompt, opts) => { captured = opts; return { text: 'oi', sessionId: 's1' }; };
-  const r = await e.chatSend(KEY_76, URL_76, 'olá');
-  assert.equal(r.ok, true);
-  while (e.chats[KEY_76].status === 'running') await new Promise((res) => setTimeout(res, 10));
-  assert.equal(captured.account, ATIVA);
-});
-
 test('launchReview: conta silenciada não abre revisão nem pelo clique, e o aviso diz por quê', async () => {
   const e = engineSoSilenciada();
   const enfileirados = [];
@@ -317,7 +294,7 @@ test('porta de execução: conta silenciada é motivo próprio, e o enqueueHeadl
   assert.equal(recibo.detalhe.includes('código conta_silenciada'), false);
 });
 
-test('postagem: PR marcado com a conta silenciada recusa antes de qualquer gh (chat, terminal, reenvio)', async () => {
+test('postagem: PR marcado com a conta silenciada recusa antes de qualquer gh (terminal, reenvio)', async () => {
   const e = engineDoIncidente();
   const pr = { key: KEY_76, repo: 'biudtech/internal-auth', number: 76, account: SILENCIADA };
   const r = await e.postReview(pr, { event: 'COMMENT', body: 'Ok por aqui.' });
@@ -346,17 +323,6 @@ test('decide: clique na pendência de conta silenciada não posta e avisa na tel
   assert.equal(escritas().length, 0);
 });
 
-test('Meus PRs: pedir reviewers num PR da conta silenciada recusa, sem trocar para a ativa', async () => {
-  const e = engineDoIncidente();
-  e.config.defaultReviewers = { biudtech: [ATIVA, 'carol'] };
-  e.myPRs = [{ key: KEY_76, url: URL_76, repo: 'biudtech/internal-auth', number: 76, author: SILENCIADA, account: SILENCIADA }];
-  const r = await e.setReviewers(URL_76);
-  assert.equal(r.ok, false);
-  assert.equal(r.blocked, 'conta_silenciada');
-  assert.equal(escritas().length, 0, 'nenhum pr edit (assignee ou reviewer) com identidade nenhuma');
-  assert.ok(e.toasts.some((t) => t.kind === 'error' && /wandersonbiuder está silenciada/.test(t.text)));
-});
-
 test('Meus PRs: merge num PR da conta silenciada recusa antes de ler o PR', async () => {
   const e = engineDoIncidente();
   e.myPRs = [{ key: KEY_76, url: URL_76, repo: 'biudtech/internal-auth', number: 76, author: SILENCIADA, account: SILENCIADA }];
@@ -364,17 +330,6 @@ test('Meus PRs: merge num PR da conta silenciada recusa antes de ler o PR', asyn
   assert.equal(r.ok, false);
   assert.equal(r.blocked, 'conta_silenciada');
   assert.equal(chamadas.length, 0);
-});
-
-test('Meus PRs: a conta autora ativa continua pedindo reviewers como antes', async () => {
-  const e = engineDoIncidente();
-  e.config.defaultReviewers = { biudtech: ['carol'] };
-  e.myPRs = [{ key: KEY_76, url: URL_76, repo: 'biudtech/internal-auth', number: 76, author: ATIVA, account: ATIVA }];
-  const r = await e.setReviewers(URL_76);
-  assert.equal(r.ok, true);
-  const edits = chamadas.filter((c) => c.args[0] === 'pr' && c.args[1] === 'edit');
-  assert.ok(edits.length >= 2);
-  for (const c of edits) assert.equal(c.env.GH_TOKEN, 'tok-ativa');
 });
 
 test('sinal legado: a coleta de ref órfã não apaga nada com a conta silenciada', async () => {

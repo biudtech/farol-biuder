@@ -1,6 +1,5 @@
 /* Farol · UI: paleta de comando (Ctrl+K / Cmd+K). Ir a qualquer lugar rápido:
-   abas, seções do Radar, ou colar/digitar URL/key de PR (org/repo#NN) pra abrir a
-   conversa salva, sem precisar do mouse. Não é aba (não passa por registrarTela):
+   abas e seções do Radar, sem precisar do mouse. Não é aba (não passa por registrarTela):
    o bootstrap (ui/app.js) chama initPaleta(switchTab, switchRadarSub) no mesmo ponto em que a
    ligação do #btnCmdK e o listener de Ctrl+K moravam. */
 
@@ -10,7 +9,6 @@ import { $, toast } from './infra.js';
 import { scopeVisible } from './contas.js';
 import { decide, decideComConfirmacao } from './acoes.js';
 import { switchSistemaSection } from './sistema.js';
-import { openChat } from './chat.js';
 import { kbdHelp } from './atalhos.js';
 import { comandosDasPendencias } from '../pure/paleta-decisoes.js';
 
@@ -79,17 +77,11 @@ function cmdItemClick(items, idx) {
 }
 function cmdRenderList(input, list) {
   const q = input.value.trim();
-  const prMatch = q.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/i) || q.match(/^([\w.-]+\/[\w.-]+)#(\d+)$/);
   const items = [];
-  if (prMatch) {
-    const key = `${prMatch[1]}#${prMatch[2]}`;
-    const url = q.startsWith('http') ? q : `https://github.com/${prMatch[1]}/pull/${prMatch[2]}`;
-    items.push({ label: `Abrir a conversa de ${key}`, hint: 'PR', run: () => openChat(key, url) });
-  }
   const ql = q.toLowerCase();
   items.push(...cmdStatic().filter(c => !ql || c.label.toLowerCase().includes(ql)));
   list.innerHTML = items.map((c, idx) => `<div class="cmd-item${idx === 0 ? ' sel' : ''}" data-idx="${idx}"><span>${esc(c.label)}</span><span class="cmd-hint">${esc(c.hint)}</span></div>`).join('')
-    || '<div class="cmd-empty">Nada encontrado. Cole a URL de um PR pra abrir a conversa.</div>';
+    || '<div class="cmd-empty">Nada encontrado.</div>';
   [...list.querySelectorAll('.cmd-item')].forEach((el, idx) => { el.onclick = () => cmdItemClick(items, idx); });
 }
 function cmdOpen() {
@@ -97,7 +89,7 @@ function cmdOpen() {
   const ov = document.createElement('div');
   ov.className = 'modal-overlay cmd-overlay';
   ov.innerHTML = `<div class="cmd-box">
-    <input id="cmdInput" class="cmd-input" type="text" spellcheck="false" placeholder="Ir para… ou cole a URL/key de um PR (org/repo#NN)">
+    <input id="cmdInput" class="cmd-input" type="text" spellcheck="false" placeholder="Ir para…">
     <div id="cmdList" class="cmd-list"></div>
   </div>`;
   document.body.appendChild(ov);

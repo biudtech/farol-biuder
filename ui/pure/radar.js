@@ -15,7 +15,7 @@
 import { esc, fmtMoney, fmtRel, fmtStamp, fmtWhenDay, plural } from './comum.js';
 import { avatar, personMention } from './mencoes.js';
 import { papelPicker } from './pessoas.js';
-import { chatBadge, reviewChip } from './review.js';
+import { reviewChip } from './review.js';
 import { prCoordNoteHtml } from './sync.js';
 import { filaEsperaHtml } from './fila-espera.js';
 import { avisosDoCard, limitNoteHtml, othersLineHtml, pwOthersHtml } from './revisando.js';
@@ -218,9 +218,6 @@ export function queueCardHtml(pr, ctx) {
       </div>
       <div class="pr-actions">
         ${acaoRevisar}
-        <button class="btn icon sm ghost act-chat" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}" title="Conversar com o Claude sobre este PR" aria-label="Conversar com o Claude sobre este PR">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-2.7A8 8 0 1 1 21 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-        </button>
         <button class="btn icon sm ghost act-more" data-key="${esc(pr.key)}" title="Mais ações" aria-label="Mais ações" aria-expanded="false">···</button>
         ${ctx.pronLado || ''}
       </div>
@@ -345,7 +342,6 @@ export function panoramaRowHtml(pr, ctx) {
         ${ctx.pronPontos || ''}
         <span class="pw-when">${fmtRel(pr.updatedAt)}</span>
         <div class="pw-acts">
-          <button class="btn icon sm ghost act-chat" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}" title="Conversar com o Claude sobre este PR" aria-label="Conversar sobre este PR">💬${chatBadge(pr.key, ctx.chats)}</button>
           ${tail}
           <button class="btn icon sm ghost rr-copy" data-url="${esc(pr.url)}" data-key="${esc(pr.key)}" title="Copiar a URL do PR" aria-label="Copiar a URL do PR">⧉</button>
           <a class="btn icon sm ghost" href="${esc(pr.url)}" target="_blank" rel="noreferrer" title="Abrir no GitHub" aria-label="Abrir no GitHub">↗</a>

@@ -55,8 +55,8 @@ test('prefixo desconhecido é recusado', () => {
   assert.throws(() => novoIdDeSessao(new Engine(), 'x'), /prefixo de sessão desconhecido/);
 });
 
-test('as cinco sessões de IA usam o id opaco, nenhuma monta id com o contador', () => {
-  const sitios = [['lib/engine/review.js', 'a'], ['lib/engine/selfpr.js', 's'], ['lib/engine/pushback.js', 'pb'], ['lib/engine/tools.js', 'f'], ['lib/engine/chat.js', 'c']];
+test('as quatro sessões de IA usam o id opaco, nenhuma monta id com o contador', () => {
+  const sitios = [['lib/engine/review.js', 'a'], ['lib/engine/selfpr.js', 's'], ['lib/engine/pushback.js', 'pb'], ['lib/engine/tools.js', 'f']];
   for (const [arquivo, prefixo] of sitios) {
     const fonte = fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
     assert.match(fonte, new RegExp(`novoIdDeSessao\\(engine, '${prefixo}'\\)`), arquivo);

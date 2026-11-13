@@ -6,7 +6,6 @@ import { estado, ehWin, ehMac, ehElectron } from './estado.js';
 import { $, sysFlash } from './infra.js';
 import { registrarTela } from './registro.js';
 import { loadLog } from './ferramentas.js';
-import { loadReviewerCands, renderReviewersEditor } from './reviewers.js';
 import { renderReleaseNotes } from './novidades.js';
 import { renderAccountsManager } from './sistema-contas.js';
 import { renderClaudeProfiles } from './sistema-perfis.js';
@@ -19,10 +18,8 @@ import { renderDoctor } from './sistema-ambiente.js';
 import { renderAbout } from './sistema-sobre.js';
 import { renderInterventionSettings } from './intervention-settings.js';
 import { initSpecialists, renderSpecialistAccounts } from './specialists.js';
-import { initReviewAudits } from './review-audits.js';
 import { initCapacity } from './capacity.js';
 import { initSetup, renderSetup } from './setup.js';
-import { initPreferencesTransfer } from './preferences-transfer.js';
 import { initReviewLabels } from './review-labels.js';
 import { syncTheme } from './tema.js';
 import { renderAutomationSettings } from './sistema-automacao.js';
@@ -121,7 +118,6 @@ function renderSettings() {
   syncTheme(c);
   if (!document.activeElement || !$('#setupSteps').contains(document.activeElement)) renderSetup();
   renderReposBloqueados();
-  renderReviewersEditor();
   renderClaudeProfiles();
   renderJiraSites();
   renderSync();
@@ -175,14 +171,12 @@ function renderPlatformSettings() {
 // não tem essa restrição: só precisa que o IMPORT deste módulo, no app.js, venha
 // depois do import de telas/time.js.
 initSpecialists();
-initReviewAudits();
 initCapacity();
 initSetup();
-initPreferencesTransfer();
 initReviewLabels();
 registrarTela({
   id: 'sistema',
-  aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); loadReviewerCands(); },
+  aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); },
   aoEstado: () => { ocultarSecoesInertes(); if ($('#tab-sistema').classList.contains('active')) { renderDoctor(); renderAccountsManager(); renderAparelhos(); renderGrupos(); } },
 });
 

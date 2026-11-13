@@ -25,7 +25,7 @@ async function checkPintura(main, waitFor, output) {
     await web.executeJavaScript(`(() => {
       const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
       window.__paintProbe={counts:{},elements:[]};
-      for(const selector of ['#resolved','#reviewersEditor','#queue','#myPRs']){
+      for(const selector of ['#resolved','#claudeProfilesManager','#queue','#myPRs']){
         const el=document.querySelector(selector);window.__paintProbe.counts[selector]=0;
         Object.defineProperty(el,'innerHTML',{configurable:true,get(){return descriptor.get.call(this)},set(value){window.__paintProbe.counts[selector]++;descriptor.set.call(this,value)}});
         window.__paintProbe.elements.push(el);
@@ -36,7 +36,7 @@ async function checkPintura(main, waitFor, output) {
     await settle(web);
     const writes = await web.executeJavaScript('({...window.__paintProbe.counts})');
     assert.equal(writes['#resolved'], 0, 'consumo não reconstrói relatórios');
-    assert.equal(writes['#reviewersEditor'], 0, 'consumo não reconstrói configurações ocultas');
+    assert.equal(writes['#claudeProfilesManager'], 0, 'consumo não reconstrói configurações ocultas');
     assert.equal(writes['#myPRs'], 0, 'subaba oculta não pinta');
     report.checks.usage = { writes, events: 100 };
 

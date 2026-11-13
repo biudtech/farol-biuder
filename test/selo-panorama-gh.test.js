@@ -27,7 +27,7 @@ const MARK = { style: '', varStyle: '', dim: '', chip: '', dot: '', acct: { labe
 const prDe = (extra = {}) => ({ key: KEY, url: 'https://github.com/acme/api/pull/7', repo: 'acme/api', number: 7, title: 'Corrige o gate', author: 'alice', updatedAt: '2026-09-15T10:00:00Z', reviewedByMe: true, ...extra });
 
 function ctxDo(snap) {
-  return { mark: MARK, actions: snap.reviewActions, staleStates: snap.staleStates, reviewStatesGh: snap.reviewStatesGh, todasContas: false, chats: {}, running: new Set(), waiting: [] };
+  return { mark: MARK, actions: snap.reviewActions, staleStates: snap.staleStates, reviewStatesGh: snap.reviewStatesGh, todasContas: false, running: new Set(), waiting: [] };
 }
 
 test('CHANGES_REQUESTED postado por outro aparelho aparece como "aguardando o autor", e o selo acompanha o GitHub a cada ciclo', async () => {
@@ -71,7 +71,7 @@ test('reviewStatesGh só projeta PR do panorama e só estado decisivo', async ()
 });
 
 test('pendência na mesa deste aparelho vence o GitHub; sem estado nenhum, revisado não finge aprovação', () => {
-  const base = { mark: MARK, actions: {}, staleStates: {}, reviewStatesGh: {}, todasContas: false, chats: {}, running: new Set(), waiting: [] };
+  const base = { mark: MARK, actions: {}, staleStates: {}, reviewStatesGh: {}, todasContas: false, running: new Set(), waiting: [] };
   const pendente = P.panoramaRowHtml(prDe(), { ...base, actions: { [KEY]: { kind: 'pending' } }, reviewStatesGh: { [KEY]: 'APPROVED' } });
   assert.match(pendente, /aguardando você/);
   const semEstado = P.panoramaRowHtml(prDe(), base);

@@ -13,7 +13,7 @@ const { doc, emitir, listeners } = instalarDom();
 const quadros = controlarQuadros();
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => null, text: async () => '' });
 const counts = {};
-for (const selector of ['#resolved', '#queue', '#reviewersEditor', '#myPRs', '#panorama']) {
+for (const selector of ['#resolved', '#queue', '#claudeProfilesManager', '#myPRs', '#panorama']) {
   counts[selector] = 0;
   const el = doc.querySelector(selector); let html = '';
   Object.defineProperty(el, 'innerHTML', { get: () => html, set: value => { html = String(value); counts[selector] = (counts[selector] || 0) + 1; } });
@@ -22,7 +22,7 @@ await import(pathToFileURL(path.join(target, 'ui/app.js')).href);
 const { estado } = await import(pathToFileURL(path.join(target, 'ui/telas/estado.js')).href);
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const fixture = { app: { platform: 'win32', version: 'fixture' }, status: 'idle', account: { user: 'dev', tokenOk: true }, accounts: [],
-  config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], defaultReviewers: {}, projectReviewers: {}, theme: 'dark' },
+  config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], theme: 'dark' },
   queue: [], panorama: [], myPRs: [], decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
   usage: {}, toolRuns: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 emitir('state', fixture); quadros.pintar();
@@ -45,7 +45,7 @@ test('replay controlado de deltas, janela oculta e atividade', () => {
   if (target === current) {
     assert.equal(radarUsage.writes['#queue'], 1);
     assert.equal(radarUsage.writes['#resolved'], 0);
-    assert.equal(radarUsage.writes['#reviewersEditor'] || 0, 0);
+    assert.equal(radarUsage.writes['#claudeProfilesManager'] || 0, 0);
     assert.equal(hiddenQueue.writes['#queue'], 0);
     assert.equal(result.retainedActivity, 300);
   }

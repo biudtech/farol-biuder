@@ -2,10 +2,6 @@
   "lib/constants.js": {
     "tempoMagico": 2
   },
-  "lib/engine/chat.js": {
-    "ternarioAninhado": 1,
-    "profundidadeExcedida": 2
-  },
   "lib/engine/decision.js": {
     "maxLines": 254,
     "jsonStringifyCru": 2,
@@ -26,11 +22,11 @@
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
-    "maxLines": 316,
+    "maxLines": 242,
     "emptyCatch": 1,
     "jsonParseCru": 4,
-    "ternarioAninhado": 2,
-    "tempoMagico": 2
+    "ternarioAninhado": 1,
+    "tempoMagico": 1
   },
   "lib/engine/session.js": {
     "maxLines": 421,
@@ -76,7 +72,7 @@
     "profundidadeExcedida": 2
   },
   "server.js": {
-    "maxLines": 929,
+    "maxLines": 903,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,
@@ -137,9 +133,6 @@
   },
   "ui/telas/radar.js": {
     "ternarioAninhado": 2
-  },
-  "ui/telas/reviewers.js": {
-    "profundidadeExcedida": 1
   },
   "ui/telas/sistema-ambiente.js": {
     "ternarioAninhado": 2

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { safeStringify } from '../../lib/io.js';
-const SELECTORS = ['#resolved', '#queue', '#reviewersEditor', '#myPRs', '#panorama'];
+const SELECTORS = ['#resolved', '#queue', '#claudeProfilesManager', '#myPRs', '#panorama'];
 const consumo = marker => ({ usage: { marker } });
 const eventoDeAtividade = n => ({ id: 'fixture', item: { t: 1000 + n, k: 'info', s: 'leitura', text: `evento ${n}` } });
 async function executarTraco({ win, transport, delay, metrics, revised }) {
@@ -112,8 +112,8 @@ async function executarTraco({ win, transport, delay, metrics, revised }) {
     myPR:m.estado().myPRs[0].title, lastActivity:m.estado().activity.fixture.at(-1).text})`);
   const errors = await js('window.__bench.errors'); assert.deepEqual(errors, []);
   if (revised) {
-    assert.equal(spaced.writes['#resolved'], 0); assert.equal(spaced.writes['#reviewersEditor'], 0);
-    assert.equal(spaced.writes['#myPRs'], 0); assert.equal(hiddenTab.writes['#reviewersEditor'], 0);
+    assert.equal(spaced.writes['#resolved'], 0); assert.equal(spaced.writes['#claudeProfilesManager'], 0);
+    assert.equal(spaced.writes['#myPRs'], 0); assert.equal(hiddenTab.writes['#claudeProfilesManager'], 0);
     assert.deepEqual(hiddenWindow, Object.fromEntries(SELECTORS.map(s => [s, 0])));
     assert.equal(focusPreserved, true); assert.equal(draftWhileFocused, true); assert.equal(draftAfterBlur, true);
     assert.equal(retainedActivity, 300); assert.equal(clockCurrent, true);

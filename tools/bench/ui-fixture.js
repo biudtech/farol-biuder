@@ -13,13 +13,13 @@ function estadoInicial() {
   return { app: { name: 'Farol', version: 'fixture', platform: 'win32' }, status: 'idle',
     account: { user: 'alice', tokenOk: true }, accounts: [{ user: 'alice', owners: ['acme'] }],
     config: { accounts: [{ user: 'alice', owners: ['acme'] }], intervalSeconds: 300,
-      parallelReviews: 1, people: {}, claudeProfiles: [], defaultReviewers: {}, projectReviewers: {},
+      parallelReviews: 1, people: {}, claudeProfiles: [],
       theme: 'dark', teamHighlights: false, deliveriesEnabled: false, soundEnabled: false },
     queue: Array.from({ length: 12 }, (_, i) => pr(i + 1)),
     panorama: Array.from({ length: 20 }, (_, i) => pr(i + 1)), myPRs: [pr(50, 'alice')],
     hiddenPRs: [], activeSessions: [], activity: {},
     headlessWaiting: [], decisions: { pending: [], resolved }, selfAnalyses: {},
-    reviewActions: {}, chats: {}, usage: {}, toolRuns: {}, update: {},
+    reviewActions: {}, usage: {}, toolRuns: {}, update: {},
     paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }
 export { estadoInicial };

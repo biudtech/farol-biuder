@@ -41,10 +41,10 @@ function estado({ sync = {}, panorama = [], myPRs = [] } = {}) {
     app: { name: 'Farol', version: '2.59.7', platform: 'win32' },
     status: 'ocioso', account: { user: 'alice', tokenOk: true },
     accounts: CONTAS,
-    config: { ghUser: 'alice', owners: ['acme'], accounts: CONTAS, intervalSeconds: 300, sync: {}, people: {}, defaultReviewers: {}, projectReviewers: {}, claudeProfiles: [] },
+    config: { ghUser: 'alice', owners: ['acme'], accounts: CONTAS, intervalSeconds: 300, sync: {}, people: {}, claudeProfiles: [] },
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
     queue: [], panorama, myPRs, hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
-    activeSessions: [], headlessWaiting: [], chats: {}, reviewActions: {}, staleStates: {},
+    activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
     usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
     // Task 9 (28/09/2026): as seções da frota (o andamento remoto, aqui) só pintam pro

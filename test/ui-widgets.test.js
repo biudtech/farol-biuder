@@ -80,7 +80,7 @@ test('loadDeliveries descarta resposta velha por token de requisicao (M19)', () 
   assert.ok(fn, 'loadDeliveries existe');
   assert.match(fn[0], /const rid = \+\+deliveriesReqSeq/, 'cada carga pega um token novo');
   assert.match(fn[0], /if \(rid !== deliveriesReqSeq\) return/,
-    'resposta de carga superada nao pinta a tela (padrao da guarda do openChat)');
+    'resposta de carga superada nao pinta a tela (guarda por token de requisicao)');
   const posGuarda = fn[0].indexOf('rid !== deliveriesReqSeq');
   const posClose = fn[0].indexOf('closeOp(');
   assert.ok(posGuarda !== -1 && posGuarda < posClose,
@@ -209,35 +209,6 @@ test('renderAccountBar consome a allowlist pura (B14)', () => {
   assert.ok(fn, 'renderAccountBar existe');
   assert.match(fn[0], /accountBarVisible\(/);
   assert.doesNotMatch(fn[0], /abaAtual\(\) === 'sistema'/, 'a denylist antiga saiu');
-});
-
-/* ---------- atividade do chat e encerramento (B16) ---------- */
-
-test('chat-activity atualiza a pill via updateOp, nao atropela o container (B16)', () => {
-  // Correção 4 da Task 11a: o cálculo saiu do connect() (ui/app.js, que só
-  // entrega o evento) para handleChatActivity, em telas/chat.js, que já é
-  // dono de chatKeyAtual().
-  const fn = APPJS.match(/function handleChatActivity\([\s\S]*?\n\}/);
-  assert.ok(fn, 'handleChatActivity existe');
-  assert.match(fn[0], /updateOp\(/, 'o texto vivo entra como step da operacao');
-  assert.doesNotMatch(fn[0], /\.textContent = text/,
-    'textContent no container destroi a pill que o renderChat criou dentro dele');
-});
-
-test('closeChat encerra a operacao do chat antes de soltar a chave (B16)', () => {
-  // recorte ancorado no inicio da PROXIMA funcao: o closeChat de uma linha so
-  // faria a regex de bloco (ate \n}) engolir o renderChat e casar falso-verde
-  const fn = APPJS.match(/function closeChat\(\)[\s\S]*?(?=\nfunction renderChat\()/);
-  assert.ok(fn, 'closeChat existe imediatamente antes do renderChat');
-  assert.match(fn[0], /closeOp\(`chat-\$\{chatKey\}`/,
-    'fechar o painel no meio da resposta nao pode vazar a op no ACTIVE_OPS');
-});
-
-test('a fase generica do chat roda so no primeiro paint, nao a cada snapshot (B16)', () => {
-  const fn = APPJS.match(/function renderChat\([\s\S]*?\n\}/);
-  assert.ok(fn, 'renderChat existe');
-  assert.doesNotMatch(fn[0], /Math\.random\(\)/,
-    'fase sorteada a cada snapshot atropelava o texto real vindo do chat-activity');
 });
 
 /* ---------- marcadores de sessao do merge (B17) ---------- */
@@ -501,7 +472,7 @@ test('toda menção com data-goto é anunciada como botão (role + tabindex)', (
 
 /* ---------- progresso: regua unica, sem percentual chutado ---------- */
 
-test('progresso literal no app.js so existe no paint inicial (<= 10); o resto sai da regua sessionProgress', () => {
+test('progresso literal no app.js so existe no paint inicial (<= 10)', () => {
   // o bug de origem (16/08/2026): barra da autoanalise fixa em "progress: 25"
   // ate concluir do nada. A regra agora e central: percentual de meio de fluxo
   // vem SEMPRE de sessionProgress (ui/pure.js); literal so pro primeiro paint,
@@ -509,7 +480,6 @@ test('progresso literal no app.js so existe no paint inicial (<= 10); o resto sa
   const chutes = [...APPJS.matchAll(/progress:\s*(\d+)/g)].filter(m => Number(m[1]) > 10);
   assert.deepEqual(chutes.map(m => m[0]), [],
     'percentual literal acima de 10 no app.js: use sessionProgress (ui/pure.js), a regua unica de progresso');
-  assert.ok(APPJS.includes('sessionProgress('), 'a regua central sumiu do app.js');
 });
 
 /* ---------- o vazio da fila nomeia a org CERTA ----------
@@ -583,18 +553,14 @@ test('Visão geral abre pelos checks de saúde e o aplicar só realça com difer
   assert.ok(pos('doctor') > 0 && pos('doctor') < pos('updateBox'), 'doctor antes do updateBox');
   assert.ok(pos('updateBox') < pos('setupManager'), 'updateBox antes do setupManager');
   assert.ok(pos('setupManager') < pos('reviewLabels'), 'setupManager antes do reviewLabels');
-  assert.ok(pos('reviewLabels') < pos('preferencesTransfer'), 'reviewLabels antes do preferencesTransfer');
-  assert.match(HTML, /<button class="btn sm" type="button" id="preferencesApply"/, 'aplicar nasce sem primary');
   const atualizacao = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'sistema-atualizacao.js'), 'utf8');
   assert.doesNotMatch(atualizacao, /O botão abaixo/);
 });
 
-test('atalhos A/M/C passam pela confirmação e o botão de reviewers diz o que faz', () => {
+test('atalhos A/M/C passam pela confirmação', () => {
   const raiz = path.join(import.meta.dirname, '..');
   const atalhos = fs.readFileSync(path.join(raiz, 'ui/telas/atalhos.js'), 'utf8');
   assert.match(atalhos, /sempre: true/);
   assert.match(atalhos, /decideComConfirmacao/);
   assert.deepEqual(atalhos.match(/.*\.click\(\).*/g), ["  if (btn.dataset.action === 'skip') { btn.click(); return; }"], 'só o pular clica no botão');
-  const meus = fs.readFileSync(path.join(raiz, 'ui/telas/meus-prs.js'), 'utf8');
-  assert.match(meus, /Pedir reviewers no GitHub/);
 });

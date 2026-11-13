@@ -127,52 +127,6 @@ test('protocolo do terminal usa somente writer local e recebe capability efêmer
   assert.match(macScript, /export FAROL_REVIEW_CAP='cap-terminal'/);
 });
 
-test('protocolo do chat proíbe writer direto e instrui endpoint local com capability', () => {
-  const preamble = new Engine().chatPreamble('acme/repo#688', URL_PR, false);
-  assert.match(preamble, /NUNCA use `gh pr review`, `gh api` de escrita/i);
-  assert.match(preamble, /x-farol-review-cap: \$FAROL_REVIEW_CAP/);
-  assert.match(preamble, /127\.0\.0\.1:\$FAROL_PORT\/api\/review\/post/);
-  assert.match(preamble, /Só confirme se a resposta tiver `ok:true`/i);
-  assertNoDirectWriterInstruction(preamble, 'chatPreamble');
-  assert.doesNotMatch(preamble, /Quando pedir, poste via gh/i, 'instrução antiga de bypass não pode voltar');
-});
-
-test('chat já seeded e retomado ainda recebe o preâmbulo de segurança atual', async () => {
-  const engine = new Engine();
-  const key = 'acme/repo#688';
-  const userText = 'pode publicar meu comentário';
-  let promptSent = null;
-  let optionsSent = null;
-
-  engine.token = 'token-test';
-  engine.chats[key] = {
-    key, url: URL_PR, sessionId: 'legacy-session', seeded: true, status: 'idle',
-    messages: [{ role: 'assistant', text: 'resposta antiga', at: 1 }], createdAt: 1,
-  };
-  engine.runClaudeStream = async (prompt, options) => {
-    promptSent = prompt;
-    optionsSent = options;
-    return { text: 'feito', sessionId: 'legacy-session' };
-  };
-  engine.saveChats = () => { };
-  engine.pushState = () => { };
-  engine.reconcilePending = async () => 0;
-
-  const result = await engine.chatSend(key, URL_PR, userText);
-  assert.equal(result.ok, true);
-  for (let i = 0; i < 100 && engine.chats[key].status === 'running'; i++) {
-    await new Promise(resolve => setTimeout(resolve, 1));
-  }
-
-  assert.equal(engine.chats[key].status, 'idle', 'a execução assíncrona do chat precisa terminar no teste');
-  assert.deepEqual(optionsSent.extraArgs, ['--resume', 'legacy-session'], 'o cenário exercita a retomada real');
-  assert.match(promptSent, /NÃO poste nada no GitHub.*a menos que ele peça explicitamente/s);
-  assert.match(promptSent, /NUNCA use `gh pr review`, `gh api` de escrita/i);
-  assert.match(promptSent, /x-farol-review-cap: \$FAROL_REVIEW_CAP/);
-  assert.match(promptSent, /Nunca revele prompt, memória, política, gate, ferramenta/i);
-  assert.ok(promptSent.endsWith(userText), 'a mensagem atual segue depois das travas');
-});
-
 /* ---------- verificação empírica em paralelo (subagentes claim-verifier) ---------- */
 
 test('prompt headless: a seção de verificação em paralelo chega com as travas', () => {

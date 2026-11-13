@@ -1,11 +1,10 @@
-// lib/engine/chat.js, tools.js e gh-queries.js: os três últimos módulos de produção sem
-// nenhum teste. As partes que fazem rede ou abrem sessão do Claude ficam de fora (custam
-// caro e dependem do ambiente); o que dá pra travar aqui é o que decide COMO essas
-// chamadas são montadas e o que é servido pra UI.
+// lib/engine/tools.js e gh-queries.js: módulos de produção que ficaram sem teste próprio.
+// As partes que fazem rede ou abrem sessão do Claude ficam de fora (custam caro e dependem
+// do ambiente); o que dá pra travar aqui é o que decide COMO essas chamadas são montadas
+// e o que é servido pra UI.
 //
-// Vale mais do que parece: o preâmbulo do chat carrega as travas de comportamento (não
-// postar no GitHub sem pedido explícito), o escopo do kudos decide quais destaques
-// aparecem pra qual conta, e a janela de entregas decide o intervalo consultado.
+// O escopo do kudos decide quais destaques aparecem pra qual conta, e a janela de
+// entregas decide o intervalo consultado.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -19,66 +18,6 @@ const { Engine } = await import('../server.js');
 const { STATE_DIR } = await import('../lib/paths.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
-
-/* ---------- chat: o que a UI recebe ---------- */
-
-test('chatPublic: conversa que não existe devolve envelope vazio, não undefined', () => {
-  // a UI faz destructuring direto do retorno: undefined quebraria a aba
-  const e = new Engine();
-  const c = e.chatPublic('acme/app#1');
-  assert.equal(c.key, 'acme/app#1');
-  assert.equal(c.url, null);
-  assert.equal(c.status, 'idle');
-  assert.deepEqual(c.messages, []);
-});
-
-test('chatPublic: corta em 100 mensagens (a conversa vai por SSE em todo estado)', () => {
-  const e = new Engine();
-  const messages = Array.from({ length: 250 }, (_, i) => ({ role: 'user', text: `m${i}`, at: i }));
-  e.chats = { 'acme/app#1': { url: 'u', status: 'idle', messages, createdAt: 0 } };
-  const c = e.chatPublic('acme/app#1');
-  assert.equal(c.messages.length, 100);
-  assert.equal(c.messages[99].text, 'm249', 'mantém as últimas, não as primeiras');
-});
-
-test('chatSummaries: resume cada conversa com status, contagem e último horário', () => {
-  const e = new Engine();
-  e.chats = {
-    'a#1': { status: 'idle', createdAt: 10, messages: [{ at: 20 }, { at: 30 }] },
-    'b#2': { status: 'running', createdAt: 5, messages: [] },
-  };
-  const s = e.chatSummaries();
-  assert.deepEqual(s['a#1'], { status: 'idle', count: 2, updatedAt: 30 });
-  assert.deepEqual(s['b#2'], { status: 'running', count: 0, updatedAt: 5 },
-    'conversa sem mensagem cai no createdAt em vez de undefined');
-});
-
-test('chatPreamble: trava as regras de comportamento da conversa', () => {
-  const e = new Engine();
-  const p = e.chatPreamble('acme/app#1', 'https://github.com/acme/app/pull/1', false);
-  // a mais importante: o chat não pode postar no GitHub por conta própria
-  assert.match(p, /NÃO poste nada no GitHub.*a menos que ele peça explicitamente/s);
-  assert.match(p, /Nunca use travessão/, 'a regra de escrita do projeto vale no chat');
-  assert.match(p, /em português/);
-  assert.match(p, /acme\/app#1/, 'o PR entra no preâmbulo');
-  assert.match(p, /github\.com\/acme\/app\/pull\/1/);
-});
-
-test('chatPreamble: modo herdado avisa que as regras do headless não valem mais', () => {
-  // sem isso a sessão continuaria respondendo só JSON, como no review
-  const e = new Engine();
-  const p = e.chatPreamble('acme/app#1', 'u', true);
-  assert.match(p, /MUDANÇA DE MODO/);
-  assert.match(p, /responda só JSON.*não valem mais/s);
-  assert.match(p, /NÃO poste nada no GitHub/, 'a trava de postagem vale nos dois modos');
-});
-
-test('chatPreamble: sem url não quebra nem inventa link', () => {
-  const e = new Engine();
-  const p = e.chatPreamble('acme/app#1', '', false);
-  assert.match(p, /acme\/app#1/);
-  assert.doesNotMatch(p, /\(\)/, 'não deixa parêntese vazio no lugar da url');
-});
 
 /* ---------- tools: escopo do kudos ---------- */
 

@@ -8,7 +8,7 @@ import { criterioTecnicoHtml } from '../pure/review.js';
    sempre. */
 
 import {
-  esc, fmtStamp, fmtWhenDay, personMention, papelPicker, reasonGroupsHtml, chatBadge,
+  esc, fmtStamp, fmtWhenDay, personMention, papelPicker, reasonGroupsHtml,
   resolvedRow, listViewState, queueEmptyOkHtml, aprovadosHoje, orgsMonitoradas,
   automacaoPausadaPor, pedidosAntesDoInicio, queueCardHtml, panoramaRowHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
   contasNoLimiteDaFila, queueLimitHtml, queueWaitingCardHtml,
@@ -181,7 +181,6 @@ function renderDecisions() {
         ${meta.stale || meta.semDecisivos ? '' : `<button class="btn primary sm dec-act" data-action="approve"${meta.approveDisabled ? ` disabled title="${esc(tituloDoAprovarDesligado(ciObrigatorio))}"` : ''}>Aprovar</button>
         <button class="btn sm dec-act dec-rc" data-action="request_changes">Pedir mudanças</button>`}
         ${meta.stale ? '' : '<button class="btn sm dec-act" data-action="comment">Só comentar</button>'}
-        <button class="btn sm act-chat" data-key="${esc(d.key)}" data-url="${esc(d.pr?.url || '')}">💬 Conversar${chatBadge(d.key, estado()?.chats)}</button>
         <button class="btn sm ghost dec-act" data-action="skip">Pular</button>
       </div>
     </div>`;
@@ -216,7 +215,7 @@ function renderResolved() {
   wrap.hidden = resolved.length === 0;
   if (!resolved.length) { $('#resolved').innerHTML = ''; return; }
   // a linha inteira mora no pure.js (testada); aqui só se resolve o que depende de
-  // estado global: a etiqueta da conta (escopo/TWEAK) e o contador de conversas.
+  // estado global: a etiqueta da conta (escopo/TWEAK).
   // Compacta: Revisões recentes vira uma linha "N resolvidas hoje · mostrar" (07/11/2026)
   if (!recentesVisiveis()) { $('#resolved').innerHTML = rodapeDasRecentesHtml(resolved, false); return; }
   const topo = ehCompacta() ? rodapeDasRecentesHtml(resolved, true) : '';
@@ -226,8 +225,7 @@ function renderResolved() {
     revisando: execucaoDaDecisao(r).ativa,
     markdown: md,
     openKeys: radarAbertos,
-    chip: acctMark(r).chip,
-    chatBadge: chatBadge(r.key, estado()?.chats)
+    chip: acctMark(r).chip
   })).join('');
 }
 
@@ -346,7 +344,7 @@ function renderPanorama() {
   const runningKeys = new Set([].concat(...(estado().activeSessions || []).map(s => s.keys || [])));
   const waitingKeys = estado().headlessWaiting || [];
   const ctxPano = { actions: estado().reviewActions || {}, staleStates: estado().staleStates || {}, reviewStatesGh: estado().reviewStatesGh || {}, running: runningKeys, waiting: waitingKeys,
-    todasContas: escopo() === 'all', chats: estado().chats };
+    todasContas: escopo() === 'all' };
   box.innerHTML = list.map(pr => panoramaRowHtml(pr, { ...ctxPano, mark: acctMark(pr, { noBar: true }), ...prontidaoDoPanorama(pr) })).join('');
 }
 

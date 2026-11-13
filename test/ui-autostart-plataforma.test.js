@@ -22,16 +22,16 @@ globalThis.requestAnimationFrame = fn => { frames.push(fn); return frames.length
 globalThis.addEventListener = (nome, fn) => janela.set(nome, [...(janela.get(nome) || []), fn]);
 const flush = () => { while (frames.length) frames.shift()(); };
 let configuracoes = 0;
-const editor = doc.querySelector('#reviewersEditor');
+const editor = doc.querySelector('#claudeProfilesManager');
 Object.defineProperty(editor, 'innerHTML', { get: () => '', set: () => { configuracoes++; } });
 await import('../ui/app.js');
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const config = { intervalSeconds: 300, parallelReviews: 1, theme: 'dark', people: {}, accounts: [],
-  mergeBlockedRepos: [], defaultReviewers: {}, projectReviewers: {}, claudeProfiles: [], claudeProfileId: '' };
+  mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '' };
 const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'linux' }, status: 'idle', config,
   account: { user: 'fixture', tokenOk: true }, accounts: [], queue: [], panorama: [], myPRs: [], hiddenPRs: [],
   activeSessions: [], activity: {}, headlessWaiting: [], decisions: { pending: [], resolved: [] },
-  selfAnalyses: {}, reviewActions: {}, usage: {}, chats: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' },
+  selfAnalyses: {}, reviewActions: {}, usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' },
   update: {}, toolRuns: {} };
 
 test('primeiro SSE Linux oculta autostart sem pintar Sistema nem alterar campo focado', () => {

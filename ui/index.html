@@ -194,7 +194,7 @@
         <h2>Meus PRs <span id="myPRsCount" class="count ambient" hidden></span></h2>
         <div id="myPRsResumo"></div>
       </div>
-      <p class="section-desc">Autoanálise dos seus próprios PRs: veredito e dicas antes de pedir review. Só pra você, nada é postado. Os botões Reviewers e Merge são as únicas ações que escrevem no GitHub daqui.</p>
+      <p class="section-desc">Autoanálise dos seus próprios PRs: veredito e dicas antes de pedir review. Só pra você, nada é postado. O botão Merge é a única ação que escreve no GitHub daqui.</p>
       <div id="myPRs" class="cards"></div>
       <!-- Meus PRs de outros aparelhos, só leitura (telas/listas-remotas.js) -->
       <div id="myPRsRemoto" class="md-remoto" hidden></div>
@@ -203,10 +203,6 @@
     </div>
 
     <div class="rpane" id="rpane-pano" role="tabpanel" aria-labelledby="rsub-pano" tabindex="0">
-    <form id="lookupForm" class="lookup-bar" title="Abre a conversa salva de um PR, mesmo que ele não esteja mais na lista">
-      <input id="lookupUrl" type="text" spellcheck="false" aria-label="Consultar um PR por URL" placeholder="Consultar um PR por URL (abre a conversa salva)…">
-      <button class="btn sm" type="submit">Abrir</button>
-    </form>
 
     <div id="panoramaSection" class="section-head">
       <h2>Panorama <span id="panoCount" class="count ambient" hidden></span></h2>
@@ -414,7 +410,7 @@
           </button>
           <button class="sys-nav-item" id="sysbtn-reviewers" data-section="reviewers" role="tab" aria-selected="false" aria-controls="sys-reviewers">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Revisores e qualidade
+            Especialistas
           </button>
           <button class="sys-nav-item" id="sysbtn-prefs" data-section="prefs" role="tab" aria-selected="false" aria-controls="sys-prefs">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -464,16 +460,6 @@
               <div id="reviewLabelsList"></div>
               <p class="set-desc" id="reviewLabelsMessage" role="status" aria-live="polite">Consulte o PR antes de remover uma tag.</p>
             </details>
-            <section class="card set-list review-tools" id="preferencesTransfer" aria-labelledby="preferencesTitle">
-              <div class="set-head"><div><h3 id="preferencesTitle">Preferências entre instalações</h3><p>Transfere todas as preferências configuráveis do Sistema, incluindo contas, automação, modelos, voz, revisores, perfis e sincronização. Senhas, tokens e chaves de acesso ficam neste aparelho.</p></div></div>
-              <div class="set-row"><div class="set-txt"><span class="set-title">Exportar deste aparelho</span><span class="set-desc">Baixa um JSON com as preferências atuais.</span></div><div class="set-ctl"><button class="btn sm" type="button" id="preferencesExport">Exportar preferências</button></div></div>
-              <div class="set-block"><div class="form-grid">
-                <div class="field"><label for="preferencesFile">Importar de outro aparelho</label><input type="file" id="preferencesFile" accept="application/json,.json" aria-describedby="preferencesFileHelp"><small id="preferencesFileHelp">Arquivo JSON de até 1 MiB. Confira as diferenças antes de aplicar.</small></div>
-                <div class="field"><button class="btn" type="button" id="preferencesInspect">Ver diferenças</button></div>
-              </div></div>
-              <div id="preferencesPreview"></div>
-              <div class="set-block"><div class="set-actions"><button class="btn sm" type="button" id="preferencesApply" disabled>Aplicar diferenças selecionadas</button></div><p class="set-msg" id="preferencesMessage" role="status" aria-live="polite"></p></div>
-            </section>
           </div>
           <div class="about" id="about"></div>
         </div>
@@ -537,7 +523,7 @@
             <label class="set-row" id="sys-row-autoupdate">
               <span class="set-txt">
                 <span class="set-title">Atualizar sozinho</span>
-                <span class="set-desc">Aplica a atualização baixada das releases assim que nenhuma análise, chat ou sessão de terminal estiver rodando e a fila de revisão estiver vazia. O app fecha e reabre sozinho. Ligado (padrão). Instalação com atualização administrada por fora (como a Hostinger) não se atualiza por aqui, com a chave ligada ou não.</span>
+                <span class="set-desc">Aplica a atualização baixada das releases assim que nenhuma análise ou sessão de terminal estiver rodando e a fila de revisão estiver vazia. O app fecha e reabre sozinho. Ligado (padrão). Instalação com atualização administrada por fora (como a Hostinger) não se atualiza por aqui, com a chave ligada ou não.</span>
               </span>
               <span class="set-ctl"><input id="setAutoUpdate" type="checkbox"><span class="switch"></span></span>
             </label>
@@ -819,16 +805,9 @@
           <p class="section-desc section-note">Perfil de assinatura aponta pra um diretório de config próprio: faça o login nele uma vez, pelo botão Abrir sessão de login do cartão ou FORA do Farol (ex.: <code>$env:CLAUDE_CONFIG_DIR="C:\caminho"; claude login</code>). A ordem de uso vale pra toda conta do GitHub que não tiver um perfil próprio (dropdown na conta, seção Contas). Sem nenhum perfil ligado, o Farol usa o login padrão da máquina.</p>
         </div>
 
-        <!-- Reviewers -->
+        <!-- Especialistas -->
         <div class="sys-section" id="sys-reviewers" role="tabpanel" aria-labelledby="sysbtn-reviewers" tabindex="0">
-          <div class="section-head"><h2>Revisores e qualidade por projeto</h2></div>
-          <p class="section-desc">Um grupo padrão por organização, aplicado num clique pelo botão Reviewers em Meus PRs. Só os repos que fogem do padrão aparecem como exceção.</p>
-          <div class="settings card">
-            <div class="field">
-              <div id="reviewersEditor" class="rev-editor"></div>
-              <small>Por repo, escolha as pessoas e times da lista (sem digitar handle na mão). É o que o botão "Reviewers" (em Meus PRs) aplica num clique.</small>
-            </div>
-          </div>
+          <div class="section-head"><h2>Especialistas</h2></div>
           <section class="card set-list review-tools" id="specialistManager" aria-labelledby="specialistHeading">
             <div class="set-head"><div><h3 id="specialistHeading">Especialistas por repositório</h3><p>Contexto curado usado pelo revisor existente. Fontes alteradas ficam fora do prompt. Lições propostas precisam da sua confirmação; nenhum conteúdo muda as regras de segurança da postagem.</p></div></div>
             <div class="set-block"><div class="form-grid">
@@ -838,7 +817,7 @@
             <div class="field"><button type="button" class="btn" id="specialistLoad">Carregar e conferir fontes</button></div>
             </div><p id="specialistCurrent" class="set-msg">Escolha conta, repositório e branch.</p><p id="specialistMessage" class="set-msg" role="status" aria-live="polite"></p></div>
             <div id="specialistEntries" class="specialist-evidence ilist"></div>
-            <details class="disc"><summary>Lições propostas por contestações e auditorias</summary><div class="disc-body"><p>Auditorias exigem avaliação humana favorável. Contestações podem incluir registros legados sem conta de origem. Confira a procedência antes de curar para a conta escolhida.</p><div id="specialistProposals" class="ilist"></div></div></details>
+            <details class="disc"><summary>Lições propostas por contestações</summary><div class="disc-body"><p>Contestações podem incluir registros legados sem conta de origem. Confira a procedência antes de curar para a conta escolhida.</p><div id="specialistProposals" class="ilist"></div></div></details>
             <div class="set-block"><div class="set-head"><div><h4 class="set-subtitle">Conclusão e evidências</h4><p id="specialistOrigin">Origem: curadoria manual.</p></div><div class="row-actions"><button type="button" class="btn sm ghost" id="specialistNew">Nova conclusão</button></div></div>
             <div class="form-grid">
             <div class="field"><label for="specialistKind">Tipo</label><select id="specialistKind"><option value="architecture">Arquitetura</option><option value="contract">Contrato</option><option value="convention">Convenção</option><option value="critical">Ponto crítico</option><option value="lesson">Lição</option></select></div>
@@ -849,27 +828,6 @@
             <div id="specialistPreview" class="specialist-evidence src-preview"></div>
             <div class="set-actions"><button type="button" class="btn primary" id="specialistConfirm" disabled>Confirmar curadoria</button></div></div>
             <details class="disc"><summary>Histórico e reversão</summary><div class="disc-body"><div class="form-grid"><div class="field"><label for="specialistVersions">Versão anterior</label><select id="specialistVersions"></select></div><div class="field"><button type="button" class="btn" id="specialistRestore">Restaurar como inativo</button></div></div><p>Restaurar preserva o histórico e recupera conclusões desativadas. Reconstrua cada uma para conferir suas fontes antes de reativar.</p></div></details>
-          </section>
-          <section class="card set-list review-tools" id="auditManager" aria-labelledby="auditHeading">
-            <div class="set-head"><div><h3 id="auditHeading">Auditoria de reviews <span class="chip off">só leitura</span></h3><p>Segunda leitura do head original. Não publica outro review nem altera decisões; concordância entre modelos não comprova precisão.</p></div><div class="row-actions"><button type="button" class="btn sm ghost" id="auditLoad">Carregar auditorias</button></div></div>
-            <div class="set-block"><h4 class="set-subtitle">Nova leitura</h4>
-            <div class="field"><label for="auditCandidate">Revisão registrada (ordem de risco)</label><select id="auditCandidate"></select></div>
-            <label class="check-opt"><input type="checkbox" id="auditRetry"> Criar nova tentativa de uma auditoria já concluída (novo consumo)</label>
-            <p class="set-desc">Leitura paga: inicia duas sessões novas de IA. Nenhum review será publicado no PR.</p>
-            <div class="set-actions"><button type="button" class="btn" id="auditStart">Iniciar auditoria · usa duas sessões de IA</button></div>
-            <p class="set-msg" id="auditMessage" role="status" aria-live="polite"></p></div>
-            <details class="disc"><summary>Limites e elegibilidade</summary><div class="disc-body"><p>Use Carregar para atualizar o andamento e o resultado. Registros antigos sem inventário e rodada verificáveis não são elegíveis. Limites: 100 arquivos e 256 KiB; excesso fica inconclusivo.</p></div></details>
-            <div class="set-block"><h4 class="set-subtitle">Trabalhos</h4><div id="auditMetrics"></div><div id="auditJobs" class="specialist-evidence ilist"></div></div>
-            <details class="disc"><summary>Amostragem automática · desligada por padrão</summary><div class="disc-body">
-              <label class="check-opt"><input type="checkbox" id="auditEnabled"> Habilitar amostragem por risco neste aparelho</label>
-              <div class="form-grid">
-              <div class="field"><label for="auditAccounts">Contas autorizadas, separadas por vírgula</label><input id="auditAccounts" type="text" autocomplete="off"></div>
-              <div class="field"><label for="auditLimit">Máximo de auditorias automáticas por dia (0–10)</label><input id="auditLimit" type="number" min="0" max="10" step="1" value="0"></div>
-              <div class="field"><label for="auditBudget">Orçamento diário das auditorias automáticas em US$</label><input id="auditBudget" type="number" min="0" max="1000" step="0.01" value="0"></div>
-              <div class="field"><label for="auditReserve">Reserva estimada para cada auditoria (duas sessões) em US$</label><input id="auditReserve" type="number" min="0" max="1000" step="0.01" value="0"></div>
-              </div><p>A reserva controla novas sessões, não é teto rígido do provedor. Um trabalho pode ultrapassá-la. Custo indisponível suspende novas amostras no dia. As revisões em andamento têm prioridade. Quantidade e orçamento são locais, não compartilhados entre aparelhos.</p>
-              <div class="set-actions"><button type="button" class="btn" id="auditSavePolicy">Salvar amostragem</button></div></div>
-            </details>
           </section>
         </div>
 
@@ -1052,71 +1010,6 @@
     </div>
   </section>
 </main>
-
-<!-- Chat do PR. Desenho do Claude Design (26/09/2026), handoff em
-     docs/superpowers/specs/2026-09-26-chat-responsivo-anexos/HANDOFF-claude-design.md.
-     Acima de 720 px a faixa da sessão fica fixa sob o cabeçalho e Exportar abre um menu;
-     até 720 px ela vira gaveta atrás de "Id e exportar". -->
-<aside id="chatPanel" class="chat-panel" role="dialog" aria-modal="false" aria-labelledby="chatKey" hidden>
-  <header class="chat-head">
-    <div class="chat-title">
-      <b id="chatKey"></b>
-      <a id="chatLink" href="#" target="_blank" rel="noreferrer" hidden><span class="only-desk">abrir PR ↗</span><span class="only-mob">abrir PR no GitHub ↗</span></a>
-    </div>
-    <button id="btnChatTools" class="btn chat-tools-btn" type="button" aria-expanded="false" aria-controls="chatSession" hidden>Id e exportar <span class="chev" aria-hidden="true"></span></button>
-    <button id="btnChatClose" class="btn icon chat-close" type="button" title="Fechar conversa" aria-label="Fechar conversa">
-      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-  </header>
-
-  <section id="chatSession" class="chat-session" aria-label="Sessão e exportação">
-    <div class="chat-sess-block">
-      <div class="chat-sess-top">
-        <div id="chatSessionLabel" class="chat-sess-label"><b>Sessão do Claude</b> · o id que o <code>claude --resume</code> usa</div>
-        <button id="btnChatExport" class="btn chat-export-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="chatExportMenu" hidden>Exportar <span class="chev" aria-hidden="true"></span></button>
-      </div>
-      <div class="chat-sess-row" data-part="id" hidden>
-        <span id="chatSessionId" class="chat-sess-id"></span>
-        <button id="btnChatCopyId" class="btn chat-copy-id" type="button">Copiar id</button>
-      </div>
-      <div class="chat-sess-empty" data-part="none" hidden></div>
-      <div class="chat-skel chat-skel-id" data-part="skel"></div>
-    </div>
-
-    <div class="chat-export-block" data-part="export" hidden>
-      <div class="chat-sess-label only-mob"><b>Exportar a conversa completa</b> · <span data-bind="count"></span> · horários de Brasília</div>
-      <div id="chatExportMenu" class="chat-export-menu" role="menu" aria-labelledby="btnChatExport">
-        <div class="chat-note warn" data-part="streaming-warn" hidden></div>
-        <button id="btnExportMd" class="chat-exp-item" role="menuitem" type="button">
-          <span class="t"><span class="only-desk">Baixar Markdown (.md)</span><span class="only-mob">Baixar .md</span></span>
-          <span class="d mono only-desk" data-bind="filename"></span>
-        </button>
-        <button id="btnExportJson" class="chat-exp-item" role="menuitem" type="button">
-          <span class="t"><span class="only-desk">Baixar JSON (.json)</span><span class="only-mob">Baixar .json</span></span>
-          <span class="d only-desk">Mesmo conteúdo, com horários também em ISO</span>
-        </button>
-        <button id="btnExportCopy" class="chat-exp-item primary-mob" role="menuitem" type="button">
-          <span class="t"><span class="only-desk">Copiar Markdown</span><span class="only-mob">Copiar .md</span></span>
-          <span class="d only-desk">Para colar onde não dá para baixar arquivo</span>
-        </button>
-        <div class="chat-exp-foot only-desk"><span data-bind="count"></span> · horários de Brasília (-03:00) · segredos saem mascarados</div>
-      </div>
-      <div class="chat-exp-hint only-mob">Copiar .md é o caminho quando o navegador do celular não baixa arquivo. Segredos saem mascarados.</div>
-    </div>
-
-    <div id="chatNotice" class="chat-notice" role="status" aria-live="polite"></div>
-  </section>
-
-  <div id="chatMsgs" class="chat-msgs" aria-live="polite"></div>
-  <div id="chatActivity" class="chat-activity" hidden></div>
-  <form id="chatForm" class="chat-form">
-    <textarea id="chatInput" rows="2" aria-label="Mensagem pro Claude sobre este PR" placeholder="Pergunte ou peça algo sobre este PR... (Enter envia · Shift+Enter quebra linha)" data-placeholder-mob="Pergunte sobre este PR"></textarea>
-    <div class="chat-form-actions">
-      <button id="btnChatStop" class="btn" type="button" hidden>Parar</button>
-      <button id="btnChatSend" class="btn primary" type="submit">Enviar</button>
-    </div>
-  </form>
-</aside>
 
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <!-- app.js e modulo ES nativo: importa as funcoes puras direto de pure.js (esc, md, fmtRel...). -->

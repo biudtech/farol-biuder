@@ -11,7 +11,6 @@ export * from './pure/aparelhos-fila.js';
 export * from './pure/aparelhos-painel.js';
 export * from './pure/autoanalise.js';
 export * from './pure/capacidades.js';
-export * from './pure/chat.js';
 export * from './pure/comum.js';
 export * from './pure/compartilhado.js';
 export * from './pure/compartilhado-decisao.js';

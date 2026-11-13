@@ -367,11 +367,6 @@ export function reviewChip(pr, actions, estadosGh) {
   return '';
 }
 
-export function chatBadge(key, chats) {
-  const c = (chats || {})[key];
-  return c && c.count ? ` <span class="count">${c.count}</span>` : '';
-}
-
 export const PB_OPTS = [['', 'sem contestação'], ['author_right', 'o autor tinha razão'], ['we_right', 'nós tínhamos razão'], ['mixed', 'meio-termo']];
 
 export const PB_SHORT = { author_right: 'autor tinha razão', we_right: 'nós tínhamos razão', mixed: 'meio-termo' };
@@ -526,7 +521,6 @@ export function resolvedRow(r, ctx) {
     <div class="rr-side">
       <span class="rr-when" title="${esc(fmtStamp(r.resolvedAt))}">${esc(fmtWhenDay(r.resolvedAt, ctx.agora))}</span>
       <div class="rr-acts">
-        <button class="btn icon sm ghost act-chat" data-key="${esc(r.key)}" data-url="${esc(url)}" title="Conversar com o Claude sobre este PR" aria-label="Conversar sobre este PR">💬${ctx.chatBadge || ''}</button>
         ${url ? `<button class="btn icon sm ghost act-review" data-url="${esc(url)}"${ctx.revisando ? ' disabled title="Revisão em andamento" aria-label="Revisão em andamento"' : ' title="Revisar de novo" aria-label="Revisar de novo"'}>↻</button>` : ''}
         <button class="btn icon sm ghost rr-copy" data-url="${esc(url)}" data-key="${esc(r.key)}" title="Copiar a URL do PR" aria-label="Copiar a URL do PR">⧉</button>
         <a class="btn icon sm ghost" href="${esc(url || '#')}" target="_blank" rel="noreferrer" title="Abrir no GitHub" aria-label="Abrir no GitHub">↗</a>

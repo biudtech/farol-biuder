@@ -52,7 +52,6 @@ async function checkJourneys(main, waitFor, output) {
     fs.writeFileSync(path.join(output, `journeys-${theme}.png`), (await captureWindow(main.win, 'journeys')).toPNG());
   }
   await captureReviewTools(main, output, 'setup', '#setupManager');
-  await captureReviewTools(main, output, 'preferences', '#preferencesTransfer');
   await reloadWindow(main.win);
   await waitFor(() => web.executeJavaScript(`!!document.querySelector('[data-setup-step="plans"][aria-pressed="true"]')`).catch(() => false), 'retomada do roteiro após recarga');
   await web.executeJavaScript(`document.querySelector('#tabbtn-radar').click()`);

@@ -47,7 +47,6 @@ const ESTADO = {
     reviewModel: '', reviewEffort: '', codexReviewModel: '', codexReviewEffort: '',
     mergeBlockedRepos: [], soundEnabled: true,
     teamHighlights: false, deliveriesEnabled: false,
-    defaultReviewers: { acme: ['bob'] }, projectReviewers: { 'acme/api': ['carol'] },
     people: { bob: { papel: 'senior' } }, claudeProfiles: [], claudeProfileId: '',
   },
   lastCheckAt: Date.now() - 60_000, nextCheckAt: Date.now() + 240_000,
@@ -59,7 +58,7 @@ const ESTADO = {
   // desenhado no smoke test, e ele é justamente um render de DADO — o lugar onde
   // objeto interpolado passa despercebido.
   activeSessions: [{ id: 'sess-1', mode: 'auto', label: 'acme/repo#42', startedAt: 1755600000000, cancellable: true, pr: { url: 'https://github.com/acme/repo/pull/42', user: 'alice' } }],
-  headlessWaiting: ['acme/repo#43'], chats: {}, reviewActions: {}, staleStates: {},
+  headlessWaiting: ['acme/repo#43'], reviewActions: {}, staleStates: {},
   usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [],
   update: { state: 'idle' }, doctor: null, deliveries: null,
   // o painel Sistema le daqui; sem isto o renderDoctor quebra, e foi o proprio teste
@@ -78,7 +77,7 @@ function semObjectObject(rotulo) {
   // motivos"). O guarda existe pra pegar OBJETO INTERPOLADO em render de DADO, e
   // incluir texto autoral só produziria falso positivo — que foi o que aconteceu ao
   // escrever a nota da v2.48.3.
-  const alvos = ['#decisions', '#queue', '#panorama', '#myPRs', '#resolved', '#team', '#usage', '#reviewersEditor', '#activeSessions'];
+  const alvos = ['#decisions', '#queue', '#panorama', '#myPRs', '#resolved', '#team', '#usage', '#activeSessions'];
   for (const sel of alvos) {
     const html = document.querySelector(sel).innerHTML || '';
     assert.ok(!html.includes('[object Object]'), `${rotulo}: "${sel}" imprimiu [object Object]`);
@@ -136,17 +135,10 @@ test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', ()
   assert.equal(emitir('state', vazio), 1);
 });
 
-test('config sem reviewers e sem pessoas não explode', () => {
-  // exercita o editor de Reviewers e o picker de papel com os mapas vazios, que é o
-  // caminho onde o ctx faltando quebrava
-  const magro = { ...ESTADO, config: { ...ESTADO.config, defaultReviewers: {}, projectReviewers: {}, people: {} } };
+test('config sem pessoas não explode', () => {
+  // exercita o picker de papel com o mapa vazio
+  const magro = { ...ESTADO, config: { ...ESTADO.config, people: {} } };
   assert.equal(emitir('state', magro), 1);
-});
-
-test('org de config sem conta dona (o bloco "Outros") não explode', () => {
-  // é exatamente o ramo que a chamada corrompida quebrava primeiro
-  const orfa = { ...ESTADO, config: { ...ESTADO.config, defaultReviewers: { semdono: ['x'] }, projectReviewers: { 'semdono/repo': ['y'] } } };
-  assert.equal(emitir('state', orfa), 1);
 });
 
 test('decisão pendente com motivos e ressalvas não explode', () => {

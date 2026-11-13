@@ -14,7 +14,7 @@ async function aplicarAtualizacao() {
   try {
     const r = await api('/api/update', {});
     aplicado = !!r?.ok;
-    if (r?.queued) toast('info', 'Tem análise, chat ou sessão de terminal em andamento. O update ficou agendado: assim que terminar, o Farol aplica sozinho, fecha e reabre.');
+    if (r?.queued) toast('info', 'Tem análise ou sessão de terminal em andamento. O update ficou agendado: assim que terminar, o Farol aplica sozinho, fecha e reabre.');
     else if (!r?.ok) toast('error', r?.error || 'não consegui iniciar a atualização');
   } catch { toast('error', 'Não consegui iniciar a atualização. Tente novamente.'); }
   finally {
@@ -55,7 +55,7 @@ function renderUpdate() {
   } else if (u.available) {
     const autoOn = remote && estado().config?.autoUpdate !== false;
     const noteAuto = autoOn
-      ? `Atualização disponível ${'nas ' + origin}. Com "Atualizar sozinho" ligado (Sistema > Automação), o Farol aplica sozinho assim que ficar ocioso (sem análise, chat ou terminal em andamento), fecha e reabre preservando estado e configurações. O botão ao lado aplica agora, sem esperar.`
+      ? `Atualização disponível ${'nas ' + origin}. Com "Atualizar sozinho" ligado (Sistema > Automação), o Farol aplica sozinho assim que ficar ocioso (sem análise ou terminal em andamento), fecha e reabre preservando estado e configurações. O botão ao lado aplica agora, sem esperar.`
       : `Atualização disponível ${remote ? 'nas ' + origin : 'na ' + origin}. O Farol ${remote ? 'baixa e instala, ' : ''}fecha e reabre sozinho, preservando estado e configurações.`;
     const queuedLine = u.queued ? ' <b>Agendado:</b> aplica sozinho assim que as sessões em andamento terminarem.' : '';
     const disabled = updateEmAndamento ? 'disabled aria-busy="true"' : '';
