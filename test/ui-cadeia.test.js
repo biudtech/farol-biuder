@@ -71,7 +71,7 @@ test('sem perfil salvo, a cadeia explica o que ela faz em vez de uma lista vazia
 
 test('Plano e chaves reúne a cadeia, o modelo por provedor e os perfis, nessa ordem', () => {
   const ini = HTML.indexOf('id="sys-plans"');
-  const fim = HTML.indexOf('<!-- Especialistas -->');
+  const fim = HTML.indexOf('<!-- Preferências -->');
   const sec = HTML.slice(ini, fim);
   const pos = ['id="cadeiaPerfis"', 'id="sys-row-provedor"', 'id="sys-row-modelo"', 'id="sys-row-esforco"', 'id="claudeProfilesManager"'].map((m) => sec.indexOf(m));
   assert.ok(pos.every((p) => p > 0), 'tudo dentro da seção');

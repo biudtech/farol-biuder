@@ -24,7 +24,7 @@ const SUBS_DO_RADAR = { 'pra-mim': 'mim', aparelhos: 'apar', 'meus-prs': 'meus',
 const SECOES_DO_SISTEMA = {
   'visao-geral': 'overview', contas: 'accounts', automacao: 'automation', jira: 'jira',
   sincronizacao: 'sync', aparelhos: 'devices', grupos: 'groups', plano: 'plans',
-  reviewers: 'reviewers', preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
+  preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
 };
 // só nessas abas a barra de contas aparece (accountBarVisible, ui/pure/contas.js)
 const ABAS_COM_CONTA = new Set(['radar', 'time']);

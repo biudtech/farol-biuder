@@ -47,9 +47,10 @@ test('nenhuma rota aparece em duas classes', () => {
 // O corte da Fase 1 (lote 2) tirou auditoria de revisão, transferência de preferências, chat (4 rotas), candidatos a reviewer e pedido de reviewers (91 virou 83).
 // O corte da Fase 1 (lote 3) tirou /api/update, o auto-update (83 virou 82).
 // O corte da Fase 1 (lote 7) tirou /api/highlights, /api/deliveries, /api/tool, /api/tool/clear e /api/log/clear (82 virou 77).
-test('as classes da spec cobrem os 77 caminhos, e as públicas são só as duas de autenticação', () => {
+// O corte da Fase 1 (lote 8) tirou /api/specialists e /api/capacity (77 virou 75).
+test('as classes da spec cobrem os 75 caminhos, e as públicas são só as duas de autenticação', () => {
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 77);
+  assert.equal(naoPublicas.length, 75);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
   assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-baixo-risco', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
 });

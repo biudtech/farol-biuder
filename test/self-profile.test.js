@@ -9,7 +9,6 @@ process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
 const { requestedSelfProfile, sessionSelfProfile } = await import('../lib/engine/self-profile.js');
 const { prepareSelfIsolation } = await import('../lib/engine/self-isolation.js');
-const { prepareAccount } = await import('../lib/capacity/admission.js');
 const io = (await import('../lib/io.js')).default;
 const admission = (await import('../lib/engine/admissao.js')).default;
 after(async () => { assert.ok(path.resolve(home).startsWith(path.resolve(os.tmpdir()) + path.sep)); await fs.rm(home, { recursive: true, force: true }); });
@@ -91,19 +90,6 @@ test('seleção explícita não atravessa o lease de coordenação', async () =>
   assert.equal(admitted, 1);
   assert.equal(result.blocked, true);
   assert.equal(engine.running.size, 0);
-});
-
-test('reserva desconhecida e orçamento do Codex escolhido continuam recusando execução', async () => {
-  const engine = fixture(), auth = { kind: 'codex', id: 'codex' };
-  engine.config.quotaReservations = { codex: { mode: 'enforce', maxUsedPercent: 70 } };
-  await assert.rejects(prepareAccount(engine, 'dev', auth), /Reserva de cota/);
-  engine.config.quotaReservations.codex.mode = 'observe';
-  engine.profileBudgetStatus = profile => ({ blocked: profile.id === 'codex' });
-  await assert.rejects(prepareAccount(engine, 'dev', auth), /Orçamento/);
-  engine.profileBudgetStatus = () => ({ blocked: false });
-  engine.budgetBlockedFor = engine.grupoSegura = () => { throw new Error('Não consultar o perfil associado no lugar do escolhido'); };
-  await prepareAccount(engine, 'dev', auth);
-  assert.equal(engine.resolveClaudeAuth('dev').id, 'claude');
 });
 
 test('fila não prende nem reserva Codex no grupo monetário do perfil associado', () => {

@@ -1,6 +1,6 @@
 {
   "lib/engine/decision.js": {
-    "maxLines": 228,
+    "maxLines": 227,
     "jsonStringifyCru": 2,
     "profundidadeExcedida": 2
   },
@@ -14,7 +14,7 @@
     "profundidadeExcedida": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 696,
+    "maxLines": 686,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
@@ -25,7 +25,7 @@
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 204,
+    "maxLines": 193,
     "emptyCatch": 1,
     "jsonParseCru": 3,
     "processEnvDireto": 2,

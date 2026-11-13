@@ -10,7 +10,6 @@ import { sysNorm } from './comum.js';
 export const SYS_INDEX = [
   { sec: 'overview', at: '#reviewLabels', title: 'Tags de revisão no GitHub', hint: 'tags, labels, marcador, revisando, remover, limpeza' },
   { sec: 'overview', at: '#setupManager', title: 'Configuração e retomada', hint: 'onboarding, começar, roteiro, configurar, retomar' },
-  { sec: 'plans', at: '#capacityManager', title: 'Reserva de cota e recursos', hint: 'cota, reserva, percentual, janela, memória, ram, cpu, processos, recursos' },
   { sec: 'overview', at: '#doctor', title: 'Saúde do ambiente', hint: 'doctor, gh, claude, git bash, diagnóstico' },
   { sec: 'sync', at: '#syncManager', title: 'Sincronização entre aparelhos', hint: 'sync, firebase, aparelho, dispositivo, coordenação, reserva do PR, lease, consolidação, consumo, um farol por pr' },
   { sec: 'devices', at: '#devicesManager', title: 'Aparelhos e administração', hint: 'aparelho, admin, aposentar, renomear, política, pausar, navegador pareado, limpeza, revogar, garantia' },
@@ -35,7 +34,6 @@ export const SYS_INDEX = [
   { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, codex, chatgpt, plano, assinatura, config dir, login, chave' },
   { sec: 'prefs', at: '#sys-row-identity', title: 'Identidade nos cards', hint: 'barra, etiqueta, ponto, marcador' },
   { sec: 'prefs', at: '#sys-row-mutedview', title: 'Contas silenciadas', hint: 'recolher, esmaecer, ocultar, exibição' },
-  { sec: 'reviewers', at: '#specialistManager', title: 'Especialistas por repositório', hint: 'contexto, arquitetura, contratos, fontes, lições, curadoria' },
   { sec: 'prefs', at: '#sys-row-sound', title: 'Som ao chegar PR novo', hint: 'som, aviso, notificação' },
   { sec: 'prefs', at: '#rowAutostart', title: 'Iniciar com o sistema', hint: 'autostart, inicialização, segundo plano, iniciar com o Windows, iniciar com o macOS, login' },
   { sec: 'diag', at: '#sys-row-spawns', title: 'Registrar processos (diagnóstico)', hint: 'spawns, terminal piscando, debug' },
