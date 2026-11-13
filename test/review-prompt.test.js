@@ -46,7 +46,7 @@ test('headlessPromptFor: sem lotes, o prompt não ganha o bloco de fan-out', () 
 
 test('o prompt da revisão não pede destaque nem elogio compartilhável', () => {
   const prompt = new Engine().headlessPromptFor(URL_PR, 'alice');
-  assert.match(prompt, /Sem destaques/);
+  assert.match(prompt, /Destaques do time desligado/);
   assert.doesNotMatch(prompt, /"highlight"|memory\.highlight|digno de compartilhar/);
 });
 
