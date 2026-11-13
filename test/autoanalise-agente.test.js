@@ -38,7 +38,7 @@ function engineFalso({ myPRs = [prMeu()], selfAnalyses = {}, owners = ['ACME'], 
     limiteDoPlanoAte: () => gasto.limite || 0,
     budgetBlockedFor: () => gasto.orcamento || null,
     quotaBlockedFor: () => gasto.cota || null,
-    launchSelfAnalysis: async (url, isolation, perfil, agente) => { lancadas.push({ url, isolation, agente }); return { ok: true, isolation }; },
+    launchSelfAnalysis: async (url, isolation, agente) => { lancadas.push({ url, isolation, agente }); return { ok: true, isolation }; },
   };
   const acessos = new Set();
   const engine = new Proxy(alvo, { get(t, nome) { acessos.add(nome); return t[nome]; } });

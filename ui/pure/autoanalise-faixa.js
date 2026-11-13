@@ -57,7 +57,7 @@ function rodando(sess, itens, agora, etapaMinima) {
     return { ...base, tom: 'wait', texto: `Sem sinal do modelo ${p.texto.replace(/^sem sinal /, '')}. A sessão segue aberta.`, apoio: 'pode cancelar e tentar de novo', frase: 'Sem sinal', barra: 'indefinida' };
   }
   const comum = { ...base, tom: 'run', texto: textoDaEtapa(etapa, itens), apoio: '', frase: FRASE_DA_ETAPA[etapa], barra: 'indefinida', pct: 0 };
-  if (!total || etapa < 1 || sess.lidos == null) return comum;   // sem leitura observada não há contagem (Codex e Antigravity não reportam)
+  if (!total || etapa < 1 || sess.lidos == null) return comum;   // sem leitura observada não há contagem
   const contagem = `${lidos} de ${total}`;
   if (etapa !== 1) return { ...comum, apoio: `${contagem} arquivos` };
   return { ...comum, apoio: `${contagem} arquivos`, frase: `Lendo ${contagem}`, barra: 'definida', pct: Math.floor(lidos / total * 100) };

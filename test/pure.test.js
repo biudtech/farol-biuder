@@ -11,10 +11,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const farol = (await import('../server.js')).default;
 const { modelLabel, isPermanentBranch, parseAccounts,
-  normalizeClaudeProfiles, sanitizeClaudeDir, applyClaudeAuthEnv, claudeAuthShellLines } = farol;
+  normalizeClaudeProfiles, applyClaudeAuthEnv, claudeAuthShellLines } = farol;
 const {
-  OPENROUTER_DEFAULT_BASE, OPENROUTER_SECRET_ENV,
-  sanitizeModel, sanitizeClaudeModel, claudeAuthPosixPrefix,
+  sanitizeModel, sanitizeClaudeModel, sanitizeClaudeDir,
 } = await import('../lib/parse.js');
 
 test('modelLabel: família + versão pontuada', () => {
@@ -102,26 +101,17 @@ test('normalizeClaudeProfiles: não-array vira [] (string, número, objeto, null
   assert.deepEqual(normalizeClaudeProfiles(null), []);
 });
 
-test('normalizeClaudeProfiles: dir com aspa dupla ou newline é descartado (id+dir inválido)', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'a', label: 'A', dir: 'C:\\ok\\path' },
-    { id: 'b', label: 'B', dir: 'C:\\bad" && calc.exe' },
-    { id: 'c', label: 'C', dir: 'C:\\bad\nlinha2' },
-    { id: 'd', label: 'D', dir: { nested: true } }, // dir não-string também é descartado
-  ]);
-  assert.deepEqual(out.map(p => p.id), ['a']); // só o válido sobrevive
-});
-
-test('normalizeClaudeProfiles: kind ausente ou "dir" mantém o shape de hoje, sem o campo kind', () => {
+test('normalizeClaudeProfiles: perfil de outro formato (pasta, máquina, OpenRouter, Codex, Antigravity) é ignorado, sem erro', () => {
   const out = normalizeClaudeProfiles([
     { id: 'a', label: 'A', dir: 'C:\\a' },
     { id: 'b', label: 'B', kind: 'dir', dir: 'C:\\b' },
+    { id: 'c', label: 'C', kind: 'maquina' },
+    { id: 'd', label: 'D', kind: 'openrouter', apiKey: 'sk-or-1' },
+    { id: 'e', label: 'E', kind: 'codex' },
+    { id: 'f', label: 'F', kind: 'agy' },
+    { id: 'g', label: 'G', kind: 'apikey', apiKey: 'sk-ant-g' },
   ]);
-  assert.deepEqual(out, [
-    { id: 'a', label: 'A', dir: 'C:\\a' },
-    { id: 'b', label: 'B', dir: 'C:\\b' },
-  ]);
-  assert.ok(!('kind' in out[0]), 'perfil dir não carrega o campo kind (preserva o shape legado)');
+  assert.deepEqual(out, [{ id: 'g', label: 'G', kind: 'apikey', apiKey: 'sk-ant-g', baseUrl: '' }]);
 });
 
 test('normalizeClaudeProfiles: kind "apikey" exige apiKey válida, baseUrl é opcional', () => {
@@ -145,12 +135,11 @@ test('normalizeClaudeProfiles: apiKey/baseUrl com aspas ou quebra de linha são 
   assert.deepEqual(out.map(p => p.id), ['ok']);
 });
 
-test('normalizeClaudeProfiles: kind desconhecido (nem dir nem apikey) é tratado como dir', () => {
+test('normalizeClaudeProfiles: kind desconhecido é ignorado, mesmo com chave', () => {
   const out = normalizeClaudeProfiles([
-    { id: 'x', label: 'X', kind: 'bedrock', dir: 'C:\\x' }, // kind estranho, mas tem dir válido -> vira perfil dir
-    { id: 'y', label: 'Y', kind: 'bedrock', apiKey: 'sk-ant-y' }, // kind estranho, sem dir -> descartado
+    { id: 'y', label: 'Y', kind: 'bedrock', apiKey: 'sk-ant-y' },
   ]);
-  assert.deepEqual(out, [{ id: 'x', label: 'X', dir: 'C:\\x' }]);
+  assert.deepEqual(out, []);
 });
 
 test('normalizeClaudeProfiles: budgetDaily/budgetTotal válidos são aceitos como número', () => {
@@ -178,32 +167,6 @@ test('normalizeClaudeProfiles: budgetSince válido (YYYY-MM-DD) é aceito, forma
   assert.equal(out[0].budgetSince, '2026-08-01');
   assert.equal(out[1].budgetSince, undefined);
   assert.equal(out[2].budgetSince, undefined);
-});
-
-// Contrato NOVO desde a v2.48.4: perfil dir também carrega orçamento (o teto
-// passou a valer pra assinatura). Continua SEM o campo `kind`, que é o que
-// preserva a leitura de perfil salvo antes desta feature, sem migração.
-test('normalizeClaudeProfiles: perfil dir carrega orçamento e segue sem kind', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: 'C:\\x', budgetDaily: 5, budgetSince: '2026-08-01' },
-  ]);
-  assert.equal(out[0].budgetDaily, 5);
-  assert.equal(out[0].budgetSince, '2026-08-01');
-  assert.equal('kind' in out[0], false);
-});
-
-test('normalizeClaudeProfiles: perfil dir sem orçamento nasce sem os campos (sem migração)', () => {
-  const out = normalizeClaudeProfiles([{ id: 'p1', label: 'P1', dir: 'C:\\x' }]);
-  assert.deepEqual(out[0], { id: 'p1', label: 'P1', dir: 'C:\\x' });
-});
-
-test('normalizeClaudeProfiles: perfil dir rejeita orçamento lixo igual ao de chave', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: 'C:\\x', budgetDaily: [5], budgetTotal: -1, budgetSince: '01/08/2026' },
-  ]);
-  assert.equal(out[0].budgetDaily, undefined);
-  assert.equal(out[0].budgetTotal, undefined);
-  assert.equal(out[0].budgetSince, undefined);
 });
 
 test('normalizeClaudeProfiles: budgetDaily/budgetTotal rejeita tipos garbage (array, boolean, objeto) como undefined', () => {
@@ -248,66 +211,6 @@ test('sanitizeClaudeDir: tira aspas duplas que envolvem o valor inteiro (Copiar 
   assert.equal(sanitizeClaudeDir('"C:\\bad"quote"'), ''); // aspas extras além do par externo: ainda rejeita
 });
 
-test('applyClaudeAuthEnv: kind dir seta CLAUDE_CONFIG_DIR, nunca as vars de apikey', () => {
-  const env = {};
-  applyClaudeAuthEnv(env, { kind: 'dir', dir: 'C:\\perfil' });
-  assert.deepEqual(env, { CLAUDE_CONFIG_DIR: 'C:\\perfil' });
-});
-
-test('applyClaudeAuthEnv: kind dir sem dir não seta nada', () => {
-  const env = {};
-  applyClaudeAuthEnv(env, { kind: 'dir', dir: '' });
-  assert.deepEqual(env, {});
-});
-
-test('applyClaudeAuthEnv: kind openrouter usa AUTH_TOKEN + API_KEY vazia + base OpenRouter', () => {
-  const env = {};
-  applyClaudeAuthEnv(env, { kind: 'openrouter', apiKey: 'sk-or-abc', baseUrl: '' });
-  assert.equal(env.ANTHROPIC_AUTH_TOKEN, 'sk-or-abc');
-  assert.equal(env.ANTHROPIC_API_KEY, '');
-  assert.equal(env.ANTHROPIC_BASE_URL, OPENROUTER_DEFAULT_BASE);
-  assert.equal(env[OPENROUTER_SECRET_ENV], 'sk-or-abc');
-  assert.equal(Object.prototype.hasOwnProperty.call(env, 'ANTHROPIC_API_KEY'), true,
-    'API_KEY tem que existir como string vazia, não ausente');
-});
-
-test('applyClaudeAuthEnv: openrouter com baseUrl própria a respeita', () => {
-  const env = {};
-  applyClaudeAuthEnv(env, { kind: 'openrouter', apiKey: 'sk-or-abc', baseUrl: 'https://openrouter.ai/api' });
-  assert.equal(env.ANTHROPIC_BASE_URL, 'https://openrouter.ai/api');
-});
-
-test('claudeAuthShellLines: kind openrouter exporta AUTH_TOKEN e API_KEY vazia', () => {
-  const lines = claudeAuthShellLines(
-    { kind: 'openrouter', apiKey: 'sk-or-abc', baseUrl: OPENROUTER_DEFAULT_BASE },
-  );
-  assert.ok(lines.some(l => l.includes("ANTHROPIC_AUTH_TOKEN='sk-or-abc'")));
-  assert.ok(lines.some(l => l === 'export ANTHROPIC_API_KEY='));
-  assert.ok(lines.some(l => l.includes(`ANTHROPIC_BASE_URL='${OPENROUTER_DEFAULT_BASE}'`)));
-});
-
-test('claudeAuthPosixPrefix: openrouter restaura o env depois do profile sem pôr a chave na cmdline', () => {
-  const prefixo = claudeAuthPosixPrefix({ kind: 'openrouter', apiKey: 'sk-or-abc' });
-  assert.match(prefixo, /^unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN;/);
-  assert.match(prefixo, /export ANTHROPIC_AUTH_TOKEN="\$FAROL_OPENROUTER_AUTH_TOKEN"/);
-  assert.match(prefixo, /unset FAROL_OPENROUTER_AUTH_TOKEN/);
-  assert.match(prefixo, /export ANTHROPIC_API_KEY=/);
-  assert.match(prefixo, /export ANTHROPIC_BASE_URL='https:\/\/openrouter\.ai\/api'/);
-  assert.doesNotMatch(prefixo, /sk-or-abc/, 'o segredo não entra em ps nem spawns.log');
-});
-
-test('normalizeClaudeProfiles: kind openrouter preenche baseUrl padrão e exige chave', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'or1', label: 'OR', kind: 'openrouter', apiKey: 'sk-or-1' },
-    { id: 'or2', label: 'Sem chave', kind: 'openrouter', apiKey: '' },
-    { id: 'or3', label: 'Base custom', kind: 'openrouter', apiKey: 'sk-or-2', baseUrl: 'https://openrouter.ai/api' },
-  ]);
-  assert.equal(out.length, 2);
-  assert.equal(out[0].kind, 'openrouter');
-  assert.equal(out[0].baseUrl, OPENROUTER_DEFAULT_BASE);
-  assert.equal(out[1].baseUrl, 'https://openrouter.ai/api');
-});
-
 test('sanitizeClaudeModel: auto é aceito em sanitizeModel e persiste (roteador resolve na revisão)', () => {
   assert.equal(sanitizeModel('auto'), 'auto');
   assert.equal(sanitizeClaudeModel('auto'), 'auto');
@@ -315,11 +218,11 @@ test('sanitizeClaudeModel: auto é aceito em sanitizeModel e persiste (roteador 
 
 test('applyClaudeAuthEnv: limpa CLAUDE_CONFIG_DIR/ANTHROPIC_* residuais do objeto recebido (achado crítico de vazamento de ambiente)', () => {
   // simula ghEnv partindo de { ...process.env }: se a MÁQUINA já tiver ANTHROPIC_API_KEY
-  // setada (uso pessoal do claude CLI fora do Farol), um perfil de assinatura (dir) não
-  // pode deixar essa chave residual passar, ela venceria a OAuth por login, sem erro.
+  // setada (uso pessoal do claude CLI fora do Farol), o perfil de chave de API não
+  // pode deixar a chave residual da máquina passar, ela venceria a do perfil, sem erro.
   const env = { ANTHROPIC_API_KEY: 'chave-de-fora', ANTHROPIC_BASE_URL: 'https://de-fora.x', OUTRA_VAR: 'preservada' };
-  applyClaudeAuthEnv(env, { kind: 'dir', dir: 'C:\\perfil' });
-  assert.deepEqual(env, { CLAUDE_CONFIG_DIR: 'C:\\perfil', OUTRA_VAR: 'preservada' });
+  applyClaudeAuthEnv(env, { kind: 'apikey', apiKey: 'sk-ant-perfil', baseUrl: '' });
+  assert.deepEqual(env, { ANTHROPIC_API_KEY: 'sk-ant-perfil', OUTRA_VAR: 'preservada' });
 
   const env2 = { CLAUDE_CONFIG_DIR: 'C:\\de-fora', OUTRA_VAR: 'preservada' };
   applyClaudeAuthEnv(env2, { kind: 'apikey', apiKey: 'sk-ant-novo', baseUrl: '' });
@@ -329,35 +232,24 @@ test('applyClaudeAuthEnv: limpa CLAUDE_CONFIG_DIR/ANTHROPIC_* residuais do objet
 test('applyClaudeAuthEnv: limpa ANTHROPIC_AUTH_TOKEN residual (precedencia oficial fica acima de ANTHROPIC_API_KEY)', () => {
   // ANTHROPIC_AUTH_TOKEN vence ANTHROPIC_API_KEY na precedencia oficial do CLI (ver docs/CONFIGURATION.md, secao Assinatura).
   // Se a maquina/ambiente do processo do Farol tiver essa var setada por fora (ex.: perfil de
-  // shell do usuario, sem relacao com o Farol), ela venceria em silencio tanto um perfil dir
-  // quanto um perfil apikey recem aplicado, derrotando a garantia desta funcao.
+  // shell do usuario, sem relacao com o Farol), ela venceria em silencio o perfil apikey
+  // recem aplicado, derrotando a garantia desta funcao.
   const env = { ANTHROPIC_AUTH_TOKEN: 'token-de-fora', OUTRA_VAR: 'preservada' };
-  applyClaudeAuthEnv(env, { kind: 'dir', dir: 'C:\\perfil' });
-  assert.deepEqual(env, { CLAUDE_CONFIG_DIR: 'C:\\perfil', OUTRA_VAR: 'preservada' });
+  applyClaudeAuthEnv(env, { kind: 'apikey', apiKey: 'sk-ant-perfil', baseUrl: '' });
+  assert.deepEqual(env, { ANTHROPIC_API_KEY: 'sk-ant-perfil', OUTRA_VAR: 'preservada' });
 });
 
 test('applyClaudeAuthEnv: OAuth herdado não substitui o perfil escolhido nem o login renovado', () => {
   const casos = [
-    [{ kind: 'dir', dir: 'C:\\perfil' }, { CLAUDE_CONFIG_DIR: 'C:\\perfil' }],
-    [{ kind: 'dir', dir: '' }, {}],
+    [null, {}],
     [{ kind: 'apikey', apiKey: 'sk-ant-perfil', baseUrl: 'https://proxy.x' },
       { ANTHROPIC_API_KEY: 'sk-ant-perfil', ANTHROPIC_BASE_URL: 'https://proxy.x' }],
-    [{ kind: 'openrouter', apiKey: 'sk-or-perfil', baseUrl: '' },
-      { ANTHROPIC_AUTH_TOKEN: 'sk-or-perfil', ANTHROPIC_API_KEY: '',
-        ANTHROPIC_BASE_URL: OPENROUTER_DEFAULT_BASE, [OPENROUTER_SECRET_ENV]: 'sk-or-perfil' }],
-    [{ kind: 'codex' }, {}],
   ];
   for (const [auth, esperado] of casos) {
     const env = { CLAUDE_CODE_OAUTH_TOKEN: 'oauth-expirado-da-maquina', OUTRA_VAR: 'preservada' };
     applyClaudeAuthEnv(env, auth);
-    assert.deepEqual(env, { ...esperado, OUTRA_VAR: 'preservada' }, `perfil ${auth.kind}`);
+    assert.deepEqual(env, { ...esperado, OUTRA_VAR: 'preservada' }, `perfil ${auth ? auth.kind : 'nenhum'}`);
   }
-});
-
-test('applyClaudeAuthEnv: perfil Codex limpa chaves OpenAI/Codex para nao sair do plano ChatGPT', () => {
-  const env = { OPENAI_API_KEY: 'sk-fora', CODEX_API_KEY: 'codex-fora', GH_TOKEN: 'gh' };
-  applyClaudeAuthEnv(env, { kind: 'codex' });
-  assert.deepEqual(env, { GH_TOKEN: 'gh' });
 });
 
 // no posix a lista abre com o unset das vars de auth da máquina (G21, ver POSIX_AUTH_UNSET
@@ -366,10 +258,9 @@ test('applyClaudeAuthEnv: perfil Codex limpa chaves OpenAI/Codex para nao sair d
 // vars são as mesmas de auth Claude que applyClaudeAuthEnv apaga, incluindo o token OAuth.
 const UNSET_POSIX = 'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN';
 
-test('claudeAuthShellLines: kind dir, com escaping de aspa simples e unset na frente', () => {
-  const lines = claudeAuthShellLines({ kind: 'dir', dir: "/tmp/x' ; touch /tmp/PROOF #" });
-  assert.deepEqual(lines, [UNSET_POSIX, `export CLAUDE_CONFIG_DIR='/tmp/x'\\'' ; touch /tmp/PROOF #'`]);
-  assert.deepEqual(claudeAuthShellLines({ kind: 'dir', dir: '' }), [UNSET_POSIX, '# sem config dir proprio']);
+test('claudeAuthShellLines: sem perfil de chave de API só limpa, não exporta nada', () => {
+  assert.deepEqual(claudeAuthShellLines(null), [UNSET_POSIX, '# sem perfil de chave de API']);
+  assert.deepEqual(claudeAuthShellLines({ kind: 'apikey', apiKey: '' }), [UNSET_POSIX, '# sem perfil de chave de API']);
 });
 
 test('claudeAuthShellLines: kind apikey, com escaping de aspa simples na chave', () => {
@@ -391,7 +282,7 @@ test('logStamp: carimbo do farol.log em Brasília com offset explícito, nunca U
 
 test('normalizeClaudeProfiles: aceita teto por dia da semana e por data', () => {
   const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: '/tmp/x', budgetByWeekday: { '0': 10, '6': 20 }, budgetDates: { '2026-08-25': 300 } },
+    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: { '0': 10, '6': 20 }, budgetDates: { '2026-08-25': 300 } },
   ]);
   assert.deepEqual(out[0].budgetByWeekday, { '0': 10, '6': 20 });
   assert.deepEqual(out[0].budgetDates, { '2026-08-25': 300 });
@@ -400,7 +291,7 @@ test('normalizeClaudeProfiles: aceita teto por dia da semana e por data', () => 
 // config editada à mão com UMA linha torta não pode levar as outras seis junto
 test('normalizeClaudeProfiles: chave ou valor invalido é descartado sem levar o resto', () => {
   const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: '/tmp/x',
+    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1',
       budgetByWeekday: { '1': 10, '9': 5, 'seg': 7, '2': -1, '3': [4] },
       budgetDates: { '2026-08-25': 300, '25/08/2026': 50, '2026-08-26': 'lixo' } },
   ]);
@@ -410,8 +301,8 @@ test('normalizeClaudeProfiles: chave ou valor invalido é descartado sem levar o
 
 test('normalizeClaudeProfiles: mapa vazio ou nao-objeto vira campo ausente', () => {
   const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: '/tmp/x', budgetByWeekday: {}, budgetDates: 'nao-e-objeto' },
-    { id: 'p2', label: 'P2', dir: '/tmp/y', budgetByWeekday: ['array'], budgetDates: null },
+    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: {}, budgetDates: 'nao-e-objeto' },
+    { id: 'p2', label: 'P2', kind: 'apikey', apiKey: 'sk-2', budgetByWeekday: ['array'], budgetDates: null },
   ]);
   assert.equal('budgetByWeekday' in out[0], false);
   assert.equal('budgetDates' in out[0], false);
@@ -422,26 +313,8 @@ test('normalizeClaudeProfiles: mapa vazio ou nao-objeto vira campo ausente', () 
 // 0 é um teto VÁLIDO ("não gaste nada neste dia"), não ausência de teto
 test('normalizeClaudeProfiles: teto 0 sobrevive nos mapas', () => {
   const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', dir: '/tmp/x', budgetByWeekday: { '0': 0 }, budgetDates: { '2026-08-25': 0 } },
+    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: { '0': 0 }, budgetDates: { '2026-08-25': 0 } },
   ]);
   assert.equal(out[0].budgetByWeekday['0'], 0);
   assert.equal(out[0].budgetDates['2026-08-25'], 0);
-});
-
-test('normalizeClaudeProfiles: perfil de CHAVE tambem carrega os overrides (mesmo mecanismo)', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: { '5': 30 } },
-  ]);
-  assert.deepEqual(out[0].budgetByWeekday, { '5': 30 });
-});
-
-test('normalizeClaudeProfiles: perfil Codex nao exige diretorio nem chave e carrega teto', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'codex', label: 'Codex OSS', kind: 'codex', budgetDaily: 20 },
-    { id: 'sem-label', kind: 'codex' },
-  ]);
-  assert.deepEqual(out, [
-    { id: 'codex', label: 'Codex OSS', kind: 'codex', budgetDaily: 20 },
-    { id: 'sem-label', label: '', kind: 'codex' },
-  ]);
 });

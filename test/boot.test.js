@@ -46,8 +46,6 @@ test('config aplica os defaults conhecidos', () => {
   assert.equal(config.port, 47170);
   assert.equal(config.reviewModel, '', 'default = modelo bom (Opus), não econômico');
   assert.equal(config.reviewEffort, '', 'default = sem flag, o CLI decide pelo modelo');
-  assert.equal(config.codexReviewModel, '', 'Codex segue o modelo padrão do CLI');
-  assert.equal(config.codexReviewEffort, '', 'Codex segue o esforço padrão do CLI');
   assert.equal(config.autoPushback, true);
   assert.ok(Array.isArray(config.accounts), 'accounts normalizado em array');
   assert.equal(typeof config.people, 'object', 'people migrado/normalizado');
@@ -83,7 +81,7 @@ test('config.json com reviewModel/reviewEffort válido é preservado no boot', (
   }
 });
 
-test('boot migra configuração GPT compartilhada pras chaves próprias do Codex', () => {
+test('boot: modelo GPT na configuração não entra no caminho Claude, e o esforço é preservado', () => {
   fs.mkdirSync(HOME, { recursive: true });
   const arq = path.join(HOME, 'config.json');
   const antes = lerConfigAnterior(arq);
@@ -92,27 +90,23 @@ test('boot migra configuração GPT compartilhada pras chaves próprias do Codex
     const { config } = new Engine();
     assert.equal(config.reviewModel, '', 'GPT não entra mais no caminho Claude');
     assert.equal(config.reviewEffort, 'high', 'esforço Claude compartilhado é preservado');
-    assert.equal(config.codexReviewModel, 'gpt-5.5');
-    assert.equal(config.codexReviewEffort, 'high');
   } finally {
     restaurarConfig(arq, antes);
   }
 });
 
-test('boot preserva pares de modelos compatíveis e os esforços próprios', () => {
+test('boot preserva modelo e esforço do Claude; chaves de provedores que saíram não derrubam o boot', () => {
   fs.mkdirSync(HOME, { recursive: true });
   const arq = path.join(HOME, 'config.json');
   const antes = lerConfigAnterior(arq);
   fs.writeFileSync(arq, JSON.stringify({
     reviewModel: 'sonnet', reviewEffort: 'low',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'minimal',
+    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'minimal', agyReviewModel: 'gemini-3.8-flash-high', cadeiaPerfis: [{ id: 'x', ativo: true }], claudeConfigDir: '/legado',
   }));
   try {
     const { config } = new Engine();
     assert.equal(config.reviewModel, 'sonnet');
     assert.equal(config.reviewEffort, 'low');
-    assert.equal(config.codexReviewModel, 'gpt-5.6-terra');
-    assert.equal(config.codexReviewEffort, 'minimal');
   } finally {
     restaurarConfig(arq, antes);
   }

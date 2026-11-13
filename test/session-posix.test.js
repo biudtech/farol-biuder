@@ -25,7 +25,7 @@ childProcess.spawn = function mockableSpawn(...args) {
   return realSpawn(...args);
 };
 
-const { runClaudeStream, buildSessionScript, buildLoginScript, killTree } = await import('../lib/engine/session.js');
+const { runClaudeStream, buildSessionScript, killTree } = await import('../lib/engine/session.js');
 const { claudeAuthShellLines, claudeAuthPosixPrefix } = await import('../lib/parse.js');
 const { WORKSPACE } = await import('../lib/paths.js');
 const { bashDoTeste } = await import('./helpers/bash-real.js');
@@ -55,8 +55,8 @@ function engineFalso(config = {}) {
     ghEnv: () => ({ PATH: '/usr/bin' }),
     pushActivity() { },
     setSessionModel() { },
-    // legado (sem perfil de chave de API): authProfileId fica vazio
-    resolveClaudeAuth: () => ({ kind: 'dir', id: '' }),
+    // sem chave de API (como o claude de mentira): authProfileId fica vazio
+    resolveClaudeAuth: () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' }),
   };
 }
 
@@ -78,7 +78,7 @@ test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', async () 
   assert.equal(cmd, '/bin/sh');
   assert.equal(argv[0], '-lc', 'login shell, senão o PATH do perfil não entra');
   // o unset vem colado no começo da linha, DEPOIS do sourcing do profile que o -l faz (G21).
-  // engineFalso resolve um perfil legado (sem dir), então não há re-export de CLAUDE_CONFIG_DIR.
+  // engineFalso resolve uma auth sem chave, então não há re-export de nada.
   assert.match(argv[1], /^unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN; claude -p --output-format stream-json --verbose --include-partial-messages --dangerously-skip-permissions/);
   assert.match(argv[1], / --model opus --effort high$/, 'as flags entram no fim da linha');
   assert.equal(opts.detached, true, 'pré-condição do killTree posix (process.kill(-pid))');
@@ -111,17 +111,12 @@ function engineLinux(auth) {
   };
 }
 
-test('claudeAuthShellLines posix (assinatura): unset das vars de auth ANTES do export do dir', () => {
-  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '/tmp/perfil' });
-  assert.equal(linhas[0], UNSET);
-  assert.match(linhas[1], /^export CLAUDE_CONFIG_DIR='\/tmp\/perfil'$/);
-});
 
-test('claudeAuthShellLines posix (assinatura sem dir, "padrão da máquina"): unset sem export nenhum', () => {
-  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '' });
-  // sem dir do perfil, o certo é NÃO re-exportar: o padrão da máquina é o login default do
-  // claude, e um CLAUDE_CONFIG_DIR herdado do profile mentiria sobre qual conta está em uso.
-  assert.deepEqual(linhas, [UNSET, '# sem config dir proprio']);
+test('claudeAuthShellLines posix (sem perfil de chave de API): unset sem export nenhum', () => {
+  const linhas = claudeAuthShellLines(null);
+  // sem perfil, o certo é NÃO re-exportar nada: um ANTHROPIC_API_KEY herdado do profile
+  // mentiria sobre qual chave está em uso.
+  assert.deepEqual(linhas, [UNSET, '# sem perfil de chave de API']);
 });
 
 test('claudeAuthShellLines posix (chave de API): a própria chave é setada DEPOIS do unset', () => {
@@ -129,20 +124,9 @@ test('claudeAuthShellLines posix (chave de API): a própria chave é setada DEPO
   assert.deepEqual(linhas, [UNSET, `export ANTHROPIC_API_KEY='sk-ant-1'`, `export ANTHROPIC_BASE_URL='https://proxy.x'`]);
 });
 
-// O prefixo headless é o ÚNICO caso em que o unset precisa devolver algo: o dir do perfil
-// viaja só pelo env (não há script pra re-exportá-lo), então unset sem re-export apagaria o
-// perfil resolvido no caminho feliz. Por isso o export vem junto, e só quando há dir.
-test('claudeAuthPosixPrefix: perfil de assinatura com dir re-exporta o dir DEPOIS do unset', () => {
-  assert.equal(claudeAuthPosixPrefix({ kind: 'dir', dir: '/tmp/x' }), `${UNSET}; export CLAUDE_CONFIG_DIR='/tmp/x'; `);
-});
-
-test('claudeAuthPosixPrefix: perfil de assinatura sem dir (padrão da máquina) é só o unset', () => {
-  assert.equal(claudeAuthPosixPrefix({ kind: 'dir', dir: '' }), `${UNSET}; `);
-});
-
-test('claudeAuthPosixPrefix: dir com aspa simples é escapado (vai pra linha de comando do sh)', () => {
-  const prefixo = claudeAuthPosixPrefix({ kind: 'dir', dir: "/tmp/x' ; touch /tmp/PROOF #" });
-  assert.equal(prefixo, `${UNSET}; export CLAUDE_CONFIG_DIR='/tmp/x'\\'' ; touch /tmp/PROOF #'; `);
+test('claudeAuthPosixPrefix: sem perfil de chave de API é só o unset', () => {
+  assert.equal(claudeAuthPosixPrefix(null), `${UNSET}; `);
+  assert.equal(claudeAuthPosixPrefix({ kind: 'apikey', apiKey: '' }), `${UNSET}; `);
 });
 
 test('claudeAuthPosixPrefix: perfil de chave remove só o token OAuth (a chave continua no env)', () => {
@@ -152,21 +136,18 @@ test('claudeAuthPosixPrefix: perfil de chave remove só o token OAuth (a chave c
 });
 
 test('scripts POSIX: o segredo de saída é variável de shell, nunca exportada ao claude', () => {
-  const sessao = buildSessionScript(engineLinux({ kind: 'dir', dir: '' }), '/pr-review x', 'id1', 'bob', '', 'segredo1');
-  const login = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '', 'id1', [], 'segredo2');
-  for (const [script, segredo] of [[sessao, 'segredo1'], [login, 'segredo2']]) {
-    assert.match(script, new RegExp(`^FAROL_SESSION_SECRET='${segredo}'$`, 'm'));
-    assert.equal(script.includes('export FAROL_SESSION_SECRET'), false);
-    assert.match(script, /-H "x-farol-session: \$FAROL_SESSION_SECRET"/);
-  }
+  const sessao = buildSessionScript(engineLinux(null), '/pr-review x', 'id1', 'bob', '', 'segredo1');
+  assert.match(sessao, /^FAROL_SESSION_SECRET='segredo1'$/m);
+  assert.equal(sessao.includes('export FAROL_SESSION_SECRET'), false);
+  assert.match(sessao, /-H "x-farol-session: \$FAROL_SESSION_SECRET"/);
 });
 
-test('buildSessionScript (assinatura): unset vem antes da linha do claude', () => {
-  const script = buildSessionScript(engineLinux({ kind: 'dir', dir: '/tmp/perfil' }), '/pr-review x', 'id1', 'bob');
-  const [iUnset, iDir, iClaude] = ordem(script, UNSET, 'export CLAUDE_CONFIG_DIR', '\nclaude ');
+test('buildSessionScript (sem perfil de chave de API): o unset vem antes da linha do claude e nada é exportado', () => {
+  const script = buildSessionScript(engineLinux(null), '/pr-review x', 'id1', 'bob');
+  const [iUnset, iClaude] = ordem(script, UNSET, '\nclaude ');
   assert.ok(iUnset > 0, 'o unset existe no script');
-  assert.ok(iUnset < iDir, 'unset antes do perfil resolvido');
-  assert.ok(iDir < iClaude, 'tudo antes do exec do claude');
+  assert.ok(iUnset < iClaude, 'tudo antes do exec do claude');
+  assert.doesNotMatch(script, /export (ANTHROPIC_|CLAUDE_CONFIG_DIR)/);
 });
 
 test('buildSessionScript (chave de API): a chave do perfil é exportada DEPOIS do unset', () => {
@@ -176,18 +157,7 @@ test('buildSessionScript (chave de API): a chave do perfil é exportada DEPOIS d
   assert.ok(iChave < iClaude);
 });
 
-test('buildLoginScript: unset antes da linha do claude (a sessão de login é onde a chave errada mais engana)', () => {
-  const script = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '/tmp/perfil', 'id1');
-  const [iUnset, iDir, iClaude] = ordem(script, UNSET, 'export CLAUDE_CONFIG_DIR', '\nclaude');
-  assert.ok(iUnset > 0, 'o unset existe no script de login');
-  assert.ok(iUnset < iDir && iDir < iClaude);
-});
 
-test('buildLoginScript (padrão da máquina): unset sem export de dir nenhum', () => {
-  const script = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '', 'id1');
-  assert.ok(script.includes(UNSET), 'o unset existe mesmo sem perfil próprio');
-  assert.doesNotMatch(script, /export CLAUDE_CONFIG_DIR/, 'sem dir do perfil não se re-exporta nada');
-});
 
 // Prova de EXECUÇÃO (não só leitura do texto montado), no mesmo padrão da prova de injeção
 // que já existe em test/session-claude-profile.test.js: um profile sujo é sourceado e o
@@ -223,21 +193,11 @@ function rodaComProfileSujo(prefixo, extraEnv = {}) {
   }
 }
 
-test('prefixo posix: profile sujo perde pro perfil resolvido (execução real com bash)', { skip: bashDisponivel ? false : 'bash não encontrado no PATH' }, () => {
-  const comDir = rodaComProfileSujo(claudeAuthPosixPrefix({ kind: 'dir', dir: '/dir/do/perfil' }));
-  assert.equal(comDir, '[|||/dir/do/perfil|]', 'as credenciais herdadas somem e o dir é o do perfil, não o do profile');
-
-  const semDir = rodaComProfileSujo(claudeAuthPosixPrefix({ kind: 'dir', dir: '' }));
-  assert.equal(semDir, '[||||]', 'padrão da máquina: nenhuma var de auth sobrevive ao prefixo');
+test('prefixo posix: profile sujo não deixa credencial sem perfil (execução real com bash)', { skip: bashDisponivel ? false : 'bash não encontrado no PATH' }, () => {
+  const semPerfil = rodaComProfileSujo(claudeAuthPosixPrefix(null));
+  assert.equal(semPerfil, '[||||]', 'sem perfil: nenhuma var de auth sobrevive ao prefixo');
 });
 
-test('prefixo posix: OpenRouter vence profile sujo sem expor a chave na linha', { skip: bashDisponivel ? false : 'bash não encontrado no PATH' }, () => {
-  const auth = { kind: 'openrouter', apiKey: 'sk-or-resolvida', baseUrl: 'https://openrouter.ai/api' };
-  const prefixo = claudeAuthPosixPrefix(auth);
-  assert.doesNotMatch(prefixo, /sk-or-resolvida/);
-  const saida = rodaComProfileSujo(prefixo, { FAROL_OPENROUTER_AUTH_TOKEN: auth.apiKey });
-  assert.equal(saida, '[|sk-or-resolvida|https://openrouter.ai/api||]');
-});
 
 test('prefixo posix: apikey remove OAuth do profile sem apagar a chave/base do perfil', { skip: bashDisponivel ? false : 'bash não encontrado no PATH' }, () => {
   const auth = { kind: 'apikey', apiKey: 'sk-ant-resolvida', baseUrl: 'https://proxy.x' };
@@ -250,20 +210,6 @@ test('prefixo posix: apikey remove OAuth do profile sem apagar a chave/base do p
   assert.equal(saida, '[sk-ant-resolvida|https://proxy.x|]');
 });
 
-test('prefixo posix: aspa simples no dir não injeta comando (execução real com bash)', { skip: bashDisponivel ? false : 'bash não encontrado no PATH' }, () => {
-  // arquivo de prova dentro de pasta de nome aleatório: com nome previsível no tmp
-  // compartilhado, outro usuário poderia criá-lo antes e confundir a prova
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-prefixo-'));
-  const proofFile = path.join(pasta, 'PROOF_PREFIXO').replace(/\\/g, '/');
-  try {
-    const dir = `/tmp/x' ; touch ${proofFile} #`;
-    const saida = rodaComProfileSujo(claudeAuthPosixPrefix({ kind: 'dir', dir }));
-    assert.equal(fs.existsSync(proofFile), false, 'comando injetado NÃO deve ter rodado');
-    assert.equal(saida, `[|||${dir}|]`, 'valor preservado como string literal única');
-  } finally {
-    try { fs.rmSync(pasta, { recursive: true, force: true }); } catch { /* limpeza, caso o teste falhe e o comando tenha rodado */ }
-  }
-});
 
 /* ---------- killTree posix: a matança de verdade, não só a pré-condição ---------- */
 // O detached:true testado acima é a pré-condição; este prova a consequência: o

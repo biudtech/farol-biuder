@@ -17,15 +17,12 @@
 // tela-aparelhos-grupos.md, seção 7).
 import { esc, fmtMoney, fmtClock, identidadeDeAparelho } from './comum.js';
 
-// O tipo do vínculo vem do `kind` do perfil. O perfil de pasta não carrega `kind` de
-// propósito (lib/parse.js) e é assinatura; kind desconhecido NÃO vira tipo, porque o
+// O tipo do vínculo vem do `kind` do perfil. Kind desconhecido NÃO vira tipo, porque o
 // engine só mede os tipos que conhece e tipo inventado prometeria medição inexistente.
-// O perfil `maquina` (login padrão da máquina, 20/10/2026) é assinatura como o de pasta.
-const TIPO_POR_KIND = { apikey: 'api', openrouter: 'openrouter', codex: 'codex', agy: 'agy', maquina: 'assinatura' };
+const TIPO_POR_KIND = { apikey: 'api' };
 
 export function grupoTipoDoPerfil(perfil) {
   const kind = perfil && perfil.kind;
-  if (!kind || kind === 'dir') return 'assinatura';
   return Object.hasOwn(TIPO_POR_KIND, kind) ? TIPO_POR_KIND[kind] : '';
 }
 
@@ -142,7 +139,7 @@ function perfisDoGrupoHtml(g, perfis) {
     ? controlados.map((id) => `<li>${esc(rotuloDoPerfil(id, perfis))}</li>`).join('')
     : '<li class="grupo-vago">nenhum perfil controlado vinculado</li>';
   const naoHtml = nao.length
-    ? `<span class="grupo-rotulo">Não controlados</span><ul>${nao.map((id) => `<li>${esc(rotuloDoPerfil(id, perfis))} <span class="grupo-vago">o provedor não informa custo, e o perfil não entra na soma nem no teto</span></li>`).join('')}</ul>`
+    ? `<span class="grupo-rotulo">Não controlados</span><ul>${nao.map((id) => `<li>${esc(rotuloDoPerfil(id, perfis))} <span class="grupo-vago">o perfil não tem custo medido, e não entra na soma nem no teto</span></li>`).join('')}</ul>`
     : '';
   return `<div class="grupo-perfis"><span class="grupo-rotulo">Perfis controlados</span><ul>${linhas}</ul>${naoHtml}</div>`;
 }
@@ -209,11 +206,10 @@ function linhaDoPerfil(p, grupos, vinculos) {
   return `<div class="grupo-perfil">${rotulo}<span>${chip('mute', 'sem grupo')}</span>${vincular}</div>`;
 }
 
-// Sem perfil salvo, o Farol roda na assinatura da máquina, que não tem id estável: ela não
-// entra em grupo, e com teto de grupo ativo o engine a trata como não identificada.
+// Sem perfil salvo, o Farol não abre sessão de revisão: não há o que vincular a um grupo.
 function semPerfilHtml() {
-  return `<div class="grupo-perfil"><span class="sync-nome">Assinatura em uso</span><span>${chip('mute', 'não identificado')}</span><span class="btn sm ghost" data-goto="sys:plans" role="button" tabindex="0">Abrir Plano e chaves</span></div>
-    <p class="apar-nota">Nenhum perfil salvo em Plano e chaves: a assinatura em uso fica sem id estável e não entra em grupo nenhum. Com um teto de grupo ativo, o que depende dele espera. Crie ou adote um perfil para poder vincular.</p>`;
+  return `<div class="grupo-perfil"><span class="sync-nome">Chave de API em uso</span><span>${chip('mute', 'nenhuma')}</span><span class="btn sm ghost" data-goto="sys:plans" role="button" tabindex="0">Abrir Plano e chaves</span></div>
+    <p class="apar-nota">Nenhum perfil salvo em Plano e chaves: sem chave de API o Farol não abre sessão de revisão. Crie um perfil para poder vincular.</p>`;
 }
 
 export function gruposPerfisHtml(perfis, grupos, vinculos) {

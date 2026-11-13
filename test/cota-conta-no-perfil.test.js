@@ -108,12 +108,6 @@ test('conta sozinha no perfil tem cota igual ao teto inteiro e nunca disputa', (
   assert.equal(r.blocked, false);
 });
 
-test('perfil Codex fica fora da cota, pelo mesmo motivo que fica fora do teto', () => {
-  const contas = [conta('biuder'), conta('pessoal', { waiting: true })];
-  const r = usageMod.quotaStatusFor(perfil({ kind: 'codex' }), [s('biuder', 90)], contas, 'biuder', 0, HOJE);
-  assert.equal(r.blocked, false, 'o plano não informa custo por sessão; teto em US$ ali é falsa precisão');
-});
-
 test('peso torto (0, negativo, lixo) vira 1 em vez de zerar a cota de alguém', () => {
   const contas = [conta('biuder', { weight: 0 }), conta('pessoal', { weight: 'banana' })];
   const r = usageMod.quotaStatusFor(perfil(), [], contas, 'biuder', 0, HOJE);

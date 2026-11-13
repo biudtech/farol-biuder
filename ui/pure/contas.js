@@ -11,8 +11,7 @@
 // e devolve string. Ficaram no app.js, por serem DOM e não markup, o guarda de foco e o
 // `hint.hidden = true` do fim dos perfis.
 //
-// Editor de orçamento (v2.50.0): o MESMO bloco vale para perfil de assinatura e de chave de
-// API, cada perfil com o seu. Três granularidades, do geral para o específico, na mesma
+// Editor de orçamento (v2.50.0): cada perfil de chave de API tem o seu. Três granularidades, do geral para o específico, na mesma
 // ordem em que o dailyCapFor resolve: teto base, por dia da semana, de uma data só.
 
 // escopo salvo no navegador validado contra as contas atuais: conta removida ou
@@ -20,7 +19,6 @@
 // Compara sem caixa e preserva o valor original quando ele e valido.
 import { esc, fmtMoney, fmtClock } from './comum.js';
 import { reviewScopeHtml } from './review-scope.js';
-import { camposAgyHtml } from './agy.js';
 
 export function validScope(scope, users) {
   if (!scope || scope === 'all') return 'all';
@@ -89,37 +87,18 @@ function seloOrcamento(budget) {
 
 export function claudeAuthBadge(id, ctx) {
   const all = (ctx.doctor && ctx.doctor.claudeAuth) || [];
-  // servidor sempre inclui a entrada '' (padrão da máquina/legado), mesmo com perfis
-  // salvos - então id === '' (padrão global sem override, ou conta sem claudeProfileId
-  // próprio) acha essa entrada direto. all[0] fica só como último recurso pra doctorInfo
-  // ainda não ter chegado num formato esperado (nunca devolve string vazia à toa).
-  const info = all.find(x => x.id === id) || all.find(x => x.id === '') || all[0] || null;
-  if (!info) return '';
-  if (info.apiKeyMode && !info.ready) return `<span class="a-claude bad" title="Perfil de chave de API sem chave preenchida">SEM CHAVE</span>`;
-  if (info.openrouterMode && !info.ready) return `<span class="a-claude bad" title="Perfil OpenRouter sem chave preenchida">SEM CHAVE</span>`;
+  // sem perfil nenhum a sessão não abre: o selo diz isso em vez de sumir. Doctor que ainda
+  // não chegou (sem a lista) não diz nada.
+  if (!all.length) return ctx.doctor && Array.isArray(ctx.doctor.claudeAuth) ? '<span class="a-claude bad" title="Cadastre uma chave de API em Plano e chaves">SEM PERFIL</span>' : '';
+  // id === '' é a conta sem perfil próprio e sem padrão salvo: vale o primeiro com chave
+  const info = all.find(x => x.id === id) || all.find(x => x.ready) || all[0];
+  if (!info.ready) return `<span class="a-claude bad" title="Perfil de chave de API sem chave preenchida">SEM CHAVE</span>`;
   // bloqueio de orçamento vem de ctx.usage.budgets (fonte única, viva a cada
   // pushState, v2.40.0); o doctor parou de carregar blocked/reason, e este selo
   // lia de lá (achado da revisão adversarial: o ramo tinha virado código morto).
-  // Desde a v2.48.4 o selo vale pros dois tipos de perfil, porque o teto também vale.
   const budget = ((ctx.usage && ctx.usage.budgets) || []).find(b => b.id === (info.id || id)) || {};
   if (budget.blocked) return seloOrcamento(budget);
-  if (info.codexMode) {
-    const ok = ctx.doctor && ctx.doctor.codexChatGPT === true;
-    const detail = (ctx.doctor && ctx.doctor.codexLoginDetail) || 'rode codex login e confirme codex login status';
-    return ok
-      ? '<span class="a-claude ok" title="Codex CLI autenticado no plano ChatGPT">Codex ChatGPT</span>'
-      : `<span class="a-claude bad" title="${esc(detail)}">SEM CODEX</span>`;
-  }
-  if (info.openrouterMode) return '<span class="a-claude ok" title="Claude Code via OpenRouter (Anthropic Skin)">OpenRouter</span>';
-  if (info.agyMode) {
-    return info.ready
-      ? '<span class="a-claude ok" title="Antigravity CLI com login na pasta deste perfil">Antigravity</span>'
-      : '<span class="a-claude bad" title="Use Abrir sessão de login neste cartão">SEM LOGIN</span>';
-  }
-  if (info.apiKeyMode) return `<span class="a-claude ok" title="Autenticação por chave de API">🔑 chave configurada</span>`;
-  if (info.ready === false) return `<span class="a-claude bad" title="rode claude login nesse diretório">SEM LOGIN</span>`;
-  if (info.account) return `<span class="a-claude ok" title="${esc(info.configDir || 'padrão da máquina')}">@${esc(info.account)}</span>`;
-  return `<span class="a-claude" title="${esc(info.configDir || 'padrão da máquina')}">${info.configDir ? 'logada' : 'padrão da máquina'}</span>`;
+  return `<span class="a-claude ok" title="Autenticação por chave de API">🔑 chave configurada</span>`;
 }
 
 const DIAS_DO_TETO = [
@@ -210,61 +189,15 @@ export function budgetEditorHtml(p, info) {
   </div>`;
 }
 
-// o login padrão da máquina não tem pasta para editar: a sessão roda sem CLAUDE_CONFIG_DIR
-const TEXTO_MAQUINA = 'Login padrão desta máquina: a conta que o Claude Code usa quando nenhuma pasta é indicada (~/.claude e ~/.claude.json). Dar um nome aqui não muda como a sessão entra; serve para escolher este login como padrão, numa conta do GitHub ou num grupo de consumo.';
-
-function profileFieldsHtml(p, isApiKey, isCodex, isOpenRouter, camposChave, camposDir, camposOrcamento, camposOpenRouter) {
-  if (p.kind === 'maquina') return `<div class="a-hint">${esc(TEXTO_MAQUINA)}</div>` + camposOrcamento;
-  if (isCodex) {
-    return '<div class="a-hint">Usa o Codex CLI local com login ChatGPT. O Farol registra os tokens das automações, mas o CLI não informa saldo da cota nem custo por sessão. Use o botão de login se o diagnóstico acusar falta de autenticação.</div>';
-  }
-  if (isOpenRouter) return camposOpenRouter + camposOrcamento;
-  if (isApiKey) return camposChave + camposOrcamento;
-  return camposDir + camposOrcamento;
-}
-
 export function claudeProfilesHtml(ctx) {
   const c = ctx.config || {};
   const profiles = c.claudeProfiles || [];
-  // migração: legado preenchido e nenhum perfil salvo ainda -> oferece virar o primeiro perfil
-  // o template sai pra um nome porque a interrogacao dentro dele e TEXTO da UI, a
-  // pergunta que o cartao faz pra pessoa, e o gate nao distingue prosa de ternario:
-  // na mesma linha do ternario, os dois somavam 2
-  const cartaoMigracao = `<div class="card acct-add">
-    <div class="a-add-title">Perfil atual detectado</div>
-    <div class="a-hint">Você já tem um diretório configurado: <code>${esc(c.claudeConfigDir)}</code>. Salvar como o primeiro perfil?</div>
-    <div class="a-editrow">
-      <input id="claudeMigrateLabel" placeholder="nome do perfil" value="Perfil atual" spellcheck="false">
-      <button class="btn sm" id="btnClaudeMigrate">Salvar como perfil</button>
-    </div>
-  </div>`;
-  // sem pasta legada, quem fica fora da lista é o login padrão da máquina: o cartão oferece
-  // listá-lo com um nome (a gravação é do engine, pela mesma rota da adoção)
-  const cartaoMaquina = `<div class="card acct-add">
-    <div class="a-add-title">Login padrão desta máquina</div>
-    <div class="a-hint">Hoje o Farol usa este login sem nome. Liste-o como perfil para dar um nome a ele e escolher onde ele vale; a sessão continua entrando do mesmo jeito.</div>
-    <div class="a-editrow">
-      <input id="claudeMigrateLabel" placeholder="nome do perfil (ex.: BIUD Max 20X)" value="Login padrão desta máquina" spellcheck="false">
-      <button class="btn sm" id="btnClaudeMigrate">Listar como perfil</button>
-    </div>
-  </div>`;
-  const temMaquina = profiles.some(p => p.kind === 'maquina');
-  let migrateCard = '';
-  if (c.claudeConfigDir) migrateCard = profiles.length ? '' : cartaoMigracao;
-  else if (!temMaquina) migrateCard = cartaoMaquina;
   const rows = profiles.map(p => {
-    const isApiKey = p.kind === 'apikey';
-    const isCodex = p.kind === 'codex';
-    const isOpenRouter = p.kind === 'openrouter';
     // gasto vem de ctx.usage.budgets (fonte unica do orcamento, viva a cada
     // pushState), nunca mais do cache do doctor, que congelava o "Hoje" daqui
     // enquanto a aba Consumo andava (v2.40.0)
-    // desde a v2.48.4 o teto vale pros DOIS tipos de perfil, então o gasto é
-    // buscado pros dois (era só apikey: perfil de assinatura não tinha teto)
     const budgetInfo = ((ctx.usage && ctx.usage.budgets) || []).find(x => x.id === p.id);
-    // todo o orçamento sai de budgetEditorHtml: um bloco só, igual pros dois
-    // tipos de perfil (assinatura e chave), com teto base, por dia da semana e
-    // por data única. Duplicar aqui faria um dos tipos envelhecer sozinho.
+    // todo o orçamento sai de budgetEditorHtml: teto base, por dia da semana e por data única
     const camposOrcamento = budgetEditorHtml(p, budgetInfo);
     const camposChave = `
       <div class="a-editrow">
@@ -274,64 +207,32 @@ export function claudeProfilesHtml(ctx) {
       <div class="a-editrow">
         <input class="cp-baseurl" data-id="${esc(p.id)}" value="${esc(p.baseUrl || '')}" placeholder="URL base (opcional, deixe em branco pra usar a Anthropic direto)" spellcheck="false">
       </div>`;
-    const camposOpenRouter = `
-      <div class="a-editrow">
-        <input class="cp-apikey" type="password" data-id="${esc(p.id)}" value="${esc(p.apiKey || '')}" placeholder="chave OpenRouter (sk-or-...)" spellcheck="false" autocomplete="off">
-        <button class="btn icon sm ghost cp-toggle-key" data-id="${esc(p.id)}" title="Mostrar/ocultar a chave" aria-label="Mostrar/ocultar a chave">👁</button>
-      </div>
-      <div class="a-editrow">
-        <input class="cp-baseurl" data-id="${esc(p.id)}" value="${esc(p.baseUrl || '')}" placeholder="https://openrouter.ai/api" spellcheck="false">
-      </div>
-      <div class="a-hint">Usa o Claude Code apontado pro Anthropic Skin do OpenRouter. A chave vai em ANTHROPIC_AUTH_TOKEN; não precisa de claude login.</div>`;
-    const camposDir = `
-      <div class="a-editrow">
-        <input class="cp-dir" data-id="${esc(p.id)}" value="${esc(p.dir || '')}" placeholder="${ctx.ehWin ? 'C:\\Users\\voce\\.claude-perfil' : '~/.claude-perfil'}" spellcheck="false">
-      </div>`;
-    const cotaAgy = ((ctx.cadeia && ctx.cadeia.entradas) || []).find(e => e.id === p.id);
-    const fields = p.kind === 'agy' ? camposAgyHtml(p, cotaAgy && cotaAgy.cota)
-      : profileFieldsHtml(p, isApiKey, isCodex, isOpenRouter, camposChave, camposDir, camposOrcamento, camposOpenRouter);
-    const semLogin = isApiKey || isOpenRouter;
     return `<div class="card acct-card">
     <div class="a-body">
       <div class="a-editrow">
         <input class="cp-label" data-id="${esc(p.id)}" value="${esc(p.label)}" placeholder="nome do perfil" spellcheck="false">
         ${claudeAuthBadge(p.id, ctx)}
       </div>
-      ${fields}
+      ${camposChave + camposOrcamento}
       <div class="cp-teste" data-teste="${esc(p.id)}"></div>
     </div>
     <div class="a-actions">
       <button class="btn sm cp-testar" data-id="${esc(p.id)}">Testar perfil</button>
-      ${semLogin ? '' : `<button class="btn sm cp-login" data-id="${esc(p.id)}">Abrir sessão de login</button>`}
       <button class="btn sm danger-ghost cp-remove" data-id="${esc(p.id)}">Remover</button>
     </div>
   </div>`;
   }).join('');
   const addForm = `<div class="card acct-add">
-    <div class="a-add-title">Adicionar perfil</div>
-    <div class="a-editrow">
-      <div class="seg" id="cpAddKind" role="group" aria-label="Tipo de perfil">
-        <button type="button" class="seg-btn active" data-kind="dir">Login por assinatura</button>
-        <button type="button" class="seg-btn" data-kind="apikey">Chave de API</button>
-        <button type="button" class="seg-btn" data-kind="openrouter">OpenRouter</button>
-        <button type="button" class="seg-btn" data-kind="codex">Codex</button>
-        <button type="button" class="seg-btn" data-kind="agy">Antigravity</button>
-      </div>
-    </div>
+    <div class="a-add-title">Adicionar perfil de chave de API</div>
     <div class="a-editrow">
       <input id="cpAddLabel" placeholder="nome (ex.: BIUD Trabalho)" spellcheck="false">
-      <input id="cpAddDir" placeholder="diretório de config (ex.: ${ctx.ehWin ? 'C:\\Users\\voce\\.claude-biud-trabalho' : '~/.claude-biud-trabalho'})" spellcheck="false">
-      <input id="cpAddApiKey" type="password" placeholder="chave de API" spellcheck="false" autocomplete="off" hidden>
-      <input id="cpAddBaseUrl" placeholder="URL base (opcional)" spellcheck="false" hidden>
-      <input id="cpAddEmail" placeholder="e-mail da conta Google esperada (opcional)" spellcheck="false" autocomplete="off" hidden>
+      <input id="cpAddApiKey" type="password" placeholder="chave de API" spellcheck="false" autocomplete="off">
+      <input id="cpAddBaseUrl" placeholder="URL base (opcional)" spellcheck="false">
       <button class="btn sm" id="btnCpAdd">Adicionar</button>
     </div>
-    <div class="a-hint" id="cpAddHint">Deixe em branco pra usar a Anthropic direto. Um endpoint customizado precisa falar a API de Mensagens da Anthropic.</div>
-    <div class="a-hint" id="cpAddOpenRouterHint" hidden>Chave em openrouter.ai. O Farol aponta o Claude Code pra https://openrouter.ai/api (Anthropic Skin). Modelos não-Anthropic pelo Skin não são garantia do Claude Code.</div>
-    <div class="a-hint" id="cpAddCodexHint" hidden>Usa a cota do plano ChatGPT pelo Codex CLI local. API key do Codex não é aceita nesse perfil.</div>
-    <div class="a-hint" id="cpAddAgyHint" hidden>Usa a cota do plano Google pelo Antigravity CLI (Gemini), com uma pasta só deste perfil. Depois de adicionar, use Abrir sessão de login no cartão dele. O e-mail serve para o Farol conferir que a conta certa entrou.</div>
+    <div class="a-hint" id="cpAddHint">Deixe a URL base em branco pra usar a Anthropic direto. Um endpoint customizado (um proxy, por exemplo) precisa falar a API de Mensagens da Anthropic.</div>
   </div>`;
-  return '<div id="cpLoginWeb"></div>' + migrateCard + rows + addForm;
+  return rows + addForm;
 }
 
 // As palavras da política da conta, um lugar só (30/09/2026): o cartão de Sistema > Contas e
@@ -463,9 +364,9 @@ export function accountsManagerHtml(ctx) {
             <select class="acct-onreject" data-user="${esc(a.user)}" title="PR com bloqueios reais (a revisão pediu mudanças)">
               ${opcoesDaPolitica('onReject', pol.onReject)}
             </select></div>
-          <div class="a-pol-item"><span class="a-fieldlabel">login do Claude (plano)</span>
-            <select class="acct-claudeprofile" data-user="${esc(a.user)}" title="Qual login do Claude (e o plano dele) roda as sessões desta conta. O modelo e o raciocínio vêm de Sistema > Automação, iguais para todas as contas">
-              <option value="">usa a ordem de uso (Plano e chaves)</option>
+          <div class="a-pol-item"><span class="a-fieldlabel">perfil de chave de API</span>
+            <select class="acct-claudeprofile" data-user="${esc(a.user)}" title="Qual chave de API do Claude roda as sessões desta conta. O modelo e o raciocínio vêm de Plano e chaves, iguais para todas as contas">
+              <option value="">usa o perfil padrão (Plano e chaves)</option>
               ${(ctx.config.claudeProfiles || []).map(p => `<option value="${esc(p.id)}"${sel(a.claudeProfileId === p.id)}>${esc(p.label)}</option>`).join('')}
             </select>
             ${claudeAuthBadge(a.claudeProfileId || ctx.config.claudeProfileId || '', ctx)}

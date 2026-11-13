@@ -14,16 +14,14 @@ export const SYS_INDEX = [
   { sec: 'sync', at: '#syncManager', title: 'Sincronização entre aparelhos', hint: 'sync, firebase, aparelho, dispositivo, coordenação, reserva do PR, lease, consolidação, consumo, um farol por pr' },
   { sec: 'devices', at: '#devicesManager', title: 'Aparelhos e administração', hint: 'aparelho, admin, aposentar, renomear, política, pausar, navegador pareado, limpeza, revogar, garantia' },
   { sec: 'plans', at: '#claudeProfilesManager', title: 'Orçamento por perfil', hint: 'orçamento, teto, limite, custo, gasto, cota' },
-  { sec: 'groups', at: '#groupsManager', title: 'Grupos de consumo', hint: 'grupo, teto, orçamento, vincular perfil, codex, custo somado' },
+  { sec: 'groups', at: '#groupsManager', title: 'Grupos de consumo', hint: 'grupo, teto, orçamento, vincular perfil, custo somado' },
   { sec: 'accounts', at: '#accountsManager', title: 'Contas do GitHub', hint: 'conta, identidade, cor, silenciar, política, token, usuário, login, gh' },
   // as organizações monitoradas são da conta (a seção Conexões, que as repetia sem efeito, saiu em 03/10/2026)
   { sec: 'accounts', at: '#accountsManager', title: 'Organizações monitoradas (por conta)', hint: 'org, organização, owners, panorama, repositórios' },
   // revisar e aprovar sozinho são da conta desde 30/09/2026: a busca leva ao cartão dela
   { sec: 'accounts', at: '#accountsManager', title: 'Revisar e aprovar sozinho (por conta)', hint: 'auto review, revisão na hora, fila, auto approve, ressalva, aprovação, reprovar' },
   { sec: 'automation', at: '#sys-row-pushback', title: 'Reconhecer quando o autor contesta a revisão', hint: 'pushback, contestação, autor, desfecho' },
-  { sec: 'plans', at: '#cadeiaPerfis', title: 'Ordem de uso dos perfis', hint: 'cadeia, ordem, prioridade, fallback, principal, limite do plano, reset, assinatura, trocar, gemini, antigravity' },
-  { sec: 'plans', at: '#sys-row-provedor', title: 'Configuração do provedor', hint: 'claude, codex, antigravity, gemini, agy, openrouter, perfil, conta, provedor' },
-  { sec: 'plans', at: '#sys-row-modelo', title: 'Modelo das sessões autônomas', hint: 'opus, sonnet, fable, auto, best, codex, gpt, sol, terra, astra, modelo, limite do plano, openrouter' },
+  { sec: 'plans', at: '#sys-row-modelo', title: 'Modelo das sessões autônomas', hint: 'opus, sonnet, fable, auto, best, modelo, esforço, limite do plano' },
   { sec: 'automation', at: '#sys-row-paralelas', title: 'Revisões paralelas por conta', hint: 'paralelo, simultâneo, série, fila, velocidade' },
   { sec: 'automation', at: '#sys-row-teto-global', title: 'Teto total deste aparelho', hint: 'teto, total, global, paralelismo, simultâneo, aparelho' },
   { sec: 'plans', at: '#sys-row-esforco', title: 'Esforço de raciocínio', hint: 'effort, pensar, raciocínio, alto, baixo, xhigh' },
@@ -31,7 +29,7 @@ export const SYS_INDEX = [
   { sec: 'automation', at: '#sys-row-skipperms', title: 'Sessão no terminal sem pedir permissões', hint: 'dangerously skip permissions, prompts' },
   // saiu de Sistema > Conexões em 03/10/2026, com a seção (merge-bloqueado.js)
   { sec: 'automation', at: '#sys-row-mergeblocked', title: 'Repos bloqueados pra merge', hint: 'merge, mergear, bloqueio, bloqueado, bloquear, repo, repos, repositório, self merge, desativa o botão Merge de Meus PRs' },
-  { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, codex, chatgpt, plano, assinatura, config dir, login, chave' },
+  { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, chave de API, perfil, proxy, url base, teto, orçamento' },
   { sec: 'prefs', at: '#sys-row-identity', title: 'Identidade nos cards', hint: 'barra, etiqueta, ponto, marcador' },
   { sec: 'prefs', at: '#sys-row-mutedview', title: 'Contas silenciadas', hint: 'recolher, esmaecer, ocultar, exibição' },
   { sec: 'prefs', at: '#sys-row-sound', title: 'Som ao chegar PR novo', hint: 'som, aviso, notificação' },

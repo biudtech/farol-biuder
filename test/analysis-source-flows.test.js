@@ -25,11 +25,11 @@ function source(status = 'complete') {
     inventory: { status, headSha: H, baseSha: B, files, changedFiles: files.length },
     release: async () => { releases++; }, releases: () => releases };
 }
-function setup(kind = 'dir') {
+function setup() {
   const e = new Engine();
   e.config = { ...e.config, jiraSites: [], reReviewResume: false, reviewContextMode: 'off', sync: {},
     accounts: [{ user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }] };
-  e.accountForPr = () => 'fixture'; e.tokenFor = () => ''; e.resolveClaudeAuth = () => ({ kind });
+  e.accountForPr = () => 'fixture'; e.tokenFor = () => ''; e.resolveClaudeAuth = () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' });
   e.headSha = async () => H;
   e.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H });
   e.myReviewStates = async () => [];
@@ -136,20 +136,19 @@ test('Engine review usa fonte comum sem perfil técnico e persiste diagnóstico 
   assert.ok(item); assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
   assert.equal(item.technicalReview.semDeclaracao, true);
 });
-test('Engine autoanálise usa os mesmos patches e mantém Codex/AGY sem leitura observável inventada', async () => {
-  for (const kind of ['codex', 'agy']) {
-    const e = setup(kind), handle = source(); sourceRuntime.prepareSources = async () => handle;
-    e.runClaudeStream = async (prompt, options) => {
-      assertPrepared(prompt, e.activeReviews.get(options.id));
-      return { text: JSON.stringify(selfResult()) };
-    };
-    await e.runSelfAnalysis({ ...pr });
-    const item = e.selfAnalyses[pr.key];
-    assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
-    assert.equal(item.observed.scope.observavel, false); assert.deepEqual(item.observed.scope.reviewed, []);
-    assert.deepEqual(item.observed.scope.total, ['src/a.js']); assert.equal(handle.releases(), 1);
-    assert.equal(e.activeReviews.size, 0);
-  }
+test('Engine autoanálise usa os mesmos patches e não inventa leitura observada quando a sessão não leu nada', async () => {
+  const e = setup(), handle = source(); sourceRuntime.prepareSources = async () => handle;
+  e.runClaudeStream = async (prompt, options) => {
+    assertPrepared(prompt, e.activeReviews.get(options.id));
+    return { text: JSON.stringify(selfResult()) };
+  };
+  await e.runSelfAnalysis({ ...pr });
+  const item = e.selfAnalyses[pr.key];
+  assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
+  assert.equal(item.observed.scope.observavel, true); assert.deepEqual(item.observed.scope.reviewed, []);
+  assert.deepEqual(item.observed.scope.missing, ['src/a.js']);
+  assert.deepEqual(item.observed.scope.total, ['src/a.js']); assert.equal(handle.releases(), 1);
+  assert.equal(e.activeReviews.size, 0);
 });
 test('cancelamento na aquisição de ambos fluxos impede modelo, não publica e devolve lease', async () => {
   for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
