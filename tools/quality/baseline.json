@@ -1,7 +1,4 @@
 {
-  "lib/constants.js": {
-    "tempoMagico": 1
-  },
   "lib/engine/decision.js": {
     "maxLines": 254,
     "jsonStringifyCru": 2,
@@ -29,7 +26,7 @@
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 412,
+    "maxLines": 410,
     "emptyCatch": 5,
     "jsonParseCru": 3,
     "processEnvDireto": 2,
@@ -60,11 +57,6 @@
   },
   "lib/paths.js": {
     "jsonParseCru": 1
-  },
-  "main.js": {
-    "emptyCatch": 3,
-    "ternarioAninhado": 1,
-    "profundidadeExcedida": 2
   },
   "server.js": {
     "maxLines": 880,

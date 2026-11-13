@@ -97,26 +97,3 @@ test('--autoanalise emite a credencial do agente: só no stdout, só no escopo d
   assert.equal(executarAqui(['--revogar-todas']).codigo, 0);
   assert.equal(verificarSessao(m[1], Date.now(), 'autoanalise'), false, 'revogar-todas também derruba a do agente');
 });
-
-for (const nome of ['farol-parear.js', 'farol-autoanalise.js']) {
-  test(`${nome} viaja no pacote leve, no Setup.exe e no offline do macOS`, () => {
-    const pacote = fs.readFileSync(path.join(RAIZ, 'tools', 'make-package.ps1'), 'utf8');
-    const pacoteSh = fs.readFileSync(path.join(RAIZ, 'tools', 'make-package.sh'), 'utf8');
-    const setup = fs.readFileSync(path.join(RAIZ, 'tools', 'make-installer.ps1'), 'utf8');
-    const offline = fs.readFileSync(path.join(RAIZ, 'tools', 'make-offline-mac.sh'), 'utf8');
-    const ps = new RegExp(`foreach \\(\\$t in @\\([^)]*'${nome.replace('.', '\\.')}'`);
-    const sh = new RegExp(`for t in [^;\\n]*\\b${nome.replace('.', '\\.')}\\b`);
-    assert.match(pacote, ps, 'whitelist do pacote leve');
-    assert.match(pacoteSh, sh, 'whitelist do pacote leve (sh)');
-    assert.match(setup, ps, 'whitelist do Setup.exe');
-    assert.match(offline, sh, 'whitelist do offline do macOS');
-  });
-}
-
-test('a guarda de árvore suja do pacote lê a mesma lista que o laço de tools/ copia', () => {
-  const pacote = fs.readFileSync(path.join(RAIZ, 'tools', 'make-package.ps1'), 'utf8');
-  // a guarda de árvore suja passou a ler a MESMA lista que o empacotador copia (main,
-  // 1e260c6): o arquivo está nela porque o laço de tools/ o acrescenta
-  assert.match(pacote, /\$doPacote \+= "tools\/\$t"/, 'o laço de tools/ alimenta a lista da guarda');
-  assert.match(pacote, /status --porcelain -- @doPacote/, 'o pacote recusa árvore suja também neste arquivo');
-});

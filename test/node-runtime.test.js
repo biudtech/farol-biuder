@@ -17,12 +17,8 @@ test('contrato suporta piso 24.22.1 e patches da linha 24, sem prometer Node 22 
   for (const version of ['24.22.1', '24.22.2', '24.23.0']) assert.equal(nodeVersionSatisfies(version, range), true, version);
   for (const version of ['22.12.0', '24.0.0', '24.14.9', '24.15.0', '24.15.9', '24.16.0', '24.19.0', '24.22.0', '25.0.0', '26.0.0', '24.22.1-rc.1', 'indisponivel']) {
     assert.equal(nodeVersionSatisfies(version, range), false, version);
-    assert.throws(() => assertExternalNodeRuntime({ version, electron: undefined }), /Node.*incompatível.*Node >=24\.22\.1 <25.*nvm install/);
+    assert.throws(() => assertExternalNodeRuntime({ version }), /Node.*incompatível.*Node >=24\.22\.1 <25.*nvm install/);
   }
-});
-
-test('Node embarcado é validado pelo contrato Electron, separadamente do PATH', () => {
-  assert.equal(assertExternalNodeRuntime({ version: '24.22.0', electron: '44.9.3', packageFile: 'ausente' }), '24.22.0');
 });
 
 test('CLI recusa runtime incompatível com mensagem acionável e código 1', () => {

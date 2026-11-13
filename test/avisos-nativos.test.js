@@ -1,6 +1,6 @@
 // Os avisos nativos prontos (lib/engine/avisos-nativos.js): o motor que roda como sidecar das
 // cascas nativas entrega pelo SSE o título, o corpo e o destino de cada notificação, o
-// contador do Dock e as cores da janela. O main.js usa a mesma fonte, e os casos deste arquivo
+// contador do Dock e as cores da janela. As cascas usam a mesma fonte, e os casos deste arquivo
 // viram test/fixtures/casca/eventos.json, o contrato de paridade das duas cascas.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -4,7 +4,7 @@
    componente do Farol que roda como PROCESSO SEPARADO sem nenhum teste de
    processo. O que havia era estático dos dois lados: um teste lia o
    `--mcp-config` escrito (test/jira-composer.test.js) e outro lia a lista de
-   pastas dos instaladores (test/pacote-runtime-tools.test.js). Os dois passavam
+   pastas dos instaladores. Os dois passavam
    verdes enquanto, na máquina do Guilherme, o servidor não subia de jeito
    nenhum. O gate aprovou o PR sem tocar no comportamento.
 
@@ -27,12 +27,8 @@
    Um é a fiação, o outro é a premissa da fiação.
 
    O que se prova, falando JSON-RPC de verdade com o processo:
-   1. sob NODE o servidor responde `initialize` e `tools/list` (portátil, roda no
-      job de qualidade da CI, que não instala Electron);
-   2. sob ELECTRON, com o env que a produção escreveu, o resultado é o MESMO
-      (pula quando o binário não está presente);
-   3. sob ELECTRON o env produzido seleciona Node; removê-lo seleciona browser;
-   4. site inexistente MORRE com erro legível em vez de travar o cliente MCP
+   1. sob NODE o servidor responde `initialize` e `tools/list`;
+   2. site inexistente MORRE com erro legível em vez de travar o cliente MCP
       esperando resposta pra sempre.
 
    Isolamento: FAROL_HOME é fixado ANTES do `await import()` do módulo do repo,
@@ -49,15 +45,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 
 const jira = await import('../lib/engine/jira.js');
-const { electronVersionSatisfies } = await import('../lib/electron-runtime.js');
 
 const SANDBOX = process.env.FAROL_HOME;
-const RAIZ = path.join(import.meta.dirname, '..');
-const ELECTRON = path.join(RAIZ, 'node_modules', 'electron', 'dist',
-  process.platform === 'win32' ? 'electron.exe' : process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron');
-const TEM_ELECTRON = fs.existsSync(ELECTRON);
-const SEM_ELECTRON = 'binário Electron não instalado neste checkout';
-const REQUISITO_ELECTRON = JSON.parse(fs.readFileSync(path.join(RAIZ, 'package.json'), 'utf8')).dependencies.electron;
 const PERFIL = { HOME: path.join(SANDBOX, 'home'), USERPROFILE: path.join(SANDBOX, 'home'),
   APPDATA: path.join(SANDBOX, 'appdata'), LOCALAPPDATA: path.join(SANDBOX, 'localdata'),
   XDG_CONFIG_HOME: path.join(SANDBOX, 'appdata'), XDG_CACHE_HOME: path.join(SANDBOX, 'localdata') };
@@ -97,7 +86,7 @@ const LISTA = rpc(2, 'tools/list');
 /* Sobe o servidor, manda as mensagens e resolve assim que chegarem `esperadas`
    linhas de resposta (ou quando o processo morrer, ou no teto de tempo). Resolver
    por CONTAGEM e não por sleep fixo é o que mantém o teste rápido no Node e ainda
-   tolerante com o boot mais lento do Electron. */
+   tolerante com um boot mais lento. */
 function conversar(cmd, args, env, mensagens, esperadas, tetoMs = 20000, removerEnv = []) {
   return new Promise((resolve) => {
     const ambiente = { ...process.env, ...PERFIL, ...env };
@@ -149,47 +138,10 @@ async function provaDoHandshake(cmd, args, env) {
   assert.deepEqual(lista.result.tools.map(t => t.name).sort(), ['getJiraIssue', 'searchJiraIssuesUsingJql']);
 }
 
-test('Electron real: env da produção seleciona Node; removê-lo muda para browser',
-  { skip: TEM_ELECTRON ? false : SEM_ELECTRON }, async (t) => {
-    const srv = servidorDaProducao();
-    const probe = path.join(SANDBOX, 'modo-electron.cjs');
-    fs.writeFileSync(probe, "console.log(JSON.stringify({version:process.versions.electron, mode:process.type || 'node', present:Object.hasOwn(process.env,'ELECTRON_RUN_AS_NODE')})); process.exit(0);");
-    async function modo(env, remover = []) {
-      const { linhas, executou, erroDeSpawn } = await conversar(ELECTRON, [probe], env, [], 1, 8000, remover);
-      assert.equal(erroDeSpawn, undefined);
-      assert.equal(executou, true);
-      const [result] = respostas(linhas);
-      assert.ok(result, 'o processo deve informar o modo e a versão reais');
-      assert.equal(electronVersionSatisfies(result.version, REQUISITO_ELECTRON), true);
-      return result;
-    }
-    const produzido = await modo(srv.env);
-    assert.equal(produzido.present, true);
-    assert.equal(produzido.mode, 'node', 'o env escrito pela produção precisa selecionar Node');
-    const removido = await modo({}, Object.keys(srv.env));
-    assert.equal(removido.present, false);
-    assert.equal(removido.mode, 'browser', 'remover o env deve reprovar o requisito de execução como Node');
-    // Valor vazio não é contrato portátil: Electron 44 o trata como Node no
-    // Windows e browser no macOS. Só caracterizamos, sem exigir esse modo.
-    const vazio = await modo({ ...srv.env, ELECTRON_RUN_AS_NODE: '' });
-    assert.equal(vazio.present, true);
-    t.diagnostic(`Electron ${produzido.version} em ${process.platform}: produção=${produzido.mode}, ausente=${removido.mode}, vazio=${vazio.mode}`);
-  });
-
 test('sob node: o servidor MCP responde initialize e tools/list', async () => {
   const srv = servidorDaProducao();
   await provaDoHandshake(process.execPath, srv.args, {});
 });
-
-test('com o comando e o env que a PRODUÇÃO escreveu: mesmo handshake (o bug de campo da v2.54.6)',
-  { skip: TEM_ELECTRON ? false : SEM_ELECTRON },
-  async () => {
-    const srv = servidorDaProducao();
-    // o `command` da produção é o process.execPath de QUEM ESCREVEU o config, que
-    // no teste é o node. Aqui o alvo é o binário do app, então troca-se só o
-    // executável: os args e o env continuam sendo os que a produção declarou.
-    await provaDoHandshake(ELECTRON, srv.args, srv.env || {});
-  });
 
 test('site inexistente: o servidor morre com erro legível em vez de travar o cliente', async () => {
   const srv = servidorDaProducao();

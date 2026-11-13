@@ -7,9 +7,7 @@
      v2.51.1  as TRÊS notificações do sistema (achado pelo Wanderson em 20/08/2026,
               e o CHANGELOG da v2.48.3 AFIRMAVA que a notificação estava corrigida)
 
-   Este arquivo trava as duas metades: o unwrap em si, e a ausência de
-   interpolação crua no shell Electron, que é o consumidor que ficou de fora
-   duas vezes por não ter teste nenhum. */
+   Este arquivo trava o unwrap em si e a fonte única dele nas notificações. */
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -48,23 +46,10 @@ test('interpolar um motivo etiquetado produz texto legível, nunca o objeto', ()
   assert.doesNotMatch(frase, /\[object Object\]/);
 });
 
-/* ---------- a trava estrutural ----------
-   O main.js não tem como ser exercitado aqui (é o shell Electron), então a
-   proteção é ler o FONTE e proibir a interpolação crua de motivo. É a mesma
-   técnica do ui-pure.test.js contra menção de pessoa escrita à mão. */
-
-test('main.js nunca interpola motivo cru numa string', () => {
-  const fonte = fs.readFileSync(path.join(RAIZ, 'main.js'), 'utf8');
-  // `${reasons[0]}`, `${ressalvas[0]}`, `${points[0]}` e afins, sem passar por reasonText
-  const cru = fonte.match(/\$\{\s*(?!reasonText)[A-Za-z_$][\w$]*\s*\[\s*0\s*\]\s*\}/g) || [];
-  assert.deepEqual(cru, [], `interpolação crua de motivo em main.js: ${cru.join(', ')}`);
-});
-
 test('as notificações usam a fonte única do unwrap (lib/format.js)', () => {
   const avisos = fs.readFileSync(path.join(RAIZ, 'lib', 'engine', 'avisos-nativos.js'), 'utf8');
   assert.match(avisos, /import \{ reasonText \} from '\.\.\/format\.js'/);
-  // e o main.js não reimplementa a própria cópia
-  assert.doesNotMatch(fs.readFileSync(path.join(RAIZ, 'main.js'), 'utf8'), /function reasonText/);
+  assert.doesNotMatch(avisos, /function reasonText/);
 });
 
 // o engine também: a cópia local dele foi removida na v2.51.1

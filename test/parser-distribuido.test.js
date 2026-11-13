@@ -8,7 +8,6 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-parser-distribuido-
 process.env.FAROL_HOME = path.join(scratch, 'home');
 const raiz = path.resolve(import.meta.dirname, '..');
 const { validarParserDistribuido, carregarParserDistribuido } = await import('../lib/parser-runtime.js');
-const { packageElectronRequirement } = await import('../lib/electron-runtime.js');
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
 
 function novaPasta(nome) { return fs.mkdtempSync(path.join(scratch, nome)); }
@@ -19,7 +18,7 @@ function escrever(dir, file, text) {
 function pacote() {
   const dir = novaPasta('pacote-');
   const engines = JSON.parse(fs.readFileSync(path.join(raiz, 'package.json'), 'utf8')).engines;
-  escrever(dir, 'package.json', JSON.stringify({ name: 'farol', type: 'module', version: '9.9.9', engines, dependencies: { electron: '^44.1.0' } }));
+  escrever(dir, 'package.json', JSON.stringify({ name: 'farol-biuder', type: 'module', version: '9.9.9', engines }));
   escrever(dir, 'server.js', '// entrada sintética');
   fs.cpSync(path.join(raiz, 'lib'), path.join(dir, 'lib'), { recursive: true });
   fs.cpSync(path.join(raiz, 'assets/third-party'), path.join(dir, 'assets/third-party'), { recursive: true });
@@ -39,7 +38,7 @@ test('artefato oficial tem versão, bytes, hash e licença fixados, sem dependê
   assert.equal(ast.program.body.length, 2);
 });
 
-test('artefato ausente, alterado ou de versão incorreta é recusado pelo requisito de runtime do pacote', () => {
+test('artefato ausente, alterado ou de versão incorreta é recusado pela validação do pacote', () => {
   for (const defect of ['ausente', 'alterado', 'versao']) {
     const source = pacote();
     const artifact = path.join(source, 'assets/third-party/babel-parser/dist/parser.cjs');
@@ -50,7 +49,7 @@ test('artefato ausente, alterado ou de versão incorreta é recusado pelo requis
       const manifest = JSON.parse(fs.readFileSync(file, 'utf8')); manifest.version = '0.0.0';
       fs.writeFileSync(file, JSON.stringify(manifest));
     }
-    assert.throws(() => packageElectronRequirement(path.join(source, 'package.json')), /Parser distribuído ausente ou inválido/);
+    assert.throws(() => validarParserDistribuido(source), /Parser distribuído ausente ou inválido/);
   }
 });
 
