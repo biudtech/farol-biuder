@@ -13,14 +13,17 @@
     "ternarioAninhado": 1,
     "profundidadeExcedida": 1
   },
+  "lib/engine/rereview-stale.js": {
+    "jsonParseCru": 1
+  },
   "lib/engine/review.js": {
     "maxLines": 677,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
-    "maxLines": 211,
+    "maxLines": 173,
     "emptyCatch": 1,
-    "jsonParseCru": 4,
+    "jsonParseCru": 3,
     "ternarioAninhado": 1,
     "tempoMagico": 1
   },
@@ -51,7 +54,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 732,
+    "maxLines": 733,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,

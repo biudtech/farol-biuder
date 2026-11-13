@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 const io = (await import('../lib/io.js')).default;
 const { Engine } = await import('../server.js');
 const selfpr = await import('../lib/engine/selfpr.js');
+const rereviewStale = await import('../lib/engine/rereview-stale.js');
 const pushback = await import('../lib/engine/pushback.js');
 
 const runReal = io.run;
@@ -73,7 +74,7 @@ async function ciclo(e, prs) {
   e.myPRs = prs.map((p) => ({ ...p }));
   e.panorama = prs.map((p) => ({ ...p, reviewedByMe: true }));
   await selfpr.enrichMyPRBranches(e);
-  await selfpr.refreshStaleStates(e);
+  await rereviewStale.refreshStaleStates(e);
   for (const pr of pushback.pushbackTargets(e, e.reviewActions())) {
     const det = await e.detectAuthorPushback(pr, e.pushbackScanned[pr.key] || '');
     if (det && !det.hadActivity) {

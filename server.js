@@ -51,6 +51,7 @@ import versaoClaude from './lib/engine/versao-claude.js';
 import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
 import sessionMod from './lib/engine/session.js';
 import selfMod from './lib/engine/selfpr.js';
+import staleMod from './lib/engine/rereview-stale.js';
 import meusPrsBase from './lib/engine/meus-prs-base.js';
 import labelsATirar from './lib/engine/labels-a-tirar.js';
 import labelPropriaOrfa from './lib/engine/label-propria-orfa.js';
@@ -1270,7 +1271,6 @@ class Engine extends EventEmitter {
 
   async runHeadlessReview(pr) { return reviewMod.runHeadlessReview(this, pr); }
 
-  // Meus PRs (mergeabilidade, autoanálise, merge): colaborador lib/engine/selfpr.js (Onda 2).
   saveSelfAnalyses() { return selfMod.saveSelfAnalyses(this); }
   setSelfAnalysisVisibility(key, hidden) { return selfMod.setSelfAnalysisVisibility(this, key, hidden); }
   // Ocultar um PR de "Meus PRs" (some da aba, sem tocar no GitHub). Não confundir com o
@@ -1287,8 +1287,8 @@ class Engine extends EventEmitter {
   async fetchAutoMergeAllowed(repo) { return selfMod.fetchAutoMergeAllowed(this, repo); }
   async fetchRuleBlocked(repo, base) { return selfMod.fetchRuleBlocked(this, repo, base); }
   async refreshMergeStates() { return selfMod.refreshMergeStates(this); }
-  async refreshStaleStates(agora) { return selfMod.refreshStaleStates(this, agora); }
-  async staleForReview(pr) { return selfMod.staleForReview(this, pr); }
+  async refreshStaleStates(agora) { return staleMod.refreshStaleStates(this, agora); }
+  async staleForReview(pr) { return staleMod.staleForReview(this, pr); }
 
   // --- pushback automático: detecta e classifica a contestação do autor ------
   // Best-effort (como o staleStates): qualquer incerteza não registra nada. O
