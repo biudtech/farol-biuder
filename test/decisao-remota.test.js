@@ -299,7 +299,7 @@ test('postar pelo admin também fica registrado no histórico do executor', asyn
 
 test('a linha do histórico diz que a decisão veio do admin', () => {
   const base = { id: 'i1', key: ITEM.key, status: 'posted', action: 'approve', resolvedAt: 1_700_000_000_000, pr: { url: 'https://github.com/acme-exemplo/app-web/pull/41', title: 't' } };
-  const ctx = { pushbacks: {}, chip: '', chatBadge: '', agora: 1_700_000_000_000 };
+  const ctx = { pushbacks: {}, chip: '', agora: 1_700_000_000_000 };
   assert.match(P.resolvedRow({ ...base, viaAdmin: true }, ctx), /decidido pelo admin/);
   assert.doesNotMatch(P.resolvedRow(base, ctx), /decidido pelo admin/);
 });

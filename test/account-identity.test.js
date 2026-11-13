@@ -140,15 +140,6 @@ test('launchSelfAnalysis: conta do PR com token passa, mesmo com a PRIMÁRIA sem
   assert.equal(e.headlessQueue[0].account, 'bob');
 });
 
-test('setReviewers: conta do PR sem token recusa mesmo com token primário presente (precedência corrigida)', async () => {
-  const e = engineDuasContas();
-  e.config.defaultReviewers = { biudtech: ['carol'] };
-  const r = await e.setReviewers('https://github.com/biudtech/app/pull/5');
-  assert.equal(r.ok, false);
-  assert.equal(chamadas.filter(c => c.args.join(' ').startsWith('pr edit')).length, 0,
-    'nenhum pr edit sai assinado pela primária');
-});
-
 /* ---------- leitores best-effort: sem token = incerteza pelo contrato ---------- */
 
 test('fetchMergeState: conta da org sem token devolve null sem rodar gh', async () => {
@@ -164,32 +155,6 @@ test('staleForReview: conta sem token devolve indeterminado (nunca reativa Re-re
   assert.equal(info.stale, false);
   assert.equal(info.head, '', 'sem head, o gate de re-revisão automática também não arma');
   assert.equal(chamadas.length, 0);
-});
-
-/* ---------- chat: sessão com a conta dona do PR (A3) ---------- */
-
-test('chatSend passa a conta do PR ao runClaudeStream (token gh e perfil Claude certos)', async () => {
-  const e = engineDuasContas();
-  e.tokens.bob = 'tok-bob'; // bob autenticado: o que se prova aqui é o REPASSE da conta
-  let captured = null;
-  e.runClaudeStream = async (prompt, opts) => { captured = opts; return { text: 'oi', sessionId: 's1' }; };
-  e.saveChats = () => { };
-  const r = await e.chatSend('biudtech/app#7', 'https://github.com/biudtech/app/pull/7', 'olá');
-  assert.equal(r.ok, true);
-  while (e.chats['biudtech/app#7'].status === 'running') await new Promise(res => setTimeout(res, 10));
-  assert.ok(captured, 'runClaudeStream foi chamado');
-  assert.equal(captured.account, 'bob', 'sem isso o resume cai no perfil Claude padrão e o gh no token primário (A3)');
-});
-
-test('chatSend recusa quando a conta do PR está sem token (nunca conversa com identidade errada)', async () => {
-  const e = engineDuasContas(); // bob sem token
-  let abriu = false;
-  e.runClaudeStream = async () => { abriu = true; return { text: 'x' }; };
-  e.saveChats = () => { };
-  const r = await e.chatSend('biudtech/app#7', 'https://github.com/biudtech/app/pull/7', 'olá');
-  assert.equal(r.ok, false);
-  assert.match(r.error, /sem token/);
-  assert.equal(abriu, false, 'nenhuma sessão abre com o token da primária');
 });
 
 /* ---------- lançamento de revisão: só conta com token abre sessão ---------- */
@@ -282,24 +247,4 @@ test('ghEnv: token da conta resolvida vence o do ambiente, e o GITHUB_TOKEN sai 
     assert.equal(env.GH_TOKEN, 'tok-alice');
     assert.equal('GITHUB_TOKEN' in env, false, 'GH_TOKEN vence no gh, mas GITHUB_TOKEN sobrando é identidade de reserva no filho');
   });
-});
-
-// Org fora do `owners` do config (Edicoes-CNBB#13, 10/09/2026): o chat montava o PR na
-// mão como { key, url }, sem a conta que a decisão pendente já trazia, e o accountForPr
-// caía no fallback da primária. Ali o repo era invisível pra ela e o POST morreu em 404;
-// com acesso, o APPROVE teria saído assinado pela conta ERRADA, que é a raiz A1.
-test('chatSend usa a conta que o PR já traz quando a org não está mapeada (nunca a primária)', async () => {
-  const e = engineDuasContas();
-  e.tokens.bob = 'tok-bob';
-  e.decisions.pending.push({
-    key: 'edicoes/app#13',
-    pr: { repo: 'edicoes/app', number: 13, url: 'https://github.com/edicoes/app/pull/13', account: 'bob' },
-  });
-  let captured = null;
-  e.runClaudeStream = async (prompt, opts) => { captured = opts; return { text: 'oi', sessionId: 's1' }; };
-  e.saveChats = () => { };
-  const r = await e.chatSend('edicoes/app#13', 'https://github.com/edicoes/app/pull/13', 'olá');
-  assert.equal(r.ok, true);
-  while (e.chats['edicoes/app#13'].status === 'running') await new Promise(res => setTimeout(res, 10));
-  assert.equal(captured.account, 'bob', 'a conta dona já estava em disco; cair na primária é agir com identidade errada');
 });

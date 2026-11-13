@@ -74,7 +74,7 @@ function rodarIsolada(corpo) {
       activeReviews: new Map([['s1', { id: 's1', mode: 'auto', keys: ['acme/app#7'] }]]),
       log() {}, emit() {}, pushState() {}, ghEnv: () => ({}), tokenFor: () => 'tok', refreshTokens: async () => {},
       accountForPr: () => 'eu', accountForOwner: () => 'eu', accountList() { return this.config.accounts; },
-      reviewersForRepo: () => ['ana'], cancelSession: (id) => { cancelados.push(id); return { ok: true }; },
+      cancelSession: (id) => { cancelados.push(id); return { ok: true }; },
     };
     const r = await (async () => { ${corpo} })();
     console.log(JSON.stringify({ r, chamadas: chamadas.length, cancelados }));
@@ -97,16 +97,6 @@ test('addInProgressLabel em isolada não chama gh nem devolve label', () => {
     return await addInProgressLabel(engine, { key: 'acme/app#7', url: 'https://github.com/acme/app/pull/7' });
   `);
   assert.deepEqual({ r: r.r, chamadas: r.chamadas }, { r: '', chamadas: 0 });
-});
-
-test('setReviewers em isolada recusa com instancia_isolada, sem gh', () => {
-  const r = rodarIsolada(`
-    const { setReviewers } = await import('${RAIZ_URL}/lib/engine/selfpr.js');
-    return await setReviewers(engine, 'https://github.com/acme/app/pull/7');
-  `);
-  assert.equal(r.r.blocked, 'instancia_isolada');
-  assert.equal(r.r.ok, false);
-  assert.equal(r.chamadas, 0);
 });
 
 test('executarMerge em isolada recusa com instancia_isolada, sem gh', () => {

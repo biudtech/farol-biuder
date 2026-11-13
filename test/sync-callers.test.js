@@ -5,7 +5,7 @@
 //     sem desfecho devolvem o lease;
 //   - pushback ('pushback'): o marcador é a versão material; recibo de outro aparelho
 //     vira { deduped } e o scan avança o marcador sem gastar sessão;
-//   - chat e ferramenta declaram o tipo ('chat'/'tool'), que o gate deixa passar sem
+//   - a ferramenta declara o tipo ('tool'), que o gate deixa passar sem
 //     coordenar (allowlist fechada: sem o tipo, a sessão seria recusada).
 //
 // Engine real com FAROL_HOME temporário (server.js alcança lib/paths.js, então await
@@ -218,7 +218,7 @@ test('scanPushbacks: classificação deduplicada avança o marcador sem gravar p
   assert.deepEqual(e.pushbacks, {});
 });
 
-/* ---------- chat e ferramenta ---------- */
+/* ---------- ferramenta ---------- */
 
 function esperar(cond, ms = 2000) {
   return new Promise((resolve, reject) => {
@@ -229,15 +229,6 @@ function esperar(cond, ms = 2000) {
     }, 10);
   });
 }
-
-test('chat declara operationKind chat', async () => {
-  const e = motor({ text: 'oi', sessionId: 's1' });
-  e.saveChats = () => { };
-  const r = await e.chatSend(PR.key, PR.url, 'olá');
-  assert.equal(r.ok, true);
-  await esperar(() => e.chats[PR.key].status === 'idle');
-  assert.equal(e.opts[0].operationKind, 'chat');
-});
 
 test('ferramenta declara operationKind tool', async () => {
   const e = motor({ text: 'resultado', sessionId: 's1' });

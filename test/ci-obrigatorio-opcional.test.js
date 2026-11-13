@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ciForaDaDecisaoBlock } from '../lib/engine/review-prompt.js';
 import { esperaCiCardMeta, staleCardMeta, tituloDoAprovarDesligado, fraseDoCi, accountsManagerHtml } from '../ui/pure.js';
-import { PREFERENCE_LABELS } from '../ui/pure/preferences.js';
 import { flagSemPermissoes, buildLoginScript, buildLoginScriptMac } from '../lib/engine/session.js';
 
 const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
@@ -143,12 +142,10 @@ test('Sistema > Automação: as chaves que nascem ligadas só desligam com false
   ]) assert.ok(sistema.includes(linha), linha);
 });
 
-test('importar preferências antigas não reabre a migração do esquema 2', async () => {
-  const { KEYS } = await import('../lib/preferences/values.js');
-  assert.equal(KEYS.includes('esquemaConfig'), false, 'o marcador não viaja na exportação nem volta na importação');
+test('uma config com o marcador do esquema 2 não reabre a migração', async () => {
   const M = (await import('../lib/engine/contas-migracao.js')).default;
-  const depoisDaImportacao = { esquemaConfig: 2, aguardarCiParaAprovar: true, skipPermissions: false, reReviewResume: false };
-  assert.deepEqual(M.migrarPadroes(depoisDaImportacao), { mudou: false, valores: {}, mudancas: [] }, 'a escolha importada fica');
+  const comMarcador = { esquemaConfig: 2, aguardarCiParaAprovar: true, skipPermissions: false, reReviewResume: false };
+  assert.deepEqual(M.migrarPadroes(comMarcador), { mudou: false, valores: {}, mudancas: [] }, 'a escolha gravada fica');
 });
 
 test('botão Aprovar desligado: o título só fala de CI com a chave ligada', () => {
@@ -183,7 +180,6 @@ test('Sistema > Automação: a linha virou chave, ligada à preferência, e os p
   }
   assert.match(ler('ui/telas/acoes.js'), /\['#setAguardarCiAprovar', 'aguardarCiParaAprovar', el => el\.checked\]/);
   assert.match(ler('ui/telas/sistema.js'), /\$\('#setAguardarCiAprovar'\)\.checked = c\.aguardarCiParaAprovar === true;/);
-  assert.equal(PREFERENCE_LABELS.aguardarCiParaAprovar, 'CI obrigatório antes da aprovação', 'a preferência viaja na exportação');
 });
 
 test('lacunas da rodada: o CI só entra na prova exigida com a chave ligada; o approvalGaps segue apontando a pipe', async () => {

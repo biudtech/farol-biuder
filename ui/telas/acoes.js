@@ -114,8 +114,7 @@ $('#panorama').addEventListener('click', async (e) => {
     revisarUrls([btn.dataset.url]);
     return;
   }
-  // .act-chat é ouvido globalmente (document); só o copiar precisa de listener aqui,
-  // mesmo padrão de "cada seção escuta o seu" usado em Revisões recentes (#resolved).
+  // Cada seção escuta o seu clique (mesmo padrão de Revisões recentes, #resolved).
   const cp = e.target.closest('.rr-copy');
   if (cp) {
     const ok = await copyToClipboard(cp.dataset.url || cp.dataset.key || '');

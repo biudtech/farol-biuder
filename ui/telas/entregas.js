@@ -29,7 +29,7 @@ let deliveriesFoco = null; // { by: 'repo'|'author', valor }
 let focoPendente = false;  // aplicado pelo endereço antes da carga: rola quando a carga chega
 function resetDeliveriesDisclosure() { deliveriesOpen = new Set(); }
 // token de requisição: trocar org/período dispara cargas concorrentes e a resposta
-// VELHA não pode vencer a nova (mesma guarda que o openChat faz por chave)
+// VELHA não pode vencer a nova (guarda por token de requisição)
 let deliveriesReqSeq = 0;
 
 // org principal (default da visão): 1º owner da 1ª conta, senão o legado config.owners

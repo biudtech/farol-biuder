@@ -1104,7 +1104,7 @@ function linhaResolvida(extra) {
     ...extra
   };
 }
-const CTX = { pushbacks: {}, chip: '', chatBadge: '', agora: AG };
+const CTX = { pushbacks: {}, chip: '', agora: AG };
 
 test('resolvedRow: cabeçalho traz referência, card, selo e o quando com dia', () => {
   const html = P.resolvedRow(linhaResolvida(), CTX);
@@ -1145,9 +1145,8 @@ test('resolvedRow: sem autor, não sobra avatar nem @ soltos', () => {
   assert.doesNotMatch(html, />@</, 'nenhum @ solto');
 });
 
-test('resolvedRow: as quatro ações estão presentes e apontam pro PR', () => {
+test('resolvedRow: as três ações estão presentes e apontam pro PR', () => {
   const html = P.resolvedRow(linhaResolvida(), CTX);
-  assert.match(html, /class="[^"]*act-chat/, 'conversar');
   assert.match(html, /class="[^"]*act-review/, 'revisar de novo');
   assert.match(html, /class="[^"]*rr-copy/, 'copiar');
   assert.match(html, /href="https:\/\/github\.com\/biudtech\/biud-esg\/pull\/172"[^>]*target="_blank"/, 'abrir no GitHub');
@@ -1220,10 +1219,9 @@ test('resolvedRow: sem autor não há controle de pushback (contrato do pushback
   assert.doesNotMatch(html, /pushback/);
 });
 
-test('resolvedRow: o chip da conta e o contador de chat entram como vieram do ctx', () => {
-  const html = P.resolvedRow(linhaResolvida(), { ...CTX, chip: '<span class="acct-chip">BIUD</span>', chatBadge: '<b>2</b>' });
+test('resolvedRow: o chip da conta entra como veio do ctx', () => {
+  const html = P.resolvedRow(linhaResolvida(), { ...CTX, chip: '<span class="acct-chip">BIUD</span>' });
   assert.match(html, /acct-chip">BIUD/);
-  assert.match(html, /<b>2<\/b>/);
 });
 
 test('resolvedRow: sem verificationCheckpoint, não mostra nenhuma linha de resumo', () => {
@@ -1904,62 +1902,11 @@ test('domainMatrix: pessoa sem matriz marca "sem info" em todos os domínios', (
   assert.equal((html.match(/<option value="" selected>/g) || []).length, P.DOMAIN_DEFS.length);
 });
 
-test('reviewerLabel: pessoa é o próprio handle, sem enfeite', () => {
-  assert.deepEqual(P.reviewerLabel('alice', {}), { label: 'alice', cls: '' });
-});
-
-test('reviewerLabel: time resolve o nome pelos candidatos da org', () => {
-  const cands = { acme: { teams: [{ id: 'acme/plataforma', name: 'Plataforma' }] } };
-  const r = P.reviewerLabel('acme/plataforma', cands);
-  assert.equal(r.label, 'Plataforma (time)');
-  assert.equal(r.cls, 'team');
-});
-
-test('reviewerLabel: sem candidatos carregados, o time degrada pro slug em vez de quebrar', () => {
-  // é o estado real enquanto o fetch dos candidatos não voltou
-  for (const cands of [null, undefined, {}, { outra: { teams: [] } }]) {
-    assert.equal(P.reviewerLabel('acme/plataforma', cands).label, 'plataforma (time)');
-  }
-});
-
-test('reviewerLabel: time enterprise é marcado como não pedível', () => {
-  // o GitHub recusa esses; a UI precisa dizer isso em vez de deixar tentar
-  const r = P.reviewerLabel('acme/ent:seguranca', {});
-  assert.equal(r.ent, true);
-  assert.equal(r.cls, 'bad');
-  assert.match(r.label, /não pedível/);
-});
-
-test('chipHtml: leva o rótulo resolvido e o botão de remover com os data-attrs', () => {
-  const cands = { acme: { teams: [{ id: 'acme/plataforma', name: 'Plataforma' }] } };
-  const html = P.chipHtml('acme/plataforma', 'rev-def-x', 'data-org="acme"', cands);
-  assert.match(html, /Plataforma \(time\)/);
-  assert.match(html, /class="rev-chip team"/);
-  assert.match(html, /class="rev-def-x" data-org="acme"/);
-});
-
-test('chipHtml: chip de enterprise ganha o title explicando por que não serve', () => {
-  const html = P.chipHtml('acme/ent:seguranca', 'x', '', {});
-  assert.match(html, /title="Time enterprise não pode ser reviewer/);
-});
-
-test('chatBadge: mostra a contagem, e some quando é zero ou não há chat', () => {
-  assert.match(P.chatBadge('o/r#1', { 'o/r#1': { count: 3 } }), /<span class="count">3<\/span>/);
-  assert.equal(P.chatBadge('o/r#1', { 'o/r#1': { count: 0 } }), '', 'zero não vira selo vazio');
-  assert.equal(P.chatBadge('o/r#2', { 'o/r#1': { count: 3 } }), '');
-});
-
-test('chatBadge: sem mapa de chats devolve vazio em vez de quebrar', () => {
-  // o app.js chama com STATE?.chats, que é undefined antes do primeiro SSE
-  assert.equal(P.chatBadge('o/r#1', undefined), '');
-  assert.equal(P.chatBadge('o/r#1', null), '');
-});
-
-/* As três abaixo são as portas de entrada: papelPicker, domainMatrix e chipHtml são
+/* As duas abaixo são as portas de entrada: papelPicker e domainMatrix são
    exatamente as que o app.js chama, então são elas que recebem o parâmetro novo do
    chamador. Um chamador esquecido passa undefined, e é esse o único risco que a
-   extração criou. Testar só as internas (personOf, reviewerLabel) deixaria o
-   caminho de verdade descoberto. */
+   extração criou. Testar só as internas (personOf) deixaria o caminho de verdade
+   descoberto. */
 
 test('papelPicker: sem mapa de pessoas cai em "não marcado" em vez de quebrar', () => {
   for (const people of [undefined, null, {}]) {
@@ -1975,15 +1922,6 @@ test('domainMatrix: sem mapa de pessoas marca "sem info" em todo domínio', () =
     assert.equal((html.match(/<option value="" selected>/g) || []).length, P.DOMAIN_DEFS.length);
     assert.equal((html.match(/class="dom-level"/g) || []).length, P.DOMAIN_DEFS.length,
       'a matriz continua completa: some o nível, não a linha');
-  }
-});
-
-test('chipHtml: sem candidatos o chip ainda sai, com o slug do time', () => {
-  // estado real enquanto o fetch dos candidatos não voltou; o chip não pode sumir
-  for (const cands of [undefined, null, {}]) {
-    const html = P.chipHtml('acme/plataforma', 'rev-x', 'data-a="1"', cands);
-    assert.match(html, /plataforma \(time\)/);
-    assert.match(html, /class="rev-x" data-a="1"/, 'o botão de remover continua funcional');
   }
 });
 
@@ -2127,111 +2065,6 @@ test('nenhum seletor de atributo escapa só a aspa (a barra tem que vir junto)',
   }
 });
 
-/* ---------- onda 5, terceiro passo: o editor de reviewers ----------
-   Diferente dos blocos anteriores, aqui não bastava um parâmetro: as funções liam
-   SETE globais entre config, candidatos e três Sets de estado de tela. Todas só
-   LEEM (quem muta os Sets são os handlers, que ficaram no app.js), então entra um
-   ctx único, montado uma vez por renderização.
-
-   A extração foi de baixo pra cima: primeiro as folhas, depois o renderOrgBlock
-   que compõe todas elas. */
-
-const CTX_REV = {
-  defaults: { acme: ['alice', 'acme/plataforma'] },
-  projects: { 'acme/api': ['bob'], 'acme/web': ['alice', 'acme/plataforma'] },
-  cands: { acme: { members: ['alice', 'bob', 'eu'], teams: [{ id: 'acme/plataforma', name: 'Plataforma' }] } },
-  candsLoaded: true,
-  abertas: new Set(), pendentes: new Set(), expandidas: new Set(),
-  prKeys: ['acme/api#1', 'acme/web#2', 'acme/site#3', 'outra/x#4'],
-  owner2user: { acme: 'eu' }, ghUser: 'eu',
-};
-
-test('defaultFor e overrideFor: acham por chave exata e por minúscula', () => {
-  assert.deepEqual(P.defaultFor('acme', CTX_REV), ['alice', 'acme/plataforma']);
-  assert.deepEqual(P.defaultFor('ACME', CTX_REV), ['alice', 'acme/plataforma'], 'org vem do GitHub com a caixa do dono');
-  assert.deepEqual(P.defaultFor('nao-existe', CTX_REV), [], 'sem padrão é lista vazia, nunca undefined');
-  assert.deepEqual(P.overrideFor('acme/api', CTX_REV), ['bob']);
-  assert.equal(P.overrideFor('nao/existe', CTX_REV), null, 'sem exceção é null, que é diferente de lista vazia');
-});
-
-test('defaultFor e overrideFor: ctx sem os mapas não quebra', () => {
-  assert.deepEqual(P.defaultFor('acme', {}), []);
-  assert.equal(P.overrideFor('acme/api', {}), null);
-});
-
-test('reposOfOrg: junta PRs, exceções e pendentes da org, sem repetir e ordenado', () => {
-  const r = P.reposOfOrg('acme', CTX_REV);
-  assert.deepEqual(r, ['acme/api', 'acme/site', 'acme/web']);
-  assert.ok(!r.some(x => x.startsWith('outra/')), 'repo de outra org fica de fora');
-});
-
-test('reposOfOrg: repo pendente entra mesmo sem PR nem exceção salva', () => {
-  // é o caso de criar exceção pra um projeto que ainda não apareceu em lugar nenhum
-  const ctx = { ...CTX_REV, pendentes: new Set(['acme/novo']) };
-  assert.ok(P.reposOfOrg('acme', ctx).includes('acme/novo'));
-});
-
-test('suggestDefault: sugere quem aparece em pelo menos metade das exceções', () => {
-  // o limiar é ceil(n/2), então com 3 listas exige 2, e alice (em 2) passa
-  const tres = { ...CTX_REV, defaults: {},
-    projects: { 'a/1': ['alice'], 'a/2': ['alice'], 'a/3': ['bob'] }, prKeys: ['a/1#1', 'a/2#2', 'a/3#3'] };
-  assert.deepEqual(P.suggestDefault('a', tres), ['alice'], 'bob, em 1 de 3, fica de fora');
-});
-
-test('suggestDefault: com exatamente 2 exceções o limiar vira 1 e tudo é sugerido', () => {
-  // Aresta REAL do ceil(n/2), não intenção: com 2 listas o limiar é 1, então
-  // qualquer reviewer que apareça numa delas entra na sugestão. Fica travado aqui
-  // porque é surpreendente ao ler o nome da função, e porque mudar isso seria
-  // decisão de produto, não refactor. O comportamento é idêntico ao de antes da
-  // extração (provado na comparação com o original).
-  assert.deepEqual(P.suggestDefault('acme', CTX_REV), ['acme/plataforma', 'alice', 'bob']);
-});
-
-test('suggestDefault: com menos de duas exceções não sugere nada', () => {
-  const ctx = { ...CTX_REV, projects: { 'a/1': ['alice'] }, prKeys: ['a/1#1'] };
-  assert.deepEqual(P.suggestDefault('a', ctx), []);
-});
-
-test('addControl: sem candidatos carregados mostra "carregando", não campo vazio', () => {
-  const html = P.addControl('c', 'data-org="acme"', [], 'acme', { ...CTX_REV, candsLoaded: false });
-  assert.match(html, /carregando/);
-});
-
-test('addControl: org sem membros enumeráveis cai no campo de digitar à mão', () => {
-  // conta pessoal ou namespace sem org: o GitHub não lista membros
-  const html = P.addControl('c', 'data-org="x"', [], 'x', CTX_REV);
-  assert.match(html, /rev-manual/);
-  assert.match(html, /digite um handle/);
-});
-
-test('addControl: não oferece quem já está na lista nem você mesmo', () => {
-  const html = P.addControl('c', 'data-org="acme"', ['alice'], 'acme', CTX_REV);
-  assert.doesNotMatch(html, /value="alice"/, 'já está na lista');
-  assert.doesNotMatch(html, /value="eu"/, 'pedir review pra si mesmo não faz sentido');
-  assert.match(html, /value="bob"/);
-  assert.match(html, /value="acme\/plataforma"/);
-});
-
-test('renderOrgBlock: org com padrão mostra o padrão e as exceções', () => {
-  const html = P.renderOrgBlock('acme', 'var(--accent)', CTX_REV);
-  assert.match(html, /rev-chips/);
-  assert.match(html, /acme\/api/, 'o repo com exceção aparece');
-});
-
-test('renderOrgBlock: lista colapsada só abre quando a org está expandida', () => {
-  const fechada = P.renderOrgBlock('acme', 'var(--accent)', CTX_REV);
-  const aberta = P.renderOrgBlock('acme', 'var(--accent)', { ...CTX_REV, expandidas: new Set(['acme']) });
-  assert.doesNotMatch(fechada, /rev-folded-list/);
-  assert.match(aberta, /rev-folded-list/);
-  assert.match(fechada, /rev-fold-toggle/, 'o botão de abrir existe nos dois estados');
-});
-
-test('renderOrgBlock: org sem nada não quebra', () => {
-  const html = P.renderOrgBlock('vazia', 'var(--muted)', { ...CTX_REV, defaults: {}, projects: {}, prKeys: [] });
-  assert.equal(typeof html, 'string');
-  assert.ok(html.length > 0);
-});
-
 /* ---------- onda 5, quarto passo: os cards do Radar ----------
    queueCardHtml e panoramaRowHtml são os dois maiores construtores de card que
    sobravam no app.js. O acctMark ficou lá: o ctx recebe o RESULTADO dele, porque
@@ -2245,7 +2078,7 @@ test('renderOrgBlock: org sem nada não quebra', () => {
 const MARK_T = { style: '--ac:#f00;', varStyle: '--ac:#f00;', dim: '', chip: '<span class="acct-chip">acme</span>', dot: '<span class="acct-dot"></span>', acct: { label: 'acme' } };
 const PR_T = (o = {}) => ({ key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7',
   title: 'Corrige o gate', author: 'alice', updatedAt: '2026-08-17T10:00:00Z', ...o });
-const CTX_PANO = { mark: MARK_T, actions: {}, staleStates: {}, todasContas: true, chats: {}, running: new Set(), waiting: [] };
+const CTX_PANO = { mark: MARK_T, actions: {}, staleStates: {}, todasContas: true, running: new Set(), waiting: [] };
 
 test('Panorama: o autor fica FORA da caixa que trunca o título', () => {
   // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado em 11/08:

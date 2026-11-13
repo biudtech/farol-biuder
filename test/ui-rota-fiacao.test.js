@@ -40,11 +40,11 @@ const ESTADO = {
   config: {
     ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: ['beta'] }],
     intervalSeconds: 300, parallelReviews: 1, theme: 'dark', mergeBlockedRepos: [],
-    teamHighlights: false, deliveriesEnabled: false, defaultReviewers: {}, projectReviewers: {},
+    teamHighlights: false, deliveriesEnabled: false,
     people: {}, claudeProfiles: [], claudeProfileId: '',
   },
   queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
-  activeSessions: [], headlessWaiting: [], chats: {}, reviewActions: {}, staleStates: {},
+  activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
   usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [],
   update: { state: 'idle' }, doctor: null, deliveries: null,
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },

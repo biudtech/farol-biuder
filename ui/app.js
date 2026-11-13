@@ -29,11 +29,10 @@ import { interventionReceived, interventionsFromState } from './telas/interventi
 import { initTweaks } from './telas/acoes.js';
 import { registrarTelaConsumo } from './telas/consumo.js';
 import { renderStatus, tickCountdown, renderActive, handleActivity } from './telas/sessoes.js';
-import { renderChat, chatKeyAtual, initChatTriggers, handleChatActivity } from './telas/chat.js';
 import {
   renderDecisions, renderQueue, renderPanorama, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
 } from './telas/radar.js';
-import { renderMyPRs, initReviewersButton, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
+import { renderMyPRs, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
 import { observarCancelamentos } from './telas/autoanalise-andamento.js';
 import { initDensidade } from './telas/densidade.js';
 import { renderUpdate } from './telas/sistema-atualizacao.js';
@@ -323,19 +322,6 @@ initPaleta(switchTab, switchRadarSub);
    keydown do document (o Ctrl+K da paleta registra ANTES deste). */
 initAtalhos(switchTab);
 
-/* Chat com o Claude: os gatilhos que abrem a conversa (.act-chat e a busca por
-   URL) moram em telas/chat.js. Chamada aqui, no mesmo ponto relativo em que os
-   dois listeners moravam, pra não mudar a ordem dos handlers de click do
-   document. */
-initChatTriggers();
-
-/* Meus PRs: botão Reviewers. Mora em telas/meus-prs.js (a tela dona do botão);
-   initReviewersButton(switchTab) recebe a navegação de que precisa pra levar à
-   aba Sistema. Chamada aqui, no mesmo ponto relativo em que o listener morava,
-   no MESMO elemento #myPRs (o listener de meus-prs.js cuida do resto dos
-   cliques do card). */
-initReviewersButton(switchTab);
-
 /* ---------- SSE ---------- */
 let TENTATIVAS_RECONEXAO = 0;
 
@@ -445,17 +431,6 @@ function connect() {
     pinturas.invalidar(['activity']);
     updateAnalysisProgress(id, item);
   });
-  es.addEventListener('chat', (e) => {
-    const c = safeJsonParse(e.data); if (!c) return;
-    const chatKey = chatKeyAtual();
-    if (chatKey && c.key === chatKey) renderChat(c);
-  });
-  // idem: telas/chat.js já é dono de chatKeyAtual(), então é quem decide o que
-  // um evento de atividade do chat significa.
-  es.addEventListener('chat-activity', (e) => {
-    const d = safeJsonParse(e.data); if (!d) return; const { key, text } = d;
-    handleChatActivity(key, text);
-  });
   // visão compartilhada (andamento e pendências de outros aparelhos): delta próprio, nunca o
   // estado inteiro. O bootstrap só entrega; quem entende é telas/radar-compartilhado.js.
   es.addEventListener('sync-live', (e) => {
@@ -547,7 +522,7 @@ initRota({ switchTab, rerenderScope });
 
 /* A4: antes de qualquer coisa, a página pergunta se este navegador pode entrar. Com a
    exigência ligada e sem credencial, a interface inteira vira o pareamento: nada do estado,
-   do log, do chat ou dos eventos é pedido antes. Sem exigência, nada muda. */
+   do log ou dos eventos é pedido antes. Sem exigência, nada muda. */
 // A recarga pelo login de fora fica marcada nesta aba: se o portão devolver 401 de novo em
 // menos de um minuto, a página avisa em vez de recarregar outra vez (sem laço).
 const RECARGA_PELO_LOGIN = 'farol-recarga-pelo-login';

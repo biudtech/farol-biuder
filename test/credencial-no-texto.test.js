@@ -180,7 +180,7 @@ test('token sintético de alta entropia em cada formato continua recusado', () =
 });
 
 test('o motivo não vira falha transitória: nada de reenvio automático', () => {
-  const erro = 'o texto do review tem o que parece uma credencial, então nada foi postado; confira no card e redija pelo chat deste PR';
+  const erro = 'o texto do review tem o que parece uma credencial, então nada foi postado; confira no card e redija e poste o review direto no GitHub';
   assert.notEqual(classify(erro).kind, 'transitorio');
   assert.equal(postRetryFor('approve', erro, { ok: false, blocked: BLOQUEIO_CREDENCIAL, attempted: false }), null);
 });

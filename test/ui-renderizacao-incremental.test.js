@@ -10,7 +10,7 @@ globalThis.addEventListener = (nome, fn) => { janela.set(nome, [...(janela.get(n
 const disparar = (mapa, nome) => { for (const fn of mapa.get(nome) || []) fn({ target: { closest: () => null } }); };
 const flush = () => { while (frames.length) frames.shift()(); };
 const escritas = {};
-for (const seletor of ['#resolved', '#reviewersEditor', '#queue', '#myPRs']) {
+for (const seletor of ['#resolved', '#claudeProfilesManager', '#queue', '#myPRs']) {
   const el = doc.querySelector(seletor);
   let html = '';
   Object.defineProperty(el, 'innerHTML', { get: () => html, set: novo => { html = String(novo); escritas[seletor] = (escritas[seletor] || 0) + 1; } });
@@ -19,11 +19,11 @@ await import('../ui/app.js');
 const { estado } = await import('../ui/telas/estado.js');
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const config = { intervalSeconds: 300, parallelReviews: 1, theme: 'dark', accounts: [], people: {},
-  mergeBlockedRepos: [], defaultReviewers: {}, projectReviewers: {}, claudeProfiles: [], claudeProfileId: '', teamHighlights: false, deliveriesEnabled: false };
+  mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '', teamHighlights: false, deliveriesEnabled: false };
 const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'win32' }, status: 'idle',
   account: { user: 'alice', tokenOk: true }, accounts: [{ user: 'alice', owners: ['acme'] }], config,
   queue: [], panorama: [], myPRs: [], hiddenPRs: [], activeSessions: [], activity: {}, headlessWaiting: [],
-  decisions: { pending: [], resolved: [] }, selfAnalyses: {}, reviewActions: {}, usage: {}, chats: {},
+  decisions: { pending: [], resolved: [] }, selfAnalyses: {}, reviewActions: {}, usage: {},
   paths: { home: '/fixture', workspace: '/fixture/workspace' }, update: {}, toolRuns: {} };
 emitir('state', fixture); flush();
 
@@ -38,21 +38,21 @@ test('SSE aplica cada patch imediatamente mas uma rajada só pinta dependências
   flush();
   assert.equal(escritas['#queue'], antes['#queue'] + 1);
   assert.equal(escritas['#resolved'], antes['#resolved']);
-  assert.equal(escritas['#reviewersEditor'], antes['#reviewersEditor']);
+  assert.equal(escritas['#claudeProfilesManager'], antes['#claudeProfilesManager']);
 });
 
 test('configuração de aba oculta só é projetada quando a navegação a mostra', () => {
-  const antes = escritas['#reviewersEditor'] || 0;
+  const antes = escritas['#claudeProfilesManager'] || 0;
   emitir('state-patch', { campos: { config: { ...config, intervalSeconds: 600 } }, removidos: [] });
   flush();
-  assert.equal(escritas['#reviewersEditor'] || 0, antes);
+  assert.equal(escritas['#claudeProfilesManager'] || 0, antes);
   irPara('/sistema/automacao'); disparar(janela, 'popstate'); flush();
   assert.equal(doc.querySelector('#setInterval').value, '600');
-  assert.ok(escritas['#reviewersEditor'] > antes);
-  const depois = escritas['#reviewersEditor'];
+  assert.ok(escritas['#claudeProfilesManager'] > antes);
+  const depois = escritas['#claudeProfilesManager'];
   doc.querySelector('#setInterval').value = 'rascunho';
   emitir('state-patch', { campos: { usage: { marcador: 99 } }, removidos: [] }); flush();
-  assert.equal(escritas['#reviewersEditor'], depois);
+  assert.equal(escritas['#claudeProfilesManager'], depois);
   assert.equal(doc.querySelector('#setInterval').value, 'rascunho');
 });
 

@@ -12,7 +12,6 @@ import { politicaDeInicio, normalizarRegras, contaTemAutomatico } from './lib/en
 import path from 'node:path';
 import os from 'node:os';
 import { EventEmitter } from 'node:events';
-import { tick as tickReviewAudits } from './lib/review-audit/commands.js';
 import { iniciarManutencaoDoEngine } from './lib/technical-review/material-session-proof.js';
 import { snapshotDecisions, snapshotReviewActions } from './lib/engine/snapshot-decisions.js';
 import { snapshotUsage } from './lib/engine/snapshot-usage.js';
@@ -21,7 +20,7 @@ import { snapshotUsage } from './lib/engine/snapshot-usage.js';
 import {
   instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, modoCasca, APP_VERSION, APP_NAME, IS_WIN, IS_MAC, IS_LINUX,
   HOME, WORKSPACE, STATE_DIR, CONFIG_FILE, LOG_FILE, SEEN_FILE, IGNORED_FILE, BASELINE_FILE,
-  INFLIGHT_FILE, CHATS_FILE, SELF_FILE, HIDDEN_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
+  INFLIGHT_FILE, SELF_FILE, HIDDEN_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
 
 // Helpers puros e utilitários movidos pra lib/ (Onda 1 do refactor, ver docs/QUALITY.md).
@@ -32,14 +31,13 @@ import { modelLabel, isPermanentBranch, logStamp, semControle } from './lib/form
 import { gravarLinhaDeLog } from './lib/log-arquivo.js';
 import { ACCOUNT_PALETTE } from './lib/taxonomy.js'; // resto da taxonomia é usado nos colaboradores (review/pushback)
 import {
-  parseProjectReviewers, parseDefaultReviewers, parseAccounts, parsePeople, migrateSeniorityToPeople,
+  parseAccounts, parsePeople, migrateSeniorityToPeople,
   sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv, claudeAuthShellLines,
   sanitizeClaudeModel, sanitizeClaudeEffort, sanitizeCodexModel, sanitizeCodexEffort, sanitizeAgyModel, sanitizeAgyEffort, AGY_MODELO_PADRAO,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, detectGitBash, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import updateMod from './lib/engine/update.js';
-import chatMod from './lib/engine/chat.js';
 import toolsMod from './lib/engine/tools.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -155,7 +153,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 // continua puro (sem importar meio mundo) e existe UM lugar só onde a lista de
 // parsers usada por preferência é montada.
 const PARSERS = {
-  parseAccounts, parseProjectReviewers, parseDefaultReviewers, parsePeople, sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId,
+  parseAccounts, parsePeople, sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort, sanitizeCodexModel, sanitizeCodexEffort, sanitizeAgyModel, sanitizeAgyEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, parseSyncConfig, sanearBind,
   normalizarCadeia: cadeiaMod.normalizarCadeia,
@@ -265,12 +263,11 @@ class Engine extends EventEmitter {
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
     this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
     this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
-    this.reviewerCands = null;        // { at, data:{members,teams} } candidatos p/ o seletor de reviewers
     this.deliveriesCache = {};        // janela (dias) -> { at, data } cache das entregas (PRs mergeados); TTL curto
     this.credits = null;              // { at, repo, owner, contributors } créditos do Sistema > Sobre (cache 24h)
     this.creditsTriedAt = 0;          // backoff de falha da busca de contribuidores (1h)
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
-    this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal/chat (nunca persistidas nem expostas)
+    this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
     this.headlessQueue = [];
     this.headlessBusyAccounts = new Map(); // conta -> nº de revisões headless rodando (teto por conta = config.parallelReviews, default 1)
@@ -351,10 +348,6 @@ class Engine extends EventEmitter {
     const vistosRecibo = readJson(path.join(STATE_DIR, 'sync-vistos-por-recibo.json'), [], warn);
     this.vistosPorRecibo = new Set(Array.isArray(vistosRecibo) ? vistosRecibo.filter(k => typeof k === 'string') : []);
     this.budgetWarned = new Set(); // ids de perfil apikey já avisados de orçamento estourado, enquanto o estouro persistir (evita repetir o toast a cada checagem)
-    this.chats = readJson(CHATS_FILE, {}, warn);
-    for (const k of Object.keys(this.chats)) {
-      if (this.chats[k].status === 'running') this.chats[k].status = 'idle';
-    }
     // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
     // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
     this.usage = { ...usageMod.defaultUsage(), ...readJson(usageMod.USAGE_FILE, {}, warn) };
@@ -715,20 +708,6 @@ class Engine extends EventEmitter {
 
   accountForPr(pr) { return contasGh.accountForPr(this, pr); }
 
-  // Lista efetiva de reviewers de um repo: a EXCECAO do repo (projectReviewers) se
-  // houver, senao o PADRAO da org (defaultReviewers). Vazio se nao houver nenhum.
-  // E o que o botao "Reviewers" aplica, entao funciona em qualquer repo da org que
-  // tenha padrao, mesmo sem config propria.
-  reviewersForRepo(repo) {
-    const r = String(repo || '');
-    const pr = this.config.projectReviewers || {};
-    const hit = pr[r] || pr[r.toLowerCase()];
-    if (hit && hit.length) return hit;
-    const org = r.split('/')[0];
-    const dr = this.config.defaultReviewers || {};
-    return dr[org] || dr[org.toLowerCase()] || [];
-  }
-
   // sem conta configurada, detecta a conta ativa do gh desta maquina: cada
   // pessoa do time usa a propria autenticacao, nada viaja com o app
   async resolveAccount() {
@@ -936,7 +915,6 @@ class Engine extends EventEmitter {
       // pushback automático: contestação do autor a um review meu (fire-and-forget:
       // roda em background pra não segurar a checagem, com guarda anti-concorrência)
       this.scanPushbacks().catch(e => this.log('WARN', `scanPushbacks: ${e.message}`));
-      tickReviewAudits(this).catch(() => this.log('WARN', 'Amostragem de auditorias indisponível; registros preservados.'));
       // atualizacao (releases do GitHub pras copias distribuidas) a cada ciclo; depois de
       // detectar, tenta aplicar sozinho quando ocioso (v2.46.0, maybeAutoUpdate). Fire-and-
       // forget dos dois: nao segura o ciclo, e falha vira WARN, nunca derruba o polling.
@@ -1416,12 +1394,7 @@ class Engine extends EventEmitter {
 
   async runHeadlessReview(pr) { return reviewMod.runHeadlessReview(this, pr); }
 
-  // Candidatos pro seletor de reviewers: membros e times das orgs monitoradas.
-  // Cacheado (mudam pouco). Assim a config vira escolha de uma lista, sem digitar
-  // handle na mao (e sem typo que zera o pedido).
-  // Meus PRs (reviewers, mergeabilidade, autoanálise, merge): colaborador lib/engine/selfpr.js (Onda 2).
-  async reviewerCandidates() { return selfMod.reviewerCandidates(this); }
-  async setReviewers(url) { return selfMod.setReviewers(this, url); }
+  // Meus PRs (mergeabilidade, autoanálise, merge): colaborador lib/engine/selfpr.js (Onda 2).
   saveSelfAnalyses() { return selfMod.saveSelfAnalyses(this); }
   setSelfAnalysisVisibility(key, hidden) { return selfMod.setSelfAnalysisVisibility(this, key, hidden); }
   // Ocultar um PR de "Meus PRs" (some da aba, sem tocar no GitHub). Não confundir com o
@@ -1494,18 +1467,6 @@ class Engine extends EventEmitter {
   writeMemory(result, actionLabel) { return decisionMod.writeMemory(this, result, actionLabel); }
   removeTeamMember(login) { return decisionMod.removeTeamMember(this, login); }
   async decide(id, action, ...opcoes) { return decisionMod.decide(this, id, action, ...opcoes); }
-
-  // --- chat com o Claude por PR ------------------------------------------------
-  // Cada PR tem uma conversa persistente. Quando existe uma revisão headless
-  // registrada (pendente ou resolvida), a conversa RETOMA a sessão da revisão
-  // (--resume): o Claude chega sabendo o diff, o card e o relatório.
-  // Chat por PR: lógica no colaborador lib/engine/chat.js (fachadas finas, Onda 2).
-  saveChats() { return chatMod.saveChats(this); }
-  chatPublic(key) { return chatMod.chatPublic(this, key); }
-  chatSummaries() { return chatMod.chatSummaries(this); }
-  chatPreamble(key, url, inherited) { return chatMod.chatPreamble(this, key, url, inherited); }
-  async chatSend(key, url, text) { return chatMod.chatSend(this, key, url, text); }
-  chatStop(key) { return chatMod.chatStop(this, key); }
 
   // escopo do kudos: '*' = todas as contas; senão o login (minúsculo) de uma conta
   // Ferramentas (kudos/diagnóstico) + limpeza: colaborador lib/engine/tools.js (Onda 2).
@@ -1949,7 +1910,6 @@ class Engine extends EventEmitter {
       // políticas já produzem, sem coleta nova. É o que torna o rodízio visível: uma
       // automação que cede a vez, vista de fora, é idêntica a uma automação quebrada.
       filaJusta: this.filaJusta(),
-      chats: this.chatSummaries(),
       toolRuns: this.toolRuns,
       decisions: snapshotDecisions(this),
       reviewActions: snapshotReviewActions(this),
@@ -2220,10 +2180,10 @@ function start(onReady) {
   return { engine, server, port: engine.config.port };
 }
 
-const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseProjectReviewers, parseDefaultReviewers, parseAccounts,
+const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
   sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
 export default farol;
-export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseProjectReviewers, parseDefaultReviewers, parseAccounts,
+export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
   sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
 
 // execucao direta: modo servidor (fallback sem Electron, ou desenvolvimento). Como sidecar de

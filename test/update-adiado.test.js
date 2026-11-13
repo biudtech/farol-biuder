@@ -40,7 +40,7 @@ test('ocioso não tem motivo, e cada coisa que segura o update tem o seu', () =>
   assert.equal(update.motivoOcupado(e), '1 PR na fila de revisão');
   e.headlessQueue.length = 0;
   e.running.set('s1', {});
-  assert.equal(update.motivoOcupado(e), '1 sessão de IA em andamento (chat, autoanálise ou ferramenta)');
+  assert.equal(update.motivoOcupado(e), '1 sessão de IA em andamento (autoanálise ou ferramenta)');
   e.running.clear();
   e.activeReviews.set('t1', { mode: 'terminal', startedAt: Date.now() });
   assert.equal(update.motivoOcupado(e), 'sessão de terminal aberta');
@@ -52,7 +52,7 @@ test('revisão conta como revisão, não duas vezes como sessão de IA', () => {
   e.running.set('rev', {});
   assert.equal(update.motivoOcupado(e), '1 revisão em andamento');
   e.running.set('chat', {});
-  assert.equal(update.motivoOcupado(e), '1 revisão em andamento, 1 sessão de IA em andamento (chat, autoanálise ou ferramenta)');
+  assert.equal(update.motivoOcupado(e), '1 revisão em andamento, 1 sessão de IA em andamento (autoanálise ou ferramenta)');
 });
 
 test('sessionsBusy continua dizendo exatamente o que dizia', () => {

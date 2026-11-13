@@ -60,9 +60,9 @@ test('limpeza: nome fora da forma de conversa não vira caminho', () => {
   assert.ok(home.pastaDoPerfil('pz2').startsWith(AGY_DIR));
 });
 
-test('conversas do chat: as dos chats e a da revisão pendente que o chat herda', () => {
-  const ids = home.conversasDoChat({ chats: { a: { sessionId: C(7) }, b: {} }, decisions: { pending: [{ sessionId: C(8) }] } });
-  assert.deepEqual([...ids].sort(), [C(7), C(8)]);
+test('conversas preservadas: a da revisão pendente, que a retomada ainda pede', () => {
+  const ids = home.conversasPreservadas({ decisions: { pending: [{ sessionId: C(8) }] } });
+  assert.deepEqual([...ids].sort(), [C(8)]);
 });
 
 test('diagnóstico: versão do agy e cota por perfil, sem conta e sem pasta', () => {

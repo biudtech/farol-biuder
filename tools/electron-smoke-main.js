@@ -10,7 +10,6 @@ import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { app, Notification, session } from 'electron';
 import { checkSpecialists } from './electron-smoke-specialists.js';
-import { checkReviewAudits } from './electron-smoke-audits.js';
 import { checkCapacity } from './electron-smoke-capacity.js';
 import { checkJourneys } from './electron-smoke-journeys.js';
 import { checkPintura } from './electron-smoke-pintura.js';
@@ -324,8 +323,6 @@ async function runSmoke() {
     report.checks.interventions = await checkInterventions(main, waitFor, config.output);
     report.probe = 'specialists';
     report.checks.specialists = await checkSpecialists(main, waitFor, config.output);
-    report.probe = 'reviewAudits';
-    report.checks.reviewAudits = await checkReviewAudits(main, waitFor, config.output);
     report.probe = 'capacity';
     report.checks.capacity = await checkCapacity(main, waitFor, config.output);
     report.probe = 'journeys';

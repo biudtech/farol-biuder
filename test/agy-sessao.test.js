@@ -42,7 +42,7 @@ function registro() {
 function engineCom(perfis, ordem) {
   const e = {
     config: { claudeProfiles: perfis, cadeiaPerfis: ordem, accounts: [], agyReviewModel: 'gemini-3.8-flash-high' },
-    running: new Map(), activeReviews: new Map(), limitesDePlano: new Map(), chats: {}, decisions: { pending: [], resolved: [] },
+    running: new Map(), activeReviews: new Map(), limitesDePlano: new Map(), decisions: { pending: [], resolved: [] },
     usage: usage.defaultUsage(), usageSessions: { sessions: [] },
     ghEnv: () => ({ ...process.env, GH_TOKEN: 'gho_da_conta', GEMINI_API_KEY: 'chave-herdada' }),
     log() { }, pushState() { }, emit() { }, accountForPr: () => 'eu',

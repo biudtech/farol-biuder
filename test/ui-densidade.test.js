@@ -37,10 +37,10 @@ const terceiro = { ...pedido, key: 'acme/app#3', number: 3, url: 'https://github
 function snapshot() {
   return { app: { platform: 'win32', version: 'fixture' }, status: 'idle', account: { user: 'alice', tokenOk: true },
     accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
-    config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], defaultReviewers: {}, projectReviewers: {}, theme: 'dark' },
+    config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], theme: 'dark' },
     lastCheckAt: Date.now(), queue: [pedido], panorama: [pedido, terceiro], myPRs: [meu], hiddenPRs: [],
     decisions: { pending: [], resolved: [{ key: 'acme/app#9', resolvedAt: Date.now(), status: 'auto_approved', action: 'approve', verdict: 'approve', pr: { title: 'x' } }] },
-    activeSessions: [], activity: {}, selfAnalyses: {}, headlessWaiting: [], usage: {}, toolRuns: {}, chats: {},
+    activeSessions: [], activity: {}, selfAnalyses: {}, headlessWaiting: [], usage: {}, toolRuns: {},
     prontidao: { 'acme/app#1': reg(1), 'acme/app#2': reg(2, { mergeStateStatus: 'CLEAN', latestReviews: { nodes: [] }, reviewRequests: { nodes: [] } }), 'acme/app#3': reg(3, { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }) },
     paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }

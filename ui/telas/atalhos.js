@@ -4,7 +4,6 @@
    listener de keydown morava, passando a navegação de que a seção precisa. */
 
 import { ehMac } from './estado.js';
-import { $ } from './infra.js';
 import { decideComConfirmacao } from './acoes.js';
 
 /* ---------- atalhos de teclado ---------- */
@@ -48,7 +47,6 @@ function kbdHelp() {
       <tr><td><kbd>M</kbd></td><td>pedir mudanças na selecionada</td></tr>
       <tr><td><kbd>C</kbd></td><td>só comentar na selecionada</td></tr>
       <tr><td><kbd>P</kbd></td><td>pular a selecionada</td></tr>
-      <tr><td><kbd>/</kbd></td><td>consultar um PR por URL</td></tr>
       <tr><td><kbd>${ehMac() ? 'Cmd' : 'Ctrl'}</kbd>+<kbd>K</kbd></td><td>paleta de comando: ir a qualquer lugar</td></tr>
       <tr><td><kbd>1</kbd>…<kbd>6</kbd></td><td>trocar de aba</td></tr>
       <tr><td><kbd>?</kbd></td><td>esta lista</td></tr>
@@ -65,16 +63,15 @@ function kbdHelp() {
 
 // registrada pelo bootstrap no mesmo ponto relativo em que o listener morava, pra
 // não mudar a ordem dos handlers de keydown do document. switchTab é a navegação
-// que a seção precisa (dígitos, '/', J/K); o resto (agir na selecionada, '?') é
+// que a seção precisa (dígitos, J/K); o resto (agir na selecionada, '?') é
 // autocontido.
 function initAtalhos(switchTab) {
   document.addEventListener('keydown', (e) => {
-    // nunca por cima de digitação, diálogo, chat ou combinação com modificador
+    // nunca por cima de digitação, diálogo ou combinação com modificador
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return;
     if (document.querySelector('.modal-overlay')) return;
-    if (!$('#chatPanel').hidden) return;
     const k = e.key;
     if (k >= '1' && k <= '6') {
       const tabs = [...document.querySelectorAll('.nav-item')].filter(b => !b.hidden);
@@ -82,7 +79,6 @@ function initAtalhos(switchTab) {
       if (btn) { switchTab(btn.dataset.tab); e.preventDefault(); }
       return;
     }
-    if (k === '/') { switchTab('radar'); $('#lookupUrl').focus(); e.preventDefault(); return; }
     if (k === '?') { kbdHelp(); e.preventDefault(); return; }
     const low = k.toLowerCase();
     if (low === 'j') { kbdMove(1, switchTab); e.preventDefault(); return; }

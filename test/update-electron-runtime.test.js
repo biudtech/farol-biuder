@@ -14,7 +14,6 @@ cp.spawn = (...args) => { launches.push(args); return { unref() {} }; };
 syncBuiltinESMExports();
 const update = (await import('../lib/engine/update.js')).default;
 const session = (await import('../lib/engine/session.js')).default;
-const chat = (await import('../lib/engine/chat.js')).default;
 const review = (await import('../lib/engine/review.js')).default;
 after(() => {
   cp.spawn = originalSpawn;
@@ -111,7 +110,7 @@ test('botão usa o pacote completo da mesma release quando o Electron instalado 
   }
 });
 
-test('instalação fecha a admissão de review, chat, stream e terminais, liberando após falha do instalador', {
+test('instalação fecha a admissão de review, stream e terminais, liberando após falha do instalador', {
   skip: process.platform !== 'win32'
 }, async () => {
   const { engine, deps } = fixture();
@@ -126,7 +125,6 @@ test('instalação fecha a admissão de review, chat, stream e terminais, libera
         assert.match(blocked.error, /instalando/);
       }
       assert.equal((await review.launchReview(engine, ['https://github.com/owner/repo/pull/1'])).ok, false);
-      assert.equal((await chat.chatSend(engine, 'owner/repo#1', '', 'oi')).ok, false);
       await assert.rejects(session.runClaudeStream(engine, 'oi'), /instalando/);
       return { ok: false };
     }
@@ -138,7 +136,7 @@ test('instalação fecha a admissão de review, chat, stream e terminais, libera
   assert.equal(launches.length, 0);
 });
 
-test('admissão assíncrona ainda sem processo e chat aguardando autenticação impedem atualizar', async () => {
+test('admissão assíncrona ainda sem processo e sessão de IA em andamento impedem atualizar', async () => {
   const { engine } = fixture();
   let release;
   engine.syncCoordenacaoAtiva = () => true;
@@ -150,7 +148,7 @@ test('admissão assíncrona ainda sem processo e chat aguardando autenticação 
   await stream;
   assert.equal(engine.pendingUpdateSessions, 0);
   assert.equal(update.sessionsBusy(engine), false);
-  engine.chats = { pr: { status: 'running' } };
+  engine.running.set('s1', { child: null });
   assert.equal(update.sessionsBusy(engine), true);
 });
 
@@ -173,7 +171,7 @@ test('sessão iniciada durante o download completo agenda o update sem fechar o 
   engine.config.updateRepo = 'owner/farol';
   const result = await update.applyUpdate(engine, { ...deps, electronVersion: '43.1.0',
     prepareFullUpdate: async () => {
-      engine.running.set('chat', { startedAt: Date.now() });
+      engine.running.set('autoanalise', { startedAt: Date.now() });
       return { installer: 'nao-executar.exe' };
     }
   });

@@ -1,31 +1,22 @@
 /* Farol · UI: aba "Meus PRs" (autoanálise). Não é aba registrável (não passa por
    registrarTela, é sub-seção do Radar): renderMyPRs é chamada pelo connect() do
-   app.js a cada snapshot do SSE, na mesma ordem de sempre.
-
-   O botão "Reviewers" (.act-set-reviewers) é a UNICA ação deste bloco que navega
-   pra fora do card: ela leva pra aba Sistema e mexe no editor de reviewers. Por
-   isso initReviewersButton recebe switchTab por parâmetro (a mesma navegação que
-   o bootstrap segura) e o app.js chama a função no lugar em que o listener
-   morava, no MESMO elemento #myPRs (o listener declarado aqui embaixo cuida do
-   resto dos cliques do card). */
+   app.js a cada snapshot do SSE, na mesma ordem de sempre. */
 
 import {
   esc, fmtRel, personMention, avatar, expiredSessionMarks, splitHiddenPRs,
   effectiveHidden, hiddenFootLabel, myPRsEmptyMsg, mergeToastKind, buildFixPrompt,
   canMergeSelfAnalysis, qualityBlockTitle, selfAnalysisBadge, selfAnalysisToggle,
-  selfAnalysisStale, listViewState, prKeyFromUrl, defaultFor, overrideFor, repoShort,
+  selfAnalysisStale, listViewState, prKeyFromUrl,
   festasPendentes, faixaDaAutoanaliseHtml, linhaDaAutoanalise,
   tituloDoMergeBloqueado, notaDoMergeBloqueadoHtml, avisoDaBaseNoCard,
 } from '../pure.js';
 import { estado, escopo } from './estado.js';
 import {
   $, api, confirmModal, toast, rotuloDoBotaoDeAnalise,
-  copyToClipboard, sysFlash, lembrarAbertos,
+  copyToClipboard, lembrarAbertos,
 } from './infra.js';
 import { scopeVisible, acctMark } from './contas.js';
 import { renderRadarNav } from './radar.js';
-import { loadReviewerCands, renderReviewersEditor, revCtx } from './reviewers.js';
-import { switchSistemaSection, sysSearchFilter } from './sistema.js';
 import { renderMeusPrsRemoto, contarRemotos } from './listas-remotas.js';
 import { festejar } from './confete.js';
 import { markdownReutilizado as md } from './markdown.js';
@@ -251,7 +242,6 @@ function renderMyPRs() {
         </div>
         <div class="pr-actions">
           ${botaoDaAnalise}
-          <button class="btn sm ghost act-set-reviewers" data-url="${esc(pr.url)}" title="Atribui você e pede review dos reviewers configurados deste repo (aba Sistema). Aplica na hora, sem confirmação.">👥 Pedir reviewers no GitHub</button>
           ${mergeBtns}
           ${a ? `<button class="btn sm ghost act-self-visibility" data-key="${esc(pr.key)}" data-hidden="${vis.alvo ? '1' : '0'}" title="${esc(vis.title)}">${esc(vis.label)}</button>` : ''}
           ${escondido
@@ -429,60 +419,5 @@ $('#myPRsHiddenFoot').addEventListener('click', (e) => {
   renderMyPRs(); renderRadarNav();
 });
 
-/* ---------- Meus PRs: botão Reviewers ----------
-   Segundo listener delegado no MESMO #myPRs (o de cima cuida do resto dos cliques
-   do card): navega pra aba Sistema (switchTab) e usa o editor de reviewers
-   (loadReviewerCands, renderReviewersEditor e revCtx). O handler mora no TOPO
-   do módulo, na mesma profundidade que tinha quando vivia no ui/app.js;
-   switchTab é a única dependência de fora, guardada em _switchTabReviewers
-   (dono único de escrita: initReviewersButton), o mesmo desenho de estado.js.
-   initReviewersButton é chamada pelo bootstrap (ui/app.js) no mesmo ponto
-   relativo em que este listener morava, e só guarda a dependência e registra
-   o handler nomeado abaixo. */
-let _switchTabReviewers = null;
-
-// rola até o editor de reviewers e o pisca, depois que a seção do Sistema
-// desenhou (setTimeout). Função nomeada em vez de closure inline: mantém a
-// profundidade de chaves na mesma faixa que tinha em ui/app.js.
-function focarReviewersEditor() {
-  const el = $('#reviewersEditor');
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); sysFlash(el); }
-}
-
-function onMyPRsReviewersClick(e) {
-  const rev = e.target.closest('.act-set-reviewers');
-  if (!rev) return;
-  const card = rev.closest('.mypr-card');
-  const repo = String(card?.dataset.key || '').split('#')[0];
-  const org = repo.split('/')[0];
-  // efetivo = exceção do repo, senão o padrão da org
-  const eff = overrideFor(repo, revCtx()) || defaultFor(org, revCtx());
-  // sem reviewers (nem exceção nem padrão): leva pra tela de config
-  if (!eff || !eff.length) {
-    _switchTabReviewers('sistema');
-    // sem isso a seção fica display:none e o scroll abaixo não mostra nada: o usuário
-    // caía na Visão geral com um toast falando de uma tela que ele não estava vendo
-    switchSistemaSection('reviewers');
-    const busca = $('#sysSearch');
-    if (busca.value) { busca.value = ''; sysSearchFilter(''); }
-    loadReviewerCands();
-    renderReviewersEditor();
-    setTimeout(focarReviewersEditor, 60);
-    toast('info', `Defina os reviewers padrão de ${org} (ou uma exceção pra ${repoShort(repo)}) aqui, depois é só clicar em Reviewers no PR.`, 7000);
-    return;
-  }
-  // tem config: aplica na hora, sem confirmação
-  rev.disabled = true; rev.textContent = 'Setando…';
-  api('/api/self-review/reviewers', { url: rev.dataset.url }).then(r => {
-    if (!r?.ok) toast('error', r?.error || 'não consegui setar os reviewers');
-    rev.disabled = false; rev.textContent = '👥 Pedir reviewers no GitHub';
-  });
-}
-
-function initReviewersButton(switchTab) {
-  _switchTabReviewers = switchTab;
-  $('#myPRs').addEventListener('click', onMyPRsReviewersClick);
-}
-
-export { renderMyPRs, renderMyPRsHiddenFoot, montaFixPrompt, initReviewersButton, contagemMeusPrs };
+export { renderMyPRs, renderMyPRsHiddenFoot, montaFixPrompt, contagemMeusPrs };
 export { updateAnalysisProgress } from './autoanalise-andamento.js';

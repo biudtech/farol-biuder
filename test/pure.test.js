@@ -10,7 +10,7 @@ process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-pure-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const farol = (await import('../server.js')).default;
-const { modelLabel, isPermanentBranch, parseAccounts, parseProjectReviewers, parseDefaultReviewers,
+const { modelLabel, isPermanentBranch, parseAccounts,
   normalizeClaudeProfiles, sanitizeClaudeDir, applyClaudeAuthEnv, claudeAuthShellLines } = farol;
 const {
   OPENROUTER_DEFAULT_BASE, OPENROUTER_SECRET_ENV,
@@ -246,19 +246,6 @@ test('sanitizeClaudeDir: tira aspas duplas que envolvem o valor inteiro (Copiar 
   // aspas no MEIO continuam rejeitadas (não é o mesmo caso)
   assert.equal(sanitizeClaudeDir('C:\\bad"quote\\path'), '');
   assert.equal(sanitizeClaudeDir('"C:\\bad"quote"'), ''); // aspas extras além do par externo: ainda rejeita
-});
-
-test('parseProjectReviewers: texto "owner/repo: pessoas" e objeto passthrough', () => {
-  assert.deepEqual(parseProjectReviewers('biudtech/biud-frontend: alice, biudtech/time'), {
-    'biudtech/biud-frontend': ['alice', 'biudtech/time'],
-  });
-  assert.deepEqual(parseProjectReviewers({ 'o/r': ['a', 'b'] }), { 'o/r': ['a', 'b'] });
-  assert.deepEqual(parseProjectReviewers('linha sem repo valido'), {}); // sem owner/repo: ignora
-});
-
-test('parseDefaultReviewers: chave é a org (sem barra)', () => {
-  assert.deepEqual(parseDefaultReviewers('biudtech: alice, bob'), { biudtech: ['alice', 'bob'] });
-  assert.deepEqual(parseDefaultReviewers({ org: ['x'] }), { org: ['x'] });
 });
 
 test('applyClaudeAuthEnv: kind dir seta CLAUDE_CONFIG_DIR, nunca as vars de apikey', () => {
