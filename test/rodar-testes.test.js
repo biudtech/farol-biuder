@@ -34,3 +34,8 @@ test('o executor encaminha os argumentos usados pela matriz e pela seleção de 
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /selecionado/);
 });
+
+test('o executor não força o encerramento, que truncava o relatório dos arquivos de teste', () => {
+  const fonte = fs.readFileSync(executor, 'utf8');
+  assert.doesNotMatch(fonte, /'--test-force-exit'/);
+});

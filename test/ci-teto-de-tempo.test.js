@@ -75,7 +75,7 @@ test('a suite declara teto de tempo POR TESTE, para trava virar falha com nome',
   assert.ok(m, 'npm test sem --test-timeout: trava vira job cancelado sem culpado, que foi o que aconteceu tres vezes em 23/09/2026');
   const ms = Number(m[1]);
   assert.ok(ms >= 60000, `teto de ${ms}ms: o caso mais lento medido leva 25 s, e teto apertado inventa falha em runner lento`);
-  assert.match(script, /--test-force-exit/, 'o force-exit continua: ele cuida do que sobra DEPOIS dos testes');
+  assert.doesNotMatch(script, /'--test-force-exit'/, 'o encerramento forçado trunca o relatório dos filhos: a suíte roda sem ele');
 });
 
 test('o teto por teste cabe dentro do teto do job, senao o job mata antes de a trava se nomear', () => {
