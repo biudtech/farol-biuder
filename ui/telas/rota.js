@@ -1,7 +1,7 @@
 /* Farol · UI: o endereço da página reflete a tela, e a tela obedece ao endereço (18/10/2026).
 
    Pedido do dono: "As URLs não refletem exatamente o que vejo em tela". A rota mora no
-   caminho (`/radar/aparelhos/<id>`, `/sistema/contas`, `/entregas?dias=7`) desde 20/10/2026;
+   caminho (`/radar/aparelhos/<id>`, `/sistema/contas`, `/consumo?janela=7`) desde 20/10/2026;
    o servidor devolve o index.html para toda navegação fora de /api (lib/http-ui.js), então
    abrir e recarregar um caminho profundo chega aqui. O link antigo, com a rota no hash
    (`/#/sistema/contas`), é convertido na entrada pelo caminho equivalente, substituindo.
@@ -28,7 +28,6 @@ import { guardarEscopo } from './contas.js';
 import { radarSubAtual, switchRadarSub } from './radar.js';
 import { aparelhoSelecionado, selecionarAparelho } from './radar-aparelhos.js';
 import { secaoDoSistema, sysGoTo } from './sistema.js';
-import { filtrosDeEntregas, aplicarFiltrosDeEntregas } from './entregas.js';
 import { janelaDoConsumo, escolherJanelaDoConsumo } from './consumo.js';
 import { caixaAberta, abrirCaixaRevisao, fecharCaixaRevisao } from './caixa-revisao.js';
 
@@ -57,7 +56,6 @@ function capturarRota() {
   const aba = abaAtual();
   const rota = { aba, sub: radarSubAtual(), aparelho: aparelhoSelecionado(), secao: secaoDoSistema(), pr: caixaAberta() };
   if (accountBarVisible(nContas(), aba) && escopo() !== 'all') rota.conta = escopo();
-  if (aba === 'entregas') Object.assign(rota, filtrosDeEntregas());
   if (aba === 'consumo') rota.janela = janelaDoConsumo();
   return rota;
 }
@@ -125,8 +123,7 @@ function aplicarRota(rota) {
   APLICANDO = true;
   try {
     aplicarConta(rota);
-    if (rota.aba === 'entregas') aplicarFiltrosDeEntregas(rota, _switchTab);
-    else if (abaAtual() !== rota.aba) _switchTab(rota.aba);
+    if (abaAtual() !== rota.aba) _switchTab(rota.aba);
     if (rota.aba === 'consumo') aplicarJanela(rota.janela);
     if (rota.aba === 'radar') aplicarRadar(rota);
     if (rota.aba === 'sistema' && secaoDoSistema() !== rota.secao) sysGoTo(rota.secao, null);

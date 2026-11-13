@@ -1,7 +1,6 @@
 // searchPRs no teto do --limit 100: o gh corta em silêncio e, com best-match como
 // ordenação, QUAIS 100 entram é imprevisível (PR pedido a mim pode ficar de fora
-// sem nenhum sinal). fetchDeliveries no mesmo arquivo já trata o caso (capped);
-// aqui trava o análogo do searchPRs: WARN no log quando o teto é atingido.
+// sem nenhum sinal). Aqui trava o WARN no log quando o teto é atingido.
 // ATENÇÃO à ordem: gh-queries destrutura io.run no LOAD, então o patch de io.run
 // precisa vir ANTES do require do server (o runner isola cada arquivo num processo).
 import os from 'node:os';

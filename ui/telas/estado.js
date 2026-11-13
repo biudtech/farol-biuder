@@ -58,8 +58,6 @@ function definirPlataforma(p) { if (p) PLATAFORMA = p; }
 // abas opcionais moram juntas aqui pela mesma razão do módulo inteiro: cada tela que
 // precisar perguntar "essa flag está ligada?" lê daqui, em vez de reimplementar a
 // mesma leitura de config ou importar a tela alheia só por causa do predicado.
-function teamHighlightsEnabled() { return estado()?.config?.teamHighlights === true; }
-function deliveriesEnabled() { return estado()?.config?.deliveriesEnabled === true; }
 
 // mapa de pessoas (perfil de review: papel e domínios) do config atual. Lido pelo
 // Radar (papelPicker de cada card) e pelo Time; junto das outras leituras derivadas
@@ -69,6 +67,6 @@ function peopleOf() { return (estado()?.config && estado().config.people) || {};
 
 export {
   estado, escopo, abaAtual, definirEstado, definirEscopo, definirAba,
-  teamHighlightsEnabled, deliveriesEnabled, peopleOf,
+  peopleOf,
   ehMac, ehWin, ehElectron, definirPlataforma,
 };

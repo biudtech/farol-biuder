@@ -49,7 +49,7 @@ function estado({ sync = {}, cfgSync = {} } = {}) {
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
     queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
-    usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [], update: { state: 'idle' },
+    usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
     // o aparelho de teste aceitou o controle: só assim ele aparece na aba Aparelhos (29/09/2026)
     sync: { enabled: true, shared: true, bloqueioCompartilhamento: '', deviceId: 'dEu', devices: DEVICES, distribuicao: { modo: 'distribuido', esperando: [] }, comandosEmitidos: [], tomadasSofridas: [], paineis: { aparelhos: [{ deviceId: 'dOutro', abriu: true, aceitarAdmin: true, contas: [] }] }, ...sync },
@@ -82,7 +82,7 @@ test('com a visão valendo, as seções aparecem e a faixa do modo sai do snapsh
   assert.equal($('#mdHistorico').hidden, false);
   assert.equal($('#mdFaixa').hidden, false);
   assert.match($('#mdFaixa').innerHTML, /fila distribuída/);
-  assert.match($('#mdLocal').innerHTML, /Destaques, Kudos e Time/);
+  assert.match($('#mdLocal').innerHTML, /memória do Time continua local/);
 });
 
 test('bloqueada pelo Farol: as seções somem e a faixa diz bloqueada', () => {

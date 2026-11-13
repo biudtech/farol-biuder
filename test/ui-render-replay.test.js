@@ -24,7 +24,7 @@ for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolv
 const fixture = { app: { platform: 'win32', version: 'fixture' }, status: 'idle', account: { user: 'dev', tokenOk: true }, accounts: [],
   config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], theme: 'dark' },
   queue: [], panorama: [], myPRs: [], decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
-  usage: {}, toolRuns: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
+  usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 emitir('state', fixture); quadros.pintar();
 function phase(run) {
   for (const key of Object.keys(counts)) counts[key] = 0;

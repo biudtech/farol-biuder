@@ -45,7 +45,7 @@ function estado({ sync = {}, panorama = [], myPRs = [] } = {}) {
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
     queue: [], panorama, myPRs, hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
-    usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [], update: { state: 'idle' },
+    usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
     // Task 9 (28/09/2026): as seções da frota (o andamento remoto, aqui) só pintam pro
     // admin. Este arquivo testa a FORMATAÇÃO do andamento, não o controle de acesso (que é

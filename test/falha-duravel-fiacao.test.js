@@ -1,4 +1,4 @@
-// A falha estacionada precisa continuar explicável depois de Limpar log e depois de o PR
+// A falha estacionada precisa continuar explicável com o log zerado e depois de o PR
 // ser relançado (spec 4.1: "Limpar log apaga a única cópia", "o motivo do estacionamento
 // some ao relançar"). Aqui a fiação: quem falha registra, e o card e o Consumo apontam.
 import os from 'node:os';
@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { erroDeSessao, anotarFalhaDaSessao } = await import('../lib/engine/falhas.js');
 const reviewMod = (await import('../lib/engine/review.js')).default;
+const { LOG_FILE } = await import('../lib/paths.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -31,17 +32,7 @@ function engineDeFila() {
   return e;
 }
 
-function esperar(cond, ms = 3000) {
-  return new Promise((resolve, reject) => {
-    const t0 = Date.now();
-    const iv = setInterval(() => {
-      if (cond()) { clearInterval(iv); resolve(); return; }
-      if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error('timeout esperando a condição')); }
-    }, 10);
-  });
-}
-
-test('falha permanente de revisão: registro durável, card aponta a sessão e Limpar log não apaga', async () => {
+test('falha permanente de revisão: registro durável, card aponta a sessão e o log zerado não apaga', async () => {
   const e = engineDeFila();
   const pr = { key: 'o/r#7', url: 'https://github.com/o/r/pull/7', repo: 'o/r', number: 7 };
   const cauda = 'x'.repeat(900) + 'CAUDA-DO-STDERR';
@@ -54,7 +45,9 @@ test('falha permanente de revisão: registro durável, card aponta a sessão e L
   await e.runOneHeadless(pr, 'conta');
   assert.ok(e.autoReviewParked.has(pr.key), 'falha permanente estaciona');
   assert.equal(e.parkedParaUi()[pr.key].sessionId, 'a-falha-1');
-  assert.equal(e.clearLog().ok, true);
+  // o log zerado (o botão Apagar saiu no corte do lote 7): o registro durável não depende dele
+  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+  fs.writeFileSync(LOG_FILE, '');
   const f = new Engine().falhaDaSessao('a-falha-1');
   assert.ok(f.motivo.endsWith('CAUDA-DO-STDERR'), 'motivo inteiro, sem o corte de 300');
   assert.equal(f.kind, 'review');
@@ -88,20 +81,6 @@ test('autoanálise que falha registra com tipo self', async () => {
   e.runSelfAnalysis = async () => { throw anotarFalhaDaSessao(new Error('autoanálise quebrou qwerty'), 's-falha-1', null); };
   await e.runOneHeadless({ key: 'o/r#10', url: 'u', kind: 'self' }, 'conta');
   assert.equal(e.falhaDaSessao('s-falha-1').kind, 'self');
-});
-
-test('ferramenta que falha registra com tipo tool e o id da sessão', async () => {
-  const e = new Engine();
-  e.token = 'tok';
-  e.pushState = () => { };
-  e.toolPrompt = () => 'prompt';
-  let idDaSessao = '';
-  e.runClaudeStream = async (prompt, opts) => { idDaSessao = opts.id; throw erroDeSessao('claude saiu com código 1: ', 'k'.repeat(400) + 'CAUDA'); };
-  await e.launchTool('health');
-  await esperar(() => (e.toolRunGet('health') || {}).status === 'error');
-  const f = e.falhaDaSessao(idDaSessao);
-  assert.equal(f.kind, 'tool');
-  assert.ok(f.motivo.endsWith('CAUDA'));
 });
 
 test('o resumo do Consumo liga a linha da sessão à falha', () => {

@@ -131,8 +131,8 @@ export function attentionCount(user) {
 export function renderAccountBar() {
   const bar = $('#accountBar');
   const accounts = (estado().accounts || []);
-  // a allowlist de abas mora no pure.js (accountBarVisible): so Radar, Destaques
-  // e Time respeitam escopo(); Entregas filtra por org propria e Sistema/Consumo
+  // a allowlist de abas mora no pure.js (accountBarVisible): so Radar e Time
+  // respeitam escopo(); Sistema/Consumo
   // sao visoes do Farol como app, nao de uma conta.
   if (!accountBarVisible(accounts.length, abaAtual())) { bar.hidden = true; bar.innerHTML = ''; return; }
   bar.hidden = false;

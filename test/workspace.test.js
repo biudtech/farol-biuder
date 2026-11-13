@@ -1,7 +1,5 @@
-// lib/workspace.js: leitura dos artefatos que o Claude escreve no workspace (destaques,
-// dossiês por autor). Estava com ZERO teste, apesar de as três funções
-// serem servidas direto em /api/highlights, /api/team e /api/log, ou seja, tudo que a
-// aba Destaques e a aba Time mostram passa por aqui.
+// lib/workspace.js: leitura dos dossiês por autor que o Farol grava no workspace. Era servida
+// direto em /api/team, ou seja, tudo que a aba Time mostra passa por aqui.
 //
 // São parsers de markdown escrito por um modelo, então a forma real varia. O que estes
 // testes travam é o contrato: nunca lançar (arquivo ausente, vazio, malformado devolvem
@@ -16,7 +14,7 @@ process.env.FAROL_HOME = FAROL_HOME;
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 const { STATE_DIR } = await import('../lib/paths.js');
-const { parseHighlights, parseTeam } = await import('../lib/workspace.js');
+const { parseTeam } = await import('../lib/workspace.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -26,59 +24,6 @@ const AUTHORS = path.join(STATE_DIR, 'authors');
 beforeEach(() => {
   fs.rmSync(STATE_DIR, { recursive: true, force: true });
   fs.mkdirSync(STATE_DIR, { recursive: true });
-});
-
-/* ---------- parseHighlights ---------- */
-
-test('parseHighlights: sem arquivo devolve lista vazia, não lança', () => {
-  // a rota /api/highlights é chamada em toda troca de aba: lançar aqui derruba a tela
-  assert.deepEqual(parseHighlights(), []);
-});
-
-test('parseHighlights: arquivo vazio devolve lista vazia', () => {
-  fs.writeFileSync(HIGHLIGHTS, '');
-  assert.deepEqual(parseHighlights(), []);
-});
-
-test('parseHighlights: extrai data, autor, referência, link e texto', () => {
-  fs.writeFileSync(HIGHLIGHTS,
-    '# Destaques\n\n' +
-    '- 2026-07-28 · @alice · [acme/app#10](https://github.com/acme/app/pull/10) — separou bem o caso de borda\n');
-  const [h] = parseHighlights();
-  assert.equal(h.date, '2026-07-28');
-  assert.equal(h.author, 'alice', 'o @ sai do login');
-  assert.equal(h.ref, 'acme/app#10');
-  assert.equal(h.url, 'https://github.com/acme/app/pull/10');
-  assert.equal(h.text, 'separou bem o caso de borda');
-});
-
-test('parseHighlights: devolve do mais novo pro mais antigo', () => {
-  // o arquivo é append-only (o mais novo no fim), a tela mostra o mais novo no topo
-  fs.writeFileSync(HIGHLIGHTS,
-    '- 2026-07-01 · @alice · [a#1](u1) — primeiro\n' +
-    '- 2026-07-02 · @bob · [b#2](u2) — segundo\n' +
-    '- 2026-07-03 · @carol · [c#3](u3) — terceiro\n');
-  assert.deepEqual(parseHighlights().map(h => h.author), ['carol', 'bob', 'alice']);
-});
-
-test('parseHighlights: linha sem os 3 campos vira texto cru, sem quebrar', () => {
-  fs.writeFileSync(HIGHLIGHTS, '- anotação solta sem separador\n');
-  const [h] = parseHighlights();
-  assert.equal(h.text, 'anotação solta sem separador');
-  assert.equal(h.author, null);
-});
-
-test('parseHighlights: ignora o que não é item de lista', () => {
-  fs.writeFileSync(HIGHLIGHTS, '# Título\n\nUm parágrafo solto.\n\n- 2026-07-01 · @alice · [a#1](u1) — vale\n');
-  assert.equal(parseHighlights().length, 1);
-});
-
-test('parseHighlights: sem link, ainda extrai autor e texto', () => {
-  fs.writeFileSync(HIGHLIGHTS, '- 2026-07-01 · @alice · comentou bem no PR\n');
-  const [h] = parseHighlights();
-  assert.equal(h.author, 'alice');
-  assert.equal(h.url, null);
-  assert.equal(h.text, 'comentou bem no PR');
 });
 
 /* ---------- parseTeam ---------- */

@@ -11,7 +11,6 @@
 // | pessoa (@login) | personMention | perfil dela no GitHub |
 // | repositório (owner/repo) | repoMention | repo no GitHub |
 // | PR (owner/repo#N) | prRefMention | o PR no GitHub |
-// | ferramenta (Kudos/Diagnóstico) | toolRefGoto | o painel dela no próprio app |
 // | ref de sessão (coluna do Consumo) | sessionRefMention | roteia entre os de cima |
 // | lugar do próprio app | data-goto (ui/app.js) | aba/seção/grupo, com destaque |
 //
@@ -20,7 +19,7 @@
 // A doutrina completa está no CLAUDE.md, seção "Menções navegáveis".
 import { esc } from './comum.js';
 
-/* ---- atribuição de conta pra memória (Destaques/Time) ---- */
+/* ---- atribuição de conta pra memória (Time) ---- */
 export function ownerFromUrl(url) { const m = String(url || '').match(/github\.com\/([^\/]+)\//i); return m ? m[1] : ''; }
 
 // Fronteira única dos links de PR que a UI torna clicáveis. Aceita query/fragmento
@@ -58,7 +57,7 @@ export function ghPrUrl(ref) {
 
 // menção de pessoa: foto + @login, clicável pro perfil no GitHub. `cls` entra
 // no avatar ('sm' nas linhas compactas). semFoto=true só onde a foto não cabe
-// (linha de PR das Entregas, que já roda dentro de um grupo com a foto no topo).
+// (linha de PR dentro de um grupo, que já roda dentro de um grupo com a foto no topo).
 export function personMention(login, cls = '', semFoto = false) {
   const nome = String(login || '').trim();
   if (!nome) return `<span class="person-mention vazio">@(desconhecido)</span>`;
@@ -85,38 +84,20 @@ export function prRefMention(ref, cls = '') {
 
 // Lê um valor de data-goto ('tipo:alvo[:seletor]'). O seletor é o RESTO inteiro,
 // nunca só o terceiro pedaço: seletor CSS tem ':' (`.acct-label:nth-child(2)`) e
-// destino de Entregas tem '/' e ':' no meio.
+// destino de PR tem '/' e ':' no meio.
 export function parseGoto(spec) {
   const [tipo, alvo, ...resto] = String(spec ?? '').split(':');
   return { tipo: tipo || '', alvo: alvo || '', seletor: resto.join(':') };
 }
 
-// Ferramenta interna: o "lugar" dela não é uma URL, é um painel do próprio app,
-// então o destino sai no formato data-goto do ui/app.js. Os rótulos são os que o
-// lib/engine/tools.js monta pro ref da sessão ('Kudos', 'Kudos · <escopo>' e
-// 'Diagnóstico do Farol'); o escopo é nome de conta, entra no rótulo mas NÃO no
-// destino, que é constante.
-const TOOL_REF_GOTO = [
-  [/^Kudos( · .+)?$/, 'aba:destaques:#kudosPanel'],
-  [/^Diagnóstico do Farol$/, 'sys:diag:#healthPanel'],
-];
-
-export function toolRefGoto(ref) {
-  const s = String(ref ?? '').trim();
-  for (const [re, destino] of TOOL_REF_GOTO) if (re.test(s)) return destino;
-  return '';
-}
-
-// menção do ref de uma sessão (coluna "PR / sessão" do Consumo), que é polimórfico:
-// revisão/pushback/chat gravam a chave do PR, ferramenta grava o rótulo dela. Cada
-// um vai pro SEU destino; o que não se reconhece continua texto puro, no mesmo
-// lugar, sem link quebrado nem clique que não leva a nada.
+// menção do ref de uma sessão (coluna "PR / sessão" do Consumo): revisão/pushback/chat
+// gravam a chave do PR e vão pro PR; o que não se reconhece (inclusive o rótulo das
+// sessões de ferramenta já gravadas) continua texto puro, sem link quebrado nem clique
+// que não leva a nada.
 export function sessionRefMention(ref, cls = '') {
   if (ghPrUrl(ref)) return prRefMention(ref, cls);
   const txt = esc(String(ref || ''));
-  const destino = toolRefGoto(ref);
-  if (!destino) return `<span class="${esc(cls)}">${txt}</span>`;
-  return `<span class="${esc(cls)} is-goto" data-goto="${esc(destino)}" role="button" tabindex="0" title="Abrir ${txt} no Farol">${txt}</span>`;
+  return `<span class="${esc(cls)}">${txt}</span>`;
 }
 
 /* A célula da coluna "PR / sessão" do Consumo. DOIS destinos no mesmo lugar, e

@@ -18,29 +18,22 @@
 
 import { ghPrUrl } from './mencoes.js';
 
-const ABAS_DA_ROTA = ['radar', 'entregas', 'destaques', 'time', 'consumo', 'sistema'];
+const ABAS_DA_ROTA = ['radar', 'time', 'consumo', 'sistema'];
 // nome na URL <-> nome interno (o data-sub / data-section do index.html)
 const SUBS_DO_RADAR = { 'pra-mim': 'mim', aparelhos: 'apar', 'meus-prs': 'meus', panorama: 'pano' };
 const SECOES_DO_SISTEMA = {
   'visao-geral': 'overview', contas: 'accounts', automacao: 'automation', jira: 'jira',
   sincronizacao: 'sync', aparelhos: 'devices', grupos: 'groups', plano: 'plans',
-  reviewers: 'reviewers', preferencias: 'prefs', novidades: 'news', diagnostico: 'diag', sobre: 'about',
+  reviewers: 'reviewers', preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
 };
 // só nessas abas a barra de contas aparece (accountBarVisible, ui/pure/contas.js)
-const ABAS_COM_CONTA = new Set(['radar', 'destaques', 'time']);
-const DIAS_DE_ENTREGAS = [0, 7, 15, 30];
+const ABAS_COM_CONTA = new Set(['radar', 'time']);
 const JANELAS_DO_CONSUMO = [1, 7, 30, 90];
 export const JANELA_PADRAO_DO_CONSUMO = 30;
-const AGRUPAR = { repositorios: 'repo', pessoas: 'author' };
 
 const ID_OPACO = /^[A-Za-z0-9_-]{1,128}$/;
 const LOGIN_GH = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
-const REPO_GH = /^[\w.-]{1,100}\/[\w.-]{1,100}$/;
-const BUSCA_MAX = 120;
 const PR_MAX = 250;
-// Busca é texto livre que a pessoa digitou. Se ela colou algo com cara de credencial no
-// filtro, o endereço não leva: URL vai para histórico, favorito e captura de tela.
-const CARA_DE_SEGREDO = /(gh[opusr]_|github_pat_|sk-|xox[abprs]-|AKIA)[A-Za-z0-9_-]{6,}/;
 
 function chaveDoValor(mapa, valor) {
   return Object.keys(mapa).find((k) => mapa[k] === valor) || '';
@@ -52,7 +45,7 @@ function decodificar(pedaco) {
 
 // Só os nomes que a rota conhece saem da consulta: o nome vem do endereço, e escrever
 // propriedade com nome livre deixaria `__proto__` e parentes mexerem no objeto.
-const NOMES_DA_CONSULTA = ['conta', 'pr', 'org', 'dias', 'agrupar', 'busca', 'repo', 'pessoa', 'janela'];
+const NOMES_DA_CONSULTA = ['conta', 'pr', 'janela'];
 
 function lerConsulta(texto) {
   const lidos = new Map();
@@ -74,7 +67,7 @@ const SECAO_PADRAO = { sistema: 'overview' };
 function rotaPadrao(aba = 'radar') {
   return {
     aba, sub: SUB_PADRAO[aba] || '', aparelho: '', secao: SECAO_PADRAO[aba] || '',
-    conta: '', pr: '', janela: null, dias: null, agrupar: '', org: '', busca: '', repo: '', pessoa: '',
+    conta: '', pr: '', janela: null,
   };
 }
 
@@ -84,21 +77,6 @@ function chaveDePr(v) {
 }
 
 function valido(re, v) { return typeof v === 'string' && re.test(v) ? v : ''; }
-
-function buscaSegura(v) {
-  const t = String(v || '').trim().slice(0, BUSCA_MAX);
-  return CARA_DE_SEGREDO.test(t) ? '' : t;
-}
-
-function lerEntregas(rota, q) {
-  const dias = Number.parseInt(q.dias, 10);
-  rota.dias = /^\d+$/.test(String(q.dias || '')) && DIAS_DE_ENTREGAS.includes(dias) ? dias : null;
-  rota.agrupar = AGRUPAR[q.agrupar] || '';
-  rota.org = valido(LOGIN_GH, q.org);
-  rota.busca = buscaSegura(q.busca);
-  rota.repo = valido(REPO_GH, q.repo);
-  rota.pessoa = rota.repo ? '' : valido(LOGIN_GH, q.pessoa);
-}
 
 // período do Consumo: só os quatro botões da tela (Hoje, 7, 30 e 90 dias), o resto é null
 function janelaValida(v) {
@@ -123,13 +101,6 @@ function lerCaminho(rota, partes) {
    rota no hash, até 20/10/2026). O hash só é rota antiga na raiz e sem consulta, que é como
    o app escrevia; fora disso ele é pedaço do endereço, nunca a rota (o `#` cru de um
    `?pr=a/b#1` digitado à mão, por exemplo). */
-// Aviso de quando a rota (ou um link) pede uma aba opcional que está desligada nas
-// preferências: a tela cai no Radar e o aviso diz por quê. Outra aba não avisa.
-export function avisoDeAbaDesligada(aba) {
-  const nome = { entregas: 'Entregas', destaques: 'Destaques' }[aba];
-  return nome ? `${nome} está desligada. Ligue em Sistema > Preferências.` : '';
-}
-
 export function enderecoDaPagina(loc) {
   const l = loc || {};
   const caminho = String(l.pathname || '/');
@@ -155,7 +126,6 @@ export function lerRota(endereco) {
   const rota = rotaPadrao(aba);
   lerCaminho(rota, aba === partes[0] ? partes : []);
   if (ABAS_COM_CONTA.has(aba)) rota.conta = valido(LOGIN_GH, consulta.conta);
-  if (aba === 'entregas') lerEntregas(rota, consulta);
   if (aba === 'consumo') rota.janela = janelaValida(consulta.janela);
   rota.pr = chaveDePr(consulta.pr);
   return rota;
@@ -177,14 +147,6 @@ export function escreverRota(r) {
   }
   if (rota.aba === 'sistema') caminho.push(chaveDoValor(SECOES_DO_SISTEMA, rota.secao));
   const consulta = [];
-  if (rota.aba === 'entregas') {
-    if (rota.org) consulta.push(pedacoDeConsulta('org', rota.org));
-    if (rota.dias !== null) consulta.push(pedacoDeConsulta('dias', rota.dias));
-    if (rota.agrupar) consulta.push(pedacoDeConsulta('agrupar', chaveDoValor(AGRUPAR, rota.agrupar)));
-    if (rota.busca) consulta.push(pedacoDeConsulta('busca', rota.busca));
-    if (rota.repo) consulta.push(pedacoDeConsulta('repo', rota.repo));
-    if (rota.pessoa) consulta.push(pedacoDeConsulta('pessoa', rota.pessoa));
-  }
   if (rota.aba === 'consumo' && rota.janela !== null && rota.janela !== JANELA_PADRAO_DO_CONSUMO) consulta.push(pedacoDeConsulta('janela', rota.janela));
   if (rota.conta) consulta.push(pedacoDeConsulta('conta', rota.conta));
   if (rota.pr) consulta.push(pedacoDeConsulta('pr', rota.pr));
@@ -202,12 +164,6 @@ function lerRotaDeObjeto(r) {
   const partes = [aba, segundo, o.aparelho];
   lerCaminho(rota, partes);
   if (ABAS_COM_CONTA.has(aba)) rota.conta = valido(LOGIN_GH, o.conta);
-  if (aba === 'entregas') {
-    lerEntregas(rota, {
-      dias: o.dias === null || o.dias === undefined ? '' : String(o.dias),
-      agrupar: chaveDoValor(AGRUPAR, o.agrupar), org: o.org, busca: o.busca, repo: o.repo, pessoa: o.pessoa,
-    });
-  }
   if (aba === 'consumo') rota.janela = janelaValida(o.janela);
   rota.pr = chaveDePr(o.pr);
   return rota;

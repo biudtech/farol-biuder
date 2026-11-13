@@ -1,54 +1,12 @@
-/* Farol · UI: abas Destaques e Time (memória de review por pessoa, separada por conta). */
+/* Farol · UI: aba Time (memória de review por pessoa, separada por conta). */
 
 import { esc, personMention, avatar, papelPicker, domainMatrix } from '../pure.js';
 import { estado, escopo, peopleOf } from './estado.js';
 import { $, get, showOp, closeOp, confirmModal, api, toast, doUsuario } from './infra.js';
 import {
-  TWEAK, ACCT, OWNER2USER, multiAccount, acctUserFromUrl, scopeMemVisible, acctStyleFor, memGroupHead,
+  TWEAK, OWNER2USER, multiAccount, acctStyleFor, memGroupHead,
 } from './contas.js';
 import { registrarTela } from './registro.js';
-import { renderTools } from './ferramentas.js';
-
-/* ---------- render: destaques (separado por conta) ---------- */
-async function loadHighlights() {
-  const box = $('#highlights');
-  const opId = 'load-highlights';
-  showOp(opId, { type: 'data', title: 'Carregando destaques', inline: true, container: box });
-  const items = (await get('/api/highlights')) || [];
-  closeOp(opId, 'done');
-  const tagged = items.map(h => ({ ...h, _user: acctUserFromUrl(h.url) }));
-  const visible = tagged.filter(h => scopeMemVisible(h._user));
-  if (!visible.length) {
-    box.innerHTML = `<div class="empty"><span class="big">🌱</span>${escopo() === 'all' ? 'Nenhum destaque registrado ainda.' : 'Nenhum destaque nesta conta ainda.'}<br><small>Quando um review encontrar algo exemplar, ele entra aqui.</small></div>`;
-    return;
-  }
-  const multi = multiAccount();
-  const card = h => `
-    <div class="card hl-card" style="${multi ? acctStyleFor(h._user) : ''}">
-      ${h.author ? avatar(h.author, 'sm') : ''}
-      <div class="body">
-        <div class="hl-head">
-          ${h.author ? `<span class="author">${personMention(h.author, 'xs', true)}</span>` : ''}
-          ${h.ref ? `<a href="${esc(h.url)}" target="_blank" rel="noreferrer">${esc(h.ref)}</a>` : ''}
-          <span>${esc(h.date || '')}</span>
-          ${escopo() === 'all' && multi && h._user ? `<span class="acct-chip">${esc((ACCT[h._user.toLowerCase()] || {}).label || h._user)}</span>` : ''}
-        </div>
-        <div class="hl-text">${esc(h.text)}</div>
-      </div>
-    </div>`;
-  if (escopo() === 'all' && multi) {
-    const parts = [];
-    for (const a of (estado().accounts || [])) {
-      const list = visible.filter(h => h._user && h._user.toLowerCase() === a.user.toLowerCase());
-      if (list.length) { parts.push(memGroupHead(a.user)); parts.push(list.map(card).join('')); }
-    }
-    const geral = visible.filter(h => !h._user);
-    if (geral.length) { parts.push(memGroupHead('')); parts.push(geral.map(card).join('')); }
-    box.innerHTML = parts.join('');
-  } else {
-    box.innerHTML = visible.map(card).join('');
-  }
-}
 
 /* ---------- perfil de review por pessoa ----------
    As puras (personOf, papelOf, domLevelOf, papelPicker, domainMatrix e as três
@@ -138,7 +96,6 @@ $('#team').addEventListener('click', async (e) => {
     body: `<p>Apaga <b>desta máquina</b> tudo o que o Farol guarda sobre ${personMention(login, 'xs')}:</p>
       <ul>
         <li>o dossiê com o histórico de reviews (todos os grupos, inclusive "Geral");</li>
-        <li>os destaques registrados nos reviews dessa pessoa;</li>
         <li>o papel e a matriz de competência configurados;</li>
         <li>os registros de contestação.</li>
       </ul>
@@ -151,10 +108,9 @@ $('#team').addEventListener('click', async (e) => {
   else toast('error', `Não deu pra remover: ${(r && r.error) || 'falha na chamada'}.`);
 });
 
-// 'destaques' e 'time' registram aqui (import estático de app.js): a ordem em que
-// as duas linhas abaixo rodam é a ordem em que aparecem em telasRegistradas(), ver
-// o comentário sobre a ordem fixa no bootstrap (ui/app.js).
-registrarTela({ id: 'destaques', aoEntrar: () => { loadHighlights(); renderTools(); } });
+// 'time' registra aqui (import estático de app.js): a ordem em que as linhas de
+// registro rodam é a ordem em que aparecem em telasRegistradas(), ver o comentário
+// sobre a ordem fixa no bootstrap (ui/app.js).
 registrarTela({ id: 'time', aoEntrar: () => loadTeam() });
 
-export { loadHighlights, loadTeam };
+export { loadTeam };

@@ -494,5 +494,5 @@ export function comandosEmitidosHtml(comandos, recibos, ctx) {
 /* ---------- 2.7: o que é só deste aparelho ---------- */
 
 export function oQueELocalHtml() {
-  return '<p class="md-nota">Destaques, Kudos e Time continuam locais: não sobem nem descem, mesmo com a visão compartilhada ligada.</p>';
+  return '<p class="md-nota">A memória do Time continua local: não sobe nem desce, mesmo com a visão compartilhada ligada.</p>';
 }

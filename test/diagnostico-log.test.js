@@ -1,5 +1,5 @@
-// lib/engine/diagnostico.js: leitura e limpeza do log de falhas (a cauda que alimenta o
-// diagnóstico e o triage). Antes moravam em lib/workspace.js e lib/engine/tools.js.
+// lib/engine/diagnostico.js: leitura do log de falhas (a cauda que alimenta o
+// diagnóstico e o triage). Antes morava em lib/workspace.js.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -10,7 +10,7 @@ process.env.FAROL_HOME = FAROL_HOME;
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 const { STATE_DIR, LOG_FILE } = await import('../lib/paths.js');
-const { tailLog, clearLog } = await import('../lib/engine/diagnostico.js');
+const { tailLog } = await import('../lib/engine/diagnostico.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -42,16 +42,4 @@ test('tailLog: aceita CRLF (log gravado no Windows)', () => {
   fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
   fs.writeFileSync(LOG_FILE, 'a\r\nb\r\nc\r\n');
   assert.deepEqual(tailLog(), ['a', 'b', 'c']);
-});
-
-test('clearLog: zera o log e o rotacionado e avisa o engine', () => {
-  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-  fs.writeFileSync(LOG_FILE, 'l1\nl2\n');
-  fs.writeFileSync(LOG_FILE + '.1', 'antigo\n');
-  let avisos = 0;
-  assert.deepEqual(clearLog({ pushState() { avisos++; } }), { ok: true });
-  assert.equal(fs.readFileSync(LOG_FILE, 'utf8'), '');
-  assert.equal(fs.existsSync(LOG_FILE + '.1'), false);
-  assert.equal(avisos, 1);
-  assert.deepEqual(tailLog(), []);
 });

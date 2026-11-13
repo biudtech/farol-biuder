@@ -38,8 +38,6 @@
     <div class="tabs-row">
     <nav class="tabs" id="nav" role="tablist" aria-label="Seções do Farol">
       <button class="nav-item active" id="tabbtn-radar" data-tab="radar" role="tab" aria-selected="true" aria-controls="tab-radar">Radar</button>
-      <button class="nav-item" id="tabbtn-entregas" data-tab="entregas" role="tab" aria-selected="false" aria-controls="tab-entregas" hidden>Entregas</button>
-      <button class="nav-item" id="tabbtn-destaques" data-tab="destaques" role="tab" aria-selected="false" aria-controls="tab-destaques" hidden>Destaques</button>
       <button class="nav-item" id="tabbtn-time" data-tab="time" role="tab" aria-selected="false" aria-controls="tab-time">Time</button>
       <button class="nav-item" id="tabbtn-consumo" data-tab="consumo" role="tab" aria-selected="false" aria-controls="tab-consumo">Consumo</button>
       <button class="nav-item" id="tabbtn-sistema" data-tab="sistema" role="tab" aria-selected="false" aria-controls="tab-sistema">Sistema</button>
@@ -106,7 +104,6 @@
     <div class="rpane active" id="rpane-mim" role="tabpanel" aria-labelledby="rsub-mim" tabindex="0">
     <!-- resumo do que está acontecendo, cada item leva à sua seção (telas/prontidao.js) -->
     <div id="praMimResumo" hidden></div>
-    <details class="card urgent set-list review-tools intv" id="interventionsInbox" hidden><summary>Intervenções</summary></details>
     <div id="activeWrap" hidden>
       <div class="section-head">
         <h2>Analisando agora <span id="activeCount" class="count ambient"></span></h2>
@@ -215,54 +212,6 @@
 
     <div id="silenced" class="silenced" hidden></div>
     </div>
-  </section>
-
-  <!-- ============ ENTREGAS ============ -->
-  <section id="tab-entregas" class="tabpane" role="tabpanel" aria-labelledby="tabbtn-entregas" tabindex="0">
-    <div class="section-head">
-      <h2>Entregas</h2>
-      <select id="delivOrg" title="Organização (a principal fica como padrão)" aria-label="Organização"></select>
-    </div>
-    <p class="section-desc">PRs mergeados nas organizações monitoradas, por qualquer pessoa. É a visão de atualização dos projetos e de quem está entregando. Só leitura, nada é postado.</p>
-    <div class="deliv-controls">
-      <div class="seg" id="delivDays" role="group" aria-label="Período">
-        <button class="seg-btn" data-days="0" aria-pressed="false">Hoje</button>
-        <button class="seg-btn active" data-days="7" aria-pressed="true">7 dias</button>
-        <button class="seg-btn" data-days="15" aria-pressed="false">15 dias</button>
-        <button class="seg-btn" data-days="30" aria-pressed="false">30 dias</button>
-      </div>
-      <div class="seg" id="delivBy" role="group" aria-label="Agrupar entregas">
-        <button class="seg-btn active" data-by="repo" aria-pressed="true">Repositórios</button>
-        <button class="seg-btn" data-by="author" aria-pressed="false">Pessoas</button>
-      </div>
-      <input type="text" id="delivQuery" class="deliv-search" aria-label="Filtrar entregas" placeholder="Filtrar por título, autor ou repo…" spellcheck="false" autocomplete="off">
-    </div>
-    <div id="delivNote" class="section-desc deliv-note" hidden></div>
-    <div id="delivStats"></div>
-    <div id="delivChart"></div>
-    <div id="deliveries" class="cards"></div>
-  </section>
-
-  <!-- ============ DESTAQUES ============ -->
-  <section id="tab-destaques" class="tabpane" role="tabpanel" aria-labelledby="tabbtn-destaques" tabindex="0">
-    <div class="section-head">
-      <h2>Destaques do time</h2>
-      <button id="btnKudos" class="btn sm">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l1.9 4.6 4.9.4-3.7 3.2 1.1 4.8L12 13.5 7.8 16l1.1-4.8L5.2 8l4.9-.4L12 3z" fill="currentColor"/></svg>
-        Gerar kudos com o Claude
-      </button>
-    </div>
-    <p class="section-desc">Momentos exemplares registrados durante as revisões. O botão acima compila internamente um resumo pronto pra compartilhar.</p>
-    <div id="kudosPanel" class="card tool-panel" hidden>
-      <div class="tool-head">
-        <h3 class="tool-title">Kudos compilados</h3>
-        <span id="kudosMeta" class="section-sub"></span>
-        <button id="btnKudosCopy" class="btn sm">Copiar texto</button>
-        <button id="btnKudosClear" class="btn sm ghost" title="Fechar e descartar este resultado">Limpar</button>
-      </div>
-      <div id="kudosOut" class="report"></div>
-    </div>
-    <div id="highlights" class="cards"></div>
   </section>
 
   <!-- ============ TIME ============ -->
@@ -415,10 +364,6 @@
           <button class="sys-nav-item" id="sysbtn-prefs" data-section="prefs" role="tab" aria-selected="false" aria-controls="sys-prefs">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Preferências
-          </button>
-          <button class="sys-nav-item" id="sysbtn-news" data-section="news" role="tab" aria-selected="false" aria-controls="sys-news">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-            Novidades
           </button>
           <button class="sys-nav-item" id="sysbtn-diag" data-section="diag" role="tab" aria-selected="false" aria-controls="sys-diag">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 7h8m-8 4h8m-8 4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -860,57 +805,7 @@
               <span class="set-ctl"><input id="setSound" type="checkbox"><span class="switch"></span></span>
             </label>
           </div>
-          <section class="card set-list review-tools" id="sys-row-interventions" aria-labelledby="interventionSettingsTitle">
-            <div class="set-head"><div><h3 id="interventionSettingsTitle">Avisos e intervenções</h3><p>Relembre pendências sem perder o foco. A voz é opcional e vem desligada por padrão.</p></div></div>
-              <div class="set-row">
-                <div class="set-txt"><label class="set-title" for="setInterventionReminder">Relembrar pendências a cada</label><p class="set-desc">Em minutos: 0 desliga; mínimo efetivo de 5. O lembrete ocorre na próxima atualização do estado. Avisos novos e mudanças relevantes continuam imediatos.</p></div>
-                <div class="set-ctl"><input id="setInterventionReminder" type="number" min="0" max="1440" step="5"><span class="unit">min</span></div>
-              </div>
-              <label class="set-row">
-                <span class="set-txt"><span class="set-title">Horário silencioso</span><span class="set-desc">Silencia a voz e os toques no horário local deste cliente. Início e fim iguais deixam o intervalo desativado.</span></span>
-                <span class="set-ctl"><input id="setVoiceQuietEnabled" type="checkbox"><span class="switch"></span></span>
-              </label>
-              <div class="set-block" id="interventionQuietTimes" hidden><div class="form-grid">
-                <div class="field"><label for="setVoiceQuietStart">Início do silêncio</label><input id="setVoiceQuietStart" type="time"></div>
-                <div class="field"><label for="setVoiceQuietEnd">Fim do silêncio</label><input id="setVoiceQuietEnd" type="time"></div>
-              </div></div>
-              <label class="set-row">
-                <span class="set-txt"><span class="set-title">Voz nos avisos de intervenção <span class="chip off">opcional</span></span><span class="set-desc">Usa uma voz local deste cliente. Fala apenas o tipo de atenção, sem nomes, repositórios ou conteúdo da revisão. Os avisos visuais continuam ativos.</span></span>
-                <span class="set-ctl"><input id="setVoiceEnabled" type="checkbox"><span class="switch"></span></span>
-              </label>
-              <div id="interventionVoiceOptions" hidden>
-              <div class="set-row">
-                <div class="set-txt"><label class="set-title" for="setVoiceEvents">Eventos com voz</label><p class="set-desc">Selecione os tipos de atenção que podem usar a voz quando ela estiver ativada.</p></div>
-                <div class="set-ctl"><select id="setVoiceEvents" multiple size="4">
-                  <option value="decision">Decisão pendente</option><option value="access">Acesso vencido ou ausente</option>
-                  <option value="failure">Falha sem recuperação</option><option value="operational">Bloqueio de configuração</option>
-                </select></div>
-              </div>
-              <div class="set-row">
-                <div class="set-txt"><label class="set-title" for="setVoiceVolume">Volume da voz</label><p class="set-desc">De 0 a 100, sujeito ao volume do sistema.</p></div>
-                <div class="set-ctl"><input id="setVoiceVolume" type="number" min="0" max="100" step="1"></div>
-              </div>
-              <div class="set-row">
-                <div class="set-txt"><p id="interventionVoiceStatus" class="set-desc" role="status">A voz depende da disponibilidade de um sintetizador local neste cliente.</p></div>
-                <div class="set-ctl"><button id="testInterventionVoice" type="button" class="btn sm">Testar voz</button></div>
-              </div>
-              </div>
-          </section>
           <div class="card set-list">
-            <label class="set-row" id="sys-row-teamhighlights">
-              <span class="set-txt">
-                <span class="set-title">Destaques do time</span>
-                <span class="set-desc">Mostra a aba Destaques e registra momentos exemplares encontrados nas revisões. Suas autoanálises também entram, então você faz parte do time exibido. Desligar oculta a função e para novos registros, sem apagar o histórico existente.</span>
-              </span>
-              <span class="set-ctl"><input id="setTeamHighlights" type="checkbox"><span class="switch"></span></span>
-            </label>
-            <label class="set-row" id="sys-row-deliveries">
-              <span class="set-txt">
-                <span class="set-title">Entregas</span>
-                <span class="set-desc">Mostra a aba Entregas e consulta no GitHub os PRs mergeados das organizações monitoradas. Esta função não usa IA; desligá-la evita as chamadas ao GitHub e o processamento local quando você não utiliza essa visão.</span>
-              </span>
-              <span class="set-ctl"><input id="setDeliveriesEnabled" type="checkbox"><span class="switch"></span></span>
-            </label>
             <label class="set-row" id="rowAutostart">
               <span class="set-txt">
                 <span class="set-title">Iniciar com o Windows</span>
@@ -921,23 +816,15 @@
           </div>
         </div>
 
-        <!-- Novidades -->
-        <div class="sys-section" id="sys-news" role="tabpanel" aria-labelledby="sysbtn-news" tabindex="0">
-          <div class="section-head"><h2>Novidades</h2></div>
-          <p class="section-desc">O que mudou em cada versão. A que você tem instalada aparece marcada.</p>
-          <div id="relNotes" class="card"></div>
-        </div>
-
         <!-- Diagnóstico -->
         <div class="sys-section" id="sys-diag" role="tabpanel" aria-labelledby="sysbtn-diag" tabindex="0">
           <div class="section-head">
             <h2>Diagnóstico</h2>
             <div class="row-actions">
-              <button id="btnHealth" class="btn sm">Diagnóstico com o Claude</button>
               <button id="btnDiag" class="btn sm" title="Copia o diagnóstico como texto: ambiente, falhas registradas e resumo do log, com segredos mascarados e menções desligadas">Copiar diagnóstico</button>
             </div>
           </div>
-          <p class="section-desc">Uma visão só: as falhas registradas com o que fazer, o log e o diagnóstico com o Claude. Ver e copiar não executam nada e não enviam o diagnóstico a ninguém; a cópia é texto, com segredos mascarados e menções desligadas.</p>
+          <p class="section-desc">Uma visão só: as falhas registradas com o que fazer e o log. Ver e copiar não executam nada e não enviam o diagnóstico a ninguém; a cópia é texto, com segredos mascarados e menções desligadas.</p>
           <div class="card set-list">
             <label class="set-row" id="sys-row-spawns">
               <span class="set-txt">
@@ -956,24 +843,15 @@
             </div>
             <div id="diagBox" class="report"></div>
           </div>
-          <div class="section-head" id="sys-row-falhas"><h2>Falhas de sessão de IA</h2><span class="section-sub">apagar o log não apaga estas</span></div>
+          <div class="section-head" id="sys-row-falhas"><h2>Falhas de sessão de IA</h2><span class="section-sub">registro próprio, separado do log</span></div>
           <div id="diagFalhas"></div>
-          <div id="healthPanel" class="card tool-panel" hidden>
-            <div class="tool-head">
-              <h3 class="tool-title">Diagnóstico</h3>
-              <span id="healthMeta" class="section-sub"></span>
-              <button id="btnHealthClear" class="btn sm ghost" title="Fecha este relatório e descarta o texto; o log de falhas continua intacto">Descartar relatório</button>
-            </div>
-            <div id="healthOut" class="report"></div>
-          </div>
           <div class="section-head" id="sys-row-log">
             <h2>Log do app (últimas 300 linhas)</h2>
             <div class="row-actions">
               <button id="btnLogRefresh" class="btn sm ghost">Atualizar</button>
-              <button id="btnLogClear" class="btn sm ghost" title="Apaga o log de falhas do disco; não dá para desfazer">Apagar o log de falhas</button>
             </div>
           </div>
-          <p class="sys-note">Falhas e avisos do app, sem ruído operacional: é o que o diagnóstico com o Claude lê, em sessão somente leitura.</p>
+          <p class="sys-note">Falhas e avisos do app, sem ruído operacional: é a fonte do diagnóstico acima.</p>
           <p class="sys-note" id="logResumo" hidden></p>
           <pre id="logBox" class="logbox">…</pre>
         </div>

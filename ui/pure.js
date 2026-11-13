@@ -22,7 +22,6 @@ export * from './pure/cadeia.js';
 export * from './pure/agy.js';
 export * from './pure/contas-gh.js';
 export * from './pure/diagnostico.js';
-export * from './pure/entregas.js';
 export * from './pure/fila-justa.js';
 export * from './pure/grupos.js';
 export * from './pure/jira.js';

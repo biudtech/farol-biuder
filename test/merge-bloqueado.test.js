@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   normalizarRepo, incluirRepo, tirarRepo, prsDoRepo, reposBloqueadosHtml,
-  textoDoMergeBloqueado, textoDoMergeDesbloqueado, tituloDoMergeBloqueado, notaDoMergeBloqueadoHtml, delivEmptyState,
+  textoDoMergeBloqueado, textoDoMergeDesbloqueado, tituloDoMergeBloqueado, notaDoMergeBloqueadoHtml,
 } from '../ui/pure.js';
 
 const RAIZ = path.join(import.meta.dirname, '..');
@@ -85,8 +85,4 @@ test('o card de Meus PRs testa o bloqueio antes de tudo e mostra a linha com o a
   assert.match(primeiro, /if \(repoBlocked\) \{\s*\n\s*mergeBtns = btnMerge\(true, tituloDoMergeBloqueado\(repo\)\);/);
   assert.match(fonte, /\$\{repoBlocked \? notaDoMergeBloqueadoHtml\(\) : ''\}/);
   assert.doesNotMatch(fonte, /edite a lista na aba Sistema/, 'o motivo vago saiu');
-});
-
-test('Entregas leva as organizações para Sistema → Contas, onde elas moram', () => {
-  assert.match(delivEmptyState({}), /organizações de cada conta em <span class="is-goto" data-goto="sys:accounts:#accountsManager"/);
 });

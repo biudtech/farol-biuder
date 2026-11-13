@@ -29,11 +29,11 @@ export function validScope(scope, users) {
 }
 
 // abas onde a barra de contas APARECE: so onde o filtro por conta age de verdade
-// (Radar, Destaques e Time filtram/agrupam por SCOPE). Allowlist, nao denylist:
-// a Entregas nasceu depois e ficou mostrando um filtro que nao filtrava nada (B14);
+// (Radar e Time filtram/agrupam por SCOPE). Allowlist, nao denylist:
+// uma aba que nasceu depois chegou a mostrar um filtro que nao filtrava nada (B14);
 // aba nova nasce SEM a barra ate alguem decidir que ela respeita o escopo.
 export function accountBarVisible(nContas, tab) {
-  return nContas >= 2 && (tab === 'radar' || tab === 'destaques' || tab === 'time');
+  return nContas >= 2 && (tab === 'radar' || tab === 'time');
 }
 
 // Os campos de uma edição de conta como viajam para POST /api/accounts/edit. `undefined`

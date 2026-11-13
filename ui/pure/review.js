@@ -482,8 +482,8 @@ export function resolvedRow(r, ctx) {
       + (vcConflicts ? ` · ⚠ ${vcConflicts} divergência(s) entre passadas` : '')
     : '';
   const stLine = stagesLine(r.stages);
-  // O que a pessoa abriu sobrevive ao redesenho, na mesma convenção de Entregas
-  // (openKeys em ui/pure/entregas.js): a tela guarda as chaves num Set, um listener de
+  // O que a pessoa abriu sobrevive ao redesenho, na convenção das listas que se redesenham
+  // por innerHTML: a tela guarda as chaves num Set, um listener de
   // `toggle` o mantém em dia, e o HTML sai com `open`. Sem isso, com uma revisão em
   // andamento a lista se redesenha a cada poucos segundos e "Ver relatório completo"
   // fechava no meio da leitura (relato de 21/09/2026). O resolvedAt entra na chave

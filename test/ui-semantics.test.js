@@ -41,7 +41,7 @@ test('as abas do topo formam um tablist completo', () => {
   assert.match(nav[0], /role="tablist"/);
   assert.match(nav[0], /aria-label="[^"]+"/, 'tablist sem rótulo não diz de que é a navegação');
   const botoes = todos(/<button[^>]*class="nav-item[^"]*"[^>]*>/g, nav[1]);
-  assert.equal(botoes.length, 6, 'as 6 abas do app');
+  assert.equal(botoes.length, 4, 'as 4 abas do app');
   for (const [b] of botoes) {
     assert.match(b, /role="tab"/, `sem role=tab: ${b}`);
     assert.match(b, /aria-selected="(true|false)"/, `sem aria-selected: ${b}`);
@@ -56,9 +56,9 @@ test('a sidebar do Sistema também é um tablist completo', () => {
   assert.ok(nav);
   assert.match(nav[0], /role="tablist"/);
   const botoes = todos(/<button[^>]*class="sys-nav-item[^"]*"[^>]*>/g, nav[1]);
-  // 13 desde 03/10/2026: Conexões saiu (dois campos sem efeito; a lista de repos bloqueados
-  // foi para Automação)
-  assert.equal(botoes.length, 13, 'as 13 seções do Sistema');
+  // 13 desde 03/10/2026 (Conexões saiu: dois campos sem efeito; a lista de repos bloqueados
+  // foi para Automação) e 12 desde o lote 7 do corte (saiu Novidades)
+  assert.equal(botoes.length, 12, 'as 12 seções do Sistema');
   for (const [b] of botoes) {
     assert.match(b, /role="tab"/);
     assert.match(b, /aria-selected="(true|false)"/);
@@ -78,7 +78,7 @@ test('todo aria-controls e aria-labelledby aponta pra um id que existe', () => {
 
 test('todo painel de aba declara role e o rótulo dele', () => {
   const paineis = todos(/<section[^>]*class="tabpane[^"]*"[^>]*>/g);
-  assert.equal(paineis.length, 6);
+  assert.equal(paineis.length, 4);
   for (const [p] of paineis) {
     assert.match(p, /role="tabpanel"/, `sem role=tabpanel: ${p}`);
     assert.match(p, /aria-labelledby="tabbtn-[a-z]+"/, `sem aria-labelledby: ${p}`);
@@ -120,7 +120,7 @@ test('os avisos que mudam sozinhos são anunciados', () => {
 
 test('os segmentados declaram o estado, não só a classe', () => {
   const botoes = todos(/<button class="seg-btn[^"]*"[^>]*>/g);
-  assert.ok(botoes.length >= 8, 'os segmentados de Entregas e Consumo');
+  assert.ok(botoes.length >= 8, 'os segmentados do Consumo e das outras telas');
   for (const [b] of botoes) assert.match(b, /aria-pressed="(true|false)"/, `sem aria-pressed: ${b}`);
 });
 
@@ -131,7 +131,7 @@ test('cada aba explica pra que serve', () => {
   for (const m of todos(/<section[^>]*id="tab-([a-z]+)"[\s\S]*?(?=<section[^>]*id="tab-|<\/main>)/g)) {
     porAba[m[1]] = (m[0].match(/class="section-desc"/g) || []).length;
   }
-  for (const aba of ['radar', 'entregas', 'destaques', 'time', 'consumo', 'sistema']) {
+  for (const aba of ['radar', 'time', 'consumo', 'sistema']) {
     assert.ok(porAba[aba] > 0, `a aba ${aba} não tem nenhuma descrição de seção`);
   }
 });

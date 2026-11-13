@@ -44,21 +44,10 @@ test('headlessPromptFor: sem lotes, o prompt não ganha o bloco de fan-out', () 
   assert.doesNotMatch(prompt, /PR GRANDE/, 'PR pequeno segue no passe único');
 });
 
-test('Destaques desligado remove do prompt o trabalho de procurar elogio', () => {
-  const engine = new Engine();
-  engine.config.teamHighlights = false;
-  const prompt = engine.headlessPromptFor(URL_PR, 'alice');
-  assert.match(prompt, /Destaques do time desligado/);
+test('o prompt da revisão não pede destaque nem elogio compartilhável', () => {
+  const prompt = new Engine().headlessPromptFor(URL_PR, 'alice');
+  assert.match(prompt, /Sem destaques/);
   assert.doesNotMatch(prompt, /"highlight"|memory\.highlight|digno de compartilhar/);
-});
-
-test('Destaques ligado mantém o campo no prompt da revisão', () => {
-  const engine = new Engine();
-  engine.config.teamHighlights = true;
-  const prompt = engine.headlessPromptFor(URL_PR, 'alice');
-  assert.match(prompt, /"highlight"/);
-  assert.match(prompt, /memory\.highlight/);
-  assert.doesNotMatch(prompt, /Destaques do time desligado/);
 });
 
 test('headlessPromptFor: COM lotes, o bloco de fan-out chega no prompt', () => {

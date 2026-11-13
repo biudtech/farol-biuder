@@ -37,7 +37,6 @@ import {
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
-import toolsMod from './lib/engine/tools.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
 import cadeiaMod from './lib/engine/cadeia-perfis.js';
@@ -87,7 +86,6 @@ import syncMod from './lib/engine/sync.js';
 import consumoGrupoMod from './lib/engine/sync-consumo-grupo.js';
 import telasMod from './lib/engine/sync-telas.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
-import interventionMod from './lib/engine/interventions.js';
 import capacidadesMod from './lib/engine/capacidades.js';
 import { detectarModoCelular } from './lib/local-auth/modo.js';
 import syncUsageMod from './lib/engine/sync-usage.js';
@@ -238,7 +236,6 @@ class Engine extends EventEmitter {
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
     this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
     this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
-    this.deliveriesCache = {};        // janela (dias) -> { at, data } cache das entregas (PRs mergeados); TTL curto
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
     this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
@@ -279,16 +276,6 @@ class Engine extends EventEmitter {
     this.destravados = destravaMod.loadDestravados(warn);
     this.skipComentado = skipMod.loadSkipComentado(warn); // { key: { at, quem } } âncora da saída de cena silenciosa ("outra pessoa já está revisando"; desde 28/08/2026 nada é comentado no PR, o aviso é toast)
     this.reviewSignals = new Map(); // repoLower -> entries das refs de "revisando" (lib/engine/review-signal.js); snapshot por ciclo, só memória
-    this.toolRuns = readJson(path.join(STATE_DIR, 'tool-results.json'), {}, warn);
-    // kudos passou a ser POR CONTA (mapa escopo->execução); migra o formato antigo
-    // (execução única, global) pro escopo "todas" ('*') pra não perder o que já existia
-    if (this.toolRuns.kudos && typeof this.toolRuns.kudos.status === 'string') this.toolRuns.kudos = { '*': this.toolRuns.kudos };
-    if (!this.toolRuns.kudos || typeof this.toolRuns.kudos !== 'object') this.toolRuns.kudos = {};
-    const interrupted = { status: 'error', error: 'o app foi reiniciado no meio da execução' };
-    if (this.toolRuns.health && this.toolRuns.health.status === 'running') this.toolRuns.health = interrupted;
-    for (const key of Object.keys(this.toolRuns.kudos)) {
-      if (this.toolRuns.kudos[key] && this.toolRuns.kudos[key].status === 'running') this.toolRuns.kudos[key] = interrupted;
-    }
     this.activity = new Map();       // id de sessão -> feed de eventos ao vivo
     this.running = new Map();        // id de sessão -> { child, cancelled } (só headless)
     this.retryAfterNet = new Map();  // key do PR -> { tries, pr } da re-revisão pós-falha transitória
@@ -444,9 +431,6 @@ class Engine extends EventEmitter {
         path.join('.claude', 'agents', 'pr-reviewer.md'),
         path.join('.claude', 'agents', 'claim-verifier.md'),
         path.join('.claude', 'commands', 'pr-review.md'),
-        // o diagnóstico virou somente leitura (A3): a cópia semeada antes mandava editar
-        // o app, então este prompt precisa chegar nas instalações já existentes
-        path.join('.claude', 'commands', 'pr-health.md'),
       ];
       for (const rel of synced) {
         const src = path.join(TEMPLATE_DIR, rel), dst = path.join(WORKSPACE, rel);
@@ -647,6 +631,8 @@ class Engine extends EventEmitter {
   // lib/engine/contas-config.js, junto da edição e do rastro.
   // ao chegar PR nesta conta: revisar sozinho (headless) ou só colocar na fila?
   autoReviewFor(user) { return contasConfig.revisaSozinho(this, user); }
+  // nome da conta nos motivos do card (apelido, senão o login); vazio para "todas"
+  scopeLabel(scope) { return contasConfig.rotuloDaConta(this, scope); }
   inicioAutomaticoDaFila() { return Object.fromEntries(this.queue.map(p => [p.key, politicaDeInicio(this, p).automatic])); }
   // quando aprovável: 'approve' (postar sozinho) ou 'wait' (aguardar você). clean = sem ressalvas
   approvePolicyFor(user, clean) { return contasConfig.acaoAoAprovar(this, user, clean); }
@@ -760,8 +746,6 @@ class Engine extends EventEmitter {
   async prCardSources(pr) { return ghMod.prCardSources(this, pr); }
   async fetchPrFiles(pr) { return fileProofMod.fetchPrFiles(this, pr); }
   async fetchPrInventory(pr, headSha) { return fileProofMod.fetchPrInventory(this, pr, headSha); }
-  deliveriesSince(days) { return ghMod.deliveriesSince(this, days); }
-  async fetchDeliveries(days, owner) { return ghMod.fetchDeliveries(this, days, owner); }
 
 
   // falha da sincronização vira estado dela e WARN, nunca erro do ciclo
@@ -1416,13 +1400,6 @@ class Engine extends EventEmitter {
   removeTeamMember(login) { return decisionMod.removeTeamMember(this, login); }
   async decide(id, action, ...opcoes) { return decisionMod.decide(this, id, action, ...opcoes); }
 
-  // escopo do kudos: '*' = todas as contas; senão o login (minúsculo) de uma conta
-  // Ferramentas (kudos/diagnóstico) + limpeza: colaborador lib/engine/tools.js (Onda 2).
-  kudosScopeKey(scope) { return toolsMod.kudosScopeKey(this, scope); }
-  scopeLabel(scope) { return toolsMod.scopeLabel(this, scope); }
-  ownerFromUrl(url) { return toolsMod.ownerFromUrl(this, url); }
-  highlightsForScope(scope) { return toolsMod.highlightsForScope(this, scope); }
-  toolPrompt(name, opts) { return toolsMod.toolPrompt(this, name, opts); }
   // diagnóstico unificado (A3): o MESMO markdown para a tela, para a cópia e para a IA
   diagnosticoMarkdown() { return diagnosticoMod.diagnosticoMarkdown(this); }
   diagnosticoFalhas() { return diagnosticoMod.falhasParaTela(this); }
@@ -1444,13 +1421,6 @@ class Engine extends EventEmitter {
   }
   claudeTestarPerfil(dados) { return perfilMod.testarPerfil(this, dados); }
   claudeAdotarLegado(dados) { return perfilMod.adotarLegado(this, dados); }
-  saveToolRuns() { return toolsMod.saveToolRuns(this); }
-  toolRunGet(name, scope) { return toolsMod.toolRunGet(this, name, scope); }
-  toolRunSet(name, scope, run) { return toolsMod.toolRunSet(this, name, scope, run); }
-  async launchTool(name, scope) { return toolsMod.launchTool(this, name, scope); }
-  clearTool(name, scope) { return toolsMod.clearTool(this, name, scope); }
-  clearLog() { return diagnosticoMod.clearLog(this); }
-
   ignore(key) {
     this.markSeen(key);
     this.marcarIgnorado(key);
@@ -1779,7 +1749,7 @@ class Engine extends EventEmitter {
       claudePerfis: { problemas: perfilMod.problemasDePerfil(this.config) },
       // capacidade implementada que NÃO está valendo: a tela não pode prometer o que o engine não aplica
       capacidades: this.estadoDasCapacidades(),
-      status: this.status, interventions: interventionMod.forUi(this),
+      status: this.status,
       error: this.lastError,
       baseline: this.baseline ??= lerBaseline(BASELINE_FILE),   // desde quando vigia (lido uma vez)
       account: { user: this.primaryUser(), tokenOk: this.tokenOk },
@@ -1841,7 +1811,6 @@ class Engine extends EventEmitter {
       // políticas já produzem, sem coleta nova. É o que torna o rodízio visível: uma
       // automação que cede a vez, vista de fora, é idêntica a uma automação quebrada.
       filaJusta: this.filaJusta(),
-      toolRuns: this.toolRuns,
       decisions: snapshotDecisions(this),
       reviewActions: snapshotReviewActions(this),
       usage: snapshotUsage(this.usageSummary()),
@@ -2055,7 +2024,7 @@ class Engine extends EventEmitter {
     return !!(profile && this.profileBudgetStatus(profile).blocked);
   }
 
-  pushState() { interventionMod.pushState(this); }
+  pushState() { this.emit('state', this.snapshot()); }
 
   // Deep-link de alerta: o shell (clique na notificação) pede pra UI levar
   // o usuário direto ao card do PR (a UI rola e destaca via SSE 'focus-pr').

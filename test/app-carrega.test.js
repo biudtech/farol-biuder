@@ -46,7 +46,6 @@ const ESTADO = {
     parallelReviews: 1, theme: 'dark', autoPushback: true,
     reviewModel: '', reviewEffort: '', codexReviewModel: '', codexReviewEffort: '',
     mergeBlockedRepos: [], soundEnabled: true,
-    teamHighlights: false, deliveriesEnabled: false,
     people: { bob: { papel: 'senior' } }, claudeProfiles: [], claudeProfileId: '',
   },
   lastCheckAt: Date.now() - 60_000, nextCheckAt: Date.now() + 240_000,
@@ -59,8 +58,8 @@ const ESTADO = {
   // objeto interpolado passa despercebido.
   activeSessions: [{ id: 'sess-1', mode: 'auto', label: 'acme/repo#42', startedAt: 1755600000000, cancellable: true, pr: { url: 'https://github.com/acme/repo/pull/42', user: 'alice' } }],
   headlessWaiting: ['acme/repo#43'], reviewActions: {}, staleStates: {},
-  usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [],
-  update: { state: 'idle' }, doctor: null, deliveries: null,
+  usage: {}, usageSessions: [], pushbacks: {}, team: [],
+  update: { state: 'idle' }, doctor: null,
   // o painel Sistema le daqui; sem isto o renderDoctor quebra, e foi o proprio teste
   // que apontou o fixture incompleto
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
@@ -88,7 +87,7 @@ test('o app.js carrega e registra o handler de state do SSE', () => {
   assert.ok(listeners.has('state'), 'sem isto a tela nunca receberia estado nenhum');
 });
 
-test('a ordem REAL de registro das telas é entregas, destaques, time, sistema, consumo, radar-compartilhado, radar-aparelhos', () => {
+test('a ordem REAL de registro das telas é time, sistema, consumo, radar-compartilhado, radar-aparelhos', () => {
   // test/ui-telas-registro.test.js só prova a propriedade genérica (a ordem de
   // registro é preservada); este aqui trava o valor de verdade. A ordem nasce do
   // encadeamento de imports estáticos do ui/app.js (cada import estático roda por
@@ -100,7 +99,7 @@ test('a ordem REAL de registro das telas é entregas, destaques, time, sistema, 
   assert.deepEqual(
     telasRegistradas().map(t => t.id),
     // radar-compartilhado registra por último, chamada explícita depois do Consumo (ui/app.js)
-    ['entregas', 'destaques', 'time', 'sistema', 'consumo', 'radar-compartilhado', 'radar-aparelhos'],
+    ['time', 'sistema', 'consumo', 'radar-compartilhado', 'radar-aparelhos'],
     'ordem de registro mudou: um import novo em algum módulo de tela reordenou o encadeamento em silêncio'
   );
 });
@@ -119,15 +118,13 @@ test('desenhar a tela com um estado plausível não levanta exceção', () => {
   semObjectObject('estado cheio');
 });
 
-test('Destaques e Entregas só ficam visíveis quando habilitados em Sistema', () => {
-  const destaques = document.querySelector('#tabbtn-destaques');
-  const entregas = document.querySelector('#tabbtn-entregas');
-  emitir('state', { ...ESTADO, config: { ...ESTADO.config, teamHighlights: false, deliveriesEnabled: false } });
-  assert.equal(destaques.hidden, true);
-  assert.equal(entregas.hidden, true);
-  emitir('state', { ...ESTADO, config: { ...ESTADO.config, teamHighlights: true, deliveriesEnabled: true } });
-  assert.equal(destaques.hidden, false);
-  assert.equal(entregas.hidden, false);
+test('as abas Destaques e Entregas saíram da página (corte do lote 7), inclusive o botão e o painel', () => {
+  // o DOM de mentira devolve um elemento para qualquer seletor: a prova é o HTML servido
+  const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
+  for (const aba of ['destaques', 'entregas']) {
+    assert.doesNotMatch(html, new RegExp(`id="(tabbtn|tab)-${aba}"`), `aba ${aba}`);
+  }
+  assert.equal(emitir('state', ESTADO), 1, 'o estado segue desenhando sem elas');
 });
 
 test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', () => {
