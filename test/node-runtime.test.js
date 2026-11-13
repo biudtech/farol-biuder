@@ -42,12 +42,13 @@ test('manifesto ausente ou range aberto não é aceito como suporte', () => {
   }
 });
 
-test('lockfile, versão local e CI preservam o piso e os três sistemas', () => {
+test('lockfile, versão local e CI preservam o piso e o Linux', () => {
   const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
   assert.equal(lock.packages[''].engines.node, packageNodeRequirement());
   assert.equal(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8').trim(), '24.22.1');
   const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
-  assert.equal((workflow.match(/node-version: '24\.22\.1'/g) || []).length, 2);
-  assert.equal((workflow.match(/os: \[ubuntu-latest, windows-latest, macos-latest\]/g) || []).length, 2);
-  assert.match(workflow, /needs: \[gate, electron\]/);
+  assert.equal((workflow.match(/node-version: '24\.22\.1'/g) || []).length, 1);
+  assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 2);
+  assert.doesNotMatch(workflow, /windows-latest|macos-latest/);
+  assert.match(workflow, /needs: \[gate\]/);
 });

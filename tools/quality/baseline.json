@@ -11,15 +11,9 @@
     "jsonStringifyCru": 2,
     "profundidadeExcedida": 2
   },
-  "lib/engine/fanout.js": {
-    "jsonParseCru": 1
-  },
   "lib/engine/gh-queries.js": {
     "jsonParseCru": 5,
     "tempoMagico": 3
-  },
-  "lib/engine/public-review.js": {
-    "ternarioAninhado": 1
   },
   "lib/engine/pushback.js": {
     "emptyCatch": 1,
@@ -28,21 +22,20 @@
     "profundidadeExcedida": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 704,
+    "maxLines": 698,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
-    "maxLines": 356,
+    "maxLines": 316,
     "emptyCatch": 1,
-    "jsonParseCru": 5,
+    "jsonParseCru": 4,
     "ternarioAninhado": 2,
-    "tempoMagico": 2,
-    "profundidadeExcedida": 5
+    "tempoMagico": 2
   },
   "lib/engine/session.js": {
-    "maxLines": 440,
+    "maxLines": 421,
     "emptyCatch": 5,
-    "jsonParseCru": 4,
+    "jsonParseCru": 3,
     "processEnvDireto": 2,
     "ternarioAninhado": 1,
     "profundidadeExcedida": 7
@@ -57,8 +50,7 @@
     "tempoMagico": 1
   },
   "lib/engine/usage.js": {
-    "ternarioAninhado": 2,
-    "profundidadeExcedida": 1
+    "ternarioAninhado": 2
   },
   "lib/format.js": {
     "ternarioAninhado": 1
@@ -67,7 +59,7 @@
     "emptyCatch": 1,
     "jsonParseCru": 1,
     "jsonStringifyCru": 1,
-    "profundidadeExcedida": 17
+    "profundidadeExcedida": 15
   },
   "lib/io.js": {
     "processEnvDireto": 3
@@ -135,7 +127,7 @@
   },
   "ui/telas/meus-prs.js": {
     "ternarioAninhado": 5,
-    "profundidadeExcedida": 6
+    "profundidadeExcedida": 4
   },
   "ui/telas/novidades.js": {
     "ternarioAninhado": 1
