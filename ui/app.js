@@ -35,7 +35,6 @@ import {
 import { renderMyPRs, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
 import { observarCancelamentos } from './telas/autoanalise-andamento.js';
 import { initDensidade } from './telas/densidade.js';
-import { renderUpdate } from './telas/sistema-atualizacao.js';
 import { sysGoTo, renderSettings, renderPlatformSettings } from './telas/sistema.js';
 import { initCaixaRevisao } from './telas/caixa-revisao.js';
 import { initAtalhos } from './telas/atalhos.js';
@@ -345,7 +344,7 @@ const pinturas = criarAgendaVisual({
     meus: renderMyPRs, panorama: renderPanorama,
     silenciadas: renderSilenced, navegacao: () => renderRadarNav(contagemMeusPrs()),
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
-    ferramentas: renderTools, atualizacao: renderUpdate, relogio: tickCountdown,
+    ferramentas: renderTools, relogio: tickCountdown,
     consumo: () => pintarTelaRegistrada('consumo'),
     compartilhado: () => pintarTelaRegistrada('radar-compartilhado'),
     aparelhos: () => pintarTelaRegistrada('radar-aparelhos'),

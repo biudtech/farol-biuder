@@ -47,7 +47,6 @@ function checkEngine() {
   e.refreshStaleStates = async () => {};
   e.refreshReviewSignals = async () => {}; // sinal por ref é rede: fora do ciclo de teste
   e.scanPushbacks = async () => {};
-  e.checkUpdate = async () => {};
   e.launchReview = () => { throw new Error('launchReview não deveria rodar neste teste'); };
   e.schedule = () => {};
   e.saveSeen = () => {}; // seen em memória basta pro cenário

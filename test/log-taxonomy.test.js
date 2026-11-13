@@ -51,7 +51,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 30, 'são 30 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 28, 'são 28 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -76,7 +76,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
     'restart-fila', 'console-fechado', 'limite-da-organizacao', 'limite-plano',
     'processos-indisponiveis', 'capacidade-agy', 'limite-agy', 'agy-print-timeout', 'agy-conta-trocada', 'agy-sem-login', 'assinatura-bloqueada',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'coordenacao-indisponivel', 'rate-limit-github', 'rede', 'github-indisponivel',
-    'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'update-runtime', 'update-checkout-git', 'migracao-vistos', 'busca-sem-mensagem', 'ferramenta'
+    'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem', 'ferramenta'
   ]);
 });
 
@@ -724,28 +724,11 @@ test('rate limit do GitHub é transitório', () => {
   }
 });
 
-// Duas falhas sem relação caíam juntas em "não classificada": a amostra do grupo era a do
-// update recusado (15/10) e a data final era a de uma busca sem mensagem (16/10), então o
-// Diagnóstico parecia dizer que o update ainda falhava hoje (16/10/2026, admin).
-test('update recusado pelo runtime e busca sem mensagem têm classe própria', () => {
-  const update = classify('auto-update falhou: Electron não identificado incompatível com ^44.1.0. Use o instalador completo desta versão; a instalação atual foi preservada.');
-  assert.equal(update.id, 'update-runtime');
-  assert.equal(update.kind, 'permanente');
+test('busca sem mensagem tem classe própria e transitória', () => {
   const busca = classify('gh search falhou (wandersonaadsantos: --reviewed-by=@me): ');
   assert.equal(busca.id, 'busca-sem-mensagem');
   assert.equal(busca.kind, 'transitorio');
   assert.notEqual(classify('gh search falhou (alex: --owner x): Invalid search query "user:x"').id, 'busca-sem-mensagem', 'busca com mensagem segue a classe da mensagem');
-});
-
-test('triage: update recusado e busca sem mensagem não se misturam num grupo só', () => {
-  const r = triage([
-    '[2026-10-15 19:08:52 -03:00] [ERROR] auto-update falhou: Electron não identificado incompatível com ^44.1.0. Use o instalador completo desta versão; a instalação atual foi preservada.',
-    '[2026-10-16 11:40:20 -03:00] [WARN] gh search falhou (wandersonaadsantos: --reviewed-by=@me): ',
-  ]);
-  const ids = r.map((g) => g.id);
-  assert.ok(ids.includes('update-runtime') && ids.includes('busca-sem-mensagem'));
-  assert.equal(ids.includes('desconhecido'), false);
-  assert.match(r.find((g) => g.id === 'update-runtime').last, /2026-10-15/, 'a data do update é a dele, não a da busca');
 });
 
 test('spawn EAGAIN volta para a fila sem confundir com credencial ou binário ausente', () => {
@@ -757,13 +740,6 @@ test('spawn EAGAIN volta para a fila sem confundir com credencial ou binário au
   for (const erro of ['spawn agy ENOENT', 'spawn agy EACCES', 'Authentication required. Please visit the URL']) {
     assert.notEqual(classify(erro).id, 'processos-indisponiveis');
   }
-});
-
-test('checkout git: a recusa do auto-update tem classe própria e permanente', () => {
-  const c = classify('auto-update falhou: O Farol roda de um repositório git (/x): atualize com git pull.');
-  assert.equal(c.id, 'update-checkout-git');
-  assert.equal(c.kind, 'permanente');
-  assert.equal(c.grupo, 'app');
 });
 
 test('triage: WARN que a taxonomia não conhece continua contando (falha real não some do Diagnóstico)', () => {

@@ -138,7 +138,6 @@ test('Sistema > Automação: as chaves que nascem ligadas só desligam com false
   for (const linha of [
     "$('#setReReviewResume').checked = c.reReviewResume !== false;",
     "$('#setSkipPerms').checked = c.skipPermissions !== false;",
-    "$('#setAutoUpdate').checked = c.autoUpdate !== false;",
   ]) assert.ok(sistema.includes(linha), linha);
 });
 
@@ -174,7 +173,7 @@ test('Sistema > Automação: a linha virou chave, ligada à preferência, e os p
   const linha = (id) => html.slice(html.indexOf(`id="${id}"`), html.indexOf('</label>', html.indexOf(`id="${id}"`)));
   assert.match(linha('sys-row-aguardarciaprovar'), /<input id="setAguardarCiAprovar" type="checkbox">/);
   assert.match(linha('sys-row-aguardarciaprovar'), /Desligado \(padrão\)/);
-  for (const id of ['sys-row-rereviewresume', 'sys-row-autoupdate', 'sys-row-skipperms']) {
+  for (const id of ['sys-row-rereviewresume', 'sys-row-skipperms']) {
     assert.match(linha(id), /Ligado \(padrão\)/, id);
     assert.doesNotMatch(linha(id), /Desligado \(padrão\)/, id);
   }

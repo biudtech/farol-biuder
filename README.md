@@ -82,7 +82,7 @@ Por onde começar a ler, dependendo do que você quer mexer:
 | o que o app decide (revisar, aprovar, esperar) | `lib/engine/` |
 | o que aparece na tela | `ui/pure/` (funções puras, com teste), `ui/telas/` (as telas, uma por assunto, com o `ui/telas/README.md` como porta de entrada) e `ui/app.js` (o bootstrap) |
 | como o app fala com o GitHub | `lib/io.js` e `lib/engine/gh-queries.js` |
-| como o app é instalado e atualizado | `installer/` e `lib/engine/update.js` |
+| como o app é instalado e atualizado | `installer/` |
 | as regras de qualidade e o gate | `docs/QUALITY.md` e `tools/quality/` |
 
 O guia do mantenedor começa no [`CLAUDE.md`](CLAUDE.md): um sumário com o mapa de arquivos

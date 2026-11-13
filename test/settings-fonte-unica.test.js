@@ -57,9 +57,9 @@ test('port existe no config mas NÃO é editável pela tela', () => {
 });
 
 test('saneamento: os defaults que ligados só desligam com valor explícito', () => {
-  // autoUpdate é o caso: chave ausente não pode virar "desligado"
-  assert.equal(sanear('autoUpdate', undefined, {}, {}), true);
-  assert.equal(sanear('autoUpdate', false, {}, {}), false);
+  // skipPermissions é o caso: chave ausente não pode virar "desligado"
+  assert.equal(sanear('skipPermissions', undefined, {}, {}), true);
+  assert.equal(sanear('skipPermissions', false, {}, {}), false);
   // e os opt-in são o contrário: só ligam com valor verdadeiro
   assert.equal(sanear('reviewFast', undefined, {}, {}), false);
   assert.equal(sanear('reviewFast', true, {}, {}), true);

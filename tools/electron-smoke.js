@@ -99,8 +99,8 @@ try {
   for (const dir of Object.values(dirs)) fs.mkdirSync(dir, { recursive: true });
   const port = await portaLivre();
   writeJsonAtomic(path.join(dirs.farol, 'config.json'), { port, accounts: [],
-    autoReview: false, autoApproveAll: false, autoPushback: false, autoUpdate: false,
-    autostart: false, updateRepo: '', jiraSites: [], claudeProfiles: [] });
+    autoReview: false, autoApproveAll: false, autoPushback: false,
+    autostart: false, jiraSites: [], claudeProfiles: [] });
   const configFile = path.join(base, 'probe.json');
   writeJsonAtomic(configFile, { dirs, root, output, port, name, autostart,
     expectedElectron, expectedApp: pkg.version });

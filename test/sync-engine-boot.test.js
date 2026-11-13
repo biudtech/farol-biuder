@@ -85,7 +85,7 @@ test('check() chama o syncTick uma vez por ciclo, depois do refreshMergeStates',
     resolveAccount: async () => {}, refreshTokens: async () => { e.tokenOk = true; return true; },
     searchPRs: async () => [], myAuthoredPRs: async () => [], enrichMyPRBranches: async () => {},
     refreshStaleStates: async () => {}, refreshReviewSignals: async () => {}, scanPushbacks: async () => {},
-    checkUpdate: async () => {}, refreshContributors: async () => {}, schedule: () => {}, saveSeen: () => {},
+    schedule: () => {}, saveSeen: () => {},
   });
   e.config.accounts = [{ user: 'me', owners: ['acme'] }];
   e.refreshMergeStates = async () => { ordem.push('merge'); };

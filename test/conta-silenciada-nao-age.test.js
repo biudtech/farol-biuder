@@ -222,7 +222,6 @@ function engineDeCheck(contas, tokens) {
   e.refreshStaleStates = async () => { };
   e.refreshReviewSignals = async () => { };
   e.scanPushbacks = async () => { };
-  e.checkUpdate = async () => { };
   e.launchReview = () => { throw new Error('launchReview não deveria rodar neste teste'); };
   e.schedule = () => { };
   e.saveSeen = () => { };

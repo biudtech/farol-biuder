@@ -8,7 +8,6 @@ import path from 'node:path';
 import farol from './server.js';
 import { interventionEvent } from './ui/pure/interventions.js';
 import { avisoDe, badgeDe, coresDe } from './lib/engine/avisos-nativos.js';
-import { consumirReaberturaSilenciosa } from './lib/engine/update.js';
 
 // fonte única do branch de plataforma (lib/paths.js), como no resto do app
 import { IS_MAC, IS_WIN } from './lib/paths.js';
@@ -34,10 +33,6 @@ let quitting = false;
 let hideHintShown = false;
 let balloonTarget = null;
 let attachedToExisting = false; // porta ocupada: esta janela é só um VISOR da instância que já roda
-// reabertura DEPOIS de um auto-update: sobe direto na bandeja, sem roubar o foco
-// de quem está trabalhando (pedido do Wanderson, 20/08/2026). O marcador é lido
-// UMA vez, aqui no topo do boot, porque o consumo apaga o arquivo.
-const reabertura = consumirReaberturaSilenciosa();
 
 // Quando o macOS executa o binário cru do Electron, a barra de menu pode herdar
 // "Electron" do bundle nativo. O nome do app precisa ser afirmado pelo processo.
@@ -67,8 +62,6 @@ if (!gotLock) {
       createTray();
       wireEngine();
       applyAutostart();
-      // depois da bandeja existir: o fallback de balão do notify() precisa dela
-      if (reabertura) notify('Farol atualizado', `Agora na versão ${reabertura.to || 'nova'}. Segue monitorando na bandeja.`);
     });
     engine = eng;
     if (diagnosticoQuedas.erro) engine.log('WARN', diagnosticoQuedas.erro);
@@ -111,16 +104,10 @@ function createWindow() {
     opts.titleBarStyle = 'hidden';
     opts.titleBarOverlay = { color: c.bg, symbolColor: c.symbol, height: 44 };
   }
-  // pós-update: nasce escondida e fica na bandeja. O aviso de que atualizou sai
-  // por notificação (não rouba foco); o ícone da bandeja reabre quando você quiser.
-  if (reabertura) opts.show = false;
   win = new BrowserWindow(opts);
   identificarJanela(win, app);
   win.setMenuBarVisibility(false);
   win.loadURL(appUrl);
-  // a janela nunca apareceu, então o aviso de "continua por aqui" do close não faz
-  // sentido; quem conta que o app está vivo é a notificação logo abaixo, no boot
-  if (reabertura) hideHintShown = true;
 
   // Renderer pode morrer sozinho (driver de GPU, principalmente no Windows, onde
   // o titleBarOverlay é composição via GPU do Chromium; o macOS usa hiddenInset,
@@ -151,7 +138,7 @@ function createWindow() {
   // no macOS o lancador (Farol.app) e um wrapper que da exec no Electron: quem o Finder
   // ativa morre na hora, e o Electron sobe sem ativacao, com a janela atras de tudo.
   // O steal traz o app pra frente na abertura (sem ele, parece que o app nao abriu)
-  if (IS_MAC && !reabertura) {
+  if (IS_MAC) {
     app.focus({ steal: true });
     // e o Dock mostra o icone do processo (Electron cru), nao o do lancador;
     // o setIcon troca em runtime pro icone do Farol
@@ -333,11 +320,6 @@ function wireEngine() {
   });
   // PR meu em conflito ou já absorvido pela base (lib/engine/meus-prs-base.js), uma vez por head
   engine.on('meu-pr-base', notificar('meu-pr-base'));
-  // release de ponte (desenho 4.7 do Farol nativo): a 3.x não roda nesta casca; o engine emite
-  // uma vez por processo e versão, e o clique só abre a janela (o aviso fica em Sistema)
-  engine.on('update-ponte', (p) => {
-    notify('Farol · última versão nesta casca', `A ${p.versao} é o Farol nativo. Baixe o instalador em Sistema > Visão geral.`, null);
-  });
   engine.on('state', updateBadge);
   engine.on('settings-changed', (cfg) => {
     applyAutostart();
