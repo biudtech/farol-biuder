@@ -27,6 +27,9 @@ io.run = function runEspiao(cmd, args, opts) {
 
 const { Engine } = await import('../server.js');
 const { ehPrProprio, ehMeu } = await import('../lib/engine/pr-proprio.js');
+const { shouldAutoApprove, shouldAutoReject } = await import('../lib/engine/approval-policy.js');
+const { caminhoNovo } = await import('../lib/engine/desfecho-da-revisao.js');
+const { criteriaFixture } = await import('./helpers/criteria-fixture.js');
 const porta = (await import('../lib/engine/porta-de-execucao.js')).default;
 const { STATE_DIR } = await import('../lib/paths.js');
 fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -77,16 +80,15 @@ test('launchReview: PR do panorama cujo autor é a conta não enfileira e avisa'
   assert.equal(e.seen.has(prDo('').key), false, 'PR barrado não é marcado como visto');
 });
 
-test('launchReview: URL avulsa (sem autor) de PR que está em Meus PRs é barrada sem ir ao GitHub', async () => {
+test('launchReview: URL avulsa (sem autor) não é barrada pela lista, e não vai ao GitHub só para ler o autor', async () => {
   const e = engineDe('wandersonbiuder');
-  e.myPRs = [prDo('wandersonbiuder')];
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
   e.on('toast', () => { });
   const r = await e.launchReview([URL_314], 'auto', 'clique');
-  assert.equal(r.ok, false);
-  assert.equal(enfileirados.length, 0);
-  assert.equal(chamadas.length, 0, 'a prova é a lista em memória, sem chamada gh');
+  assert.equal(r.ok, true, 'sem autor conhecido o gate não bloqueia (falta de dado nunca bloqueia)');
+  assert.equal(enfileirados.length, 1);
+  assert.equal(chamadas.length, 0);
 });
 
 test('launchReview: PR de outra pessoa segue normalmente', async () => {
@@ -110,11 +112,34 @@ test('enqueueHeadless: re-revisão, comando e distribuição também não entram
   assert.deepEqual(porta.executaveis(e, [prDo('wandersonbiuder')]), []);
 });
 
-test('ehMeu: autor de outra pessoa nunca é trocado pela lista Meus PRs', () => {
+test('ehMeu: decide só pelo autor do item; a lista Meus PRs não existe mais e não prova nada', () => {
   const e = engineDe('wandersonbiuder');
   e.myPRs = [prDo('wandersonbiuder')];
   assert.equal(ehMeu(e, prDo('Alexpraxedes')), false);
-  assert.equal(ehMeu(e, prDo('')), true);
-  e.myPRs = [];
-  assert.equal(ehMeu(e, prDo('')), false, 'sem prova, não barra');
+  assert.equal(ehMeu(e, prDo('')), false, 'sem autor no item, a lista (que o motor não lê mais) não decide');
+  assert.equal(ehMeu(e, prDo('WandersonBiuder')), true, 'autor igual à conta, sem diferenciar caixa');
+});
+
+// Review Focus 2: o gate de PR próprio não pode depender de engine.myPRs.
+const aprovavel = () => ({ ...criteriaFixture('approve'), analysisStatus: 'complete', verdict: 'approve', payloads: { approve: { event: 'APPROVE', body: 'ok' } } });
+
+test('gate sem engine.myPRs: autor igual à conta em caixa diferente nunca sai como APPROVE nem REQUEST_CHANGES', () => {
+  const e = engineDe('wandersonbiuder');
+  delete e.myPRs;
+  const pr = { ...prDo('WandersonBiuder'), requested: true };
+  assert.deepEqual(shouldAutoApprove(e, pr, aprovavel()), { ok: false, motivo: 'pr_proprio' });
+  const rc = { ...criteriaFixture('request_changes'), analysisStatus: 'complete', verdict: 'request_changes', payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'x' } } };
+  assert.equal(shouldAutoReject(e, pr, rc), false);
+});
+
+test('gate sem engine.myPRs: o desfecho do PR próprio posta COMMENT', () => {
+  const e = engineDe('wandersonbiuder');
+  delete e.myPRs;
+  e.config.accounts[0].onClean = 'approve';
+  const pr = { ...prDo('WandersonBiuder'), requested: true };
+  const resultado = { ...aprovavel(), headSha: 'abc123', payloads: { approve: { event: 'APPROVE', body: 'ok' }, comment: { event: 'COMMENT', body: 'Leitura completa.' } } };
+  const novo = caminhoNovo(e, pr, resultado, { ok: false, motivo: 'pr_proprio' }, false);
+  assert.equal(novo && novo.tipo, 'pr_proprio');
+  assert.equal(novo.evento, 'comment');
+  assert.equal(novo.payload.event, 'COMMENT');
 });
