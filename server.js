@@ -267,7 +267,7 @@ class Engine extends EventEmitter {
     this.credits = null;              // { at, repo, owner, contributors } créditos do Sistema > Sobre (cache 24h)
     this.creditsTriedAt = 0;          // backoff de falha da busca de contribuidores (1h)
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
-    this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal/chat (nunca persistidas nem expostas)
+    this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
     this.headlessQueue = [];
     this.headlessBusyAccounts = new Map(); // conta -> nº de revisões headless rodando (teto por conta = config.parallelReviews, default 1)

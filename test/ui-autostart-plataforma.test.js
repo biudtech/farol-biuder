@@ -10,7 +10,6 @@ const respostas = new Map([
   ['/api/log', []],
   ['/api/log/triage', []],
   ['/api/diagnostics', { ok: true, markdown: 'Diagnóstico sintético', falhas: [] }],
-  ['/api/reviewer-candidates', {}],
 ]);
 globalThis.fetch = async url => {
   assert.ok(respostas.has(url), `Rota HTTP não prevista na fixture: ${url}`);
