@@ -1732,21 +1732,6 @@ test('nenhum seletor de atributo escapa só a aspa (a barra tem que vir junto)',
 const MARK_T = { style: '--ac:#f00;', varStyle: '--ac:#f00;', dim: '', chip: '<span class="acct-chip">acme</span>', dot: '<span class="acct-dot"></span>', acct: { label: 'acme' } };
 const PR_T = (o = {}) => ({ key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7',
   title: 'Corrige o gate', author: 'alice', updatedAt: '2026-08-17T10:00:00Z', ...o });
-const CTX_PANO = { mark: MARK_T, actions: {}, staleStates: {}, todasContas: true, running: new Set(), waiting: [] };
-
-test('Panorama: o autor fica FORA da caixa que trunca o título', () => {
-  // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado em 11/08:
-  // com o @autor dentro do .pw-title (overflow hidden + ellipsis), título comprido
-  // empurrava foto e login pra fora da tela, sem aviso. Era regex no ui-widgets;
-  // agora renderiza.
-  const html = P.panoramaRowHtml(PR_T({ title: 'T'.repeat(300) }), CTX_PANO);
-  const linha = html.match(/<div class="pw-title">([\s\S]*?)<\/div>/);
-  assert.ok(linha, 'a linha do título existe');
-  assert.match(linha[1], /<span class="pw-title-txt"/, 'o texto do título tem elemento próprio, que é quem trunca');
-  assert.match(linha[1], /person-mention/, 'o autor está na LINHA, irmão do texto');
-  const txt = html.match(/<span class="pw-title-txt"[^>]*>([\s\S]*?)<\/span>/);
-  assert.doesNotMatch(txt[1], /person-mention/, 'e nunca DENTRO da caixa que trunca');
-});
 
 test('cards do Radar: título e autor saem escapados', () => {
   // A asserção NÃO procura por uma tag específica: o CodeQL reprovou a primeira
@@ -1757,7 +1742,7 @@ test('cards do Radar: título e autor saem escapados', () => {
   const PAYLOADS = ['<img src=x onerror=1>', '<SCRIPT>x</SCRIPT>', '<ScRiPt>x</ScRiPt>', '"><b>', "'><b>"];
   for (const carga of PAYLOADS) {
     const mau = PR_T({ title: carga, author: carga });
-    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T }), P.panoramaRowHtml(mau, CTX_PANO)]) {
+    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T })]) {
       assert.ok(!html.includes(carga), `a carga "${carga}" não pode aparecer crua`);
       assert.match(html, /&lt;|&quot;|&#39;/, 'e o que entrou saiu como entidade');
     }
@@ -1768,7 +1753,7 @@ test('cards do Radar: o escape não depende da caixa da tag', () => {
   // trava explícita do que o CodeQL apontou
   for (const tag of ['<script>', '<SCRIPT>', '<ScRiPt>']) {
     const mau = PR_T({ title: tag });
-    const html = P.panoramaRowHtml(mau, CTX_PANO);
+    const html = P.queueCardHtml(mau, { people: {}, mark: MARK_T });
     assert.doesNotMatch(html, new RegExp(tag.replace(/[<>]/g, m => '\\' + m), 'i'),
       `${tag} escapado em qualquer caixa`);
   }
@@ -1784,38 +1769,6 @@ test('queueCardHtml: rascunho e re-pedido ganham selo; PR comum não', () => {
 test('queueCardHtml: sem autor não renderiza o seletor de papel', () => {
   const html = P.queueCardHtml(PR_T({ author: '' }), { people: {}, mark: MARK_T });
   assert.doesNotMatch(html, /papel-level/, 'PR sem autor não tem papel a marcar');
-});
-
-test('panoramaRowHtml: a precedência do botão é rodando > fila > revisar', () => {
-  const rodando = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, running: new Set(['acme/api#7']), waiting: ['acme/api#7'] });
-  assert.match(rodando, /Revisando…/, 'rodando ganha da fila');
-  const naFila = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, waiting: ['acme/api#7'] });
-  assert.match(naFila, /Na fila \(1\)/);
-  const livre = P.panoramaRowHtml(PR_T(), CTX_PANO);
-  assert.match(livre, /act-review/, 'sem nada em curso, dá pra revisar');
-});
-
-test('panoramaRowHtml: estado resolvido troca o botão por rótulo', () => {
-  const pedido = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'request_changes' } } });
-  assert.match(pedido, /aguardando o autor/);
-  assert.doesNotMatch(pedido, /act-review/, 'já pedi mudanças: não oferece revisar de novo');
-  const pendente = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'pending' } } });
-  assert.match(pendente, /aguardando você/);
-});
-
-test('panoramaRowHtml: commit novo depois da review reabre o botão', () => {
-  const base = { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'approve' } } };
-  assert.doesNotMatch(P.panoramaRowHtml(PR_T(), base), /act-review/, 'aprovado e parado: nada a fazer');
-  const stale = P.panoramaRowHtml(PR_T(), { ...base, staleStates: { 'acme/api#7': true } });
-  assert.match(stale, /act-review/, 'entrou commit novo: revisar de novo');
-  assert.match(stale, /commit novo/, 'e o tooltip diz por quê');
-});
-
-test('panoramaRowHtml: o selo da conta só aparece no escopo "todas"', () => {
-  assert.match(P.panoramaRowHtml(PR_T(), CTX_PANO), /acct-chip/);
-  const umaConta = P.panoramaRowHtml(PR_T({ mine: true }), { ...CTX_PANO, todasContas: false });
-  assert.doesNotMatch(umaConta, /acct-chip/);
-  assert.match(umaConta, /sua revisão/, 'numa conta só, o que importa é ser seu');
 });
 
 /* ---------- onda 5, quinto passo: o painel Sistema (perfis e contas) ----------
@@ -1934,42 +1887,13 @@ test('vazio da fila: sem aprovação hoje, não inventa contagem', () => {
   assert.doesNotMatch(html, /aprovou/, 'zero não vira "aprovou 0"');
 });
 
-test('pedidosAntesDoInicio conta só mine, fora da fila e anteriores ao baseline', () => {
-  const baseline = { at: Date.parse('2026-10-10T12:00:00Z'), marcados: 3 };
-  const antes = '2026-10-01T00:00:00Z';
-  const depois = '2026-10-20T00:00:00Z';
-  const panorama = [
-    { key: 'a', mine: true, updatedAt: antes },
-    { key: 'b', mine: true, updatedAt: depois },
-    { key: 'c', mine: false, updatedAt: antes },
-    { key: 'd', mine: true, updatedAt: antes },
-  ];
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline }), 1);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline: null }), 0);
-});
-
-test('pedidosAntesDoInicio: baseline legado e PR já revisado por mim não contam', () => {
-  const antes = '2026-10-01T00:00:00Z';
-  const panorama = [{ key: 'a', mine: true, updatedAt: antes }, { key: 'r', mine: true, reviewedByMe: true, updatedAt: antes }];
-  const at = Date.parse('2026-10-10T12:00:00Z');
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: null } }), 0);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: 2 } }), 1);
-});
-
-test('vazio da fila com PRs anteriores ao baseline diz quantos e leva ao Panorama', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['biudtech'], intervalSeconds: 300, antesDoInicio: 14 });
-  assert.match(html, /14 PRs já pediam sua revisão antes do Farol começar a vigiar/);
-  assert.match(html, /class="btn sm eo-panorama"/);
-  assert.doesNotMatch(html, /Nada esperando por você/);
-});
-
 test('vazio da fila sem aprovados não oferece "Ver o que foi aprovado"', () => {
-  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
-  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
+  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300 }), /eo-resolved/);
+  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300 }), /eo-resolved/);
 });
 
-test('vazio da fila com antesDoInicio 0 é o vazio bom de sempre', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300, antesDoInicio: 0 });
+test('vazio da fila sem nada a contar é o vazio bom de sempre', () => {
+  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300 });
   assert.match(html, /Nada esperando por você/);
   assert.doesNotMatch(html, /eo-panorama/);
 });

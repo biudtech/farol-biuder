@@ -52,8 +52,6 @@ import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
 import sessionMod from './lib/engine/session.js';
 import selfMod from './lib/engine/selfpr.js';
 import meusPrsBase from './lib/engine/meus-prs-base.js';
-import prontidaoPr from './lib/engine/prontidao-pr.js';
-import radarNaTela from './lib/engine/radar-na-tela.js';
 import labelsATirar from './lib/engine/labels-a-tirar.js';
 import labelPropriaOrfa from './lib/engine/label-propria-orfa.js';
 import { registrarBaseline, lerBaseline } from './lib/engine/baseline.js';
@@ -72,7 +70,6 @@ import destravaMod from './lib/engine/destrava.js';
 import vistosMod from './lib/engine/vistos-reconciliacao.js';
 import checksMod from './lib/engine/checks-exigidos.js';
 import esperaProvaMod from './lib/engine/espera-prova.js';
-import signalMod from './lib/engine/review-signal.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
@@ -209,7 +206,6 @@ class Engine extends EventEmitter {
     // assinatura do Claude -> { ate, em }: até quando ela está no limite do plano
     carregarLimites(this);
     this.mergeStates = {};            // key do PR -> mergeabilidade real (só p/ aprovaveis)
-    this.staleStates = {};            // key do PR -> true quando entrou commit apos a minha review
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
     this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
     this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
@@ -252,7 +248,6 @@ class Engine extends EventEmitter {
     // commit ou pedido de revisão nunca destrava duas vezes, nem depois de reinício
     this.destravados = destravaMod.loadDestravados(warn);
     this.skipComentado = skipMod.loadSkipComentado(warn); // { key: { at, quem } } âncora da saída de cena silenciosa ("outra pessoa já está revisando"; desde 28/08/2026 nada é comentado no PR, o aviso é toast)
-    this.reviewSignals = new Map(); // repoLower -> entries das refs de "revisando" (lib/engine/review-signal.js); snapshot por ciclo, só memória
     this.activity = new Map();       // id de sessão -> feed de eventos ao vivo
     this.running = new Map();        // id de sessão -> { child, cancelled } (só headless)
     this.retryAfterNet = new Map();  // key do PR -> { tries, pr } da re-revisão pós-falha transitória
@@ -781,17 +776,6 @@ class Engine extends EventEmitter {
       this.podarSkipComentado(chavesDoPanorama);
       this.podarHistoricoAvisado(chavesDoPanorama);
 
-      // refs de "revisando" da v2.53.9 (leitura de TRANSIÇÃO, ver o cabeçalho de
-      // lib/engine/review-signal.js; o sinal escrito voltou a ser a label):
-      // UMA busca por repo de interesse por ciclo, ANTES de qualquer decisão de
-      // gastar sessão. O filtro toReview lê via _registraPulo/outrosRevisando e o
-      // launchReReviews lê via reReviewTargets, então o refresh precisa vir antes
-      // dos dois. Os repos de pendência stale_head vêm do decisions persistido e
-      // os de staleInfo do ciclo ANTERIOR (o refreshStaleStates roda mais abaixo);
-      // um repo que ficou stale agora entra no refresh do próximo ciclo, o que só
-      // atrasa a leitura do sinal em um ciclo, nunca a segurança do gate.
-      await this.refreshReviewSignals();
-
       // estado novo destrava o que esperava clique (v2.59.3): commit novo ou pedido de
       // revisão depois de uma revisão estacionada, pulada ou presa em head velho devolve
       // o PR aos caminhos automáticos. ANTES do _dispararAutomacoes, pro toReview deste
@@ -807,8 +791,6 @@ class Engine extends EventEmitter {
       try { await this.refreshMergeStates(); } catch (e) { this.log('WARN', `refreshMergeStates: ${e.message}`); }
       // conflito e PR superado pela base, de TODO PR meu (meus-prs-base.js), sem esperar clique
       try { await meusPrsBase.refreshBaseDosMeusPRs(this); } catch (e) { this.log('WARN', `base dos meus PRs: ${e.message}`); }
-      // faixa de prontidão (checks, reviewers, merge) dos meus PRs e dos PRs do Radar (prontidao-pr.js)
-      try { await prontidaoPr.refreshProntidao(this); } catch (e) { this.log('WARN', `prontidão dos PRs: ${e.message}`); }
       // label :revisando cuja remoção falhou no fim da revisão (labels-a-tirar.js)
       try { await labelsATirar.tirarPendentes(this); } catch (e) { this.log('WARN', `labels a tirar: ${e.message}`); }
       try { await labelPropriaOrfa.tirarOrfas(this, panorama); } catch (e) { this.log('WARN', `label própria sem dono: ${e.message}`); }
@@ -1049,11 +1031,10 @@ class Engine extends EventEmitter {
         ...(this.headlessIniciando || []),
         ...[...this.activeReviews.values()].flatMap(s => s.keys || [])
       ]);
-      // UM Farol por PR (desligável por revisarComOutrosRevisando): quem já saiu de cena
-      // naquele head fica fora, e quem vê o sinal de outra pessoa sai agora. Os dois são
-      // coletados aqui e resolvidos depois do filtro, porque consultar review e CODEOWNERS
-      // é IO e este filtro é síncrono. Ferramenta não conta como pessoa, e clique manual
-      // nunca passa por aqui (lib/engine/skip-review.js).
+      // UM Farol por PR: quem já saiu de cena naquele head fica fora, e quem vê o sinal de
+      // outra pessoa sai agora. Os dois são coletados aqui e resolvidos depois do filtro,
+      // porque consultar review é IO e este filtro é síncrono. Ferramenta não conta como
+      // pessoa, e clique manual nunca passa por aqui (lib/engine/skip-review.js).
       const pulados = [];
       const foraDeCena = [];
       const toReview = this.queue.filter(p => {
@@ -1103,8 +1084,8 @@ class Engine extends EventEmitter {
         this.emit('new-prs', { items: freshActive, total: this.queue.filter(p => !this.isMuted(this.accountForPr(p))).length, auto: freshActive.some(p => toReview.some(t => t.key === p.key)) });
       }
       if (toReview.length) this.launchReview(toReview.map(p => p.url), 'auto');
-      // fire-and-forget, no padrão do scanPushbacks: sair de cena e co-assinar são
-      // cortesia com quem já pegou o PR, nunca pré-requisito do ciclo de polling.
+      // fire-and-forget, no padrão do scanPushbacks: sair de cena é cortesia com quem
+      // já pegou o PR, nunca pré-requisito do ciclo de polling.
       if (pulados.length || foraDeCena.length) {
         this.resolvePulos(pulados, foraDeCena).catch(err => this.log('WARN', `saída de cena: ${err.message}`));
       }
@@ -1211,12 +1192,9 @@ class Engine extends EventEmitter {
     try { writeJsonAtomic(path.join(STATE_DIR, 'label-vista-observada.json'), this.labelVistaObservadaEm); }
     catch { /* best-effort: sem o instante, o carimbo antigo segue valendo como antes */ }
   }
-  // sinal invisível de "revisando" por ref git (lib/engine/review-signal.js)
-  refreshReviewSignals() { return signalMod.refreshReviewSignals(this); }
-  // UM Farol por PR (lib/engine/skip-review.js): sair de cena e co-assinar
+  // UM Farol por PR (lib/engine/skip-review.js): sair de cena
   outrosRevisando(pr) { return skipMod.outrosRevisando(this, pr); }
-  saiDeCena(pr, outros, head, autoridade) { return skipMod.saiDeCena(this, pr, outros, head, autoridade); }
-  autoridadeNaSaida(pr) { return skipMod.autoridadeNaSaida(this, pr); }
+  saiDeCena(pr, outros, head) { return skipMod.saiDeCena(this, pr, outros, head); }
   seguirForaDeCena(pr, registro, head) { return skipMod.seguirForaDeCena(this, pr, registro, head); }
   podarSkipComentado(abertos) { return skipMod.podarSkipComentado(this, abertos); }
   // gate de consciência do review automático (28/08/2026 à tarde): head ativo com
@@ -1231,23 +1209,18 @@ class Engine extends EventEmitter {
 
   /* Resolve, num ciclo, os dois lados do "um Farol por PR". Assíncrono e
      best-effort: nada aqui é pré-requisito do polling.
-     - `pulados`: acabei de ver o sinal de outra pessoa (label legada ou ref).
+     - `pulados`: acabei de ver o sinal de outra pessoa (a label).
        Saio de cena AGORA, de forma durável naquele head, e o aviso é um toast
        no app (desde 28/08/2026 nada é comentado no PR: o comentário era template
        detectável e denunciava a automação).
      - `foraDeCena`: já estava fora. Aqui é onde a saída pode CADUCAR (a sessão do
-       colega morreu sem deixar review) ou virar co-assinatura (ele aprovou e a
-       chave está ligada).
+       colega morreu sem deixar review).
      O head vem de `headSha`, e falha ali degrada pra head vazio: sem head, a
      âncora vale pro PR inteiro, que é o lado seguro de "um Farol por PR". */
   async resolvePulos(pulados, foraDeCena) {
     for (const { pr, outros } of pulados || []) {
-      // regra PLANA (28/08/2026 à tarde): ver alguém revisando SEMPRE segura o
-      // automático, sem a exceção de CODEOWNERS da v2.51.0. O que o CODEOWNERS
-      // ainda responde é se eu sou AUTORIDADE, porque isso gateia a
-      // co-assinatura ("nunca co-assino onde sou autoridade").
-      const autoridade = await this.autoridadeNaSaida(pr);
-      await this.saiDeCena(pr, outros, await this._headSeguro(pr), autoridade);
+      // regra PLANA (28/08/2026 à tarde): ver alguém revisando SEMPRE segura o automático
+      await this.saiDeCena(pr, outros, await this._headSeguro(pr));
     }
     for (const pr of foraDeCena || []) {
       await this.seguirForaDeCena(pr, this.skipComentado[pr.key] || {}, await this._headSeguro(pr));
@@ -1609,10 +1582,15 @@ class Engine extends EventEmitter {
   syncConsolidated(days) { return syncUsageMod.consolidated(this, days); }
   syncConsolidate() { return syncUsageMod.consolidate(this); }
 
-  // Último estado decisivo MEU no GitHub por PR do panorama (staleInfo, que o
-  // refreshStaleStates já busca). É o que faz o selo concordar entre aparelhos: o
-  // histórico local só sabe o que ESTE aparelho postou.
-  reviewStatesGhParaUi() { return radarNaTela.reviewStatesGh(this); }
+  // A projeção das sessões ativas, com quem mais está revisando o PR da sessão: o motor anota
+  // isso a cada ciclo nos PRs abertos (skip-review.js), e o PR da sessão já saiu da fila.
+  sessoesParaTela() {
+    const outros = new Map((this.panorama || []).map(p => [p.key, p.outrosRevisando]));
+    return sessionMod.projectSessions([...this.activeReviews.values()]).map((s) => {
+      const quem = outros.get((s.keys || [])[0]);
+      return Array.isArray(quem) && quem.length ? { ...s, outrosRevisando: quem } : s;
+    });
+  }
 
   snapshot() {
     return {
@@ -1663,7 +1641,6 @@ class Engine extends EventEmitter {
       // card de commit novo (pendência stale_head): o que o round automático vai fazer e
       // quando, ou por que não vai. Sem isto o card pedia clique no caso em que o app agia sozinho
       reRounds: this.reRoundParaUi(),
-      panorama: this.panorama,
       myPRs: this.myPRs,
       // só as CHAVES: myPRs vai completo de propósito, porque quem esconde é a UI
       // (que também precisa oferecer "mostrar os ocultos")
@@ -1673,13 +1650,9 @@ class Engine extends EventEmitter {
       selfAnalyses: selfMod.projectSelfAnalyses(this.selfAnalyses),
       mergeStates: this.mergeStates,
       baseDosMeusPRs: this.baseDosMeusPRs || {},
-      // checks obrigatórios, reviewers e merge de cada PR do Radar (lib/engine/prontidao-pr.js)
-      prontidao: radarNaTela.prontidao(this),
-      staleStates: this.staleStates,
-      reviewStatesGh: this.reviewStatesGhParaUi(),
       // projeção pura: tira o interno (fileBlobs, mapa cru de agents) e entrega a
       // contagem/lista compacta de subagentes que a UI mostra no card da sessão
-      activeSessions: sessionMod.projectSessions([...this.activeReviews.values()]),
+      activeSessions: this.sessoesParaTela(),
       activity: Object.fromEntries(this.activity),
       ...reviewMod.esperaParaTela(this),
       // Justiça de fila (spec 2026-09-10): leitura PURA do estado que as três

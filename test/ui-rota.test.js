@@ -36,10 +36,8 @@ test('as quatro abas e as sub-abas do Radar', () => {
   assert.equal(lerRota('/radar/pra-mim').sub, 'mim');
   assert.equal(lerRota('/radar/aparelhos').sub, 'apar');
   assert.equal(lerRota('/radar/meus-prs').sub, 'meus');
-  assert.equal(lerRota('/radar/panorama').sub, 'pano');
-  // o nome interno também é aceito na leitura, mas a escrita é sempre a do endereço
-  assert.equal(lerRota('/radar/pano').sub, 'pano');
-  assert.equal(escreverRota(lerRota('/radar/pano')), '/radar/panorama');
+  // o Panorama saiu no corte da fase 1: o endereço antigo cai em Pra mim, sem lançar
+  assert.equal(lerRota('/radar/panorama').sub, 'mim');
   // sem barra inicial e na grafia antiga, com o hash, também
   assert.equal(lerRota('#/radar/meus-prs').sub, 'meus');
   assert.equal(lerRota('radar/meus-prs').sub, 'meus');
@@ -49,7 +47,7 @@ test('aparelho selecionado só existe em Radar > Aparelhos, e só como id opaco'
   const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
   assert.equal(lerRota(`/radar/aparelhos/${id}`).aparelho, id);
   assert.equal(escreverRota({ aba: 'radar', sub: 'apar', aparelho: id }), `/radar/aparelhos/${id}`);
-  assert.equal(lerRota(`/radar/panorama/${id}`).aparelho, '');
+  assert.equal(lerRota(`/radar/pra-mim/${id}`).aparelho, '');
   assert.equal(lerRota('/radar/aparelhos/<script>').aparelho, '');
   assert.equal(lerRota('/radar/aparelhos/a%2Fb').aparelho, '');
   assert.equal(escreverRota({ aba: 'radar', sub: 'meus', aparelho: id }), '/radar/meus-prs');
@@ -120,7 +118,7 @@ test('caixa de revisão aberta: só chave de PR no formato owner/repo#N', () => 
 test('escrever e ler de volta dá a mesma rota (ida e volta)', () => {
   const casos = [
     { aba: 'radar', sub: 'apar', aparelho: 'dev-1', conta: 'alice', pr: 'a/b#1' },
-    { aba: 'radar', sub: 'pano' },
+    { aba: 'radar', sub: 'meus' },
     { aba: 'sistema', secao: 'diag', pr: 'x/y#9' },
     { aba: 'consumo' }, { aba: 'time', conta: 'bob' },
   ];

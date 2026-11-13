@@ -21,7 +21,7 @@ import { renderMeusPrsRemoto, contarRemotos } from './listas-remotas.js';
 import { markdownReutilizado as md } from './markdown.js';
 import { cardCheio } from './densidade.js';
 import { andamentoDoPr, iniciando, pedirAutoanalise, cancelarAutoanalise, dispensarFalha, aoMudarAndamento } from './autoanalise-andamento.js';
-import { faixaDe, barraDe, setaDoCard, linhaDoMeuPr, renderResumoDosMeus } from './prontidao.js';
+import { setaDoCard, linhaDoMeuPr } from './linhas-compactas.js';
 
 /* ---------- render: meus PRs (autoanálise) ---------- */
 // PRs cujo merge normal esbarrou na proteção de branch: mostram as saídas
@@ -103,8 +103,6 @@ function renderMyPRs() {
   // o estado de carregamento é do MOTOR, então olha a lista completa: com tudo oculto o
   // ciclo terminou bem e o vazio é escolha da pessoa, não falta de resposta
   const vs = listViewState({ lastCheckAt: estado().lastCheckAt, status: estado().status, length: todos.length });
-  // "1 pronto pra merge · 2 esperando · 1 travado", pela pílula Merge (07/11/2026)
-  renderResumoDosMeus(vs === 'list' ? visiveis : []);
   if (vs !== 'list' || !list.length) {
     $('#myPRs').innerHTML = `<div class="empty" style="border:0">${esc(myPRsEmptyMsg(vs, { escopoTodas: escopo() === 'all', ocultos: ocultos.length }))}</div>`;
     return;
@@ -189,10 +187,10 @@ function renderMyPRs() {
       }
       else mergeBtns = btnMerge(true, `Não dá pra mergear agora (${ms.status || ms.mergeable || 'estado desconhecido'})`);
     }
-    // Compacta (07/11/2026): uma linha com o ponto da conta, repo#N, o trio da prontidão,
-    // o Merge só quando a regra atual permite e a seta que abre o card cheio
-    const barraDoSelo = sel => (sel ? BARRA_DO_SELO[sel.cls] : barraDe(pr.key, { repoBloqueado: repoBlocked }));
-    if (!cardCheio(pr.key)) return linhaDoMeuPr(pr, { ...extrasDaLinha, mark: m, escondido, repoBloqueado: repoBlocked, barra: barraDoSelo(selfAnalysisBadge(a)), merge: mergeLivre && mergeBtns });
+    // Compacta (07/11/2026): uma linha com o ponto da conta, repo#N, o Merge só quando a
+    // regra atual permite e a seta que abre o card cheio
+    const barraDoSelo = sel => (sel ? BARRA_DO_SELO[sel.cls] : '');
+    if (!cardCheio(pr.key)) return linhaDoMeuPr(pr, { ...extrasDaLinha, mark: m, escondido, barra: barraDoSelo(selfAnalysisBadge(a)), merge: mergeLivre && mergeBtns });
     const sel = selfAnalysisBadge(a);
     const badge = sel ? `<span class="verdict ${sel.cls}"${sel.title ? ` title="${esc(sel.title)}"` : ''}>${esc(sel.label)}</span>` : '';
     const vis = selfAnalysisToggle(a);
@@ -234,7 +232,6 @@ function renderMyPRs() {
           ${setaDoCard(pr.key)}
         </div>
       </div>
-      ${faixaDe(pr.key, { repoBloqueado: repoBlocked })}
       ${faixaDaAutoanaliseHtml(andamento, { key: pr.key, url: pr.url })}
       ${daBase.html}
       ${repoBlocked ? notaDoMergeBloqueadoHtml() : ''}

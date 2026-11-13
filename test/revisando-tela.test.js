@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  avisosDoCard, othersLineHtml, limitNoteHtml, queueLimitHtml, pwOthersHtml, horaDoReset,
+  avisosDoCard, othersLineHtml, limitNoteHtml, queueLimitHtml, horaDoReset,
   contasNoLimiteDaFila, queueCardHtml, sessionCardHtml,
 } from '../ui/pure.js';
 
@@ -42,7 +42,7 @@ test('1 e 8: ninguém revisando e nenhum registro: Revisar, coordenação como s
   assert.deepEqual(avisosDoCard({}, {}), { rotulo: 'Revisar', nota: 'coordenacao', formaLimite: 'longa', forma: '', logins: [] });
 });
 
-test('2 e 3: alguém revisando com a chave desligada: fora de cena, sem limite nem coordenação', () => {
+test('2 e 3: alguém revisando: fora de cena, sem limite nem coordenação', () => {
   const av = avisosDoCard({ outrosRevisando: ['ana', 'bia'] }, { limiteAtivo: true });
   assert.equal(av.rotulo, 'Revisar junto');
   assert.equal(av.forma, 'fora');
@@ -50,24 +50,14 @@ test('2 e 3: alguém revisando com a chave desligada: fora de cena, sem limite n
   assert.deepEqual(av.logins, ['ana', 'bia']);
 });
 
-test('4, 9e e 12c: chave ligada: revisa junto, e a nota de limite ou coordenação continua', () => {
-  assert.deepEqual(
-    [avisosDoCard({ outrosRevisando: ['ana'] }, { revisarJunto: true }).forma, avisosDoCard({ outrosRevisando: ['ana'] }, { revisarJunto: true }).nota],
-    ['junto', 'coordenacao'],
-  );
-  const comLimite = avisosDoCard({ outrosRevisando: ['ana'] }, { revisarJunto: true, limiteAtivo: true });
-  assert.deepEqual([comLimite.forma, comLimite.nota, comLimite.rotulo], ['junto-curta', 'limite', 'Revisar junto']);
-});
-
 test('6: a label sumiu e o registro ficou (a pessoa revisou): fiquei de fora, botão Revisar', () => {
-  const av = avisosDoCard({ outrosRevisando: [], foraDeCena: { quem: ['ana'], desde: 1, coAssinado: false } }, {});
+  const av = avisosDoCard({ outrosRevisando: [], foraDeCena: { quem: ['ana'], desde: 1 } }, {});
   assert.deepEqual([av.forma, av.rotulo], ['terminou', 'Revisar']);
   assert.deepEqual(av.logins, ['ana']);
-  assert.equal(avisosDoCard({ foraDeCena: { quem: ['ana'], coAssinado: true } }, {}).forma, '', 'co-assinado não volta ao card');
 });
 
 test('9c e 12d: a parada vence tudo; com alguém revisando ela usa a forma curta', () => {
-  const av = avisosDoCard({ outrosRevisando: ['ana'] }, { temParada: true, limiteAtivo: true, revisarJunto: true });
+  const av = avisosDoCard({ outrosRevisando: ['ana'] }, { temParada: true, limiteAtivo: true });
   assert.deepEqual([av.nota, av.forma], ['parada', 'curta-parada']);
   assert.equal(avisosDoCard({}, { temParada: true, limiteAtivo: true }).nota, 'parada');
 });
@@ -85,10 +75,8 @@ test('linha de pessoas: cada forma com o seu texto, e o login sempre pelo person
   assert.match(fora, /class="person-mention"[^>]*href="https:\/\/github.com\/ana"/);
   assert.equal(texto(othersLineHtml(['ana', 'bia', 'cris'], 'fora')).split('.')[0], '@ana, @bia e @cris estão revisando este PR');
   assert.equal(texto(othersLineHtml(['ana'], 'curta-parada')), '@ana está revisando este PR. Tentar de novo agora é revisar junto.');
-  assert.equal(texto(othersLineHtml(['ana'], 'junto-curta')), '@ana está revisando este PR. Vou revisar junto mesmo assim.');
   assert.equal(texto(othersLineHtml(['ana'], 'sessao')), '@ana também está revisando este PR.');
   assert.equal(texto(othersLineHtml(['ana', 'bia'], 'terminou')), '@ana e @bia revisaram este PR. Fiquei de fora neste commit; a decisão é sua.');
-  assert.match(othersLineHtml(['ana'], 'junto'), /data-goto="sys:automation:#sys-row-revisarjunto"[^>]*role="button"[^>]*tabindex="0"/);
   assert.equal(othersLineHtml([], 'fora'), '');
 });
 
@@ -116,16 +104,7 @@ test('contasNoLimiteDaFila: 2 ou mais cards da mesma conta, sem contar parado ne
   const contaDe = (pr) => pr.key.split('#')[0];
   const limiteDe = (pr) => (contaDe(pr) === 'a' || contaDe(pr) === 'b' ? AS_21 : 0);
   assert.deepEqual(contasNoLimiteDaFila(fila, { contaDe, limiteDe, parked: { 'a#4': {} }, agora: AGORA }), { a: { ate: AS_21, n: 2 } });
-  assert.deepEqual(contasNoLimiteDaFila(fila, { contaDe, limiteDe, revisarJunto: true, agora: AGORA }).a.n, 4, 'com a chave ligada quem está fora de cena também espera o limite');
   assert.deepEqual(contasNoLimiteDaFila(fila, { contaDe, limiteDe, agora: AS_21 + 1 }), {}, 'depois do reset ninguém');
-});
-
-test('Panorama: primeiro login e quantos mais, com a lista no title', () => {
-  assert.equal(texto(pwOthersHtml(['ana'])), '@ana revisando');
-  const dois = pwOthersHtml(['ana', 'bia']);
-  assert.equal(texto(dois), '@ana e mais 1 revisando');
-  assert.match(dois, /title="@ana, @bia estão revisando"/);
-  assert.equal(pwOthersHtml([]), '');
 });
 
 /* ---------- o card montado ---------- */

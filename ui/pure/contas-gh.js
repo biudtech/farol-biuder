@@ -40,7 +40,7 @@ const ORIGEM = {
 
 function sugestao(s) {
   const porque = lista(s.origens).map((o) => ORIGEM[o]).filter(Boolean).join(' e ');
-  return linha(`${personMention(s.conta)} ${esc(porque)}, mas a org <b>${esc(s.owner)}</b> não está nas orgs dela no Farol: o Panorama não mostra os PRs de lá.`,
+  return linha(`${personMention(s.conta)} ${esc(porque)}, mas a org <b>${esc(s.owner)}</b> não está nas orgs dela no Farol: o Farol não busca os PRs de lá.`,
     `<button class="btn sm" data-gh-add-org="${esc(s.owner)}" data-user="${esc(s.conta)}">Adicionar ${esc(s.owner)}</button>`);
 }
 

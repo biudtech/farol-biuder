@@ -84,16 +84,15 @@
       <span id="metaCheck">…</span>
     </div>
 
-    <!-- 3 sub-abas: uma tela, um propósito. Substituem a antiga .radar-nav, que era uma
+    <!-- sub-abas: uma tela, um propósito. Substituem a antiga .radar-nav, que era uma
          faixa de âncoras rolável e escondia metade dos destinos sem avisar. -->
     <!-- densidade Compacta (padrão) e Expandida, ao lado das sub-abas (07/11/2026): vale para
-         Pra mim, Meus PRs e Panorama, guardada como preferência da tela (telas/densidade.js) -->
+         Pra mim e Meus PRs, guardada como preferência da tela (telas/densidade.js) -->
     <div class="radar-topo">
     <div class="radar-subs" id="radarSubs" role="tablist" aria-label="Seções do Radar">
       <button class="rsub active" id="rsub-mim" data-sub="mim" role="tab" aria-selected="true" aria-controls="rpane-mim">Pra mim <span class="count" id="rcMim" hidden></span></button>
       <button class="rsub" id="rsub-apar" data-sub="apar" role="tab" aria-selected="false" aria-controls="rpane-apar" hidden>Aparelhos <span class="count" id="rcApar" hidden></span></button>
       <button class="rsub" id="rsub-meus" data-sub="meus" role="tab" aria-selected="false" aria-controls="rpane-meus">Meus PRs <span class="count ambient" id="rcMeus" hidden></span></button>
-      <button class="rsub" id="rsub-pano" data-sub="pano" role="tab" aria-selected="false" aria-controls="rpane-pano">Panorama <span class="count ambient" id="rcPano" hidden></span></button>
     </div>
     <div class="densidade" id="densidade" role="group" aria-label="Densidade da lista">
       <button type="button" class="dens on" data-densidade="compacta" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Compacta</button>
@@ -102,7 +101,7 @@
     </div>
 
     <div class="rpane active" id="rpane-mim" role="tabpanel" aria-labelledby="rsub-mim" tabindex="0">
-    <!-- resumo do que está acontecendo, cada item leva à sua seção (telas/prontidao.js) -->
+    <!-- resumo do que está acontecendo, cada item leva à sua seção (telas/linhas-compactas.js) -->
     <div id="praMimResumo" hidden></div>
     <div id="activeWrap" hidden>
       <div class="section-head">
@@ -189,7 +188,6 @@
     <div id="myPRsWrap" hidden>
       <div class="section-head">
         <h2>Meus PRs <span id="myPRsCount" class="count ambient" hidden></span></h2>
-        <div id="myPRsResumo"></div>
       </div>
       <p class="section-desc">Autoanálise dos seus próprios PRs: veredito e dicas antes de pedir review. Só pra você, nada é postado. O botão Merge é a única ação que escreve no GitHub daqui.</p>
       <div id="myPRs" class="cards"></div>
@@ -199,19 +197,6 @@
     </div>
     </div>
 
-    <div class="rpane" id="rpane-pano" role="tabpanel" aria-labelledby="rsub-pano" tabindex="0">
-
-    <div id="panoramaSection" class="section-head">
-      <h2>Panorama <span id="panoCount" class="count ambient" hidden></span></h2>
-      <span id="panoOwners" class="section-sub"></span>
-    </div>
-    <div id="panoLegenda" hidden></div>
-    <div id="panorama" class="rows"></div>
-    <!-- Panorama de outros aparelhos, só leitura (telas/listas-remotas.js) -->
-    <div id="panoramaRemoto" class="md-remoto" hidden></div>
-
-    <div id="silenced" class="silenced" hidden></div>
-    </div>
   </section>
 
   <!-- ============ TIME ============ -->
@@ -393,12 +378,6 @@
               <summary><span><b class="set-title" id="setupTitle">Configuração e retomada</b><span class="set-desc">Retome o roteiro quando precisar. Os indicadores usam o estado atual e o último diagnóstico; nenhum passo ativa automação ou dispensa as regras de segurança da postagem.</span></span><span class="chev" aria-hidden="true"></span></summary>
               <ol class="steps" id="setupSteps"></ol>
             </details>
-            <details class="card set-list review-tools setup" id="reviewLabels" aria-labelledby="reviewLabelsTitle">
-              <summary><span><b class="set-title" id="reviewLabelsTitle">Tags de revisão no GitHub</b><span class="set-desc">Consulte um PR para remover os marcadores conta:revisando gerenciados pelo Farol. A remoção da tag não cancela a revisão.</span></span><span class="chev" aria-hidden="true"></span></summary>
-              <div class="set-row review-label-query"><label class="set-txt field" for="reviewLabelsUrl"><span class="set-title">URL do pull request</span><input id="reviewLabelsUrl" type="url" placeholder="https://github.com/dono/repo/pull/123"></label><button id="reviewLabelsInspect" type="button" class="btn sm">Consultar tags</button></div>
-              <div id="reviewLabelsList"></div>
-              <p class="set-desc" id="reviewLabelsMessage" role="status" aria-live="polite">Consulte o PR antes de remover uma tag.</p>
-            </details>
           </div>
           <div class="about" id="about"></div>
         </div>
@@ -416,21 +395,6 @@
           <div class="section-head"><h2>Automação</h2></div>
           <p class="section-desc">Como o Farol trabalha sozinho: com qual modelo, quantas revisões ao mesmo tempo e de quanto em quanto tempo ele consulta o GitHub. Se uma conta revisa e aprova sozinha é decidido só em <span class="is-goto" data-goto="sys:accounts:#accountsManager" role="button" tabindex="0" title="Abrir Sistema → Contas">Contas</span>, conta a conta.</p>
           <div class="card set-list">
-            <label class="set-row" id="sys-row-coassinar">
-              <span class="set-txt">
-                <span class="set-title">Aprovar junto com quem pegou o PR</span>
-                <span class="set-desc">Quando outra pessoa já está revisando, o Farol pode sair de cena para evitar duplicar trabalho e avisa no app, sem postar nada no PR. Esta opção permite endossar a aprovação no mesmo commit somente quando também houver uma avaliação técnica própria, atual e suficiente. A aprovação de outra pessoa não substitui essa prova. Nunca co-assina onde você é dono do código pelo CODEOWNERS. Conta que espera você também não co-assina; sem prova própria, use Revisar.</span>
-                <span class="set-nota" id="notaAprovarJuntoSemEfeito" hidden>Sem efeito agora: com “Revisar sozinho mesmo com outra pessoa revisando” ligada, o Farol não sai de cena e não há quem co-assinar.</span>
-              </span>
-              <span class="set-ctl"><input id="setCoAssinarReview" type="checkbox"><span class="switch"></span></span>
-            </label>
-            <label class="set-row" id="sys-row-revisarjunto">
-              <span class="set-txt">
-                <span class="set-title">Revisar sozinho mesmo com outra pessoa revisando</span>
-                <span class="set-desc">Quando outra pessoa tem a label de revisando num PR pedido a você, a revisão automática roda mesmo assim e o card só informa quem está lá. Desligada (padrão), o Farol não revisa sozinho naquele commit e o botão Revisar junto continua valendo. Ligada, a co-assinatura de “Aprovar junto com quem pegou o PR” não acontece: sua aprovação vem da sua revisão.</span>
-              </span>
-              <span class="set-ctl"><input id="setRevisarJunto" type="checkbox"><span class="switch"></span></span>
-            </label>
             <label class="set-row" id="sys-row-aguardarci">
               <span class="set-txt">
                 <span class="set-title">Esperar o CI antes de revisar</span>

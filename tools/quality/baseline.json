@@ -14,11 +14,11 @@
     "profundidadeExcedida": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 678,
+    "maxLines": 677,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
-    "maxLines": 214,
+    "maxLines": 211,
     "emptyCatch": 1,
     "jsonParseCru": 4,
     "ternarioAninhado": 1,
@@ -51,7 +51,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 740,
+    "maxLines": 732,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,
@@ -74,14 +74,11 @@
   "ui/pure/sistema.js": {
     "ternarioAninhado": 1
   },
-  "ui/telas/acoes.js": {
-    "ternarioAninhado": 1
-  },
   "ui/telas/consumo.js": {
     "ternarioAninhado": 1
   },
   "ui/telas/contas.js": {
-    "ternarioAninhado": 4
+    "ternarioAninhado": 3
   },
   "ui/telas/diagnostico.js": {
     "ternarioAninhado": 2

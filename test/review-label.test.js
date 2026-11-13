@@ -10,8 +10,8 @@
 // resto do engine: agir sem identidade provada é pior que não agir); e remoção sem
 // label aplicada não toca o engine (a adição que falhou não gera remoção à toa).
 // O caminho com gh de verdade é best-effort por construção e não tem teste de
-// rede, como fetchPrFiles e afins. O repoDoPr usado pela criação vem de
-// review-signal.js e o teste dele mora em test/review-signal.test.js (não duplique).
+// rede, como fetchPrFiles e afins. O repoDoPr usado pela criação mora em
+// review-label-target.js e o teste dele fecha este arquivo.
 // FAROL_HOME isolado ANTES de importar o engine (10/10/2026): a remoção que falha passou a
 // anotar a label em state/labels-a-tirar.json, e sem isto o caso de falha gravaria na pasta real.
 import os from 'node:os';
@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 after(() => fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }));
 
 const { inProgressLabelFor, addInProgressLabel, removeInProgressLabel } = await import('../lib/engine/review.js');
+const { repoDoPr } = await import('../lib/engine/review-label-target.js');
 
 test('inProgressLabelFor compõe "<conta>:revisando" e vazio sem conta', () => {
   assert.equal(inProgressLabelFor('thiagocarvalho-dev'), 'thiagocarvalho-dev:revisando');
@@ -149,4 +150,12 @@ test('falha na remoção nunca sobe: vira WARN no log', async () => {
   assert.equal(logs[0].level, 'WARN');
   assert.match(logs[0].msg, /thiagocarvalho-dev:revisando/);
   assert.match(logs[0].msg, /o\/r#1/);
+});
+
+test('repoDoPr resolve o repo do objeto ou da key, e recusa formato inválido', () => {
+  assert.equal(repoDoPr({ repo: 'biudtech/biud-core', key: 'x/y#1' }), 'biudtech/biud-core');
+  assert.equal(repoDoPr({ key: 'biudtech/biud-core#42' }), 'biudtech/biud-core');
+  assert.equal(repoDoPr({ key: 'sem-barra#1' }), '');
+  assert.equal(repoDoPr({}), '');
+  assert.equal(repoDoPr(null), '');
 });

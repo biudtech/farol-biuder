@@ -33,8 +33,7 @@ test('--accent-text do tema claro tem contraste AA sobre --surface', () => {
   assert.ok(contraste(texto, superficie) >= 4.5);
 });
 
-test('link do PR e selo usam --accent-text no tema claro', () => {
-  const claro = regra(':root[data-theme="light"] .prow.mine .pw-ref, :root[data-theme="light"] .pr-ref a');
+test('link do PR usa --accent-text no tema claro', () => {
+  const claro = regra(':root[data-theme="light"] .pr-ref a');
   assert.match(claro, /color:\s*var\(--accent-text\)/);
-  assert.match(regra('.pw-head .badge'), /color:\s*var\(--accent-text\)/);
 });
