@@ -13,7 +13,7 @@ const { doc, emitir, listeners } = instalarDom();
 const quadros = controlarQuadros();
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => null, text: async () => '' });
 const counts = {};
-for (const selector of ['#resolved', '#queue', '#claudeProfilesManager', '#myPRs', '#panorama']) {
+for (const selector of ['#resolved', '#queue', '#claudeProfilesManager', '#myPRs']) {
   counts[selector] = 0;
   const el = doc.querySelector(selector); let html = '';
   Object.defineProperty(el, 'innerHTML', { get: () => html, set: value => { html = String(value); counts[selector] = (counts[selector] || 0) + 1; } });
@@ -23,7 +23,7 @@ const { estado } = await import(pathToFileURL(path.join(target, 'ui/telas/estado
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const fixture = { app: { platform: 'win32', version: 'fixture' }, status: 'idle', account: { user: 'dev', tokenOk: true }, accounts: [],
   config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], theme: 'dark' },
-  queue: [], panorama: [], myPRs: [], decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
+  queue: [], myPRs: [], decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
   usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 emitir('state', fixture); quadros.pintar();
 function phase(run) {

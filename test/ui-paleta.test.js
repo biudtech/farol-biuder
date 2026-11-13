@@ -62,7 +62,6 @@ for (const [rotulo, sub, secao] of [
   ['Ir para Precisa de você', 'mim', 'decisionsWrap'],
   ['Ir para Sua fila', 'mim', 'queueSection'],
   ['Ir para Meus PRs', 'meus', null],
-  ['Ir para Panorama', 'pano', null],
 ]) {
   test(`${rotulo} abre o Radar na sub-aba ${sub}${secao ? ` e rola até ${secao}` : ''}`, async () => {
     await escolher(rotulo);

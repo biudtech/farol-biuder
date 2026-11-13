@@ -331,14 +331,6 @@ test('Meus PRs: merge num PR da conta silenciada recusa antes de ler o PR', asyn
   assert.equal(chamadas.length, 0);
 });
 
-test('sinal legado: a coleta de ref órfã não apaga nada com a conta silenciada', async () => {
-  const e = engineSoSilenciada();
-  const { gcSignals } = await import('../lib/engine/review-signal.js');
-  const corridas = [];
-  await gcSignals(e, 'biudtech/app', SILENCIADA, [{ ref: 'refs/farol/revisando/1/x/1', epochMs: 1 }], Date.now(), async (...a) => { corridas.push(a); return { ok: true }; });
-  assert.equal(corridas.length, 0);
-});
-
 test('conta-que-age: guardarPelaCapaz troca só da incapaz para a capaz', () => {
   const e = engineDoIncidente();
   const mapa = new Map();

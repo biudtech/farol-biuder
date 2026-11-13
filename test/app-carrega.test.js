@@ -12,7 +12,7 @@
 //
 // O caminho exercitado aqui é o mesmo do app real: o handler de `state` do SSE, que é
 // o orquestrador de render (chama ~15 funções de tela numa tacada). Disparar um estado
-// plausível nele passa por status, contas, fila, decisões, Meus PRs, panorama,
+// plausível nele passa por status, contas, fila, decisões, Meus PRs,
 // configurações, ferramentas e atualização.
 //
 // Limite honesto: o DOM é um stub burro (test/helpers/dom-stub.js). Verde aqui NÃO diz
@@ -50,7 +50,6 @@ const ESTADO = {
   },
   lastCheckAt: Date.now() - 60_000, nextCheckAt: Date.now() + 240_000,
   queue: [{ key: 'acme/api#1', url: 'u', title: 'Corrige o gate', author: 'bob', updatedAt: new Date().toISOString() }],
-  panorama: [{ key: 'acme/web#2', url: 'u', title: 'Sobe versão', author: 'carol', updatedAt: new Date().toISOString(), mine: true }],
   myPRs: [{ key: 'acme/api#3', url: 'u', title: 'Meu PR', author: 'alice', updatedAt: new Date().toISOString() }],
   hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
   // sessão ativa de verdade no fixture: sem ela o cartão de "Analisando agora" nunca é
@@ -76,7 +75,7 @@ function semObjectObject(rotulo) {
   // motivos"). O guarda existe pra pegar OBJETO INTERPOLADO em render de DADO, e
   // incluir texto autoral só produziria falso positivo — que foi o que aconteceu ao
   // escrever a nota da v2.48.3.
-  const alvos = ['#decisions', '#queue', '#panorama', '#myPRs', '#resolved', '#team', '#usage', '#activeSessions'];
+  const alvos = ['#decisions', '#queue', '#myPRs', '#resolved', '#team', '#usage', '#activeSessions'];
   for (const sel of alvos) {
     const html = document.querySelector(sel).innerHTML || '';
     assert.ok(!html.includes('[object Object]'), `${rotulo}: "${sel}" imprimiu [object Object]`);
@@ -128,7 +127,7 @@ test('as abas Destaques e Entregas saíram da página (corte do lote 7), inclusi
 });
 
 test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', () => {
-  const vazio = { ...ESTADO, queue: [], panorama: [], myPRs: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
+  const vazio = { ...ESTADO, queue: [], myPRs: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
   assert.equal(emitir('state', vazio), 1);
 });
 

@@ -1,11 +1,11 @@
 /* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição,
-   doctor), os cliques de Panorama/Sessões ativas/Fila/
+   doctor), os cliques de Sessões ativas/Fila/
    Decisões pendentes, e o laço que liga settingsMap aos toggles de Sistema. */
 
 import { settingsIgnoradasTexto } from '../pure.js';
 import { estado } from './estado.js';
 import {
-  $, api, get, toast, toastRich, confirmModal, copyToClipboard,
+  $, api, get, toast, toastRich, confirmModal,
 } from './infra.js';
 import { TWEAK, scopeVisible, prUser, guardarMutedHandling, guardarIdentityStyle } from './contas.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
@@ -79,22 +79,6 @@ function initTweaks(rerenderScope) {
 $('#btnDoctor').onclick = async () => { await get('/api/doctor'); };
 $('#btnLogRefresh').onclick = loadLog;
 
-$('#panorama').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.pano-review');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Revisando…';
-    revisarUrls([btn.dataset.url]);
-    return;
-  }
-  // Cada seção escuta o seu clique (mesmo padrão de Revisões recentes, #resolved).
-  const cp = e.target.closest('.rr-copy');
-  if (cp) {
-    const ok = await copyToClipboard(cp.dataset.url || cp.dataset.key || '');
-    toast(ok ? 'ok' : 'error', ok ? 'URL do PR copiada.' : 'Não consegui copiar (permissão do navegador).', 2500);
-  }
-});
-
 $('#activeSessions').addEventListener('click', (e) => {
   const btn = e.target.closest('.act-cancel');
   if (!btn) return;
@@ -154,8 +138,6 @@ const settingsMap = [
   ['#setAutoPushback', 'autoPushback', el => el.checked],
   ['#setDebugSpawns', 'debugSpawns', el => el.checked],
   ['#setReviewFast', 'reviewFast', el => el.checked],
-  ['#setCoAssinarReview', 'coAssinarReview', el => el.checked],
-  ['#setRevisarJunto', 'revisarComOutrosRevisando', el => el.checked],
   ['#setAguardarCi', 'aguardarCiParaRevisar', el => el.checked],
   ['#setAguardarCiAprovar', 'aguardarCiParaAprovar', el => el.checked],
   ['#setReReviewResume', 'reReviewResume', el => el.checked],

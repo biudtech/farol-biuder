@@ -151,15 +151,6 @@ test('separarPendentes: o contador de Precisa de você não conta quem espera o 
   assert.equal(P.separarPendentes([esperando({ esperaCi: null })]).precisam.length, 1, 'espera largada volta a precisar de você');
 });
 
-test('reviewChip: no Panorama, pendência em espera do CI não diz "aguardando você"', () => {
-  const pr = { key: 'acme/app#7' };
-  const espera = P.reviewChip(pr, { 'acme/app#7': { kind: 'pending', esperaCi: true } }, {});
-  assert.match(espera, /esperando o CI/);
-  assert.match(espera, /aprova sozinho/);
-  assert.doesNotMatch(espera, /aguardando você/);
-  assert.match(P.reviewChip(pr, { 'acme/app#7': { kind: 'pending' } }, {}), /aguardando você/);
-});
-
 test('todo contador local de pendência exclui a espera do CI, e a tela tem a seção própria', async () => {
   const fs = await import('node:fs');
   const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');

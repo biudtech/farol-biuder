@@ -177,8 +177,8 @@ test('listViewState: lista com item sempre mostra a lista, mesmo se o ciclo mais
   assert.equal(P.listViewState({ lastCheckAt: null, status: 'checking', length: 1 }), 'list');
 });
 
-test('renderMyPRs, renderQueue e renderPanorama decidem o empty state pelo listViewState, nao so pelo tamanho', () => {
-  for (const nome of ['renderMyPRs', 'renderQueue', 'renderPanorama']) {
+test('renderMyPRs e renderQueue decidem o empty state pelo listViewState, nao so pelo tamanho', () => {
+  for (const nome of ['renderMyPRs', 'renderQueue']) {
     const fn = APPJS.match(new RegExp(`function ${nome}\\([\\s\\S]*?\\n\\}`));
     assert.ok(fn, `${nome} existe`);
     assert.match(fn[0], /listViewState\(/,
@@ -306,22 +306,6 @@ test('o rodape dos ocultos usa o texto puro e alterna estado so da tela', () => 
    que só existem no app.js/index.html: o título que trunca sem comer o autor e
    o handler ÚNICO de navegação interna. */
 
-test('Panorama: o CSS que impede o título de empurrar o autor pra fora', () => {
-  // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado aqui em
-  // 11/08: com o @autor dentro do .pw-title (overflow hidden + ellipsis), título
-  // comprido empurrava foto e login pra fora da tela, sem aviso.
-  //
-  // A metade de MARKUP deste teste saiu daqui na onda 5: o card do panorama virou
-  // panoramaRowHtml, em ui/pure.js, e lá dá pra renderizar de verdade em vez de
-  // casar regex no fonte. Ver "Panorama: o autor fica FORA da caixa que trunca o
-  // título" em ui-pure.test.js. O que sobra aqui é o par de CSS, que segue sendo
-  // texto porque app.css não é executável.
-  assert.match(CSS, /\.pw-title-txt \{[^}]*text-overflow: ellipsis/,
-    'quem corta é o texto, não a linha inteira');
-  assert.match(CSS, /\.pw-title \.person-mention \{[^}]*flex: none/,
-    'a menção do autor não encolhe junto com o título');
-});
-
 // Corpos de todos os `@media (max-width: N px)` concatenados (chaves equilibradas).
 function corposDaMedia(largura) {
   const marca = `@media (max-width: ${largura}px)`;
@@ -340,13 +324,6 @@ function corposDaMedia(largura) {
 test('topbar em 768 px: Verificar agora vira só o ícone até 900 px', () => {
   assert.match(corposDaMedia(900), /#btnCheck span\s*\{\s*display:\s*none/,
     'o rótulo some até 900 px, senão a aba Sistema é cortada em 768 px');
-});
-
-test('Panorama no celular: título em duas linhas, autor embaixo e alvos de 40 px', () => {
-  const m = corposDaMedia(420);
-  assert.match(m, /\.pw-title-txt\s*\{[^}]*white-space:\s*normal[^}]*-webkit-line-clamp:\s*2/);
-  assert.match(m, /\.pw-title \.person-mention\s*\{[^}]*flex-basis:\s*100%/);
-  assert.match(m, /\.pw-acts \.btn\s*\{[^}]*min-width:\s*40px[^}]*min-height:\s*40px/);
 });
 
 test('navegação interna tem UM handler só, delegado, e entende os 2 tipos', () => {
@@ -471,7 +448,6 @@ test('card da fila: o ponto da conta fica na linha do PR, e a grade tem só avat
 test('Visão geral abre pelos checks de saúde e o aplicar só realça com diferença selecionada', () => {
   const pos = (id) => HTML.indexOf(`id="${id}"`);
   assert.ok(pos('doctor') > 0 && pos('doctor') < pos('setupManager'), 'doctor antes do setupManager');
-  assert.ok(pos('setupManager') < pos('reviewLabels'), 'setupManager antes do reviewLabels');
 });
 
 test('atalhos A/M/C passam pela confirmação', () => {
