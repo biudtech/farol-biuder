@@ -311,3 +311,19 @@ test('as rotas fazem o mesmo que as fachadas, e a adoção pela rota exige confi
     await new Promise((resolve) => server.close(() => resolve()));
   }
 });
+
+// --- só chave de API (corte 09) ------------------------------------------------------
+
+test('authFromProfile aceita só perfil de chave de API com a chave preenchida', () => {
+  assert.deepEqual(authFromProfile({ id: 'a', kind: 'apikey', apiKey: 'k' }), { kind: 'apikey', id: 'a', apiKey: 'k', baseUrl: '' });
+  assert.deepEqual(authFromProfile({ id: 'a', kind: 'apikey', apiKey: 'k', baseUrl: 'https://proxy.exemplo.com' }), { kind: 'apikey', id: 'a', apiKey: 'k', baseUrl: 'https://proxy.exemplo.com' });
+  assert.equal(authFromProfile({ id: 'b', kind: 'dir', dir: '/x' }), null);
+  assert.equal(authFromProfile({ id: 'c', dir: '/x' }), null, 'perfil sem kind era o de pasta');
+  assert.equal(authFromProfile({ id: 'd', kind: 'apikey', apiKey: '' }), null);
+  assert.equal(authFromProfile({ id: 'e', kind: 'apikey' }), null);
+  assert.equal(authFromProfile({ id: 'f', kind: 'maquina' }), null);
+  assert.equal(authFromProfile({ id: 'g', kind: 'openrouter', apiKey: 'k' }), null);
+  assert.equal(authFromProfile({ id: 'h', kind: 'codex' }), null);
+  assert.equal(authFromProfile({ id: 'i', kind: 'agy' }), null);
+  assert.equal(authFromProfile(null), null);
+});
