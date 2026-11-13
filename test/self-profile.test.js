@@ -59,7 +59,7 @@ test('duas sessões da mesma conta escolhem executores distintos sem trocar a as
   const bin = path.join(home, 'native-fixture'), commands = [];
   await fs.mkdir(bin);
   for (const name of ['claude', 'codex']) {
-    const file = path.join(bin, name + (process.platform === 'win32' ? '.exe' : ''));
+    const file = path.join(bin, name);
     await fs.writeFile(file, 'fixture: capability negotiation is intercepted');
     await fs.chmod(file, 0o700);
   }
@@ -74,7 +74,7 @@ test('duas sessões da mesma conta escolhem executores distintos sem trocar a as
     assert.match(results[0].reason?.message || '', /Codex sem contrato/);
     assert.match(results[1].reason?.message || '', /Claude sem contrato/);
     assert.deepEqual(commands.map(item => path.basename(item.command)).sort(),
-      ['claude', 'codex'].map(name => name + (process.platform === 'win32' ? '.exe' : '')).sort());
+      ['claude', 'codex']);
     assert.ok(commands.every(item => item.args.includes('--help')));
     assert.deepEqual(engine.config, before);
     assert.equal(engine.resolveClaudeAuth('dev').id, 'claude');

@@ -179,7 +179,6 @@ test('árvore de processos separa Farol e CLIs, ignora PID reciclado e não traz
   assert.equal(processUsage([{ ...rows[0], cpuMs: 1002 }], rows, 1000, 2).cpuPercent, 50);
   assert.equal(proc.cpuTime('1-02:03:04'), ((26 * 3600) + 184) * 1000);
   assert.equal(proc.posixProcesses('1 0 100 00:01:00 Fri Oct 23 12:00:00 2026')[0].rss, 102400);
-  assert.equal(proc.windowsProcesses('[{"ProcessId":1}]'), null);
 });
 
 test('recursos reais incluem um filho Node da sessão e a coleta não muda concorrência', async () => {

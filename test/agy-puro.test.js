@@ -23,30 +23,14 @@ after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: 
 
 const HERDADO = { PATH: '/bin', HOME: '/home/eu', USERPROFILE: 'C:\\Users\\eu', GH_TOKEN: 'gho_conta', GEMINI_API_KEY: 'k1', Google_Api_Key: 'k2', AGY_ADC_AUTH: 'true' };
 
-test('Windows: USERPROFILE é a pasta do perfil, SSH_CLIENT liga o token em arquivo, HOME fica', () => {
-  const env = agyEnv(HERDADO, 'C:\\farol\\agy\\p1', { win: true });
-  assert.equal(env.USERPROFILE, 'C:\\farol\\agy\\p1');
-  assert.equal(env.SSH_CLIENT, 'farol 0 0');
-  assert.equal(env.HOME, '/home/eu', 'o git lê HOME: ele não muda no Windows');
-  assert.equal(env.GH_TOKEN, 'gho_conta', 'o token da conta segue como nos outros provedores');
-  for (const k of ['GEMINI_API_KEY', 'Google_Api_Key', 'AGY_ADC_AUTH']) assert.equal(env[k], undefined, `${k} herdada sai`);
-  assert.equal(env.GIT_CONFIG_GLOBAL, undefined);
-});
-
-test('Windows: a variável em outra caixa não convive com a do Farol', () => {
-  const env = agyEnv({ UserProfile: 'C:\\Users\\eu', ssh_client: 'x' }, 'C:\\p', { win: true });
-  assert.deepEqual(Object.keys(env).filter((k) => k.toUpperCase() === 'USERPROFILE'), ['USERPROFILE']);
-  assert.deepEqual(Object.keys(env).filter((k) => k.toUpperCase() === 'SSH_CLIENT'), ['SSH_CLIENT']);
-});
-
-test('POSIX: HOME é a pasta do perfil e o git volta ao ~/.gitconfig real', () => {
-  const env = agyEnv(HERDADO, '/home/eu/.farol/agy/p1', { win: false, gitconfigReal: '/home/eu/.gitconfig' });
+test('HOME é a pasta do perfil e o git volta ao ~/.gitconfig real', () => {
+  const env = agyEnv(HERDADO, '/home/eu/.farol/agy/p1', { gitconfigReal: '/home/eu/.gitconfig' });
   assert.equal(env.HOME, '/home/eu/.farol/agy/p1');
   assert.equal(env.SSH_CLIENT, 'farol 0 0');
   assert.equal(env.GIT_CONFIG_GLOBAL, '/home/eu/.gitconfig');
   assert.equal(env.GH_TOKEN, 'gho_conta');
   assert.equal(env.GEMINI_API_KEY, undefined);
-  assert.equal(agyEnv({}, '/p', { win: false }).GIT_CONFIG_GLOBAL, undefined, 'sem ~/.gitconfig, nada');
+  assert.equal(agyEnv({}, '/p').GIT_CONFIG_GLOBAL, undefined, 'sem ~/.gitconfig, nada');
 });
 
 /* ---------- protocolo partido ---------- */

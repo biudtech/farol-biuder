@@ -18,7 +18,7 @@ import { snapshotUsage } from './lib/engine/snapshot-usage.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
 import {
-  instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, APP_VERSION, APP_NAME, IS_WIN, IS_MAC, IS_LINUX,
+  instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, APP_VERSION, APP_NAME,
   HOME, WORKSPACE, STATE_DIR, CONFIG_FILE, LOG_FILE, SEEN_FILE, IGNORED_FILE, BASELINE_FILE,
   INFLIGHT_FILE, SELF_FILE, HIDDEN_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
@@ -36,7 +36,7 @@ import {
   sanitizeClaudeModel, sanitizeClaudeEffort, sanitizeCodexModel, sanitizeCodexEffort, sanitizeAgyModel, sanitizeAgyEffort, AGY_MODELO_PADRAO,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
-import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, detectGitBash, prependPathDirs, priorizarNoPath } from './lib/io.js';
+import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import toolsMod from './lib/engine/tools.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -100,17 +100,6 @@ import jiraMod from './lib/engine/jira.js';
 import { startServer } from './lib/http-server.js';
 import { registrarSaidaOrdenada } from './lib/engine/saida-ordenada.js';
 
-function codexWindowsPathDirs() {
-  const root = path.join(os.homedir(), 'AppData', 'Local', 'OpenAI', 'Codex', 'bin');
-  const dirs = [path.join(os.homedir(), 'AppData', 'Roaming', 'npm'), path.join(os.homedir(), 'AppData', 'Local', 'agy', 'bin')];
-  try {
-    for (const item of fs.readdirSync(root, { withFileTypes: true })) {
-      if (item.isDirectory()) dirs.push(path.join(root, item.name));
-    }
-  } catch (err) { void err; /* Codex pode ainda não estar instalado nesta máquina */ }
-  return dirs;
-}
-
 function aplicarPathDoBoot(extras, sempre = []) {
   const atual = process.env.PATH;
   process.env.PATH = priorizarNoPath(prependPathDirs(atual, extras, fs.existsSync) || atual, sempre);
@@ -118,20 +107,9 @@ function aplicarPathDoBoot(extras, sempre = []) {
 
 // App aberto pelo Finder/Dock ou atalho herda PATH reduzido (gh/claude/codex somem). O ~/.local/bin do instalador
 // do claude vai SEMPRE na frente, exista ou não, para nenhum claude antigo ganhar dele (celular, 26/09/2026).
-if (IS_WIN) {
-  aplicarPathDoBoot(codexWindowsPathDirs());
-} else {
-  const extras = ['/opt/homebrew/bin', '/usr/local/bin',
-    path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), 'bin')];
-  aplicarPathDoBoot(extras, [path.join(os.homedir(), '.local', 'bin')]);
-}
-
-// Windows e macOS são suportados; Linux é EXPERIMENTAL desde a v2.45.0 (ramo
-// próprio de sessão/instalação/update). Qualquer outra plataforma cai nos
-// ramos posix genéricos e merece aviso alto no boot.
-if (!IS_WIN && !IS_MAC && !IS_LINUX) {
-  console.warn(`[farol] plataforma ${process.platform} não suportada: os caminhos de sessão/update assumem POSIX (mac/linux).`);
-}
+const extras = ['/usr/local/bin',
+  path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), 'bin')];
+aplicarPathDoBoot(extras, [path.join(os.homedir(), '.local', 'bin')]);
 
 // A telemetria do GitHub CLI relanca um "gh send-telemetry" DESTACADO (sem console)
 // que roda tzutil /g; como processo destacado nao herda o console oculto do Farol,
@@ -363,7 +341,6 @@ class Engine extends EventEmitter {
     this.doctorInfo = null;
     this.timer = null;
     this.checking = false;
-    this.gitBash = detectGitBash();
 
     this.prepareHome();
     this.loadSeen();
@@ -768,7 +745,6 @@ class Engine extends EventEmitter {
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
     env.FAROL_PORT = String(this.config.port || DEFAULT_PORT);
-    if (this.gitBash) env.CLAUDE_CODE_GIT_BASH_PATH = this.gitBash;
     // assinatura do Claude que o Farol usa pra esta conta: ver resolveClaudeAuth
     // (perfil por conta > perfil padrão do Farol > claudeConfigDir legado).
     applyClaudeAuthEnv(env, this.resolveClaudeAuth(user));
@@ -1236,26 +1212,17 @@ class Engine extends EventEmitter {
   }
 
   // --- sessao de revisao no Claude (terminal proprio, interativo) ---
-  // O comando vai num .cmd e a janela abre via Start-Process (ShellExecute):
-  // e o unico caminho que garante um console NOVO com stdin de verdade, que o
-  // claude interativo exige. Spawnar cmd/start direto do Node herda handles
-  // nulos (stdio ignore) e o console nasce sem stdin: pause/claude morrem na hora.
+  // A sessão de terminal grava um script bash e o abre no emulador de terminal Linux.
   // Sessão/stream (terminal + headless): colaborador lib/engine/session.js (Onda 2).
-  buildSessionScript(slash, account, reviewCap = '') { return sessionMod.buildSessionScript(this, slash, account, reviewCap); }
-  buildSessionScriptMac(slash, id, user, reviewCap = '', segredo = '') { return sessionMod.buildSessionScriptMac(this, slash, id, user, reviewCap, segredo); }
-  spawnConsoleMac(slash, label, keys = [], account) { return sessionMod.spawnConsoleMac(this, slash, label, keys, account); }
+  buildSessionScript(slash, id, user, reviewCap = '', segredo = '') { return sessionMod.buildSessionScript(this, slash, id, user, reviewCap, segredo); }
   spawnConsoleLinux(slash, label, keys = [], account) { return sessionMod.spawnConsoleLinux(this, slash, label, keys, account); }
   sessionExit(id) { return sessionMod.sessionExit(this, id); }
   spawnConsole(slash, label, keys = [], account) { return sessionMod.spawnConsole(this, slash, label, keys, account); }
   handleSessionExit(opts) { return sessionMod.handleSessionExit(this, opts); }
-  buildLoginScript(dir) { return sessionMod.buildLoginScript(this, dir); }
-  buildLoginScriptMac(dir, id, segredo = '') { return sessionMod.buildLoginScriptMac(this, dir, id, [], segredo); }
-  buildCodexLoginScript() { return sessionMod.buildCodexLoginScript(this); }
-  buildCodexLoginScriptMac(id, segredo = '') { return sessionMod.buildCodexLoginScriptMac(this, id, segredo); }
-  spawnLoginConsoleMac(dir) { return sessionMod.spawnLoginConsoleMac(this, dir); }
+  buildLoginScript(dir, id, segredo = '') { return sessionMod.buildLoginScript(this, dir, id, [], segredo); }
+  buildCodexLoginScript(id, segredo = '') { return sessionMod.buildCodexLoginScript(this, id, segredo); }
   spawnLoginConsoleLinux(dir) { return sessionMod.spawnLoginConsoleLinux(this, dir); }
   spawnLoginConsole(dir) { return sessionMod.spawnLoginConsole(this, dir); }
-  spawnCodexLoginConsoleMac() { return sessionMod.spawnCodexLoginConsoleMac(this); }
   spawnCodexLoginConsoleLinux() { return sessionMod.spawnCodexLoginConsoleLinux(this); }
   spawnCodexLoginConsole() { return sessionMod.spawnCodexLoginConsole(this); }
 
@@ -1630,7 +1597,6 @@ class Engine extends EventEmitter {
       codexLoginDetail: loginCodex.detalhe,
       agy, agyPerfis: agyDoctor.perfis(this), // versão do Antigravity CLI e login e cota de cada perfil
       ghAuth: auth.ok && !!auth.stdout.trim(),
-      gitBash: this.gitBash,
       // rodar como root quebra a revisão autônoma INTEIRA, e não é opção de
       // config: o `--dangerously-skip-permissions` do headless é fixo na linha
       // do runClaudeStream (só as sessões de terminal olham skipPermissions),

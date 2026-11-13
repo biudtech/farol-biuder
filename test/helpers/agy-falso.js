@@ -20,7 +20,7 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 const env = process.env;
-const home = process.platform === 'win32' ? env.USERPROFILE : env.HOME;
+const home = env.HOME;
 const cli = home ? path.join(home, '.gemini', 'antigravity-cli') : '';
 const token = cli ? path.join(cli, 'antigravity-oauth-token') : '';
 const valor = (nome) => { const i = args.indexOf(nome); return i >= 0 ? args[i + 1] : undefined; };

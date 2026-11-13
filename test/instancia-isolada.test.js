@@ -211,7 +211,7 @@ function pegar(porta, rota) {
   });
 }
 
-test('servidor filho com FAROL_HOME temporário expõe doctor.instanciaIsolada=true', { skip: process.platform === 'win32', timeout: 60000 }, async () => {
+test('servidor filho com FAROL_HOME temporário expõe doctor.instanciaIsolada=true', { timeout: 60000 }, async () => {
   const home = fs.mkdtempSync(path.join(BASE, 'srv-'));
   const porta = await portaLivre();
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ port: porta, autoReview: false }));

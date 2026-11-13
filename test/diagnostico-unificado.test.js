@@ -38,7 +38,7 @@ before(async () => {
   engine.log = () => { };
   engine.pushState = () => { };
   engine.config.port = 0;
-  engine.doctorInfo = { node: 'v24.0.0', gh: 'gh version 2.0.0', ghAuth: true, claude: '1.0.0 (Claude Code)', codex: null, root: false, gitBash: 'C:/bash.exe', claudeAuth: [{ id: '', label: 'Padrão', ready: true, account: 'pessoa@exemplo.com' }] };
+  engine.doctorInfo = { node: 'v24.0.0', gh: 'gh version 2.0.0', ghAuth: true, claude: '1.0.0 (Claude Code)', codex: null, root: false, claudeAuth: [{ id: '', label: 'Padrão', ready: true, account: 'pessoa@exemplo.com' }] };
   engine.registrarFalha({ sessionId: 'a-diag', kind: 'review', ref: 'acme/repo#7 <b>x</b>', motivo: MALICIOSO });
   await new Promise((resolve, reject) => {
     server = startServer(engine, (url, err) => (err ? reject(err) : resolve()));
@@ -158,13 +158,4 @@ test('GET /api/diagnostics devolve o Markdown já mascarado, e visualizar não e
   assert.match(corpo.body.markdown, /^# Diagnóstico do Farol$/m);
   assert.equal(corpo.body.markdown.includes(TOKEN), false);
   assert.equal(sessoes, 0);
-});
-
-// O Git Bash é peça do Windows: fora dele, "não encontrado" era um ATENÇÃO falso em todo
-// servidor e celular (16/10/2026, Diagnóstico do admin na Hostinger).
-test('Git Bash só aparece no diagnóstico do Windows', async () => {
-  const { ambienteDoDoctor } = (await import('../lib/engine/diagnostico.js')).default;
-  const doctor = { node: 'v22', gh: 'gh', ghAuth: true, claude: '1.0.0', codex: null, root: false, gitBash: null };
-  assert.equal(ambienteDoDoctor(doctor, { windows: false }).some((l) => l.label === 'Git Bash'), false);
-  assert.ok(ambienteDoDoctor(doctor, { windows: true }).some((l) => l.label === 'Git Bash'), 'no Windows a falta dele segue avisada');
 });

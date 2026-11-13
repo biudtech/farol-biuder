@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ciForaDaDecisaoBlock } from '../lib/engine/review-prompt.js';
 import { esperaCiCardMeta, staleCardMeta, tituloDoAprovarDesligado, fraseDoCi, accountsManagerHtml } from '../ui/pure.js';
-import { flagSemPermissoes, buildLoginScript, buildLoginScriptMac } from '../lib/engine/session.js';
+import { flagSemPermissoes, buildLoginScript } from '../lib/engine/session.js';
 
 const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 // a seção v2.78.42 do CHANGELOG, a deste PR
@@ -103,7 +103,7 @@ test('sessão no terminal sem pedir permissões: ligada por padrão, mas como ro
     });
     comUid(0, () => {
       assert.equal(flagSemPermissoes(engine), '', 'o Claude Code recusa a flag como root: a sessão morreria ao abrir');
-      assert.doesNotMatch(buildLoginScript(engine, '') + buildLoginScriptMac(engine, '', 't1'), /--dangerously-skip-permissions/);
+      assert.doesNotMatch(buildLoginScript(engine, '', 't1'), /--dangerously-skip-permissions/);
     });
     comUid(1000, () => assert.equal(flagSemPermissoes({ config: { skipPermissions: false } }), '', 'desligada continua sem a flag'));
   } finally {

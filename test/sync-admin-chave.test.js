@@ -16,7 +16,6 @@ import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 const ak = await import('../lib/sync/admin-chave.js');
-const { IS_WIN } = await import('../lib/paths.js');
 const { credentialsPath } = await import('../lib/sync/credentials.js');
 
 after(() => { try { fs.rmSync(BASE, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ } });
@@ -71,7 +70,7 @@ test('apagar é idempotente e some com o arquivo', () => {
   assert.equal(ak.apagarChaveDeAdmin(), false);
 });
 
-test('modo 0600 depois de CADA gravação (posix)', { skip: IS_WIN ? 'chmod não vale em NTFS' : false }, () => {
+test('modo 0600 depois de CADA gravação (posix)', () => {
   const par = ak.gerarParDeAdmin();
   ak.gravarChaveDeAdmin({ uid: 'u1', destino: DESTINO, generation: 1, jwk: par.jwk });
   assert.equal(fs.statSync(ak.caminhoDaChaveDeAdmin()).mode & 0o777, 0o600);

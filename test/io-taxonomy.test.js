@@ -13,9 +13,8 @@ process.env.FAROL_HOME = FAROL_HOME;
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-const { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, detectGitBash, prependPathDirs, priorizarNoPath } = await import('../lib/io.js');
+const { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } = await import('../lib/io.js');
 const { run, runShell } = (await import('../lib/io.js')).default;
-const { IS_WIN } = await import('../lib/paths.js');
 const tax = (await import('../lib/taxonomy.js')).default;
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-io-'));
@@ -148,17 +147,6 @@ test('copyRecursive sobrescreve o destino existente', () => {
   assert.equal(fs.readFileSync(path.join(dst, 'p.md'), 'utf8'), 'novo');
 });
 
-/* ---------- io: detectGitBash ---------- */
-
-test('detectGitBash devolve null fora do Windows', { skip: IS_WIN ? 'só roda em POSIX' : false }, () => {
-  assert.equal(detectGitBash(), null, 'CLAUDE_CODE_GIT_BASH_PATH só existe no Windows');
-});
-
-test('detectGitBash devolve caminho existente ou null, nunca lixo', { skip: IS_WIN ? false : 'só roda no Windows' }, () => {
-  const p = detectGitBash();
-  if (p !== null) assert.ok(fs.existsSync(p), `devolveu ${p}, que não existe`);
-});
-
 /* ---------- io: run / runShell ---------- */
 
 test('run devolve o envelope completo no sucesso', async () => {
@@ -201,13 +189,6 @@ test('runShell NÃO lança quando o comando falha', async () => {
   const r = await runShell('binario-que-nao-existe-farol-teste --versao');
   assert.equal(r.ok, false);
   assert.equal(typeof r.stderr, 'string');
-});
-
-test('runShell no Windows força UTF-8 antes do comando', { skip: IS_WIN ? false : 'só roda no Windows' }, async () => {
-  const r = await runShell('echo acentuação');
-  assert.equal(r.ok, true);
-  assert.match(r.stdout, /acentuação/);
-  assert.doesNotMatch(r.stdout, /�/);
 });
 
 /* ---------- taxonomy ---------- */

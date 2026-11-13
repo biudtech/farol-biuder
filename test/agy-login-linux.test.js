@@ -25,7 +25,7 @@ readline.createInterface({ input: process.stdin }).on('line', (codigo) => {
   process.exit(codigo === '4/bom-codigo_123' ? 0 : 7);
 });
 `);
-const { IS_LINUX, AGY_DIR } = await import('../lib/paths.js');
+const { AGY_DIR } = await import('../lib/paths.js');
 const { default: web } = await import('../lib/engine/login-web.js');
 after(() => fs.rmSync(raiz, { recursive: true, force: true }));
 
@@ -39,7 +39,7 @@ function engine() {
 }
 
 for (const [codigo, esperado] of [['4/bom-codigo_123', 0], ['4/ruim-codigo', 7]]) {
-  test(`Linux: CLI recebe código sem eco e preserva saída ${esperado}`, { skip: !IS_LINUX, timeout: 10000 }, async (t) => {
+  test(`Linux: CLI recebe código sem eco e preserva saída ${esperado}`, { timeout: 10000 }, async (t) => {
     const e = engine();
     let child;
     let saida = '';
@@ -62,7 +62,7 @@ for (const [codigo, esperado] of [['4/bom-codigo_123', 0], ['4/ruim-codigo', 7]]
 }
 
 for (const automatico of [false, true]) {
-  test(`Linux: ${automatico ? 'prazo vencido' : 'cancelar'} encerra também o CLI na sessão do pseudoterminal`, { skip: !IS_LINUX, timeout: 10000 }, async (t) => {
+  test(`Linux: ${automatico ? 'prazo vencido' : 'cancelar'} encerra também o CLI na sessão do pseudoterminal`, { timeout: 10000 }, async (t) => {
     const e = engine();
     const r = await web.iniciar(e, 'cancelar', { prazoTotalMs: automatico ? 2000 : 10000 });
     t.after(() => web.cancelar(e, r.loginId));
@@ -81,7 +81,7 @@ for (const automatico of [false, true]) {
   });
 }
 
-test('Linux: cancelamento com saída zero não confirma código em trânsito', { skip: !IS_LINUX, timeout: 10000 }, async (t) => {
+test('Linux: cancelamento com saída zero não confirma código em trânsito', { timeout: 10000 }, async (t) => {
   const e = engine();
   e.ghEnv = () => ({ ...process.env, AGY_FALSO_AGUARDAR: '1' });
   const r = await web.iniciar(e, 'interrompido');
@@ -97,7 +97,7 @@ test('Linux: cancelamento com saída zero não confirma código em trânsito', {
   assert.equal(resultado.code, 'expirou');
 });
 
-test('Linux: CLI que ignora TERM é forçado e recolhido pelo wrapper', { skip: !IS_LINUX, timeout: 10000 }, async (t) => {
+test('Linux: CLI que ignora TERM é forçado e recolhido pelo wrapper', { timeout: 10000 }, async (t) => {
   const e = engine();
   e.ghEnv = () => ({ ...process.env, AGY_FALSO_IGNORAR_TERM: '1' });
   const r = await web.iniciar(e, 'ignora');
@@ -112,7 +112,7 @@ test('Linux: CLI que ignora TERM é forçado e recolhido pelo wrapper', { skip: 
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });
 
-test('Linux: kernel sem children usa PPID e recolhe CLI que ignora TERM e EOF', { skip: !IS_LINUX, timeout: 10000 }, async (t) => {
+test('Linux: kernel sem children usa PPID e recolhe CLI que ignora TERM e EOF', { timeout: 10000 }, async (t) => {
   const ler = fs.readFileSync;
   t.mock.method(fs, 'readFileSync', (alvo, ...args) => {
     if (String(alvo).endsWith('/children')) throw Object.assign(new Error('sem children'), { code: 'ENOENT' });

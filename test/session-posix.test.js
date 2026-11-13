@@ -1,12 +1,6 @@
-// Branch POSIX do spawn headless (macOS/Linux). Pula no Windows, porque IS_WIN é const de
-// nível de módulo lida de lib/paths no load: não dá pra forçar o outro branch daqui.
-//
-// Por que existe: o caminho headless é o item 5 do checklist do port do macOS e nunca
-// rodou num Mac de verdade. Este teste não substitui essa validação, mas garante que,
-// quando o primeiro Mac rodar `npm test`, o contrato do spawn dê SINAL em vez de silêncio.
-// O que ele trava:
-//   - shell /bin/sh com -lc (login shell: sem isso o PATH do Homebrew não entra e o
-//     `claude` some quando o app é aberto pelo Finder)
+// Spawn headless do motor (Linux). O que ele trava:
+//   - shell /bin/sh com -lc (login shell: sem isso o PATH do perfil não entra e o
+//     `claude` some)
 //   - detached: true, que é a PRÉ-CONDIÇÃO do killTree posix (process.kill(-pid) só mata
 //     o grupo se o filho for líder de grupo). Sem isso, cancelar uma revisão deixa o
 //     claude e os subagentes rodando órfãos.
@@ -31,9 +25,9 @@ childProcess.spawn = function mockableSpawn(...args) {
   return realSpawn(...args);
 };
 
-const { runClaudeStream, buildSessionScriptMac, buildLoginScriptMac, killTree } = await import('../lib/engine/session.js');
+const { runClaudeStream, buildSessionScript, buildLoginScript, killTree } = await import('../lib/engine/session.js');
 const { claudeAuthShellLines, claudeAuthPosixPrefix } = await import('../lib/parse.js');
-const { WORKSPACE, IS_WIN } = await import('../lib/paths.js');
+const { WORKSPACE } = await import('../lib/paths.js');
 const { bashDoTeste } = await import('./helpers/bash-real.js');
 import { execFileSync } from 'node:child_process';
 
@@ -71,7 +65,7 @@ function engineFalso(config = {}) {
 // disso deixa os casos seguintes CANCELADOS, numa rodada que ainda diz "0 falhas".
 const { pickLinuxTerminal, LINUX_TERMINALS } = await import('../lib/engine/session.js');
 
-test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', { skip: IS_WIN ? 'só roda em POSIX' : false }, async () => {
+test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', async () => {
   let capturado = null;
   spawnImpl = (...args) => { capturado = args; return filhoFalso(); };
   try {
@@ -82,7 +76,7 @@ test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', { skip: I
   assert.ok(capturado, 'spawn foi chamado');
   const [cmd, argv, opts] = capturado;
   assert.equal(cmd, '/bin/sh');
-  assert.equal(argv[0], '-lc', 'login shell, senão o PATH do Homebrew não entra');
+  assert.equal(argv[0], '-lc', 'login shell, senão o PATH do perfil não entra');
   // o unset vem colado no começo da linha, DEPOIS do sourcing do profile que o -l faz (G21).
   // engineFalso resolve um perfil legado (sem dir), então não há re-export de CLAUDE_CONFIG_DIR.
   assert.match(argv[1], /^unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN; claude -p --output-format stream-json --verbose --include-partial-messages --dangerously-skip-permissions/);
@@ -91,32 +85,10 @@ test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', { skip: I
   assert.equal(opts.cwd, WORKSPACE);
 });
 
-test('spawn headless windows: cmd.exe com verbatim args e janela escondida', { skip: IS_WIN ? false : 'só roda no Windows' }, async () => {
-  let capturado = null;
-  spawnImpl = (...args) => { capturado = args; return filhoFalso(); };
-  try {
-    await runClaudeStream(engineFalso({ reviewModel: 'sonnet', reviewEffort: 'low' }), 'prompt qualquer', {});
-  } catch { /* idem */ }
-  spawnImpl = null;
-
-  assert.ok(capturado, 'spawn foi chamado');
-  const [cmd, argv, opts] = capturado;
-  assert.equal(cmd, 'cmd.exe');
-  assert.deepEqual(argv.slice(0, 3), ['/d', '/s', '/c']);
-  assert.match(argv[3], / --model sonnet --effort low"$/, 'as flags entram no fim da linha');
-  assert.equal(opts.windowsHide, true, 'sem isso o console pisca na cara do usuário');
-  assert.equal(opts.windowsVerbatimArguments, true);
-  assert.equal(opts.cwd, WORKSPACE);
-});
-
 // --- G21: env de auth da máquina não sobrevive ao login shell posix ----------
-// Os testes de spawn acima pulam no Windows (IS_WIN é const de módulo), mas o CONTEÚDO do
-// que vai pro shell é texto: montar a linha/o script e inspecionar o texto roda em
-// qualquer SO, e é isso que os testes abaixo fazem.
-//
 // O defeito: applyClaudeAuthEnv limpa as vars de auth do env, mas no posix o profile do
 // usuário é sourceado DEPOIS disso (o -l do `/bin/sh -lc` no headless; o login shell do
-// Terminal.app antes de executar o .command). Um `export ANTHROPIC_API_KEY` perdido no
+// terminal antes de executar o .command). Um `export ANTHROPIC_API_KEY` perdido no
 // ~/.profile re-injeta a chave POR CIMA do perfil resolvido, e a precedência oficial do
 // claude CLI põe a chave acima do login OAuth: o perfil de assinatura do Farol seria anulado
 // em silêncio. Por isso o unset é emitido DENTRO do shell, depois de qualquer sourcing e
@@ -131,7 +103,7 @@ function ordem(texto, ...pedacos) {
   return pedacos.map(p => texto.indexOf(p));
 }
 
-function engineMac(auth) {
+function engineLinux(auth) {
   return {
     config: { skipPermissions: false, port: 47170 },
     resolveClaudeAuth: () => auth,
@@ -140,28 +112,21 @@ function engineMac(auth) {
 }
 
 test('claudeAuthShellLines posix (assinatura): unset das vars de auth ANTES do export do dir', () => {
-  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '/tmp/perfil' }, false);
+  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '/tmp/perfil' });
   assert.equal(linhas[0], UNSET);
   assert.match(linhas[1], /^export CLAUDE_CONFIG_DIR='\/tmp\/perfil'$/);
 });
 
 test('claudeAuthShellLines posix (assinatura sem dir, "padrão da máquina"): unset sem export nenhum', () => {
-  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '' }, false);
+  const linhas = claudeAuthShellLines({ kind: 'dir', dir: '' });
   // sem dir do perfil, o certo é NÃO re-exportar: o padrão da máquina é o login default do
   // claude, e um CLAUDE_CONFIG_DIR herdado do profile mentiria sobre qual conta está em uso.
   assert.deepEqual(linhas, [UNSET, '# sem config dir proprio']);
 });
 
 test('claudeAuthShellLines posix (chave de API): a própria chave é setada DEPOIS do unset', () => {
-  const linhas = claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: 'https://proxy.x' }, false);
+  const linhas = claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: 'https://proxy.x' });
   assert.deepEqual(linhas, [UNSET, `export ANTHROPIC_API_KEY='sk-ant-1'`, `export ANTHROPIC_BASE_URL='https://proxy.x'`]);
-});
-
-test('claudeAuthShellLines windows: NÃO emite unset (cmd.exe não sourceia profile nenhum)', () => {
-  const dir = claudeAuthShellLines({ kind: 'dir', dir: 'C:\\perfil' }, true);
-  const chave = claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: '' }, true);
-  assert.equal(dir.some(l => /unset/.test(l)), false);
-  assert.equal(chave.some(l => /unset/.test(l)), false);
 });
 
 // O prefixo headless é o ÚNICO caso em que o unset precisa devolver algo: o dir do perfil
@@ -187,8 +152,8 @@ test('claudeAuthPosixPrefix: perfil de chave remove só o token OAuth (a chave c
 });
 
 test('scripts POSIX: o segredo de saída é variável de shell, nunca exportada ao claude', () => {
-  const sessao = buildSessionScriptMac(engineMac({ kind: 'dir', dir: '' }), '/pr-review x', 'id1', 'bob', '', 'segredo1');
-  const login = buildLoginScriptMac(engineMac({ kind: 'dir', dir: '' }), '', 'id1', [], 'segredo2');
+  const sessao = buildSessionScript(engineLinux({ kind: 'dir', dir: '' }), '/pr-review x', 'id1', 'bob', '', 'segredo1');
+  const login = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '', 'id1', [], 'segredo2');
   for (const [script, segredo] of [[sessao, 'segredo1'], [login, 'segredo2']]) {
     assert.match(script, new RegExp(`^FAROL_SESSION_SECRET='${segredo}'$`, 'm'));
     assert.equal(script.includes('export FAROL_SESSION_SECRET'), false);
@@ -196,30 +161,30 @@ test('scripts POSIX: o segredo de saída é variável de shell, nunca exportada 
   }
 });
 
-test('buildSessionScriptMac (assinatura): unset vem antes da linha do claude', () => {
-  const script = buildSessionScriptMac(engineMac({ kind: 'dir', dir: '/tmp/perfil' }), '/pr-review x', 'id1', 'bob');
+test('buildSessionScript (assinatura): unset vem antes da linha do claude', () => {
+  const script = buildSessionScript(engineLinux({ kind: 'dir', dir: '/tmp/perfil' }), '/pr-review x', 'id1', 'bob');
   const [iUnset, iDir, iClaude] = ordem(script, UNSET, 'export CLAUDE_CONFIG_DIR', '\nclaude ');
   assert.ok(iUnset > 0, 'o unset existe no script');
   assert.ok(iUnset < iDir, 'unset antes do perfil resolvido');
   assert.ok(iDir < iClaude, 'tudo antes do exec do claude');
 });
 
-test('buildSessionScriptMac (chave de API): a chave do perfil é exportada DEPOIS do unset', () => {
-  const script = buildSessionScriptMac(engineMac({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: '' }), '/pr-review x', 'id1', 'bob');
+test('buildSessionScript (chave de API): a chave do perfil é exportada DEPOIS do unset', () => {
+  const script = buildSessionScript(engineLinux({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: '' }), '/pr-review x', 'id1', 'bob');
   const [iUnset, iChave, iClaude] = ordem(script, UNSET, "export ANTHROPIC_API_KEY='sk-ant-1'", '\nclaude ');
   assert.ok(iUnset > 0 && iUnset < iChave, 'o unset não pode apagar a chave do próprio perfil');
   assert.ok(iChave < iClaude);
 });
 
-test('buildLoginScriptMac: unset antes da linha do claude (a sessão de login é onde a chave errada mais engana)', () => {
-  const script = buildLoginScriptMac(engineMac({ kind: 'dir', dir: '' }), '/tmp/perfil', 'id1');
+test('buildLoginScript: unset antes da linha do claude (a sessão de login é onde a chave errada mais engana)', () => {
+  const script = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '/tmp/perfil', 'id1');
   const [iUnset, iDir, iClaude] = ordem(script, UNSET, 'export CLAUDE_CONFIG_DIR', '\nclaude');
   assert.ok(iUnset > 0, 'o unset existe no script de login');
   assert.ok(iUnset < iDir && iDir < iClaude);
 });
 
-test('buildLoginScriptMac (padrão da máquina): unset sem export de dir nenhum', () => {
-  const script = buildLoginScriptMac(engineMac({ kind: 'dir', dir: '' }), '', 'id1');
+test('buildLoginScript (padrão da máquina): unset sem export de dir nenhum', () => {
+  const script = buildLoginScript(engineLinux({ kind: 'dir', dir: '' }), '', 'id1');
   assert.ok(script.includes(UNSET), 'o unset existe mesmo sem perfil próprio');
   assert.doesNotMatch(script, /export CLAUDE_CONFIG_DIR/, 'sem dir do perfil não se re-exporta nada');
 });
@@ -305,7 +270,7 @@ test('prefixo posix: aspa simples no dir não injeta comando (execução real co
 // process.kill(-pid) derruba o GRUPO (o sh líder E o filho dele), que é o que
 // impede cancelamento de revisão deixar claude/subagentes órfãos. Era o único
 // caminho de kill sem nenhum assert em SO nenhum (auditoria 16/08).
-test('killTree posix: mata o grupo de processo inteiro, não só o líder', { skip: IS_WIN ? 'só roda em POSIX' : false }, async () => {
+test('killTree posix: mata o grupo de processo inteiro, não só o líder', async () => {
   const child = realSpawn('/bin/sh', ['-c', 'sleep 30 & sleep 30 & wait'], { detached: true, stdio: 'ignore' });
   child.on('error', () => { });
   await new Promise(r => setTimeout(r, 300));   // grupo montado

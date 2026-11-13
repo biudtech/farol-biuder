@@ -34,7 +34,7 @@ function proofResult(flow) {
 }
 io.run = async (command, args = [], options) => {
   if (command !== 'gh') {
-    if (!['git', 'powershell.exe', 'ps'].includes(command)) throw new Error('Processo externo fora da prova foi bloqueado.');
+    if (!['git', 'ps'].includes(command)) throw new Error('Processo externo fora da prova foi bloqueado.');
     return originalRun(command, args, options);
   }
     const read = args[0] === 'api' && !args.includes('--input') && !args.includes('--method')

@@ -12,7 +12,7 @@ process.env.AGY_FALSO_REGISTRO = REGISTRO;
 
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-const { AGY_DIR, WORKSPACE, IS_WIN } = await import('../lib/paths.js');
+const { AGY_DIR, WORKSPACE } = await import('../lib/paths.js');
 const usage = (await import('../lib/engine/usage.js')).default;
 const cadeia = await import('../lib/engine/cadeia-perfis.js');
 const { runProvedor } = await import('../lib/engine/session.js');
@@ -92,7 +92,6 @@ test('revisão no agy: resultado do último passo, ambiente da pasta, protocolo 
   assert.equal(sessao.env.SSH_CLIENT, 'farol 0 0');
   assert.equal(sessao.env.GH_TOKEN, 'gho_da_conta');
   assert.equal(sessao.env.GEMINI_API_KEY, undefined, 'a chave herdada não chega ao filho');
-  if (IS_WIN) assert.notEqual(sessao.env.HOME, path.join(AGY_DIR, 'gx'), 'no Windows só o USERPROFILE muda');
   assert.ok(sessao.args.includes('--dangerously-skip-permissions'));
   assert.deepEqual(sessao.args.slice(sessao.args.indexOf('--model'), sessao.args.indexOf('--model') + 2), ['--model', 'gemini-3.8-flash-high']);
   const prompt = JSON.parse(regs.find((r) => r.modo === 'prompt').entrada.trim());

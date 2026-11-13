@@ -280,7 +280,6 @@ test('applyClaudeAuthEnv: openrouter com baseUrl própria a respeita', () => {
 test('claudeAuthShellLines: kind openrouter exporta AUTH_TOKEN e API_KEY vazia', () => {
   const lines = claudeAuthShellLines(
     { kind: 'openrouter', apiKey: 'sk-or-abc', baseUrl: OPENROUTER_DEFAULT_BASE },
-    false,
   );
   assert.ok(lines.some(l => l.includes("ANTHROPIC_AUTH_TOKEN='sk-or-abc'")));
   assert.ok(lines.some(l => l === 'export ANTHROPIC_API_KEY='));
@@ -361,36 +360,20 @@ test('applyClaudeAuthEnv: perfil Codex limpa chaves OpenAI/Codex para nao sair d
   assert.deepEqual(env, { GH_TOKEN: 'gh' });
 });
 
-test('claudeAuthShellLines: kind dir, Windows', () => {
-  assert.deepEqual(claudeAuthShellLines({ kind: 'dir', dir: 'C:\\perfil' }, true), ['set "CLAUDE_CONFIG_DIR=C:\\perfil"']);
-  assert.deepEqual(claudeAuthShellLines({ kind: 'dir', dir: '' }, true), ['rem sem config dir proprio']);
-});
-
 // no posix a lista abre com o unset das vars de auth da máquina (G21, ver POSIX_AUTH_UNSET
 // em lib/parse.js): o profile do usuário é sourceado DEPOIS do env montado, então limpar só
 // o env não basta. A ordem é contrato: o perfil resolvido vem sempre DEPOIS do unset. As
 // vars são as mesmas de auth Claude que applyClaudeAuthEnv apaga, incluindo o token OAuth.
 const UNSET_POSIX = 'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN';
 
-test('claudeAuthShellLines: kind dir, macOS/posix, com escaping de aspa simples e unset na frente', () => {
-  const lines = claudeAuthShellLines({ kind: 'dir', dir: "/tmp/x' ; touch /tmp/PROOF #" }, false);
+test('claudeAuthShellLines: kind dir, com escaping de aspa simples e unset na frente', () => {
+  const lines = claudeAuthShellLines({ kind: 'dir', dir: "/tmp/x' ; touch /tmp/PROOF #" });
   assert.deepEqual(lines, [UNSET_POSIX, `export CLAUDE_CONFIG_DIR='/tmp/x'\\'' ; touch /tmp/PROOF #'`]);
-  assert.deepEqual(claudeAuthShellLines({ kind: 'dir', dir: '' }, false), [UNSET_POSIX, '# sem config dir proprio']);
+  assert.deepEqual(claudeAuthShellLines({ kind: 'dir', dir: '' }), [UNSET_POSIX, '# sem config dir proprio']);
 });
 
-test('claudeAuthShellLines: kind apikey, Windows, com e sem baseUrl', () => {
-  assert.deepEqual(
-    claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-123', baseUrl: '' }, true),
-    ['set "ANTHROPIC_API_KEY=sk-ant-123"', 'rem sem base url propria']
-  );
-  assert.deepEqual(
-    claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-123', baseUrl: 'https://proxy.x' }, true),
-    ['set "ANTHROPIC_API_KEY=sk-ant-123"', 'set "ANTHROPIC_BASE_URL=https://proxy.x"']
-  );
-});
-
-test('claudeAuthShellLines: kind apikey, macOS/posix, com escaping de aspa simples na chave', () => {
-  const lines = claudeAuthShellLines({ kind: 'apikey', apiKey: "sk-ant-123' ; touch /tmp/PROOF #", baseUrl: '' }, false);
+test('claudeAuthShellLines: kind apikey, com escaping de aspa simples na chave', () => {
+  const lines = claudeAuthShellLines({ kind: 'apikey', apiKey: "sk-ant-123' ; touch /tmp/PROOF #", baseUrl: '' });
   // a chave do próprio perfil é setada DEPOIS do unset, senão o unset a apagaria junto
   assert.deepEqual(lines, [UNSET_POSIX, `export ANTHROPIC_API_KEY='sk-ant-123'\\'' ; touch /tmp/PROOF #'`, '# sem base url propria']);
 });

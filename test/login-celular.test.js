@@ -15,7 +15,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const lc = (await import('../lib/engine/login-celular.js')).default;
-const { buildLoginScriptMac } = await import('../lib/engine/session.js');
+const { buildLoginScript } = await import('../lib/engine/session.js');
 
 after(() => { try { fs.rmSync(BASE, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ } });
 
@@ -25,7 +25,7 @@ function motor() {
 
 test('no celular: o script fixa HOME e PATH antes da pasta do perfil, e o comando é o do Termux', () => {
   const e = motor();
-  const r = lc.semTerminal(e, '/home/farol/.claude', buildLoginScriptMac, { sinais: { celular: true }, distro: 'ubuntu', home: '/home/farol', sessionsDir: BASE });
+  const r = lc.semTerminal(e, '/home/farol/.claude', buildLoginScript, { sinais: { celular: true }, distro: 'ubuntu', home: '/home/farol', sessionsDir: BASE });
   assert.equal(r.code, 'copiar-comando');
   const m = r.comando.match(/^proot-distro login ubuntu -- bash '(.+)'$/);
   assert.ok(m, r.comando);
@@ -40,7 +40,7 @@ test('no celular: o script fixa HOME e PATH antes da pasta do perfil, e o comand
 });
 
 test('perfil "Padrão da máquina" (sem pasta própria) depende do HOME, que vai fixado', () => {
-  const r = lc.semTerminal(motor(), '', buildLoginScriptMac, { sinais: { celular: true }, distro: 'debian', home: '/home/farol', sessionsDir: BASE });
+  const r = lc.semTerminal(motor(), '', buildLoginScript, { sinais: { celular: true }, distro: 'debian', home: '/home/farol', sessionsDir: BASE });
   const script = fs.readFileSync(r.comando.match(/bash '(.+)'$/)[1], 'utf8');
   assert.match(script, /export HOME='\/home\/farol'/);
   assert.doesNotMatch(script, /CLAUDE_CONFIG_DIR='/, 'sem pasta própria, a credencial fica no $HOME/.claude do Farol');
@@ -48,7 +48,7 @@ test('perfil "Padrão da máquina" (sem pasta própria) depende do HOME, que vai
 
 test('sem sinal de proot, o comando é o bash direto, e nunca mais o erro de terminal', () => {
   const e = motor();
-  const r = lc.semTerminal(e, '/x', buildLoginScriptMac, { sinais: { celular: false, sistemaAndroid: false, osrelease: '6.8.0-generic' }, home: '/home/eu', sessionsDir: BASE });
+  const r = lc.semTerminal(e, '/x', buildLoginScript, { sinais: { celular: false, sistemaAndroid: false, osrelease: '6.8.0-generic' }, home: '/home/eu', sessionsDir: BASE });
   assert.equal(r.code, 'copiar-comando');
   assert.equal(r.onde, 'terminal');
   assert.match(r.comando, /^bash '.+.command'$/);
@@ -65,7 +65,7 @@ test('proot se reconhece pelo kernel falso, pelo /system do Android ou pelo modo
   assert.equal(lc.dentroDoProot({ osrelease: '5.10.198-android12-9-g1234' }), true);
   assert.equal(lc.dentroDoProot({ osrelease: '6.8.0-45-generic' }), false);
   assert.equal(lc.dentroDoProot(), false);
-  const r = lc.semTerminal(motor(), '/home/farol/.claude', buildLoginScriptMac, { sinais: { osrelease: '6.2.1-PRoot-Distro' }, distro: 'ubuntu', home: '/home/farol', sessionsDir: BASE });
+  const r = lc.semTerminal(motor(), '/home/farol/.claude', buildLoginScript, { sinais: { osrelease: '6.2.1-PRoot-Distro' }, distro: 'ubuntu', home: '/home/farol', sessionsDir: BASE });
   assert.equal(r.onde, 'termux');
   assert.match(r.comando, /^proot-distro login ubuntu -- bash '/);
 });

@@ -83,7 +83,7 @@ test('revogarCodigos invalida os pendentes', () => {
   assert.equal(consumirCodigo(codigo, T0 + 1000), false);
 });
 
-test('o arquivo de pareamentos nunca fica legível por outros', { skip: process.platform === 'win32' }, () => {
+test('o arquivo de pareamentos nunca fica legível por outros', () => {
   criarCodigo(T0);
   assert.equal(fs.statSync(pareamentosPath()).mode & 0o777, 0o600);
   consumirCodigo('AAAAAAAAAA', T0 + 1);

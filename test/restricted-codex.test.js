@@ -8,7 +8,6 @@ import { prepareSelfIsolation } from '../lib/engine/self-isolation.js';
 import { sourceRead, dispatchSource, serveSource } from '../lib/engine/restricted-source.js';
 import { observeRestrictedCodex, restrictedCodex, beginRestrictedCodexObservation, finishRestrictedCodexObservation } from '../lib/engine/restricted-codex.js';
 import io from '../lib/io.js';
-import { IS_WIN } from '../lib/paths.js';
 import { blobHash } from '../lib/review-source/contract.js';
 
 const base = await fs.mkdtemp(path.join(os.tmpdir(), 'farol-codex-restricted-'));
@@ -94,7 +93,7 @@ test('cobertura Codex exige retorno real do servidor próprio e o patch integral
 
 test('launcher Codex é por execução, sem shell/config herdada, persistência, bypass ou mudança do perfil', async () => {
   const cliDir = path.join(base, 'cli'); await fs.mkdir(cliDir);
-  const command = path.join(cliDir, IS_WIN ? 'codex.exe' : 'codex'); await fs.writeFile(command, 'fixture');
+  const command = path.join(cliDir, 'codex'); await fs.writeFile(command, 'fixture');
   const inherited = { PATH: cliDir, CODEX_HOME: '/existing-profile', GH_TOKEN: 'fake', OPENAI_API_KEY: 'fake', NODE_OPTIONS: '--require unsafe' };
   const original = io.run;
   io.run = async () => ({ ok: true, stdout: '--ignore-user-config --ignore-rules --ephemeral --sandbox' });
