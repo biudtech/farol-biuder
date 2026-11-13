@@ -30,8 +30,7 @@
    1. sob NODE o servidor responde `initialize` e `tools/list` (portátil, roda no
       job de qualidade da CI, que não instala Electron);
    2. sob ELECTRON, com o env que a produção escreveu, o resultado é o MESMO
-      (pula quando o binário não está presente, mesmo idioma do
-      installer-update-mac.test.js);
+      (pula quando o binário não está presente);
    3. sob ELECTRON o env produzido seleciona Node; removê-lo seleciona browser;
    4. site inexistente MORRE com erro legível em vez de travar o cliente MCP
       esperando resposta pra sempre.

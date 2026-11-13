@@ -207,7 +207,7 @@ else
   if [ -f "$PACOTE" ]; then
     step "Extraindo $PACOTE"
     mkdir -p "$TMP/pacote"
-    # saida 1 do unzip e aviso, nao erro (saida 1 do unzip costuma ser so aviso)
+    # saida 1 do unzip e aviso, nao erro (arquivo com aviso de nome ou permissao)
     unzip -q -o "$PACOTE" -d "$TMP/pacote" || [ $? -eq 1 ] || die "Falha ao extrair $PACOTE"
     ORIGEM="$TMP/pacote"
   else

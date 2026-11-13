@@ -18,7 +18,7 @@
     "profundidadeExcedida": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 698,
+    "maxLines": 696,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
@@ -29,7 +29,7 @@
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 421,
+    "maxLines": 412,
     "emptyCatch": 5,
     "jsonParseCru": 3,
     "processEnvDireto": 2,

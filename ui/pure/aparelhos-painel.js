@@ -134,7 +134,7 @@ function fato(rot, valor, sub, classe = '') {
 }
 
 
-// O motor não compara com a última release: a atualização é por imagem, fora do Farol.
+// O motor não compara com a última release.
 function fatoDaVersao(ap) {
   return fato('Versão', `Farol ${ap.versao}`, 'versão em execução no aparelho');
 }

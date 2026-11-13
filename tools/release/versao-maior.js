@@ -1,6 +1,6 @@
 // Plano 4 do Farol nativo: o appcast da Sparkle só recebe versão MAIOR que a última
 // publicada. Publicar igual ou menor faria a Sparkle ignorar o item (ou, pior, oferecer
-// downgrade a quem estiver numa versão de teste). A comparação é a de
+// downgrade a quem estiver numa versão de teste). A comparação é a do
 // motor (`cmpVersion` de `lib/engine/cmp-versao.js`), para as duas regras nunca divergirem.
 //
 // São DUAS versões (decisão R-L): a curta (`sparkle:shortVersionString`, o
