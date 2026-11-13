@@ -21,10 +21,6 @@ function seed() {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'fulano.md'), '# fulano (Fulano Silva)\n\n## 2026-06-01 · acme/app#1 · APPROVE\n- ganho: x\n');
   fs.writeFileSync(path.join(dir, 'beltrana.md'), '# beltrana\n\n## 2026-06-02 · acme/app#2 · APPROVE\n- ganho: y\n');
-  fs.writeFileSync(path.join(STATE_DIR, 'highlights.md'),
-    '# Destaques\n\n- 2026-06-01 · @fulano · [acme/app#1](https://github.com/acme/app/pull/1) — mandou bem\n'
-    + '- 2026-06-02 · @beltrana · [acme/app#2](https://github.com/acme/app/pull/2) — também\n'
-    + '- 2026-06-03 · @Fulano · [acme/app#3](https://github.com/acme/app/pull/3) — caixa diferente, mesma pessoa\n');
   const e = new Engine();
   e.config.people = { fulano: { papel: 'senior' }, beltrana: { papel: 'pleno' } };
   e.pushbacks = {
@@ -35,16 +31,12 @@ function seed() {
   return e;
 }
 
-test('remove a pessoa inteira e SÓ ela: dossiê, destaques (caso-insensível), perfil e pushbacks', () => {
+test('remove a pessoa inteira e SÓ ela: dossiê, perfil e pushbacks', () => {
   const e = seed();
   const r = e.removeTeamMember('fulano');
   assert.deepEqual(r, { ok: true, removed: true });
   assert.ok(!fs.existsSync(path.join(STATE_DIR, 'authors', 'fulano.md')), 'dossiê da pessoa saiu');
   assert.ok(fs.existsSync(path.join(STATE_DIR, 'authors', 'beltrana.md')), 'dossiê de outra pessoa fica');
-  const hl = fs.readFileSync(path.join(STATE_DIR, 'highlights.md'), 'utf8');
-  assert.doesNotMatch(hl, /fulano/i, 'destaques da pessoa saíram, inclusive com caixa diferente');
-  assert.match(hl, /beltrana/, 'destaque de outra pessoa fica');
-  assert.match(hl, /# Destaques/, 'cabeçalho do arquivo fica');
   assert.equal(e.config.people.fulano, undefined, 'perfil configurado saiu');
   assert.ok(e.config.people.beltrana, 'perfil de outra pessoa fica');
   assert.equal(e.pushbacks['acme/app#1'], undefined, 'pushback da pessoa saiu');

@@ -19,12 +19,12 @@ await import('../ui/app.js');
 const { estado } = await import('../ui/telas/estado.js');
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const config = { intervalSeconds: 300, parallelReviews: 1, theme: 'dark', accounts: [], people: {},
-  mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '', teamHighlights: false, deliveriesEnabled: false };
+  mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '' };
 const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'win32' }, status: 'idle',
   account: { user: 'alice', tokenOk: true }, accounts: [{ user: 'alice', owners: ['acme'] }], config,
   queue: [], panorama: [], myPRs: [], hiddenPRs: [], activeSessions: [], activity: {}, headlessWaiting: [],
   decisions: { pending: [], resolved: [] }, selfAnalyses: {}, reviewActions: {}, usage: {},
-  paths: { home: '/fixture', workspace: '/fixture/workspace' }, update: {}, toolRuns: {} };
+  paths: { home: '/fixture', workspace: '/fixture/workspace' }, update: {} };
 emitir('state', fixture); flush();
 
 test('SSE aplica cada patch imediatamente mas uma rajada só pinta dependências uma vez', () => {

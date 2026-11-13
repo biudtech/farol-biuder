@@ -1,16 +1,16 @@
-/* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição, kudos,
-   diagnóstico, doctor, atualização), os cliques de Panorama/Sessões ativas/Fila/
+/* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição,
+   doctor), os cliques de Panorama/Sessões ativas/Fila/
    Decisões pendentes, e o laço que liga settingsMap aos toggles de Sistema. */
 
 import { settingsIgnoradasTexto } from '../pure.js';
 import { estado } from './estado.js';
 import {
-  $, api, get, toast, toastRich, confirmModal, showOp, closeOp, copyToClipboard,
+  $, api, get, toast, toastRich, confirmModal, copyToClipboard,
 } from './infra.js';
 import { TWEAK, scopeVisible, prUser, guardarMutedHandling, guardarIdentityStyle } from './contas.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
 import { revisarUrls } from './consumo.js';
-import { kudosScopeKey, loadLog } from './ferramentas.js';
+import { loadLog } from './diagnostico.js';
 import { cancelarSessao } from './sessao-cancelar.js';
 
 /* decisão pendente: caminho ÚNICO de POST, usado pelo card (#decisions) e pela paleta
@@ -76,22 +76,6 @@ function initTweaks(rerenderScope) {
   if (mh) { mh.value = TWEAK.muted; mh.onchange = () => { TWEAK.muted = mh.value; guardarMutedHandling(mh.value); rerenderScope(); }; }
   if (is) { is.value = TWEAK.ident; is.onchange = () => { TWEAK.ident = is.value; guardarIdentityStyle(is.value); rerenderScope(); }; }
 }
-$('#btnKudos').onclick = async () => {
-  const btn = $('#btnKudos');
-  const opId = 'tool-kudos';
-  showOp(opId, { type: 'tool', title: 'Gerando kudos', inline: true, container: btn.parentElement });
-  const r = await api('/api/tool', { name: 'kudos', scope: kudosScopeKey() });
-  if (r?.ok) closeOp(opId, 'done', 'Kudos gerado');
-  else { closeOp(opId, 'error', r?.error || 'não consegui gerar'); toast('info', r?.error || 'não consegui gerar'); }
-};
-$('#btnHealth').onclick = async () => {
-  const btn = $('#btnHealth');
-  const opId = 'tool-health';
-  showOp(opId, { type: 'tool', title: 'Diagnosticando', inline: true, container: btn.parentElement });
-  const r = await api('/api/tool', { name: 'health' });
-  if (r?.ok) closeOp(opId, 'done', 'Diagnóstico completo');
-  else closeOp(opId, 'error', r?.error || 'falha no diagnóstico');
-};
 $('#btnDoctor').onclick = async () => { await get('/api/doctor'); };
 $('#btnLogRefresh').onclick = loadLog;
 
@@ -181,15 +165,6 @@ const settingsMap = [
   ['#setReReviewResume', 'reReviewResume', el => el.checked],
   ['#setSkipPerms', 'skipPermissions', el => el.checked],
   ['#setSound', 'soundEnabled', el => el.checked],
-  ['#setVoiceEnabled', 'voiceEnabled', el => el.checked],
-  ['#setVoiceEvents', 'voiceEvents', el => Array.from(el.selectedOptions, o => o.value)],
-  ['#setVoiceVolume', 'voiceVolume', el => Number(el.value)],
-  ['#setVoiceQuietEnabled', 'voiceQuietEnabled', el => el.checked],
-  ['#setVoiceQuietStart', 'voiceQuietStart', el => el.value],
-  ['#setVoiceQuietEnd', 'voiceQuietEnd', el => el.value],
-  ['#setInterventionReminder', 'interventionReminderMinutes', el => Number(el.value)],
-  ['#setTeamHighlights', 'teamHighlights', el => el.checked],
-  ['#setDeliveriesEnabled', 'deliveriesEnabled', el => el.checked],
   ['#setAutostart', 'autostart', el => el.checked]
 ];
 for (const [sel, key, read] of settingsMap) {

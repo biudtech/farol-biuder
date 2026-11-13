@@ -68,14 +68,14 @@ export async function copyToClipboard(text) {
 }
 
 // segmentado: a classe pinta, o aria-pressed e o que o leitor de tela anuncia.
-// Um helper so pra os dois nunca divergirem. Usado por Entregas, Consumo e Sistema:
+// Um helper so pra os dois nunca divergirem. Usado por Consumo e Sistema:
 // mora aqui pra nenhuma dessas telas depender de outra por acidente de posição.
 export function marcarSeg(botoes, ehAtivo) {
   botoes.forEach(b => { const a = ehAtivo(b); b.classList.toggle('active', a); b.setAttribute('aria-pressed', a ? 'true' : 'false'); });
 }
 
 // Mantém `abertos` em dia com os <details data-abre> de uma lista que se redesenha por
-// innerHTML. É a convenção de Entregas (o listener de #deliveries em entregas.js): a
+// innerHTML. É a convenção das listas que se redesenham: a
 // tela guarda as chaves, o HTML sai com `open` a partir delas, e o redesenho a cada estado
 // do SSE deixa de fechar o que a pessoa abriu. `toggle` não borbulha, daí a captura.
 export function lembrarAbertos(box, abertos) {
@@ -171,13 +171,12 @@ export function confirmModal(opts) {
 
    Coverage (9 problem areas resolved):
    - Polling: status checks with queue feedback
-   - Data Loading: spinners for Deliveries/Highlights/Team
+   - Data Loading: spinners for Team
    - Review/Analysis: progress through Lendo → Analisando → Montando
    - Merge: success toast on completion
    - Chat: phase progression + streaming indicator
    - Update: verification feedback badge
    - Settings: success toast on save
-   - Tools: Kudos & Health execution feedback
    - Session Startup: stage indicators (iniciando → processando)
 
    Implementation: Pure JS, no frameworks. ACTIVE_OPS Map tracks all active operations.

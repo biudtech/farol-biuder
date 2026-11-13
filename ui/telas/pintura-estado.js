@@ -18,7 +18,6 @@ function gruposDaPintura(pintar) {
     grupo('silenciadas', ['accounts', 'panorama', 'config'], radar),
     grupo('navegacao', ['queue', 'panorama', 'myPRs', 'hiddenPRs', 'decisions', 'activeSessions', 'headlessWaiting', 'headlessDistributing', 'accounts', 'sync'], radar),
     grupo('configuracoes', ['app', 'paths', 'config', 'accounts', 'account', 'contasGh', 'doctor', 'sync', 'jiraSites', 'cadeiaPerfis', 'provedores', 'modelos', 'capacidades', 'myPRs', 'panorama'], sistema),
-    grupo('ferramentas', ['toolRuns', 'config'], () => telaVisivel('sistema') || telaVisivel('destaques')),
     grupo('relogio', ['lastCheckAt', 'nextCheckAt', 'status', 'activeSessions', 'activity']),
     grupo('consumo', ['usage', 'config', 'sync', 'filaJusta', 'accounts', 'activeSessions'], () => telaVisivel('consumo')),
     grupo('compartilhado', ['sync', 'config', 'accounts'], radar),

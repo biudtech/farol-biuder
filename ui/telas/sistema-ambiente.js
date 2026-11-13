@@ -39,8 +39,7 @@ function renderDoctor() {
     </div>`).join('');
   $('#about').innerHTML = `O polling usa só o GitHub CLI (zero tokens de IA). Claude ou Codex entram apenas quando uma sessão de IA é aberta.`;
   // versão e caminho dos dados moram no rodapé da sidebar, visíveis em qualquer seção.
-  // A versão leva às Novidades dela (a menção mais citada da tela toda).
-  $('#sysFoot').innerHTML = `<span class="is-goto" data-goto="sys:news:#relNotes" role="button" tabindex="0" title="Ver as novidades desta versão">Farol v${esc(estado().app.version)}</span><br>dados em <code>${esc(estado().paths.home)}</code>`;
+  $('#sysFoot').innerHTML = `<span>Farol v${esc(estado().app.version)}</span><br>dados em <code>${esc(estado().paths.home)}</code>`;
 }
 
 export { renderDoctor };

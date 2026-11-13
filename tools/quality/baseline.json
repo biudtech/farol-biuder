@@ -1,12 +1,11 @@
 {
   "lib/engine/decision.js": {
-    "maxLines": 254,
+    "maxLines": 228,
     "jsonStringifyCru": 2,
     "profundidadeExcedida": 2
   },
   "lib/engine/gh-queries.js": {
-    "jsonParseCru": 4,
-    "tempoMagico": 1
+    "jsonParseCru": 3
   },
   "lib/engine/pushback.js": {
     "emptyCatch": 1,
@@ -19,23 +18,19 @@
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
-    "maxLines": 242,
+    "maxLines": 221,
     "emptyCatch": 1,
     "jsonParseCru": 4,
     "ternarioAninhado": 1,
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 208,
+    "maxLines": 204,
     "emptyCatch": 1,
     "jsonParseCru": 3,
     "processEnvDireto": 2,
     "ternarioAninhado": 1,
     "profundidadeExcedida": 7
-  },
-  "lib/engine/tools.js": {
-    "emptyCatch": 2,
-    "ternarioAninhado": 2
   },
   "lib/engine/usage.js": {
     "ternarioAninhado": 2
@@ -56,7 +51,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 851,
+    "maxLines": 826,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,
@@ -73,9 +68,6 @@
   "ui/pure/consumo.js": {
     "ternarioAninhado": 1
   },
-  "ui/pure/entregas.js": {
-    "ternarioAninhado": 2
-  },
   "ui/pure/review.js": {
     "ternarioAninhado": 6
   },
@@ -91,12 +83,8 @@
   "ui/telas/contas.js": {
     "ternarioAninhado": 4
   },
-  "ui/telas/entregas.js": {
-    "jsonStringifyCru": 1,
-    "ternarioAninhado": 1
-  },
-  "ui/telas/ferramentas.js": {
-    "ternarioAninhado": 3
+  "ui/telas/diagnostico.js": {
+    "ternarioAninhado": 2
   },
   "ui/telas/infra.js": {
     "jsonStringifyCru": 1,
@@ -105,9 +93,6 @@
   "ui/telas/meus-prs.js": {
     "ternarioAninhado": 5,
     "profundidadeExcedida": 4
-  },
-  "ui/telas/novidades.js": {
-    "ternarioAninhado": 1
   },
   "ui/telas/perfil-pessoa.js": {
     "profundidadeExcedida": 1
@@ -119,6 +104,6 @@
     "ternarioAninhado": 2
   },
   "ui/telas/time.js": {
-    "ternarioAninhado": 3
+    "ternarioAninhado": 2
   }
 }

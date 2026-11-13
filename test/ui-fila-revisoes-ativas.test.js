@@ -28,7 +28,7 @@ function snapshot() {
       theme: 'dark' },
     lastCheckAt: Date.now(), queue: [pr, outro], panorama: [pr, outro], myPRs: [], hiddenPRs: [],
     decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
-    headlessWaiting: [], usage: {}, toolRuns: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
+    headlessWaiting: [], usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }
 function receber(snap) { emitir('state', snap); quadros.pintar(); }
 function sessao(item = pr) { return { id: 'review-ativa', mode: 'auto', keys: [item.key], pr: item, startedAt: Date.now() }; }

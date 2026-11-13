@@ -40,13 +40,12 @@ const ESTADO = {
   config: {
     ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: ['beta'] }],
     intervalSeconds: 300, parallelReviews: 1, theme: 'dark', mergeBlockedRepos: [],
-    teamHighlights: false, deliveriesEnabled: false,
     people: {}, claudeProfiles: [], claudeProfileId: '',
   },
   queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
   activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
-  usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [],
-  update: { state: 'idle' }, doctor: null, deliveries: null,
+  usage: {}, usageSessions: [], pushbacks: {}, team: [],
+  update: { state: 'idle' }, doctor: null,
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
 };
 const ultima = () => history.chamadas[history.chamadas.length - 1];
@@ -114,7 +113,7 @@ test('trocar de lugar pela tela empilha; trocar de conta substitui', () => {
   assert.equal(escopo(), 'all', 'sem conta no endereço, numa aba com a barra, é Todas');
 });
 
-test('aba opcional desligada cai no Radar, na sub-aba Pra mim, avisa e o endereço diz isso', () => {
+test('endereço de aba que saiu (Entregas, Destaques) cai no Radar, na sub-aba Pra mim, sem aviso, e o endereço diz isso', () => {
   switchRadarSub('pano');
   const toasts = document.querySelector('#toasts').children;
   const antes = toasts.length;
@@ -122,10 +121,7 @@ test('aba opcional desligada cai no Radar, na sub-aba Pra mim, avisa e o endere�
   disparar('popstate');
   assert.equal(abaAtual(), 'radar');
   assert.equal(radarSubAtual(), 'mim');
-  const novos = toasts.slice(antes);
-  assert.equal(novos.length, 1);
-  assert.equal(novos[0].textContent, 'Entregas está desligada. Ligue em Sistema > Preferências.');
-  assert.match(novos[0].className, /info/);
+  assert.equal(toasts.length, antes, 'a aba não está desligada, ela não existe mais: nada a avisar');
   assert.match(ultima()[1], /^\/radar\//);
 });
 
@@ -147,23 +143,6 @@ test('Codex 4: conta que não está configurada no endereço cai em Todas na hor
   assert.equal(escopo(), 'all', 'conta desconhecida não vira escopo, nem guardado');
   assert.equal(localStorage.getItem('farol-scope'), 'all');
   assert.deepEqual(ultima(), ['replace', '/radar/panorama']);
-});
-
-test('Codex 5: link só com ?repo= ou ?pessoa= troca o agrupamento para o do foco', async () => {
-  const { filtrosDeEntregas } = await import('../ui/telas/entregas.js');
-  emitir('state', { ...ESTADO, config: { ...ESTADO.config, deliveriesEnabled: true } });
-  localStorage.setItem('farol-deliv-by', 'author');
-  irPara('/entregas?pessoa=carol');
-  disparar('popstate');
-  assert.equal(filtrosDeEntregas().agrupar, 'author');
-  irPara('/entregas?repo=acme/api');
-  disparar('popstate');
-  assert.equal(filtrosDeEntregas().agrupar, 'repo', 'o grupo do repositório só existe na visão por repositório');
-  assert.equal(filtrosDeEntregas().repo, 'acme/api');
-  irPara('/entregas?pessoa=carol');
-  disparar('popstate');
-  assert.equal(filtrosDeEntregas().agrupar, 'author');
-  emitir('state', ESTADO);
 });
 
 test('Codex 6: caixa de revisão cuja busca termina depois de a rota mudar não abre nem empilha', async () => {

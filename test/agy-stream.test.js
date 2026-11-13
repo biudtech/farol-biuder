@@ -92,7 +92,6 @@ test('argumentos: flash-high por padrão, flash-low recusado, esforço só fora 
   const sonnet = st.agyArgs({ agyReviewModel: 'claude-sonnet-4-6', agyReviewEffort: 'high' });
   assert.deepEqual(sonnet.slice(-4), ['--model', 'claude-sonnet-4-6', '--effort', 'high']);
   assert.ok(!st.agyArgs({ agyReviewEffort: 'max' }).includes('max'), 'max fica fora');
-  assert.ok(!st.agyArgs({}, { somenteLeitura: true }).includes('--dangerously-skip-permissions'), 'leitura sem liberar comando');
   const retoma = st.agyArgs({}, { extraArgs: ['--resume', 'c0ffee00-0000-4000-8000-000000000001'] });
   assert.deepEqual(retoma.slice(-2), ['--conversation', 'c0ffee00-0000-4000-8000-000000000001']);
   assert.ok(!st.agyArgs({}, { extraArgs: ['--resume', 'x; rm -rf /'] }).includes('--conversation'), 'id fora da forma não entra');

@@ -73,85 +73,6 @@ test('erro de checagem nao trava o widget sys-polling pra sempre (B11)', () => {
     'op terminal e purgada no comeco do ciclo seguinte, senao o has() barra o novo widget');
 });
 
-/* ---------- corrida de respostas na aba Entregas (M19) ---------- */
-
-test('loadDeliveries descarta resposta velha por token de requisicao (M19)', () => {
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(fn[0], /const rid = \+\+deliveriesReqSeq/, 'cada carga pega um token novo');
-  assert.match(fn[0], /if \(rid !== deliveriesReqSeq\) return/,
-    'resposta de carga superada nao pinta a tela (guarda por token de requisicao)');
-  const posGuarda = fn[0].indexOf('rid !== deliveriesReqSeq');
-  const posClose = fn[0].indexOf('closeOp(');
-  assert.ok(posGuarda !== -1 && posGuarda < posClose,
-    'a guarda vem ANTES do closeOp: resposta velha nao encerra a op da carga nova');
-});
-
-test('loadDeliveries não chama a rota quando Entregas está desligado', () => {
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(fn[0], /if \(!deliveriesEnabled\(\)\) return;/,
-    'a guarda vem antes de renderizar ou chamar get(\/api\/deliveries)');
-  assert.ok(fn[0].indexOf('deliveriesEnabled()') < fn[0].indexOf("get('/api/deliveries"));
-});
-
-test('Entregas guarda disclosure de Pessoas separado e confirma o reset pela resposta do novo contexto', () => {
-  assert.match(APPJS, /let deliveriesOpen = new Set\(\)/,
-    'details aberto/fechado não pode reutilizar deliveriesExpanded (mostrar mais/menos)');
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(APPJS, /let deliveriesDataContext = null/,
-    'o estado registra a org/período da última resposta aceita');
-  assert.match(fn[0], /const requestContext = JSON\.stringify\(\[requestOrg, requestDays\]\)/,
-    'a carga captura o contexto resolvido antes da chamada assíncrona');
-  const posGuarda = fn[0].indexOf('rid !== deliveriesReqSeq');
-  const posContexto = fn[0].indexOf('deliveriesDataContext !== requestContext');
-  assert.ok(posGuarda !== -1 && posGuarda < posContexto,
-    'resposta velha não pode confirmar nem resetar o contexto de disclosure');
-  assert.match(fn[0], /if \(deliveriesDataContext !== requestContext\) resetDeliveriesDisclosure\(\);\s*\n\s*deliveriesDataContext = requestContext/,
-    'contexto novo fecha reabertura da UI velha durante a carga; refresh igual preserva o atalho');
-  const render = APPJS.match(/function renderDeliveries\([\s\S]*?\n\}/);
-  assert.match(render[0], /openKeys: deliveriesOpen/,
-    'o renderer puro recebe as chaves abertas explicitamente');
-  assert.match(APPJS, /function resetDeliveriesDisclosure\(\) \{ deliveriesOpen = new Set\(\); \}/,
-    'o reset de disclosure tem uma operação nomeada');
-  assert.match(APPJS, /\$\('#delivOrg'\)[\s\S]{0,300}resetDeliveriesDisclosure\(\);\s*\n\s*loadDeliveries\(\)/,
-    'trocar organização fecha os grupos da organização anterior');
-  assert.match(APPJS, /\$\('#delivDays'\)[\s\S]{0,500}resetDeliveriesDisclosure\(\);\s*\n\s*loadDeliveries\(\)/,
-    'trocar período fecha os grupos do período anterior');
-  assert.match(APPJS, /if \(nextDays === deliveriesDays\) return/,
-    'clicar no período já ativo não fecha disclosures nem refaz a consulta');
-});
-
-test('toggle nativo de details atualiza Pessoas e mostrar mais preserva o card aberto', () => {
-  assert.match(APPJS,
-    /addEventListener\('toggle',[\s\S]*?details\[data-deliv-group\^="author:"\][\s\S]*?deliveriesOpen\.add\(key\)[\s\S]*?deliveriesOpen\.delete\(key\)[\s\S]*?true\)/,
-    'toggle não borbulha: a delegação usa capture e sincroniza o Set de Pessoas');
-  const handler = APPJS.match(/\$\('#deliveries'\)\.addEventListener\('click',[\s\S]*?\n\}\);/);
-  assert.ok(handler, 'handler delegado de Entregas existe');
-  assert.match(handler[0], /mais\.closest\('details\[open\]'\)[\s\S]*?deliveriesOpen\.add\(key\)/,
-    'antes do re-render de mostrar mais, o details aberto é preservado até se o toggle ainda estiver enfileirado');
-});
-
-test('atalho @pessoa abre explicitamente o grupo, sem mudar o default recolhido', () => {
-  // gotoDeliv mora em ui/telas/entregas.js (Fase 1b, Task 7) e recebe switchTab por
-  // parâmetro: é primitiva do shell (troca de aba, aciona aoEntrar de toda tela) e
-  // não pode ser importada de lá sem criar ciclo com o bootstrap.
-  const fn = APPJS.match(/function gotoDeliv\(kind, valor, switchTab\) \{[\s\S]*?\n\}/);
-  assert.ok(fn, 'gotoDeliv existe');
-  assert.match(fn[0], /if \(by === 'author'\) deliveriesOpen\.add\('author:' \+ valor\);\s*\n\s*renderDeliveries\(\)/,
-    'clicar em @fulano na frente é intenção explícita de abrir aquele grupo');
-  assert.match(fn[0], /if \(abaAtual\(\) !== 'entregas'\) switchTab\('entregas'\)/,
-    'atalho dentro da própria tela não inicia uma carga que substituiria o alvo recém-aberto');
-});
-
-test('seta do accordion acompanha o atributo open no próprio summary', () => {
-  assert.match(CSS, /\.deliv-card details\[open\] > summary\.deliv-sum::after \{[^}]*transform: rotate\(90deg\)/,
-    'summary já é .deliv-sum; não existe um .deliv-sum filho dentro dele');
-  assert.doesNotMatch(CSS, /details\[open\] > summary \.deliv-sum::after/,
-    'o seletor antigo nunca casava e deixava a seta apontando para a direita com o corpo aberto');
-});
-
 /* ---------- estagio da sessao ativa (B13) ---------- */
 
 test('o cabecalho da sessao mostra a etapa REAL, nao a idade da sessao', () => {
@@ -195,9 +116,9 @@ test('rebuildAccounts saneia o SCOPE persistido a cada snapshot (B15)', () => {
 
 test('accountBarVisible: so nas abas onde o filtro por conta age', () => {
   assert.equal(P.accountBarVisible(2, 'radar'), true);
-  assert.equal(P.accountBarVisible(2, 'destaques'), true);
+  assert.equal(P.accountBarVisible(2, 'destaques'), false, 'a aba saiu: allowlist, sem a barra');
   assert.equal(P.accountBarVisible(2, 'time'), true);
-  assert.equal(P.accountBarVisible(2, 'entregas'), false, 'Entregas filtra por org propria, nada ali respeita SCOPE');
+  assert.equal(P.accountBarVisible(2, 'entregas'), false, 'a aba saiu: allowlist, sem a barra');
   assert.equal(P.accountBarVisible(2, 'sistema'), false);
   assert.equal(P.accountBarVisible(2, 'consumo'), false);
   assert.equal(P.accountBarVisible(1, 'radar'), false, 'conta unica nao tem o que filtrar');
@@ -276,14 +197,14 @@ test('renderMyPRs, renderQueue e renderPanorama decidem o empty state pelo listV
    eles protegiam está em test/diagnostico-falhas-tela.test.js e em
    test/diagnostico-unificado.test.js, que olham a saída do engine. */
 
-test('a aba Sistema mostra o resumo agrupado do log, sem mexer no botao de zerar', () => {
+test('a aba Sistema mostra o resumo agrupado do log, e o botao de zerar saiu', () => {
   const fn = APPJS.match(/async function loadLog\(\)[\s\S]*?\n\}/);
   assert.ok(fn, 'loadLog existe');
   assert.match(fn[0], /get\('\/api\/log\/triage'\)/);
   assert.match(fn[0], /logSummaryShort\(grupos \|\| \[\], 3\)/, 'os 3 maiores grupos');
   assert.match(HTML, /<p class="sys-note" id="logResumo" hidden><\/p>/,
     'o resumo mora em paragrafo proprio: a .section-head e flex e quebra cedo');
-  assert.match(HTML, /id="btnLogClear"/, 'o botao de zerar segue onde estava');
+  assert.doesNotMatch(HTML, /id="btnLogClear"/, 'o botao de zerar saiu com a rota /api/log/clear (corte do lote 7)');
   assert.match(HTML, /id="logBox"/, 'o despejo cru continua disponivel embaixo');
 });
 
@@ -428,7 +349,7 @@ test('Panorama no celular: título em duas linhas, autor embaixo e alvos de 40 p
   assert.match(m, /\.pw-acts \.btn\s*\{[^}]*min-width:\s*40px[^}]*min-height:\s*40px/);
 });
 
-test('navegação interna tem UM handler só, delegado, e entende os 3 tipos', () => {
+test('navegação interna tem UM handler só, delegado, e entende os 2 tipos', () => {
   const fn = APPJS.match(/function goTo\(spec\) \{[\s\S]*?\n\}/);
   assert.ok(fn, 'goTo existe');
   assert.match(fn[0], /const \{ tipo, alvo, seletor \} = parseGoto\(spec\);/,
@@ -437,9 +358,8 @@ test('navegação interna tem UM handler só, delegado, e entende os 3 tipos', (
     'aba: repassa o seletor (destino de ferramenta precisa dele)');
   assert.match(fn[0], /switchTab\('sistema'\);\s*\n\s*return sysGoTo\(alvo, seletor \|\| null\);/,
     'sys: troca a aba ANTES do sysGoTo (elemento em aba escondida não rola)');
-  // switchTab vai por parâmetro: gotoDeliv mora em ui/telas/entregas.js e não pode
-  // importar o bootstrap de volta (mesmo motivo do teste de gotoDeliv acima)
-  assert.match(fn[0], /if \(tipo === 'deliv'\) return gotoDeliv\(alvo, seletor, switchTab\);/);
+  // o tipo 'deliv' (Entregas) saiu no lote 7 do corte
+  assert.doesNotMatch(fn[0], /deliv/);
   // mesma ordem do sysGoTo, pelo mesmo motivo, e sem piscar painel escondido
   assert.match(APPJS, /function gotoAba\(nome, at\) \{\s*\n\s*switchTab\(nome\);/,
     'gotoAba troca a aba ANTES de procurar o alvo');

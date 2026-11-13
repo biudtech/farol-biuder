@@ -281,9 +281,9 @@ function wireUsageControls() {
 wireUsageControls();
 
 // Import estático roda ANTES do corpo do app.js (é assim que ES module funciona), e
-// a ordem de registro das telas precisa continuar entregas, destaques, time, sistema,
+// a ordem de registro das telas precisa continuar time, sistema,
 // consumo (telasRegistradas() devolve na ordem de registro). Se o registro rodasse
-// aqui, no topo do módulo, consumo passaria à frente de destaques/time/sistema, que
+// aqui, no topo do módulo, consumo passaria à frente de time/sistema, que
 // ainda se registram no CORPO do app.js. Por isso o registro fica atrás desta função,
 // que o app.js chama no lugar exato de onde tirou o registrarTela literal.
 function registrarTelaConsumo() {

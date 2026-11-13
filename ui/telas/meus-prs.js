@@ -7,7 +7,7 @@ import {
   effectiveHidden, hiddenFootLabel, myPRsEmptyMsg, mergeToastKind, buildFixPrompt,
   canMergeSelfAnalysis, qualityBlockTitle, selfAnalysisBadge, selfAnalysisToggle,
   selfAnalysisStale, listViewState, prKeyFromUrl,
-  festasPendentes, faixaDaAutoanaliseHtml, linhaDaAutoanalise,
+  faixaDaAutoanaliseHtml, linhaDaAutoanalise,
   tituloDoMergeBloqueado, notaDoMergeBloqueadoHtml, avisoDaBaseNoCard,
 } from '../pure.js';
 import { estado, escopo } from './estado.js';
@@ -18,7 +18,6 @@ import {
 import { scopeVisible, acctMark } from './contas.js';
 import { renderRadarNav } from './radar.js';
 import { renderMeusPrsRemoto, contarRemotos } from './listas-remotas.js';
-import { festejar } from './confete.js';
 import { markdownReutilizado as md } from './markdown.js';
 import { cardCheio } from './densidade.js';
 import { andamentoDoPr, iniciando, pedirAutoanalise, cancelarAutoanalise, dispensarFalha, aoMudarAndamento } from './autoanalise-andamento.js';
@@ -61,21 +60,6 @@ function contagemMeusPrs() {
   const filtro = pr => scopeVisible(pr) && !ocultos.has(String(pr.key).toLowerCase());
   return todos.filter(filtro).length + contarRemotos(todos, 'myPrs', filtro);
 }
-// Análises que já viraram confete NESTA sessão da tela (PR mais o instante da análise).
-// Some com a página, de propósito: a festa é do momento em que a análise termina, e não um
-// estado que precise sobreviver a alguma coisa.
-const festejadas = new Set();
-
-// A festa da análise impecável (17/09/2026). Quem decide é a pura `festasPendentes`; aqui
-// só marca e anima. A marca entra ANTES da animação: animação que falhe não deixa o mesmo
-// resultado tentando festejar em todo ciclo do SSE.
-function festejarAnaliseImpecavel() {
-  for (const marca of festasPendentes(estado().selfAnalyses, festejadas)) {
-    festejadas.add(marca);
-    festejar();
-  }
-}
-
 aoMudarAndamento(() => renderMyPRs());
 
 function botaoDeAnaliseHtml(url, { emCurso, girando, rotulo }) {
@@ -257,7 +241,6 @@ function renderMyPRs() {
       ${analysisPanel}
     </div>`;
   }).join('');
-  festejarAnaliseImpecavel();
 }
 // rodapé discreto da seção: "3 PRs ocultos · mostrar". A linha inteira é o controle
 // (um botão só), pra ser alcançável por teclado e leitor de tela sem inventar widget.

@@ -1,14 +1,13 @@
 /* Farol · UI: som e notificação de PR novo, reação a evento do SSE (ver connect() em
    ui/app.js). */
 
-import { quietNow } from '../pure/interventions.js';
 import { estado, ehElectron } from './estado.js';
 import { toastRich, tituloDaNotificacao } from './infra.js';
 
 /* ---------- som + notificação ---------- */
 let audioCtx = null;
 function ping() {
-  if (!estado()?.config?.soundEnabled || quietNow(estado()?.config)) return;
+  if (!estado()?.config?.soundEnabled) return;
   try {
     audioCtx = audioCtx || new AudioContext();
     const t = audioCtx.currentTime;

@@ -1,6 +1,7 @@
-// A sessão de leitura (A3) vista pela LINHA DE COMANDO que cada provedor recebe de verdade.
-// O helper sozinho não prova nada: um runProvedor que esquecesse de chamá-lo passaria em
-// qualquer teste do helper. Mesmo padrão do session-stream: spawn trocado antes do import.
+// A sessão comum vista pela LINHA DE COMANDO que cada provedor recebe de verdade: nenhuma
+// restrição de ferramenta (--tools, --safe-mode) nem sandbox explícito do Codex. O modo
+// somente leitura saiu com o diagnóstico por IA (corte da fase 1, lote 7).
+// Mesmo padrão do session-stream: spawn trocado antes do import.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -64,19 +65,9 @@ async function linhaDe(kind, opts) {
   return sessoes[0];
 }
 
-test('Claude: sessão de leitura sai com as ferramentas de leitura e sem MCP', async () => {
-  const linha = await linhaDe('dir', { somenteLeitura: true });
-  assert.match(linha, /--tools Read,Grep,Glob --strict-mcp-config --safe-mode --disable-slash-commands/);
-});
-
 test('Claude: sessão comum não ganha restrição nenhuma', async () => {
   const linha = await linhaDe('dir', {});
   assert.doesNotMatch(linha, /--tools|--strict-mcp-config|--safe-mode|--disable-slash-commands/);
-});
-
-test('Codex: sessão de leitura sai com o sandbox de leitura', async () => {
-  const linha = await linhaDe('codex', { somenteLeitura: true });
-  assert.match(linha, /--sandbox read-only/);
 });
 
 test('Codex: sessão comum não ganha sandbox explícito', async () => {

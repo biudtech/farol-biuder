@@ -10,7 +10,7 @@ const css = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui/app.css'), 
 test('o título tem base própria, para os botões descerem quando não couberem ao lado', () => {
   assert.match(css, /\.mypr-top \.info \{ flex: 1 1 320px; min-width: 0; \}/);
   assert.match(css, /\.mypr-top \.pr-actions \{ flex: 0 1 auto; max-width: 100%; \}/);
-  assert.match(css, /^\.section-head, \.row-actions, \.deliv-controls, \.mypr-top,[^{]*\{ flex-wrap: wrap; \}/m, 'sem wrap as ações não descem');
+  assert.match(css, /^\.section-head, \.row-actions, \.mypr-top,[^{]*\{ flex-wrap: wrap; \}/m, 'sem wrap as ações não descem');
 });
 
 test('o título reserva o lugar da seta em qualquer largura', () => {

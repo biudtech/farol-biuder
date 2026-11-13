@@ -241,7 +241,7 @@ const PRIVACIDADE = [
   ['Qualquer cópia do banco enxerga', 'horários, custos e tokens por sessão, quantidade e tamanho aproximado dos itens, qual aparelho fez cada coisa, e a correlação entre itens do mesmo PR e da mesma organização pelos identificadores.'],
   ['A coordenação expõe', 'conta, PR e commit por resumo sem chave, descobríveis testando nomes conhecidos. Aparelho em versão antiga continua enviando o nome da máquina e o commit.'],
   ['A cifra não protege contra', 'quem sabe a sua senha ou controla o e-mail da conta, o Google (que recebe a senha no login) e quem tem acesso a um aparelho seu.'],
-  ['Nunca sai do aparelho', 'logs, prompts, chats, saída de terminal, credenciais, caminhos de arquivo, Destaques, Kudos e Time.'],
+  ['Nunca sai do aparelho', 'logs, prompts, chats, saída de terminal, credenciais, caminhos de arquivo e Time.'],
   ['Não é backup', 'a sincronização serve para os aparelhos combinarem trabalho, não para guardar cópia do que é seu.'],
 ];
 
