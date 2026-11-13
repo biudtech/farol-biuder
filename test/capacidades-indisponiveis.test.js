@@ -43,8 +43,7 @@ test('com a exigência ligada pelo arquivo, a autenticação sai da lista de ind
   assert.equal(capacidadesIndisponiveis(e).some((i) => i.id === 'autenticacao-local'), false);
 });
 
-test('no modo casca e com bind fora do loopback o retrato diz que a autenticação é exigida', () => {
-  assert.equal(estadoDasCapacidades({ ...DESKTOP, modoCasca: 'mac' }).autenticacaoLocal.exigida, true);
+test('com bind fora do loopback o retrato diz que a autenticação é exigida', () => {
   assert.equal(estadoDasCapacidades({ ...DESKTOP, bindForaDoLoopback: true }).autenticacaoLocal.exigida, true);
 });
 

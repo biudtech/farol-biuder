@@ -18,7 +18,7 @@ import { snapshotUsage } from './lib/engine/snapshot-usage.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
 import {
-  instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, modoCasca, APP_VERSION, APP_NAME, IS_WIN, IS_MAC, IS_LINUX,
+  instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, APP_VERSION, APP_NAME, IS_WIN, IS_MAC, IS_LINUX,
   HOME, WORKSPACE, STATE_DIR, CONFIG_FILE, LOG_FILE, SEEN_FILE, IGNORED_FILE, BASELINE_FILE,
   INFLIGHT_FILE, SELF_FILE, HIDDEN_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
@@ -98,9 +98,7 @@ import acesso from './lib/local-auth/acesso.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
 import { startServer } from './lib/http-server.js';
-import { publicarCasca } from './lib/engine/casca-arquivo.js';
 import { registrarSaidaOrdenada } from './lib/engine/saida-ordenada.js';
-import { bootstrapDaCasca } from './lib/engine/casca-bootstrap.js';
 
 function codexWindowsPathDirs() {
   const root = path.join(os.homedir(), 'AppData', 'Local', 'OpenAI', 'Codex', 'bin');
@@ -1474,7 +1472,7 @@ class Engine extends EventEmitter {
       config,
       bloqueio: this.syncBloqueioCompartilhamento || '',
       grupoConfigurado: Object.keys((this.sync && this.sync.grupos) || {}).length > 0,
-      modoCasca: modoCasca(), bindForaDoLoopback: !loopback(this.config.bind),
+      bindForaDoLoopback: !loopback(this.config.bind),
     });
   }
   claudeTestarPerfil(dados) { return perfilMod.testarPerfil(this, dados); }
@@ -1809,8 +1807,7 @@ class Engine extends EventEmitter {
       // `app` é a IDENTIDADE do app, e o smoke do Electron confere o objeto inteiro: o
       // catálogo de seleções (lib/modelos.js), de onde a tela monta os seletores, é outra coisa
       app: { name: APP_NAME, version: APP_VERSION, platform: process.platform },
-      // `casca`: a casca nativa em que o motor roda (modoCasca), para a UI dar o recuo dos semáforos
-      modelos: catalogoDeModelos(this.claudeVersao || null), casca: modoCasca() || null,
+      modelos: catalogoDeModelos(this.claudeVersao || null),
       cadeiaPerfis: cadeiaMod.cadeiaParaTela(this), provedores: provedoresParaTela(this.config),
       // perfil apontado que a cascata não usa (A2): a queda para o legado deixou de ser silenciosa
       claudePerfis: { problemas: perfilMod.problemasDePerfil(this.config) },
@@ -2136,10 +2133,6 @@ function start(onReady) {
     // em dobro e escreveria seen/inflight/usage sem lock (A7). Por isso o
     // monitoramento só começa DEPOIS do listen dar certo.
     if (!err && !began) { began = true; engine.schedule(); engine.start(); registrarSaidaOrdenada(engine); }
-    // Sidecar de uma casca nativa: só agora, com o socket escutando, a casca pode achar o
-    // motor. Porta EFETIVA do socket. Com a porta ocupada nada é gravado: a casca reconhece
-    // o Farol vivo pelo GET /api/auth/status.
-    if (!err && modoCasca()) publicarCasca(engine, server.address().port);
     if (onReady) onReady(url, err);
   });
   return { engine, server, port: engine.config.port };
@@ -2151,9 +2144,8 @@ export default farol;
 export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
   sanitizeClaudeDir, normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
 
-// execucao direta: modo servidor (fallback sem Electron, ou desenvolvimento). Como sidecar de
-// casca nativa, antes do engine existir, o motor semeado pode se reexecutar de ~/.farol/engine.
-if (executadoDireto(import.meta.url) && !bootstrapDaCasca()) {
+// execucao direta: modo servidor (`node server.js`)
+if (executadoDireto(import.meta.url)) {
   start((url, err) => {
     if (err) { console.error('[farol] erro ao subir o servidor:', err.message); process.exit(1); }
     console.log(`[farol] monitorando · UI em ${url}`);

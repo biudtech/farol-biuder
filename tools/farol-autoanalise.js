@@ -6,7 +6,6 @@
 import { executadoDireto, CONFIG_FILE } from '../lib/paths.js';
 import { DEFAULT_PORT } from '../lib/constants.js';
 import { readJson, parseJson, safeStringify } from '../lib/io.js';
-import { lerCasca } from '../lib/engine/casca-arquivo.js';
 import { autoanaliseToken } from '../lib/env.js';
 import { sanearBind } from '../lib/parse.js';
 
@@ -17,10 +16,9 @@ const ROTAS = {
   listar: () => ['GET', '/api/self-review/agent/list', undefined],
 };
 
-// No modo casca a porta real está no casca.json; fora dele, a do config.json.
-// shortcut: casca.json que sobrou de uma queda aponta para porta morta, e a falha diz a porta tentada.
+// A porta do motor vem do config.json, senão a padrão.
 function portaDoMotor() {
-  return lerCasca()?.porta || readJson(CONFIG_FILE, {}).port || DEFAULT_PORT;
+  return readJson(CONFIG_FILE, {}).port || DEFAULT_PORT;
 }
 
 // O host é o bind do motor (config.bind, saneado do mesmo jeito que o Engine faz). Escuta em
