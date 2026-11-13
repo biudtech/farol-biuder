@@ -35,15 +35,14 @@ test('item 4: admin sem batimento diz há quanto tempo, pelo instante que este a
 
 /* ---------- item 5: versão mínima e o caminho para atualizar ---------- */
 
-test('item 5: a nota da garantia nomeia a versão mínima e leva a "Verificar atualização"', () => {
+test('item 5: a nota da garantia nomeia a versão mínima', () => {
   const cobertura = [{ account: 'acme-exemplo', coberta: false, naoCobertaPor: ['Desktop antigo'] }];
   const html = P.aparelhosListaHtml([aparelho(), VELHO], { cobertura, agora: AGORA, versaoMinima: '2.59.4' });
   assert.match(html, /anterior à 2\.59\.4/);
-  assert.match(html, /data-goto="sys:overview:#updateBox"[^>]*role="button"[^>]*tabindex="0"[^>]*>Como atualizar o Farol</);
   const semVersao = P.aparelhosListaHtml([aparelho(), VELHO], { cobertura, agora: AGORA });
   assert.match(semVersao, /anterior à da postagem coordenada/, 'sem o número no snapshot, a nota não inventa um');
   const coberta = P.aparelhosListaHtml([aparelho(), VELHO], { cobertura: [], agora: AGORA, versaoMinima: '2.59.4' });
-  assert.doesNotMatch(coberta, /Como atualizar/, 'sem conta descoberta não há nota');
+  assert.doesNotMatch(coberta, /Garantia não coberta/, 'sem conta descoberta não há nota');
 });
 
 /* ---------- item 6: sem presença e primeiro aparelho ---------- */

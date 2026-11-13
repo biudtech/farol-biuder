@@ -19,12 +19,12 @@ const farol = (await import('../server.js')).default;
 
 after(() => { try { fs.rmSync(HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
-// autoReview false e updateRepo vazio: nem o caminho pré-correção (start síncrono)
-// dispara revisão automática ou gh release view
+// autoReview false: nem o caminho pré-correção (start síncrono)
+// dispara revisão automática
 function escreveConfig(cfg) {
   fs.mkdirSync(HOME, { recursive: true });
   fs.writeFileSync(path.join(HOME, 'config.json'),
-    JSON.stringify({ autoReview: false, updateRepo: '', ...cfg }));
+    JSON.stringify({ autoReview: false, ...cfg }));
 }
 
 test('porta ocupada: o engine NÃO agenda polling nem inicia o ciclo (A7)', async () => {
@@ -57,7 +57,6 @@ test('porta livre: o engine monitora DEPOIS do listen (comportamento preservado)
   // com a correção, schedule/start só rodam no callback, então usam os stubs
   // e a suite verde não faz rede nenhuma
   engine.check = async () => { engine.status = 'idle'; };
-  engine.checkUpdate = async () => { };
   engine.doctor = async () => { };
   await pronto;
   await new Promise(res => setImmediate(res));

@@ -1,7 +1,7 @@
 // Plano 4 do Farol nativo: o appcast da Sparkle só recebe versão MAIOR que a última
 // publicada. Publicar igual ou menor faria a Sparkle ignorar o item (ou, pior, oferecer
-// downgrade a quem estiver numa versão de teste). A comparação é a MESMA do update do
-// motor (`cmpVersion` de `lib/engine/update.js`), para as duas regras nunca divergirem.
+// downgrade a quem estiver numa versão de teste). A comparação é a do
+// motor (`cmpVersion` de `lib/engine/cmp-versao.js`), para as duas regras nunca divergirem.
 //
 // São DUAS versões (decisão R-L): a curta (`sparkle:shortVersionString`, o
 // CFBundleShortVersionString que a pessoa vê) e o build (`sparkle:version`, o
@@ -13,7 +13,7 @@
 //
 // Sai 0 quando a versão nova pode ser publicada, 1 (com o motivo no stderr) quando não.
 import fs from 'node:fs';
-import { cmpVersion } from '../../lib/engine/update.js';
+import { cmpVersion } from '../../lib/engine/cmp-versao.js';
 import { executadoDireto } from '../../lib/paths.js';
 
 // a versão nova vem do nome do dmg e do CFBundleShortVersionString: X.Y.Z e mais nada

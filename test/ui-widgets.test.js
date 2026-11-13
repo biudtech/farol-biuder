@@ -550,11 +550,8 @@ test('card da fila: o ponto da conta fica na linha do PR, e a grade tem só avat
 
 test('Visão geral abre pelos checks de saúde e o aplicar só realça com diferença selecionada', () => {
   const pos = (id) => HTML.indexOf(`id="${id}"`);
-  assert.ok(pos('doctor') > 0 && pos('doctor') < pos('updateBox'), 'doctor antes do updateBox');
-  assert.ok(pos('updateBox') < pos('setupManager'), 'updateBox antes do setupManager');
+  assert.ok(pos('doctor') > 0 && pos('doctor') < pos('setupManager'), 'doctor antes do setupManager');
   assert.ok(pos('setupManager') < pos('reviewLabels'), 'setupManager antes do reviewLabels');
-  const atualizacao = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'sistema-atualizacao.js'), 'utf8');
-  assert.doesNotMatch(atualizacao, /O botão abaixo/);
 });
 
 test('atalhos A/M/C passam pela confirmação', () => {

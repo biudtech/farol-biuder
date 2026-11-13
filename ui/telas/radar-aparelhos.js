@@ -44,12 +44,6 @@ async function alternarEspelho(opId) {
 
 
 function syncAtual() { return (estado() && estado().sync) || {}; }
-// a última release que ESTE Farol conhece (a do GitHub, ou a dele mesmo sem nada mais novo)
-function ultimaVersaoConhecida() {
-  const u = (estado() && estado().update) || {};
-  return u.sourceVersion || u.current || '';
-}
-
 function ligada(s) {
   return visaoCompartilhada(s) === 'ligada' && secoesDaFrota(s);
 }
@@ -115,7 +109,7 @@ function renderPagina(s) {
   const fontesLidas = conjunto.estadoPendencias === 'lido' && conjunto.estadoOperacoes === 'lido';
   const situacao = situacaoDaFila(ap.deviceId, f.listas, { antigo: versaoAntiga(ap.versao), fontesLidas });
   alvo.innerHTML = `${faixaDeAparelhosHtml(executores, ap.deviceId, contagens, agora)}
-    ${painelDoAparelhoHtml(ap, { agora, desligado, prKeyDaTag: prKeyDaTag(itens), ultimaVersao: ultimaVersaoConhecida() })}
+    ${painelDoAparelhoHtml(ap, { agora, desligado, prKeyDaTag: prKeyDaTag(itens) })}
     ${avisoDoAparelhoHtml(ap, { agora })}
     ${andamentoAtrasadoHtml(conjunto.andamentoEm, agora, conjunto.andamentoFalhaEm, { estado: conjunto.estadoOperacoes })}
     <section aria-label="Fila do aparelho" id="aparFila">${filaDoAparelhoHtml(itens, situacao, ctxFila)}</section>

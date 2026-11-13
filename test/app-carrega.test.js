@@ -43,7 +43,7 @@ const ESTADO = {
   config: {
     ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }],
     intervalSeconds: 300, autoReview: true, autoApproveAll: false,
-    parallelReviews: 1, theme: 'dark', autoUpdate: true, autoPushback: true,
+    parallelReviews: 1, theme: 'dark', autoPushback: true,
     reviewModel: '', reviewEffort: '', codexReviewModel: '', codexReviewEffort: '',
     mergeBlockedRepos: [], soundEnabled: true,
     teamHighlights: false, deliveriesEnabled: false,

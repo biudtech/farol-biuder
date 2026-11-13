@@ -14,7 +14,7 @@
 // quebraria a atualização de toda cópia instalada. O dmg e o msix levam a versão no
 // nome, então artefato de outra versão no dist não conta.
 //
-// Da 3.0.0 em diante (comparação de `cmpVersion`, a mesma do update do motor) os quatro
+// Da 3.0.0 em diante (comparação de `cmpVersion`, de `lib/engine/cmp-versao.js`) os quatro
 // nativos (dmg, appcast, msix e appinstaller) também são OBRIGATÓRIOS: a release 3.x é a
 // que as cascas instaladas leem pelo `releases/latest`, e uma release sem o appcast ou sem
 // o appinstaller deixaria toda cópia instalada sem update (e a próxima pipeline sem o
@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { executadoDireto } from '../../lib/paths.js';
 import { safeStringify } from '../../lib/io.js';
-import { cmpVersion } from '../../lib/engine/update.js';
+import { cmpVersion } from '../../lib/engine/cmp-versao.js';
 import { CASCA } from '../../lib/constants.js';
 
 const VERSAO = /^\d+\.\d+\.\d+$/;

@@ -93,17 +93,6 @@ $('#btnHealth').onclick = async () => {
   else closeOp(opId, 'error', r?.error || 'falha no diagnóstico');
 };
 $('#btnDoctor').onclick = async () => { await get('/api/doctor'); };
-$('#btnUpdateCheck').onclick = async () => {
-  const btn = $('#btnUpdateCheck');
-  const opId = 'sys-update-check';
-  btn.disabled = true;
-  btn.textContent = '↑ Verificando…';
-  showOp(opId, { type: 'update', title: 'Verificando atualizações', inline: true, container: $('#updateBox') || document.body });
-  await get('/api/doctor');
-  closeOp(opId, 'done', 'Verificação concluída');
-  setTimeout(() => { btn.disabled = false; btn.textContent = '↑ Verificar agora'; }, 1000);
-  toast('ok', 'Verificação de atualização feita.', 2500);
-};
 $('#btnLogRefresh').onclick = loadLog;
 
 $('#panorama').addEventListener('click', async (e) => {
@@ -183,7 +172,6 @@ const settingsMap = [
   ['#setCodexReviewEffort', 'codexReviewEffort', el => el.value],
   ['#setAgyReviewEffort', 'agyReviewEffort', el => el.value],
   ['#setAutoPushback', 'autoPushback', el => el.checked],
-  ['#setAutoUpdate', 'autoUpdate', el => el.checked],
   ['#setDebugSpawns', 'debugSpawns', el => el.checked],
   ['#setReviewFast', 'reviewFast', el => el.checked],
   ['#setCoAssinarReview', 'coAssinarReview', el => el.checked],

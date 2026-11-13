@@ -441,14 +441,12 @@
           <div class="section-head">
             <h2>Visão geral</h2>
             <div class="row-actions">
-              <button id="btnUpdateCheck" class="btn sm ghost">Verificar atualização</button>
               <button id="btnDoctor" class="btn sm">Reverificar saúde</button>
             </div>
           </div>
           <p class="section-desc">Saúde do ambiente, versão instalada e onde ficam os teus dados.</p>
           <div class="sys-stack lg">
             <div id="doctor" class="doctor-grid"></div>
-            <div id="updateBox" class="card update-box">…</div>
             <!-- ferramentas de manutenção no fim (pedido do dono, 30/10/2026): o topo fica com saúde e versão -->
             <details class="card set-list review-tools setup" id="setupManager" aria-labelledby="setupTitle">
               <summary><span><b class="set-title" id="setupTitle">Configuração e retomada</b><span class="set-desc">Retome o roteiro quando precisar. Os indicadores usam o estado atual e o último diagnóstico; nenhum passo ativa automação ou dispensa as regras de segurança da postagem.</span></span><span class="chev" aria-hidden="true"></span></summary>
@@ -519,13 +517,6 @@
                 <span class="set-desc">Quando o autor corrige depois de um pedido de mudanças seu, a re-revisão automática continua a mesma conversa da revisão anterior (a sessão já leu o PR, então retomar poupa a releitura). Ligado (padrão). Desligado, cada rodada parte do zero, sem carregar o contexto do anterior. Se a sessão antiga não existir mais, o app recomeça do zero sozinho. Só vale no Claude Code: conta com perfil Codex sempre recomeça do zero.</span>
               </span>
               <span class="set-ctl"><input id="setReReviewResume" type="checkbox"><span class="switch"></span></span>
-            </label>
-            <label class="set-row" id="sys-row-autoupdate">
-              <span class="set-txt">
-                <span class="set-title">Atualizar sozinho</span>
-                <span class="set-desc">Aplica a atualização baixada das releases assim que nenhuma análise ou sessão de terminal estiver rodando e a fila de revisão estiver vazia. O app fecha e reabre sozinho. Ligado (padrão). Instalação com atualização administrada por fora (como a Hostinger) não se atualiza por aqui, com a chave ligada ou não.</span>
-              </span>
-              <span class="set-ctl"><input id="setAutoUpdate" type="checkbox"><span class="switch"></span></span>
             </label>
             <label class="set-row" id="sys-row-pushback">
               <span class="set-txt">
@@ -998,12 +989,11 @@
           </div>
           <div class="card about-card" id="aboutLicense">
             <h3 class="about-title">Licença</h3>
-            <p>Software livre sob a licença MIT, distribuído no estado em que se encontra, sem garantia. O texto completo está no arquivo <a id="aboutLicenseLink" href="#" target="_blank" rel="noreferrer">LICENSE do repositório</a>.</p>
+            <p>Software livre sob a licença MIT, distribuído no estado em que se encontra, sem garantia. O texto completo está no arquivo <a id="aboutLicenseLink" href="https://github.com/biudtech/farol-biuder/blob/main/LICENSE" target="_blank" rel="noreferrer">LICENSE do repositório</a>.</p>
           </div>
           <div class="card about-card" id="aboutCredits">
             <h3 class="about-title">Créditos</h3>
             <div id="aboutOrigem" class="about-origem"></div>
-            <div id="creditsBox"></div>
           </div>
         </div>
       </div>

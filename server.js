@@ -37,7 +37,6 @@ import {
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, detectGitBash, prependPathDirs, priorizarNoPath } from './lib/io.js';
-import updateMod from './lib/engine/update.js';
 import toolsMod from './lib/engine/tools.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -264,8 +263,6 @@ class Engine extends EventEmitter {
     this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
     this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
     this.deliveriesCache = {};        // janela (dias) -> { at, data } cache das entregas (PRs mergeados); TTL curto
-    this.credits = null;              // { at, repo, owner, contributors } créditos do Sistema > Sobre (cache 24h)
-    this.creditsTriedAt = 0;          // backoff de falha da busca de contribuidores (1h)
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
     this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
@@ -368,9 +365,6 @@ class Engine extends EventEmitter {
     this.doctorInfo = null;
     this.timer = null;
     this.checking = false;
-    this.updateApplying = false; // "Atualizar agora" em andamento (guarda de clique duplo; só memória)
-    this.autoUpdateFailedAt = 0; // hora da última falha REAL de auto-update (backoff); memória, não persiste
-    this.updateQueued = false; // clique em Atualizar com sessão ativa fica agendado (one-shot); memória, não persiste
     this.gitBash = detectGitBash();
 
     this.prepareHome();
@@ -794,7 +788,6 @@ class Engine extends EventEmitter {
   async fetchPrInventory(pr, headSha) { return fileProofMod.fetchPrInventory(this, pr, headSha); }
   deliveriesSince(days) { return ghMod.deliveriesSince(this, days); }
   async fetchDeliveries(days, owner) { return ghMod.fetchDeliveries(this, days, owner); }
-  async refreshContributors() { return ghMod.refreshContributors(this); }
 
 
   // falha da sincronização vira estado dela e WARN, nunca erro do ciclo
@@ -915,16 +908,6 @@ class Engine extends EventEmitter {
       // pushback automático: contestação do autor a um review meu (fire-and-forget:
       // roda em background pra não segurar a checagem, com guarda anti-concorrência)
       this.scanPushbacks().catch(e => this.log('WARN', `scanPushbacks: ${e.message}`));
-      // atualizacao (releases do GitHub pras copias distribuidas) a cada ciclo; depois de
-      // detectar, tenta aplicar sozinho quando ocioso (v2.46.0, maybeAutoUpdate). Fire-and-
-      // forget dos dois: nao segura o ciclo, e falha vira WARN, nunca derruba o polling.
-      this.checkUpdate()
-        .catch(e => this.log('WARN', `update check: ${e.message}`))
-        .then(() => updateMod.maybeAutoUpdate(this))
-        .catch(e => this.log('WARN', `auto-update: ${e.message}`));
-      // créditos do Sistema > Sobre (contribuidores do repo): TTL de 24h interno,
-      // então na prática só roda 1x por dia; fire-and-forget como o pushback
-      this.refreshContributors().catch(e => this.log('WARN', `créditos: ${e.message}`));
       // versao do Claude Code contra o registro do npm (lib/engine/versao-claude.js):
       // intervalo proprio de 6 h e nunca lanca, entao o ciclo so dispara e segue
       versaoClaude.atualizarVersaoClaude(this);
@@ -1516,20 +1499,6 @@ class Engine extends EventEmitter {
     this.checkNow();
   }
 
-  // --- versao e atualizacao ----------------------------------------------------
-  // A "fonte" de atualizacao e a pasta do codigo (por padrao ~/Documents/farol).
-  // Atualizar = rodar o installer da fonte, que ja mata as instancias, migra
-  // estado e recria os atalhos (sem duplicar instalacao), e reabrir o app.
-  // Auto-update: a logica vive no modulo colaborador lib/engine/update.js; estes
-  // metodos sao fachadas finas que delegam passando o engine como contexto (Onda 2).
-  resolveUpdateSource() { return updateMod.resolveUpdateSource(this); }
-  cmpVersion(a, b) { return updateMod.cmpVersion(a, b); }
-  async checkUpdate(opcoes) { return updateMod.checkUpdate(this, opcoes); }
-  async checkUpdateRemote(repo) { return updateMod.checkUpdateRemote(this, repo); }
-  async downloadRemoteUpdate() { return updateMod.downloadRemoteUpdate(this); }
-  async applyUpdate() { return updateMod.applyUpdate(this); }
-  applyUpdateMac() { return updateMod.applyUpdateMac(this); }
-
   // qual AUTENTICAÇÃO (não só dir) usar pras sessões desta conta GitHub. Cascata:
   // 1) accounts[].claudeProfileId da própria conta; 2) claudeProfileId global (padrão do
   // Farol); 3) sem profiles configurados (ou id não encontrado/perfil sem o campo
@@ -1680,7 +1649,6 @@ class Engine extends EventEmitter {
       await versaoClaude.atualizarVersaoClaude(this, { forcar: forcarVersaoClaude, instalada: this.doctorInfo.claude });
     }
     if (this.doctorLeitura !== leitura) return this.doctorInfo;
-    this.checkUpdate({ forcar: true }).catch(() => {}); // o Diagnóstico pergunta na hora
     this.pushState();
     return this.doctorInfo;
   }
@@ -1746,7 +1714,7 @@ class Engine extends EventEmitter {
     // pra badge refletir o estado real logo após salvar. NÃO inclui 'accounts': editar
     // cor/rótulo/tipo/org/claudeProfileId de uma conta não muda o resultado de
     // allClaudeAuthInfo() (ela só lê claudeProfiles), então redisparar doctor() aqui só
-    // gastava 3 subprocessos + 1 chamada de rede (checkUpdate) à toa (achado da revisão final).
+    // gastava 3 subprocessos à toa (achado da revisão final).
     if ('claudeProfiles' in patch || 'claudeProfileId' in patch || 'cadeiaPerfis' in patch) {
       this.doctor().catch(() => {});
     }
@@ -1914,9 +1882,7 @@ class Engine extends EventEmitter {
       decisions: snapshotDecisions(this),
       reviewActions: snapshotReviewActions(this),
       usage: snapshotUsage(this.usageSummary()),
-      credits: this.credits,
       doctor: this.doctorInfo,
-      update: this.update || null,
       paths: { home: HOME, workspace: WORKSPACE }
     };
   }
@@ -2136,7 +2102,6 @@ class Engine extends EventEmitter {
     iniciarManutencaoDoEngine(this);
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();
-    this.checkUpdate().catch(() => {});
     this.doctor().catch(() => {});
     // A presença não espera a consulta ao GitHub; a admissão continua exigindo confirmação.
     this._tickSeguro().catch(() => {});

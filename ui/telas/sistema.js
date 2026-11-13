@@ -136,10 +136,9 @@ function renderSettings() {
   $('#sys-row-coassinar').classList.toggle('sem-efeito', revisarJunto);
   $('#setAguardarCi').checked = c.aguardarCiParaRevisar === true;
   $('#setAguardarCiAprovar').checked = c.aguardarCiParaAprovar === true;
-  // padrão ligado desde 06/11/2026: só o false explícito desliga, como no autoUpdate
+  // padrão ligado desde 06/11/2026: só o false explícito desliga
   $('#setReReviewResume').checked = c.reReviewResume !== false;
   $('#setAutoPushback').checked = !!c.autoPushback;
-  $('#setAutoUpdate').checked = c.autoUpdate !== false;
   $('#setDebugSpawns').checked = !!c.debugSpawns;
   $('#setSkipPerms').checked = c.skipPermissions !== false;
   $('#setSound').checked = !!c.soundEnabled;

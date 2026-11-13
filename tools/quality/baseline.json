@@ -1,6 +1,6 @@
 {
   "lib/constants.js": {
-    "tempoMagico": 2
+    "tempoMagico": 1
   },
   "lib/engine/decision.js": {
     "maxLines": 254,
@@ -8,8 +8,8 @@
     "profundidadeExcedida": 2
   },
   "lib/engine/gh-queries.js": {
-    "jsonParseCru": 5,
-    "tempoMagico": 3
+    "jsonParseCru": 4,
+    "tempoMagico": 1
   },
   "lib/engine/pushback.js": {
     "emptyCatch": 1,
@@ -18,7 +18,7 @@
     "profundidadeExcedida": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 698,
+    "maxLines": 696,
     "profundidadeExcedida": 3
   },
   "lib/engine/selfpr.js": {
@@ -29,7 +29,7 @@
     "tempoMagico": 1
   },
   "lib/engine/session.js": {
-    "maxLines": 421,
+    "maxLines": 412,
     "emptyCatch": 5,
     "jsonParseCru": 3,
     "processEnvDireto": 2,
@@ -39,11 +39,6 @@
   "lib/engine/tools.js": {
     "emptyCatch": 2,
     "ternarioAninhado": 2
-  },
-  "lib/engine/update.js": {
-    "jsonParseCru": 2,
-    "processEnvDireto": 1,
-    "tempoMagico": 1
   },
   "lib/engine/usage.js": {
     "ternarioAninhado": 2
@@ -72,7 +67,7 @@
     "profundidadeExcedida": 2
   },
   "server.js": {
-    "maxLines": 903,
+    "maxLines": 880,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,
@@ -96,9 +91,6 @@
     "ternarioAninhado": 6
   },
   "ui/pure/sistema.js": {
-    "ternarioAninhado": 1
-  },
-  "ui/pure/sobre.js": {
     "ternarioAninhado": 1
   },
   "ui/telas/acoes.js": {
@@ -136,9 +128,6 @@
   },
   "ui/telas/sistema-ambiente.js": {
     "ternarioAninhado": 2
-  },
-  "ui/telas/sistema-atualizacao.js": {
-    "ternarioAninhado": 1
   },
   "ui/telas/time.js": {
     "ternarioAninhado": 3
