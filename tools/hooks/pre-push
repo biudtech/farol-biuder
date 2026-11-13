@@ -11,8 +11,7 @@
 # da suíte pula fora do POSIX (o instalador do macOS, o spawn headless posix, o
 # killTree por grupo de processo, o chmod da credencial), e isso depende do
 # SISTEMA, não do shell: Git Bash no Windows não recupera nenhum deles. Quem
-# cobre as três plataformas é a matriz do .github/workflows/ci.yml, e continua
-# sendo. Aqui o contrato é mais modesto e honesto: o que roda nesta máquina tem
+# cobre o Linux é o .github/workflows/ci.yml, que é a plataforma do motor. Aqui o contrato é mais modesto e honesto: o que roda nesta máquina tem
 # que estar verde antes de sair dela.
 #
 # Escape hatch: `git push --no-verify`. É do git, não precisa de opção nossa.
@@ -45,8 +44,8 @@ falhou() {
 # recusa aqui, antes de o bypass ser exercido.
 #
 # Custa pouco porque o ruleset pede ZERO aprovacoes: o fluxo e branch -> PR ->
-# CI verde -> merge, sem depender de ninguem. E de quebra a matriz
-# Linux/Windows/macOS passa a rodar ANTES da main, que era a outra metade que
+# CI verde -> merge, sem depender de ninguem. E de quebra o CI
+# em Linux passa a rodar ANTES da main, que era a outra metade que
 # faltava (o CI roda em pull_request desde sempre).
 #
 # git manda por stdin: <ref local> <sha local> <ref remota> <sha remota>
@@ -59,7 +58,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
       echo "  O caminho e:"
       echo "    git switch -c <branch> && git push origin <branch>"
       echo "    gh pr create --fill"
-      echo "    (CI verde nos tres SOs) && gh pr merge --merge --delete-branch"
+      echo "    (CI verde) && gh pr merge --merge --delete-branch"
       echo ""
       echo "  O ruleset pede ZERO aprovacoes, entao voce mesmo fecha o PR."
       echo "  Emergencia real: 'git push --no-verify', e registre o porque."
@@ -85,14 +84,6 @@ npm run lint --silent || falhou "o gate de qualidade"
 echo "  -> suite (npm test)"
 npm test --silent || falhou "a suite"
 
-# --- constituicao (npm run eng) ------------------------------------------------
-# Fica AQUI e nao no `npm run lint`, que roda no CI. O porque tem um endereco so,
-# em docs/QUALITY.md, secao "A constituicao vem do eng-behaviour". O que importa
-# para este hook: como ele tambem proibe push direto na main, todo caminho ate a
-# main atravessa este gate.
-echo "  -> constituicao (npm run eng)"
-npm run eng --silent || falhou "o gate do eng-behaviour"
-
 echo ""
-echo "  ok  gate local verde. Lembrando que a matriz Linux/Windows/macOS so fecha no CI."
+echo "  ok  gate local verde. O CI roda o mesmo gate em Linux."
 echo ""

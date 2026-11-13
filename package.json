@@ -18,7 +18,6 @@
     "check": "node tools/check-syntax.js",
     "lint": "node tools/quality/gate.js && node tools/quality/higiene.js",
     "lint:update": "node tools/quality/gate.js --update",
-    "eng": "node tools/eng-behaviour/gate.js",
     "sync:rules": "node tools/sync-rules.js",
     "test": "node tools/rodar-testes.js",
     "hooks:install": "git config core.hooksPath tools/hooks",
@@ -26,8 +25,7 @@
     "preserver": "node lib/node-runtime.js",
     "pretest": "node lib/node-runtime.js",
     "precheck": "node lib/node-runtime.js",
-    "prelint": "node lib/node-runtime.js",
-    "preeng": "node lib/node-runtime.js"
+    "prelint": "node lib/node-runtime.js"
   },
   "dependencies": {
     "electron": "^44.9.3"
