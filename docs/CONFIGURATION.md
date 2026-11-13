@@ -756,17 +756,6 @@ padrão permanece desligado.
 
 ## Interface, retomada e preferências portáveis
 
-**Diagnóstico local de quedas da janela Electron** é desligado por padrão. Quando
-o código de saída e a memória registrados no `farol.log` não identificarem a causa,
-adicione `"diagnosticoQuedas": true` ao `~/.farol/config.json` e reinicie o Farol.
-O coletor grava minidumps em `~/.farol/diagnostico-quedas` (ou sob `FAROL_HOME`),
-com envio remoto desligado e sem URL de destino. Esses arquivos podem conter
-trechos da memória, incluindo dados privados; não são incluídos no diagnóstico
-de texto nem enviados à sincronização. Para parar a coleta, remova a chave ou
-defina `false` e reinicie: o Electron não desliga o coletor durante a execução.
-Os arquivos existentes permanecem para inspeção local. A coleta não identifica
-automaticamente a causa e não representa correção de uma falha ainda não reproduzida.
-
 O estado enviado à interface leva ações de revisão apenas dos PRs das listas,
 pendências e revisões recentes; o histórico completo continua acessível pela chave
 do PR. O resumo de consumo preserva as séries, totais e limites de orçamento,

@@ -7,59 +7,22 @@ Radar de Pull Requests para Windows e macOS. O Farol monitora o GitHub em segund
 
 O Farol nasceu de uma iniciativa do Thiago ([@thiagopcdev](https://github.com/thiagopcdev)), o "PR Reviewer (Windows)" em PowerShell: um revisor de PRs que rodava numa janela de terminal e dependia de ação manual. O app atual capturou essa essência e reconstruiu o sistema do zero como app de desktop com interface, bandeja do sistema e instalador.
 
-## Instalar
+## Rodar
 
-Requisitos do sistema: **Windows de 64 bits (x64 ou ARM64)**, **macOS 13 (Ventura) ou posterior** em Intel ou Apple Silicon, ou **Linux de 64 bits (x64 ou ARM64, experimental)**. O Electron 44 deixou de oferecer suporte a macOS 12, Windows de 32 bits e Linux ARM de 32 bits; os instaladores recusam esses sistemas antes de alterar uma instalação existente. [Compatibilidade do Electron 44](https://www.electronjs.org/docs/latest/breaking-changes/#removed-macos-12-support).
+O Farol roda como `node server.js` (ou `npm run server`) em Linux, e serve a interface em `http://127.0.0.1:47170`. Não há instalador, janela nem pacote de distribuição: o código sai do clone.
 
-### Jeito mais fácil (offline, sem pré-requisitos)
+Pré-requisitos: Node.js 24 LTS (24.22.1 até antes de 25), GitHub CLI (`gh auth login`) e pelo menos um provedor de IA no PATH: **Claude Code** (`claude`) ou **Codex CLI** (`codex`, autenticado pelo ChatGPT).
 
-Um arquivo único com o Electron já embutido: não precisa de Node, npm nem download.
-
-- **Windows**: dê dois cliques em `Farol-Setup-vX.Y.Z.exe`. Instala e abre sozinho, sem extrair zip nem escolher arquivo.
-- **macOS**: dê dois cliques em `Farol-Instalar-mac.command` (na 1ª vez, botão direito > Abrir, por causa da quarentena de arquivos baixados).
-
-Ainda são necessários o **GitHub CLI** (`gh auth login`) e pelo menos um provedor de IA no PATH: **Claude Code** (`claude`) ou **Codex CLI** (`codex`, autenticado pelo ChatGPT). O instalador do Windows é gerado por `tools/make-installer.ps1` e o do macOS por `tools/make-offline-mac.sh` (roda em qualquer sistema: ele baixa o Electron do macOS e embute; o `.app` só é montado na hora da instalação, no Mac). Sem assinatura de código, o SmartScreen/Gatekeeper avisa uma vez.
-
-### Jeito leve (precisa de Node)
-
-1. Pré-requisitos: Node.js 24 LTS (24.22.1 até antes de 25) quando for baixar o Electron com npm; o instalador offline dispensa Node externo. GitHub CLI (`gh`, autenticado na conta de trabalho: `gh auth login`) e Claude Code (`claude`) ou Codex CLI (`codex`) autenticado na sua própria conta.
-2. Dê dois cliques em `Instalar.cmd` (ou rode `installer\install.ps1`). O Electron é baixado via `npm` na primeira vez.
-3. Abra o **Farol** pelo Menu Iniciar.
-
-Na primeira execução o Farol detecta a conta ativa do seu `gh` e usa ela; se você tiver mais de uma, ajuste em **Sistema → Contas**. Nenhuma conta ou token viaja com o app: o token é pedido ao `gh` da sua máquina em tempo de execução, e cada conta pode usar um perfil Claude Code ou Codex configurado em **Sistema → Plano e chaves**.
-
-O instalador copia o app para `%USERPROFILE%\.farol\app` (fora do AppData de propósito: o Claude Code empacotado enxerga o `%LOCALAPPDATA%` virtualizado e o estado divergiria), cria atalhos (Menu Iniciar e Desktop) e migra automaticamente o estado de instalações antigas (PRs já vistos, memória do time, destaques, log e config), inclusive mesclando o overlay MSIX se existir.
-
-Para desinstalar: `Desinstalar.cmd`. O estado é preservado por padrão (`uninstall.ps1 -RemoveData` apaga tudo).
-
-### macOS
-
-1. Pré-requisitos: Node.js 24 LTS (24.22.1 até antes de 25) quando for baixar o Electron com npm; o instalador offline dispensa Node externo. GitHub CLI (`gh auth login`) e Claude Code ou Codex CLI no PATH.
-2. No Terminal, na pasta do Farol: `bash Instalar.command` (o zip vindo do Windows não preserva a permissão de execução, então a primeira vez é com `bash`, não duplo clique).
-3. Abra o **Farol** por `~/Applications` (ou Spotlight).
-
-O instalador copia o app para `~/.farol/app` e cria o lançador `~/Applications/Farol.app`. Desinstalar: `bash Desinstalar.command` (estado preservado; `bash installer/uninstall.sh --remove-data` apaga tudo).
-
-**Importante**: o suporte a macOS foi construído sem um Mac de teste. Se algo falhar, abra o Claude Code na pasta do Farol e peça pra ele seguir o [`docs/MACOS.md`](docs/MACOS.md), que tem o checklist de validação e o mapa do que é específico de cada sistema. O mesmo guia viaja com o app instalado, em `~/.farol/app/docs/MACOS.md`.
+Na primeira execução o Farol detecta a conta ativa do seu `gh` e usa ela; se você tiver mais de uma, ajuste em **Sistema → Contas**. Nenhuma conta ou token viaja com o app: o token é pedido ao `gh` da sua máquina em tempo de execução.
 
 ## Runtime suportado
 
 Desenvolvimento, testes e motor externo (`node server.js`) usam **Node 24 LTS,
-`>=24.22.1 <25`**. A CI valida o piso 24.22.1 em Linux, Windows e macOS.
+`>=24.22.1 <25`**. A CI valida o piso 24.22.1 em Linux.
 Use `nvm install 24.22.1` e `nvm use` neste projeto, confira `node --version`,
 depois execute `node lib/node-runtime.js`, `npm install` e os comandos usuais.
 Com outro gerenciador, selecione a mesma versão somente no ambiente do Farol.
 Não é necessário mudar o Node dos demais projetos.
-
-O desktop usa o Node embarcado no **Electron 44.9.3** (ou release compatível com
-`^44.9.3`), validado por smoke nativo; atualizar Node no PATH não muda esse runtime.
-O instalador offline e o lançador nativo não precisam do Node externo. O fallback
-de instalação por npm exige o contrato acima e o confere antes de alterar o app.
-
-Electron 44.9.3 mitiga os certificados TLS comprometidos. Seu Node embarcado
-24.22.0 ainda contém Undici 7.29.1: permanece a limitação de DoS de `fetch`
-GHSA-xjj6-f33q-929c. Atualizar a dependência npm de download não altera esse
-componente interno; não se declara segurança total do desktop.
 
 Node 22 deixou de fazer parte do suporte. O crash observado em 22.12 permanece
 como **“Ocorrência sem causa determinada em runtime que deixou de fazer parte do
@@ -68,12 +31,7 @@ esta decisão não corrige nem explica o crash.
 
 ## Mapa do código
 
-O Farol tem **duas entradas**, e as duas estão corretas:
-
-| entrada | o que é | como roda |
-|---|---|---|
-| `main.js` | o shell Electron: janela, bandeja, notificações, autostart | `npm start` (que é `electron .`, e o `electron` lê o campo `main` do `package.json`) |
-| `server.js` | o engine puro, sem janela: polling do GitHub, fila, sessões de IA e o servidor HTTP + SSE que serve a interface | `npm run server` (que é `node server.js`) |
+A entrada do Farol é o `server.js`: o engine puro, sem janela, com polling do GitHub, fila, sessões de IA e o servidor HTTP + SSE que serve a interface. Roda com `npm run server` (que é `node server.js`).
 
 Por onde começar a ler, dependendo do que você quer mexer:
 
@@ -82,14 +40,12 @@ Por onde começar a ler, dependendo do que você quer mexer:
 | o que o app decide (revisar, aprovar, esperar) | `lib/engine/` |
 | o que aparece na tela | `ui/pure/` (funções puras, com teste), `ui/telas/` (as telas, uma por assunto, com o `ui/telas/README.md` como porta de entrada) e `ui/app.js` (o bootstrap) |
 | como o app fala com o GitHub | `lib/io.js` e `lib/engine/gh-queries.js` |
-| como o app é instalado e atualizado | `installer/` |
 | as regras de qualidade e o gate | `docs/QUALITY.md` e `tools/quality/` |
 
 O guia do mantenedor começa no [`CLAUDE.md`](CLAUDE.md): um sumário com o mapa de arquivos
-e os invariantes que reprovam um PR. O detalhe mora em quatro guias, que também viajam com o
-app instalado: [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md),
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), [`docs/MACOS.md`](docs/MACOS.md) e
-[`docs/RELEASE.md`](docs/RELEASE.md).
+e os invariantes que reprovam um PR. O detalhe mora em dois guias:
+[`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) e
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ## Como funciona
 
@@ -194,17 +150,11 @@ Se o PR ainda pede a sua revisão, ele volta sozinho pra fila quando chegar comm
 
 ## Compartilhando com o time
 
-Pra distribuir, gere o pacote limpo:
-
-```
-powershell -ExecutionPolicy Bypass -File tools\make-package.ps1
-```
-
-Sai um `dist\farol-vX.Y.Z.zip` **auditado automaticamente**: o script falha se detectar config, estado, logs, `node_modules` ou qualquer coisa com cara de token/conta pessoal. É esse zip que você manda pro time (nunca compartilhe `%USERPROFILE%\.farol`, que contém o seu estado e a sua memória de reviews).
+Cada pessoa do time roda o próprio Farol, a partir do clone, e nunca compartilha `~/.farol` (que contém o estado e a memória de reviews).
 
 Cada pessoa do time precisa, na própria máquina:
 
-1. **Node.js 24 LTS**, de 24.22.1 até antes de 25, para desenvolvimento e download do Electron via npm. Instaladores offline dispensam Node externo.
+1. **Node.js 24 LTS**, de 24.22.1 até antes de 25, para rodar o motor.
 2. **GitHub CLI** autenticado na conta corporativa dela: `gh auth login`.
 3. **Claude Code** ou **Codex CLI** logado na conta dela (o CLI escolhido precisa estar no PATH).
 4. Opcional, recomendado para perfis Claude: o conector do **Jira/Atlassian** configurado no Claude Code dela, pro review ler os cards BT. Sem ele o fluxo continua funcionando, só trata todo card como "não-verificável" (não faz auto-approve sozinho).
@@ -225,7 +175,7 @@ O tráfego de rede que existe é todo em seu nome, com as suas credenciais:
 
 Sobre responsabilidade: os reviews que o Farol posta saem **na sua conta do GitHub**, e as sessões de análise consomem **o plano ou os créditos do provedor configurado**. As automações de postagem (auto-approve e reprovação automática) vêm ligadas na conta nova e podem ser desligadas por conta, e quem as deixa ligadas responde pelo que é postado. O software é distribuído "no estado em que se encontra", sem garantia, nos termos da licença MIT (arquivo `LICENSE`).
 
-Nunca compartilhe a sua pasta `~/.farol`: ela contém o seu estado, as suas configurações e a sua memória de reviews. Pra distribuir o app, use sempre o pacote auditado de `tools\make-package.ps1`.
+Nunca compartilhe a sua pasta `~/.farol`: ela contém o seu estado, as suas configurações e a sua memória de reviews.
 
 ## Contribuindo
 
@@ -241,7 +191,5 @@ Quem participa do projeto segue o [Código de Conduta](.github/CODE_OF_CONDUCT.m
 
 ## Desenvolvimento
 
-- `npm start` abre o app Electron apontando para os dados reais (`%USERPROFILE%\.farol`).
-- `node server.js` sobe só o engine + UI em `http://127.0.0.1:47170` (modo navegador, útil pra depurar).
+- `node server.js` sobe o engine + UI em `http://127.0.0.1:47170`.
 - Variáveis úteis: `FAROL_HOME` (muda a pasta de dados) e `FAROL_REVIEW_CMD` (substitui o `claude` por um stub em testes).
-- Ícones: `tools\make-icons.ps1` gera os PNGs e `node tools\pack-ico.js` empacota o `.ico`.

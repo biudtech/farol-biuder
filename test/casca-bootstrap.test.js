@@ -95,9 +95,9 @@ test('o aviso padrão de manifesto inválido vai para o farol.log', () => {
   assert.match(log, /\[WARN\].*manifesto inválido.*2\.95\.0/);
 });
 
-test('package.json declara engines.farolShell e mantém o contrato do Node', () => {
+test('package.json mantém o contrato do Node', () => {
   const manifesto = JSON.parse(fs.readFileSync(path.join(paths.APP_ROOT, 'package.json'), 'utf8'));
-  assert.equal(manifesto.engines.farolShell, '>=3.0.0 <4');
+  assert.equal(manifesto.engines.farolShell, undefined, 'o motor não declara mais a faixa de casca; cada motor semeado pelas cascas traz a sua');
   assert.match(manifesto.engines.node, /^>=\d+\.\d+\.\d+ <\d+$/);
 });
 

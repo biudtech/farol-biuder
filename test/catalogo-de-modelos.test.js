@@ -108,10 +108,10 @@ test('a tela sabe se a seleção aceita esforço pelo catálogo, e valor fora de
 /* ---------- o snapshot: chave própria, e o `app` continua sendo só identidade ---------- */
 
 test('o snapshot leva o catálogo e a versão do CLI em `modelos`, e deixa `app` intacto', async () => {
-  // a primeira versão desta entrega pendurou o catálogo dentro de `app`, e o smoke do
-  // Electron (tools/electron-smoke-lib.js) reprovou nos três sistemas: ele confere `app`
-  // inteiro contra { name, version, platform }, porque `app` é a IDENTIDADE do app. O
-  // smoke só roda no CI, com desktop; este caso pega a mesma quebra aqui, sem Electron.
+  // a primeira versão desta entrega pendurou o catálogo dentro de `app`, e o smoke da
+  // janela reprovou nos três sistemas: ele conferia `app` inteiro contra
+  // { name, version, platform }, porque `app` é a IDENTIDADE do app. Este caso pega a
+  // mesma quebra aqui.
   const { Engine } = await import('../server.js');
   const e = new Engine();
   e.claudeVersao = { instalada: '2.1.282', maisRecente: '2.1.282', atualizada: true, atrasadaDesde: 0, atrasada: false };

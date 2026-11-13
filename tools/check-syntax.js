@@ -1,7 +1,7 @@
 // Gate de sintaxe do Farol: valida TODO .js do projeto, não uma lista fixa.
 //
 // Antes o `npm run check` era `node --check` em três arquivos escolhidos a dedo
-// (server.js, main.js, ui/app.js). Os 19 módulos de lib/ e lib/engine/, criados na
+// (server.js, ui/app.js). Os 19 módulos de lib/ e lib/engine/, criados na
 // decomposição da Engine, e os arquivos de test/ ficavam de fora: erro de sintaxe neles
 // só aparecia quando alguém rodasse a suíte, e num arquivo pouco exercitado podia passar
 // despercebido. Aqui a lista é DESCOBERTA, então módulo novo entra sozinho.
