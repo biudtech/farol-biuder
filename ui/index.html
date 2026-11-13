@@ -357,10 +357,6 @@
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78m.27-2.34L19.07 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 8l-1.5 1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Plano e chaves
           </button>
-          <button class="sys-nav-item" id="sysbtn-reviewers" data-section="reviewers" role="tab" aria-selected="false" aria-controls="sys-reviewers">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Especialistas
-          </button>
           <button class="sys-nav-item" id="sysbtn-prefs" data-section="prefs" role="tab" aria-selected="false" aria-controls="sys-prefs">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Preferências
@@ -583,22 +579,6 @@
           <div class="section-head"><h2>Plano e chaves</h2></div>
           <p class="section-desc">As assinaturas que pagam as revisões, em ordem de prioridade, o modelo que cada provedor usa e os perfis salvos.</p>
           <div id="cadeiaPerfis"></div>
-          <section class="card set-list review-tools" id="capacityManager" aria-labelledby="capacityHeading">
-            <div class="set-head"><div><h3 id="capacityHeading">Reserva de cota e recursos</h3><p>Uma política por perfil, aplicada a novos trabalhos. Cota desconhecida não é saldo disponível.</p></div><div class="row-actions"><button type="button" class="btn sm ghost" id="capacityLoad">Carregar cotas e políticas</button></div></div>
-            <div id="capacityQuotas" class="ilist"></div>
-            <div class="set-block"><h4 class="set-subtitle">Política do perfil</h4><div class="form-grid">
-            <div class="field"><label for="capacityProfile">Perfil</label><select id="capacityProfile"></select></div>
-            <div class="field"><label for="capacityMode">Política de novos trabalhos</label><select id="capacityMode"><option value="off">Desligada</option><option value="observe">Observar e avisar</option><option value="enforce">Reservar: bloquear novas sessões no teto ou sem medição</option></select></div>
-            <div class="field"><label for="capacityMax">Uso máximo em qualquer janela do grupo (1–99%)</label><input type="number" id="capacityMax" min="1" max="99" step="1" value="70"></div>
-            </div><p class="set-desc">Comece em observação. Reservar com cota indisponível aguarda fonte válida ou outra opção já habilitada na ordem de uso dos perfis. Conta com perfil exclusivo não transborda. Orçamentos, grupos e políticas do aparelho continuam valendo.</p>
-            <p class="set-desc">Sessões iniciadas podem concluir e ultrapassar o percentual. Isso não garante reserva rígida de 30% nem separa consumo de outros aplicativos da mesma assinatura. Terminais interativos ficam fora deste controle de cota.</p>
-            <div class="set-actions"><button type="button" class="btn" id="capacitySave">Salvar política deste perfil</button></div><p class="set-msg" id="capacityMessage" role="status" aria-live="polite"></p></div>
-            <details class="disc"><summary>Fonte de cota e limites da leitura</summary><div class="disc-body"><p>A fonte precisa comprovar identidade, janela, atualização e reset. A leitura verificável integrada é o /usage do Antigravity; os demais provedores mostram cota indisponível.</p></div></details>
-            <details class="disc"><summary>Últimas observações do controle de cota</summary><div class="disc-body" id="capacityHistory"></div></details>
-            <div class="set-row"><div class="set-txt"><h4 class="set-title">Recursos deste aparelho</h4><p class="set-desc">Medição sob demanda. Não ajusta concorrência nem encerra processos.</p></div><div class="set-ctl"><button type="button" class="btn sm" id="capacityMeasure">Medir recursos agora</button></div></div>
-            <details class="disc"><summary>Como a medição funciona</summary><div class="disc-body"><p>Cache de cinco segundos. CPU precisa de duas amostras e é normalizada pela máquina inteira. RAM soma RSS/working set, incluindo páginas compartilhadas; não é memória física exclusiva. O coletor também tem custo.</p></div></details>
-            <div id="capacityResources" class="set-block"></div>
-          </section>
           <div class="card set-list" id="sys-plans-modelo">
             <div class="set-row" id="sys-row-provedor">
               <div class="set-txt">
@@ -739,32 +719,6 @@
           </div>
           <div id="claudeProfilesManager" class="cards"></div>
           <p class="section-desc section-note">Perfil de assinatura aponta pra um diretório de config próprio: faça o login nele uma vez, pelo botão Abrir sessão de login do cartão ou FORA do Farol (ex.: <code>$env:CLAUDE_CONFIG_DIR="C:\caminho"; claude login</code>). A ordem de uso vale pra toda conta do GitHub que não tiver um perfil próprio (dropdown na conta, seção Contas). Sem nenhum perfil ligado, o Farol usa o login padrão da máquina.</p>
-        </div>
-
-        <!-- Especialistas -->
-        <div class="sys-section" id="sys-reviewers" role="tabpanel" aria-labelledby="sysbtn-reviewers" tabindex="0">
-          <div class="section-head"><h2>Especialistas</h2></div>
-          <section class="card set-list review-tools" id="specialistManager" aria-labelledby="specialistHeading">
-            <div class="set-head"><div><h3 id="specialistHeading">Especialistas por repositório</h3><p>Contexto curado usado pelo revisor existente. Fontes alteradas ficam fora do prompt. Lições propostas precisam da sua confirmação; nenhum conteúdo muda as regras de segurança da postagem.</p></div></div>
-            <div class="set-block"><div class="form-grid">
-            <div class="field"><label for="specialistAccount">Conta</label><select id="specialistAccount"></select></div>
-            <div class="field"><label for="specialistRepo">Repositório (organização/nome)</label><input id="specialistRepo" type="text" placeholder="organização/projeto" autocomplete="off"></div>
-            <div class="field"><label for="specialistBranch">Branch de destino do PR</label><input id="specialistBranch" type="text" placeholder="main ou staging" autocomplete="off"></div>
-            <div class="field"><button type="button" class="btn" id="specialistLoad">Carregar e conferir fontes</button></div>
-            </div><p id="specialistCurrent" class="set-msg">Escolha conta, repositório e branch.</p><p id="specialistMessage" class="set-msg" role="status" aria-live="polite"></p></div>
-            <div id="specialistEntries" class="specialist-evidence ilist"></div>
-            <details class="disc"><summary>Lições propostas por contestações</summary><div class="disc-body"><p>Contestações podem incluir registros legados sem conta de origem. Confira a procedência antes de curar para a conta escolhida.</p><div id="specialistProposals" class="ilist"></div></div></details>
-            <div class="set-block"><div class="set-head"><div><h4 class="set-subtitle">Conclusão e evidências</h4><p id="specialistOrigin">Origem: curadoria manual.</p></div><div class="row-actions"><button type="button" class="btn sm ghost" id="specialistNew">Nova conclusão</button></div></div>
-            <div class="form-grid">
-            <div class="field"><label for="specialistKind">Tipo</label><select id="specialistKind"><option value="architecture">Arquitetura</option><option value="contract">Contrato</option><option value="convention">Convenção</option><option value="critical">Ponto crítico</option><option value="lesson">Lição</option></select></div>
-            <div class="field"><label for="specialistTitle">Título</label><input id="specialistTitle" type="text" maxlength="140"></div>
-            <div class="field span-all"><label for="specialistText">Conclusão a conferir no código atual</label><textarea id="specialistText" rows="3" maxlength="2000"></textarea></div>
-            <div class="field span-all"><label for="specialistSources">Evidências (uma por linha: caminho:início-fim)</label><textarea id="specialistSources" rows="3" placeholder="CLAUDE.md:1-10"></textarea><small>De 1 a 8 evidências, até 20 linhas por trecho. Não inclua credenciais ou dados pessoais.</small></div>
-            </div><div class="set-actions"><button type="button" class="btn" id="specialistBuild">Pré-visualizar fontes</button></div>
-            <div id="specialistPreview" class="specialist-evidence src-preview"></div>
-            <div class="set-actions"><button type="button" class="btn primary" id="specialistConfirm" disabled>Confirmar curadoria</button></div></div>
-            <details class="disc"><summary>Histórico e reversão</summary><div class="disc-body"><div class="form-grid"><div class="field"><label for="specialistVersions">Versão anterior</label><select id="specialistVersions"></select></div><div class="field"><button type="button" class="btn" id="specialistRestore">Restaurar como inativo</button></div></div><p>Restaurar preserva o histórico e recupera conclusões desativadas. Reconstrua cada uma para conferir suas fontes antes de reativar.</p></div></details>
-          </section>
         </div>
 
         <!-- Preferências -->

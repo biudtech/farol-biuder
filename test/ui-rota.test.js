@@ -59,7 +59,7 @@ test('as doze seções do Sistema, com nome em português no endereço', () => {
   const mapa = {
     'visao-geral': 'overview', contas: 'accounts', automacao: 'automation', jira: 'jira',
     sincronizacao: 'sync', aparelhos: 'devices', grupos: 'groups', plano: 'plans',
-    reviewers: 'reviewers', preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
+    preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
   };
   for (const [slug, interno] of Object.entries(mapa)) {
     assert.equal(lerRota(`/sistema/${slug}`).secao, interno, slug);

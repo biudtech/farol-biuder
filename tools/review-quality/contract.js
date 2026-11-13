@@ -1,6 +1,6 @@
 // Entrada offline: a curadoria fica separada da resposta do modelo e ligada ao seu hash.
 import { createHash } from 'node:crypto';
-import { check, SHA, sourceRef, digest } from '../../lib/specialists/contract.js';
+import { check, SHA, sourceRef, digest } from '../../lib/review-context/contrato.js';
 
 const CHECKS = ['coverage', 'evidence', 'classification', 'publication', 'claims'];
 const STATES = ['verified', 'violated', 'unverified'];
