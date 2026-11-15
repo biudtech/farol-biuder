@@ -10,6 +10,8 @@ const { claudeProfilesHtml, perfilTesteHtml, perfilProblemasHtml } = await impor
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const TELA = fs.readFileSync(path.join(RAIZ, 'ui', 'telas', 'sistema-perfis.js'), 'utf8');
+const lerTela = (nome) => { try { return fs.readFileSync(path.join(RAIZ, 'ui', 'telas', nome), 'utf8'); } catch { return ''; } };
+const LOGIN = lerTela('login-claude.js');
 
 const CONFIG = {
   claudeProfiles: [
@@ -32,13 +34,23 @@ test('cada perfil ganha o botão de testar e o lugar do resultado', () => {
   assert.match(resultado, /preenchida/);
 });
 
-test('a tela só oferece cadastrar chave de API: sem pasta, sem login, sem outros provedores', () => {
+// Em 15/11/2026 a assinatura do Claude voltou (decisão do dono): a tela oferece os dois tipos
+// de perfil, e o de assinatura entra pelo login na própria tela. Continuam fora a pasta
+// digitada à mão, o login pelo terminal, a adoção do login da máquina e os outros provedores.
+test('a tela oferece assinatura e chave de API: login pela tela, sem terminal e sem outros provedores', () => {
   const html = claudeProfilesHtml({ config: { claudeProfiles: [], claudeProfileId: '', accounts: [] }, usage: {}, doctor: {} });
   assert.match(html, /id="cpAddApiKey"/);
   assert.match(html, /id="btnCpAdd"/);
-  assert.doesNotMatch(html, /cpAddDir|cpAddKind|cp-login|btnClaudeMigrate|cpLoginWeb|diretório de config/);
-  const comPerfil = claudeProfilesHtml({ config: CONFIG, usage: {}, doctor: {} });
-  assert.doesNotMatch(comPerfil, /cp-login|Abrir sessão de login/);
+  assert.match(html, /id="btnCpAddAssinatura"/);
+  assert.match(html, /id="cpLoginWeb"/);
+  assert.doesNotMatch(html, /cpAddDir|btnClaudeMigrate|diretório de config|Abrir sessão de login|terminal|Codex|OpenRouter|Antigravity|ordem de uso/i);
+  const comChave = claudeProfilesHtml({ config: CONFIG, usage: {}, doctor: {} });
+  assert.doesNotMatch(comChave, /cp-login/, 'perfil de chave de API não tem login');
+  const comPlano = claudeProfilesHtml({ config: { claudeProfiles: [{ id: 's1', label: 'Plano Max', kind: 'dir', dir: '' }], claudeProfileId: 's1', accounts: [] }, usage: {}, doctor: {} });
+  assert.equal((comPlano.match(/class="btn sm cp-login" data-id="s1"/g) || []).length, 1);
+  assert.match(comPlano, /class="btn sm cp-testar" data-id="s1"/);
+  assert.doesNotMatch(comPlano, /cp-apikey|cp-baseurl/, 'perfil de assinatura não tem campo de chave');
+  assert.match(comPlano, /cp-budget-daily/, 'o orçamento vale para os dois tipos');
 });
 
 test('o resultado do teste mostra a origem de cada informação', () => {
@@ -85,9 +97,11 @@ test('o markup escapa o que vem da configuração', () => {
   assert.doesNotMatch(html, /<script|<img/i);
 });
 
-test('a tela liga o teste à rota do engine, e as rotas de adoção e de login saíram da tela', () => {
+test('a tela liga o teste e o login pela tela às rotas do engine; adoção e login pelo terminal continuam fora', () => {
   assert.match(TELA, /\/api\/claude\/profile-test/);
-  assert.doesNotMatch(TELA, /profile-adopt|claude-login|login-web/);
+  for (const rota of ['start', 'code', 'cancel']) assert.ok(LOGIN.includes(`'/api/claude/login-web/${rota}'`), `rota ${rota} do login pela tela`);
+  // o código colado vive só no campo e na chamada: nada de guardar no navegador nem no console
+  assert.doesNotMatch(TELA + LOGIN, /profile-adopt|claude-login|localStorage|sessionStorage|console\./);
   // o aviso entra no desenho do bloco, não só no import
   const render = TELA.slice(TELA.indexOf('export function renderClaudeProfiles()'), TELA.indexOf('/* editor de perfis'));
   assert.match(render, /perfilProblemasHtml\(/);

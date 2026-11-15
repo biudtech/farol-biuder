@@ -1,4 +1,5 @@
-// Plano e chaves explícito (spec 7.A2), o comportamento, desde o corte 09 só com chave de API.
+// Plano e chaves explícito (spec 7.A2), o comportamento: perfil de assinatura por pasta e de
+// chave de API (a assinatura voltou em 15/11/2026, por decisão do dono).
 // Aqui se prova o que a tela consome: o teste do perfil como ATO EXPLÍCITO (nada é gravado e
 // nada roda), a origem de cada informação e o aviso de perfil apontado que não resolve.
 import os from 'node:os';
@@ -14,6 +15,8 @@ import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
 const { problemasDePerfil, authFromProfile } = await import('../lib/engine/perfil-claude.js');
+const { HOME, WORKSPACE, CLAUDE_PERFIS_DIR } = await import('../lib/paths.js');
+const { default: io } = await import('../lib/io.js');
 const { runtimeChecks } = await import('../ui/pure.js');
 const { startServer } = await import('../lib/http-server.js');
 
@@ -147,13 +150,26 @@ test('sem id, o teste é do perfil que a resolução usa; sem nenhum perfil, diz
   assert.equal(sem.code, 'sem-perfil');
 });
 
-// --- só chave de API (corte 09) ------------------------------------------------------
+// --- assinatura por pasta e chave de API ----------------------------------------------
+// Decisão do dono de 15/11/2026: o Claude roda pelo plano de assinatura, e o perfil de pasta
+// volta ao motor ao lado do de chave de API (o corte 09 tinha deixado só a chave).
 
-test('authFromProfile aceita só perfil de chave de API com a chave preenchida', () => {
+test('authFromProfile aceita o perfil de assinatura por pasta e o de chave de API, e nenhum outro tipo', () => {
   assert.deepEqual(authFromProfile({ id: 'a', kind: 'apikey', apiKey: 'k' }), { kind: 'apikey', id: 'a', apiKey: 'k', baseUrl: '' });
   assert.deepEqual(authFromProfile({ id: 'a', kind: 'apikey', apiKey: 'k', baseUrl: 'https://proxy.exemplo.com' }), { kind: 'apikey', id: 'a', apiKey: 'k', baseUrl: 'https://proxy.exemplo.com' });
+  // sem pasta informada, o motor usa a do próprio perfil, sob o HOME do Farol
+  assert.deepEqual(authFromProfile({ id: 'plano-1', kind: 'dir' }), { kind: 'dir', id: 'plano-1', dir: path.join(CLAUDE_PERFIS_DIR, 'plano-1') });
+  assert.ok(path.join(CLAUDE_PERFIS_DIR, 'plano-1').startsWith(HOME + path.sep), 'a pasta do perfil mora dentro do HOME do Farol');
+  // pasta informada vale quando mora dentro do HOME do Farol
+  const dentro = path.join(HOME, 'assinaturas', 'trabalho');
+  assert.deepEqual(authFromProfile({ id: 'b', kind: 'dir', dir: dentro }), { kind: 'dir', id: 'b', dir: dentro });
+  // fora do HOME o perfil não resolve: no container só esse volume persiste
   assert.equal(authFromProfile({ id: 'b', kind: 'dir', dir: '/x' }), null);
-  assert.equal(authFromProfile({ id: 'c', dir: '/x' }), null, 'perfil sem kind era o de pasta');
+  assert.equal(authFromProfile({ id: 'b', kind: 'dir', dir: path.join(HOME, '..', 'fora') }), null);
+  assert.equal(authFromProfile({ id: 'b', kind: 'dir', dir: path.join(WORKSPACE, 'claude') }), null, 'nunca dentro do workspace da sessão');
+  assert.equal(authFromProfile({ id: '../escapa', kind: 'dir' }), null, 'id que não serve de nome de pasta');
+  assert.equal(authFromProfile({ id: 'c', dir: '/x' }), null, 'perfil sem kind não é de pasta');
+  assert.equal(authFromProfile({ id: 'c', dir: dentro }), null, 'perfil sem kind não é de pasta');
   assert.equal(authFromProfile({ id: 'd', kind: 'apikey', apiKey: '' }), null);
   assert.equal(authFromProfile({ id: 'e', kind: 'apikey' }), null);
   assert.equal(authFromProfile({ id: 'f', kind: 'maquina' }), null);
@@ -165,7 +181,61 @@ test('authFromProfile aceita só perfil de chave de API com a chave preenchida',
 
 // --- a rota ---------------------------------------------------------------------
 
-test('a rota de teste faz o mesmo que a fachada, e as rotas de adoção e de login saíram', async () => {
+// --- teste explícito do perfil de assinatura -----------------------------------------
+// `claude auth status --json` roda contra uma CÓPIA efêmera da configuração: o CLI reescreve
+// o `.claude.json` da pasta que recebe, e testar não pode alterar a pasta da assinatura.
+
+test('perfil de assinatura: o status roda na cópia efêmera, lê a credencial da pasta original e nada é gravado', async () => {
+  const dir = path.join(HOME, 'claude', 'teste-status');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'dona@exemplo.com' } }));
+  fs.writeFileSync(path.join(dir, '.credentials.json'), '{"segredo":"nao-copiar"}');
+  const antesDaPasta = fs.readdirSync(dir).sort();
+  const e = engineCom({ claudeProfiles: [{ id: 's1', label: 'Plano', kind: 'dir', dir }], claudeProfileId: 's1', accounts: [] });
+  const chamadas = [];
+  const original = io.runShell;
+  io.runShell = async (cmd, opts) => {
+    chamadas.push({ cmd, env: { ...opts.env }, copiados: fs.readdirSync(opts.env.CLAUDE_CONFIG_DIR).sort() });
+    return { ok: true, code: 0, stdout: JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'dona@exemplo.com', subscriptionType: 'max' }), stderr: '' };
+  };
+  try {
+    const antes = configEmDisco();
+    const r = await e.claudeTestarPerfil({ profileId: 's1' });
+    assert.equal(r.ok, true);
+    assert.equal(r.escreveu, false);
+    assert.equal(configEmDisco(), antes);
+    assert.equal(chamadas.length, 1);
+    assert.equal(chamadas[0].cmd, 'claude auth status --json');
+    assert.notEqual(chamadas[0].env.CLAUDE_CONFIG_DIR, dir, 'a configuração é a cópia');
+    assert.equal(chamadas[0].env.CLAUDE_SECURESTORAGE_CONFIG_DIR, dir, 'a credencial é lida da pasta original');
+    assert.deepEqual(chamadas[0].copiados, ['.claude.json'], 'a credencial nunca é copiada');
+    assert.equal(fs.existsSync(chamadas[0].env.CLAUDE_CONFIG_DIR), false, 'a cópia some no fim');
+    for (const nome of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'GH_TOKEN']) assert.equal(nome in chamadas[0].env, false, `${nome} herdada não entra`);
+    assert.deepEqual(fs.readdirSync(dir).sort(), antesDaPasta, 'a pasta da assinatura não muda');
+    assert.equal(r.perfil.kind, 'dir');
+    assert.deepEqual(r.perfil.campos.login, { valor: true, origem: 'validado' });
+    assert.deepEqual(r.perfil.campos.email, { valor: 'dona@exemplo.com', origem: 'validado' });
+    assert.equal(r.perfil.campos.plano.valor, null, 'o nome do plano não é exposto');
+    assert.equal(JSON.stringify(r).includes('max'), false);
+    assert.equal(JSON.stringify(r).includes('nao-copiar'), false);
+  } finally { io.runShell = original; }
+});
+
+test('perfil de assinatura: CLI que não responde vira leitura dos arquivos, com aviso', async () => {
+  const dir = path.join(HOME, 'claude', 'teste-mudo');
+  fs.mkdirSync(dir, { recursive: true });
+  const e = engineCom({ claudeProfiles: [{ id: 's2', label: 'Plano', kind: 'dir', dir }], claudeProfileId: 's2', accounts: [] });
+  const original = io.runShell;
+  io.runShell = async () => ({ ok: false, code: 127, stdout: '', stderr: 'claude: not found' });
+  try {
+    const r = await e.claudeTestarPerfil({ profileId: 's2' });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.perfil.campos.login, { valor: false, origem: 'inferido', motivo: 'pelos arquivos da pasta' });
+    assert.match(r.perfil.aviso, /não respondeu/);
+  } finally { io.runShell = original; }
+});
+
+test('a rota de teste faz o mesmo que a fachada, e as rotas de adoção e de login pelo terminal continuam fora', async () => {
   const e = engineCom({ claudeProfiles: [CHAVE_A], claudeProfileId: 'p1', accounts: [] });
   e.config.port = 0;
   const server = await new Promise((resolve, reject) => {
@@ -193,7 +263,7 @@ test('a rota de teste faz o mesmo que a fachada, e as rotas de adoção e de log
     assert.equal(json.ok, true);
     assert.equal(json.escreveu, false);
     assert.equal(teste.corpo.includes('sk-ant-a'), false, 'a chave nunca sai pela rota');
-    for (const rota of ['/api/claude/profile-adopt', '/api/claude-login', '/api/claude/login-web/start']) {
+    for (const rota of ['/api/claude/profile-adopt', '/api/claude-login']) {
       const r = await pedir(rota, { confirmar: true });
       assert.equal(r.status, 404, `${rota} saiu`);
     }

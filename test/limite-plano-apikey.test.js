@@ -67,7 +67,7 @@ test('sem perfil utilizável não há autenticação, e a sessão nem abre', asy
   const antes = process.env.FAROL_HEADLESS_CMD;
   delete process.env.FAROL_HEADLESS_CMD;
   try {
-    await assert.rejects(() => runClaudeStream(e, 'x', { account: 'eu', id: 'sem-perfil' }), /sem perfil de chave de API utilizável/);
+    await assert.rejects(() => runClaudeStream(e, 'x', { account: 'eu', id: 'sem-perfil' }), /sem perfil do Claude utilizável/);
   } finally {
     if (antes !== undefined) process.env.FAROL_HEADLESS_CMD = antes;
   }
