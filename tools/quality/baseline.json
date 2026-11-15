@@ -5,7 +5,7 @@
     "profundidadeExcedida": 2
   },
   "lib/engine/gh-queries.js": {
-    "jsonParseCru": 3
+    "jsonParseCru": 2
   },
   "lib/engine/pushback.js": {
     "emptyCatch": 1,
@@ -17,18 +17,11 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 677,
+    "maxLines": 649,
     "profundidadeExcedida": 3
   },
-  "lib/engine/selfpr.js": {
-    "maxLines": 173,
-    "emptyCatch": 1,
-    "jsonParseCru": 3,
-    "ternarioAninhado": 1,
-    "tempoMagico": 1
-  },
   "lib/engine/session.js": {
-    "maxLines": 97,
+    "maxLines": 85,
     "emptyCatch": 1,
     "jsonParseCru": 3,
     "processEnvDireto": 1,
@@ -45,7 +38,7 @@
     "emptyCatch": 1,
     "jsonParseCru": 1,
     "jsonStringifyCru": 1,
-    "profundidadeExcedida": 14
+    "profundidadeExcedida": 13
   },
   "lib/parse.js": {
     "profundidadeExcedida": 2
@@ -54,7 +47,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 733,
+    "maxLines": 675,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,
@@ -89,10 +82,6 @@
   "ui/telas/infra.js": {
     "jsonStringifyCru": 1,
     "ternarioAninhado": 3
-  },
-  "ui/telas/meus-prs.js": {
-    "ternarioAninhado": 5,
-    "profundidadeExcedida": 4
   },
   "ui/telas/perfil-pessoa.js": {
     "profundidadeExcedida": 1

@@ -194,7 +194,7 @@ export function fmtUsageMetric(v, metric) { return metric === 'custo' ? fmtMoney
 // (modelo/conta), que tem quantidade variavel de nomes. _resto (a fatia
 // reconciliada sem detalhamento) e SEMPRE apagado, em qualquer dimensao: e
 // registro antigo, nao pode parecer uma serie de verdade.
-export const USAGE_KIND_COLOR = { review: 'var(--accent)', self: 'var(--info)', chat: 'var(--ok)', tool: '#b394f0', pushback: 'var(--danger)', outro: 'var(--faint)', _resto: 'var(--faint)' };
+export const USAGE_KIND_COLOR = { review: 'var(--accent)', chat: 'var(--ok)', tool: '#b394f0', pushback: 'var(--danger)', outro: 'var(--faint)', _resto: 'var(--faint)' };
 
 export const USAGE_PALETTE = ['var(--accent)', 'var(--info)', 'var(--ok)', '#b394f0', 'var(--danger)', 'var(--faint)'];
 
