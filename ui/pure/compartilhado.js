@@ -398,7 +398,7 @@ const CODIGO = {
 
 const TIPO_CMD = {
   cancelar: 'cancelar', repetir: 'repetir', decidir: 'decidir', iniciar: 'iniciar', transferir: 'transferir', tomar: 'tomar', 'designar-admin': 'designar admin',
-  revisar: 'revisar agora', ignorar: 'ignorar', restaurar: 'restaurar', ocultar: 'ocultar', mostrar: 'mostrar', 'config-conta': 'configurar a conta',
+  revisar: 'revisar agora', ignorar: 'ignorar', restaurar: 'restaurar', 'config-conta': 'configurar a conta',
 };
 
 function detalheDoCodigo(code) {

@@ -125,7 +125,7 @@ export function usageMatrixRows(matrixSeries, kindNames, modelNames, days, metri
 // _resto e a fatia reconciliada de um dia sem detalhamento (registro anterior aos
 // buckets cruzados da v2.38.0, ou sessao gravada por versao antiga no meio do dia):
 // o engine garante que soma(camadas) == serie do dia, e essa camada e a diferenca.
-export const USAGE_KIND_LABEL = { review: 'Revisão', self: 'Autoanálise', pushback: 'Contestação', tool: 'Ferramentas', chat: 'Chat', outro: 'Outro', _resto: 'Sem detalhamento' };
+export const USAGE_KIND_LABEL = { review: 'Revisão', pushback: 'Contestação', tool: 'Ferramentas', chat: 'Chat', outro: 'Outro', _resto: 'Sem detalhamento' };
 
 // Desfecho da sessão. Status desconhecido (registro de uma versão futura, arquivo
 // editado à mão) cai em 'ok' na leitura, que é o comportamento que sempre valeu.

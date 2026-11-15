@@ -1,4 +1,3 @@
-import { reconcileSelfAnalyses } from './lib/engine/self-reconciliation.js';
 import { assertExternalNodeRuntime } from './lib/node-runtime.js';
 import { repescarRetry } from './lib/engine/review-retry.js';
 assertExternalNodeRuntime();
@@ -50,9 +49,7 @@ import contaQueAge from './lib/engine/conta-que-age.js';
 import versaoClaude from './lib/engine/versao-claude.js';
 import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
 import sessionMod from './lib/engine/session.js';
-import selfMod from './lib/engine/selfpr.js';
 import staleMod from './lib/engine/rereview-stale.js';
-import meusPrsBase from './lib/engine/meus-prs-base.js';
 import labelsATirar from './lib/engine/labels-a-tirar.js';
 import labelPropriaOrfa from './lib/engine/label-propria-orfa.js';
 import { registrarBaseline, lerBaseline } from './lib/engine/baseline.js';
@@ -190,23 +187,12 @@ class Engine extends EventEmitter {
     this.nextCheckAt = null;
     this.panorama = [];
     this.queue = [];
-    this.myPRs = [];                 // PRs abertos de autoria minha (fonte da autoanalise)
-    this.selfAnalyses = readJson(SELF_FILE, {}, warn); // key do PR -> resultado da autoanalise
-    // Ausências consecutivas antes de consultar diretamente o estado do PR.
-    // Contagem só em memória: reiniciar adia a consulta, sem perder relatório.
-    this.selfPruneStrikes = new Map();
     // busca que já deu certo pelo menos uma vez neste processo: sem ela, lista vazia é falta
     // de leitura, e a visão compartilhada não pode publicá-la (lib/engine/sync-andamento.js)
     this.ownersJaLidos = new Set();
-    this.contasMeusPrsLidas = new Set();
     this.contasPedidosLidas = new Set();
-    // key do PR -> { at, updatedAt } dos PRs meus que o usuario mandou sumir da aba.
-    // Nao filtra myPRs (quem esconde e a UI); o updatedAt guardado e o que permite o
-    // retorno automatico quando o PR recebe atividade nova (reconcileHiddenPRs).
-    this.hiddenPRs = readJson(HIDDEN_FILE, {}, warn);
     // assinatura do Claude -> { ate, em }: até quando ela está no limite do plano
     carregarLimites(this);
-    this.mergeStates = {};            // key do PR -> mergeabilidade real (só p/ aprovaveis)
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
     this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
     this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
@@ -400,7 +386,6 @@ class Engine extends EventEmitter {
       const synced = [
         'CLAUDE.md',
         path.join('prompts', 'pr-review-auto.md'),
-        path.join('prompts', 'self-review.md'),
         path.join('.claude', 'agents', 'pr-reviewer.md'),
         path.join('.claude', 'agents', 'claim-verifier.md'),
         path.join('.claude', 'commands', 'pr-review.md'),
@@ -712,7 +697,6 @@ class Engine extends EventEmitter {
 
   // Consultas ao GitHub (leitura, zero IA): colaborador lib/engine/gh-queries.js (Onda 2).
   async searchPRs(extraArgs, user, agora = Date.now()) { return ghMod.searchPRs(this, extraArgs, user, agora); }
-  async myAuthoredPRs(user) { return ghMod.myAuthoredPRs(this, user); }
   async prState(pr) { return ghMod.prState(this, pr); }
   async prEstadoELabels(pr) { return ghMod.prEstadoELabels(this, pr); }
   async headSha(pr) { return ghMod.headSha(this, pr); }
@@ -786,12 +770,6 @@ class Engine extends EventEmitter {
       await this._dispararAutomacoes(fresh);
       await retomadaVarredura.varrerFechadas(this);
 
-      // branch origem->destino de cada PR meu (o card mostra de/para)
-      try { await this.enrichMyPRBranches(); } catch (e) { this.log('WARN', `enrichMyPRBranches: ${e.message}`); }
-      // mergeabilidade real dos PRs aprovaveis (gate honesto do botao Merge)
-      try { await this.refreshMergeStates(); } catch (e) { this.log('WARN', `refreshMergeStates: ${e.message}`); }
-      // conflito e PR superado pela base, de TODO PR meu (meus-prs-base.js), sem esperar clique
-      try { await meusPrsBase.refreshBaseDosMeusPRs(this); } catch (e) { this.log('WARN', `base dos meus PRs: ${e.message}`); }
       // label :revisando cuja remoção falhou no fim da revisão (labels-a-tirar.js)
       try { await labelsATirar.tirarPendentes(this); } catch (e) { this.log('WARN', `labels a tirar: ${e.message}`); }
       try { await labelPropriaOrfa.tirarOrfas(this, panorama); } catch (e) { this.log('WARN', `label própria sem dono: ${e.message}`); }
@@ -906,37 +884,6 @@ class Engine extends EventEmitter {
         for (const pr of part) revSet.add(pr.key);
       }
       if (revAnyOk) this.reviewedKeys = revSet;
-
-      // meus PRs abertos (autoanalise), POR CONTA: falha de uma conta preserva
-      // o estado dela (G5: any-ok global apagava autoanálises e desocultava
-      // hidden da conta que falhou no ciclo)
-      let mineAuthored = null;
-      const authOk = new Set();
-      const authMap = new Map();
-      for (const acc of accounts) {
-        const part = await this.myAuthoredPRs(acc.user);
-        if (part === null) continue;
-        authOk.add(String(acc.user).toLowerCase());
-        this.contasMeusPrsLidas.add(String(acc.user).toLowerCase());
-        for (const pr of part) if (!authMap.has(pr.key)) authMap.set(pr.key, pr);
-      }
-      if (authOk.size) {
-        // preserva do ciclo anterior os PRs das contas que falharam agora
-        for (const pr of (this.myPRs || [])) {
-          const dona = String(this.accountForPr(pr) || '').toLowerCase();
-          if (!authOk.has(dona) && !authMap.has(pr.key)) authMap.set(pr.key, pr);
-        }
-        mineAuthored = [...authMap.values()];
-        mineAuthored.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-        this.myPRs = mineAuthored;
-        await reconcileSelfAnalyses(this, [...mineAuthored, ...panorama, ...(mine || [])], authOk);
-      }
-      // ocultos de "Meus PRs" reconciliados com a lista recém-montada: PR com atividade
-      // nova volta a aparecer sozinho, e chave órfã (PR que fechou) é limpa. O argumento
-      // é o MESMO sinal que decidiu, PR a PR, o que foi substituído e o que foi
-      // preservado logo acima: só a chave de conta que respondeu pode ser limpa, senão
-      // a queda de rede de UMA conta desocultaria os PRs dela (ver reconcileHiddenPRs).
-      this.reconcileHiddenPRs(authOk.size ? authOk : null);
 
       // falha só das --review-requested (ex.: rate limit da API de search): preserva
       // fila, "é meu" e marcadores do último ciclo bom, no MESMO padrão de reviewedKeys
@@ -1271,22 +1218,6 @@ class Engine extends EventEmitter {
 
   async runHeadlessReview(pr) { return reviewMod.runHeadlessReview(this, pr); }
 
-  saveSelfAnalyses() { return selfMod.saveSelfAnalyses(this); }
-  setSelfAnalysisVisibility(key, hidden) { return selfMod.setSelfAnalysisVisibility(this, key, hidden); }
-  // Ocultar um PR de "Meus PRs" (some da aba, sem tocar no GitHub). Não confundir com o
-  // setSelfAnalysisVisibility acima, que esconde só a AUTOANÁLISE e mantém o PR na lista.
-  // Ocultar PR se desfaz sozinho quando o PR recebe atividade nova (reconcileHiddenPRs,
-  // chamada no check()); ocultar ANÁLISE só se desfaz por clique, porque é preferência de
-  // leitura, não estado do PR.
-  saveHiddenPRs() { return selfMod.saveHiddenPRs(this); }
-  hidePR(key) { return selfMod.hidePR(this, key); }
-  unhidePR(key) { return selfMod.unhidePR(this, key); }
-  reconcileHiddenPRs(okAccounts) { return selfMod.reconcileHiddenPRs(this, okAccounts); }
-  async fetchMergeState(url) { return selfMod.fetchMergeState(this, url); }
-  async enrichMyPRBranches() { return selfMod.enrichMyPRBranches(this); }
-  async fetchAutoMergeAllowed(repo) { return selfMod.fetchAutoMergeAllowed(this, repo); }
-  async fetchRuleBlocked(repo, base) { return selfMod.fetchRuleBlocked(this, repo, base); }
-  async refreshMergeStates() { return selfMod.refreshMergeStates(this); }
   async refreshStaleStates(agora) { return staleMod.refreshStaleStates(this, agora); }
   async staleForReview(pr) { return staleMod.staleForReview(this, pr); }
 
@@ -1297,22 +1228,6 @@ class Engine extends EventEmitter {
   async scanPushbacks() { return pushbackMod.scanPushbacks(this); }
   async detectAuthorPushback(pr, seen) { return pushbackMod.detectAuthorPushback(this, pr, seen); }
   async classifyPushback(pr, marker) { return pushbackMod.classifyPushback(this, pr, marker); }
-
-  // --- merge do MEU PR quando a MINHA autoanalise diz "aprovavel" -------------
-  // Unica escrita no GitHub partindo de "Meus PRs" (a autoanalise em si continua
-  // 100% leitura). Acionada por clique explicito, com gate: so o autor mergeia o
-  // proprio PR, so quando aprovavel, so em repo fora da lista bloqueada. Atribui
-  // o autor se preciso e deleta a branch de origem SO se for descartavel.
-  // mode: 'normal' (merge imediato), 'auto' (--auto: mergeia quando os requisitos
-  // passarem, sem burlar protecao) ou 'admin' (--admin: bypassa a protecao agora,
-  // so funciona se voce for admin do repo). Quando o merge normal esbarra na
-  // protecao de branch, devolve { blocked:'policy' } pra UI oferecer auto/admin.
-  async mergeSelfPR(url, opts = {}) { return selfMod.mergeSelfPR(this, url, opts); }
-  selfPromptFor(url) { return selfMod.selfPromptFor(this, url); }
-  parseSelfResult(raw) { return selfMod.parseSelfResult(this, raw); }
-  async launchSelfAnalysis(url, isolation = undefined, agente = false) { return selfMod.launchSelfAnalysis(this, url, { isolation, agente }); }
-  cancelSelfAnalysis(key) { return selfMod.cancelSelfAnalysis(this, key); }
-  async runSelfAnalysis(pr) { return selfMod.runSelfAnalysis(this, pr); }
 
   // Decisão + postagem no GitHub: colaborador lib/engine/decision.js (gate intacto, Onda 2).
   recordDecision(pr, result, extra) { return decisionMod.recordDecision(this, pr, result, extra); }
@@ -1641,15 +1556,6 @@ class Engine extends EventEmitter {
       // card de commit novo (pendência stale_head): o que o round automático vai fazer e
       // quando, ou por que não vai. Sem isto o card pedia clique no caso em que o app agia sozinho
       reRounds: this.reRoundParaUi(),
-      myPRs: this.myPRs,
-      // só as CHAVES: myPRs vai completo de propósito, porque quem esconde é a UI
-      // (que também precisa oferecer "mostrar os ocultos")
-      hiddenPRs: Object.keys(this.hiddenPRs),
-      // quality DERIVADO (calculado agora, nunca lido do disco): e o unico dado que
-      // a UI pode usar pra decidir merge. Ver projectSelfAnalyses em selfpr.js.
-      selfAnalyses: selfMod.projectSelfAnalyses(this.selfAnalyses),
-      mergeStates: this.mergeStates,
-      baseDosMeusPRs: this.baseDosMeusPRs || {},
       // projeção pura: tira o interno (fileBlobs, mapa cru de agents) e entrega a
       // contagem/lista compacta de subagentes que a UI mostra no card da sessão
       activeSessions: this.sessoesParaTela(),

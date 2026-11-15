@@ -10,7 +10,6 @@ const statusLabel = { ok: 'Concluída', erro: 'Erro', cancelada: 'Cancelada', in
 export function activityKpisHtml(report) {
   const values = [
     ['review', 'Revisões concluídas', report.completed.reviews, 'Resultados técnicos · publicação não medida'],
-    ['self', 'Autoanálises concluídas', report.completed.self, 'Análise de PR próprio'],
     ['pr', 'PRs revisados', report.completed.prs, 'PRs únicos com resultado concluído'],
     ['all', 'Execuções de IA', report.totals.attempts, `${count(report.retries)} retentativas identificadas já incluídas`],
   ];
