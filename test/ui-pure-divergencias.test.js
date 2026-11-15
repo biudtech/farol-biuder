@@ -258,8 +258,8 @@ test('item 11: teto atingido ganha selo, texto de teto macio e a projeção sepa
 
 const PERFIS = [
   { id: 'pLab', label: 'Chave de laboratório', kind: 'apikey' },
-  { id: 'pPessoal', label: 'Pessoal' },
-  { id: 'pOutro', label: 'Outro', kind: 'openrouter' },
+  { id: 'pPessoal', label: 'Pessoal', kind: 'apikey' },
+  { id: 'pOutro', label: 'Outro', kind: 'apikey' },
 ];
 
 test('item 12: o vínculo vem do snapshot, inclusive para grupo que não chegou aqui', () => {
@@ -271,10 +271,10 @@ test('item 12: o vínculo vem do snapshot, inclusive para grupo que não chegou 
   assert.doesNotMatch(html, /sem grupo conhecido/);
 });
 
-test('item 14: sem perfil salvo, a assinatura em uso é "não identificado", com o caminho para Plano e chaves', () => {
+test('item 14: sem perfil salvo, não há chave em uso, com o caminho para Plano e chaves', () => {
   const html = P.gruposPerfisHtml([], [grupo()], {});
-  assert.match(html, /não identificado/);
-  assert.match(html, /sem id estável/);
+  assert.match(html, /Chave de API em uso/);
+  assert.match(html, /não abre sessão de revisão/);
   assert.match(html, /data-goto="sys:plans"[^>]*role="button"[^>]*tabindex="0"/);
 });
 

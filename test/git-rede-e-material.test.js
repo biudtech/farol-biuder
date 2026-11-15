@@ -58,10 +58,9 @@ test('as chaves da lista passam, com o valor conferido, e qualquer outra não', 
     '-c', 'https.proxy=socks5h://[::1]:1080',
     '-c', `http.sslCAInfo=${barra(ca)}`,
     '-c', 'http.sslBackend=openssl',
-    '-c', 'http.schannelUseSSLCAInfo=true',
   ]);
   assert.equal(/hostil|fsmonitor|sshCommand|gitProxy|hooksPath|credential|insteadOf/i.test(flags.join(' ')), false);
-  assert.deepEqual(Object.keys(CHAVES_DE_REDE).sort(), ['http.proxy', 'http.schannelUseSSLCAInfo', 'http.sslBackend', 'http.sslCAInfo', 'https.proxy'], 'a lista é fechada');
+  assert.deepEqual(Object.keys(CHAVES_DE_REDE).sort(), ['http.proxy', 'http.sslBackend', 'http.sslCAInfo', 'https.proxy'], 'a lista é fechada');
 });
 
 test('valor fora da forma não passa, mesmo na chave da lista', async () => {
@@ -78,19 +77,17 @@ test('sem config global, nada é repassado', async () => {
   assert.deepEqual(await flagsDeRedeDaMaquina(), []);
 });
 
-test('schannel escolhido pelo Farol respeita a CA declarada; o backend declarado é de quem declarou', () => {
-  const ca = 'http.schannelUseSSLCAInfo=true';
-  assert.ok(flagsDeRede({}, '/ca.pem', true).includes(ca), 'GIT_SSL_CAINFO não some com o schannel forçado');
-  assert.ok(flagsDeRede({ 'http.sslCAInfo': '/ca.pem' }, '', true).includes(ca));
-  assert.deepEqual(flagsDeRede({}, '', true), [], 'sem CA, fica o repositório de certificados da máquina');
-  assert.equal(flagsDeRede({ 'http.sslCAInfo': '/ca.pem', 'http.sslBackend': 'schannel' }, '', true).includes(ca), false);
-  assert.equal(flagsDeRede({ 'http.sslCAInfo': '/ca.pem', 'http.schannelUseSSLCAInfo': 'false' }, '', true).includes(ca), false);
-  assert.deepEqual(flagsDeRede({}, '/ca.pem', false), [], 'fora do Windows a variável já vale sozinha');
+test('flagsDeRede repassa só o que o config global declarou, na ordem', () => {
+  assert.deepEqual(flagsDeRede({}), []);
+  assert.deepEqual(flagsDeRede({ 'http.sslCAInfo': '/ca.pem' }), ['-c', 'http.sslCAInfo=/ca.pem']);
+  assert.deepEqual(flagsDeRede({ 'http.sslCAInfo': '/ca.pem', 'http.sslBackend': 'openssl' }), ['-c', 'http.sslCAInfo=/ca.pem', '-c', 'http.sslBackend=openssl']);
 });
 
-test('o caminho longo vale no git isolado e em quem lê o material, só no Windows', () => {
-  const windows = process.platform === 'win32';
-  for (const flags of [FLAGS_GIT_ISOLADO, FLAGS_GIT_SOBRE_MATERIAL]) assert.equal(flags.includes('core.longpaths=true'), windows);
+test('o git isolado e quem lê o material não forçam core.longpaths nem schannel', () => {
+  for (const flags of [FLAGS_GIT_ISOLADO, FLAGS_GIT_SOBRE_MATERIAL]) {
+    assert.equal(flags.includes('core.longpaths=true'), false);
+    assert.equal(flags.includes('http.sslBackend=schannel'), false);
+  }
 });
 
 test('git sobre o material não executa o core.fsmonitor do config global', async () => {

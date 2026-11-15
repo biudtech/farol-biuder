@@ -147,13 +147,13 @@ test('perfil de IA apagado deixa de ser apontado pelas contas, no servidor', () 
 /* ---------- o rastro: toda mudança de política tem data e origem ---------- */
 
 test('a diferença de política considera conta e chave geral, e ignora o que não é política', () => {
-  const antes = C.retratoDaPolitica({ coAssinarReview: false, accounts: BASE });
+  const antes = C.retratoDaPolitica({ aguardarCiParaRevisar: false, accounts: BASE });
   const depois = C.retratoDaPolitica({
-    coAssinarReview: true,
+    aguardarCiParaRevisar: true,
     accounts: [{ ...BASE[0], color: '#fff', onClean: 'wait' }, BASE[1]],
   });
   assert.deepEqual(C.mudancasDePolitica(antes, depois), [
-    { conta: null, campo: 'coAssinarReview', de: false, para: true },
+    { conta: null, campo: 'aguardarCiParaRevisar', de: false, para: true },
     { conta: 'trabalho', campo: 'onClean', de: null, para: 'wait' },
   ]);
   // as chaves gerais que saíram em 30/09/2026 não são mais política geral
@@ -210,10 +210,10 @@ test('o servidor é quem decide o que é valor válido: escolha fica, valor tort
 
 test('chave geral de Automação que continua sendo política também entra no rastro', () => {
   const e = new Engine();
-  e.updateSettings({ coAssinarReview: true }, 'janela do Farol');
+  e.updateSettings({ aguardarCiParaRevisar: true }, 'janela do Farol');
   const hist = JSON.parse(fs.readFileSync(POLITICA_HISTORICO_FILE, 'utf8'));
   const ultima = hist[hist.length - 1];
-  assert.deepEqual([ultima.conta, ultima.campo, ultima.de, ultima.para, ultima.origem], [null, 'coAssinarReview', false, true, 'janela do Farol']);
+  assert.deepEqual([ultima.conta, ultima.campo, ultima.de, ultima.para, ultima.origem], [null, 'aguardarCiParaRevisar', false, true, 'janela do Farol']);
 });
 
 test('o Diagnóstico mostra as mudanças recentes de política', () => {

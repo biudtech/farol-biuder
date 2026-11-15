@@ -34,7 +34,7 @@ function proofResult(flow) {
 }
 io.run = async (command, args = [], options) => {
   if (command !== 'gh') {
-    if (!['git', 'powershell.exe', 'ps'].includes(command)) throw new Error('Processo externo fora da prova foi bloqueado.');
+    if (!['git', 'ps'].includes(command)) throw new Error('Processo externo fora da prova foi bloqueado.');
     return originalRun(command, args, options);
   }
     const read = args[0] === 'api' && !args.includes('--input') && !args.includes('--method')
@@ -66,7 +66,7 @@ try {
     sourceCacheLimits: { maxBytes: 128 * 1024 ** 2, globalMaxBytes: 256 * 1024 ** 2 } };
   engine.config.ghUser = account;
   engine.accountForPr = () => account;
-  engine.resolveClaudeAuth = () => ({ kind: 'codex' });
+  engine.resolveClaudeAuth = () => ({ kind: 'apikey', id: 'prova', apiKey: '', baseUrl: '' });
   await engine.refreshTokens();
   if (!engine.tokenFor(account)) throw new Error('Credencial da conta indisponível no mecanismo existente.');
   const pr = { key: `${repo}#${number}`, repo, number, url, author: metadata.author, headSha: metadata.head, requested: true };

@@ -46,12 +46,6 @@ test('interpolar um motivo etiquetado produz texto legível, nunca o objeto', ()
   assert.doesNotMatch(frase, /\[object Object\]/);
 });
 
-test('as notificações usam a fonte única do unwrap (lib/format.js)', () => {
-  const avisos = fs.readFileSync(path.join(RAIZ, 'lib', 'engine', 'avisos-nativos.js'), 'utf8');
-  assert.match(avisos, /import \{ reasonText \} from '\.\.\/format\.js'/);
-  assert.doesNotMatch(avisos, /function reasonText/);
-});
-
 // o engine também: a cópia local dele foi removida na v2.51.1
 // o desfecho da revisão (que usa o unwrap) saiu do review.js para o desfecho-da-revisao.js
 // em 18/10/2026: os dois seguem sem cópia local, e quem usa importa do lib/format.js

@@ -93,15 +93,6 @@ test('myAuthoredPRs: conta sem token devolve null sem rodar gh', async () => {
   assert.equal(chamadas.length, 0);
 });
 
-test('fetchDeliveries: alvo de conta sem token vira partial, os outros alvos seguem', async () => {
-  const e = engineDuasContas();
-  runImpl = () => Promise.resolve({ ok: true, code: 0, stdout: '[]', stderr: '' });
-  const d = await e.fetchDeliveries(7, '');
-  assert.equal(d.partial, true, 'a UI avisa que uma conta ficou de fora, nada de corte silencioso');
-  assert.ok(chamadas.length > 0, 'a conta com token buscou normalmente');
-  for (const c of chamadas) assert.equal(c.env.GH_TOKEN, 'tok-alice', 'nenhuma busca saiu com token trocado');
-});
-
 /* ---------- postagem: nunca com a identidade errada (A1, consequência 2) ---------- */
 
 test('postReview: conta do PR sem token NÃO posta (o APPROVE não sai pela primária)', async () => {

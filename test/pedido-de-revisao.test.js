@@ -6,7 +6,6 @@ import io from '../lib/io.js';
 import { ultimoPedidoDeRevisao } from '../lib/engine/gh-queries.js';
 import { registrarPedidoDaSessao } from '../lib/engine/pedido-de-revisao.js';
 import { provasDaDecisao } from '../lib/engine/provas-da-decisao.js';
-import { avisoDe } from '../lib/engine/avisos-nativos.js';
 import { sessionCardHtml } from '../ui/pure/sessao.js';
 import { fmtClock } from '../ui/pure/comum.js';
 
@@ -71,10 +70,3 @@ test('sessionCardHtml mostra "pedida por" com menção navegável e hora quando 
   assert.match(sessionCardHtml({ id: 'a1', label: 'x', pedido: null }, ''), /pedido não identificado/);
 });
 
-test('avisoDe("review-started") monta o aviso silencioso com o pedido', () => {
-  const em = '2026-11-05T10:00:00Z';
-  assert.deepEqual(avisoDe('review-started', { pr: PR, pedido: { por: 'ana', em, time: false } }), {
-    titulo: 'Revisão automática iniciada', corpo: `o/r#7, pedida por @ana às ${fmtClock(Date.parse(em))}`, url: PR.url, pr: 'o/r#7', silencioso: true,
-  });
-  assert.equal(avisoDe('review-started', { pr: PR, pedido: null }).corpo, 'o/r#7, pedido não identificado');
-});

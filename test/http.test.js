@@ -19,32 +19,6 @@ const { reviewCaps } = await import('../lib/engine/decision.js');
 
 let server, base, engine;
 
-test('rota Codex exige seleção explícita válida e preserva a associação global', async () => {
-  const saved = { myPRs: engine.myPRs, headlessQueue: engine.headlessQueue, accountForPr: engine.accountForPr,
-    tokenFor: engine.tokenFor, processHeadless: engine.processHeadless, pushState: engine.pushState };
-  const before = structuredClone(engine.config);
-  const url = 'https://github.com/fixture/repo/pull/938';
-  engine.myPRs = [{ url, key: 'fixture/repo#938', repo: 'fixture/repo', number: 938 }];
-  engine.config.claudeProfiles = [{ id: 'existing-codex', kind: 'codex' }, { id: 'claude', kind: 'dir', dir: '/fixture' }];
-  engine.headlessQueue = []; engine.accountForPr = () => 'fixture'; engine.tokenFor = () => 'fixture-token';
-  engine.processHeadless = engine.pushState = () => {};
-  const route = '/api/self-review/restricted/codex';
-  try {
-    assert.equal((await postSemHeader(route, { url, profileId: 'existing-codex' })).status, 403);
-    for (const profileId of [undefined, null, false, 1, {}, '', 'missing', 'claude']) {
-      const result = JSON.parse((await post(route, { url, profileId })).body);
-      assert.equal(result.ok, false);
-      assert.equal(engine.headlessQueue.length, 0);
-    }
-    const configBeforeLaunch = structuredClone(engine.config);
-    const result = JSON.parse((await post(route, { url, profileId: 'existing-codex', isolation: 'unrestricted' })).body);
-    assert.deepEqual(result, { ok: true, isolation: 'restricted-read', codexProfileId: 'existing-codex' });
-    assert.equal(engine.headlessQueue[0].codexProfileId, 'existing-codex');
-    assert.equal(engine.headlessQueue[0].isolation, 'restricted-read');
-    assert.deepEqual(engine.config, configBeforeLaunch);
-  } finally { Object.assign(engine, saved); engine.config = before; }
-});
-
 test('rota restrita exige o gate HTTP e fixa o modo, sem aceitar downgrade no corpo', async () => {
   const saved = { myPRs: engine.myPRs, headlessQueue: engine.headlessQueue, accountForPr: engine.accountForPr,
     tokenFor: engine.tokenFor, processHeadless: engine.processHeadless, pushState: engine.pushState };
@@ -145,29 +119,6 @@ test('GET /api/state devolve o snapshot serializável', async () => {
   assert.ok(snap.decisions, 'snapshot traz decisions');
   assert.ok(Array.isArray(snap.decisions.resolved), 'resolved é array');
   assert.ok(snap.decisions.resolved.length <= 30, 'payload do SSE respeita o cap de 30 (Revisões recentes)');
-});
-
-test('GET /api/deliveries só consulta o GitHub quando Entregas está ligado', async () => {
-  const real = engine.fetchDeliveries;
-  const previous = engine.config.deliveriesEnabled;
-  let calls = 0;
-  engine.fetchDeliveries = async () => { calls++; return { items: [{ key: 'acme/app#1' }] }; };
-  engine.config.deliveriesEnabled = false;
-  try {
-    const off = await get('/api/deliveries?days=7&owner=acme');
-    assert.equal(off.status, 200);
-    assert.deepEqual(JSON.parse(off.body), { items: [], disabled: true });
-    assert.equal(calls, 0, 'desligado não chega ao fetchDeliveries/gh search');
-
-    engine.config.deliveriesEnabled = true;
-    const on = await get('/api/deliveries?days=7&owner=acme');
-    assert.equal(on.status, 200);
-    assert.deepEqual(JSON.parse(on.body), { items: [{ key: 'acme/app#1' }] });
-    assert.equal(calls, 1, 'ligado consulta exatamente uma vez');
-  } finally {
-    engine.fetchDeliveries = real;
-    engine.config.deliveriesEnabled = previous;
-  }
 });
 
 test('GET / serve a UI estática (index.html)', async () => {

@@ -1,6 +1,6 @@
 // Quem abre é quem fecha, no mesmo lugar (08/11/2026, pedido do dono: clicar para expandir e ter
 // de clicar em outra região para recolher não é intuitivo). A posição foi medida no navegador, em
-// Pra mim, Meus PRs e Panorama (mesmo x e y aberta e fechada); aqui ficam travadas as peças dela.
+// Pra mim e Meus PRs (mesmo x e y aberta e fechada); aqui ficam travadas as peças dela.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import path from 'node:path';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const css = fs.readFileSync(path.join(RAIZ, 'ui/app.css'), 'utf8');
-const prontidao = fs.readFileSync(path.join(RAIZ, 'ui/telas/prontidao.js'), 'utf8');
+const linhas = fs.readFileSync(path.join(RAIZ, 'ui/telas/linhas-compactas.js'), 'utf8');
 
 test('no card aberto, a seta fica no canto da seta da linha compacta', () => {
   assert.match(css, /\.pr-linha \{[^}]*min-height: 48px; padding: 8px 10px 8px 14px/, 'a linha que define o canto');
@@ -33,14 +33,8 @@ test('o card da fila de execução recolhe pela mesma seta', () => {
 });
 
 test('no cartão da sessão, a seta aberta fica na mesma linha da fechada', () => {
-  assert.match(prontidao, /<div class="sess-pron-aberta">\$\{faixaDe\(key\)\}\$\{setaDoCard\(key\)\}<\/div>/);
-  assert.match(css, /\.sess-pron-aberta \{ display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px; \}/);
+  assert.match(linhas, /<div class="sess-pron-aberta">\$\{setaDoCard\(key\)\}<\/div>/);
+  assert.match(css, /\.sess-pron-aberta \{ display: flex; align-items: flex-start; justify-content: flex-end; gap: 8px; margin: 6px 0 2px; \}/);
   assert.match(css, /\.sess-pron-curta \{[^}]*margin: 6px 0 2px; \}/, 'as duas com a mesma margem');
   assert.match(css, /\.card \.sess-pron-aberta \.pron-seta\[aria-expanded="true"\] \{ position: static; \}/);
-});
-
-test('no Panorama aberto, o lugar dos pontos fica reservado, só na Compacta', () => {
-  assert.match(prontidao, /ehCompacta\(\) \? `<span class="pron-pontos-reserva" aria-hidden="true">/);
-  assert.match(css, /\.pron-pontos-reserva \{ display: contents; \}/);
-  assert.match(css, /\.pron-pontos-reserva > \* \{ visibility: hidden; \}/);
 });

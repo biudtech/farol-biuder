@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 
 const falhas = await import('../lib/engine/falhas.js');
 const { Engine } = await import('../server.js');
+const { LOG_FILE } = await import('../lib/paths.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -27,11 +28,12 @@ test('motivo longo fica inteiro (sem o corte de 300) e sobrevive a um engine nov
   assert.equal(outro.falhaDaSessao('a-longo').motivo, motivo);
 });
 
-test('Limpar log não apaga o registro de falha', () => {
+test('log zerado não apaga o registro de falha', () => {
   const e = new Engine();
   e.registrarFalha({ sessionId: 'a-limpar', kind: 'review', motivo: 'quebrou qwerty' });
   e.log('ERROR', 'linha de teste');
-  assert.equal(e.clearLog().ok, true);
+  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+  fs.writeFileSync(LOG_FILE, '');
   assert.ok(fs.existsSync(falhas.arquivoDeFalhas()));
   assert.equal(new Engine().falhaDaSessao('a-limpar').motivo, 'quebrou qwerty');
 });
