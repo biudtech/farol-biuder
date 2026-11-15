@@ -16,7 +16,6 @@ import assert from 'node:assert/strict';
 
 const cache = await import('../lib/sync/cache-chave.js');
 const kek = await import('../lib/sync/kek.js');
-const { IS_WIN } = await import('../lib/paths.js');
 const { credentialsPath } = await import('../lib/sync/credentials.js');
 
 after(() => { try { fs.rmSync(BASE, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ } });
@@ -79,7 +78,7 @@ test('apagarCache remove o arquivo e é idempotente', () => {
   assert.equal(cache.apagarCache(), false);
 });
 
-test('modo 0600 depois de CADA gravação (posix)', { skip: IS_WIN ? 'chmod não vale em NTFS' : false }, () => {
+test('modo 0600 depois de CADA gravação (posix)', () => {
   cache.gravarCache(valor());
   assert.equal(fs.statSync(cache.caminhoDoCache()).mode & 0o777, 0o600);
   cache.gravarCache(valor({ keyringRev: 2 }));

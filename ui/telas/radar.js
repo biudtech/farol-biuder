@@ -1,31 +1,29 @@
 import { safeJsonParse, safeJsonStringify } from '../pure/comum.js';
 import { roundSummaryHtml } from '../pure/round-summary.js';
 import { criterioTecnicoHtml } from '../pure/review.js';
-/* Farol · UI: a aba Radar (fila, decisões pendentes, pushback e panorama). Não é uma
+/* Farol · UI: a aba Radar (fila, decisões pendentes e pushback). Não é uma
    aba registrável (é a aba padrão, e hoje não reage a entrar de aba nem a chegar
-   estado): renderDecisions, renderQueue, renderPanorama e renderRadarNav são
+   estado): renderDecisions, renderQueue e renderRadarNav são
    chamadas pelo connect() do app.js a cada snapshot do SSE, na mesma ordem de
    sempre. */
 
 import {
   esc, fmtStamp, fmtWhenDay, personMention, papelPicker, reasonGroupsHtml,
   resolvedRow, listViewState, queueEmptyOkHtml, aprovadosHoje, orgsMonitoradas,
-  automacaoPausadaPor, pedidosAntesDoInicio, queueCardHtml, panoramaRowHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
+  automacaoPausadaPor, queueCardHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
   contasNoLimiteDaFila, queueLimitHtml, queueWaitingCardHtml,
 } from '../pure.js';
 import { estado, escopo, peopleOf } from './estado.js';
-import { $, api, textoDaListaVazia, toast, copyToClipboard, lembrarAbertos } from './infra.js';
+import { $, api, toast, copyToClipboard, lembrarAbertos } from './infra.js';
 import { scopeVisible, acctMark, acctOf, prUser } from './contas.js';
 import { revisarUrls } from './consumo.js';
-import { renderPanoramaRemoto, contarRemotos } from './listas-remotas.js';
 import { groupedQueue } from '../pure/queue-groups.js';
 import { filaSemRevisoesAtivas, revisaoAtiva, mesmaRevisao } from '../pure/fila.js';
 import { markdownReutilizado as md } from './markdown.js';
 import { cardCheio, ehCompacta, recentesVisiveis } from './densidade.js';
 import {
-  faixaDe, setaDoCard, linhaDaDecisao, linhaDaFila, linhaDaFilaDeExecucao, rodapeDasRecentesHtml, renderResumoPraMim,
-  prontidaoDoPanorama, renderLegendaDoPanorama,
-} from './prontidao.js';
+  setaDoCard, linhaDaDecisao, linhaDaFila, linhaDaFilaDeExecucao, rodapeDasRecentesHtml, renderResumoPraMim,
+} from './linhas-compactas.js';
 
 let queueGrouping = 'none';
 const closedQueueGroups = new Set();
@@ -80,15 +78,13 @@ function switchRadarSub(nome) {
 }
 
 // Contagem das sub-abas. 'Pra mim' soma a fila visível e o que espera decisão sua;
-// as outras duas são contexto e usam a contagem neutra.
+// as outras são contexto e usam a contagem neutra.
 function renderRadarNav(meus) {
   const num = sel => { const e = $(sel); return (!e || e.hidden) ? 0 : (parseInt(e.textContent, 10) || 0); };
   const poe = (sel, n) => { const e = $(sel); if (!e) return; e.textContent = n || ''; e.hidden = !n; };
   const { precisam } = separarPendentes((estado().decisions?.pending || []).filter(scopeVisible));
-  const lista = (estado().panorama || []).filter(scopeVisible);
   poe('#rcMim', precisam.length + dadosDaFila().total);
   poe('#rcMeus', meus ?? num('#myPRsCount'));
-  poe('#rcPano', lista.length + contarRemotos(lista, 'panorama', scopeVisible));
 }
 // menu ··· do card: abre um por vez, e fecha ao clicar fora
 document.addEventListener('click', (e) => {
@@ -111,7 +107,6 @@ document.addEventListener('click', (e) => {
 // atalhos do estado vazio: levar pro que foi feito, ou forçar uma checagem
 document.addEventListener('click', (e) => {
   if (e.target.closest('.eo-check-now')) $('#btnCheck').click();
-  if (e.target.closest('.eo-panorama')) switchRadarSub('pano');
   const r = e.target.closest('.eo-resolved');
   if (r) { const alvo = $('#resolvedWrap'); if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 });
@@ -168,7 +163,6 @@ function renderDecisions() {
       </div>
       ${d.pr?.title ? `<div class="dec-title">${esc(d.pr.title)}</div>` : ''}
       ${author ? `<div class="dec-author">PR de ${personMention(author, 'xs')} ${papelPicker(author, people)}</div>` : ''}
-      ${faixaDe(d.key)}
       ${meta.reasons.length ? reasonGroupsHtml(meta.reasons, d.postRetry) : ''}
       ${meta.statusHtml}
       ${criterioTecnicoHtml(d.technical)}
@@ -237,7 +231,7 @@ function dadosDaFila() {
   const acionaveis = new Set(q.map(pr => pr.key));
   const distribuindo = new Set(estado().headlessDistributing || []);
   const esperando = new Set([...(estado().headlessWaiting || []), ...distribuindo]);
-  const aguardando = semAtivas(estado().panorama || []).filter(pr => pr.mine && scopeVisible(pr)
+  const aguardando = semAtivas(estado().headlessWaitingPrs || []).filter(pr => scopeVisible(pr)
     && esperando.has(pr.key) && !acionaveis.has(pr.key) && !decisoes.has(pr.key));
   const total = q.length + aguardando.length;
   return { q, aguardando, distribuindo, total };
@@ -251,7 +245,7 @@ function manualDe(pr) {
 }
 function cardDaFila(pr, posicao, ctx) {
   if (!cardCheio(pr.key)) return linhaDaFila(pr, { mark: ctx.mark, posicao, parado: !!(ctx.parked || {})[pr.key], manual: manualDe(pr) });
-  return queueCardHtml(pr, { ...ctx, pronCorpo: faixaDe(pr.key), pronLado: setaDoCard(pr.key) });
+  return queueCardHtml(pr, { ...ctx, pronLado: setaDoCard(pr.key) });
 }
 function cardDaFilaDeExecucao(pr, ctx) {
   if (!cardCheio(pr.key)) return linhaDaFilaDeExecucao(pr, ctx);
@@ -292,60 +286,29 @@ function renderQueue() {
       // fila vazia com a automação pausada por teto não é "está tudo em dia":
       // é "nada vai ser revisado sozinho até liberar" (ver automacaoPausadaPor)
       pausado: automacaoPausadaPor(estado().accounts, estado().config, estado().usage),
-      // PRs que já pediam minha revisão antes do baseline: a fila vazia diz quantos ficaram de fora
-      antesDoInicio: pedidosAntesDoInicio({
-        panorama: estado().panorama || [],
-        queueKeys: new Set((estado().queue || []).map(p => p.key)),
-        baseline: estado().baseline,
-      }),
     });
     return;
   }
   const parked = estado().parked || {};
   // limite do plano e quem mais está revisando (02/10/2026, ui/pure/revisando.js): conta com
   // 2 ou mais cards na mesma espera ganha um aviso só no topo, e os cards a forma curta
-  const revisarJunto = estado().config?.revisarComOutrosRevisando === true;
   const contaDe = (pr) => (acctOf(pr) || {}).user || '';
   const limiteDe = (pr) => {
     const conta = acctOf(pr) || {};
     return manualDe(pr) ? 0 : conta.limitePlanoAte || 0;
   };
-  const noTopo = contasNoLimiteDaFila(q, { contaDe, limiteDe, parked, revisarJunto });
+  const noTopo = contasNoLimiteDaFila(q, { contaDe, limiteDe, parked });
   const varias = Object.keys(noTopo).length > 1;
   const avisos = Object.entries(noTopo).map(([conta, v]) => queueLimitHtml(acctOf({ account: conta }), v.ate, v.n, varias)).join('');
   const rows = q.map((pr, i) => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFila(pr, i + 1, {
     people, mark: acctMark(pr), parked, sync: estado().sync,
-    revisarJunto, limiteAte: limiteDe(pr), limiteNoTopo: !!noTopo[contaDe(pr)], manual: manualDe(pr),
+    limiteAte: limiteDe(pr), limiteNoTopo: !!noTopo[contaDe(pr)], manual: manualDe(pr),
     esperaConflito: estado().esperaConflito,
   }) })).concat(aguardando.map(pr => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFilaDeExecucao(pr, {
     mark: acctMark(pr), sync: estado().sync, distribuindo: distribuindo.has(pr.key),
     espera: (estado().headlessWaitingDetails || {})[pr.key],
   }) })));
   box.innerHTML = avisos + groupedQueue(rows, queueGrouping, closedQueueGroups);
-}
-
-function renderPanorama() {
-  const list = (estado().panorama || []).filter(scopeVisible);
-  // as linhas de outros aparelhos passam pelo MESMO filtro de conta, e a contagem soma só
-  // as que este aparelho não tem (telas/listas-remotas.js)
-  const total = list.length + renderPanoramaRemoto(list, scopeVisible);
-  $('#panoCount').hidden = total === 0;
-  $('#panoCount').textContent = total;
-  $('#panoOwners').textContent = list.length ? 'PRs abertos, os seus destacados' : '';
-  const box = $('#panorama');
-  const vs = listViewState({ lastCheckAt: estado().lastCheckAt, status: estado().status, length: list.length });
-  renderLegendaDoPanorama(vs === 'list');
-  if (vs !== 'list') {
-    box.style.display = 'block';
-    box.innerHTML = `<div class="empty" style="border:0">${textoDaListaVazia(vs)}</div>`;
-    return;
-  }
-  box.style.display = '';
-  const runningKeys = new Set([].concat(...(estado().activeSessions || []).map(s => s.keys || [])));
-  const waitingKeys = estado().headlessWaiting || [];
-  const ctxPano = { actions: estado().reviewActions || {}, staleStates: estado().staleStates || {}, reviewStatesGh: estado().reviewStatesGh || {}, running: runningKeys, waiting: waitingKeys,
-    todasContas: escopo() === 'all' };
-  box.innerHTML = list.map(pr => panoramaRowHtml(pr, { ...ctxPano, mark: acctMark(pr, { noBar: true }), ...prontidaoDoPanorama(pr) })).join('');
 }
 
 /* ---------- gatilhos de #resolved (desfecho e nota de pushback, revisar de
@@ -365,7 +328,7 @@ function initResolvedTriggers() {
     const btn = e.target.closest('.pb-confirm');
     if (btn) { submitPushback(btn); return; }
     // revisar de novo: mesma rota do Revisar da fila. O .act-review NÃO tem listener
-    // global (o da fila é escutado dentro do #queue, o do panorama dentro do #panorama),
+    // global (o da fila é escutado dentro do #queue),
     // então a seção escuta o seu. O botão desabilita até o próximo estado re-renderizar.
     const rev = e.target.closest('.act-review');
     if (rev) { if (rev.disabled) return; rev.disabled = true; revisarUrls([rev.dataset.url]); return; }
@@ -378,6 +341,6 @@ function initResolvedTriggers() {
 }
 
 export {
-  renderDecisions, submitPushback, renderResolved, renderQueue, renderPanorama,
+  renderDecisions, submitPushback, renderResolved, renderQueue,
   renderRadarNav, switchRadarSub, radarSubAtual, initResolvedTriggers, aoMudarRadarSub,
 };

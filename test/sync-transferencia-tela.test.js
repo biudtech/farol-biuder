@@ -250,7 +250,7 @@ function estadoDaTela() {
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
     queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
-    usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [], update: { state: 'idle' },
+    usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
     sync,
   };

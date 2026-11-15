@@ -31,7 +31,7 @@ const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'linux' },
   account: { user: 'fixture', tokenOk: true }, accounts: [], queue: [], panorama: [], myPRs: [], hiddenPRs: [],
   activeSessions: [], activity: {}, headlessWaiting: [], decisions: { pending: [], resolved: [] },
   selfAnalyses: {}, reviewActions: {}, usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' },
-  update: {}, toolRuns: {} };
+  update: {} };
 
 test('primeiro SSE Linux oculta autostart sem pintar Sistema nem alterar campo focado', () => {
   doc.activeElement = { tagName: 'INPUT', value: 'rascunho' };

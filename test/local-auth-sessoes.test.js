@@ -86,7 +86,7 @@ test('emitir uma sessão nova poda as expiradas', () => {
   assert.deepEqual(lista.map(s => s.rotulo), ['nova']);
 });
 
-test('o arquivo de sessões nunca fica legível por outros', { skip: process.platform === 'win32' }, () => {
+test('o arquivo de sessões nunca fica legível por outros', () => {
   const token = emitirSessao('', T0);
   assert.equal(fs.statSync(sessoesPath()).mode & 0o777, 0o600);
   verificarSessao(token, T0 + TEMPOS.SESSAO_LOCAL_TOQUE_MS);

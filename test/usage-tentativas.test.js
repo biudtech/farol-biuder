@@ -14,7 +14,6 @@ import assert from 'node:assert/strict';
 const t = await import('../lib/engine/usage-tentativas.js');
 const usage = (await import('../lib/engine/usage.js')).default;
 const { TEMPOS } = await import('../lib/constants.js');
-const { IS_WIN } = await import('../lib/paths.js');
 
 after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 beforeEach(() => { fs.rmSync(t.arquivoDeTentativas(), { force: true }); });
@@ -68,7 +67,7 @@ test('boot: tentativa com tokens vira linha interrompida com o parcial', () => {
   assert.equal(s.inputTokens, 12);
   assert.equal(s.attemptId, id);
   assert.equal(s.costSource, 'desconhecido', 'sem base de estimativa no registro vazio');
-  assert.equal(s.provedorPodeTerContinuado === true, !IS_WIN);
+  assert.equal(s.provedorPodeTerContinuado, true);
   assert.deepEqual(ler(), {});
 });
 

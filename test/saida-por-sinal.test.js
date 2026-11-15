@@ -42,7 +42,7 @@ function rodar(sinal) {
 }
 
 for (const sinal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
-  test(`${sinal} passa pela saída ordenada: sai pelo handler com código 0`, { skip: process.platform === 'win32' }, async () => {
+  test(`${sinal} passa pela saída ordenada: sai pelo handler com código 0`, async () => {
     const r = await rodar(sinal);
     assert.equal(r.signal, null, 'saiu pelo handler, não morto pelo sinal');
     assert.equal(r.code, 0);

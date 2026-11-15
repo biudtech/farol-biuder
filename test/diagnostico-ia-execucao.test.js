@@ -1,13 +1,7 @@
-// A sessão de diagnóstico (A3) vista pelo PROCESSO que ela abre de verdade (verificação B,
-// 16/09/2026). O cmdline.test troca o spawn; aqui o spawn é o real, o FAROL_HEADLESS_CMD está
-// ausente e quem responde é um `claude` falso no PATH, que grava o argv e o cwd que recebeu.
-//
-// Por que as flags além de `--tools`: pelo `claude --help` da 2.1.268 e pela documentação de
-// hooks, `--tools` tira ferramenta do contexto do modelo, mas hooks de settings (usuário,
-// projeto do workspace, plugins) rodam mesmo assim, e nem `--dangerously-skip-permissions`
-// nem `--tools` os afetam. `--safe-mode` desliga hooks, plugins, skills, MCP, agentes
-// customizados, CLAUDE.md e memória, mantendo autenticação e ferramentas embutidas;
-// `--disable-slash-commands` desliga skills e comandos.
+// A sessão comum vista pelo PROCESSO que ela abre de verdade: o cmdline.test troca o spawn;
+// aqui o spawn é o real, o FAROL_HEADLESS_CMD está ausente e quem responde é um `claude`
+// falso no PATH, que grava o argv e o cwd que recebeu. Afirma que a linha é a de sempre,
+// sem nenhuma restrição de ferramenta (o modo somente leitura saiu no lote 7 do corte).
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -21,7 +15,7 @@ import assert from 'node:assert/strict';
 
 const io = (await import('../lib/io.js')).default;
 const { runProvedor, parseEnvelope } = await import('../lib/engine/session.js');
-const { IS_WIN, WORKSPACE } = await import('../lib/paths.js');
+const { WORKSPACE } = await import('../lib/paths.js');
 
 const BIN = path.join(BASE, 'bin');
 const REGISTRO = path.join(BASE, 'registro.jsonl');
@@ -40,11 +34,7 @@ before(() => {
   fs.mkdirSync(BIN, { recursive: true });
   fs.mkdirSync(WORKSPACE, { recursive: true });
   fs.writeFileSync(path.join(BIN, 'claude-falso.cjs'), FALSO);
-  if (IS_WIN) {
-    fs.writeFileSync(path.join(BIN, 'claude.cmd'), `@"${process.execPath}" "%~dp0claude-falso.cjs" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(BIN, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/claude-falso.cjs" "$@"\n`, { mode: 0o755 });
-  }
+  fs.writeFileSync(path.join(BIN, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/claude-falso.cjs" "$@"\n`, { mode: 0o755 });
   process.env.PATH = BIN + path.delimiter + process.env.PATH;
   process.env.FAROL_TESTE_REGISTRO = REGISTRO;
 });
@@ -66,9 +56,8 @@ function engineFalso() {
   };
 }
 
-// mesmo motivo do perfil-claude-sem-escrita: no macOS o shell de login reordena o PATH
+// mesmo motivo do perfil-claude-sem-escrita: o shell de login pode reordenar o PATH
 async function falsoResolve(t) {
-  if (IS_WIN) return true;
   const r = await io.runShell('command -v claude', { env: { ...process.env } });
   if (r.stdout.trim() === path.join(BIN, 'claude')) return true;
   t.skip(`o shell de login resolve outro claude (${r.stdout.trim()}), o falso não seria o executado`);
@@ -83,29 +72,9 @@ async function execucao(opts) {
   return { res, reg: JSON.parse(linhas[0]) };
 }
 
-const RESTRICAO = ['--tools', 'Read,Grep,Glob', '--strict-mcp-config', '--safe-mode', '--disable-slash-commands'];
-
-test('a sessão de leitura executa o claude com a linha exata, no workspace, sem MCP nem customização', async (t) => {
-  if (!await falsoResolve(t)) return;
-  const { res, reg } = await execucao({ somenteLeitura: true });
-  assert.equal(res.text, 'ok', 'o resultado do processo real voltou');
-  assert.deepEqual(reg.argv, ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--dangerously-skip-permissions', ...RESTRICAO]);
-  // o cwd que o processo enxerga vem canônico: no macOS a pasta temporária mora em
-  // /var, que é link para /private/var (medido no CI em 17/09/2026)
-  assert.equal(fs.realpathSync(reg.cwd), fs.realpathSync(WORKSPACE));
-  assert.ok(reg.prompt > 0, 'o prompt chegou pelo stdin, não pela linha');
-  assert.equal(reg.argv.includes('--mcp-config'), false);
-});
-
 test('a sessão comum executa sem nenhuma das restrições', async (t) => {
   if (!await falsoResolve(t)) return;
   const { reg } = await execucao({});
   assert.deepEqual(reg.argv, ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--dangerously-skip-permissions']);
-});
-
-test('argumento extra de quem chama não substitui a restrição, vem depois dela', async (t) => {
-  if (!await falsoResolve(t)) return;
-  const { reg } = await execucao({ somenteLeitura: true, extraArgs: ['--resume', '00000000-0000-4000-8000-000000000000'] });
-  assert.deepEqual(reg.argv.slice(6, 6 + RESTRICAO.length), RESTRICAO);
-  assert.deepEqual(reg.argv.slice(-2), ['--resume', '00000000-0000-4000-8000-000000000000']);
+  assert.equal(fs.realpathSync(reg.cwd), fs.realpathSync(WORKSPACE), 'a sessão roda no workspace');
 });

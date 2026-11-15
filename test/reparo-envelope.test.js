@@ -248,7 +248,7 @@ test('falha real do provedor na continuação sobe intacta para login, cota e re
   for (const message of ['OAuth session expired and could not be refreshed', 'rate limit reached', 'fetch failed']) {
     const broken = envelope();
     delete broken.criteriaVersion;
-    const failure = Object.assign(new Error(message), { perfilDaSessao: { kind: 'codex', id: 'perfil-usado' }, sessionId: 'conversa-que-falhou' });
+    const failure = Object.assign(new Error(message), { perfilDaSessao: { kind: 'apikey', id: 'perfil-usado' }, sessionId: 'conversa-que-falhou' });
     const e = engineCom([{ texto: broken }]);
     const run = e.runClaudeStream;
     let count = 0, published = 0;
@@ -269,7 +269,7 @@ test('infra descrita no envelope da continuação conserva o perfil para a recup
   let count = 0;
   e.runClaudeStream = (prompt, opts) => ++count === 1 ? run(prompt, opts) : Promise.resolve({
     text: saida({ ...envelope(), analysisStatus: 'incomplete', payloads: {}, reportMarkdown: 'OAuth session expired and could not be refreshed' }),
-    sessionId: 'conversa-real', sessionBinding: { kind: 'codex', id: 'perfil-real', dir: '', grupo: '' },
+    sessionId: 'conversa-real', sessionBinding: { kind: 'apikey', id: 'perfil-real' },
   });
   await assert.rejects(e.runHeadlessReview({ ...PR }), error => {
     assert.match(error.message, /OAuth session expired/);
