@@ -170,7 +170,7 @@ test('a linha cifrada cabe no teto de 2048 do panorama/$item com o maior título
 
 function engineFalso(extra = {}) {
   return {
-    headlessQueue: [{ key: 'o/r#1' }, { key: 'o/r#9', kind: 'self' }],
+    headlessQueue: [{ key: 'o/r#1' }],
     activeReviews: new Map([['s1', { keys: ['o/r#2'] }]]),
     decisions: { pending: [{ key: 'o/r#3', createdAt: T }] },
     ignorados: new Set(['o/r#4']),
@@ -193,7 +193,6 @@ test('a fiação lê cada fato do engine e entrega o estado certo por PR', () =>
   const estado = (key) => filaEng.filaDoPr(e, fatos, { key, mine: true }).estado;
   assert.equal(estado('o/r#1'), 'revisando', 'na fila de execução');
   assert.equal(estado('o/r#2'), 'revisando', 'sessão viva');
-  assert.equal(estado('o/r#9'), 'esperando', 'autoanálise na fila não é revisão deste PR');
   assert.equal(estado('o/r#3'), 'decidir');
   assert.equal(estado('o/r#4'), 'ignorado');
   assert.deepEqual(filaEng.filaDoPr(e, fatos, { key: 'o/r#5', mine: true }), { estado: 'estacionado', motivo: 'cancelado', desde: T, ate: 0 });

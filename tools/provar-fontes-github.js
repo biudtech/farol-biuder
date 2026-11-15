@@ -25,12 +25,10 @@ let handle, material;
 const report = { schema: 1, runtime: process.versions.node, arch: process.arch, url,
   isolation: { temporaryHome: true, personalCheckout: false, repositoryExecution: false, paidModel: false, publication: false },
   status: 'running' };
-function proofResult(flow) {
-  if (flow === 'runHeadlessReview') return { analysisStatus: 'incomplete', verdict: 'approve', decision: 'needs_decision',
+function proofResult() {
+  return { analysisStatus: 'incomplete', verdict: 'approve', decision: 'needs_decision',
     reasons: ['Fixture sem análise de modelo.'], findings: [], reportMarkdown: 'Prova de aquisição, sem análise de modelo.',
     payloads: {}, coverage: { total: 0, reviewed: [], missing: [] } };
-  return { verdict: 'needs_work', approvable: false, cardMet: false, blockers: [], externalBlockers: [], tips: [],
-    coverageLimitations: ['Fixture sem análise de modelo.'], summary: 'Prova de aquisição.', reportMarkdown: 'Sem análise de modelo.' };
 }
 io.run = async (command, args = [], options) => {
   if (command !== 'gh') {
@@ -97,18 +95,17 @@ try {
   engine.headSha = async () => metadata.head;
   engine.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: metadata.head });
   engine.myReviewStates = async () => [];
-  engine.myPRs = [{ ...pr }]; engine.selfAnalyses = {}; engine.decisions = { pending: [], resolved: [] };
+  engine.decisions = { pending: [], resolved: [] };
   engine.writeMemory = engine.writeInflight = engine.pushState = engine.processHeadless = () => {};
-  engine.fetchMergeState = async () => null;
   engine.postReview = async () => { throw new Error('Publicação não permitida.'); };
   report.flows = [];
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+  for (const flow of ['runHeadlessReview']) {
     let entered = false;
     engine.runClaudeStream = async prompt => {
       entered = true;
       report.flows.push({ flow, modelStub: true, fullPromptBytes: Buffer.byteLength(prompt),
         fixedHeadInPrompt: prompt.includes(metadata.head), commonSourcesInPrompt: prompt.includes('Fontes e patches preparados') });
-      return { text: safeStringify(proofResult(flow)) };
+      return { text: safeStringify(proofResult()) };
     };
     await engine[flow]({ ...pr });
     if (!entered) throw new Error('Fluxo não chegou à fronteira substituída do modelo.');

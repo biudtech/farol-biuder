@@ -133,13 +133,21 @@ test('retryFailedPosts: dedup no GitHub e POST ancorado', async () => {
   ]);
 });
 
-test('postReviewFromSession: POST direto, sem consulta ao GitHub antes', async () => {
+// Desde 15/11/2026 o item montado só pela chave chega sem autor, e o portão lê o autor antes
+// de enviar um decisivo (autor-do-pr.js): é a única consulta, e nada de coordenação entra.
+const AUTOR = ['pr', 'view', PR.url, '--json', 'author'];
+const AUTOR_DEV = { ok: true, code: 0, stdout: '{"author":{"login":"dev"}}', stderr: '' };
+
+test('postReviewFromSession: só a leitura do autor antes do POST, sem coordenação', async () => {
   const e = motor();
   const cap = e.createReviewPostCapability([PR.key], 'eu', 'chat', '');
-  respostas = [OK_POST];
+  respostas = [AUTOR_DEV, OK_POST];
   const r = await e.postReviewFromSession({ key: PR.key, payload: { event: 'APPROVE', body: CORPO, comments: [] } }, cap);
   assert.equal(r.ok, true);
   await new Promise((res) => setImmediate(res));
-  assert.deepEqual(chamadas, [{ cmd: 'gh', args: POST, conteudo: arquivo({ event: 'APPROVE', body: CORPO, comments: [] }) }]);
+  assert.deepEqual(chamadas, [
+    { cmd: 'gh', args: AUTOR, conteudo: null },
+    { cmd: 'gh', args: POST, conteudo: arquivo({ event: 'APPROVE', body: CORPO, comments: [] }) },
+  ]);
 });
 

@@ -87,7 +87,7 @@ test('o ambiente fixo do headless é só a trava, e congelado', () => {
   assert.ok(Object.isFrozen(ENV_HEADLESS));
 });
 
-for (const prompt of ['pr-review-auto.md', 'self-review.md']) {
+for (const prompt of ['pr-review-auto.md']) {
   test(`o prompt ${prompt} proíbe esperar o CI em segundo plano`, () => {
     const texto = fs.readFileSync(path.join('workspace-template', 'prompts', prompt), 'utf8');
     assert.match(texto, /O CI do PR você não\s+espera/);

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { envSemRepositorioHerdado } from '../lib/git-env.js';
 const root = path.join(import.meta.dirname, '..');
 test('agendamento chega aos engines reais sem trocar patch ou instruções comuns', () => {
-  for (const flow of ['review', 'self']) {
+  for (const flow of ['review']) {
     const reports = [];
     for (const reads of ['off', 'on']) {
       const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-engine-compare-reads-'));
@@ -25,7 +25,7 @@ test('agendamento chega aos engines reais sem trocar patch ou instruções comun
   }
 });
 test('comparação usa engines reais, separa preparo de leitura e comprova reuso em análises distintas', () => {
-  for (const flow of ['review', 'self']) {
+  for (const flow of ['review']) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-engine-compare-test-'));
     try {
       const report = JSON.parse(execFileSync(process.execPath, [path.join(root, 'tools/comparar-contexto-engine.js'), '--mode', 'assist', '--flow', flow],
@@ -46,7 +46,7 @@ test('comparação usa engines reais, separa preparo de leitura e comprova reuso
 });
 
 test('orientação experimental acrescenta referências sem substituir patches ou alegar review de modelo', () => {
-  for (const flow of ['review', 'self']) {
+  for (const flow of ['review']) {
     const reports = [];
     for (const navigation of ['off', 'on']) {
       const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-engine-compare-navigation-'));

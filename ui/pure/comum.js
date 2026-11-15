@@ -39,7 +39,7 @@ export function fmtCompact(n) {
   return String(Math.round(n));
 }
 
-// decide o que uma lista vinda do motor (myPRs/queue/panorama) deve mostrar quando
+// decide o que uma lista vinda do motor (a fila, por exemplo) deve mostrar quando
 // esta vazia: 'loading' (nenhum ciclo terminou ainda desde o boot), 'error' (o
 // PRIMEIRO ciclo da vida falhou sem nunca ter confirmado nada) ou 'empty' (pelo
 // menos um ciclo terminou com sucesso e a lista, de fato, veio vazia). Uma lista

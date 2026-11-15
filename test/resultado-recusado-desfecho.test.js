@@ -48,8 +48,3 @@ test('pushback ilegível marca erro na linha da sessão', async () => {
   assert.match(s.id, /^pb-/);
   assert.equal(s.status, 'erro');
 });
-
-test('autoanálise: a leitura do resultado recusado marca erro antes de propagar', () => {
-  const fonte = fs.readFileSync(path.join(RAIZ, 'lib', 'engine', 'selfpr.js'), 'utf8');
-  assert.match(fonte, /try \{ result = engine\.parseSelfResult\(res\.text\); \}\s*catch \(err\) \{ marcarErroNoConsumo\(engine, id\); throw err; \}/);
-});

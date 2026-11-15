@@ -9,8 +9,6 @@ process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
 const { sourceRuntime } = await import('../lib/engine/analysis-source.js');
 const { PROFILE_FILE } = await import('../lib/technical-review/profiles.js');
-const { observeReadEvent } = await import('../lib/engine/read-evidence.js');
-const { qualityOf } = await import('../lib/engine/selfpr.js');
 const io = (await import('../lib/io.js')).default;
 const original = { ...sourceRuntime }, runOriginal = io.run;
 afterEach(() => { Object.assign(sourceRuntime, original); io.run = runOriginal; });
@@ -33,11 +31,10 @@ function setup() {
   e.headSha = async () => H;
   e.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H });
   e.myReviewStates = async () => [];
-  e.myPRs = [{ ...pr }]; e.decisions = { pending: [], resolved: [] }; e.selfAnalyses = {};
+  e.decisions = { pending: [], resolved: [] };
   e.writeMemory = e.writeInflight = e.pushState = e.processHeadless = e.log = () => {};
   e.postReview = async () => { throw new Error('Nenhuma publicação permitida na fixture.'); };
   e.fetchPrInventory = async () => { throw new Error('Não deve repetir inventário preparado.'); };
-  e.fetchMergeState = async () => null;
   io.run = async (_command, args) => {
     if (args.includes('headRefOid')) return { ok: true, stdout: H };
     if (args.includes('--json')) return { ok: true, stdout: JSON.stringify({ headRefOid: H, baseRefOid: B, statusCheckRollup: [] }) };
@@ -54,11 +51,6 @@ function reviewResult() {
     contextEvidence: { sourceStatus: 'forged', mode: 'assist' },
     payloads: { approve: { event: 'APPROVE', body: 'Análise sintética.' }, request_changes: { event: 'REQUEST_CHANGES', body: 'Análise sintética.' } } };
 }
-function selfResult() {
-  return { verdict: 'approvable', approvable: true, cardMet: true, blockers: [], externalBlockers: [], tips: [],
-    coverageLimitations: [], reportMarkdown: 'Análise sintética.', summary: 'Fixture.',
-    contextEvidence: { sourceStatus: 'forged', mode: 'assist' } };
-}
 function assertPrepared(prompt, session) {
   assert.match(prompt, /Fontes e patches preparados/);
   for (const sha of [H, B, M]) assert.ok(prompt.includes(sha));
@@ -66,61 +58,6 @@ function assertPrepared(prompt, session) {
   assert.equal(session.totalArquivos, 1);
 }
 
-test('requisição normal e restrita atravessam fila, fonte fixada e observação sem aprovar verificações ausentes', async () => {
-  for (const isolation of [undefined, 'restricted-read']) {
-    const e = setup(); e.tokenFor = () => 'fixture-token';
-    const handle = source(); handle.manifest.files = files.map(f => ({ ...f, patchStatus: 'available' }));
-    handle.reader = { tree: async () => ({ complete: true, entries: [{ path: 'src/a.js', readable: true, mode: '100644' }] }),
-      read: async () => ({ status: 'available', text: 'source' }) };
-    sourceRuntime.prepareSources = async () => handle;
-    const launched = await e.launchSelfAnalysis(pr.url, isolation);
-    assert.equal(launched.ok, true);
-    assert.equal(e.headlessQueue[0].isolation, isolation);
-    e.runClaudeStream = async (prompt, opts) => {
-      const session = e.activeReviews.get(opts.id);
-      if (isolation) {
-        assert.match(prompt, /Execução restrita/); assert.deepEqual(opts.extraArgs, []);
-        const filePath = path.join(session.scopeRoot, 'src/a.js');
-        const call = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: filePath } }] } };
-        observeReadEvent(e, opts, call); assert.equal(session.filesRead.size, 0);
-        const content = files[0].patch;
-        observeReadEvent(e, opts, { type: 'user', tool_use_result: { type: 'text', file: {
-          filePath, content, startLine: 1, numLines: 3 } }, message: { content: [{ type: 'tool_result',
-          tool_use_id: 'r1', content: content.split('\n').map((line, i) => `${i + 1}→${line}`).join('\n') }] } });
-        assert.equal(session.filesRead.size, 1);
-      } else assertPrepared(prompt, session);
-      return { text: JSON.stringify(selfResult()) };
-    };
-    await e.runSelfAnalysis(e.headlessQueue.shift());
-    assert.equal(e.activeReviews.size, 0);
-    assert.equal(handle.releases(), 1);
-    if (isolation) {
-      assert.equal(e.selfAnalyses[pr.key].observed.verification.status, 'unknown');
-      assert.equal(qualityOf(e.selfAnalyses[pr.key]).status, 'inconclusive');
-    }
-  }
-});
-
-test('autoanálise restrita descarta mudança de head e não registra resultado quando head final não é confirmado', async () => {
-  for (const finalHead of ['d'.repeat(40), '']) {
-    const e = setup(); e.tokenFor = () => 'fixture-token';
-    const handle = source(); handle.manifest.files = files.map(f => ({ ...f, patchStatus: 'available' }));
-    handle.reader = { tree: async () => ({ complete: true, entries: [{ path: 'src/a.js', readable: false, mode: '100644' }] }) };
-    sourceRuntime.prepareSources = async () => handle;
-    let calls = 0;
-    io.run = async (_command, args) => {
-      if (args.includes('headRefOid')) return { ok: true, stdout: calls++ === 0 ? H : finalHead };
-      if (args.includes('--json')) return { ok: true, stdout: JSON.stringify({ headRefOid: H, baseRefOid: B }) };
-      return { ok: true, stdout: '[[]]' };
-    };
-    e.runClaudeStream = async () => ({ text: JSON.stringify(selfResult()) });
-    if (finalHead) await e.runSelfAnalysis({ ...pr, isolation: 'restricted-read' });
-    else await assert.rejects(e.runSelfAnalysis({ ...pr, isolation: 'restricted-read' }), /Head final não confirmado/);
-    assert.equal(e.selfAnalyses[pr.key], undefined);
-    assert.equal(e.activeReviews.size, 0);
-    assert.equal(handle.releases(), 1);
-  }
-});
 test('Engine review usa fonte comum sem perfil técnico e persiste diagnóstico que o modelo não pode forjar', async () => {
   const e = setup(), handle = source();
   assert.equal(fs.existsSync(PROFILE_FILE), false);
@@ -136,22 +73,8 @@ test('Engine review usa fonte comum sem perfil técnico e persiste diagnóstico 
   assert.ok(item); assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
   assert.equal(item.technicalReview.semDeclaracao, true);
 });
-test('Engine autoanálise usa os mesmos patches e não inventa leitura observada quando a sessão não leu nada', async () => {
-  const e = setup(), handle = source(); sourceRuntime.prepareSources = async () => handle;
-  e.runClaudeStream = async (prompt, options) => {
-    assertPrepared(prompt, e.activeReviews.get(options.id));
-    return { text: JSON.stringify(selfResult()) };
-  };
-  await e.runSelfAnalysis({ ...pr });
-  const item = e.selfAnalyses[pr.key];
-  assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
-  assert.equal(item.observed.scope.observavel, true); assert.deepEqual(item.observed.scope.reviewed, []);
-  assert.deepEqual(item.observed.scope.missing, ['src/a.js']);
-  assert.deepEqual(item.observed.scope.total, ['src/a.js']); assert.equal(handle.releases(), 1);
-  assert.equal(e.activeReviews.size, 0);
-});
-test('cancelamento na aquisição de ambos fluxos impede modelo, não publica e devolve lease', async () => {
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+test('cancelamento na aquisição impede modelo, não publica e devolve lease', async () => {
+  for (const flow of ['runHeadlessReview']) {
     const e = setup(), handle = source(); let entered, finish, signal, model = 0;
     const acquisition = new Promise(resolve => { entered = resolve; });
     sourceRuntime.prepareSources = (_engine, _pr, options) => {
@@ -165,56 +88,51 @@ test('cancelamento na aquisição de ambos fluxos impede modelo, não publica e 
     await assert.rejects(running, error => error.cancelled === true);
     assert.equal(model, 0); assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
     assert.equal(e.decisions.pending.length + e.decisions.resolved.length, 0);
-    assert.equal(e.selfAnalyses[pr.key], undefined);
   }
 });
-test('falha do modelo em ambos fluxos libera a fonte e não inventa resultado', async () => {
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+test('falha do modelo libera a fonte e não inventa resultado', async () => {
+  for (const flow of ['runHeadlessReview']) {
     const e = setup(), handle = source(); sourceRuntime.prepareSources = async () => handle;
     e.runClaudeStream = async () => { throw new Error('Provedor indisponível na fixture.'); };
     await assert.rejects(e[flow]({ ...pr }), /Provedor indisponível/);
     assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
     assert.equal(e.decisions.pending.length + e.decisions.resolved.length, 0);
-    assert.equal(e.selfAnalyses[pr.key], undefined);
   }
 });
 test('fonte indisponível mantém fallback inconclusivo, sem cobertura ou aprovação fabricadas', async () => {
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+  for (const flow of ['runHeadlessReview']) {
     const e = setup(), handle = source('unavailable'); sourceRuntime.prepareSources = async () => handle;
     e.fetchPrInventory = async () => ({ status: 'unavailable', reason: 'Fixture sem inventário.', headSha: H, baseSha: B, files: [], changedFiles: null });
     e.runClaudeStream = async prompt => {
       assert.equal(prompt.includes('## Fontes e patches preparados'), false);
-      return { text: JSON.stringify(flow === 'runHeadlessReview' ? reviewResult() : selfResult()) };
+      return { text: JSON.stringify(reviewResult()) };
     };
     await e[flow]({ ...pr });
-    const item = flow === 'runHeadlessReview' ? e.decisions.pending[0] : e.selfAnalyses[pr.key];
+    const item = e.decisions.pending[0];
     assert.ok(item); assert.equal(item.contextEvidence.sourceStatus, 'unavailable');
-    if (flow === 'runSelfAnalysis') {
-      assert.equal(item.observed.scope, null);
-      assert.equal(e.snapshot().selfAnalyses[pr.key].quality.status, 'inconclusive');
-    } else assert.equal(item.inventarioDiff.status, 'unavailable');
+    assert.equal(item.inventarioDiff.status, 'unavailable');
     assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
   }
 });
-test('falha do índice em assist permite fluxo existente e registra limitação nos dois resultados', async () => {
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+test('falha do índice em assist permite fluxo existente e registra limitação no resultado', async () => {
+  for (const flow of ['runHeadlessReview']) {
     const e = setup(), handle = source(); e.config.reviewContextMode = 'assist';
     sourceRuntime.prepareSources = async () => handle;
     sourceRuntime.buildMap = async () => { throw new Error('Fixture de índice incompleto.'); };
     e.runClaudeStream = async (prompt, options) => {
       assertPrepared(prompt, e.activeReviews.get(options.id));
       assert.equal(prompt.includes('## Navegação do código na revisão fixada'), false);
-      return { text: JSON.stringify(flow === 'runHeadlessReview' ? reviewResult() : selfResult()) };
+      return { text: JSON.stringify(reviewResult()) };
     };
     await e[flow]({ ...pr });
-    const item = flow === 'runHeadlessReview' ? e.decisions.pending[0] : e.selfAnalyses[pr.key];
+    const item = e.decisions.pending[0];
     assert.equal(item.contextEvidence.indexStatus, 'unavailable');
     assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
   }
 });
 
-test('observe preserva prompt completo e resultado decisório de off nos dois fluxos; assist injeta só navegação', async () => {
-  for (const flow of ['runHeadlessReview', 'runSelfAnalysis']) {
+test('observe preserva prompt completo e resultado decisório de off; assist injeta só navegação', async () => {
+  for (const flow of ['runHeadlessReview']) {
     const measured = [];
     for (const mode of ['off', 'observe', 'assist']) {
       // Cada modo recebe o mesmo estado inicial da memória comum, em fixture privada.
@@ -232,10 +150,10 @@ test('observe preserva prompt completo e resultado decisório de off nos dois fl
         const session = e.activeReviews.get(options.id), scopeRoot = session.scopeRoot;
         completePrompt = prompt.replaceAll(JSON.stringify(scopeRoot).slice(1, -1), 'FROZEN_SCOPE_ROOT')
           .replaceAll(scopeRoot, 'FROZEN_SCOPE_ROOT').replaceAll(options.id, 'FROZEN_SESSION_ID');
-        return { text: JSON.stringify(flow === 'runHeadlessReview' ? reviewResult() : selfResult()) };
+        return { text: JSON.stringify(reviewResult()) };
       };
       await e[flow]({ ...pr });
-      const item = flow === 'runHeadlessReview' ? e.decisions.pending[0] : e.selfAnalyses[pr.key];
+      const item = e.decisions.pending[0];
       assert.ok(item); assert.equal(handle.releases(), 1);
       measured.push({ prompt: completePrompt, result: { verdict: item.verdict, status: item.status, decision: item.decision,
         approvable: item.approvable, reasons: item.reasons, payloads: item.payloads }, work: item.contextEvidence.work });

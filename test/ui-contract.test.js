@@ -41,9 +41,9 @@ test('o extrator de rotas não está cego (sanidade das duas pontas)', () => {
   // teste acima passaria no vazio; esta sanidade acusa a cegueira.
   const chamadas = rotasChamadas(), servidas = rotasServidas();
   assert.ok(chamadas.has('/api/decide'), 'a UI chama /api/decide');
-  assert.ok(chamadas.has('/api/self-review'), 'a UI chama /api/self-review');
+  assert.ok(chamadas.has('/api/review'), 'a UI chama /api/review');
   assert.ok(servidas.has('/api/review'), 'o servidor roteia /api/review');
-  assert.ok(servidas.has('/api/self-review/cancel'), 'o servidor roteia o cancelamento da autoanálise');
+  assert.ok(servidas.has('/api/cancel'), 'o servidor roteia o cancelamento da revisão');
   assert.ok(chamadas.size >= 15, `a UI chama muitas rotas (achou ${chamadas.size})`);
 });
 

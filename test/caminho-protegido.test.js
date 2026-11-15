@@ -16,7 +16,7 @@ const {
 } = await import('../lib/review-source/caminho-protegido.js');
 const { KIND: ENV_KIND } = await import('../lib/review-source/env-changes.js');
 const { prPathFromRead, arquivoMaterializado, materializeScope, scopeBlock, blocoDosRedigidos } = await import('../lib/engine/pr-scope.js');
-const { observeReadEvent, observarLeitura, leiturasProvadas, observeSourceResult, lidosComProtegidoProvado } = await import('../lib/engine/read-evidence.js');
+const { observeReadEvent, observarLeitura, leiturasProvadas } = await import('../lib/engine/read-evidence.js');
 const { makeReader } = await import('../lib/review-source/reader.js');
 const { blobHash } = await import('../lib/review-source/contract.js');
 const { prepararCoberturaParaOGate, coverageGap, splitByProof, salvarProvaDaSessao, readFileProof } = await import('../lib/engine/file-proof.js');
@@ -306,33 +306,6 @@ test('o leitor do arquivo inteiro recusa caminho protegido mesmo fora do manifes
   assert.equal((await leitor.read('src/a.js')).status, 'available', 'caminho comum segue legível');
 });
 
-test('a prova pela fonte restrita só credita caminho dentro da raiz do escopo', () => {
-  const root = path.join(FAROL_HOME, 'fonte-restrita', 'patches');
-  fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(path.join(root, '..', 'fora.txt'), 'linha\n');
-  fs.writeFileSync(path.join(root, 'dentro.txt'), 'linha\n');
-  const review = { scopeRoot: root, filesRead: new Set() };
-  const engine = { config: {}, activeReviews: new Map([['rev', review]]) };
-  const entrega = (p) => observeSourceResult(engine, { id: 'rev' }, { path: p, text: 'linha', start: 1, count: 1 }, ' 1→linha');
-  entrega('../fora.txt');
-  assert.equal(leiturasProvadas(engine, 'rev').size, 0, 'arquivo fora da raiz nunca vira prova');
-  entrega('dentro.txt');
-  assert.deepEqual([...leiturasProvadas(engine, 'rev')], ['dentro.txt']);
-});
-
-test('a autoanálise só conta o protegido como lido com a entrega conferida', () => {
-  const root = path.join(FAROL_HOME, 'prova-self');
-  materializeScope(root, [{ path: '.env.example', patch: 'linha um\n', status: 'modified' }, { path: 'src/a.js', patch: PATCH_COMUM, status: 'modified' }]);
-  const f = fixture(root);
-  f.request(arquivoMaterializado(root, '.env.example'), 'r1');
-  assert.deepEqual([...f.review.filesRead], ['.env.example'], 'a regra do Read viu o pedido');
-  f.review.filesRead.add('src/a.js');
-  assert.deepEqual([...lidosComProtegidoProvado(f.engine, 'rev', f.review.filesRead)], ['src/a.js'], 'pedido sem entrega conferida não conta');
-  f.response(arquivoMaterializado(root, '.env.example'), 'r1', ['linha um']);
-  assert.deepEqual([...lidosComProtegidoProvado(f.engine, 'rev', f.review.filesRead)].sort(), ['.env.example', 'src/a.js']);
-  assert.equal(lidosComProtegidoProvado(f.engine, 'rev', undefined).size, 0);
-});
-
 // Matcher das regras `Bash(...)` de deny: `*` casa qualquer trecho, inclusive espaço e aspas.
 function negado(regras, comando) {
   return regras.some((regra) => {
@@ -398,13 +371,6 @@ test('rename vindo de caminho protegido: inventário, prova por arquivo e índic
   assert.deepEqual(Object.values(repoProof.lerIndiceDoRepositorio('o/ren')).map((e) => e.caminho), ['src/a.js']);
 });
 
-test('lidosComProtegidoProvado usa os metadados do diff para o rename vindo de protegido', () => {
-  const engine = { activeReviews: new Map() };
-  const lidos = new Set(['config.txt', 'src/a.js']);
-  assert.deepEqual([...lidosComProtegidoProvado(engine, 'x', lidos, [{ path: 'config.txt', previousPath: '.env.example' }, { path: 'src/a.js' }])], ['src/a.js']);
-  assert.deepEqual([...lidosComProtegidoProvado(engine, 'x', lidos, [{ path: 'config.txt', previousPath: 'docs/old.txt' }])].sort(), ['config.txt', 'src/a.js']);
-});
-
 test('representação sem conteúdo integral: o escopo marca, a leitura não credita, o gate acusa e a prova não guarda', async () => {
   const repoProof = await import('../lib/engine/prova-do-repositorio.js');
   const root = path.join(FAROL_HOME, 'sem-conteudo');
@@ -449,13 +415,11 @@ test('representação sem conteúdo integral: o escopo marca, a leitura não cre
   repoProof.registrarNoIndiceDoRepositorio({ key: 'o/sc#1', repo: 'o/sc' }, 'h1', comPatch,
     { coverage: { reviewed: ['src/a.js', 'img/logo.png'], missing: [] }, semConteudoIntegral: ['img/logo.png'] }, {});
   assert.deepEqual(Object.values(repoProof.lerIndiceDoRepositorio('o/sc')).map((e) => e.caminho), ['src/a.js']);
-  // a autoanálise também tira o sem conteúdo, mesmo que alguém o tenha posto em filesRead
-  assert.deepEqual([...lidosComProtegidoProvado(f.engine, 'rev', new Set(['src/a.js', 'img/logo.png']))], ['src/a.js']);
 });
 
 /* ---------- protegido sem projeção (review de 06/11/2026, 18:19) ---------- */
 
-test('protegido sem patch não ganha marcador no disco: não há o que ler, e a leitura do marcador não credita', () => {
+test('protegido sem patch não ganha marcador no disco: não há o que ler', () => {
   const root = path.join(FAROL_HOME, 'sem-projecao');
   const r = materializeScope(root, [
     { path: '.env.example', patch: '', status: 'modified' },
@@ -472,14 +436,4 @@ test('protegido sem patch não ganha marcador no disco: não há o que ler, e a 
   assert.deepEqual(r.arquivos.map((f) => [f.path, f.projecao]), [['.env.example', false], ['apps/web/.env.local', true], ['img/logo.png', true]]);
   assert.match(scopeBlock(r), /\.env\.example.*sem projeção/);
   assert.match(blocoDosRedigidos(r.redigidos, r.semProjecao), /coverage\.missing/);
-  // a disponibilidade viaja até o crédito: mesmo com uma entrega conferida (um marcador antigo no
-  // disco, por exemplo), o protegido sem projeção fica fora do que a autoanálise conta como lido
-  const f = fixture(root);
-  fs.mkdirSync(path.dirname(arquivoMaterializado(root, '.env.example')), { recursive: true });
-  fs.writeFileSync(arquivoMaterializado(root, '.env.example'), 'marcador\n');
-  f.request(arquivoMaterializado(root, '.env.example'), 'r1');
-  f.response(arquivoMaterializado(root, '.env.example'), 'r1', ['marcador']);
-  assert.ok(leiturasProvadas(f.engine, 'rev').has('.env.example'), 'a entrega do marcador foi conferida');
-  assert.deepEqual([...lidosComProtegidoProvado(f.engine, 'rev', f.review.filesRead, r.arquivos)], []);
-  assert.deepEqual([...lidosComProtegidoProvado(f.engine, 'rev', f.review.filesRead, [{ path: '.env.example', projecao: true }])], ['.env.example']);
 });

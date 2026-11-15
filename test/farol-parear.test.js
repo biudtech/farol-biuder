@@ -66,7 +66,7 @@ test('--revogar-todas derruba sessões e códigos pendentes', () => {
 test('argumento desconhecido não gera código nem mexe em nada', () => {
   const r = rodar(['--codigo', 'ABCDEFGHIJ']);
   assert.equal(r.status, 2);
-  assert.match(r.stderr, /Uso: node tools\/farol-parear\.js \[--revogar-todas \| --autoanalise \[rótulo\]\]/);
+  assert.match(r.stderr, /Uso: node tools\/farol-parear\.js \[--revogar-todas\]/);
   assert.equal(r.stdout, '');
   assert.equal(fs.existsSync(LOCAL_AUTH_DIR), false);
 });
@@ -78,22 +78,15 @@ function executarAqui(args) {
   return { codigo, stdout: saida.join(''), stderr: erro.join('') };
 }
 
-test('--autoanalise emite a credencial do agente: só no stdout, só no escopo dela, revogável', () => {
-  const r = executarAqui(['--autoanalise']);
-  assert.equal(r.codigo, 0, r.stderr);
-  const m = r.stdout.match(/Credencial do agente da autoanálise: ([A-Za-z0-9_-]{43})\nVale só para pedir, ler e listar autoanálises, por até 90 dias\. /);
-  assert.ok(m, r.stdout);
-  assert.equal(verificarSessao(m[1], Date.now(), 'autoanalise'), true);
-  assert.equal(verificarSessao(m[1]), false, 'nunca vale como Bearer geral');
-  assert.deepEqual(listarSessoes().map(s => [s.rotulo, s.classe]), [['agente', 'autoanalise']]);
-  for (const arquivo of arquivosDe(HOME)) assert.equal(fs.readFileSync(arquivo, 'utf8').includes(m[1]), false, `token em claro em ${arquivo}`);
-  assert.equal(executarAqui(['--autoanalise', 'laptop']).codigo, 0);
-  assert.ok(listarSessoes().some(s => s.rotulo === 'laptop' && s.classe === 'autoanalise'));
-  for (const args of [['--autoanalise', 'a', 'b'], ['--outra']]) {
+// A flag do agente saiu com a autoanálise: pedir por ela é uso errado, e nenhuma sessão nasce.
+test('--autoanalise deixou de existir: uso errado, nada no stdout e nenhuma sessão emitida', () => {
+  for (const args of [['--autoanalise'], ['--autoanalise', 'laptop'], ['--outra']]) {
     const errado = executarAqui(args);
     assert.equal(errado.codigo, 2, args.join(' '));
     assert.equal(errado.stdout, '');
+    assert.match(errado.stderr, /Uso: node tools\/farol-parear\.js \[--revogar-todas\]/);
   }
+  assert.deepEqual(listarSessoes(), []);
   assert.equal(executarAqui(['--revogar-todas']).codigo, 0);
-  assert.equal(verificarSessao(m[1], Date.now(), 'autoanalise'), false, 'revogar-todas também derruba a do agente');
 });
+

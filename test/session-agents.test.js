@@ -119,16 +119,16 @@ test('pushActivity: linha de subagente carrega o rótulo (item.a); linha da prin
    A UI mostra a foto de quem escreveu o PR pelo `pr.author` da sessão; se o registro
    parar de carregar o campo, a menção some em SILÊNCIO (personMention sem login não
    desenha nada) e ninguém quebra. Estas duas travas seguram as duas pontas: quem
-   grava (review/selfpr) e quem entrega ao snapshot (projectSessions). */
+   grava (review) e quem entrega ao snapshot (projectSessions). */
 
 test('projectSessions: o autor do PR chega inteiro no snapshot', () => {
   const [p] = projectSessions([{ id: 'a1', mode: 'auto', pr: { key: 'org/app#1', url: 'u', author: 'gabrielk5' } }]);
   assert.equal(p.pr.author, 'gabrielk5');
 });
 
-test('a sessão de revisão e a de autoanálise gravam o autor no pr (senão a UI perde a foto)', () => {
+test('a sessão de revisão grava o autor no pr (senão a UI perde a foto)', () => {
   const raiz = path.join(import.meta.dirname, '..', 'lib', 'engine');
-  for (const arq of ['review.js', 'selfpr.js']) {
+  for (const arq of ['review.js']) {
     const src = fs.readFileSync(path.join(raiz, arq), 'utf8');
     const reg = src.match(/pr: \{ key: pr\.key,[^}]*\}/);
     assert.ok(reg, `${arq}: sumiu o registro do pr na sessão`);

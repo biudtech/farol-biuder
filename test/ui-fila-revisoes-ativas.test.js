@@ -26,8 +26,8 @@ function snapshot() {
     accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: [] }],
     config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [],
       theme: 'dark' },
-    lastCheckAt: Date.now(), queue: [pr, outro], myPRs: [], hiddenPRs: [],
-    decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
+    lastCheckAt: Date.now(), queue: [pr, outro],
+    decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {},
     headlessWaiting: [], usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }
 function receber(snap) { emitir('state', snap); quadros.pintar(); }

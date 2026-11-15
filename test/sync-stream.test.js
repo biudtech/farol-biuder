@@ -192,7 +192,6 @@ engine.sync.fetchImpl = fetchDosDubles;
 engine.sync.agendadorStream = agendador;
 engine.panorama = [{ key: PR_CONHECIDO, url: 'https://github.com/Org/Repo/pull/7', repo: 'Org/Repo', number: 7, account: CONTA }];
 engine.queue = [{ key: PR_VENCIDO, url: 'https://github.com/Org/Repo/pull/9', repo: 'Org/Repo', number: 9, account: CONTA }];
-engine.myPRs = [{ key: PR_MEU, url: 'https://github.com/Org/Repo/pull/8', repo: 'Org/Repo', number: 8, account: CONTA }];
 let pushes = 0;
 engine.pushState = () => { pushes++; };
 const logs = [];

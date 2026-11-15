@@ -15,7 +15,7 @@ const { APP_VERSION } = await import('../lib/paths.js');
 
 test('kindFromId deriva o tipo pelo prefixo do id da sessão', () => {
   assert.equal(usage.kindFromId('a7'), 'review');
-  assert.equal(usage.kindFromId('s3'), 'self');
+  assert.equal(usage.kindFromId('s3'), 'outro', 'o prefixo da autoanálise saiu com ela: linha antiga cai em outro');
   assert.equal(usage.kindFromId('pb2'), 'pushback');
   assert.equal(usage.kindFromId('f1'), 'tool');
   assert.equal(usage.kindFromId('c9'), 'chat');
@@ -48,14 +48,14 @@ test('applyUsage agrega em todos os eixos (totais, dia, tipo, conta, modelo)', (
   const u1 = usage.extractUsage({ usage: { input_tokens: 100, output_tokens: 20 }, total_cost_usd: 0.02 }, 'claude-opus-4-8');
   const u2 = usage.extractUsage({ usage: { input_tokens: 50, output_tokens: 10 }, total_cost_usd: 0.01 }, 'claude-sonnet-4-5');
   usage.applyUsage(store, '2026-07-20', 'review', 'trabalho', 'claude-opus-4-8', u1);
-  usage.applyUsage(store, '2026-07-21', 'self', 'pessoal', 'claude-sonnet-4-5', u2);
+  usage.applyUsage(store, '2026-07-21', 'pushback', 'pessoal', 'claude-sonnet-4-5', u2);
 
   assert.equal(store.totals.sessions, 2);
   assert.equal(store.totals.inputTokens, 150);
   assert.equal(store.totals.outputTokens, 30);
   assert.equal(Math.round(store.totals.costUsd * 100) / 100, 0.03);
   assert.equal(store.byKind.review.inputTokens, 100);
-  assert.equal(store.byKind.self.inputTokens, 50);
+  assert.equal(store.byKind.pushback.inputTokens, 50);
   assert.equal(store.byAccount.trabalho.sessions, 1);
   assert.equal(store.byAccount.pessoal.sessions, 1);
   // byModel usa o rótulo amigável (Opus 4.8 / Sonnet 4.5)
@@ -78,16 +78,16 @@ test('applyUsage: buckets diarios cruzados (kind/model/account/kindxmodel)', () 
   const u1 = usage.extractUsage({ usage: { input_tokens: 100, output_tokens: 20 }, total_cost_usd: 0.02 }, 'claude-opus-4-8');
   const u2 = usage.extractUsage({ usage: { input_tokens: 50, output_tokens: 10 }, total_cost_usd: 0.01 }, 'claude-sonnet-4-5');
   usage.applyUsage(store, '2026-08-01', 'review', 'trabalho', 'claude-opus-4-8', u1);
-  usage.applyUsage(store, '2026-08-01', 'self', 'pessoal', 'claude-sonnet-4-5', u2);
+  usage.applyUsage(store, '2026-08-01', 'pushback', 'pessoal', 'claude-sonnet-4-5', u2);
 
   assert.equal(store.daysByKind['review|2026-08-01'].inputTokens, 100);
-  assert.equal(store.daysByKind['self|2026-08-01'].inputTokens, 50);
+  assert.equal(store.daysByKind['pushback|2026-08-01'].inputTokens, 50);
   assert.equal(store.daysByModel['Opus 4.8|2026-08-01'].inputTokens, 100);
   assert.equal(store.daysByModel['Sonnet 4.5|2026-08-01'].inputTokens, 50);
   assert.equal(store.daysByAccount['trabalho|2026-08-01'].inputTokens, 100);
   assert.equal(store.daysByAccount['pessoal|2026-08-01'].inputTokens, 50);
   assert.equal(store.daysByKindModel['review|Opus 4.8|2026-08-01'].inputTokens, 100);
-  assert.equal(store.daysByKindModel['self|Sonnet 4.5|2026-08-01'].inputTokens, 50);
+  assert.equal(store.daysByKindModel['pushback|Sonnet 4.5|2026-08-01'].inputTokens, 50);
 });
 
 test('applyUsage: poda dos buckets cruzados acompanha a poda de days (MAX_DAYS)', () => {
@@ -233,7 +233,7 @@ test('usageSummary: reconciliação cria a camada _resto pra dia sem detalhament
   const u1 = usage.extractUsage({ usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 7 }, total_cost_usd: 0.5 }, 'claude-opus-4-8');
   const u2 = usage.extractUsage({ usage: { input_tokens: 40, output_tokens: 10 }, total_cost_usd: 0.25 }, 'claude-sonnet-4-5');
   usage.applyUsage(store, '2026-08-01', 'review', 'trabalho', 'claude-opus-4-8', u1);
-  usage.applyUsage(store, '2026-08-02', 'self', 'pessoal', 'claude-sonnet-4-5', u2);
+  usage.applyUsage(store, '2026-08-02', 'pushback', 'pessoal', 'claude-sonnet-4-5', u2);
   // simula o registro anterior à v2.38.0: o dia 01 existe em days mas os buckets
   // cruzados dele não existem (era exatamente o estado do disco em 10/08/2026)
   for (const map of ['daysByKind', 'daysByModel', 'daysByAccount']) {
@@ -305,10 +305,10 @@ test('INVARIANTE: _resto é SEMPRE o último item, e os demais seguem a ordem ex
 
   const sum = usage.usageSummary({ usage: store });
   assert.equal(sum.kindNames[sum.kindNames.length - 1], usage.RESTO, '_resto fecha a lista de nomes');
-  assert.deepEqual(sum.kindNames.slice(0, -1), ['review', 'self', 'chat', 'tool', 'pushback', 'outro'], 'os nomes base mantêm a ordem fixa');
+  assert.deepEqual(sum.kindNames.slice(0, -1), ['review', 'chat', 'tool', 'pushback', 'outro'], 'os nomes base mantêm a ordem fixa');
   for (const dia of sum.stackedSeries.byKind) {
     assert.equal(dia.items[dia.items.length - 1].name, usage.RESTO, `_resto é o último item do dia ${dia.day}`);
-    assert.deepEqual(dia.items.map(i => i.name).slice(0, -1), ['review', 'self', 'chat', 'tool', 'pushback', 'outro'],
+    assert.deepEqual(dia.items.map(i => i.name).slice(0, -1), ['review', 'chat', 'tool', 'pushback', 'outro'],
       `os items do dia ${dia.day} seguem a MESMA ordem dos nomes (cor/legenda/tooltip casam por índice)`);
   }
 });
@@ -475,7 +475,7 @@ test('usageSummary expoe stackedSeries, matrixSeries e recentSessions', () => {
   usage.recordUsage(engine, 'a1', 'trabalho', { usage: { input_tokens: 100, output_tokens: 20 }, total_cost_usd: 0.02 }, 'claude-opus-4-8', '', 'biudtech/farol#88');
 
   const s = usage.usageSummary(engine);
-  assert.deepEqual(s.kindNames, ['review', 'self', 'chat', 'tool', 'pushback', 'outro']);
+  assert.deepEqual(s.kindNames, ['review', 'chat', 'tool', 'pushback', 'outro']);
   assert.ok(s.modelNames.includes('Opus 4.8'));
   assert.ok(s.accountNames.includes('trabalho'));
 
@@ -484,8 +484,8 @@ test('usageSummary expoe stackedSeries, matrixSeries e recentSessions', () => {
   const itemReview = dia.items.find(i => i.name === 'review');
   assert.equal(itemReview.label, 'Revisão');
   assert.equal(itemReview.inputTokens, 200, 'soma applyUsage + recordUsage (2 chamadas de 100 cada)');
-  const itemSelf = dia.items.find(i => i.name === 'self');
-  assert.equal(itemSelf.inputTokens, 0, 'dimensao sem sessao no dia vem com bucket zerado, nao ausente');
+  const itemPushback = dia.items.find(i => i.name === 'pushback');
+  assert.equal(itemPushback.inputTokens, 0, 'dimensao sem sessao no dia vem com bucket zerado, nao ausente');
 
   const diaMatrix = s.matrixSeries.find(d => d.day === today);
   assert.equal(diaMatrix.cells.review['Opus 4.8'].inputTokens, 200);
@@ -531,7 +531,7 @@ test('custoTipicoDeReview: número par de revisões usa a média dos dois do mei
 test('custoTipicoDeReview: só conta REVISÃO, e só dentro da janela', () => {
   const agora = Date.now();
   const sessions = [
-    sessaoDe(10, agora - DIA_MS, 'self'),      // autoanálise não é revisão
+    sessaoDe(10, agora - DIA_MS, 'pushback'),  // pushback não é revisão
     sessaoDe(10, agora - DIA_MS, 'pushback'),  // scan de pushback também não
     sessaoDe(99, agora - 40 * DIA_MS),         // revisão velha, fora dos 30 dias
     sessaoDe(4, agora - DIA_MS),

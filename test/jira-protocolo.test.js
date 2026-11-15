@@ -8,31 +8,17 @@ import assert from 'node:assert/strict';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const PROTOCOLO = fs.readFileSync(path.join(RAIZ, 'workspace-template', 'CLAUDE.md'), 'utf8');
-const SELF = fs.readFileSync(path.join(RAIZ, 'workspace-template', 'prompts', 'self-review.md'), 'utf8');
 
-test('nenhum dos dois fixa mais um site do Jira', () => {
-  for (const [nome, texto] of [['CLAUDE.md', PROTOCOLO], ['self-review.md', SELF]]) {
-    assert.ok(!/[a-z0-9-]+\.atlassian\.net/i.test(texto), `${nome} ainda cita um site fixo do Jira`);
-  }
+test('o protocolo não fixa mais um site do Jira', () => {
+  assert.ok(!/[a-z0-9-]+\.atlassian\.net/i.test(PROTOCOLO), 'CLAUDE.md ainda cita um site fixo do Jira');
 });
 
 test('a revisão sabe que o card já vem lido pelo Farol', () => {
   assert.ok(/lido pelo Farol/i.test(PROTOCOLO));
 });
 
-// ANTES do P0b a autoanálise NÃO recebia o bloco do card: ela mandava o modelo caçar a
-// chave e chamar getJiraIssue sozinho. Isso foi invertido de propósito, porque o card é
-// entrada de uma decisão e precisa vir do app: determinismo, cache, escopo de tenant e o
-// guard de "isto é dado, não instrução" que só o cardBlock aplica.
-test('a autoanálise recebe o card PRÉ-LIDO pelo app e não sai buscando sozinha', () => {
-  assert.ok(/j[áa] vem lido pelo Farol/i.test(SELF), 'o card entra pelo Farol');
-  assert.ok(/N[ãa]o busque de novo/i.test(SELF));
-  assert.ok(!/extraia a chave do card/i.test(SELF), 'não sobrou instrução de caçar a chave');
-});
-
-test('a regra de card não verificável continua nos dois', () => {
+test('a regra de card não verificável continua no protocolo', () => {
   assert.ok(/n[ãa]o[- ]verific[áa]vel/i.test(PROTOCOLO));
-  assert.ok(/n[ãa]o[- ]verific[áa]vel/i.test(SELF));
 });
 
 test('o protocolo da revisão instrui o caso da seção de card ausente', () => {
@@ -53,47 +39,10 @@ test('card lido fora do caminho escopado só vale se for da organização do PR'
     'a mesma chave existe em mais de um tenant: sem confirmar a origem, o card é não-verificável');
 });
 
-/* ---------- P0b: o que o prompt da autoanálise passou a mandar ---------- */
-
-test('a regra de git virou "não mutar", não "não executar"', () => {
-  assert.match(SELF, /n[ãa]o mutar/i, 'o alvo é a mutação');
-  assert.match(SELF, /Inspe[çc][ãa]o com git é permitida/i);
-  assert.match(SELF, /tempor[áa]rio descart[áa]vel|clone ou diret[óo]rio tempor[áa]rio/i);
-});
-
-test('o prompt manda ler o escopo materializado, e não substituir por gh pr diff', () => {
-  assert.match(SELF, /Atribua cada\s+arquivo ou lote a um responsável, que lê com `Read` naquele diretório/i);
-  assert.match(SELF, /leitura observada\s+dos subagentes também conta/i);
-  assert.match(SELF, /Um arquivo sem leitura observada continua não analisado; cache não substitui essa prova/i);
-  assert.match(SELF, /não substitua isso por `gh pr diff`/i);
-});
-
-test('o prompt diz que coverageLimitations só SUBTRAI, e não existe campo que some', () => {
-  assert.match(SELF, /coverageLimitations/);
-  assert.match(SELF, /s[óo] SUBTRAI|só SUBTRAI cobertura/i);
-  assert.match(SELF, /Nada que voc[êe] escreva no JSON aumenta isso/i);
-});
-
-test('o prompt fixa o enum de verdict e proíbe a coerção que o parser recusa', () => {
-  assert.match(SELF, /"approvable"\s*\|\s*"needs_work"|exatamente `"approvable"` ou `"needs_work"`/);
-  assert.match(SELF, /aus[êe]ncia n[ãa]o [ée] o mesmo que\s*\n?\s*vazio|ausência não é o mesmo que/i);
-});
-
-test('a autoanálise participa do protocolo de verificação (era exclusivo da revisão)', () => {
-  assert.match(SELF, /FAROL_CHECKPOINT/);
-  assert.match(SELF, /claim-verifier/);
-  assert.match(SELF, /Nunca escreva o arquivo de checkpoint/i, 'quem grava continua sendo o app');
-});
-
 test('o subagente sabe ler do escopo quando ele existe, e só cai no patch quando não existe', () => {
   const AGENTE = fs.readFileSync(path.join(RAIZ, 'workspace-template', '.claude', 'agents', 'pr-reviewer.md'), 'utf8');
   assert.match(AGENTE, /RAIZ DE ESCOPO/, 'o subagente precisa saber que a raiz pode existir');
   assert.match(AGENTE, /um arquivo por vez/i);
   assert.match(AGENTE, /Sem raiz de escopo/i, 'a revisão comum não pode ser afetada');
   assert.match(AGENTE, /n[ãa]o prova nada sobre arquivo nenhum/i);
-});
-
-test('a autoanálise repassa a raiz do escopo pro subagente (senão ninguém abre os arquivos)', () => {
-  assert.match(SELF, /RAIZ DO ESCOPO/);
-  assert.match(SELF, /A leitura do subagente conta pra cobertura/i);
 });

@@ -53,9 +53,8 @@ function packBytes(directory) {
 async function diagnoseLegacy(home, port) {
   const root = path.join(home, 'workspace/state/technical-review');
   const decisions = read(path.join(home, 'workspace/state/decisions.json'));
-  const self = read(path.join(home, 'workspace/state/self-analyses.json'));
   const inflight = read(path.join(home, 'workspace/state/inflight.json'));
-  const records = [...(decisions?.pending || []), ...(decisions?.resolved || []), ...Object.values(self || {})];
+  const records = [...(decisions?.pending || []), ...(decisions?.resolved || [])];
   let sessions = [], liveStatus = 'unavailable';
   if (port) {
     try {
@@ -84,7 +83,7 @@ async function diagnoseLegacy(home, port) {
         : 'Comprovar término dos consumidores e ausência de necessidade de retomada; preservar resultados; validar raiz privada. Ausência de referência ou idade não bastam.' };
   });
   return { schema: 1, at: new Date().toISOString(), readOnly: true, cleanupExecuted: false,
-    sources: { decisions: !!decisions, selfAnalyses: !!self, inflight: Array.isArray(inflight), liveSnapshot: liveStatus, liveSessions: sessions.length },
+    sources: { decisions: !!decisions, inflight: Array.isArray(inflight), liveSnapshot: liveStatus, liveSessions: sessions.length },
     categories: grouped, items, count: items.length,
     interpretation: 'Referência histórica a -result.json não demonstra consumidor da árvore Git. Término da análise ou existência de resultado não comprova término de todos os processos legados sem manifesto.',
     limitations: ['Nenhum legado tem identidade de proprietário/consumidor reconstruída com segurança.', 'Packs são parte do tamanho total; não some esta medida ao total histórico.', 'Checkpoint de verificação de claims é histórico, não prova de sessão retomável.', 'Não foram lidos argumentos de processos nem extraídos conteúdos privados para o relatório.'] };

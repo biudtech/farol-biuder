@@ -125,13 +125,6 @@ test('comandos entre aparelhos: tomar, iniciar e repetir não recusam por ser ad
   }
 });
 
-test('autoanálise no admin: não devolve o aviso de quem só assiste', async () => {
-  const e = engineDe('eu');
-  e.myPRs = [prDo('eu')];
-  const r = await e.launchSelfAnalysis(URL_314);
-  assert.doesNotMatch(String(r.error || ''), /assiste e decide/);
-});
-
 test('varredura de pushback no admin olha os PRs', async () => {
   const e = engineDe('eu');
   e.config.autoPushback = true;

@@ -125,7 +125,7 @@ export function usageMatrixRows(matrixSeries, kindNames, modelNames, days, metri
 // _resto e a fatia reconciliada de um dia sem detalhamento (registro anterior aos
 // buckets cruzados da v2.38.0, ou sessao gravada por versao antiga no meio do dia):
 // o engine garante que soma(camadas) == serie do dia, e essa camada e a diferenca.
-export const USAGE_KIND_LABEL = { review: 'Revisão', self: 'Autoanálise', pushback: 'Contestação', tool: 'Ferramentas', chat: 'Chat', outro: 'Outro', _resto: 'Sem detalhamento' };
+export const USAGE_KIND_LABEL = { review: 'Revisão', pushback: 'Contestação', tool: 'Ferramentas', chat: 'Chat', outro: 'Outro', _resto: 'Sem detalhamento' };
 
 // Desfecho da sessão. Status desconhecido (registro de uma versão futura, arquivo
 // editado à mão) cai em 'ok' na leitura, que é o comportamento que sempre valeu.
@@ -194,7 +194,7 @@ export function fmtUsageMetric(v, metric) { return metric === 'custo' ? fmtMoney
 // (modelo/conta), que tem quantidade variavel de nomes. _resto (a fatia
 // reconciliada sem detalhamento) e SEMPRE apagado, em qualquer dimensao: e
 // registro antigo, nao pode parecer uma serie de verdade.
-export const USAGE_KIND_COLOR = { review: 'var(--accent)', self: 'var(--info)', chat: 'var(--ok)', tool: '#b394f0', pushback: 'var(--danger)', outro: 'var(--faint)', _resto: 'var(--faint)' };
+export const USAGE_KIND_COLOR = { review: 'var(--accent)', chat: 'var(--ok)', tool: '#b394f0', pushback: 'var(--danger)', outro: 'var(--faint)', _resto: 'var(--faint)' };
 
 export const USAGE_PALETTE = ['var(--accent)', 'var(--info)', 'var(--ok)', '#b394f0', 'var(--danger)', 'var(--faint)'];
 
@@ -401,7 +401,7 @@ export function usageSessionsHtml(u) {
 
 /* Uma linha que responde a pergunta que a tabela sozinha nao responde: quanto do
    gasto virou resultado. Ela existe porque em 30/08/2026 o dia fechou com US$ 94,39
-   e 87% da autoanalise no lixo, e a aba mostrava sucesso em 100% das sessoes: pra
+   e 87% do gasto de um tipo de sessao no lixo, e a aba mostrava sucesso em 100% das sessoes: pra
    enxergar o desperdicio foi preciso cruzar dois arquivos na mao.
 
    So aparece quando ha o que dizer (algum gasto perdido ou estimado): linha fixa

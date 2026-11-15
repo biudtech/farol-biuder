@@ -87,12 +87,6 @@ test('searchPRs: conta com token busca com o token DELA', async () => {
   assert.equal(chamadas[0].env.GH_TOKEN, 'tok-alice');
 });
 
-test('myAuthoredPRs: conta sem token devolve null sem rodar gh', async () => {
-  const e = engineDuasContas();
-  assert.equal(await e.myAuthoredPRs('bob'), null);
-  assert.equal(chamadas.length, 0);
-});
-
 /* ---------- postagem: nunca com a identidade errada (A1, consequência 2) ---------- */
 
 test('postReview: conta do PR sem token NÃO posta (o APPROVE não sai pela primária)', async () => {
@@ -111,34 +105,7 @@ test('myReviewStates: conta sem token devolve null (não confirma dedup pela ide
   assert.equal(chamadas.length, 0);
 });
 
-/* ---------- Meus PRs: gate pela conta DONA do PR, não pela primária (M10) ---------- */
-
-test('launchSelfAnalysis: recusa quando a conta do PR está sem token, mesmo com a primária ok (M10)', async () => {
-  const e = engineDuasContas(); // primária alice ok, bob sem token
-  e.myPRs = [{ key: 'biudtech/app#3', url: 'https://github.com/biudtech/app/pull/3', repo: 'biudtech/app', number: 3 }];
-  const r = await e.launchSelfAnalysis('https://github.com/biudtech/app/pull/3');
-  assert.equal(r.ok, false, 'não abre sessão que rodaria gh e Claude com identidade errada');
-  assert.equal(e.headlessQueue.length, 0);
-});
-
-test('launchSelfAnalysis: conta do PR com token passa, mesmo com a PRIMÁRIA sem token (o M10 recusava isso)', async () => {
-  const e = engineDuasContas();
-  e.token = null; e.tokenOk = false; e.tokens = { bob: 'tok-bob' }; // só a de trabalho autenticada
-  e.myPRs = [{ key: 'biudtech/app#3', url: 'https://github.com/biudtech/app/pull/3', repo: 'biudtech/app', number: 3 }];
-  e.processHeadless = () => { }; // não abrir sessão de verdade no teste
-  const r = await e.launchSelfAnalysis('https://github.com/biudtech/app/pull/3');
-  assert.equal(r.ok, true);
-  assert.equal(e.headlessQueue[0].account, 'bob');
-});
-
 /* ---------- leitores best-effort: sem token = incerteza pelo contrato ---------- */
-
-test('fetchMergeState: conta da org sem token devolve null sem rodar gh', async () => {
-  const e = engineDuasContas();
-  const ms = await e.fetchMergeState('https://github.com/biudtech/app/pull/8');
-  assert.equal(ms, null);
-  assert.equal(chamadas.length, 0);
-});
 
 test('staleForReview: conta sem token devolve indeterminado (nunca reativa Re-revisar nem relança por incerteza)', async () => {
   const e = engineDuasContas();

@@ -1,7 +1,7 @@
 // A fiação do caminho protegido nas sessões de verdade (06/11/2026, revisão do PR #350): o que o
-// lançador RECEBE (guardas e MCP, com a exceção da execução isolada), a leitura observada que
-// chega ao gate da revisão e à autoanálise, e o escopo gravado para a revisão no terminal.
-// Os testes dirigem runHeadlessReview, runSelfAnalysis e launchReview com o lançador dublado,
+// lançador RECEBE (guardas e MCP), a leitura observada que chega ao gate da revisão, e o escopo
+// gravado para a revisão no terminal.
+// Os testes dirigem runHeadlessReview e launchReview com o lançador dublado,
 // no mesmo molde de test/analysis-source-flows.test.js: nada aqui lê o fonte.
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 import fs from 'node:fs';
@@ -51,10 +51,9 @@ function setup({ jira = true } = {}) {
   e.headSha = async () => H;
   e.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H });
   e.myReviewStates = async () => [];
-  e.myPRs = [{ ...pr }]; e.decisions = { pending: [], resolved: [] }; e.selfAnalyses = {};
+  e.decisions = { pending: [], resolved: [] };
   e.writeMemory = e.writeInflight = e.pushState = e.processHeadless = e.log = () => {};
   e.postReview = async () => { throw new Error('Nenhuma publicação permitida na fixture.'); };
-  e.fetchMergeState = async () => null;
   io.run = async (_command, args) => {
     if (args.includes('headRefOid')) return { ok: true, stdout: H };
     if (args.includes('--json')) return { ok: true, stdout: JSON.stringify({ headRefOid: H, baseRefOid: B, statusCheckRollup: [] }) };
@@ -86,10 +85,6 @@ function reviewResult(revisados = ['src/a.js', '.env.example']) {
     alcance: [{ alterado: 'src/a.js', chamadores: [], semChamador: 'Fixture não declara consumidor externo.' }],
     payloads: { approve: { event: 'APPROVE', body: 'Análise sintética.' }, request_changes: { event: 'REQUEST_CHANGES', body: 'Análise sintética.' } } };
 }
-function selfResult() {
-  return { verdict: 'approvable', approvable: true, cardMet: true, blockers: [], externalBlockers: [], tips: [],
-    coverageLimitations: [], reportMarkdown: 'Análise sintética.', summary: 'Fixture.' };
-}
 const LACUNA = /caminho protegido sem leitura observada da projeção redigida: \.env\.example/;
 const motivosDe = (item) => JSON.stringify(item);
 
@@ -112,20 +107,6 @@ test('a revisão headless sem Jira cadastrado ainda recebe as guardas', async ()
   assert.deepEqual(args, GUARDAS);
 });
 
-test('a autoanálise entrega guardas e MCP, e a execução isolada não leva nenhum', async () => {
-  for (const isolation of [undefined, 'restricted-read']) {
-    const e = setup();
-    if (isolation) sourceRuntime.prepareSources = async () => source([files[0]], true);
-    let args = null;
-    e.runClaudeStream = async (_prompt, opts) => { args = opts.extraArgs; return { text: JSON.stringify(selfResult()) }; };
-    await e.runSelfAnalysis({ ...pr, isolation });
-    if (isolation) { assert.deepEqual(args, [], 'execução isolada: nada além do que ela mesma monta'); continue; }
-    assert.ok(args.includes('--mcp-config') && args.includes('--strict-mcp-config'), JSON.stringify(args));
-    const i = args.indexOf('--settings');
-    assert.deepEqual(args.slice(i, i + 2), GUARDAS);
-  }
-});
-
 test('a leitura observada da projeção chega ao gate da revisão (leiturasProvadas)', async () => {
   for (const comRetorno of [false, true]) {
     const e = setup();
@@ -135,17 +116,6 @@ test('a leitura observada da projeção chega ao gate da revisão (leiturasProva
     assert.ok(item, 'a decisão foi registrada');
     if (comRetorno) assert.doesNotMatch(motivosDe(item), LACUNA, 'leitura conferida cobre o protegido');
     else assert.match(motivosDe(item), LACUNA, 'só o pedido, sem entrega conferida, é lacuna');
-  }
-});
-
-test('a autoanálise só conta o protegido lido com a entrega conferida', async () => {
-  for (const comRetorno of [false, true]) {
-    const e = setup();
-    e.runClaudeStream = async (_prompt, opts) => { lerProjecao(e, opts, comRetorno); return { text: JSON.stringify(selfResult()) }; };
-    await e.runSelfAnalysis({ ...pr });
-    const scope = e.selfAnalyses[pr.key].observed.scope;
-    assert.equal(scope.reviewed.includes('.env.example'), comRetorno, JSON.stringify(scope));
-    assert.equal(scope.missing.includes('.env.example'), !comRetorno);
   }
 });
 
@@ -219,18 +189,6 @@ const RENOMEADO = { path: 'config.txt', previousPath: '.env.example', sha: 'f'.r
 const COM_RENAME = [files[0], RENOMEADO];
 const LACUNA_DO_RENAME = /caminho protegido sem leitura observada da projeção redigida: config\.txt/;
 
-test('rename de .env.example para config.txt: a autoanálise só conta o destino lido com a entrega conferida', async () => {
-  for (const comRetorno of [false, true]) {
-    const e = setup();
-    sourceRuntime.prepareSources = async () => source(COM_RENAME);
-    e.runClaudeStream = async (_prompt, opts) => { lerProjecao(e, opts, comRetorno, 'config.txt'); return { text: JSON.stringify(selfResult()) }; };
-    await e.runSelfAnalysis({ ...pr });
-    const scope = e.selfAnalyses[pr.key].observed.scope;
-    assert.equal(scope.reviewed.includes('config.txt'), comRetorno, JSON.stringify(scope));
-    assert.equal(scope.missing.includes('config.txt'), !comRetorno);
-  }
-});
-
 test('rename de .env.example para config.txt: a revisão só cobre o destino com a entrega conferida', async () => {
   for (const comRetorno of [false, true]) {
     const e = setup();
@@ -299,39 +257,6 @@ function lerTudoDoEscopo(e, opts, caminhos) {
       message: { content: [{ type: 'tool_result', tool_use_id: `r-${i}`, content: linhas.map((l, n) => `${n + 1}→${l}`).join('\n') }] } });
   }
 }
-
-test('patch ausente ou truncado: a autoanálise não conta como lido o marcador nem o fragmento, protegido ou comum', async () => {
-  const e = setup();
-  sourceRuntime.prepareSources = async () => source(SEM_PATCH);
-  e.runClaudeStream = async (_prompt, opts) => {
-    const session = e.activeReviews.get(opts.id);
-    assert.match(fs.readFileSync(arquivoMaterializado(session.scopeRoot, 'img/logo.png'), 'utf8'), /não é o conteúdo do arquivo/);
-    lerTudoDoEscopo(e, opts, SEM_PATCH.map((f) => f.path));
-    return { text: JSON.stringify(selfResult()) };
-  };
-  await e.runSelfAnalysis({ ...pr });
-  const scope = e.selfAnalyses[pr.key].observed.scope;
-  assert.deepEqual(scope.reviewed, ['src/a.js'], JSON.stringify(scope));
-  assert.deepEqual(scope.missing, INCOMPLETOS);
-});
-
-test('o feed da autoanálise sai com a etapa de cada linha, e o fechamento é marcado', async () => {
-  const e = setup();
-  sourceRuntime.prepareSources = async () => source(SEM_PATCH);
-  let itens = [];
-  const fases = [];
-  const pushOriginal = e.pushState;
-  e.pushState = function (...args) { for (const s of e.activeReviews.values()) fases.push(s.fase); return pushOriginal.apply(this, args); };
-  e.runClaudeStream = async (_prompt, opts) => {
-    opts.onEvent({ kind: 'tool', text: 'Read src/a.js' });
-    opts.onEvent({ kind: 'text', text: 'Comparando com o card' });
-    itens = [...e.activity.get(opts.id)];
-    return { text: JSON.stringify(selfResult()) };
-  };
-  await e.runSelfAnalysis({ ...pr });
-  assert.deepEqual(itens.filter(i => /Read src|Comparando/.test(i.text)).map(i => i.s), ['leitura', 'raciocinio']);
-  assert.ok(fases.includes('fechando'), JSON.stringify(fases));
-});
 
 test('patch ausente ou truncado: na revisão, ler o marcador ou o fragmento inteiro não cobre, e o declarado vira lacuna', async () => {
   const e = setup();

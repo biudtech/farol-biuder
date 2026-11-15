@@ -82,18 +82,6 @@ test('a espera é por conta: a fila de uma não atrasa a da outra', async () => 
   assert.deepEqual(relogio.dormidas, [], 'contas diferentes, cotas diferentes: ninguém espera');
 });
 
-test('a autoria (Meus PRs) também passa pelo orçamento', async () => {
-  const e = engineComContas();
-  const relogio = comRelogioFalso();
-  try {
-    await e.searchPRs(['--owner', 'acme'], 'ana');
-    await e.myAuthoredPRs('ana');
-  } finally { relogio.restaurar(); }
-  assert.equal(chamadas.length, 2);
-  assert.deepEqual(relogio.dormidas, [ESPACO_MIN_MS],
-    'buscar autoria é busca como qualquer outra e gasta a mesma cota');
-});
-
 // A propriedade que interessa, e que o espaçamento produz sozinho: por mais buscas que o
 // ciclo peça, NENHUMA janela de um minuto passa do teto. O limite do GitHub é 30 por
 // minuto; o teste afirma o nosso, que é menor de propósito.

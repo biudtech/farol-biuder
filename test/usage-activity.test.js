@@ -25,7 +25,7 @@ const report = (rows, filters = {}) => activityReport([{ device: 'local', rows }
 test('soma todas as tentativas, mas conclusão e PR único não duplicam', () => {
   const r = report([row({ at: NOW - 1000, status: 'erro', attemptId: 'a' }), row({ attemptId: 'b' }), row({ id: 'review-2' })]);
   assert.equal(r.totals.attempts, 3);
-  assert.deepEqual(r.completed, { reviews: 2, self: 0, prs: 1 });
+  assert.deepEqual(r.completed, { reviews: 2, prs: 1 });
   assert.equal(r.retries, 1);
   assert.equal(r.history.total, 2);
   assert.equal(r.totals.inputTokens + r.totals.outputTokens, 45);
@@ -44,11 +44,11 @@ test('retentativa mantém a classificação quando a tentativa anterior está fo
 });
 
 test('identidade separa aparelho, conta, perfil e tipo; subagentes não viram reviews', () => {
-  const rows = [row(), row({ account: 'other' }), row({ profileId: 'other' }), row({ kind: 'self' }), row({ modelUsage: { subagent: {} }, id: 'review-2' })];
+  const rows = [row(), row({ account: 'other' }), row({ profileId: 'other' }), row({ kind: 'pushback' }), row({ modelUsage: { subagent: {} }, id: 'review-2' })];
   const r = activityReport([{ device: 'one', rows }, { device: 'two', rows: [row()] }], query, NOW);
   assert.equal(r.history.total, 6);
   assert.equal(r.completed.reviews, 5);
-  assert.equal(r.completed.self, 1);
+  assert.deepEqual(Object.keys(r.completed).sort(), ['prs', 'reviews'], 'outro tipo de sessão não vira conclusão de revisão');
 });
 
 test('desfecho desconhecido, descartado ou legado sem ID não vira conclusão', () => {
@@ -70,7 +70,7 @@ test('IDs curtos reutilizados entre boots não unem PRs nem inventam conclusões
   assert.equal(r.totals.attempts, 2);
   assert.equal(r.history.total, 2);
   assert.equal(r.unidentified, 2);
-  assert.deepEqual(r.completed, { reviews: 0, self: 0, prs: 0 });
+  assert.deepEqual(r.completed, { reviews: 0, prs: 0 });
   assert.equal(r.retries, 0);
 });
 

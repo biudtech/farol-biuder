@@ -132,30 +132,7 @@ test('renderAccountBar consome a allowlist pura (B14)', () => {
   assert.doesNotMatch(fn[0], /abaAtual\(\) === 'sistema'/, 'a denylist antiga saiu');
 });
 
-/* ---------- marcadores de sessao do merge (B17) ---------- */
-
-test('expiredSessionMarks: marca so expira quando chega refresh mais NOVO', () => {
-  const marks = [['acme/app#1', 100], ['acme/app#2', 200]];
-  assert.deepEqual(P.expiredSessionMarks(marks, 150), ['acme/app#1'], 'expira so quem foi marcado antes do refresh');
-  assert.deepEqual(P.expiredSessionMarks(marks, 200), ['acme/app#1'], 'refresh da mesma geracao nao confirma nada');
-  assert.deepEqual(P.expiredSessionMarks(marks, 300), ['acme/app#1', 'acme/app#2']);
-  assert.deepEqual(P.expiredSessionMarks([], 300), []);
-  assert.deepEqual(P.expiredSessionMarks(marks, null), [], 'sem lastCheckAt (boot) nada expira');
-  assert.deepEqual(P.expiredSessionMarks(marks, 0), [], 'zero tambem e ausencia de refresh');
-});
-
-test('os marcadores de merge sao Map com geracao e sao podados no render (B17)', () => {
-  assert.match(APPJS, /autoUnavailableKeys = new Map\(\)/);
-  assert.match(APPJS, /adminUnavailableKeys = new Map\(\)/);
-  assert.doesNotMatch(APPJS, /autoUnavailableKeys\.add\(/, 'Map nao tem add: seria TypeError em runtime');
-  assert.doesNotMatch(APPJS, /adminUnavailableKeys\.add\(/, 'Map nao tem add: seria TypeError em runtime');
-  const inicio = APPJS.match(/function renderMyPRs\(\) \{[\s\S]{0,700}/);
-  assert.ok(inicio, 'renderMyPRs existe');
-  assert.match(inicio[0], /expiredSessionMarks\(/,
-    'a poda roda no comeco de cada render, cumprindo o que o comentario da declaracao dos marcadores sempre prometeu');
-});
-
-/* ---------- estado de carregamento das listas (Meus PRs vinha assumindo vazio) ---------- */
+/* ---------- estado de carregamento das listas (a lista vinha assumindo vazio) ---------- */
 
 test('listViewState: nunca assume vazio antes do primeiro ciclo terminar', () => {
   assert.equal(P.listViewState({ lastCheckAt: null, status: 'starting', length: 0 }), 'loading');
@@ -177,8 +154,8 @@ test('listViewState: lista com item sempre mostra a lista, mesmo se o ciclo mais
   assert.equal(P.listViewState({ lastCheckAt: null, status: 'checking', length: 1 }), 'list');
 });
 
-test('renderMyPRs e renderQueue decidem o empty state pelo listViewState, nao so pelo tamanho', () => {
-  for (const nome of ['renderMyPRs', 'renderQueue']) {
+test('renderQueue decide o empty state pelo listViewState, nao so pelo tamanho', () => {
+  for (const nome of ['renderQueue']) {
     const fn = APPJS.match(new RegExp(`function ${nome}\\([\\s\\S]*?\\n\\}`));
     assert.ok(fn, `${nome} existe`);
     assert.match(fn[0], /listViewState\(/,
@@ -206,99 +183,6 @@ test('a aba Sistema mostra o resumo agrupado do log, e o botao de zerar saiu', (
     'o resumo mora em paragrafo proprio: a .section-head e flex e quebra cedo');
   assert.doesNotMatch(HTML, /id="btnLogClear"/, 'o botao de zerar saiu com a rota /api/log/clear (corte do lote 7)');
   assert.match(HTML, /id="logBox"/, 'o despejo cru continua disponivel embaixo');
-});
-
-/* ---------- "Meus PRs": PR oculto ----------
-   A separacao visivel/oculto e o texto do rodape sao puros e moram no ui/pure.js
-   (ui-pure.test.js). Aqui ficam as invariantes do CONSUMO, que sem DOM so da pra travar
-   no texto do app.js: quem o contador conta, de onde vem a decisao e o desempate dos
-   dois botoes escritos "Ocultar" no mesmo card. */
-
-test('o contador de Meus PRs conta o VISIVEL, nao o total', () => {
-  // com 3 PRs e os 3 ocultos, a bolinha dizia 3 e a lista mostrava 0
-  const fn = APPJS.match(/function renderMyPRs\(\) \{[\s\S]*?\n\}/);
-  assert.ok(fn, 'renderMyPRs existe');
-  // as linhas de outros aparelhos entram só pelo que passou no MESMO filtro de ocultos
-  assert.match(fn[0], /const contagem = visiveis\.length \+ remotasVisiveis;/);
-  assert.match(fn[0], /\$\('#myPRsCount'\)\.textContent = contagem;/);
-  assert.match(fn[0], /\$\('#myPRsCount'\)\.hidden = contagem === 0;/);
-  assert.doesNotMatch(fn[0], /\$\('#myPRsCount'\)\.textContent = list\.length;/,
-    'o contador pelo total saiu');
-});
-
-test('renderMyPRs decide o oculto pelas funcoes puras, nao por logica solta', () => {
-  const fn = APPJS.match(/function renderMyPRs\(\) \{[\s\S]*?\n\}/);
-  assert.match(fn[0], /splitHiddenPRs\(todos, effectiveHidden\(estado\(\)\.hiddenPRs, hideOptimistic, unhideOptimistic\)\)/,
-    'o motor manda myPRs COMPLETO; quem separa e a UI, com a marca otimista por cima');
-  assert.match(fn[0], /myPRsEmptyMsg\(vs, \{ escopoTodas: escopo\(\) === 'all', ocultos: ocultos\.length \}\)/,
-    'o vazio com tudo oculto tem que explicar, nao ficar em branco');
-});
-
-test('o estado de carregamento olha a lista COMPLETA, senao ocultar tudo viraria "verificando"', () => {
-  const fn = APPJS.match(/function renderMyPRs\(\) \{[\s\S]*?\n\}/);
-  assert.match(fn[0], /listViewState\(\{ lastCheckAt: estado\(\)\.lastCheckAt, status: estado\(\)\.status, length: todos\.length \}\)/);
-});
-
-test('a marca otimista morre quando o motor confirma (nao sobrevive a estado novo)', () => {
-  const fn = APPJS.match(/function renderMyPRs\(\) \{[\s\S]*?\n\}/);
-  assert.match(fn[0], /if \(doMotor\.has\(String\(k\)\.toLowerCase\(\)\)\) hideOptimistic\.delete\(k\)/);
-  assert.match(fn[0], /if \(!doMotor\.has\(String\(k\)\.toLowerCase\(\)\)\) unhideOptimistic\.delete\(k\)/);
-});
-
-test('o card nao tem mais DOIS botoes escritos "Ocultar" (a confusao que originou a feature)', () => {
-  // o botao da analise some so com o PARECER, e o usuario lia como "ocultar o PR".
-  // O rotulo virou par (Ocultar/Mostrar) e mora no selfAnalysisToggle, entao aqui a
-  // afirmacao e que o card CONSOME o par, nunca escreve rotulo proprio: rotulo escrito
-  // a mao no template foi exatamente o que deixou o botao mentindo sobre o que fazia.
-  assert.match(APPJS, /class="btn sm ghost act-self-visibility"[\s\S]{0,220}\$\{esc\(vis\.label\)\}<\/button>/,
-    'o botao da autoanalise tira o rotulo do par puro');
-  assert.doesNotMatch(APPJS, /act-self-visibility"[\s\S]{0,220}>Ocultar<\/button>/,
-    'o rotulo ambiguo saiu');
-  assert.doesNotMatch(APPJS, /act-self-clear/,
-    'o botao que APAGAVA a analise nao existe mais (ocultar deixou de deletar)');
-});
-
-test('ocultar analise NUNCA apaga: a rota e de visibilidade e o handler e otimista', () => {
-  const handler = APPJS.match(/const visBtn = e\.target\.closest\('\.act-self-visibility'\);[\s\S]*?\n    return;\n  \}/);
-  assert.ok(handler, 'o handler de ocultar/mostrar a analise existe');
-  assert.match(handler[0], /api\('\/api\/self-review\/visibility', \{ key, hidden \}\)/,
-    'fala com a rota de VISIBILIDADE, nao com uma rota de limpeza');
-  assert.match(handler[0], /a\.hidden = !hidden;[\s\S]{0,120}toast\('error'/,
-    'rota que falha desfaz a marca otimista e avisa, senao a tela mentiria');
-  assert.doesNotMatch(APPJS, /\/api\/self-review\/clear/,
-    'a rota que apagava a analise saiu da UI');
-});
-
-test('o botao Ocultar do PR promete o comportamento REAL (volta sozinho com commit novo)', () => {
-  const btn = APPJS.match(/class="btn sm ghost act-pr-hide"[^>]*>/);
-  assert.ok(btn, 'o botao Ocultar do PR existe');
-  assert.match(btn[0], /title="Some com este PR de Meus PRs\. Ele volta sozinho se receber commit novo"/,
-    'ocultar nao e pra sempre: o motor reexibe quando ha atividade nova');
-  assert.match(APPJS, /class="btn sm ghost act-pr-unhide"[\s\S]{0,200}>Reexibir<\/button>/,
-    'com os ocultos a mostra, o Ocultar vira Reexibir');
-});
-
-test('ocultar e reexibir sao otimistas e desfazem a marca quando a rota falha', () => {
-  const handler = APPJS.match(/const hide = e\.target\.closest\('\.act-pr-hide'\);[\s\S]*?\n  \}\n\}\);/);
-  assert.ok(handler, 'o handler de ocultar/reexibir existe');
-  assert.match(handler[0], /api\('\/api\/pr\/hide', \{ key \}\)/, 'usa o helper api(), como o resto da UI');
-  assert.match(handler[0], /api\('\/api\/pr\/unhide', \{ key \}\)/);
-  assert.match(handler[0], /hideOptimistic\.delete\(key\); renderMyPRs\(\); renderRadarNav\(\);/,
-    'falhou, o card volta: a tela nao pode mentir que ocultou');
-  assert.match(handler[0], /unhideOptimistic\.delete\(key\); renderMyPRs\(\); renderRadarNav\(\);/);
-});
-
-test('o rodape dos ocultos usa o texto puro e alterna estado so da tela', () => {
-  const fn = APPJS.match(/function renderMyPRsHiddenFoot\([\s\S]*?\n\}/);
-  assert.ok(fn, 'renderMyPRsHiddenFoot existe');
-  assert.match(fn[0], /hiddenFootLabel\(n, hiddenOpen\)/, 'o texto vem da funcao pura');
-  assert.match(fn[0], /foot\.hidden = !label/, 'sem oculto o rodape some inteiro');
-  assert.match(fn[0], /aria-expanded="\$\{hiddenOpen \? 'true' : 'false'\}"/,
-    'o toggle declara o estado, nao so a classe');
-  assert.match(APPJS, /hiddenOpen = !hiddenOpen;\n  renderMyPRs\(\); renderRadarNav\(\);/,
-    'alternar re-renderiza a secao E a contagem da sub-aba');
-  assert.match(HTML, /<div id="myPRsHiddenFoot" class="mypr-hidden-foot" hidden><\/div>/,
-    'a ancora do rodape existe no index.html (nao e id fantasma, B11)');
 });
 
 /* ---------- menções navegáveis: estrutura que a foto/link exigem ----------
@@ -370,7 +254,7 @@ test('toda menção com data-goto é anunciada como botão (role + tabindex)', (
 /* ---------- progresso: regua unica, sem percentual chutado ---------- */
 
 test('progresso literal no app.js so existe no paint inicial (<= 10)', () => {
-  // o bug de origem (16/08/2026): barra da autoanalise fixa em "progress: 25"
+  // o bug de origem (16/08/2026): barra de uma sessao fixa em "progress: 25"
   // ate concluir do nada. A regra agora e central: percentual de meio de fluxo
   // vem SEMPRE de sessionProgress (ui/pure.js); literal so pro primeiro paint,
   // e primeiro paint honesto e baixo (ninguem mediu nada ainda).

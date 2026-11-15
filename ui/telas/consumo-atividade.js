@@ -83,7 +83,7 @@ function paint(report) {
   paintTimeline();
   $('#activityHistory').innerHTML = report?.ok ? activityHistoryHtml(report) : '';
   for (const el of document.querySelectorAll('[data-activity-key]')) el.open = expanded.has(el.dataset.activityKey);
-  const focusLabels = { review: 'Revisões concluídas', self: 'Autoanálises concluídas', pr: 'PRs únicos revisados' };
+  const focusLabels = { review: 'Revisões concluídas', pr: 'PRs únicos revisados' };
   $('#activityFocus').textContent = filters.focus === 'all' ? 'Todas as execuções do recorte · tentativas agrupadas' : `Detalhes do indicador: ${focusLabels[filters.focus]} · limpar filtros para voltar`;
   if (!report?.ok) return;
   const labels = { account: 'Todas as contas', repo: 'Todos os repositórios', provider: 'Todos os provedores', model: 'Todos os modelos', kind: 'Todos os tipos' };

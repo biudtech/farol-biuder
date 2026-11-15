@@ -71,7 +71,7 @@ const TESTEMUNHAS = {
 
 function motorDe(contas, ressalvas) {
   const engine = {
-    config: { accounts: contas }, myPRs: [],
+    config: { accounts: contas },
     accountList: () => contas,
     accountForPr: pr => pr.account,
     attentionPoints: () => ressalvas,

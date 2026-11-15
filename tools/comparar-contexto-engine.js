@@ -12,7 +12,7 @@ const mode = option('mode', 'off'), flow = option('flow', 'review'), scenario = 
 const navigation = option('navigation', 'off');
 const reads = option('reads', 'off');
 const startNumber = Number(option('start', '1'));
-if (!['off', 'observe', 'assist'].includes(mode) || !['review', 'self'].includes(flow)) throw new Error('Modo ou fluxo inválido.');
+if (!['off', 'observe', 'assist'].includes(mode) || flow !== 'review') throw new Error('Modo ou fluxo inválido.');
 if (!['off', 'on'].includes(navigation)) throw new Error('Orientação inválida.');
 if (!['off', 'on'].includes(reads)) throw new Error('Agendamento inválido.');
 const load = relative => import(pathToFileURL(path.join(root, relative)).href);
@@ -84,8 +84,6 @@ if (fs.existsSync(path.join(root, 'lib/engine/analysis-source.js'))) {
   };
 }
 function fakeProviderEnvelope() {
-  if (flow === 'self') return { verdict: 'needs_work', approvable: false, cardMet: null, blockers: ['Fixture sem execução de modelo.'],
-    externalBlockers: [], tips: [], coverageLimitations: [], reportMarkdown: 'Fixture, nenhuma review de IA.' };
   return { analysisStatus: 'incomplete', verdict: 'request_changes', decision: 'needs_decision', cardMet: null,
     protocolo: { prReviewer: 'nao_rodou' }, coverage: { total: 1, reviewed: [], missing: ['src/amount.ts'] },
     reasons: ['Fixture sem execução de modelo.'], findings: [], payloads: {}, reportMarkdown: 'Fixture, nenhuma review de IA.' };
@@ -107,7 +105,7 @@ async function analysis() {
   engine.accountForPr = () => 'fixture'; engine.tokenFor = () => 'synthetic-token'; engine.ghEnv = () => ({});
   engine.resolveClaudeAuth = () => ({ kind: 'dir' }); engine.headSha = async () => H;
   engine.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H }); engine.myReviewStates = async () => [];
-  engine.fetchMergeState = async () => null; engine.selfAnalyses = {}; engine.decisions = { pending: [], resolved: [] };
+  engine.decisions = { pending: [], resolved: [] };
   engine.writeMemory = engine.writeInflight = engine.pushState = engine.processHeadless = engine.log = () => {};
   engine.postReview = async () => { throw new Error('Publicação proibida.'); };
   let prompt = '', scopeText = '', modelCalls = 0;
@@ -119,11 +117,10 @@ async function analysis() {
   };
   const pr = { key: `org/frontend#${number}`, repo: 'org/frontend', number, account: 'fixture', author: 'fixture', requested: true,
     url: `https://github.com/org/frontend/pull/${number}`, title: 'Frozen frontend comparison', headSha: H };
-  engine.myPRs = [pr];
-  await engine[flow === 'self' ? 'runSelfAnalysis' : 'runHeadlessReview'](pr);
+  await engine.runHeadlessReview(pr);
   if (modelCalls !== 1) throw new Error('O engine não chegou exatamente uma vez ao limite do provedor.');
   const used = process.cpuUsage(cpu), memoryAfter = process.memoryUsage();
-  const item = flow === 'self' ? engine.selfAnalyses[pr.key] : engine.decisions.pending[0] || engine.decisions.resolved[0];
+  const item = engine.decisions.pending[0] || engine.decisions.resolved[0];
   const commonFiles = ['CLAUDE.md', '.claude/agents/pr-reviewer.md'].map(relative => fs.readFileSync(path.join(STATE_DIR, '..', relative), 'utf8'));
   const input = [prompt, scopeText, ...commonFiles], completeBytes = input.reduce((sum, value) => sum + Buffer.byteLength(value), 0);
   const extraEvidencePaths = [];

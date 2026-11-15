@@ -10,7 +10,6 @@ const statusLabel = { ok: 'Concluída', erro: 'Erro', cancelada: 'Cancelada', in
 export function activityKpisHtml(report) {
   const values = [
     ['review', 'Revisões concluídas', report.completed.reviews, 'Resultados técnicos · publicação não medida'],
-    ['self', 'Autoanálises concluídas', report.completed.self, 'Análise de PR próprio'],
     ['pr', 'PRs revisados', report.completed.prs, 'PRs únicos com resultado concluído'],
     ['all', 'Execuções de IA', report.totals.attempts, `${count(report.retries)} retentativas identificadas já incluídas`],
   ];
@@ -92,5 +91,5 @@ export function activityBodyHtml(report) {
 }
 
 export function activityRulesHtml() {
-  return '<summary>Como contamos</summary><p>Revisões e autoanálises concluídas são operações identificadas cujo último resultado técnico é ok no período. Isso não comprova publicação no GitHub. PRs revisados são referências únicas dessas reviews. Execuções incluem falhas, cancelamentos, parciais e descartes. Tentativas com o mesmo ID, aparelho, conta, perfil e tipo são agrupadas; IDs diferentes não são unidos por suposição. Retentativas identificadas não representam necessariamente todas as recuperações históricas. Subagentes já fazem parte do consumo informado pela árvore do provedor e não contam como reviews extras. Modalidade de cobrança só aparece quando registrada na execução; histórico anterior permanece desconhecido. Nenhum destes números altera regras de segurança, orçamento ou política de revisão.</p>';
+  return '<summary>Como contamos</summary><p>Revisões concluídas são operações identificadas cujo último resultado técnico é ok no período. Isso não comprova publicação no GitHub. PRs revisados são referências únicas dessas reviews. Execuções incluem falhas, cancelamentos, parciais e descartes. Tentativas com o mesmo ID, aparelho, conta, perfil e tipo são agrupadas; IDs diferentes não são unidos por suposição. Retentativas identificadas não representam necessariamente todas as recuperações históricas. Subagentes já fazem parte do consumo informado pela árvore do provedor e não contam como reviews extras. Modalidade de cobrança só aparece quando registrada na execução; histórico anterior permanece desconhecido. Nenhum destes números altera regras de segurança, orçamento ou política de revisão.</p>';
 }

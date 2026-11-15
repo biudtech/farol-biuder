@@ -10,7 +10,7 @@ globalThis.addEventListener = (nome, fn) => { janela.set(nome, [...(janela.get(n
 const disparar = (mapa, nome) => { for (const fn of mapa.get(nome) || []) fn({ target: { closest: () => null } }); };
 const flush = () => { while (frames.length) frames.shift()(); };
 const escritas = {};
-for (const seletor of ['#resolved', '#claudeProfilesManager', '#queue', '#myPRs']) {
+for (const seletor of ['#resolved', '#claudeProfilesManager', '#queue']) {
   const el = doc.querySelector(seletor);
   let html = '';
   Object.defineProperty(el, 'innerHTML', { get: () => html, set: novo => { html = String(novo); escritas[seletor] = (escritas[seletor] || 0) + 1; } });
@@ -22,8 +22,8 @@ const config = { intervalSeconds: 300, parallelReviews: 1, theme: 'dark', accoun
   mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '' };
 const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'win32' }, status: 'idle',
   account: { user: 'alice', tokenOk: true }, accounts: [{ user: 'alice', owners: ['acme'] }], config,
-  queue: [], panorama: [], myPRs: [], hiddenPRs: [], activeSessions: [], activity: {}, headlessWaiting: [],
-  decisions: { pending: [], resolved: [] }, selfAnalyses: {}, reviewActions: {}, usage: {},
+  queue: [], panorama: [], activeSessions: [], activity: {}, headlessWaiting: [],
+  decisions: { pending: [], resolved: [] }, reviewActions: {}, usage: {},
   paths: { home: '/fixture', workspace: '/fixture/workspace' }, update: {} };
 emitir('state', fixture); flush();
 
@@ -80,11 +80,11 @@ test('atividade recebida no SSE não cresce sem limite entre snapshots e é coal
   assert.equal(estado().activity.ativa.at(-1).text, 'linha 1999');
 });
 
-test('alerta de PR abre e prepara a subaba ainda não pintada antes de localizar o card', () => {
+test('alerta de PR abre o Radar em Pra mim e pinta a fila ainda não pintada antes de localizar o card', () => {
   const url = 'https://github.com/acme/repo/pull/7';
-  emitir('state-patch', { campos: { myPRs: [{ key: 'acme/repo#7', url, title: 'Meu PR recém-chegado', repo: 'acme/repo', author: 'alice' }] }, removidos: [] });
+  irPara('/consumo'); disparar(janela, 'popstate'); flush();
+  emitir('state-patch', { campos: { queue: [{ key: 'acme/repo#7', url, title: 'PR recém-chegado', repo: 'acme/repo', number: 7, author: 'alice' }] }, removidos: [] });
+  emitir('focus-pr', { url }); flush();
   assert.equal(document.body.dataset.radarSub || 'mim', 'mim');
-  emitir('focus-pr', { url });
-  assert.equal(document.body.dataset.radarSub, 'meus');
-  assert.match(doc.querySelector('#myPRs').innerHTML, /Meu PR recém-chegado/);
+  assert.match(doc.querySelector('#queue').innerHTML, /PR recém-chegado/);
 });

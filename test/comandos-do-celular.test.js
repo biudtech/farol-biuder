@@ -38,7 +38,7 @@ const SENHA = 'senha-de-teste';
 const LOGIN = 'conta-do-celular';
 const ORIGEM_EMULADOR_AUTH = new URL(SYNC.AUTH_EMULATOR_IDENTITY_URL).origin;
 const TAG = 'a'.repeat(32);
-const NOVOS = ['revisar', 'ignorar', 'restaurar', 'ocultar', 'mostrar', 'config-conta'];
+const NOVOS = ['revisar', 'ignorar', 'restaurar', 'config-conta'];
 let fake;
 let identity;
 const MOTORES = [];
@@ -76,7 +76,6 @@ function fresca() {
 }
 
 const PR = { key: 'acme/app#7', title: 'Titulo', author: 'alguem', repo: 'acme/app', number: 7, url: 'https://github.com/acme/app/pull/7', mine: true };
-const MEU = { key: 'acme/app#8', title: 'Meu PR', author: LOGIN, repo: 'acme/app', number: 8, url: 'https://github.com/acme/app/pull/8', updatedAt: 'x' };
 
 async function motor({ distribuicao = false } = {}) {
   const e = new Engine();
@@ -102,7 +101,7 @@ async function motor({ distribuicao = false } = {}) {
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false });
   e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [] });
   e.outrosRevisando = () => [];
-  Object.assign(e, { queue: [{ ...PR }], panorama: [{ ...PR }], myPRs: [{ ...MEU }], headlessQueue: [], headlessBusyAccounts: new Map(), writeInflight() { }, processHeadless() { } });
+  Object.assign(e, { queue: [{ ...PR }], panorama: [{ ...PR }], headlessQueue: [], headlessBusyAccounts: new Map(), writeInflight() { }, processHeadless() { } });
   return e;
 }
 
@@ -126,7 +125,7 @@ async function aplicar(e, cfg = e.config.sync) {
 /* ---------- forma e allowlist ---------- */
 
 test('forma: os comandos da fila levam só o prTag, e config-conta só conta, campo e valor', () => {
-  for (const tipo of ['revisar', 'ignorar', 'restaurar', 'ocultar', 'mostrar']) {
+  for (const tipo of ['revisar', 'ignorar', 'restaurar']) {
     assert.deepEqual(comando.sanearComando({ tipo, args: { prTag: TAG, manual: true, requested: true, matTag: TAG } }), { tipo, args: { prTag: TAG } }, tipo);
     assert.equal(comando.sanearComando({ tipo, args: {} }), null, `${tipo} sem PR não é comando`);
     assert.equal(comando.sanearComando({ tipo, args: { prTag: 'acme/app#7' } }), null, `${tipo}: PR em claro não é tag`);
@@ -151,7 +150,7 @@ test('config-conta: campo ou valor fora da allowlist não é comando, e o emisso
 test('sem consentimento local, cada comando novo é ignorado com o porquê e não mexe em nada', async () => {
   const e = await motor();
   const tagPr = prTag(kId(e), PR.key);
-  const args = { revisar: { prTag: tagPr }, ignorar: { prTag: tagPr }, restaurar: { prTag: tagPr }, ocultar: { prTag: prTag(kId(e), MEU.key) }, mostrar: { prTag: tagPr },
+  const args = { revisar: { prTag: tagPr }, ignorar: { prTag: tagPr }, restaurar: { prTag: tagPr },
     'config-conta': { acctTag: acctTag(kId(e), LOGIN), campo: 'muted', valor: true } };
   const ids = [];
   for (const tipo of NOVOS) ids.push(await emitirPara(e, tipo, args[tipo]));
@@ -161,7 +160,6 @@ test('sem consentimento local, cada comando novo é ignorado com o porquê e nã
   for (const id of ids) assert.deepEqual([recibo(id).estado, recibo(id).code], ['ignorado', 'nao-aceita-admin']);
   assert.equal(enfileirados, 0);
   assert.equal(e.seen.has(PR.key), false, 'nada foi ignorado');
-  assert.deepEqual(Object.keys(e.hiddenPRs), [], 'nada foi ocultado');
   assert.equal(e.isMuted(LOGIN), false, 'a conta não foi silenciada');
 });
 
@@ -235,7 +233,7 @@ test('revisar: checks obrigatórios, saída de cena, outra pessoa revisando e PR
   assert.equal(recibo(cmdId).code, 'nao_conheco');
 });
 
-/* ---------- ignorar, restaurar, ocultar, mostrar ---------- */
+/* ---------- ignorar, restaurar ---------- */
 
 test('ignorar e restaurar fazem o mesmo que os botões locais', async () => {
   const e = await motor();
@@ -256,21 +254,6 @@ test('ignorar e restaurar fazem o mesmo que os botões locais', async () => {
   assert.equal(e.seen.has(PR.key), false);
   assert.equal(e.ignorados.has(PR.key), false);
   assert.equal(checou, 1, 'restaurar pede a checagem, como a rota local');
-});
-
-test('ocultar e mostrar fazem o mesmo que os botões de Meus PRs; PR que não é meu não se oculta', async () => {
-  const e = await motor();
-  const c1 = await emitirPara(e, 'ocultar', { prTag: prTag(kId(e), MEU.key) });
-  const c2 = await emitirPara(e, 'ocultar', { prTag: prTag(kId(e), PR.key) });
-  await aplicar(e);
-  assert.equal(recibo(c1).estado, 'aplicado');
-  assert.deepEqual([recibo(c2).estado, recibo(c2).code], ['recusado', 'nao_conheco']);
-  assert.deepEqual(Object.keys(e.hiddenPRs), [MEU.key]);
-  e.myPRs = [];
-  const c3 = await emitirPara(e, 'mostrar', { prTag: prTag(kId(e), MEU.key) });
-  await aplicar(e);
-  assert.equal(recibo(c3).estado, 'aplicado');
-  assert.deepEqual(Object.keys(e.hiddenPRs), []);
 });
 
 /* ---------- config-conta ---------- */
@@ -354,7 +337,7 @@ test('a tela tem texto para cada código novo de recusa e para cada tipo novo', 
     assert.equal(r.estado, 'recusado');
     assert.equal(r.detalhe.includes(`código ${code}`), false, `${code} sem texto na tela`);
   }
-  const rotulos = { revisar: 'revisar agora', ignorar: 'ignorar', restaurar: 'restaurar', ocultar: 'ocultar', mostrar: 'mostrar', 'config-conta': 'configurar a conta' };
+  const rotulos = { revisar: 'revisar agora', ignorar: 'ignorar', restaurar: 'restaurar', 'config-conta': 'configurar a conta' };
   for (const tipo of NOVOS) {
     const html = P.comandosEmitidosHtml([{ cmdId: 'c'.repeat(32), tipo, alvo: 'd', at: 1, vence: Date.now() + 60_000 }], {});
     assert.ok(html.includes(`<b>${rotulos[tipo]}</b>`), `${tipo} sem rótulo em português na tela`);

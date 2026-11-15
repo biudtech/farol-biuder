@@ -91,12 +91,11 @@ test('API de estado limita ações ao que a tela conhece sem perder revisão ant
   }));
   e.panorama = [{ key: 'fixture/app#700' }];
   e.queue = [{ key: 'fixture/app#800' }];
-  e.myPRs = [{ key: 'fixture/app#900' }];
   e.decisions.pending = [{ id: 'p-700', key: 'fixture/app#700', createdAt: 2000, esperaProva: { tentativas: 2 } }];
   const original = structuredClone(e.decisions);
   const inteiro = e.reviewActions();
   const compacto = e.snapshot().reviewActions;
-  assert.equal(Object.keys(compacto).length, 33);
+  assert.equal(Object.keys(compacto).length, 32);
   for (const key of Object.keys(compacto)) assert.deepEqual(compacto[key], inteiro[key]);
   assert.equal(compacto['fixture/app#700'].kind, 'pending');
   assert.equal(compacto['fixture/app#700'].esperaProva, true);
@@ -109,7 +108,7 @@ test('API de estado limita ações ao que a tela conhece sem perder revisão ant
   const bytesAntes = Buffer.byteLength(JSON.stringify(inteiro));
   const bytesDepois = Buffer.byteLength(JSON.stringify(compacto));
   assert.ok(bytesDepois < bytesAntes * .03);
-  t.diagnostic(`Ações sintéticas, 1900 chaves e 33 exibidas: ${bytesAntes} -> ${bytesDepois} bytes.`);
+  t.diagnostic(`Ações sintéticas, 1900 chaves e 32 exibidas: ${bytesAntes} -> ${bytesDepois} bytes.`);
 });
 
 test('snapshot da Engine aplica a projeção de consumo e mantém os registros para consulta completa', () => {

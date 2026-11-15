@@ -341,7 +341,7 @@ export function confirmacaoAutomatica(aparelho, conta, campo) {
 /* ---------- comandos enviados a um aparelho ---------- */
 
 const ROTULO_CMD = {
-  revisar: 'Revisar agora', ignorar: 'Ignorar', restaurar: 'Restaurar', ocultar: 'Ocultar', mostrar: 'Mostrar',
+  revisar: 'Revisar agora', ignorar: 'Ignorar', restaurar: 'Restaurar',
   decidir: 'Decidir', cancelar: 'Cancelar', transferir: 'Transferir', iniciar: 'Começar', repetir: 'Repetir', tomar: 'Tomar',
 };
 // o comando enviado se descreve com o rótulo e a opção que a pessoa viu ao escolher

@@ -5,7 +5,7 @@ process.env.TZ = 'America/Sao_Paulo';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  estadoDasListas, estadoDoEscopo, mesclarListaRemota, meusPrsRemotoHtml,
+  estadoDasListas, estadoDoEscopo, mesclarListaRemota,
   prIdentificadoHtml, itensDaFila, filaDoAparelhoHtml,
 } from '../ui/pure.js';
 
@@ -122,44 +122,13 @@ test('os que não abriram são somados', () => {
   assert.equal(m.naoAbriram, 3);
 });
 
-/* ---------- HTML ---------- */
-
-test('sem linha remota e sem aviso, o bloco some; com estado, ele diz o estado', () => {
-  const bloco = (sync, lista) => meusPrsRemotoHtml(mesclarListaRemota([], lista, 'myPrs', { sync, agora: AGORA }));
-  assert.equal(bloco(SYNC, listas([])), '');
-  assert.equal(bloco({ shared: false }, listas([])), '', 'desligada não polui a aba');
-  assert.match(bloco({ shared: true, bloqueioCompartilhamento: 'x' }, listas([])), /bloque/);
-  assert.match(bloco(SYNC, listas([], { estado: 'sem-frota' })), /nenhum outro aparelho/i);
-  assert.match(bloco(SYNC, listas([escopo('myPrs', [linha('acme/app#2')], { estado: 'falhou', falhaEm: AGORA - 1000 })])), /leitura falhou/);
-  assert.match(bloco(SYNC, listas([escopo('myPrs', [], { naoAbriram: 1 })])), /1 item de outro aparelho não abriu e ficou de fora/);
-});
-
 test('aparelho que não é o admin não mostra linha nem faixa das listas dos outros', () => {
   const soAdmin = listas([], { estado: 'so-admin' });
   assert.deepEqual(estadoDasListas(soAdmin, SYNC), { estado: 'so-admin', texto: '' });
   const locais = [{ key: 'acme/app#1' }, { key: 'acme/app#2' }];
   const m = mesclarListaRemota(locais, soAdmin, 'myPrs', { sync: SYNC, agora: AGORA });
   assert.deepEqual([m.remotas.length, m.deste, m.total, m.avisos.length], [0, 2, 2, 0], 'a contagem da aba é só a deste aparelho');
-  assert.equal(meusPrsRemotoHtml(mesclarListaRemota([], soAdmin, 'myPrs', { sync: SYNC, agora: AGORA })), '');
-  assert.equal(meusPrsRemotoHtml(m), '', 'nem a faixa de estado aparece');
-});
-
-test('texto vindo de outro aparelho é escapado', () => {
-  const m = mesclarListaRemota([], listas([escopo('myPrs', [linha('acme/app#2', { title: '<img src=x onerror=1>' })], { aparelho: '<b>x</b>' })]), 'myPrs', { sync: SYNC, agora: AGORA });
-  const html = meusPrsRemotoHtml(m);
-  assert.doesNotMatch(html, /<img src=x|<b>x/);
-  assert.match(html, /&lt;img src=x onerror=1&gt;/);
-});
-
-test('Meus PRs remoto: só leitura, merge desabilitado com o motivo, nenhum botão', () => {
-  const m = mesclarListaRemota([], listas([escopo('myPrs', [linha('acme/app#36', { somenteLeitura: true, mergeable: 'MERGEABLE', headRefName: 'feat/x', baseRefName: 'main' })])]), 'myPrs', { sync: SYNC, agora: AGORA });
-  const html = meusPrsRemotoHtml(m, { agora: AGORA });
-  assert.match(html, /do Notebook, só leitura/);
-  assert.match(html, /Merge desabilitado aqui: dado vindo de outro aparelho nunca habilita merge/);
-  assert.match(html, /feat\/x/);
-  assert.match(html, /pr-ref-mention/);
-  assert.doesNotMatch(html, /<button/);
-  assert.equal(meusPrsRemotoHtml(mesclarListaRemota([], listas([]), 'myPrs', { sync: SYNC, agora: AGORA }), { agora: AGORA }), '');
+  assert.equal(m.geral.texto, '', 'nem a faixa de estado tem o que dizer');
 });
 
 /* ---------- o nome do PR na visão compartilhada ---------- */

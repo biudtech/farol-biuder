@@ -23,6 +23,9 @@ let envios = [];
 io.run = async (cmd, args) => {
   const sub = (args || []).join(' ');
   if (sub.includes('--json state')) return { code: 0, stderr: '', ...estado };
+  // o token da conta: sem resposta aqui, a releitura de tokens que a config dispara esvazia a
+  // conta enquanto o portão lê o autor do item, e o teste mediria a falta de token
+  if (sub.startsWith('auth token')) return { ok: true, code: 0, stdout: 'tok', stderr: '' };
   if (/pulls\/\d+\/reviews --input/.test(sub)) { envios.push(sub); return { ok: true, code: 0, stdout: '{"id":1}', stderr: '' }; }
   return { ok: true, code: 0, stdout: '', stderr: '' };
 };

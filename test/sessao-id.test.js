@@ -31,10 +31,10 @@ test('dois boots não reutilizam id, e o rótulo curto recomeça só para exibi�
 
 test('marcarDesfecho corrige a sessão certa depois de um reinício', () => {
   const primeiro = new Engine();
-  const velho = novoIdDeSessao(primeiro, 's').id;
+  const velho = novoIdDeSessao(primeiro, 'a').id;
   primeiro.recordUsage(velho, 'eu', RESULTADO, 'claude-opus-5', '', 'o/r#1');
   const segundo = new Engine();
-  const novo = novoIdDeSessao(segundo, 's').id;
+  const novo = novoIdDeSessao(segundo, 'a').id;
   segundo.recordUsage(novo, 'eu', RESULTADO, 'claude-opus-5', '', 'o/r#2');
   assert.equal(segundo.marcarDesfecho(velho, 'descartada'), true);
   const linhas = segundo.usageSessions.sessions;
@@ -45,7 +45,6 @@ test('marcarDesfecho corrige a sessão certa depois de um reinício', () => {
 test('kindFromId continua lendo o tipo pelo prefixo do id opaco', () => {
   const e = new Engine();
   assert.equal(kindFromId(novoIdDeSessao(e, 'a').id), 'review');
-  assert.equal(kindFromId(novoIdDeSessao(e, 's').id), 'self');
   assert.equal(kindFromId(novoIdDeSessao(e, 'pb').id), 'pushback');
   assert.equal(kindFromId(novoIdDeSessao(e, 'f').id), 'tool');
   assert.equal(kindFromId(novoIdDeSessao(e, 'c').id), 'chat');
@@ -53,10 +52,11 @@ test('kindFromId continua lendo o tipo pelo prefixo do id opaco', () => {
 
 test('prefixo desconhecido é recusado', () => {
   assert.throws(() => novoIdDeSessao(new Engine(), 'x'), /prefixo de sessão desconhecido/);
+  assert.throws(() => novoIdDeSessao(new Engine(), 's'), /prefixo de sessão desconhecido/, 'o prefixo da autoanálise saiu com ela');
 });
 
 test('as sessões de IA usam o id opaco, nenhuma monta id com o contador', () => {
-  const sitios = [['lib/engine/review.js', 'a'], ['lib/engine/selfpr.js', 's'], ['lib/engine/pushback.js', 'pb']];
+  const sitios = [['lib/engine/review.js', 'a'], ['lib/engine/pushback.js', 'pb']];
   for (const [arquivo, prefixo] of sitios) {
     const fonte = fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
     assert.match(fonte, new RegExp(`novoIdDeSessao\\(engine, '${prefixo}'\\)`), arquivo);

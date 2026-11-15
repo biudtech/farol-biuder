@@ -191,18 +191,15 @@ test('tombstone sai só 24 h depois; tipo desconhecido é recusado', async () =>
   assert.equal((await esc.publicarEscopo(e, e.config.sync, { tipo: 'outro', conta: LOGIN, prs: [] })).code, 'forma');
 });
 
-test('o ciclo do relógio publica Panorama e Meus PRs por conta', async () => {
+test('o ciclo do relógio publica o Panorama por conta', async () => {
   const e = await motorPronto();
   e.panorama = PRS;
-  e.myPRs = [PRS[0]];
   e.accountForPr = () => LOGIN;
   // as listas acima fazem o papel da busca: ela precisa constar como feita, senão o relógio
   // não publica lista que ninguém leu (guarda do arranque a frio)
   for (const conta of e.accountList()) for (const o of conta.owners) e.ownersJaLidos.add(String(o).toLowerCase());
-  e.contasMeusPrsLidas.add(LOGIN.toLowerCase());
   e.contasPedidosLidas.add(LOGIN.toLowerCase());
   const andamentoEng = await import('../lib/engine/sync-andamento.js');
   await andamentoEng.ciclo(e, e.config.sync, { agora: Date.now() });
   assert.equal(Object.keys(raiz('panorama')).length, 2);
-  assert.equal(Object.keys(raiz('myPrs')).length, 1);
 });

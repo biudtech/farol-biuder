@@ -196,21 +196,18 @@ test('marcador com payload em formato de array é ignorado, não grava entrada v
   assert.equal(cp.entries.length, 0, 'array não é um objeto de claim válido, não deveria virar entrada nenhuma');
 });
 
-// ANTES do P0b a autoanalise era barrada por `mode !== 'auto'` e NUNCA produzia
-// verificacao capturavel, que era exatamente o furo: o caminho menos verificavel era o
-// que autorizava merge. Ela passa a capturar, mas numa LOJA PROPRIA: a revisao oficial
-// e a autoanalise falam do mesmo PR, e misturar faria a analise que EU fiz do MEU PR
-// alimentar o gate de uma revisao feita por outra conta.
-test('autoanálise captura checkpoint na loja própria, sem tocar a da revisão', async () => {
+// A loja do checkpoint é a que a sessão declara: duas sessões de propósitos diferentes sobre o
+// mesmo PR não se misturam, senão a verificação de uma alimentaria o gate da revisão oficial.
+test('sessão com loja própria captura checkpoint nela, sem tocar a da revisão', async () => {
   const id = 'a7';
   const prKey = 'org/repo#102';
-  const engine = engineFalso(id, prKey, { mode: 'self', checkpoint: 'self' });
+  const engine = engineFalso(id, prKey, { mode: 'auto', checkpoint: 'self' });
 
   await rodarSessaoComMarcador(engine, id, {
     claim: 'x', file: 'f.ts', line: 1, verdict: 'confirmado', evidence: 'e',
   });
 
-  assert.equal(readCheckpoint(checkpointPath(prKey, 'self')).entries.length, 1, 'a autoanálise agora verifica');
+  assert.equal(readCheckpoint(checkpointPath(prKey, 'self')).entries.length, 1, 'a entrada foi para a loja declarada');
   assert.equal(readCheckpoint(checkpointPath(prKey)).entries.length, 0, 'e não contamina a loja da revisão');
 });
 

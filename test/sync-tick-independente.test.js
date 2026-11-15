@@ -46,7 +46,7 @@ test('ciclo sem erro continua com um tick só', async () => {
   assert.equal(e.ticks, 1);
 });
 
-function motorDeColeta({ ownerFalha = false, autoriaFalha = false, pedidosFalha = false } = {}) {
+function motorDeColeta({ ownerFalha = false, pedidosFalha = false } = {}) {
   const e = motor();
   e.resolveAccount = async () => { };
   e.refreshTokens = async () => { };
@@ -55,7 +55,6 @@ function motorDeColeta({ ownerFalha = false, autoriaFalha = false, pedidosFalha 
   e.isMuted = () => false;
   e.accountForPr = () => 'Eu';
   e.accountForOwner = () => 'Eu';
-  e.myAuthoredPRs = async () => (autoriaFalha ? null : []);
   e.searchPRs = async (args) => ((ownerFalha && args[0] === '--owner') || (pedidosFalha && args[0] === '--review-requested=@me') ? null : []);
   return e;
 }
@@ -66,12 +65,10 @@ test('a coleta marca owner e conta só quando a busca respondeu', async () => {
   const boa = motorDeColeta();
   await boa._coletarPanorama();
   assert.equal(boa.ownersJaLidos.has('org'), true);
-  assert.equal(boa.contasMeusPrsLidas.has('eu'), true);
   assert.equal(boa.contasPedidosLidas.has('eu'), true, 'a busca dos pedidos também conta');
-  const ruim = motorDeColeta({ ownerFalha: true, autoriaFalha: true });
+  const ruim = motorDeColeta({ ownerFalha: true });
   await ruim._coletarPanorama();
   assert.equal(ruim.ownersJaLidos.size, 0, 'busca do owner que falhou não conta como lida');
-  assert.equal(ruim.contasMeusPrsLidas.size, 0, 'busca de autoria que falhou não conta como lida');
   const semPedidos = motorDeColeta({ pedidosFalha: true });
   await semPedidos._coletarPanorama();
   assert.equal(semPedidos.contasPedidosLidas.size, 0, 'busca dos pedidos que falhou não conta como lida');

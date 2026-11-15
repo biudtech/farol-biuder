@@ -93,32 +93,20 @@ test('o arquivo de sessões nunca fica legível por outros', () => {
   assert.equal(fs.statSync(sessoesPath()).mode & 0o777, 0o600, 'o toque regrava e restringe de novo');
 });
 
-// Credencial do agente da autoanálise (issue #346): escopo próprio, nunca Bearer geral.
-test('a sessão da autoanálise só vale no próprio escopo, e a comum nunca vale nele', () => {
-  const agente = emitirSessao('agente', T0, { classe: 'autoanalise' });
-  const comum = emitirSessao('celular', T0);
-  assert.equal(verificarSessao(agente, T0 + 1), false, 'o token do agente não pode abrir a API geral');
-  assert.equal(verificarSessao(agente, T0 + 1, 'autoanalise'), true);
-  assert.equal(verificarSessao(comum, T0 + 1, 'autoanalise'), false, 'o Bearer geral não abre as rotas do agente');
-  assert.equal(verificarSessao(comum, T0 + 1), true);
-});
-
-test('o hash da sessão da autoanálise mora em domínio próprio, e o motor antigo nunca a reconhece', () => {
-  const agente = emitirSessao('agente', T0, { classe: 'autoanalise' });
-  const [s] = JSON.parse(fs.readFileSync(sessoesPath(), 'utf8'));
-  assert.equal(s.classe, 'autoanalise');
-  assert.notEqual(s.hash, crypto.createHash('sha256').update(agente).digest('hex'), 'sha256(token) puro viraria Bearer geral num revert');
-});
-
-test('a sessão da autoanálise aparece na lista com a classe, vence pelo prazo e sai com a revogação', () => {
-  const agente = emitirSessao('agente', T0, { classe: 'autoanalise' });
+// A classe de sessão do agente saiu com a autoanálise. O que ela gravou em disco tem hash em
+// domínio próprio ('<classe>:' + token), então o token antigo nunca casa com o sha256(token)
+// puro do Bearer geral: sobra na lista, sem abrir nada, até vencer ou ser revogado.
+test('sessão gravada com a classe que saiu nunca vale como Bearer geral, e ainda dá para revogar', () => {
+  const antigo = crypto.randomBytes(32).toString('base64url');
+  const hash = crypto.createHash('sha256').update('autoanalise:' + antigo).digest('hex');
+  fs.mkdirSync(path.dirname(sessoesPath()), { recursive: true });
+  fs.writeFileSync(sessoesPath(), JSON.stringify([{ hash, criadoEm: T0, ultimoUsoEm: T0, rotulo: 'agente', classe: 'autoanalise' }]));
+  assert.equal(verificarSessao(antigo, T0 + 1), false, 'o token do agente antigo não abre a API geral');
+  assert.equal(verificarSessao(antigo, T0 + 1, 'autoanalise'), false, 'e o escopo que o aceitava não existe mais');
   const [linha] = listarSessoes({ agora: T0 + 1 });
-  assert.equal(linha.classe, 'autoanalise');
-  assert.equal(linha.ultimoUsoEm, T0);
-  assert.equal(verificarSessao(agente, T0 + TEMPOS.SESSAO_LOCAL_ABSOLUTA_MS, 'autoanalise'), false, 'tem prazo');
-  const outro = emitirSessao('agente', T0, { classe: 'autoanalise' });
-  assert.equal(revogarSessao(listarSessoes({ agora: T0 + 1 }).at(-1).id, T0 + 1), true);
-  assert.equal(verificarSessao(outro, T0 + 2, 'autoanalise'), false, 'revogada');
+  assert.deepEqual(Object.keys(linha).sort(), ['atual', 'criadoEm', 'id', 'rotulo', 'ultimoUsoEm']);
+  assert.equal(revogarSessao(linha.id, T0 + 1), true);
+  assert.deepEqual(listarSessoes({ agora: T0 + 2 }), []);
 });
 
 test('código de pareamento comum gera sessão comum, de uso único e com prazo', () => {
@@ -128,7 +116,6 @@ test('código de pareamento comum gera sessão comum, de uso único e com prazo'
   assert.equal(r.ok, true);
   const sessao = listarSessoes().at(-1);
   assert.equal(sessao.rotulo, 'navegador');
-  assert.equal(sessao.classe, '', 'sessão comum não leva classe');
   assert.equal(parear({ codigo }).ok, false, 'uso único');
   assert.equal(verificarSessao(r.token, agora + TEMPOS.SESSAO_LOCAL_ABSOLUTA_MS + 1), false, 'vence no limite absoluto');
   const vencido = criarCodigo(agora - TEMPOS.PAREAMENTO_VALIDADE_MS - 1);

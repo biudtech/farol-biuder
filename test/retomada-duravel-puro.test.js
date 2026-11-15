@@ -123,12 +123,11 @@ test('emAndamentoNoBoot: fila, execução e legado sem estado; pendente fica de 
   assert.deepEqual(r.emAndamentoNoBoot(lista).map(p => p.key), ['a#2', 'a#3', 'a#4']);
 });
 
-test('montarInflight: três estados, formato exato, sem duplicar e sem autoanálise', () => {
+test('montarInflight: três estados, formato exato e sem duplicar', () => {
   const e = motorFalso();
   r.guardarRetomada(e, PR, { retomarSid: SID, knownHead: HEAD, ...CTX });
   r.guardarRetomada(e, { key: 'o/r#2', url: 'u2' }, { retomarSid: 'sessao-fila-02', knownHead: 'h2', ...CTX });
   e.headlessQueue.push({ key: 'o/r#2', url: 'u2', title: 't2', author: 'b' });
-  e.headlessQueue.push({ key: 'o/r#9', url: 'u9', kind: 'self' });
   e.headlessQueue.push({ key: 'o/r#4', url: 'u4', title: 't4', knownHead: 'h4' });
   e.activeReviews.set('a1', { mode: 'auto', pr: { key: 'o/r#3', url: 'u3', title: 't3', author: 'c' }, sessionId: 'sessao-exec-03', headSha: 'h3' });
   e.activeReviews.set('a2', { mode: 'terminal', pr: { key: 'o/r#8' } });

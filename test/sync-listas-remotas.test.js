@@ -214,10 +214,6 @@ test('a tela mostra a origem certa e não conta dobrado o PR visto aqui e lá', 
   assert.equal(m.remotas[0].aparelho, 'Notebook');
   assert.equal(m.total, 3, 'dois daqui e um de lá, sem o repetido');
   assert.equal(m.outros, 1);
-  const meus = pure.meusPrsRemotoHtml(pure.mesclarListaRemota([], proj, 'myPrs', { sync: SYNC_TELA, agora: T + 20 }), { agora: T + 20 });
-  assert.match(meus, /do Notebook, só leitura/);
-  assert.match(meus, /Merge desabilitado aqui/);
-  assert.doesNotMatch(meus, /act-merge|act-set-reviewers/, 'nada que escreva no GitHub');
 });
 
 test('sem mudança no ponteiro não relê as linhas; com mudança, lê só o que é novo', async () => {
@@ -329,7 +325,6 @@ test('estados sem leitura: desligada, sem frota e sem chave são ditos, não vir
 test('sem nenhuma busca bem-sucedida da conta, o relógio não publica as listas dela', async () => {
   const { a } = await par();
   a.panorama = PAN;
-  a.myPRs = MEUS;
   fake.requests.length = 0;
   await andamento.ciclo(a, a.config.sync, { agora: Date.now() });
   const escritas = fake.requests.filter((r) => r.method === 'PUT' && /\/users\/u1\/(panorama|myPrs)(Meta)?\//.test(r.path));
@@ -342,7 +337,7 @@ test('sem nenhuma busca bem-sucedida da conta, o relógio não publica as listas
   await andamento.ciclo(a, a.config.sync, { agora: Date.now() });
   const depois = fake.requests.filter((r) => r.method === 'PUT' && /\/users\/u1\/panorama\//.test(r.path));
   assert.ok(depois.length > 0, 'depois da primeira busca boa dos owners e dos pedidos da conta, o Panorama sobe');
-  assert.equal(fake.requests.filter((r) => r.method === 'PUT' && /\/users\/u1\/myPrs\//.test(r.path)).length, 0, 'Meus PRs espera a busca própria');
+  assert.equal(fake.requests.filter((r) => r.method === 'PUT' && /\/users\/u1\/myPrs\//.test(r.path)).length, 0, 'este aparelho não publica mais a lista de Meus PRs');
 });
 
 // Conta que só recebe pedido de revisão (colaboradora numa org, sem org monitorada): o PR
@@ -389,11 +384,9 @@ test('org sem acesso não trava o Panorama da conta, e org ainda não lida conti
 test('o ciclo do relógio lê as listas depois de publicar', async () => {
   const { a, b } = await par();
   a.panorama = PAN;
-  a.myPRs = MEUS;
   // as listas acima fazem o papel da busca: ela precisa constar como feita
   a.ownersJaLidos.add('acme');
   a.contasPedidosLidas.add(LOGIN.toLowerCase());
-  a.contasMeusPrsLidas.add(LOGIN.toLowerCase());
   await andamento.ciclo(a, a.config.sync, { agora: Date.now() });
   await andamento.ciclo(b, b.config.sync, { agora: Date.now() });
   const pano = escopoDe(b.syncListasRemotas(), 'panorama');

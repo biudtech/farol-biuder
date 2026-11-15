@@ -47,7 +47,7 @@ function estado({ sync = {}, cfgSync = {} } = {}) {
     accounts: [{ user: 'alice', owners: ['acme-exemplo'] }],
     config: { ghUser: 'alice', owners: ['acme-exemplo'], accounts: [{ user: 'alice', owners: ['acme-exemplo'] }], intervalSeconds: 300, sync: cfgSync, people: {}, claudeProfiles: [] },
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
-    queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
+    queue: [], panorama: [], decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
     usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
@@ -464,7 +464,6 @@ test('aparelho que não aceitou o controle não aparece na aba nem soa o aviso d
   assert.equal($('#toasts').children.length, antesDosToasts, 'a decisão dele não soa aqui');
   assert.equal($('#mdSeusAparelhos').innerHTML, '');
 });
-
 
 test('card explica automação desligada por conta e acompanha a mudança do snapshot', () => {
   const snap = estado();

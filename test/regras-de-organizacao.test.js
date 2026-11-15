@@ -115,8 +115,8 @@ test('reprovar sem blocker e só com organização é incoerente: o texto volta 
   assert.equal(reviewCoherenceGap({ ...r, technicalReview: relatorio([fail('backend.output.sanitized')]) }), '');
 });
 
-test('o protocolo diz o mesmo nos quatro textos, e o exemplo de bloqueio não é de organização', () => {
-  for (const arq of ['workspace-template/CLAUDE.md', 'workspace-template/prompts/pr-review-auto.md', 'workspace-template/prompts/self-review.md', 'workspace-template/.claude/agents/pr-reviewer.md']) {
+test('o protocolo diz o mesmo nos três textos, e o exemplo de bloqueio não é de organização', () => {
+  for (const arq of ['workspace-template/CLAUDE.md', 'workspace-template/prompts/pr-review-auto.md', 'workspace-template/.claude/agents/pr-reviewer.md']) {
     assert.match(fs.readFileSync(arq, 'utf8'), /salvo de regra de organização sem cenário concreto de falha/, arq);
   }
   assert.doesNotMatch(fs.readFileSync('lib/engine/review-prompt.js', 'utf8'), /alias canônico antes do merge/);

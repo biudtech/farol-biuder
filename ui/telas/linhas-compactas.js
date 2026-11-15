@@ -1,7 +1,7 @@
 /* Farol · UI: as linhas da Compacta (07/11/2026) nas telas do Radar. Junta o estado da tela
    com o desenho de ui/pure/densidade.js (linha, frases, resumo do topo e rodapé de Revisões
-   recentes) e o que está aberto em densidade.js, e devolve o HTML pronto para radar.js,
-   meus-prs.js e sessoes.js não incharem. */
+   recentes) e o que está aberto em densidade.js, e devolve o HTML pronto para radar.js
+   e sessoes.js não incharem. */
 import {
   esc, avatar, setaDaLinhaHtml, linhaCompactaHtml, fraseDaDecisao, acaoDaDecisaoHtml,
   fraseDaEspera, fraseDaFila, fraseDaFilaDeExecucao, rodapeDasRecentes, resolvidasHoje, resumoPraMimHtml, separarPendentes,
@@ -12,15 +12,6 @@ import { ehCompacta, cardCheio } from './densidade.js';
 
 // a seta que recolhe o card cheio, só na Compacta (na Expandida não há linha para voltar)
 function setaDoCard(key) { return ehCompacta() ? setaDaLinhaHtml(key, true, key) : ''; }
-
-/* ---------- Meus PRs ---------- */
-function linhaDoMeuPr(pr, o) {
-  return linhaCompactaHtml({
-    key: pr.key, url: pr.url, titulo: pr.title, inicio: o.mark.dot, style: o.mark.style,
-    classe: ['mypr-linha', o.escondido && 'oculto', o.classeExtra].filter(Boolean).join(' '), barra: o.barra,
-    acoes: o.merge || '', ...(o.andamento || {}),
-  });
-}
 
 /* ---------- Pra mim ---------- */
 function linhaDaDecisao(d, meta, o) {
@@ -59,7 +50,7 @@ function renderResumoPraMim(filtro, totalDaFila) {
   const el = $('#praMimResumo');
   if (!el) return;
   const { precisam, esperandoCi } = separarPendentes((estado().decisions?.pending || []).filter(filtro));
-  const analisando = (estado().activeSessions || []).filter(s => (s.mode === 'auto' || s.mode === 'self')).length;
+  const analisando = (estado().activeSessions || []).filter(s => s.mode === 'auto').length;
   const html = resumoPraMimHtml({
     analisando, precisam: precisam.length, sozinhos: esperandoCi.length, fila: totalDaFila,
     resolvidas: resolvidasHoje((estado().decisions?.resolved || []).filter(filtro)),
@@ -78,6 +69,6 @@ function setaDaSessaoHtml(key) {
 }
 
 export {
-  setaDoCard, linhaDoMeuPr, linhaDaDecisao, linhaDaFila, linhaDaFilaDeExecucao, rodapeDasRecentesHtml, renderResumoPraMim,
+  setaDoCard, linhaDaDecisao, linhaDaFila, linhaDaFilaDeExecucao, rodapeDasRecentesHtml, renderResumoPraMim,
   setaDaSessaoHtml,
 };

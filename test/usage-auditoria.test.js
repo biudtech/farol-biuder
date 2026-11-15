@@ -185,28 +185,8 @@ test('sessao antiga sem costSource conta como MEDIDA, que e o que ela era', () =
   assert.equal(r.util.costUsd, 5);
 });
 
-/* ---------- fiação: os dois caminhos de descarte da autoanálise carimbam ---------- */
-// Teste de fonte, mesmo padrão dos outros wirings deste repo: o caminho de verdade faz
-// spawn e chamada gh. São DOIS descartes diferentes, e os dois desperdiçam igual:
-// o imediato (commit novo durante a análise, no fim do runSelfAnalysis) e o tardio
-// (a análise era válida quando saiu e envelheceu, percebido no polling seguinte).
-const SELF = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'selfpr.js'), 'utf8');
+/* ---------- fiação ---------- */
 const SERVER = fs.readFileSync(path.join(import.meta.dirname, '..', 'server.js'), 'utf8');
-
-test('o descarte imediato carimba o desfecho da sessão', () => {
-  assert.match(SELF, /engine\.marcarDesfecho\(id, 'descartada'\)/);
-});
-
-test('o desfecho tardio reencontra a sessão pelo id gravado na análise', () => {
-  assert.match(SELF, /usageId: id/, 'a análise guarda o id da sessão do Farol');
-  // `parcial`, e nao `descartada`: desde que o registro passou a PERSISTIR quando o head
-  // anda, o gasto continua nao virando merge mas vira um relatorio que segue na tela e
-  // segue sendo lido. Carimbar `descartada` diria que nada sobrou, e sobrou.
-  assert.match(SELF, /if \(a\.usageId\) engine\.marcarDesfecho\(a\.usageId, 'parcial'\)/);
-  // o descarte IMEDIATO (push durante a sessao) continua `descartada`: ali nao sobra
-  // relatorio nenhum, a sessao inteira foi jogada fora.
-  assert.match(SELF, /engine\.marcarDesfecho\(id, 'descartada'\)/);
-});
 
 test('a fachada existe no engine', () => {
   assert.match(SERVER, /marcarDesfecho\(id, status\) \{ return usageMod\.marcarDesfecho\(this, id, status\); \}/);

@@ -18,15 +18,14 @@ const $ = selector => doc.querySelector(selector);
 const { switchRadarSub } = await import('../ui/telas/radar.js');
 
 const pedido = { key: 'acme/app#1', repo: 'acme/app', number: 1, url: 'https://github.com/acme/app/pull/1', account: 'alice', title: 'Corrige o filtro', author: 'autora', mine: true, updatedAt: new Date().toISOString() };
-const meu = { key: 'acme/app#2', repo: 'acme/app', number: 2, url: 'https://github.com/acme/app/pull/2', account: 'alice', title: 'Meu PR', author: 'alice', updatedAt: new Date().toISOString() };
 
 function snapshot() {
   return { app: { platform: 'win32', version: 'fixture' }, status: 'idle', account: { user: 'alice', tokenOk: true },
     accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
     config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [], theme: 'dark' },
-    lastCheckAt: Date.now(), queue: [pedido], myPRs: [meu], hiddenPRs: [],
+    lastCheckAt: Date.now(), queue: [pedido],
     decisions: { pending: [], resolved: [{ key: 'acme/app#9', resolvedAt: Date.now(), status: 'auto_approved', action: 'approve', verdict: 'approve', pr: { title: 'x' } }] },
-    activeSessions: [], activity: {}, selfAnalyses: {}, headlessWaiting: [], usage: {},
+    activeSessions: [], activity: {}, headlessWaiting: [], usage: {},
     paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }
 function receber(snap, sub = 'mim') { switchRadarSub(sub); emitir('state', snap); quadros.pintar(); }
@@ -68,17 +67,9 @@ test('o PR que saiu da fila e espera vaga vira linha na fila de execução, só 
   assert.match(html, /Na fila de execução/);
 });
 
-test('Meus PRs na Compacta: linha sem a faixa de prontidão e o Merge só pela regra atual', () => {
-  receber(snapshot(), 'meus');
-  const html = $('#myPRs').innerHTML;
-  assert.match(html, /class="pr-linha mypr-linha/);
-  assert.doesNotMatch(html, /pron-b-|pron-trio/, 'sem a prontidão, a barra só vem do selo da autoanálise');
-  assert.doesNotMatch(html, /act-self-merge/, 'sem autoanálise elegível o Merge não aparece');
-});
-
-test('o Radar não tem mais o Panorama nem a faixa de prontidão', () => {
+test('o Radar não tem mais o Panorama, a faixa de prontidão nem Meus PRs', () => {
   const index = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
-  assert.doesNotMatch(index, /rsub-pano|rpane-pano|id="panorama"|id="silenced"|myPRsResumo|reviewLabels/);
+  assert.doesNotMatch(index, /rsub-pano|rpane-pano|id="panorama"|id="silenced"|myPRsResumo|reviewLabels|rsub-meus|rpane-meus|id="myPRs/);
   assert.equal(snapshot().panorama, undefined);
 });
 

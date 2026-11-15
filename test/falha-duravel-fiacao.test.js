@@ -76,13 +76,6 @@ test('cancelamento não é falha e não registra', async () => {
   assert.equal(e.falhaDaSessao('a-cancel'), null);
 });
 
-test('autoanálise que falha registra com tipo self', async () => {
-  const e = engineDeFila();
-  e.runSelfAnalysis = async () => { throw anotarFalhaDaSessao(new Error('autoanálise quebrou qwerty'), 's-falha-1', null); };
-  await e.runOneHeadless({ key: 'o/r#10', url: 'u', kind: 'self' }, 'conta');
-  assert.equal(e.falhaDaSessao('s-falha-1').kind, 'self');
-});
-
 test('o resumo do Consumo liga a linha da sessão à falha', () => {
   const e = new Engine();
   e.recordUsage('a-resumo', 'eu', { usage: { output_tokens: 3 }, total_cost_usd: 0.1, is_error: true }, 'claude-opus-5', '', 'o/r#11');
@@ -90,9 +83,7 @@ test('o resumo do Consumo liga a linha da sessão à falha', () => {
   assert.equal(e.usageSummary().falhasPorSessao['a-resumo'].motivo, 'quebrou');
 });
 
-test('as sessões anotam a falha antes do finally apagar o feed', () => {
+test('a sessão anota a falha antes do finally apagar o feed', () => {
   const review = fs.readFileSync(path.join(RAIZ, 'lib', 'engine', 'review.js'), 'utf8');
-  const self = fs.readFileSync(path.join(RAIZ, 'lib', 'engine', 'selfpr.js'), 'utf8');
   assert.match(review, /anotarFalhaDaSessao\(err, id, stageSummaryFrom\(/);
-  assert.match(self, /anotarFalhaDaSessao\(err, id, stageSummaryFrom\(/);
 });

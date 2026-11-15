@@ -13,9 +13,6 @@ const { SourceStore } = await import('../lib/review-source/store.js');
 const { StorageBudget } = await import('../lib/review-source/storage-budget.js');
 const { projectedTextCache } = await import('../lib/review-source/projected-text-cache.js');
 const { createSourceProjection } = await import('../lib/review-source/projection.js');
-const { prepareSelfIsolation } = await import('../lib/engine/self-isolation.js');
-const { restrictedCheckpoint, recordProjection } = await import('../lib/engine/self-read-proof.js');
-const { checkpointPath, readCheckpoint } = await import('../lib/engine/verification-checkpoint.js');
 after(() => fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
 
 const H = 'a'.repeat(40), B = 'b'.repeat(40), M = 'c'.repeat(40);
@@ -124,12 +121,11 @@ test('pontuação em credencial não citada nunca revela sufixo', () => {
 
 test('projeções concorrentes não compartilham marcadores nem persistem o valor sintético', async t => {
   const f = await fixture(t), first = await f.prepare(true), second = await f.prepare(true);
-  const [a, b] = await Promise.all([first, second].map(source =>
-    prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') })));
-  assert.notEqual(a.root, b.root);
-  assert.notEqual(a.manifest.projection.id, b.manifest.projection.id);
-  assert.notEqual(await fs.readFile(path.join(a.patches, 'src/header.js'), 'utf8'),
-    await fs.readFile(path.join(b.patches, 'src/header.js'), 'utf8'));
+  const [a, b] = [first, second].map(source => source.manifest.files[0]);
+  assert.ok(a.representation.projectionId && b.representation.projectionId);
+  assert.notEqual(a.representation.projectionId, b.representation.projectionId);
+  assert.notEqual(a.patch, b.patch, 'cada execução tem os próprios marcadores');
+  for (const patch of [a.patch, b.patch]) for (const token of f.tokens) assert.equal(patch.includes(token), false);
   await f.noOriginalPersisted();
 });
 
@@ -144,10 +140,7 @@ test('GitHub/reader padrão continuam fechados; somente a projeção entrega fix
   assert.equal(projected.manifest.files[0].sensitivity.content, true);
   const read = await projected.reader.read('src/header.js', 'head');
   assert.equal(read.commit, H); assert.equal(read.text.includes(f.tokens[1]), false);
-  const isolated = await prepareSelfIsolation({ source: projected }, { base: path.join(f.root, 'snapshots') });
-  assert.match(await fs.readFile(path.join(isolated.patches, 'src/header.js'), 'utf8'), /Bearer \[FAROL_REDACTED_/);
-  assert.ok(isolated.manifest.representations.some(v => v.redactions.length));
-  assert.equal(isolated.manifest.projection.hiddenValuesRead, false);
+  assert.match(projected.manifest.files[0].patch, /Bearer \[FAROL_REDACTED_/);
   await f.noOriginalPersisted();
 });
 
@@ -158,31 +151,12 @@ test('senha genérica em template não depende do detector de Bearer para impedi
   const source = await f.prepare(true);
   assert.equal(source.manifest.files[0].sensitivity.content, false);
   assert.deepEqual(source.manifest.files[0].patchOrigin, { status: 'available', policy: 'template-keys' });
-  const isolated = await prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') });
-  assert.match(await fs.readFile(path.join(isolated.patches, '.env.example'), 'utf8'), /patch GitHub=available; política=template-keys/);
   await f.noOriginalPersisted();
 });
 
-for (const status of ['modified', 'added', 'removed', 'renamed']) test(`patch ausente usa versões verificadas para ${status}`, async t => {
-  const f = await fixture(t, { status, patch: null, previousPath: status === 'renamed' ? 'old/header.js' : undefined });
-  const source = await f.prepare(true);
-  const isolated = await prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') });
-  const view = isolated.manifest.representations.find(v => v.path === 'patches/src/header.js');
-  assert.equal(view.kind, 'fixed-versions'); assert.equal(view.references.mergeBase.commit, M);
-  assert.equal(view.references.head.commit, H);
-  assert.equal(view.references.mergeBase.status, status === 'added' ? 'missing' : 'available');
-  assert.equal(view.references.head.status, status === 'removed' ? 'missing' : 'available');
-  if (status === 'renamed') assert.equal(view.references.mergeBase.path, 'old/header.js');
-  const delivered = await fs.readFile(path.join(isolated.patches, 'src/header.js'), 'utf8');
-  assert.match(delivered, /não um diff GitHub/); assert.equal(view.digest.length, 64);
-  await f.noOriginalPersisted();
-});
-
-test('patch parcial usa versões completas sem promover o fragmento a diff completo', async t => {
+test('patch parcial não é promovido a diff completo', async t => {
   const f = await fixture(t, { patch: '@@ -1 +1 @@\n+partial' }), source = await f.prepare(true);
   assert.equal(source.manifest.files[0].patchStatus, 'partial');
-  const isolated = await prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') });
-  assert.equal(isolated.manifest.representations[0].kind, 'fixed-versions');
   await f.noOriginalPersisted();
 });
 
@@ -192,37 +166,9 @@ for (const name of ['.env.example', '.env.sample']) test(`template ${name} só a
   assert.equal((await normal.reader.read(name, 'head')).status, 'excluded');
   const projected = await f.prepare(true);
   assert.equal((await projected.reader.read(name, 'head')).text.includes('fixture-after-value'), false);
-  const isolated = await prepareSelfIsolation({ source: projected }, { base: path.join(f.root, 'snapshots') });
-  assert.equal((await fs.readFile(path.join(isolated.root, 'head', name), 'utf8')).includes('fixture-after-value'), false);
   const normalAgain = await f.prepare(false);
   assert.equal((await normalAgain.reader.read(name, 'head')).status, 'excluded', 'cache de árvore não amplia permissão de outra execução');
   await f.noOriginalPersisted();
-});
-
-for (const options of [{ path: '.env' }, { status: 'renamed', previousPath: '.env' }, { path: '.env.example', mode: '120000', patch: null },
-  { mode: '120000' }, { mode: '160000' },
-  { afterBytes: Buffer.from([0, 255]), patch: null }, { truncated: true, patch: null }]) test('fonte excluída, link, binário ou árvore incompleta não ganha cobertura', async t => {
-  const f = await fixture(t, options), source = await f.prepare(true);
-  await assert.rejects(prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') }));
-});
-
-test('o host conserva ressalva e torna inconclusiva uma contraprova de arquivo ocultado', async t => {
-  const f = await fixture(t), source = await f.prepare(true);
-  const isolated = await prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') });
-  const key = 'org/projection#42', id = 's-projection';
-  t.after(() => fs.rm(checkpointPath(key, 'self'), { force: true }));
-  const e = { activeReviews: new Map([[id, { mode: 'self', keys: [key], pr: { key, url: PR.url }, checkpoint: 'self', headSha: H,
-    filesRead: new Set(['src/header.js']) }]]), pushState() {} };
-  restrictedCheckpoint(e, { id, selfIsolation: isolated }, 'FAROL_CHECKPOINT: ' + JSON.stringify({
-    method: 'read', file: 'src/header.js', line: 1, claim: 'valor é válido', verdict: 'confirmado', evidence: 'declaração do modelo' }));
-  const entry = readCheckpoint(checkpointPath(key, 'self')).entries.at(-1);
-  assert.equal(entry.verdict, 'inconclusivo');
-  const result = { summary: 'completo', reportMarkdown: 'tudo lido', coverageLimitations: [] }, observed = { scope: {} };
-  recordProjection(result, observed, isolated);
-  assert.equal(observed.scope.originalTextComplete, false);
-  assert.equal(observed.sourceProjection.hiddenValuesRead, false);
-  assert.match(result.reportMarkdown, /valores ocultos não foram lidos/);
-  assert.deepEqual(result.coverageLimitations, [], 'ressalva do host não vira um caminho falso na lista do modelo');
 });
 
 test('caminho contendo valor reconhecido é recusado antes de cache, snapshot ou prompt', async t => {
@@ -232,7 +178,6 @@ test('caminho contendo valor reconhecido é recusado antes de cache, snapshot ou
     projection: createSourceProjection(), limits: { reserveBytes: 1 } });
   assert.equal(source.status, 'unavailable');
   assert.equal(JSON.stringify(source).includes(secret), false);
-  await assert.rejects(prepareSelfIsolation({ source }, { base: path.join(f.root, 'snapshots') }));
   await f.noOriginalPersisted();
 });
 
