@@ -14,8 +14,6 @@ import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 const { LOG_FILE, UI_DIR } = await import('../lib/paths.js');
-const { normalizeReviewPayload } = await import('../lib/engine/public-review.js');
-const { reviewCaps } = await import('../lib/engine/decision.js');
 
 let server, base, engine;
 
