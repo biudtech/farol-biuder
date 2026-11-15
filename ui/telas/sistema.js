@@ -15,10 +15,7 @@ import { renderAparelhos, carregarAparelhos } from './sistema-aparelhos.js';
 import { renderGrupos } from './sistema-grupos.js';
 import { renderDoctor } from './sistema-ambiente.js';
 import { renderAbout } from './sistema-sobre.js';
-import { initSpecialists, renderSpecialistAccounts } from './specialists.js';
-import { initCapacity } from './capacity.js';
 import { initSetup, renderSetup } from './setup.js';
-import { initReviewLabels } from './review-labels.js';
 import { syncTheme } from './tema.js';
 import { renderAutomationSettings } from './sistema-automacao.js';
 
@@ -124,13 +121,6 @@ function renderSettings() {
   $('#setGlobalParallelReviews').value = String(c.globalParallelReviews || 0);
   renderAutomationSettings(c);
   $('#setReviewFast').checked = c.reviewFast === true;
-  $('#setCoAssinarReview').checked = c.coAssinarReview === true;
-  // revisar junto ligado tira o efeito de "Aprovar junto": não há saída de cena para co-assinar.
-  // O valor salvo de "Aprovar junto" fica como está; só a linha avisa e o switch esmaece.
-  const revisarJunto = c.revisarComOutrosRevisando === true;
-  $('#setRevisarJunto').checked = revisarJunto;
-  $('#notaAprovarJuntoSemEfeito').hidden = !revisarJunto;
-  $('#sys-row-coassinar').classList.toggle('sem-efeito', revisarJunto);
   $('#setAguardarCi').checked = c.aguardarCiParaRevisar === true;
   $('#setAguardarCiAprovar').checked = c.aguardarCiParaAprovar === true;
   // padrão ligado desde 06/11/2026: só o false explícito desliga
@@ -139,7 +129,6 @@ function renderSettings() {
   $('#setDebugSpawns').checked = !!c.debugSpawns;
   $('#setSkipPerms').checked = c.skipPermissions !== false;
   $('#setSound').checked = !!c.soundEnabled;
-  renderSpecialistAccounts();
   $('#setAutostart').checked = !!c.autostart;
 }
 
@@ -164,10 +153,7 @@ function renderPlatformSettings() {
 // ele poderia passar à frente de 'sistema' dependendo da ordem dos imports. 'sistema'
 // não tem essa restrição: só precisa que o IMPORT deste módulo, no app.js, venha
 // depois do import de telas/time.js.
-initSpecialists();
-initCapacity();
 initSetup();
-initReviewLabels();
 registrarTela({
   id: 'sistema',
   aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); },

@@ -53,21 +53,23 @@ test('fonte incompleta, patch ausente, traversal, segredo e cancelamento recusam
 test('ambiente do filho não herda tokens GitHub, API, opções Node ou diretórios temporários compartilhados', () => {
   const inherited = { PATH: '/bin', HOME: '/home/test', GH_TOKEN: 'fake', ANTHROPIC_API_KEY: 'fake',
     NODE_OPTIONS: '--require unsafe', TEMP: '/shared', CLAUDE_CONFIG_DIR: '/other-profile' };
-  const auth = { kind: 'dir', dir: '/chosen-profile' };
+  const auth = { kind: 'apikey', apiKey: 'sk-chosen-profile', baseUrl: '' };
   const env = restrictedEnvironment(inherited, auth, base);
-  assert.equal(env.CLAUDE_CONFIG_DIR, auth.dir);
+  assert.equal(env.ANTHROPIC_API_KEY, auth.apiKey, 'só a chave do perfil escolhido entra, nunca a herdada');
+  assert.equal(env.CLAUDE_CONFIG_DIR, undefined);
   assert.equal(env.TEMP, path.join(base, 'runtime'));
-  for (const key of ['GH_TOKEN', 'ANTHROPIC_API_KEY', 'NODE_OPTIONS']) assert.equal(env[key], undefined);
+  for (const key of ['GH_TOKEN', 'NODE_OPTIONS']) assert.equal(env[key], undefined);
   assert.equal(inherited.TEMP, '/shared'); assert.equal(inherited.CLAUDE_CONFIG_DIR, '/other-profile');
 });
 
 test('provedor incompatível, MCP, retomada e snapshot forjado não iniciam fallback', async () => {
   const selfIsolation = await prepareSelfIsolation(prepared(), { base });
   for (const [opts, auth] of [
-    [{ selfIsolation, operationKind: 'self' }, { kind: 'codex' }],
-    [{ selfIsolation, operationKind: 'review' }, { kind: 'dir', dir: '/profile' }],
-    [{ selfIsolation, operationKind: 'self', extraArgs: ['--resume', 'old'] }, { kind: 'dir', dir: '/profile' }],
-    [{ selfIsolation: { ...selfIsolation }, operationKind: 'self' }, { kind: 'dir', dir: '/profile' }]
+    [{ selfIsolation, operationKind: 'self' }, { kind: 'dir', dir: '/profile' }],
+    [{ selfIsolation, operationKind: 'self' }, { kind: 'apikey', apiKey: '' }],
+    [{ selfIsolation, operationKind: 'review' }, { kind: 'apikey', apiKey: 'sk-profile' }],
+    [{ selfIsolation, operationKind: 'self', extraArgs: ['--resume', 'old'] }, { kind: 'apikey', apiKey: 'sk-profile' }],
+    [{ selfIsolation: { ...selfIsolation }, operationKind: 'self' }, { kind: 'apikey', apiKey: 'sk-profile' }]
   ]) await assert.rejects(restrictedLaunch(opts, auth, {}));
 });
 

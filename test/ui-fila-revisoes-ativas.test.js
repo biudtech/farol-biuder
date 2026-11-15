@@ -26,7 +26,7 @@ function snapshot() {
     accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: [] }],
     config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [],
       theme: 'dark' },
-    lastCheckAt: Date.now(), queue: [pr, outro], panorama: [pr, outro], myPRs: [], hiddenPRs: [],
+    lastCheckAt: Date.now(), queue: [pr, outro], myPRs: [], hiddenPRs: [],
     decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {}, selfAnalyses: {},
     headlessWaiting: [], usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' } };
 }
@@ -61,7 +61,6 @@ test('PR em revisão sai do card acionável, dos contadores e do Revisar tudo, s
 test('revisão da mesma chave por outra conta não oculta o pedido legítimo dessa conta', () => {
   const snap = snapshot();
   snap.queue = [pr, { ...pr, account: 'bob' }];
-  snap.panorama = snap.queue;
   snap.activeSessions = [sessao({ ...pr, account: 'ALICE' })];
   receber(snap);
   assert.equal($('#queueCount').textContent, '1');
@@ -98,6 +97,7 @@ test('somente pedidos em espera não abrem a seção Analisando agora', () => {
   snap.queue = [];
   snap.headlessWaiting = [pr.key, outro.key];
   snap.headlessWaitingContas = { [pr.key]: 'alice', [outro.key]: 'alice' };
+  snap.headlessWaitingPrs = [pr, outro];
   receber(snap);
   assert.equal($('#queueCount').textContent, '2');
   assert.equal($('#activeWrap').hidden, true);
@@ -145,7 +145,6 @@ test('recuperação mostra agenda, executor e execução conforme o snapshot rea
 test('attentionCount soma as pendências que precisam de você, inclusive a recuperação pausada', () => {
   const snap = snapshot();
   snap.queue = [];
-  snap.panorama = [];
   const pendencia = (id, extra) => ({ id, key: `acme/app#${id}`, pr: { ...pr, key: `acme/app#${id}` }, verdict: 'approve', reasons: [], ...extra });
   snap.decisions = { pending: [
     pendencia(1, {}),

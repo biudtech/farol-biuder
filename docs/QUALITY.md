@@ -253,6 +253,9 @@ não explode. Validar visual e clique continua sendo abrir o app.
 
 Nota de operação: o script de test ganhou `--test-force-exit`, porque carregar o
 `app.js` liga os timers dele e o runner esperava o event loop drenar.
+Ele saiu em 13/11/2026: o encerramento forçado truncava o relatório de alguns arquivos
+(7059 testes relatados com ele, 7101 sem, nas duas rodadas, sem travar), e um teste que
+falhasse no trecho cortado não apareceria.
 
 ## Achar trava sem guarda (auditoria de mutação)
 

@@ -31,7 +31,7 @@ function togglesDaTela() {
 
 test('toda preferência que a tela edita existe na tabela e é editável', () => {
   const daTela = togglesDaTela();
-  assert.ok(daTela.length >= 15, `esperava os toggles de Sistema, achei ${daTela.length}`);
+  assert.ok(daTela.length >= 14, `esperava os toggles de Sistema, achei ${daTela.length}`);
   const órfãs = daTela.filter(t => !EDITAVEIS.has(t.key));
   assert.deepEqual(órfãs.map(t => `${t.sel} -> ${t.key}`), [],
     'chave que a tela manda e o servidor não aceita é preferência que some em silêncio');
@@ -69,13 +69,10 @@ test('saneamento: valor inválido mantém o anterior, não derruba pro padrão',
   // semântica de sempre: a tela mostra o que o engine aceitou no próximo estado
   const fns = {
     sanitizeClaudeModel: () => null, sanitizeClaudeEffort: () => null,
-    sanitizeCodexModel: () => null, sanitizeCodexEffort: () => null,
     sanitizeParallelReviews: () => null,
   };
   assert.equal(sanear('reviewModel', 'lixo', { reviewModel: 'opus' }, fns), 'opus');
   assert.equal(sanear('reviewEffort', 'lixo', { reviewEffort: 'high' }, fns), 'high');
-  assert.equal(sanear('codexReviewModel', 'lixo', { codexReviewModel: 'gpt-5.6-terra' }, fns), 'gpt-5.6-terra');
-  assert.equal(sanear('codexReviewEffort', 'lixo', { codexReviewEffort: 'medium' }, fns), 'medium');
   assert.equal(sanear('parallelReviews', 99, { parallelReviews: 3 }, fns), 3);
 });
 

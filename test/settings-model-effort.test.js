@@ -30,16 +30,13 @@ test('updateSettings grava os níveis de esforço suportados', () => {
   }
 });
 
-test('updateSettings sincroniza modelos e preserva os esforços próprios', () => {
+test('updateSettings grava modelo e esforço do Claude', () => {
   const engine = new Engine();
   engine.updateSettings({
     reviewModel: 'sonnet', reviewEffort: 'low',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'minimal',
   });
   assert.equal(engine.config.reviewModel, 'sonnet');
   assert.equal(engine.config.reviewEffort, 'low');
-  assert.equal(engine.config.codexReviewModel, 'gpt-5.6-terra');
-  assert.equal(engine.config.codexReviewEffort, 'minimal');
 });
 
 test('updateSettings normaliza espaço e caixa', () => {
@@ -71,17 +68,14 @@ test('updateSettings aceita nome completo de modelo (escotilha sem release)', ()
   const engine = new Engine();
   engine.updateSettings({ reviewModel: 'claude-opus-5' });
   assert.equal(engine.config.reviewModel, 'claude-opus-5');
-  engine.updateSettings({ codexReviewModel: 'gpt-5.5' });
-  assert.equal(engine.config.codexReviewModel, 'gpt-5.5');
 });
 
-test('updateSettings rejeita modelo do provedor errado e esforço fora do Codex CLI', () => {
+test('updateSettings rejeita modelo de outro provedor e esforço fora do Claude Code', () => {
   const engine = new Engine();
-  engine.updateSettings({ reviewModel: 'sonnet', codexReviewModel: 'gpt-5.6-sol', codexReviewEffort: 'high' });
-  engine.updateSettings({ reviewModel: 'gpt-5.5', codexReviewModel: 'opus', codexReviewEffort: 'max' });
+  engine.updateSettings({ reviewModel: 'sonnet', reviewEffort: 'high' });
+  engine.updateSettings({ reviewModel: 'gpt-5.5', reviewEffort: 'max' });
   assert.equal(engine.config.reviewModel, 'sonnet');
-  assert.equal(engine.config.codexReviewModel, 'gpt-6.1-sol');
-  assert.equal(engine.config.codexReviewEffort, 'high');
+  assert.equal(engine.config.reviewEffort, 'high');
 });
 
 test('updateSettings não cria chave fora da allowlist', () => {
@@ -95,11 +89,8 @@ test('updateSettings persiste modelo e esforço no config.json', () => {
   const engine = new Engine();
   engine.updateSettings({
     reviewModel: 'sonnet', reviewEffort: 'low',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'medium',
   });
   const gravado = JSON.parse(fs.readFileSync(path.join(HOME, 'config.json'), 'utf8'));
   assert.equal(gravado.reviewModel, 'sonnet');
   assert.equal(gravado.reviewEffort, 'low');
-  assert.equal(gravado.codexReviewModel, 'gpt-5.6-terra');
-  assert.equal(gravado.codexReviewEffort, 'medium');
 });

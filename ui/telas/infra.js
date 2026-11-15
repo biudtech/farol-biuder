@@ -45,7 +45,7 @@ export function baixarArquivo(nome, conteudo, tipo) {
 // Copia texto com fallback: a Clipboard API exige contexto seguro e foco; quando
 // falha (ex.: janela sem foco), recai pro textarea + execCommand, que não depende
 // de permissão. Devolve true se algum caminho copiou. Não é sobre nenhuma tela em
-// particular (o app.js usa em Revisões recentes, Panorama e Diagnóstico; Meus PRs
+// particular (o app.js usa em Revisões recentes e Diagnóstico; Meus PRs
 // usa no prompt de correção): mora aqui, ao lado de $/toast/api, por só tocar
 // document/navigator.
 export async function copyToClipboard(text) {

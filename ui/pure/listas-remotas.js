@@ -14,7 +14,7 @@
 //      vem do engine (`limiteMs`), a tela não define regra de dado. Aparelho que não é o admin
 //      recebe `so-admin` e não mostra nada: nem linha, nem faixa (decisão do dono, 06/11/2026).
 import { esc, fmtClock, plural } from './comum.js';
-import { personMention, prRefMention } from './mencoes.js';
+import { prRefMention } from './mencoes.js';
 import { visaoCompartilhada } from './compartilhado.js';
 
 const INDISPONIVEL = {
@@ -131,30 +131,6 @@ function avisosHtml(m) {
 function origemHtml(l) {
   const hora = l.u ? `<span class="md-fraco">atualizado ${esc(fmtClock(l.u))}</span>` : '';
   return `<span class="sync-chip mute md-origem" title="lista vinda de outro aparelho">${esc(l.aparelho)}</span>${hora}`;
-}
-
-function linhaPanoramaHtml(l) {
-  const rascunho = l.isDraft ? '<span class="badge">rascunho</span>' : '';
-  const autor = l.author ? `<span class="pw-sep">·</span>${personMention(l.author, 'xs')}` : '';
-  return `<div class="prow md-remota" data-origem="${esc(l.dev)}">
-    <span class="status-dot" aria-hidden="true"></span>
-    <div class="pw-main">
-      <div class="pw-head">${prRefMention(l.key, 'pw-ref')}${rascunho}</div>
-      <div class="pw-title"><span class="pw-title-txt">${esc(l.title || '')}</span>${autor}</div>
-    </div>
-    <div class="md-remota-fim">${origemHtml(l)}<span class="settled">só leitura</span></div>
-  </div>`;
-}
-
-// Bloco de linhas remotas do Panorama. Vazio quando não há nada a dizer (visão desligada
-// não polui a aba; ela já diz isso no Radar).
-export function panoramaRemotoHtml(m) {
-  const avisos = avisosHtml(m || {});
-  const linhas = (m && m.remotas) || [];
-  if (!linhas.length && !avisos) return '';
-  const topo = linhas.length ? `<div class="md-remoto-topo">${esc(resumoDaOrigem(m))}</div>` : '';
-  const corpo = linhas.length ? `<div class="rows md-remoto-linhas">${linhas.map(linhaPanoramaHtml).join('')}</div>` : '';
-  return `${topo}${avisos}${corpo}`;
 }
 
 function ramoHtml(l) {
