@@ -543,27 +543,20 @@ test('espera desligada não afrouxa o head: commit novo na espera continua larga
   assert.equal(pendente(e, 34).blockedKind, 'stale_head');
 });
 
-test('desligada: o que os outros aparelhos recebem não diz espera do CI (pendência e fila)', async () => {
-  const { randomBytes } = await import('node:crypto');
-  const pendencia = (await import('../lib/sync/pendencia.js')).default;
-  const filaEng = (await import('../lib/engine/sync-fila.js')).default;
-  const K = randomBytes(32);
-  const projetar = (e, n) => pendencia.projetarPendencia(pendente(e, n), { kId: K });
-  const naFila = (e, n) => filaEng.filaDoPr(e, filaEng.fatosDaFila(e), { key: `acme/app#${n}`, mine: true });
+test('desligada: a pendência não carrega a marca da espera do CI, e a armada antes sai no ciclo seguinte', async () => {
   // revisão nova com a chave desligada: a conta espera você pela política, e nada fala do CI como espera
   const e = motorPadrao([{ nome: 'test', estado: 'rodando' }], ['wait', 'wait']);
   sessao(e);
   await e.runHeadlessReview(PR(36));
-  assert.equal(projetar(e, 36).espera || '', '');
-  assert.notEqual(naFila(e, 36).motivo, 'espera-ci');
-  // espera armada com a chave ligada e depois desligada: some da projeção no ciclo seguinte
+  assert.equal(pendente(e, 36).esperaCi, undefined);
+  assert.equal(e.decisionForUi(pendente(e, 36)).esperaCi, undefined);
+  // espera armada com a chave ligada e depois desligada: sai no ciclo seguinte
   const a = await emEspera(37);
-  assert.equal(projetar(a, 37).espera, 'ci');
-  assert.equal(naFila(a, 37).motivo, 'espera-ci');
+  assert.ok(pendente(a, 37).esperaCi, 'armada com a chave ligada');
+  assert.ok(a.decisionForUi(pendente(a, 37)).esperaCi);
   a.config.aguardarCiParaAprovar = false;
   assert.equal(await a.varrerEsperas(), 1);
-  assert.equal(pendente(a, 37), undefined, 'aprovada e resolvida: não sobe mais como pendência');
-  assert.notEqual(naFila(a, 37).motivo, 'espera-ci');
+  assert.equal(pendente(a, 37), undefined, 'aprovada e resolvida: não fica mais como pendência');
 });
 
 test('o padrão da preferência é desligado e só o booleano verdadeiro liga', async () => {

@@ -74,15 +74,14 @@ export function queueLimitHtml(conta, ate, n, variasContas, agora = Date.now()) 
 
 // A precedência do handoff (seção 2), sem HTML: o que o card mostra. Entradas:
 // `temParada` (a nota de revisão parada existe), `limiteAtivo` e `limiteNoTopo`. Saída: o
-// rótulo do botão, a forma da linha de pessoas (ou '') com os logins dela, e qual nota de revisão automática fica ('parada', 'limite',
-// 'coordenacao' ou ''), com a forma do limite.
+// rótulo do botão, a forma da linha de pessoas (ou '') com os logins dela, e qual nota de revisão automática fica ('parada', 'limite'
+// ou ''), com a forma do limite.
 export function avisosDoCard(pr, { temParada = false, limiteAtivo = false, limiteNoTopo = false } = {}) {
   const outros = Array.isArray(pr && pr.outrosRevisando) ? pr.outrosRevisando.filter(Boolean) : [];
   const temOutros = outros.length > 0;
   let nota = '';
   if (temParada) nota = 'parada';
   else if (!temOutros && limiteAtivo) nota = 'limite';
-  else if (!temOutros) nota = 'coordenacao';
   const rotulo = temOutros ? 'Revisar junto' : 'Revisar';
   const formaLimite = limiteNoTopo ? 'curta' : 'longa';
   const out = { rotulo, nota, formaLimite, forma: '', logins: outros };

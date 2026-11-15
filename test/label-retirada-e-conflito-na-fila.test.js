@@ -1,5 +1,5 @@
 // Achados da revisão do PR #343: a revisão parada porque tiraram a label não volta sozinha pela
-// recuperação, PR em conflito na fila não paga gh a cada ciclo, e sessão de outro aparelho que já
+// recuperação, PR em conflito na fila não paga gh a cada ciclo, e sessão de outra máquina que já
 // revisou sai como revisada, não como pedido para parar.
 import test, { after } from 'node:test';
 import assert from 'node:assert';

@@ -1,6 +1,6 @@
 // A lista de falhas do Diagnostico estava ilegivel (23/09/2026).
 //
-// Medido no aparelho do Wanderson: 19 registros, dos quais 15 sao o MESMO limite de plano
+// Medido na máquina do Wanderson: 19 registros, dos quais 15 sao o MESMO limite de plano
 // no MESMO PR (biud-frontend#1050), um por tentativa entre 17:12 e 18:02. Cada um vira um
 // cartao inteiro e ABERTO na tela (titulo, chip, "o que fazer", bloco com hora, sessao,
 // referencia e o texto cru, mais o botao de copiar), entao quatro falhas ocupam a tela

@@ -17,14 +17,14 @@ import { snapshotUsage } from './lib/engine/snapshot-usage.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
 import {
-  instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, APP_VERSION, APP_NAME,
+  instanciaIsolada, executadoDireto, rodandoComoRoot, APP_VERSION, APP_NAME,
   HOME, WORKSPACE, STATE_DIR, CONFIG_FILE, LOG_FILE, SEEN_FILE, IGNORED_FILE, BASELINE_FILE,
   INFLIGHT_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
 
 // Helpers puros e utilitários movidos pra lib/ (Onda 1 do refactor, ver docs/QUALITY.md).
 // A Engine abaixo compõe estes módulos; a decomposição por responsabilidade segue nas ondas 2+.
-import { DEFAULT_PORT, TEMPOS, ATIVACAO_AUTOMATICA_A4, ATIVACAO_TETO_GRUPO_C4B } from './lib/constants.js';
+import { DEFAULT_PORT, TEMPOS } from './lib/constants.js';
 import env from './lib/env.js';
 import { modelLabel, isPermanentBranch, logStamp, semControle } from './lib/format.js';
 import { gravarLinhaDeLog } from './lib/log-arquivo.js';
@@ -34,7 +34,6 @@ import {
   normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
-import { loopback } from './lib/http-guard.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -71,17 +70,9 @@ import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
 import quotaMod from './lib/engine/quota.js';
-import syncMod from './lib/engine/sync.js';
-import consumoGrupoMod from './lib/engine/sync-consumo-grupo.js';
-import telasMod from './lib/engine/sync-telas.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
-import capacidadesMod from './lib/engine/capacidades.js';
-import { detectarModoCelular } from './lib/local-auth/modo.js';
-import syncUsageMod from './lib/engine/sync-usage.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar } from './lib/settings.js';
 import { parseJiraSites, maskJiraSites } from './lib/jira/sites.js';
-import { parseSyncConfig, syncDefaults, comCompartilhamentoBloqueado, comCompartilhamentoPedido } from './lib/sync/config.js';
-import acesso from './lib/local-auth/acesso.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
 import { startServer } from './lib/http-server.js';
@@ -93,7 +84,7 @@ function aplicarPathDoBoot(extras, sempre = []) {
 }
 
 // App aberto pelo Finder/Dock ou atalho herda PATH reduzido (gh/claude somem). O ~/.local/bin do instalador
-// do claude vai SEMPRE na frente, exista ou não, para nenhum claude antigo ganhar dele (celular, 26/09/2026).
+// do claude vai SEMPRE na frente, exista ou não, para nenhum claude antigo ganhar dele (26/09/2026).
 const extras = ['/usr/local/bin',
   path.join(os.homedir(), '.local', 'bin'), path.join(os.homedir(), 'bin')];
 aplicarPathDoBoot(extras, [path.join(os.homedir(), '.local', 'bin')]);
@@ -116,7 +107,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 const PARSERS = {
   parseAccounts, parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, parseSyncConfig, sanearBind,
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind,
 };
 
 // carência anti-lag do índice de busca do GitHub: logo após EU postar um review, o PR
@@ -154,13 +145,6 @@ class Engine extends EventEmitter {
     // leitor é ignorada, e perfil que não é de chave de API cai fora no normalizeClaudeProfiles
     this.config.reviewModel = sanitizeClaudeModel(this.config.reviewModel) || '';
     this.config.reviewEffort = sanitizeClaudeEffort(this.config.reviewEffort) || '';
-    // sincronização entre dispositivos: opt-in que segura revisão quando ligado, então
-    // config.json editado à mão passa pelo mesmo saneador do caminho HTTP antes de
-    // qualquer coisa ler `enabled`. Base nos defaults: no boot não há valor anterior.
-    this.config.sync = this.syncComGuardaDoCelular(parseSyncConfig(this.config.sync, syncDefaults()));
-    // runtime da sincronização (lib/engine/sync.js): montado a partir do config JÁ
-    // saneado e sem rede nem arquivo novo; quem conecta é o primeiro tick do check()
-    this.sync = syncMod.bootSync(this);
     // intervalo do polling: o caminho HTTP (updateSettings) já clampa em 180..3600, mas
     // o boot engolia config.json editado à mão. Não numérico virava Math.max(180, NaN)
     // = NaN no schedule(), e setTimeout(fn, NaN) dispara em ~1ms: polling contínuo
@@ -171,7 +155,7 @@ class Engine extends EventEmitter {
     // paralelismo por conta: mesmo tratamento (boot engole config.json editado à mão);
     // o escalonador clampa de novo por defesa em profundidade (parallelLimit em review.js)
     this.config.parallelReviews = sanitizeParallelReviews(this.config.parallelReviews) ?? DEFAULTS.parallelReviews;
-    // teto TOTAL deste aparelho (Politica 3): mesmo tratamento de boot, e o escalonador
+    // teto TOTAL desta instância (Politica 3): mesmo tratamento de boot, e o escalonador
     // clampa de novo (globalParallelLimit em review.js). 0 = sem teto total.
     this.config.globalParallelReviews = sanitizeGlobalParallelReviews(this.config.globalParallelReviews) ?? DEFAULTS.globalParallelReviews;
     // perfil de review por pessoa (papel + matriz por domínio); migra a senioridade plana antiga pro campo `papel`
@@ -185,10 +169,6 @@ class Engine extends EventEmitter {
     this.nextCheckAt = null;
     this.panorama = [];
     this.queue = [];
-    // busca que já deu certo pelo menos uma vez neste processo: sem ela, lista vazia é falta
-    // de leitura, e a visão compartilhada não pode publicá-la (lib/engine/sync-andamento.js)
-    this.ownersJaLidos = new Set();
-    this.contasPedidosLidas = new Set();
     // assinatura do Claude -> { ate, em }: até quando ela está no limite do plano
     carregarLimites(this);
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
@@ -250,13 +230,6 @@ class Engine extends EventEmitter {
     const motivosSalvos = (parkedSalvo && !Array.isArray(parkedSalvo) && parkedSalvo.motivos && typeof parkedSalvo.motivos === 'object') ? parkedSalvo.motivos : {};
     for (const k of this.autoReviewParked) if (motivosSalvos[k] && typeof motivosSalvos[k] === 'object') this.parkedMotivos[k] = motivosSalvos[k];
     this.parkedPruneStrikes = new Map(); // key estacionada -> ausências SEGUIDAS do panorama (memória; reinício zera, lado seguro)
-    // PRs marcados vistos porque OUTRO aparelho já analisou o head (recibo da
-    // sincronização). Persistido porque reconciliarVistos os confundia com revisão que
-    // morreu no meio: sem o arquivo, todo reinício devolvia esses PRs à fila, a admissão
-    // ouvia o mesmo recibo e o WARN voltava. Formato errado degrada pra vazio, mesmo
-    // guarda-corpo do estacionamento acima (`{}` é JSON válido e não é lista).
-    const vistosRecibo = readJson(path.join(STATE_DIR, 'sync-vistos-por-recibo.json'), [], warn);
-    this.vistosPorRecibo = new Set(Array.isArray(vistosRecibo) ? vistosRecibo.filter(k => typeof k === 'string') : []);
     this.budgetWarned = new Set(); // ids de perfil apikey já avisados de orçamento estourado, enquanto o estouro persistir (evita repetir o toast a cada checagem)
     // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
     // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
@@ -374,14 +347,14 @@ class Engine extends EventEmitter {
     // com a fonte a cada boot, pra mudanças (ex.: review humano/personalizado) chegarem
     // nas cópias já semeadas. NUNCA toca em state/ (dados do usuário) nem em settings.json.
     try {
-      const synced = [
+      const espelhados = [
         'CLAUDE.md',
         path.join('prompts', 'pr-review-auto.md'),
         path.join('.claude', 'agents', 'pr-reviewer.md'),
         path.join('.claude', 'agents', 'claim-verifier.md'),
         path.join('.claude', 'commands', 'pr-review.md'),
       ];
-      for (const rel of synced) {
+      for (const rel of espelhados) {
         const src = path.join(TEMPLATE_DIR, rel), dst = path.join(WORKSPACE, rel);
         if (fs.existsSync(src)) { ensureDir(path.dirname(dst)); fs.copyFileSync(src, dst); }
       }
@@ -429,17 +402,7 @@ class Engine extends EventEmitter {
     // paraGravar tira as chaves que estão no padrão e são marcadas para não viajar
     // (hoje só localAuth, da A4): recurso não habilitado não escreve no config.json
     // de quem nunca o ligou (CT-COMPAT, item a). O que está em memória não muda.
-    writeJsonAtomic(CONFIG_FILE, paraGravar(this.configParaDisco()));
-  }
-
-  // A guarda do celular desliga o EFEITO do compartilhamento, e a escolha de quem ligou tem
-  // que continuar no disco: gravar o valor forçado apagaria em silêncio o que a pessoa pediu,
-  // e nem quando a autenticação passasse a valer ele voltaria (achado da jornada integrada de
-  // 16/09/2026). O que roda continua sendo o `this.config`, desligado.
-  configParaDisco() {
-    const pedido = this.syncPedidoCompartilhamento;
-    if (!pedido || !this.syncBloqueioCompartilhamento) return this.config;
-    return { ...this.config, sync: comCompartilhamentoPedido(this.config.sync, pedido) };
+    writeJsonAtomic(CONFIG_FILE, paraGravar(this.config));
   }
 
   // --- log: so falhas, sem ruido (mesmo contrato do tool antigo) ---
@@ -489,8 +452,8 @@ class Engine extends EventEmitter {
   // Devolve à fila o que foi marcado como visto por uma revisão que NUNCA decidiu:
   // a sessão morreu no meio (app fechado, crash, falha não classificada) e o PR
   // saiu da fila pra sempre, exigindo clique manual. Não toca no que foi descartado
-  // de propósito, no que tem decisão, no que outro aparelho já analisou (visto por
-  // recibo), nem no que está em andamento, estacionado ou aguardando retry, que são
+  // de propósito, no que tem decisão, nem no que está em andamento, estacionado ou
+  // aguardando retry, que são
   // estados legítimos.
   // PR visto sem decisão: volta à fila, salvo se já está resolvido neste head (vistos-reconciliacao.js)
   reconciliarVistos(mineList) { return vistosMod.reconciliarVistos(this, mineList); }
@@ -508,19 +471,6 @@ class Engine extends EventEmitter {
     writeTextAtomic(IGNORED_FILE, arr.join('\n') + (arr.length ? '\n' : ''));
   }
 
-  // Marcado como visto pela coordenação: a análise deste head terminou em outro
-  // aparelho (lib/sync/coordinator.js, registrarRecibo). Grava só quando muda, então
-  // quem nunca ligou a sincronização nunca ganha o arquivo.
-  marcarVistoPorRecibo(key) {
-    if (!this.vistosPorRecibo) this.vistosPorRecibo = new Set();
-    if (!this.vistosPorRecibo.has(key)) { this.vistosPorRecibo.add(key); this.saveVistosPorRecibo(); }
-  }
-
-  saveVistosPorRecibo() {
-    ensureDir(STATE_DIR);
-    writeJsonAtomic(path.join(STATE_DIR, 'sync-vistos-por-recibo.json'), [...(this.vistosPorRecibo || [])]);
-  }
-
   saveSeen() {
     ensureDir(STATE_DIR);
     writeTextAtomic(SEEN_FILE, [...this.seen].join('\n') + (this.seen.size ? '\n' : ''));
@@ -529,7 +479,7 @@ class Engine extends EventEmitter {
   markSeen(key) { if (!this.seen.has(key)) { this.seen.add(key); this.saveSeen(); } }
   // o PR que volta à fila (re-request, destrave, restore, bloqueio de coordenação) deixa
   // de ser "visto por recibo": a proteção do reconciliarVistos vale só enquanto ele está visto
-  unsee(key) { if (this.seen.delete(key)) this.saveSeen(); if (this.vistosPorRecibo?.delete(key)) this.saveVistosPorRecibo(); }
+  unsee(key) { if (this.seen.delete(key)) this.saveSeen(); }
 
   // --- GitHub ---
   // lista normalizada de contas monitoradas: [{ user, owners }]. Sem config.accounts,
@@ -695,18 +645,10 @@ class Engine extends EventEmitter {
   async fetchPrInventory(pr, headSha) { return fileProofMod.fetchPrInventory(this, pr, headSha); }
 
 
-  // falha da sincronização vira estado dela e WARN, nunca erro do ciclo
-  async _tickSeguro() {
-    try { await this.syncTick(); } catch (e) { this.log('WARN', `sincronização: ${e.message}`); }
-  }
-
   async check(reason = 'timer') {
     if (this.checking) return;
     this.checking = true;
     this.setStatus('checking');
-    // a sincronização não depende do GitHub: se a parte do GitHub lançar erro antes do tick,
-    // ele roda no finally, senão presença e relógio da visão compartilhada param junto
-    let sincronizou = false;
     try {
       // reconcilia budgetWarned com a realidade ATUAL dos perfis, independente da fila
       // ter PR nenhum pra oferecer a chance de "destravar": sem isso, um perfil que
@@ -763,10 +705,6 @@ class Engine extends EventEmitter {
       // label :revisando cuja remoção falhou no fim da revisão (labels-a-tirar.js)
       try { await labelsATirar.tirarPendentes(this); } catch (e) { this.log('WARN', `labels a tirar: ${e.message}`); }
       try { await labelPropriaOrfa.tirarOrfas(this, panorama); } catch (e) { this.log('WARN', `label própria sem dono: ${e.message}`); }
-      // sincronização entre dispositivos: presença e reconexão. Desligada custa zero, e
-      // falha dela vira estado da própria sincronização, nunca erro do ciclo.
-      sincronizou = true;
-      await this._tickSeguro();
       // stale: PRs que EU revisei e receberam commit novo depois (reativa o "Re-revisar")
       try { await this.refreshStaleStates(); } catch (e) { this.log('WARN', `refreshStaleStates: ${e.message}`); }
       // round 2 sozinho: PR onde EU pedi mudanças e o autor empurrou commit novo volta
@@ -800,7 +738,6 @@ class Engine extends EventEmitter {
       this.log('ERROR', `ciclo de monitoramento: ${err.message}`);
       this.setStatus('error');
     } finally {
-      if (!sincronizou) await this._tickSeguro();
       this.checking = false;
       this.schedule();
       this.pushState();
@@ -836,7 +773,6 @@ class Engine extends EventEmitter {
           if (list === null) continue;
           anyOk = true;
           ownersOk.add(String(owner).toLowerCase());
-          this.ownersJaLidos.add(String(owner).toLowerCase());
           for (const pr of list) contaQueAge.guardarPelaCapaz(this, panoramaMap, pr, acc.user);
         }
       }
@@ -850,7 +786,6 @@ class Engine extends EventEmitter {
         const part = await this.searchPRs(['--review-requested=@me'], acc.user);
         if (part === null) continue;
         mineAnyOk = true;
-        this.contasPedidosLidas.add(String(acc.user).toLowerCase());
         // G18: o mesmo PR pode chegar por duas contas (time com as duas). A
         // conta CAPAZ de agir (não silenciada, com token) vence a incapaz;
         // empate mantém a primeira, o comportamento de sempre.
@@ -981,8 +916,6 @@ class Engine extends EventEmitter {
         if (inflight.has(p.key)) return false;
         if (this.autoReviewParked.has(p.key)) return false;
         if (this.retryAfterNet.has(p.key)) return false;
-        // teto do grupo que não dá para verificar (C4b): espera, sem estacionar
-        if (this.grupoSegura(acct)) return false;
         // assinatura do Claude no limite do plano: nem entra na fila até o reset, senão
         // cada PR abria sessão, punha a label e morria em segundos (21/09/2026)
         if (this.limiteDoPlanoAte(acct)) return false;
@@ -1232,21 +1165,6 @@ class Engine extends EventEmitter {
   diagnosticoMarkdown() { return diagnosticoMod.diagnosticoMarkdown(this); }
   diagnosticoFalhas() { return diagnosticoMod.falhasParaTela(this); }
   // plano e chaves explícito (A2): testar é ato explícito e nunca grava; adotar só com confirmação
-  // capacidade implementada que ainda não está valendo (adendo, item 5): os sinais reais
-  // do aparelho, para a tela nunca anunciar proteção que o engine não está aplicando
-  estadoDasCapacidades() {
-    // a seção sync, mais o localAuth do TOPO da config, que é de onde o porteiro o lê
-    const config = { ...this.config.sync, localAuth: this.config.localAuth };
-    return capacidadesMod.estadoDasCapacidades({
-      modoCelular: detectarModoCelular(sinaisDoModoCelular()),
-      ativacaoA4: ATIVACAO_AUTOMATICA_A4,
-      ativacaoTetoGrupo: ATIVACAO_TETO_GRUPO_C4B,
-      config,
-      bloqueio: this.syncBloqueioCompartilhamento || '',
-      grupoConfigurado: Object.keys((this.sync && this.sync.grupos) || {}).length > 0,
-      bindForaDoLoopback: !loopback(this.config.bind),
-    });
-  }
   claudeTestarPerfil(dados) { return perfilMod.testarPerfil(this, dados); }
   ignore(key) {
     this.markSeen(key);
@@ -1322,20 +1240,6 @@ class Engine extends EventEmitter {
     return this.doctorInfo;
   }
 
-  // Adendo de 16/09/2026: no celular, a visão compartilhada só liga com a autenticação
-  // exigida valendo. O motivo fica visível para a tela, que não pode mostrar como ligado o
-  // que o engine desligou.
-  syncComGuardaDoCelular(cfgSync) {
-    const liberado = acesso.compartilhamentoLiberado(this.config);
-    const pedido = {
-      shared: !!(cfgSync && cfgSync.shared && cfgSync.shared.enabled),
-      distribution: !!(cfgSync && cfgSync.distribution && cfgSync.distribution.enabled),
-    };
-    this.syncBloqueioCompartilhamento = !liberado && pedido.shared ? 'autenticacao-local' : '';
-    this.syncPedidoCompartilhamento = this.syncBloqueioCompartilhamento ? pedido : null;
-    return liberado ? cfgSync : comCompartilhamentoBloqueado(cfgSync);
-  }
-
   sanearPreferencia(key, value, config = this.config) { return sanear(key, value, config, PARSERS); }
 
   updateSettings(patch, origem) {
@@ -1364,15 +1268,10 @@ class Engine extends EventEmitter {
       this.config[k] = v;
     }
     contasConfig.normalizarDepoisDeAplicar(this, patch);
-    // a guarda do celular depende de localAuth, que pode ter mudado no mesmo patch
-    this.config.sync = this.syncComGuardaDoCelular(this.config.sync);
     try { this.saveConfig(); }
     catch (error) { this.config = previous; throw error; }
     contasConfig.registrarMudancas(this, contasConfig.mudancasDePolitica(politicaAntes, contasConfig.retratoDaPolitica(this.config)), origem);
     env.setDebugSpawns(this.config.debugSpawns); // liga/desliga o logger depois de salvar
-    // a sincronização liga, desliga ou reconecta conforme o objeto novo; não espera a
-    // rede (aplicarConfig nunca rejeita) e o estado final chega pela tela via pushState
-    if ('sync' in (patch || {})) this.syncAplicarConfig();
     if (userChanged) { this.token = null; this.tokenOk = false; this.tokens = {}; }
     if (intervalChanged || userChanged) this.checkNow();
     // perfil (lista ou padrão global) mudou: o badge do perfil de chave de API (doctor.claudeAuth)
@@ -1390,10 +1289,7 @@ class Engine extends EventEmitter {
     // dizia "Configuração salva." mesmo quando o servidor tinha descartado a chave, e
     // a preferência sumia sem ninguém saber. Vazio = tudo entrou.
     if (ignoradas.length) this.log('WARN', `updateSettings ignorou chave desconhecida: ${ignoradas.join(', ')}`);
-    // a fatia `sync` volta JÁ SANEADA: o saneador mantém o valor anterior quando o novo
-    // é recusado (URL fora da allowlist de host), e sem devolver o que de fato ficou a
-    // tela não tem como distinguir "salvou" de "recusou em silêncio"
-    return { ok: true, ignoradas, sync: this.config.sync };
+    return { ok: true, ignoradas };
   }
   origemDe(userAgent) { return contasConfig.origemDaRequisicao(userAgent); }
   // conta editada por OPERAÇÃO sobre a config atual, nunca pela lista que a tela tinha
@@ -1413,52 +1309,6 @@ class Engine extends EventEmitter {
   // Testa o site cadastrado contra o Jira de verdade (ver testarSite em lib/engine/jira.js).
   testarJiraSite(siteId) { return jiraMod.testarSite(this, siteId); }
 
-  // Sincronização entre dispositivos: colaborador lib/engine/sync.js, o único que junta
-  // config, credencial, aparelho e cliente do Firebase. A senha do login atravessa só a
-  // fachada de login e nunca volta em resultado nenhum.
-  syncLogin(credenciais, fetchImpl) { return syncMod.syncLogin(this, credenciais, fetchImpl); }
-  syncUnlock(dados) { return syncMod.syncUnlock(this, dados); }
-  // usado pela chave do conjunto: abrir a chave muda o que este aparelho anuncia
-  syncPresenca() { return syncMod.anunciarPresenca(this); }
-  // o relógio da visão compartilhada relê a frota quando o portão dela recusa
-  syncFrota() { return syncMod.lerAparelhos(this); }
-  syncGerarChaveNova(dados) { return syncMod.syncGerarChaveNova(this, dados); }
-  syncTornarAdmin(dados) { return syncMod.syncTornarAdmin(this, dados); }
-  syncPublicarPolitica(dados) { return syncMod.syncPublicarPolitica(this, dados); }
-  syncPublicarGrupo(dados) { return syncMod.syncPublicarGrupo(this, dados); }
-  // C6: o admin emite; o desfecho só existe quando o recibo do alvo aparece
-  syncEmitirComando(dados) { return telasMod.emitirComando(this, dados); }
-  syncDesfechoDoComando(dados) { return telasMod.desfechoDoComando(this, dados); }
-  // contrato das telas (B2): leituras avulsas que não cabem no snapshot
-  syncAvisoDaTomada(dados) { return telasMod.avisoDaTomada(this, dados); }
-  syncDestinosDaTransferencia(dados) { return telasMod.destinosDaTransferencia(this, dados); }
-  syncEstadoDaLimpeza() { return telasMod.estadoDaLimpeza(this); }
-  syncLerPolitica(dados) { return telasMod.lerPolitica(this, dados); }
-  syncRecusarDesignacao() { return telasMod.recusarDesignacao(this); }
-  syncVincularPerfil(dados) { return syncMod.vincularPerfil(this, dados); }
-  syncMedirEnvio() { return syncMod.medirEnvio(this); }
-  syncEnviarHistorico(dados) { return syncMod.enviarHistorico(this, dados); }
-  syncRecentes(dados) { return syncMod.recentes(this, dados); }
-  syncListasRemotas() { return syncMod.listasRemotas(this); }
-  syncAbrirRevisao(dados) { return syncMod.abrirRevisao(this, dados); }
-  syncMarcarVisto(dados) { return syncMod.marcarVisto(this, dados); }
-  syncAparelho(dados) { return syncMod.aparelho(this, dados); }
-  syncChaveDeLimpeza(dados) { return syncMod.chaveDeLimpeza(this, dados); }
-  syncLimpar(dados) { return syncMod.limpar(this, dados); }
-  syncRevogar(dados) { return syncMod.revogar(this, dados); }
-  syncRetirarConsentimento() { return syncMod.retirarConsentimento(this); }
-  syncLogout() { return syncMod.syncLogout(this); }
-  syncTest() { return syncMod.syncTest(this); }
-  syncStop() { return syncMod.stopSync(this); }
-  syncTick() { return syncMod.syncTick(this); }
-  syncConfirmarConexao() { return syncMod.syncTick(this, { apenasConexao: true }); }
-  syncAplicarConfig() { return syncMod.aplicarConfig(this); }
-  syncRedoReceipt(key) { return syncMod.redoReceipt(this, key); }
-  // gancho do consumo (usage.js): no-op com a consolidação entre aparelhos desligada
-  syncEnqueueUsage(sessao) { return syncUsageMod.enqueueUsage(this, sessao); }
-  syncConsolidated(days) { return syncUsageMod.consolidated(this, days); }
-  syncConsolidate() { return syncUsageMod.consolidate(this); }
-
   // A projeção das sessões ativas, com quem mais está revisando o PR da sessão: o motor anota
   // isso a cada ciclo nos PRs abertos (skip-review.js), e o PR da sessão já saiu da fila.
   sessoesParaTela() {
@@ -1477,8 +1327,6 @@ class Engine extends EventEmitter {
       modelos: catalogoDeModelos(this.claudeVersao || null),
       // perfil apontado que a resolução não usa (A2): a queda não é silenciosa
       claudePerfis: { problemas: perfilMod.problemasDePerfil(this.config) },
-      // capacidade implementada que NÃO está valendo: a tela não pode prometer o que o engine não aplica
-      capacidades: this.estadoDasCapacidades(),
       status: this.status,
       error: this.lastError,
       baseline: this.baseline ??= lerBaseline(BASELINE_FILE),   // desde quando vigia (lido uma vez)
@@ -1490,16 +1338,10 @@ class Engine extends EventEmitter {
       // contas e org sugerida (lib/engine/contas-gh.js)
       contasGh: contasGh.diagnosticoDoEngine(this),
       pushbacks: this.pushbacks,
-      // a tela recebe o que foi PEDIDO: ela devolve o objeto inteiro ao salvar, e a config
-      // já zerada pela guarda do celular apagaria o pedido a cada salvamento. O efeito segue
-      // bloqueado no engine, e `capacidades` diz à tela que não está valendo.
-      config: { ...this.configParaDisco() },
+      config: { ...this.config },
       // lista mascarada dos sites do Jira: mesmos campos do config, mais só a
       // EXISTÊNCIA da credencial (hasCredential), nunca o valor (ver lib/jira/sites.js).
       jiraSites: maskJiraSites(this.config.jiraSites || [], credMod.hasCredential),
-      // sincronização entre dispositivos por allowlist (statusForUi): nunca senha,
-      // token ou URL com auth=, só estado, aparelhos e o que a coordenação viu
-      sync: syncMod.statusForUi(this),
       lastCheckAt: this.lastCheckAt,
       nextCheckAt: this.nextCheckAt,
       // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela
@@ -1509,9 +1351,6 @@ class Engine extends EventEmitter {
       inicioAutomatico: this.inicioAutomaticoDaFila(),
       // PRs em conflito com a base: { key: { at, head } }, sem sessão nem label (lib/engine/espera-conflito.js)
       esperaConflito: Object.fromEntries(Object.entries(this.esperaConflito || {}).map(([k, v]) => [k, { at: v.at, head: v.head, updatedAt: v.updatedAt }])),
-      // A fila de espera ja sai em esperaParaTela abaixo. Expor tambem a distribuicao
-      // evita que um pedido sem aparelho apto pareca visto.
-      headlessDistributing: this.headlessDistribuindo instanceof Map ? [...this.headlessDistribuindo.keys()] : [],
       // PRs da fila que estacionaram (falha, cancelamento, orçamento): o card mostra
       // quando e por quê, senão "nunca revisou" e "revisou e caiu" são idênticos na tela
       parked: this.parkedParaUi(),
@@ -1575,16 +1414,8 @@ class Engine extends EventEmitter {
   budgetBlockedFor(acct) {
     const profile = this.profileOfAccount(acct);
     if (profile && this.profileBudgetStatus(profile).blocked) return profile;
-    // teto do grupo estourado (C4b) chega como perfil sintético `grupo:<id>`, e daí
-    // valem os mesmos fluxos do orçamento do perfil
-    return this.grupoBloqueia(acct);
+    return null;
   }
-
-  // teto do grupo de consumo (C4b): bloqueio por gasto, espera por não verificável e o
-  // grupo em que a execução desta conta vai gastar
-  grupoBloqueia(acct) { return consumoGrupoMod.bloqueioDoGrupo(this, acct); }
-  grupoSegura(acct) { return consumoGrupoMod.grupoSegura(this, acct); }
-  grupoDaConta(acct) { return consumoGrupoMod.grupoDaConta(this, acct); }
 
   // perfil Claude efetivo de uma conta GitHub. Sem perfil utilizável devolve null: não há a
   // quem atribuir teto nem cota.
@@ -1729,7 +1560,6 @@ class Engine extends EventEmitter {
      do Set todo ciclo e o toast de cota repetiria sem parar, que é exatamente o barulho
      que este Set existe pra impedir. */
   _avisoDeOrcamentoAindaVale(chave) {
-    if (String(chave).startsWith('grupo:')) return consumoGrupoMod.grupoAindaBloqueia(this, String(chave));
     const corte = String(chave).indexOf('|');
     if (corte >= 0) return !!this.quotaBlockedFor(String(chave).slice(corte + 1));
     const profile = (this.config.claudeProfiles || []).find(p => p.id === chave);
@@ -1747,8 +1577,6 @@ class Engine extends EventEmitter {
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();
     this.doctor().catch(() => {});
-    // A presença não espera a consulta ao GitHub; a admissão continua exigindo confirmação.
-    this._tickSeguro().catch(() => {});
     // label presa por morte do processo: limpa antes do primeiro ciclo, pra a
     // frota não continuar saindo de cena por uma sessão que não existe mais
     if (this.inflightRecuperado && this.inflightRecuperado.length) {

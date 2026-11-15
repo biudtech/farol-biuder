@@ -29,26 +29,26 @@ const event = cost => ({ usage: { input_tokens: 10, output_tokens: 5 }, total_co
 
 test('gravação real sincroniza o arquivo temporário antes da troca e mantém a ordem de confirmação', () => {
   const file = path.join(home, 'decisions.json'); fs.writeFileSync(file, '{"seq":0}');
-  const sync = fs.fsyncSync, rename = fs.renameSync, phases = [];
-  let expected = 1, synced = 0;
+  const noDisco = fs.fsyncSync, rename = fs.renameSync, phases = [];
+  let expected = 1, gravado = 0;
   fs.fsyncSync = fd => {
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).seq, expected - 1);
     assert.equal(JSON.parse(fs.readFileSync(file + '.tmp', 'utf8')).seq, expected);
-    sync(fd); synced = expected; phases.push(`sync-${expected}`);
+    noDisco(fd); gravado = expected; phases.push(`disco-${expected}`);
   };
   fs.renameSync = (from, to) => {
-    assert.equal(synced, expected); rename(from, to); phases.push(`commit-${expected}`);
+    assert.equal(gravado, expected); rename(from, to); phases.push(`commit-${expected}`);
   };
   try {
     writeJsonAtomic(file, { seq: expected }); expected++;
     writeJsonAtomic(file, { seq: expected });
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).seq, 2);
-    assert.deepEqual(phases, ['sync-1', 'commit-1', 'sync-2', 'commit-2']);
+    assert.deepEqual(phases, ['disco-1', 'commit-1', 'disco-2', 'commit-2']);
     assert.equal(fs.existsSync(file + '.tmp'), false);
-  } finally { fs.fsyncSync = sync; fs.renameSync = rename; }
+  } finally { fs.fsyncSync = noDisco; fs.renameSync = rename; }
 });
 test('falha de fsync preserva versão confirmada, fecha descritor e permite recuperação posterior', () => {
-  const file = path.join(home, 'decisions.json'), sync = fs.fsyncSync;
+  const file = path.join(home, 'decisions.json'), noDisco = fs.fsyncSync;
   fs.writeFileSync(file, '{"seq":10}'); let descriptor;
   fs.fsyncSync = fd => { descriptor = fd; throw Object.assign(new Error('fsync indisponível'), { code: 'EIO' }); };
   try {
@@ -56,7 +56,7 @@ test('falha de fsync preserva versão confirmada, fecha descritor e permite recu
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).seq, 10);
     assert.throws(() => fs.fstatSync(descriptor), { code: 'EBADF' });
     assert.equal(persistenceMetrics().writes.at(-1).ok, false);
-  } finally { fs.fsyncSync = sync; }
+  } finally { fs.fsyncSync = noDisco; }
   writeJsonAtomic(file, { seq: 12 });
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).seq, 12);
   assert.equal(persistenceMetrics().writes.at(-1).ok, true);

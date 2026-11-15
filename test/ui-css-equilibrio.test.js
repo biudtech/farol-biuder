@@ -2,7 +2,7 @@
 // acha a primeira `}` e segue. Medido em 16/09/2026: uma `}` a mais fechava o bloco de 620 px
 // cedo, e as regras de Entregas, Destaques, Time e do card do Radar passavam a valer em
 // qualquer largura; num merge da mesma semana, o fechamento de outro bloco sumiu e as
-// regras de Aparelhos só valiam no estreito. Nenhum dos dois quebrava teste.
+// regras de uma tela só valiam no estreito. Nenhum dos dois quebrava teste.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

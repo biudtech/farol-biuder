@@ -303,9 +303,9 @@ test('o motivo do card diz a regra e o lugar, e só a violação ganha detalhe',
 for (const [origem, marcas] of [
   ['clique no Panorama', { requested: false, manual: true }],
   ['URL colada', { manual: true }],
-  ['Revisar agora do aparelho admin', { viaAdmin: true }],
+  ['Revisar agora do admin', { viaAdmin: true }],
   ['comando remoto', { viaComando: true }],
-  ['distribuição entre aparelhos', { viaComando: true, viaDistribuicao: true }],
+  ['distribuição', { viaComando: true, viaDistribuicao: true }],
 ]) {
   test(`revisão mandada pelo dono (${origem}) aprova sozinha pela política, sem mesa`, async () => {
     const e = motor();

@@ -32,7 +32,7 @@ import { CONFIG_FILE, STATE_DIR, executadoDireto } from '../lib/paths.js';
 import { readRegularFile } from '../lib/bounded-file.js';
 import { parseJson, safeStringify } from '../lib/io.js';
 
-// o decisions.json mede dezenas de MB em aparelho antigo (82 MB em 03/11/2026)
+// o decisions.json mede dezenas de MB em máquina antiga (82 MB em 03/11/2026)
 const TETO_DO_ARQUIVO = 256 * 1024 ** 2;
 const VALORES = Object.freeze({
   onClean: ['approve', 'wait'],

@@ -113,7 +113,7 @@ test('leitura do pedido que falha não bloqueia: falta de dado não inventa recu
   assert.equal(sessoes, 1);
 });
 
-for (const [nome, marcas] of [['clique', { manual: true, requested: false }], ['aparelho admin', { viaAdmin: true }], ['comando', { viaComando: true }]]) {
+for (const [nome, marcas] of [['clique', { manual: true, requested: false }], ['admin', { viaAdmin: true }], ['comando', { viaComando: true }]]) {
   test(`${nome} é o dono pedindo: atravessa a conferência do pedido`, async () => {
     gh.pedidos = [];
     await motor().runOneHeadless(PR(6, marcas), 'eu');
@@ -174,7 +174,7 @@ test('rodada automática segurada na boca solta a âncora', async () => {
   assert.notEqual(e.reReviewLaunched['acme/app#13']?.head, HEAD);
 });
 
-test('comando e aparelho admin atravessam a decisão de gente na boca: o recibo já disse aplicado', async () => {
+test('comando e admin atravessam a decisão de gente na boca', async () => {
   gh.alheios = [{ quem: 'ana', tipo: 'User', state: 'APPROVED', commit_id: HEAD }];
   await motor().runOneHeadless(PR(14, { viaComando: true }), 'eu');
   await motor().runOneHeadless(PR(15, { viaAdmin: true }), 'eu');

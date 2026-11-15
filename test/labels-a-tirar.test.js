@@ -67,7 +67,7 @@ test('falha de novo mantém a anotação; label que já não está lá encerra',
   assert.deepEqual(e.labelsATirar, {});
 });
 
-test('revisão viva deste aparelho no mesmo PR adia: a label é dela', async () => {
+test('revisão viva desta máquina no mesmo PR adia: a label é dela', async () => {
   const e = motor();
   e.activeReviews.set('s1', { mode: 'review', keys: [PR.key] });
   e.labelsATirar = { [PR.key]: { url: PR.url, label: 'eu:revisando', desde: Date.now() } };

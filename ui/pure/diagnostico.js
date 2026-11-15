@@ -61,10 +61,10 @@ function diagnosticoHtml(src) {
    última lista boa e há quanto tempo ela é. */
 const CLASSE_DO_CARTAO = { permanente: 'blocked', 'espera-reset': 'urgent', transitorio: 'urgent', operacional: 'ambient' };
 const CHIP_DA_GRAVIDADE = {
-  permanente: '<span class="sync-chip bad">precisa de você</span>',
-  'espera-reset': '<span class="sync-chip warn">passa sozinho no horário</span>',
-  transitorio: '<span class="sync-chip warn">se resolve sozinho</span>',
-  operacional: '<span class="sync-chip mute">sem ação</span>',
+  permanente: '<span class="chip-estado bad">precisa de você</span>',
+  'espera-reset': '<span class="chip-estado warn">passa sozinho no horário</span>',
+  transitorio: '<span class="chip-estado warn">se resolve sozinho</span>',
+  operacional: '<span class="chip-estado mute">sem ação</span>',
 };
 
 function quandoLegivel(at) {
@@ -82,7 +82,7 @@ function falhaCartaoHtml(f) {
     : '';
   const onde = f.ref ? `<span class="falha-ref">${esc(f.ref)}</span>` : '';
   // Nasce FECHADA, menos a que precisa de você: 19 falhas abertas enterravam justamente as
-  // duas que pediam ação (Diagnóstico do aparelho do Wanderson, 23/09/2026). O resumo tem o
+  // duas que pediam ação (Diagnóstico da máquina do Wanderson, 23/09/2026). O resumo tem o
   // que faz escolher qual abrir: quando, o que é, sobre qual PR e se repetiu. O identificador
   // de sessão fica no corpo, porque 36 caracteres de id não ajudam nessa escolha.
   const aberta = f.precisaDeVoce ? ' open' : '';

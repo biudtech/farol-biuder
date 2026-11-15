@@ -115,16 +115,16 @@ test('prompt headless: a seção de verificação em paralelo chega com as trava
   assert.match(prompt, /subagente verifica fato, nunca decide/);
 });
 
-test('agente claim-verifier: template existe, é só leitura e entra no sync do boot', () => {
+test('agente claim-verifier: template existe, é só leitura e entra na cópia do boot', () => {
   const agentPath = path.join(TEMPLATE_DIR, '.claude', 'agents', 'claim-verifier.md');
   const src = fs.readFileSync(agentPath, 'utf8');
   assert.match(src, /name: claim-verifier/);
   assert.match(src, /tools: Bash, Read, Grep, Glob\n/, 'sem Write/Edit: verificador é leitura pura');
   assert.match(src, /Só leitura/);
-  // sem o sync, workspace já semeado nunca receberia o agente novo (mesma classe
+  // sem a cópia, workspace já semeado nunca receberia o agente novo (mesma classe
   // do bug de fachada da v2.28.0: a peça existe e o caminho até ela não)
   const serverSrc = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
-  assert.match(serverSrc, /claim-verifier\.md/, 'agente listado no synced do prepareHome');
+  assert.match(serverSrc, /claim-verifier\.md/, 'agente listado nos espelhados do prepareHome');
 });
 
 // A sessão de revisão rodou `gh pr view biudtech/biud-core#439` para ler uma dependência, a

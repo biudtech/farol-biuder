@@ -57,8 +57,9 @@ test('a sidebar do Sistema também é um tablist completo', () => {
   assert.match(nav[0], /role="tablist"/);
   const botoes = todos(/<button[^>]*class="sys-nav-item[^"]*"[^>]*>/g, nav[1]);
   // 13 desde 03/10/2026 (Conexões saiu: dois campos sem efeito; a lista de repos bloqueados
-  // foi para Automação), 12 desde o lote 7 do corte (saiu Novidades) e 11 desde o lote 8 (saiu Especialistas)
-  assert.equal(botoes.length, 11, 'as 11 seções do Sistema');
+  // foi para Automação), 12 desde o lote 7 do corte (saiu Novidades), 11 desde o lote 8 (saiu Especialistas)
+  // e 8 desde o lote 13b (saíram as três seções da coordenação entre instalações)
+  assert.equal(botoes.length, 8, 'as 8 seções do Sistema');
   for (const [b] of botoes) {
     assert.match(b, /role="tab"/);
     assert.match(b, /aria-selected="(true|false)"/);

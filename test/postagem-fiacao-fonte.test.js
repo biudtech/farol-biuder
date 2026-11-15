@@ -23,7 +23,7 @@ test('reenvio e clique se identificam', () => {
 });
 
 // 30/09/2026: sexta via. A aprovação que esperava o CI posta quando ele fecha verde, sem
-// handle de lease (como o reenvio) e ancorada no head que a sessão leu.
+// handle da fonte (como o reenvio) e ancorada no head que a sessão leu.
 test('espera do CI se identifica e ancora no head lido', () => {
   const fonte = ler('lib/engine/espera-ci.js');
   assert.ok(fonte.includes('postarReconstruindo(engine, pr, { ...item.payloads.approve, commit_id: item.headSha }, item)'));

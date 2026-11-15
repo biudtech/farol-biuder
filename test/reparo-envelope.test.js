@@ -1,7 +1,7 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 // Sessao que trabalha 10 a 15 minutos e termina em PROSA ganha UMA rodada de reparo.
 //
-// Caso medido no aparelho do Wanderson (state/falhas-sessao.json, 22 e 23/09/2026):
+// Caso medido na máquina do Wanderson (state/falhas-sessao.json, 22 e 23/09/2026):
 //   biudtech/biud-frontend#1123, sessao de 10m17, devolveu 166 caracteres de texto;
 //   biudtech/tenant-company#126, sessao de 14m56, devolveu 97 caracteres.
 // As duas passaram por todas as etapas (preparo, leitura, card, verificacao,

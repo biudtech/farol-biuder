@@ -85,7 +85,7 @@ test('o app.js carrega e registra o handler de state do SSE', () => {
   assert.ok(listeners.has('state'), 'sem isto a tela nunca receberia estado nenhum');
 });
 
-test('a ordem REAL de registro das telas é time, sistema, consumo, radar-compartilhado, radar-aparelhos', () => {
+test('a ordem REAL de registro das telas é time, sistema, consumo', () => {
   // test/ui-telas-registro.test.js só prova a propriedade genérica (a ordem de
   // registro é preservada); este aqui trava o valor de verdade. A ordem nasce do
   // encadeamento de imports estáticos do ui/app.js (cada import estático roda por
@@ -96,8 +96,7 @@ test('a ordem REAL de registro das telas é time, sistema, consumo, radar-compar
   // verdade de quem desenha em cima de quem no rodapé de sistema.
   assert.deepEqual(
     telasRegistradas().map(t => t.id),
-    // radar-compartilhado registra por último, chamada explícita depois do Consumo (ui/app.js)
-    ['time', 'sistema', 'consumo', 'radar-compartilhado', 'radar-aparelhos'],
+    ['time', 'sistema', 'consumo'],
     'ordem de registro mudou: um import novo em algum módulo de tela reordenou o encadeamento em silêncio'
   );
 });

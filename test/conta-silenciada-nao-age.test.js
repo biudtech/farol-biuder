@@ -1,6 +1,6 @@
 // Conta silenciada não inicia ações; revisões já admitidas podem concluir pela conta original.
 //
-// Incidente: no Farol de um celular, o `gh` tinha duas contas cobrindo a org `biudtech`, a
+// Incidente: num Farol, o `gh` tinha duas contas cobrindo a org `biudtech`, a
 // primeira silenciada (`wandersonbiuder`) e a segunda ativa (`Alexpraxedes`). O dono quis agir
 // como o Alex num PR da org e a ação saiu como `wandersonbiuder`. As duas metades da correção
 // moram em lib/engine/conta-que-age.js: RESOLVER (a org entrega a conta capaz, e o dedup das
@@ -258,9 +258,6 @@ test('porta de execução: conta silenciada é motivo próprio, e o enqueueHeadl
   assert.equal(porta.motivoParaNaoExecutar(e, pr), 'conta_silenciada');
   e.processHeadless = () => { };
   assert.deepEqual(e.enqueueHeadless({ ...pr }), { ok: false, code: 'conta_silenciada' });
-  // o recibo de um comando entre aparelhos ganha texto na tela, não "código conta_silenciada"
-  const recibo = P.reciboEstado({ tipo: 'revisar' }, { estado: 'recusado', code: 'conta_silenciada', at: 0 });
-  assert.equal(recibo.detalhe.includes('código conta_silenciada'), false);
 });
 
 test('postagem: PR marcado com a conta silenciada recusa antes de qualquer gh (clique, reenvio)', async () => {

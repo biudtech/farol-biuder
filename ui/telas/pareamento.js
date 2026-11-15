@@ -77,7 +77,7 @@ function voltarDoPareamento(raiz, reconectar, corpo = globalThis.document && glo
 
 // ordem importa: o Edge também diz "Chrome", e o Chrome também diz "Safari"
 const NAVEGADORES = [[/Edg\//, 'Edge'], [/Firefox\//, 'Firefox'], [/Chrome\//, 'Chrome'], [/Safari\//, 'Safari']];
-const APARELHOS = [[/Android/i, ' do celular'], [/iPhone|iPad/i, ' do iPhone']];
+const DISPOSITIVOS = [[/Android/i, ' do telefone'], [/iPhone|iPad/i, ' do iPhone']];
 
 function primeiroQueCasa(tabela, texto, padrao) {
   const achado = tabela.find(([re]) => re.test(texto));
@@ -86,7 +86,7 @@ function primeiroQueCasa(tabela, texto, padrao) {
 
 function rotuloSugerido(navegador = globalThis.navigator) {
   const ua = String((navegador && navegador.userAgent) || '');
-  return primeiroQueCasa(NAVEGADORES, ua, 'Navegador') + primeiroQueCasa(APARELHOS, ua, '');
+  return primeiroQueCasa(NAVEGADORES, ua, 'Navegador') + primeiroQueCasa(DISPOSITIVOS, ua, '');
 }
 
 function ehWindows(navegador = globalThis.navigator) {

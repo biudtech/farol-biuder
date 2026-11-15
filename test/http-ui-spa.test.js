@@ -56,7 +56,7 @@ function pedir(caminho, { method = 'GET', host } = {}) {
 /* ---------- a regra pura ---------- */
 
 test('navegação devolve a página; arquivo que existe sai como ele mesmo', () => {
-  for (const p of ['/', '/radar/pra-mim', '/radar/aparelhos/dev-1', '/sistema/contas', '/entregas', '/qualquer/coisa']) {
+  for (const p of ['/', '/radar/pra-mim', '/radar/pra-mim/dev-1', '/sistema/contas', '/entregas', '/qualquer/coisa']) {
     const r = resolverDaUi(p, UI_DIR);
     assert.equal(r && r.pagina, true, p);
     assert.equal(r.arquivo, path.join(path.resolve(UI_DIR), 'index.html'), p);
@@ -103,7 +103,7 @@ test('só leitura chega à página: outro método é 404', () => {
 /* ---------- o servidor real ---------- */
 
 test('caminho profundo aberto direto recebe o index.html, que carrega os arquivos pela raiz', async () => {
-  for (const p of ['/radar/pra-mim', '/radar/aparelhos/dev-1?conta=alice', '/sistema/contas', '/entregas?dias=7&org=acme']) {
+  for (const p of ['/radar/pra-mim', '/radar/pra-mim?conta=alice', '/sistema/contas', '/entregas?dias=7&org=acme']) {
     const r = await pedir(p);
     assert.equal(r.status, 200, p);
     assert.match(r.tipo, /^text\/html/, p);

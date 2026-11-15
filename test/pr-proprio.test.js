@@ -1,6 +1,6 @@
 // PR da própria conta nunca vira revisão headless (28/09/2026).
 //
-// Caso medido: um PR do engine-ai era da conta deste Farol, e um aparelho do grupo
+// Caso medido: um PR do engine-ai era da conta deste Farol, e uma revisão headless
 // abriu revisão headless nele com a mesma conta. A label `<conta>:revisando`
 // ficou oito minutos no PR, com o autor "revisando" o próprio trabalho. As três portas:
 // a regra pura, o launchReview (clique, URL avulsa) e o enqueueHeadless (re-revisão,

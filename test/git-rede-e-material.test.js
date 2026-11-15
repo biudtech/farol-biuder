@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
+import fsNode from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -95,7 +95,7 @@ test('git sobre o material não executa o core.fsmonitor do config global', asyn
   await fs.writeFile(script, `#!/bin/sh\necho "$GH_TOKEN" >> "${barra(canario)}"\n`, { mode: 0o755 });
   await comConfig(['[core]', `\tfsmonitor = ${barra(script)}`, '[user]', '\tname = x']);
   const env = { ...envGitLimpo(), GIT_CONFIG_GLOBAL: config, GH_TOKEN: 'valor-do-token-de-teste' };
-  const lido = () => (fsSync.existsSync(canario) ? fsSync.readFileSync(canario, 'utf8') : '');
+  const lido = () => (fsNode.existsSync(canario) ? fsNode.readFileSync(canario, 'utf8') : '');
   // controle: sem as travas ele roda e lê o token
   spawnSync('git', ['status', '--porcelain'], { cwd: repo, env, encoding: 'utf8', windowsHide: true });
   assert.match(lido(), /valor-do-token-de-teste/, 'o config morde sem as travas');

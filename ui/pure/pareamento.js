@@ -9,9 +9,9 @@ import { esc } from './comum.js';
 
 const RECUSAS = {
   codigo_invalido: (r) => `Código não confere. ${tentativas(r.restantes)}`,
-  bloqueado: () => 'Cinco tentativas erradas. O código foi invalidado: gere outro no terminal deste aparelho.',
+  bloqueado: () => 'Cinco tentativas erradas. O código foi invalidado: gere outro no terminal deste computador.',
   sem_codigo_pendente: () => 'Não há código válido esperando. Ele pode ter passado dos 10 minutos ou já ter sido usado. Gere outro no terminal.',
-  sem_resposta: () => 'Não deu para falar com o Farol deste aparelho. Confira se ele está aberto e tente de novo: o código não foi gasto.',
+  sem_resposta: () => 'Não deu para falar com o Farol deste computador. Confira se ele está aberto e tente de novo: o código não foi gasto.',
 };
 
 function tentativas(n) {
@@ -52,9 +52,9 @@ function pareamentoHtml(dados = {}) {
     ${aviso}
     <form class="card par-card" id="parForm">
       <h2 class="par-titulo">Parear este navegador</h2>
-      <p class="par-desc">Este Farol exige credencial para abrir a API local. Nada do estado, dos relatórios, do log ou do chat aparece antes do pareamento. O código é gerado no terminal do próprio aparelho, vale uma vez e dura 10 minutos.</p>
+      <p class="par-desc">Este Farol exige credencial para abrir a API local. Nada do estado, dos relatórios, do log ou do chat aparece antes do pareamento. O código é gerado no terminal do próprio computador, vale uma vez e dura 10 minutos.</p>
       <div class="par-passo">
-        <span class="set-title">1. No terminal deste aparelho, rode</span>
+        <span class="set-title">1. No terminal deste computador, rode</span>
         ${linhas}
         <span class="par-dica">Rode dentro da pasta onde o Farol está instalado.</span>
       </div>

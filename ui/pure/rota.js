@@ -1,7 +1,7 @@
 /* Farol · UI: a ROTA, o endereço que diz o que está na tela (18/10/2026).
 
    Pedido do dono: "As URLs não refletem exatamente o que vejo em tela". A rota mora no
-   CAMINHO desde 20/10/2026 (`/<aba>[/<sub>[/<aparelho>]]?<filtros>`), também pedido do dono:
+   CAMINHO desde 20/10/2026 (`/<aba>[/<sub>]?<filtros>`), também pedido do dono:
    "usualmente associamos o uso de # pra referenciar um id, e aquilo na realidade são
    páginas". Na primeira versão ela morava no hash; o link antigo (`/#/radar/pra-mim`)
    continua valendo e é convertido na entrada (enderecoDaPagina). Quem faz o caminho
@@ -14,16 +14,16 @@
 
    Nada que identifique credencial entra no endereço: cada campo é validado por formato
    fechado (aba e seção de lista conhecida, conta e org no formato de login do GitHub, PR
-   no formato owner/repo#N, aparelho como id opaco), e o que não casa some calado. */
+   no formato owner/repo#N), e o que não casa some calado. */
 
 import { ghPrUrl } from './mencoes.js';
 
 const ABAS_DA_ROTA = ['radar', 'time', 'consumo', 'sistema'];
 // nome na URL <-> nome interno (o data-sub / data-section do index.html)
-const SUBS_DO_RADAR = { 'pra-mim': 'mim', aparelhos: 'apar' };
+const SUBS_DO_RADAR = { 'pra-mim': 'mim' };
 const SECOES_DO_SISTEMA = {
   'visao-geral': 'overview', contas: 'accounts', automacao: 'automation', jira: 'jira',
-  sincronizacao: 'sync', aparelhos: 'devices', grupos: 'groups', plano: 'plans',
+  plano: 'plans',
   preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
 };
 // só nessas abas a barra de contas aparece (accountBarVisible, ui/pure/contas.js)
@@ -31,7 +31,6 @@ const ABAS_COM_CONTA = new Set(['radar', 'time']);
 const JANELAS_DO_CONSUMO = [1, 7, 30, 90];
 export const JANELA_PADRAO_DO_CONSUMO = 30;
 
-const ID_OPACO = /^[A-Za-z0-9_-]{1,128}$/;
 const LOGIN_GH = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const PR_MAX = 250;
 
@@ -66,7 +65,7 @@ const SECAO_PADRAO = { sistema: 'overview' };
 
 function rotaPadrao(aba = 'radar') {
   return {
-    aba, sub: SUB_PADRAO[aba] || '', aparelho: '', secao: SECAO_PADRAO[aba] || '',
+    aba, sub: SUB_PADRAO[aba] || '', secao: SECAO_PADRAO[aba] || '',
     conta: '', pr: '', janela: null,
   };
 }
@@ -89,7 +88,6 @@ function lerCaminho(rota, partes) {
   if (rota.aba === 'radar') {
     const sub = SUBS_DO_RADAR[partes[1]] || (Object.values(SUBS_DO_RADAR).includes(partes[1]) ? partes[1] : '');
     if (sub) rota.sub = sub;
-    if (rota.sub === 'apar') rota.aparelho = valido(ID_OPACO, partes[2]);
   }
   if (rota.aba === 'sistema') {
     const secao = SECOES_DO_SISTEMA[partes[1]] || (Object.values(SECOES_DO_SISTEMA).includes(partes[1]) ? partes[1] : '');
@@ -141,10 +139,7 @@ function pedacoDeConsulta(nome, valor) {
 export function escreverRota(r) {
   const rota = lerRotaDeObjeto(r);
   const caminho = [rota.aba];
-  if (rota.aba === 'radar') {
-    caminho.push(chaveDoValor(SUBS_DO_RADAR, rota.sub));
-    if (rota.sub === 'apar' && rota.aparelho) caminho.push(rota.aparelho);
-  }
+  if (rota.aba === 'radar') caminho.push(chaveDoValor(SUBS_DO_RADAR, rota.sub));
   if (rota.aba === 'sistema') caminho.push(chaveDoValor(SECOES_DO_SISTEMA, rota.secao));
   const consulta = [];
   if (rota.aba === 'consumo' && rota.janela !== null && rota.janela !== JANELA_PADRAO_DO_CONSUMO) consulta.push(pedacoDeConsulta('janela', rota.janela));
@@ -161,7 +156,7 @@ function lerRotaDeObjeto(r) {
   const rota = rotaPadrao(aba);
   // a tela manda sub-aba e seção sempre (cada uma lembra a sua): vale a da aba à mostra
   const segundo = aba === 'sistema' ? chaveDoValor(SECOES_DO_SISTEMA, o.secao) : chaveDoValor(SUBS_DO_RADAR, o.sub);
-  const partes = [aba, segundo, o.aparelho];
+  const partes = [aba, segundo];
   lerCaminho(rota, partes);
   if (ABAS_COM_CONTA.has(aba)) rota.conta = valido(LOGIN_GH, o.conta);
   if (aba === 'consumo') rota.janela = janelaValida(o.janela);
@@ -171,7 +166,7 @@ function lerRotaDeObjeto(r) {
 
 /* Como a troca de rota entra no histórico do navegador:
    - ''             nada mudou no endereço
-   - 'push'         mudou de lugar (aba, sub-aba, aparelho, seção) ou abriu uma caixa de
+   - 'push'         mudou de lugar (aba, sub-aba, seção) ou abriu uma caixa de
                     revisão: o Voltar do navegador desfaz
    - 'fechou-caixa' a única diferença é a caixa de revisão ter fechado: quem chama volta a
                     entrada que a abertura empilhou, em vez de empilhar outra igual
@@ -181,7 +176,7 @@ export function mudancaDeRota(antes, depois) {
   if (!antes) return 'replace';
   const a = lerRotaDeObjeto(antes);
   if (escreverRota(a) === escreverRota(b)) return '';
-  const lugar = (r) => [r.aba, r.sub, r.aparelho, r.secao].join('|');
+  const lugar = (r) => [r.aba, r.sub, r.secao].join('|');
   if (lugar(a) !== lugar(b)) return 'push';
   if (b.pr && b.pr !== a.pr) return 'push';
   if (a.pr && !b.pr && escreverRota({ ...a, pr: '' }) === escreverRota(b)) return 'fechou-caixa';

@@ -41,9 +41,6 @@ const MSG = {
   restart: 'app reiniciado com revisão em andamento: biudtech/biud-core#262 devolvido(s) à fila',
   console: 'sessao "Login do Claude" saiu com codigo 3221225786',
   nadaVer: 'qualquer coisa que ninguém previu',
-  // a coordenação entre dispositivos (Firebase) carrega o texto do fetch; sem classe
-  // própria ANTES de 'rede' ela seria lida como queda de rede genérica
-  coordenacao: 'coordenação entre dispositivos indisponível: fetch failed',
 };
 
 /* ---------- CLASSES: forma e ordem ---------- */
@@ -51,7 +48,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 24, 'são 24 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 23, 'são 23 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -74,7 +71,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
     // contêm "usage limit" e seriam lidas como limite de janela (test/limite-do-claude.test.js)
     'restart-fila', 'console-fechado', 'limite-da-organizacao', 'limite-plano',
     'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
-    'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'coordenacao-indisponivel', 'rate-limit-github', 'rede', 'github-indisponivel',
+    'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem', 'ferramenta'
   ]);
 });
@@ -128,7 +125,6 @@ const CASOS = [
   ['credencial-invalida', MSG.credencial],
   ['oauth-expirado', MSG.oauthExpirado],
   ['credito-insuficiente', MSG.credito],
-  ['coordenacao-indisponivel', MSG.coordenacao],
   ['rede', MSG.rede],
   ['rede', MSG.redeSessao],
   ['rede', MSG.redeReconexao],
@@ -694,22 +690,6 @@ test('classify: pega as duas metades da mensagem do CLI', () => {
   assert.equal(classify('sessão retornou erro: cannot be used with root/sudo privileges').id, 'skip-permissions-root');
 });
 
-test('coordenação entre dispositivos indisponível: transitória e vence rede mesmo com "fetch failed"', () => {
-  const c = classify(MSG.coordenacao);
-  assert.equal(c.id, 'coordenacao-indisponivel');
-  assert.equal(c.kind, 'transitorio', 'espera é o comportamento certo, nunca estacionamento');
-  assert.equal(c.grupo, 'rede');
-  assert.match(MSG.coordenacao, /fetch failed/, 'confirma que o texto casaria com rede também');
-  assert.equal(classify('Coordenacao entre dispositivos indisponivel: timeout').id, 'coordenacao-indisponivel', 'sem acento também');
-  assert.equal(classify(MSG.redeSessao).id, 'rede', 'fetch failed sozinho continua sendo rede');
-  // com só a consolidação ligada a MESMA falha se chama "sincronização": sem isto o
-  // Diagnóstico mostrava "Coordenação indisponível" a quem nem ligou a coordenação
-  const c2 = classify('sincronização entre dispositivos indisponível: fetch failed');
-  assert.equal(c2.id, 'coordenacao-indisponivel', 'mesma classe, porque é a mesma falha');
-  assert.equal(c2.kind, 'transitorio');
-  assert.equal(c2.label, 'Sincronização entre dispositivos indisponível', 'o rótulo não pode nomear um recurso que ninguém ligou');
-  assert.equal(classify('Sincronizacao entre dispositivos indisponivel: timeout').id, 'coordenacao-indisponivel', 'sem acento também');
-});
 
 // 7.C5: rate limit do GitHub é espera, não defeito.
 test('rate limit do GitHub é transitório', () => {
@@ -742,7 +722,7 @@ test('spawn EAGAIN volta para a fila sem confundir com credencial ou binário au
 });
 
 test('triage: WARN que a taxonomia não conhece continua contando (falha real não some do Diagnóstico)', () => {
-  for (const msg of ['salvar destravados: ENOSPC', 'lease tomado por outro aparelho: risco de consumo duplicado']) {
+  for (const msg of ['salvar destravados: ENOSPC', 'gravação recusada: risco de consumo duplicado']) {
     const r = triage([L('2026-08-06 14:12:35', 'WARN', msg)]);
     assert.equal(r.length, 1, msg);
     assert.equal(r[0].id, 'desconhecido');

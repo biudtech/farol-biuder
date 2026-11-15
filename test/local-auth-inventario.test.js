@@ -15,7 +15,7 @@ function rotasServidas() {
 test('o extrator de rotas não está cego', () => {
   const servidas = rotasServidas();
   assert.ok(servidas.has('/api/decide'));
-  assert.ok(servidas.size >= 46, `esperava pelo menos 46 rotas, achei ${servidas.size}`);
+  assert.ok(servidas.size >= 27, `esperava pelo menos 27 rotas, achei ${servidas.size}`);
 });
 
 test('toda rota servida tem classe no inventário', () => {
@@ -29,21 +29,7 @@ test('nenhuma rota aparece em duas classes', () => {
 });
 
 // O número é tripwire de rota nova entrando sem classe. Ele muda quando o conjunto de
-// rotas muda de propósito: a C1 tirou /api/sync/erase-remote e acrescentou /api/sync/unlock
-// e /api/sync/new-epoch (46 virou 47), a C2a acrescentou /api/sync/admin (47 virou 48) e a
-// C2b acrescentou grupo, vínculo, aparelho, chave de limpeza, limpeza e revogação
-// (48 virou 54), a C3c acrescentou /api/sync/seen (54 virou 55)
-// a C3d acrescentou a lista e o corpo das revisões (55 virou 57), e a C3g a medição e o
-// envio do histórico local (57 virou 59), e a C6 acrescentou /api/sync/command
-// (59 virou 60). O contrato das telas (B2) acrescentou desfecho de comando, publicar
-// política, aviso da tomada, estado da chave de limpeza e as sessões da A4 (60 virou 66). O diagnóstico unificado (A3) acrescentou /api/diagnostics (66 virou 67). O plano e chaves (A2) acrescentou testar perfil e adotar o legado (67 virou 69). As divergências de Aparelhos acrescentaram a leitura da política publicada e a recusa da designação (69 virou 71). A transferência pela tela acrescentou /api/sync/transfer-targets, leitura sensível porque lista os aparelhos com o que cada um consegue fazer (71 virou 72).
-// As listas remotas (Panorama e Meus PRs de outros aparelhos) acrescentaram /api/sync/lists (72 virou 73).
-// A edição de conta por operação acrescentou /api/accounts/edit, na mesma classe de /api/settings (73 virou 74).
-// O espelho sob demanda acrescentou /api/sync/mirror (75 virou 76).
-// O login do Claude pela tela acrescentou abrir, enviar o código (recebe segredo: o código de
-// autorização é credencial de uso único) e cancelar (77 virou 80).
-// A seleção Codex por autoanálise restrita acrescentou uma sessão paga (87 virou 88).
-// O agente da autoanálise (issue #346) acrescentou pedir (sessão paga), ler e listar (88 virou 91).
+// rotas muda de propósito. Chegou a 91 antes do corte da Fase 1.
 // O corte da Fase 1 (lote 2) tirou auditoria de revisão, transferência de preferências, chat (4 rotas), candidatos a reviewer e pedido de reviewers (91 virou 83).
 // O corte da Fase 1 (lote 3) tirou /api/update, o auto-update (83 virou 82).
 // O corte da Fase 1 (lote 7) tirou /api/highlights, /api/deliveries, /api/tool, /api/tool/clear e /api/log/clear (82 virou 77).
@@ -51,11 +37,14 @@ test('nenhuma rota aparece em duas classes', () => {
 // O corte da Fase 1 (lote 11) tirou a autoanálise e Meus PRs: /api/self-review, /restricted, /merge, /visibility, /cancel, /agent/request, /agent/read, /agent/list, /api/pr/hide e /api/pr/unhide (69 virou 59).
 // O corte da Fase 1 (lote 9, só Claude) tirou /api/claude-login, /api/claude/login-web/start, /code e /cancel, /api/claude/profile-adopt e /api/self-review/restricted/codex (75 virou 69).
 // O corte da Fase 1 (lote 12) tirou a sessão de terminal: /api/review/post e /api/session-exit (59 virou 57).
-test('as classes da spec cobrem os 57 caminhos, e as públicas são só as duas de autenticação', () => {
+// O corte da Fase 1 (lote 13b) tirou as 31 rotas da coordenação entre instalações, e com elas a
+// classe de leitura de baixo risco, que só tinha uma delas: as não públicas foram de 56 a 25. O
+// título contava 57 e eram 58 com as duas públicas; agora são 27.
+test('as classes da spec cobrem os 27 caminhos, e as públicas são só as duas de autenticação', () => {
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 56);
+  assert.equal(naoPublicas.length, 25);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
-  assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-baixo-risco', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
+  assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
 });
 
 test('toda rota inventariada existe no servidor (sem classe morta)', () => {

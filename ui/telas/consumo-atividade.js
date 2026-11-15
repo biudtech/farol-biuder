@@ -9,7 +9,7 @@ const DEFAULT_FILTERS = { account: 'all', repo: 'all', provider: 'all', model: '
 const filters = { ...DEFAULT_FILTERS };
 let current = null, lastKey = '', loadedAt = 0, generation = 0, searchTimer;
 let metric = 'sessions';
-let context = { window: 30, scope: 'local' };
+let context = { window: 30 };
 
 function day(at) { return new Date(at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
 
@@ -107,14 +107,9 @@ async function refresh(force = false) {
 }
 
 export function renderActivity(next) {
-  const scopeChanged = context.scope !== next.scope;
-  const changed = context.window !== next.window || context.scope !== next.scope;
+  const changed = context.window !== next.window;
   context = next;
   init();
-  if (scopeChanged) {
-    Object.assign(filters, DEFAULT_FILTERS);
-    $('#activitySearch').value = '';
-  }
   if (changed && $('#activityCustom').open) $('#activityCustom').open = false;
   if (changed) filters.page = 0;
   return refresh();

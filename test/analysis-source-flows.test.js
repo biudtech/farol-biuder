@@ -25,7 +25,7 @@ function source(status = 'complete') {
 }
 function setup() {
   const e = new Engine();
-  e.config = { ...e.config, jiraSites: [], reReviewResume: false, reviewContextMode: 'off', sync: {},
+  e.config = { ...e.config, jiraSites: [], reReviewResume: false, reviewContextMode: 'off',
     accounts: [{ user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }] };
   e.accountForPr = () => 'fixture'; e.tokenFor = () => ''; e.resolveClaudeAuth = () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' });
   e.headSha = async () => H;
@@ -73,7 +73,7 @@ test('Engine review usa fonte comum sem perfil técnico e persiste diagnóstico 
   assert.ok(item); assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
   assert.equal(item.technicalReview.semDeclaracao, true);
 });
-test('cancelamento na aquisição impede modelo, não publica e devolve lease', async () => {
+test('cancelamento na aquisição impede modelo, não publica e devolve a referência da fonte', async () => {
   for (const flow of ['runHeadlessReview']) {
     const e = setup(), handle = source(); let entered, finish, signal, model = 0;
     const acquisition = new Promise(resolve => { entered = resolve; });

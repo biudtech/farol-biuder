@@ -51,21 +51,19 @@ function modelsHtml(report) {
   return report.models.map(model => `<div class="activity-model"><span>${esc(model.name)}</span><span>${count(model.attempts)} execuções <small>${fmtUsageMetric(tokens(model), 'total')} tokens</small></span></div>`).join('') || '<p class="usage-empty">Sem dados neste período.</p>';
 }
 
-function reference(row, remote) {
-  if (!row.ref) return 'Sem referência';
-  if (remote) return `PR identificado · ${esc(row.ref.slice(0, 10))}…`;
-  return esc(row.ref);
+function reference(row) {
+  return row.ref ? esc(row.ref) : 'Sem referência';
 }
 
-function historyRow(row, remote) {
-  const label = `${USAGE_KIND_LABEL[row.kind]} · ${reference(row, remote)}`;
+function historyRow(row) {
+  const label = `${USAGE_KIND_LABEL[row.kind]} · ${reference(row)}`;
   const attempts = row.attempts.map(a => `<li>${esc(statusLabel[a.status])} · ${esc(new Date(a.at).toLocaleString('pt-BR'))} · ${fmtUsageMetric(tokens(a), 'total')} tokens · ${UNKNOWN_COST(a) ? 'custo desconhecido' : money(a.costUsd)} (${esc(a.costSource)})</li>`).join('');
   const total = row.attempts.reduce((n, a) => n + tokens(a), 0);
   const duration = row.attempts.reduce((n, a) => n + Math.max(0, a.duration), 0);
   const durationLabel = row.attempts.every(a => a.durationKnown) ? `${count(Math.round(duration / 60000))} min` : 'Não informada';
   const cost = row.attempts.reduce((n, a) => n + a.costUsd, 0);
   const costLabel = row.attempts.some(UNKNOWN_COST) ? 'Parcial / desconhecido' : money(cost);
-  return `<tr><td><details data-activity-key="${esc(row.key)}"><summary>${label}<small>${count(row.attempts.length)} tentativa(s) · ${esc(row.device === 'local' ? 'Este aparelho' : row.device)} · ${esc(new Date(row.at).toLocaleDateString('pt-BR'))}</small></summary><ol>${attempts}</ol><small>Consumo de todas as tentativas desta operação, inclusive fora da janela. Conclusão contada no máximo uma vez.</small></details></td><td>${esc(statusLabel[row.status])}</td><td>${esc(row.model)}<small>${esc(row.provider)}</small></td><td>${fmtUsageMetric(total, 'total')}</td><td>${durationLabel}</td><td>${costLabel}<small>Referência do CLI</small></td></tr>`;
+  return `<tr><td><details data-activity-key="${esc(row.key)}"><summary>${label}<small>${count(row.attempts.length)} tentativa(s) · ${esc(new Date(row.at).toLocaleDateString('pt-BR'))}</small></summary><ol>${attempts}</ol><small>Consumo de todas as tentativas desta operação, inclusive fora da janela. Conclusão contada no máximo uma vez.</small></details></td><td>${esc(statusLabel[row.status])}</td><td>${esc(row.model)}<small>${esc(row.provider)}</small></td><td>${fmtUsageMetric(total, 'total')}</td><td>${durationLabel}</td><td>${costLabel}<small>Referência do CLI</small></td></tr>`;
 }
 
 function UNKNOWN_COST(row) { return ['sem-base', 'desconhecido'].includes(row.costSource); }
@@ -75,7 +73,7 @@ export function activityHistoryHtml(report) {
   const start = h.total ? h.page * 8 + 1 : 0;
   const previous = h.page === 0 ? 'disabled' : '';
   const next = h.page + 1 >= h.pages ? 'disabled' : '';
-  return `<div class="activity-scroll"><table class="activity-history"><thead><tr><th>Trabalho / PR</th><th>Resultado</th><th>Modelo</th><th>Tokens da execução</th><th>Duração</th><th>Custo de referência</th></tr></thead><tbody>${h.rows.map(row => historyRow(row, report.remote)).join('') || '<tr><td colspan="6">Nenhuma execução neste recorte.</td></tr>'}</tbody></table></div><div class="activity-history-foot"><span>${start}–${Math.min(h.total, (h.page + 1) * 8)} de ${count(h.total)} execuções</span><div><button data-activity-page="${h.page - 1}" aria-label="Página anterior" ${previous}>←</button><button data-activity-page="${h.page + 1}" aria-label="Próxima página" ${next}>→</button></div></div>`;
+  return `<div class="activity-scroll"><table class="activity-history"><thead><tr><th>Trabalho / PR</th><th>Resultado</th><th>Modelo</th><th>Tokens da execução</th><th>Duração</th><th>Custo de referência</th></tr></thead><tbody>${h.rows.map(row => historyRow(row)).join('') || '<tr><td colspan="6">Nenhuma execução neste recorte.</td></tr>'}</tbody></table></div><div class="activity-history-foot"><span>${start}–${Math.min(h.total, (h.page + 1) * 8)} de ${count(h.total)} execuções</span><div><button data-activity-page="${h.page - 1}" aria-label="Página anterior" ${previous}>←</button><button data-activity-page="${h.page + 1}" aria-label="Próxima página" ${next}>→</button></div></div>`;
 }
 
 export function activityBodyHtml(report) {
@@ -84,12 +82,11 @@ export function activityBodyHtml(report) {
   if (report.incomplete) notice += 'O diário detalhado não cobre todo o consumo agregado. Os indicadores representam apenas os registros disponíveis. ';
   if (report.unidentified) notice += `${count(report.unidentified)} execuções sem identidade de operação: consumo incluído, conclusões e retentativas não inferidas. `;
   if (report.since && report.range.start < report.sinceDay) notice += 'O período começa antes do primeiro registro disponível. Não há cobertura comprovada dos dias anteriores. ';
-  if (report.remote) notice += 'Consolidado apenas dos eventos recebidos. Contas e PRs remotos permanecem identificados por hash; modalidade e provedor podem não estar disponíveis. ';
-  const scope = report.remote ? 'Todos os aparelhos · eventos sincronizados' : 'Este aparelho · diário permanente';
+  const scope = 'Diário permanente';
   const warning = notice ? `<div class="callout warn">${esc(notice)}</div>` : '';
   return `<div class="activity-scope">${date(report.range.start)} a ${date(report.range.end)} · ${scope}</div>${warning}<div class="usage-kpis activity-kpis">${activityKpisHtml(report)}</div>${activityTable(report)}${resources(report)}<div class="usage-grid-2"><div class="card usage-chart-card"><div class="usage-chart-head"><h3>Linha do tempo</h3><div class="seg"><button data-activity-metric="sessions">Volume</button><button data-activity-metric="total">Tokens</button><button data-activity-metric="api">Custo API</button></div></div><div id="activityTimeline">${activityTimelineHtml(report)}</div></div><div class="card usage-chart-card"><h3>Por modelo</h3><p class="usage-caption">Uma execução pode usar mais de um modelo.</p>${modelsHtml(report)}</div></div>`;
 }
 
 export function activityRulesHtml() {
-  return '<summary>Como contamos</summary><p>Revisões concluídas são operações identificadas cujo último resultado técnico é ok no período. Isso não comprova publicação no GitHub. PRs revisados são referências únicas dessas reviews. Execuções incluem falhas, cancelamentos, parciais e descartes. Tentativas com o mesmo ID, aparelho, conta, perfil e tipo são agrupadas; IDs diferentes não são unidos por suposição. Retentativas identificadas não representam necessariamente todas as recuperações históricas. Subagentes já fazem parte do consumo informado pela árvore do provedor e não contam como reviews extras. Modalidade de cobrança só aparece quando registrada na execução; histórico anterior permanece desconhecido. Nenhum destes números altera regras de segurança, orçamento ou política de revisão.</p>';
+  return '<summary>Como contamos</summary><p>Revisões concluídas são operações identificadas cujo último resultado técnico é ok no período. Isso não comprova publicação no GitHub. PRs revisados são referências únicas dessas reviews. Execuções incluem falhas, cancelamentos, parciais e descartes. Tentativas com o mesmo ID, conta, perfil e tipo são agrupadas; IDs diferentes não são unidos por suposição. Retentativas identificadas não representam necessariamente todas as recuperações históricas. Subagentes já fazem parte do consumo informado pela árvore do provedor e não contam como reviews extras. Modalidade de cobrança só aparece quando registrada na execução; histórico anterior permanece desconhecido. Nenhum destes números altera regras de segurança, orçamento ou política de revisão.</p>';
 }

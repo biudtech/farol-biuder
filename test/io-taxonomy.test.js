@@ -276,7 +276,7 @@ test('prependPathDirs: respeita ponto-e-virgula de PATH Windows', () => {
 });
 
 /* ---------- priorizarNoPath: o ~/.local/bin do instalador do claude na frente ---------- */
-// 26/09/2026: no celular o ~/.local/bin (Claude Code 2.1.283) já estava no PATH, mas atrás de
+// 26/09/2026: o ~/.local/bin (Claude Code 2.1.283) já estava no PATH, mas atrás de
 // uma pasta com um claude antigo (2.1.246), e o prependPathDirs, que só acrescenta o que
 // falta, deixava a ordem como estava. As revisões rodavam no binário antigo.
 

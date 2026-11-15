@@ -360,74 +360,53 @@ test('com uma conta só, os campos de Conexões (conta e organizações) editam 
   assert.equal(JSON.stringify(e.config.accounts), antes, 'duas contas ou mais: nenhuma muda');
 });
 
-/* ---------- o teto total de quem já tinha o compartilhamento ligado ---------- */
+/* ---------- o marcador do esquema 1 ----------
+   O esquema 1 gravava no teto total o que a instalação com a visão compartilhada praticava. A
+   visão compartilhada saiu: sobra o ramo de quem nunca a teve, e a config antiga que ainda traz a
+   chave dela é lida sem lançar (a chave fica sem leitor). */
 
-const LIGADO = { enabled: true, shared: { enabled: true } };
+const CHAVE_ANTIGA = 'sync';
+const LIGADO = { enabled: true, shared: { enabled: true }, databaseUrl: 'http://127.0.0.1:1', apiKey: 'k', projectId: 'p' };
 
-test('compartilhamento ligado e sem teto total: o total que o aparelho praticava vira o teto total', () => {
-  for (const porConta of [1, 2, 3, 4]) {
-    const r = M.migrarParalelismo({ parallelReviews: porConta, globalParallelReviews: 0, sync: LIGADO });
-    assert.equal(r.globalParallelReviews, porConta);
-    assert.equal(r.esquemaConfig, M.ESQUEMA_PARALELISMO);
-    assert.deepEqual(r.mudancas, [{ conta: null, campo: 'globalParallelReviews', de: 0, para: porConta }]);
-  }
-  assert.equal(M.migrarParalelismo({ parallelReviews: 2, sync: LIGADO }).globalParallelReviews, 2, 'ausente é 0');
-  assert.equal(M.migrarParalelismo({ parallelReviews: 'x', sync: LIGADO }).globalParallelReviews, 1, 'torto cai no limite por conta padrão');
-  assert.equal(M.migrarParalelismo({ parallelReviews: 9, sync: LIGADO }).globalParallelReviews, 4, 'o clamp do limite por conta');
-});
-
-// O escalonador já aplicava o teto global junto com o da admissão: valia o menor. Deixar um
-// teto global MAIOR que o parallelReviews de pé faria o total subir depois da atualização.
-test('teto total que já existia: fica o menor entre ele e o que a admissão praticava', () => {
-  assert.equal(M.migrarParalelismo({ parallelReviews: 2, globalParallelReviews: 6, sync: LIGADO }).globalParallelReviews, 2);
-  const menor = M.migrarParalelismo({ parallelReviews: 3, globalParallelReviews: 1, sync: LIGADO });
-  assert.equal('globalParallelReviews' in menor, false, 'já era o menor: nada a gravar');
-  assert.deepEqual(menor.mudancas, []);
-  assert.equal(menor.mudou, true, 'o marcador é gravado mesmo assim');
-});
-
-test('sem o compartilhamento ligado, o teto total não é tocado, e o marcador é gravado', () => {
-  for (const sync of [undefined, { enabled: false }, { enabled: true, shared: { enabled: false } }, { enabled: false, shared: { enabled: true } }]) {
-    const r = M.migrarParalelismo({ parallelReviews: 3, globalParallelReviews: 0, sync });
-    assert.equal('globalParallelReviews' in r, false, JSON.stringify(sync));
+test('o teto total nunca é inventado, com ou sem a chave antiga na config, e o marcador é gravado', () => {
+  for (const antiga of [undefined, { enabled: false }, LIGADO, 'lixo']) {
+    const r = M.migrarParalelismo({ parallelReviews: 3, globalParallelReviews: 0, [CHAVE_ANTIGA]: antiga });
+    assert.equal('globalParallelReviews' in r, false, JSON.stringify(antiga));
     assert.deepEqual([r.mudou, r.esquemaConfig, r.mudancas.length], [true, 1, 0]);
   }
 });
 
 test('o marcador é explícito: config já marcada não é tocada, nem com o total em 0', () => {
-  const r = M.migrarParalelismo({ esquemaConfig: 1, parallelReviews: 3, globalParallelReviews: 0, sync: LIGADO });
+  const r = M.migrarParalelismo({ esquemaConfig: 1, parallelReviews: 3, globalParallelReviews: 0 });
   assert.deepEqual(r, { mudou: false, mudancas: [] });
 });
 
-const SYNC_DE_TESTE = { enabled: true, shared: { enabled: true }, databaseUrl: 'http://127.0.0.1:1', apiKey: 'k', projectId: 'p' };
-
-test('no engine: uma vez só, com rastro, e quem depois tira o teto de propósito fica sem teto', () => {
-  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, parallelReviews: 3, sync: SYNC_DE_TESTE, accounts: [{ user: 'a', owners: [] }, { user: 'b', owners: [] }] }));
+test('no engine: config antiga com a chave que saiu sobe sem lançar, sem teto inventado, e o marcador não é editável', () => {
+  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, parallelReviews: 3, [CHAVE_ANTIGA]: LIGADO, accounts: [{ user: 'a', owners: [] }, { user: 'b', owners: [] }] }));
   fs.rmSync(POLITICA_HISTORICO_FILE, { force: true });
-  const e = new Engine();
-  assert.equal(e.config.globalParallelReviews, 3);
-  assert.deepEqual([lerJson(CONFIG).globalParallelReviews, lerJson(CONFIG).esquemaConfig], [3, M.ESQUEMA_PADROES]);
-  const doTeto = () => lerJson(POLITICA_HISTORICO_FILE).filter((h) => h.campo === 'globalParallelReviews');
-  assert.deepEqual(doTeto().map((h) => [h.conta, h.de, h.para, h.origem]), [[null, 0, 3, 'migração']]);
-  // a pessoa tira o teto de propósito: os boots seguintes respeitam
+  let e;
+  assert.doesNotThrow(() => { e = new Engine(); });
+  assert.equal(e.config.globalParallelReviews, 0);
+  assert.deepEqual([lerJson(CONFIG).globalParallelReviews, lerJson(CONFIG).esquemaConfig], [0, M.ESQUEMA_PADROES]);
+  assert.doesNotThrow(() => e.snapshot());
+  // a chave que saiu não é mais preferência: o salvamento a devolve como ignorada
+  assert.deepEqual(e.updateSettings({ [CHAVE_ANTIGA]: { enabled: false } }, 'navegador').ignoradas, [CHAVE_ANTIGA]);
+  // a pessoa põe e tira o teto de propósito: os boots seguintes respeitam
+  e.updateSettings({ globalParallelReviews: 2 }, 'janela do Farol');
+  assert.equal(new Engine().config.globalParallelReviews, 2);
   e.updateSettings({ globalParallelReviews: 0 }, 'janela do Farol');
   const e2 = new Engine();
   assert.equal(e2.config.globalParallelReviews, 0);
-  assert.equal(lerJson(CONFIG).globalParallelReviews, 0);
-  assert.equal(doTeto().length, 1, 'registrada uma vez só');
   // e POST /api/settings não alcança o marcador
   assert.deepEqual(e2.updateSettings({ esquemaConfig: 0 }, 'navegador').ignoradas, ['esquemaConfig']);
   assert.equal(e2.config.esquemaConfig, M.ESQUEMA_PADROES);
 });
 
-test('instalação sem compartilhamento: o boot grava o marcador e não inventa teto', () => {
+test('instalação nova: o boot grava o marcador e não inventa teto', () => {
   fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, parallelReviews: 4, accounts: [{ user: 'a', owners: [] }] }));
   const e = new Engine();
   assert.equal(e.config.globalParallelReviews, 0);
   assert.equal(lerJson(CONFIG).esquemaConfig, M.ESQUEMA_PADROES);
-  // ligar o compartilhamento DEPOIS já é escolha com os números novos: nada é imposto
-  e.updateSettings({ sync: SYNC_DE_TESTE }, 'navegador');
-  assert.equal(new Engine().config.globalParallelReviews, 0);
 });
 
 /* ---------- os padrões de 06/11/2026 (esquema 2) ----------

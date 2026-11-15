@@ -42,10 +42,8 @@ test('quem está revisando segura o automático', () => {
   assert.deepEqual(pulados.map((p) => p.outros), [['ana']]);
 });
 
-test('a trava do round automático e a do comando remoto leem a mesma resposta', async () => {
-  const fila = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'sync-comandos-fila.js'), 'utf8');
+test('a trava do round automático lê outrosQueSeguram', async () => {
   const review = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'review.js'), 'utf8');
-  assert.match(fila, /outrosQueSeguram\(engine, pr\)/);
   assert.match(review, /outrosQueSeguram\(engine, pr\)/);
 });
 

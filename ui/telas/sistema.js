@@ -1,7 +1,7 @@
 /* Farol · UI: a aba Sistema, sub-navegação e busca (SYS_INDEX), o formulário de
    configurações (renderSettings) e o registro da tela. */
 
-import { esc, sysNorm, SYS_INDEX, buscarNoSistema, secoesOcultasDoSistema } from '../pure.js';
+import { esc, sysNorm, SYS_INDEX, buscarNoSistema } from '../pure.js';
 import { estado, ehWin, ehMac, ehElectron } from './estado.js';
 import { $, sysFlash } from './infra.js';
 import { registrarTela } from './registro.js';
@@ -9,13 +9,10 @@ import { loadLog } from './diagnostico.js';
 import { renderAccountsManager } from './sistema-contas.js';
 import { renderClaudeProfiles } from './sistema-perfis.js';
 import { renderJiraSites } from './sistema-jira.js';
-import { renderSync } from './sistema-sync.js';
-import { renderAparelhos, carregarAparelhos } from './sistema-aparelhos.js';
-import { renderGrupos } from './sistema-grupos.js';
 import { renderDoctor } from './sistema-ambiente.js';
 import { renderAbout } from './sistema-sobre.js';
 import { initSetup, renderSetup } from './setup.js';
-import { syncTheme } from './tema.js';
+import { temaDaConfig } from './tema.js';
 import { renderAutomationSettings } from './sistema-automacao.js';
 
 /* ---------- sistema: sub-navegação sidebar ---------- */
@@ -33,16 +30,6 @@ function switchSistemaSection(name) {
 
 // a seção à mostra, para o endereço da página (ui/telas/rota.js)
 function secaoDoSistema() { return SISTEMA_SECTION; }
-
-/* Aparelhos e Grupos somem do menu com a sincronização desligada (só mostravam o aviso
-   de que ela está desligada). Se a pessoa estava numa delas, volta para Sincronização. */
-function ocultarSecoesInertes() {
-  const ocultas = secoesOcultasDoSistema(estado()?.config);
-  document.querySelectorAll('.sys-nav-item').forEach(b => {
-    b.hidden = ocultas.includes(b.dataset.section);
-  });
-  if (ocultas.includes(SISTEMA_SECTION)) switchSistemaSection('sync');
-}
 
 $('#sysNav').addEventListener('click', (e) => {
   const btn = e.target.closest('.sys-nav-item');
@@ -84,8 +71,7 @@ function sysSearchFilter(query) {
     navItems.forEach(b => { b.classList.remove('match'); b.classList.toggle('active', b.dataset.section === SISTEMA_SECTION); });
     return;
   }
-  const ocultas = secoesOcultasDoSistema(estado()?.config);
-  const hits = buscarNoSistema(SYS_INDEX, query, sysSecName).filter(h => !ocultas.includes(h.sec));
+  const hits = buscarNoSistema(SYS_INDEX, query, sysSecName);
   // enquanto busca, nenhuma seção fica aberta: quem ocupa a área é a lista de resultados
   document.querySelectorAll('.sys-section').forEach(s => s.classList.remove('active'));
   const comHit = new Set(hits.map(h => h.sec));
@@ -108,14 +94,13 @@ $('#sysResults').addEventListener('click', (e) => {
 function renderSettings() {
   renderAbout();
   const c = estado().config;
-  syncTheme(c);
+  temaDaConfig(c);
   if (!document.activeElement || !$('#setupSteps').contains(document.activeElement)) renderSetup();
   renderClaudeProfiles();
   renderJiraSites();
-  renderSync();
   $('#setInterval').value = String(c.intervalSeconds);
   $('#setParallelReviews').value = String(c.parallelReviews || 1);
-  // teto total do aparelho: 0 = sem teto, e o `|| 0` do default cai certo nele de propósito
+  // teto total da instalação: 0 = sem teto, e o `|| 0` do default cai certo nele de propósito
   $('#setGlobalParallelReviews').value = String(c.globalParallelReviews || 0);
   renderAutomationSettings(c);
   $('#setReviewFast').checked = c.reviewFast === true;
@@ -153,8 +138,8 @@ function renderPlatformSettings() {
 initSetup();
 registrarTela({
   id: 'sistema',
-  aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); },
-  aoEstado: () => { ocultarSecoesInertes(); if ($('#tab-sistema').classList.contains('active')) { renderDoctor(); renderAccountsManager(); renderAparelhos(); renderGrupos(); } },
+  aoEntrar: () => { switchSistemaSection(); loadLog(); },
+  aoEstado: () => { if ($('#tab-sistema').classList.contains('active')) { renderDoctor(); renderAccountsManager(); } },
 });
 
 export { switchSistemaSection, secaoDoSistema, sysSearchFilter, sysGoTo, renderSettings, renderPlatformSettings };

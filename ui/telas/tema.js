@@ -15,7 +15,7 @@ function applyTheme(theme) {
   $('#btnTheme').setAttribute('aria-pressed', String(theme === 'light'));
 }
 let engineTheme;
-function syncTheme(config) {
+function temaDaConfig(config) {
   if (!['light', 'dark'].includes(config?.theme) || config.theme === engineTheme) return;
   engineTheme = config.theme;
   applyTheme(engineTheme);
@@ -37,4 +37,4 @@ function initTema() {
   };
 }
 
-export { initTema, applyTheme, syncTheme };
+export { initTema, applyTheme, temaDaConfig };

@@ -6,7 +6,7 @@
 //   B4  valor oculto de ambiente vinha DEPOIS do gate de prova e gastava duas sessões;
 //   B5  lacuna dura recuperável não tinha teto;
 //   B6  revisão manual sobre pendência pausada duplicava o card;
-//   B7  a pausada ficava fora de "Precisa de você", do ícone e da projeção entre aparelhos.
+//   B7  a pausada ficava fora de "Precisa de você" e do ícone.
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -46,9 +46,6 @@ const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
 const busca = (await import('../lib/engine/busca-da-prova.js')).default;
 const { shouldAutoApprove, textoDaRecusa } = await import('../lib/engine/approval-policy.js');
 const { AUTOMACAO_DESLIGADA, registrarPausa } = await import('../lib/engine/recuperacao-prova.js');
-const pendencia = (await import('../lib/sync/pendencia.js')).default;
-const fila = (await import('../lib/sync/fila.js')).default;
-const { fatosDaFila } = await import('../lib/engine/sync-fila.js');
 const { separarPendentes, staleCardMeta, reviewBoxHtml } = await import('../ui/pure/review.js');
 
 after(() => {
@@ -251,7 +248,7 @@ test('B4: valor oculto de ambiente não impede armar a busca da prova', () => {
 });
 
 // B7: a pausada é "precisa de você" em toda superfície, e o fato viaja como motivo.
-test('B7: pendência pausada conta no contador, no ícone, no card e na projeção entre aparelhos', async () => {
+test('B7: pendência pausada conta no contador, no ícone e no card', async () => {
   const e = motor(['wait', 'wait'], { automatica: false });
   const d = await revisado(e, INCOMPLETA);
   assert.equal(d.esperaProva.pedeVoce, true);
@@ -266,20 +263,11 @@ test('B7: pendência pausada conta no contador, no ícone, no card e na projeç�
   assert.doesNotMatch(meta.statusHtml, /sem decisão manual|não exige decisão manual/);
   assert.equal(meta.cardClass, 'urgent');
   assert.doesNotMatch(reviewBoxHtml(tela), /sem decisão manual/);
-  // projeção: pendência comum com o impedimento como motivo, sem estado novo
-  const p = pendencia.projetarPendencia(d, { kId: Buffer.alloc(32, 1) });
-  assert.equal(p.espera, '', 'não é espera automática');
-  assert.ok(p.motivos.some((m) => /desativada/.test(m.text)), 'o impedimento viaja como motivo');
-  assert.equal(p.acoes.includes('approve'), false, 'aprovar segue bloqueado sem prova');
-  assert.equal(pendencia.deveNotificar('x', { notificadas: new Set(), vistos: {}, espera: p.espera }), true);
-  const f = fila.estadoDaFila(PR.key, fatosDaFila(e));
-  assert.deepEqual([f.estado, f.motivo], ['decidir', ''], 'vocabulário fechado preservado: motivo vazio, não estado novo');
   // a que NÃO está pausada continua fora, como antes
   revisaSozinha(e, true);
   await esperaProva.reverQuandoAProvaMudar(e);
   assert.equal(d.esperaProva.pedeVoce, false);
   assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 0);
-  assert.equal(pendencia.projetarPendencia(d, { kId: Buffer.alloc(32, 1) }).espera, 'prova');
 });
 
 test('B7: a pausa que chega depois avisa needs-decision uma vez, e a espera do CI no início não é "precisa de você"', async () => {

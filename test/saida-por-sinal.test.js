@@ -17,7 +17,7 @@ const SERVER = new URL('../server.js', import.meta.url).href;
 function script() {
   return `
     const { registrarSaidaOrdenada } = await import(${JSON.stringify(SERVER)});
-    const engine = { syncStop() {}, log() {} };
+    const engine = { log() {} };
     registrarSaidaOrdenada(engine);
     process.stdout.write('pronto\\n');
     setInterval(() => {}, 1000);

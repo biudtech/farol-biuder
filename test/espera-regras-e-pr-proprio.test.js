@@ -1,5 +1,5 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
-// Dois defeitos medidos no celular (v2.72.5, 17/10/2026), corrigidos na v2.72.6.
+// Dois defeitos medidos (v2.72.5, 17/10/2026), corrigidos na v2.72.6.
 //
 // 1. Espera armada por uma versão anterior nunca era reavaliada depois de uma mudança de regra:
 //    biudtech/biud-messaging-waba#52 seguia mostrando lacunas que as regras de hoje não
@@ -162,7 +162,7 @@ for (const [nome, regras] of [['sem carimbo (armada antes da v2.72.6)', undefine
   });
 }
 
-test('espera do celular (biud-messaging-waba#52): sem carimbo e com as tentativas gastas, a rodada nova fecha o caso sem laço', async () => {
+test('espera medida (biud-messaging-waba#52): sem carimbo e com as tentativas gastas, a rodada nova fecha o caso sem laço', async () => {
   const e = motor();
   await revisado(e, PR, INCOMPLETA);
   const marca = pendente(e).esperaProva;

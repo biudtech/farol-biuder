@@ -1,7 +1,7 @@
 /* Farol · UI: o endereço da página reflete a tela, e a tela obedece ao endereço (18/10/2026).
 
    Pedido do dono: "As URLs não refletem exatamente o que vejo em tela". A rota mora no
-   caminho (`/radar/aparelhos/<id>`, `/sistema/contas`, `/consumo?janela=7`) desde 20/10/2026;
+   caminho (`/radar/pra-mim`, `/sistema/contas`, `/consumo?janela=7`) desde 20/10/2026;
    o servidor devolve o index.html para toda navegação fora de /api (lib/http-ui.js), então
    abrir e recarregar um caminho profundo chega aqui. O link antigo, com a rota no hash
    (`/#/sistema/contas`), é convertido na entrada pelo caminho equivalente, substituindo.
@@ -13,8 +13,8 @@
      depois dos handlers do document, inclusive o data-goto, a paleta e os atalhos);
    - quando a caixa de revisão abre ou fecha (avisarNavegacao, telas/registro.js);
    - a cada estado novo do SSE, sempre substituindo (correções que o estado impõe: aba
-     opcional desligada, aparelho que sumiu, conta que saiu).
-   Lugar novo (aba, sub-aba, aparelho, seção, caixa aberta) empilha no histórico; filtro e
+     opcional desligada, conta que saiu).
+   Lugar novo (aba, sub-aba, seção, caixa aberta) empilha no histórico; filtro e
    conta substituem. Voltar e Avançar aplicam a rota da entrada.
 
    Quem chega em `/` (o login do Google, quando não guarda o caminho pedido) vê a tela como
@@ -22,11 +22,9 @@
 
 import { enderecoDaPagina, lerRota, escreverRota, mudancaDeRota, accountBarVisible, validScope, JANELA_PADRAO_DO_CONSUMO } from '../pure.js';
 import { estado, abaAtual, escopo, definirEscopo } from './estado.js';
-import { $ } from './infra.js';
 import { aoNavegar } from './registro.js';
 import { guardarEscopo } from './contas.js';
 import { radarSubAtual, switchRadarSub } from './radar.js';
-import { aparelhoSelecionado, selecionarAparelho } from './radar-aparelhos.js';
 import { secaoDoSistema, sysGoTo } from './sistema.js';
 import { janelaDoConsumo, escolherJanelaDoConsumo } from './consumo.js';
 import { caixaAberta, abrirCaixaRevisao, fecharCaixaRevisao } from './caixa-revisao.js';
@@ -54,7 +52,7 @@ function nContas() { return ((estado() && estado().accounts) || []).length; }
 
 function capturarRota() {
   const aba = abaAtual();
-  const rota = { aba, sub: radarSubAtual(), aparelho: aparelhoSelecionado(), secao: secaoDoSistema(), pr: caixaAberta() };
+  const rota = { aba, sub: radarSubAtual(), secao: secaoDoSistema(), pr: caixaAberta() };
   if (accountBarVisible(nContas(), aba) && escopo() !== 'all') rota.conta = escopo();
   if (aba === 'consumo') rota.janela = janelaDoConsumo();
   return rota;
@@ -92,16 +90,8 @@ function aplicarConta(rota) {
   if (estado()) _rerenderScope();
 }
 
-// Aparelhos só existe com a visão compartilhada ligada (o botão da sub-aba some sem ela)
-function aparelhosEscondido() {
-  const apar = $('#rsub-apar');
-  return !!estado() && !!apar && apar.hidden;
-}
-
 function aplicarRadar(rota) {
-  const sub = rota.sub === 'apar' && aparelhosEscondido() ? 'mim' : rota.sub;
-  if (sub === 'apar' && rota.aparelho) selecionarAparelho(rota.aparelho);
-  if (radarSubAtual() !== sub) switchRadarSub(sub);
+  if (radarSubAtual() !== rota.sub) switchRadarSub(rota.sub);
 }
 
 function aplicarCaixa(pr) {
@@ -161,12 +151,11 @@ function aoInteragir() {
 }
 
 /* Chamada pelo bootstrap depois de cada repintura por estado. Na primeira, reaplica a rota
-   de entrada (nenhuma tela desenha sem estado); em todas, corrige
-   a sub-aba Aparelhos escondida e substitui o endereço pelo que a tela mostra. */
+   de entrada (nenhuma tela desenha sem estado); em todas, substitui o endereço pelo que a
+   tela mostra. */
 function depoisDoEstado() {
   if (!_switchTab) return;
   if (ROTA_DE_ENTRADA) { const rota = ROTA_DE_ENTRADA; ROTA_DE_ENTRADA = null; aplicarRota(rota); }
-  if (radarSubAtual() === 'apar' && aparelhosEscondido()) switchRadarSub('mim');
   sincronizarUrl(true);
 }
 

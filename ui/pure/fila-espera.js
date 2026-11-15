@@ -4,15 +4,7 @@ import { esc } from './comum.js';
 const MOTIVOS = {
   'aguardando-agendador': 'Aguardando a próxima passagem do agendador; motivo de bloqueio ainda não confirmado.',
   'limite-conta': 'Limite de revisões simultâneas desta conta atingido',
-  'limite-global': 'Limite total de revisões simultâneas deste aparelho atingido',
-  'sem-vaga': 'Todas as vagas de execução deste aparelho estão ocupadas',
-  pausado: 'Este aparelho está pausado para novas execuções.',
-  'grupo-nao-verificavel': 'Não foi possível verificar o limite de consumo compartilhado desta conta.',
-  'presenca-vencida': 'A presença deste aparelho na coordenação está desatualizada.',
-  root: 'O provedor não permite iniciar sessões como root.',
-  'provedor-nao-pronto': 'O provedor de IA deste aparelho não está pronto.',
-  'memoria-desconhecida': 'Não foi possível medir a memória disponível para iniciar uma revisão.',
-  'memoria-insuficiente': 'Memória disponível insuficiente para iniciar uma revisão com segurança.',
+  'limite-global': 'Limite total de revisões simultâneas atingido',
 };
 
 export function filaEsperaHtml(espera) {

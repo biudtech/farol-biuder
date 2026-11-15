@@ -1,6 +1,6 @@
 // O Claude Code atrasado deixa o Farol rodando num modelo legado, em silencio (24/09/2026).
 //
-// Caso medido neste aparelho: o CLI estava na 2.1.268 desde 10/09. O Farol pede `--model
+// Caso medido nesta máquina: o CLI estava na 2.1.268 desde 10/09. O Farol pede `--model
 // opus`, e quem decide o que `opus` significa e o CLI: a 2.1.280 (22/09) trouxe o Opus 5.5
 // como "o Opus padrao", mas aqui o apelido seguia apontando para o Opus 5, que a pagina
 // oficial de modelos ja lista como LEGADO. As 1001 sessoes registradas rodaram no Opus 5.
@@ -39,7 +39,7 @@ const DIA = 24 * 3600 * 1000;
 
 /* ---------- a avaliação, pura ---------- */
 
-test('o caso deste aparelho: 2.1.268, atrás desde 11/09, é atrasado', () => {
+test('o caso desta máquina: 2.1.268, atrás desde 11/09, é atrasado', () => {
   const v = versao.avaliarVersao({ instalada: '2.1.268 (Claude Code)', maisRecente: '2.1.282', datas: DATAS, agora: AGORA });
   assert.equal(v.instalada, '2.1.268', 'a versão sai limpa do texto do --version');
   assert.equal(v.atualizada, false);

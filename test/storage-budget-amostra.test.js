@@ -4,13 +4,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
+import fsNode from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const home = fsSync.mkdtempSync(path.join(os.tmpdir(), 'farol-amostra-home-'));
+const home = fsNode.mkdtempSync(path.join(os.tmpdir(), 'farol-amostra-home-'));
 process.env.FAROL_HOME = home;
-after(() => fsSync.rmSync(home, { recursive: true, force: true }));
+after(() => fsNode.rmSync(home, { recursive: true, force: true }));
 const { SourceStore } = await import('../lib/review-source/store.js');
 const { storageInventory } = await import('../lib/review-source/storage-inventory.js');
 const { createRecord, readRecord, ready, recordBytes, updateRecord } = await import('../lib/technical-review/material-record.js');
@@ -31,7 +31,7 @@ function espiar(budget, base) {
   const calls = { scan: [], scanScope: [] };
   for (const name of ['scan', 'scanScope']) {
     const original = budget[name].bind(budget);
-    budget[name] = async () => { calls[name].push(fsSync.existsSync(lock)); return original(); };
+    budget[name] = async () => { calls[name].push(fsNode.existsSync(lock)); return original(); };
   }
   return calls;
 }
@@ -117,7 +117,7 @@ for (const [caso, change] of [
 
 test('reserva grava o inventário completo como base das amostras', async t => {
   const { base, first } = await fixture(t);
-  assert.equal(fsSync.existsSync(path.join(base, 'storage-budget.json')), false);
+  assert.equal(fsNode.existsSync(path.join(base, 'storage-budget.json')), false);
   const id = await first.budget.reserve('git-acquisition', 10000);
   const saved = JSON.parse(await fs.readFile(path.join(base, 'storage-budget.json'), 'utf8'));
   assert.equal(typeof saved.lastInventory.managedBytes, 'number');

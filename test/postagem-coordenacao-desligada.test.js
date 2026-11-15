@@ -1,4 +1,4 @@
-// Coordenação entre aparelhos DESLIGADA: as chamadas ao gh das vias de postagem ficam
+// Postagem sem coordenação nenhuma: as chamadas ao gh das vias de postagem ficam
 // exatamente como eram antes da arbitragem de postagem (CT-POST, "Com a coordenação
 // desligada: comportamento de hoje", e CT-COMPAT). Este arquivo nasce ANTES da mudança,
 // verde contra o código de então, e continua verde depois: é a prova byte a byte.

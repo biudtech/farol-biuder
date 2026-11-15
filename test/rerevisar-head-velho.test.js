@@ -166,7 +166,7 @@ test('o clique em Revisar de novo é escutado pela seção de decisões', () => 
   const listener = appJs.slice(i, i + 900);
   assert.match(listener, /act-review/, 'o .act-review não tem listener global: cada seção escuta o seu');
   // desde a seção de sincronização, TODO clique passa pela boca única `revisarUrls`,
-  // que é quem trata a confirmação da coordenação entre aparelhos. Chamar /api/review
+  // a boca única do clique. Chamar /api/review
   // direto aqui puliria essa confirmação em silêncio, que é o defeito que a boca única
   // existe pra impedir (mesma doutrina do enqueueHeadless no engine).
   assert.match(listener, /revisarUrls\(/, 'e usa a MESMA boca do Revisar da fila');

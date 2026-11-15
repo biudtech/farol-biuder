@@ -1,6 +1,6 @@
 // Comando local de pareamento (A4, spec 7.A4 itens 3 e 4). O código sai SÓ na saída do
 // terminal: nunca em farol.log, spawns.log, arquivo em claro ou linha de comando de outro
-// processo. O comando honra FAROL_HOME, porque roda no aparelho ao lado do engine.
+// processo. O comando honra FAROL_HOME, porque roda na máquina ao lado do engine.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -54,7 +54,7 @@ test('imprime um código que funciona uma vez, só no stdout e só dentro do FAR
 });
 
 test('--revogar-todas derruba sessões e códigos pendentes', () => {
-  const token = emitirSessao('celular');
+  const token = emitirSessao('navegador');
   const codigo = criarCodigo();
   const r = rodar(['--revogar-todas']);
   assert.equal(r.status, 0, r.stderr);

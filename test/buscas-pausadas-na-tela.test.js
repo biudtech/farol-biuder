@@ -1,6 +1,6 @@
 // O bloqueio do GitHub tem que APARECER. Antes disto ele existia só no farol.log, e a
-// tela seguia exibindo o panorama velho como se fosse o de agora: 38 bloqueios medidos no
-// aparelho do Wanderson em poucos dias, nenhum visível para quem olhava o painel.
+// tela seguia exibindo o panorama velho como se fosse o de agora: 38 bloqueios medidos na
+// máquina do Wanderson em poucos dias, nenhum visível para quem olhava o painel.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statusBannerHtml } from '../ui/pure/contas.js';

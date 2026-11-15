@@ -40,7 +40,7 @@ function source(arquivos = files, comLeitor = false, status = 'complete') {
 }
 function setup({ jira = true } = {}) {
   const e = new Engine();
-  e.config = { ...e.config, reReviewResume: false, reviewContextMode: 'off', sync: {},
+  e.config = { ...e.config, reReviewResume: false, reviewContextMode: 'off',
     jiraSites: jira ? [{ id: 'site-fixture', baseUrl: 'https://fixture.example.invalid', owners: ['outra-org'] }] : [],
     accounts: [{ user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }] };
   e.accountForPr = () => 'fixture'; e.tokenFor = () => 'fixture-token'; e.resolveClaudeAuth = () => ({ kind: 'dir' });

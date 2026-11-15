@@ -1,6 +1,6 @@
-// A sessão leva a CONTA que revisa (29/09/2026). Caso medido no celular: a conta silenciada,
+// A sessão leva a CONTA que revisa (29/09/2026). Caso medido: a conta silenciada,
 // usada para revisões escolhidas a dedo, não monitora organização nenhuma. O registro da
-// sessão guardava o PR sem a conta, e quem o lia (a tela, o andamento entre aparelhos)
+// sessão guardava o PR sem a conta, e quem o lia (a tela)
 // deduzia a conta pelo dono do repositório: a revisão sumia da fila da silenciada e
 // aparecia "em execução" na conta dona da org. A lista de espera tinha o mesmo defeito.
 // Runner nativo, ZERO deps. Engine real com FAROL_HOME temporário e gh desligado.
@@ -87,12 +87,6 @@ test('lista de espera: a tela recebe a conta de cada PR, na ordem da fila', asyn
   const snap = e.snapshot();
   assert.deepEqual(snap.headlessWaiting, ['acme/app#7']);
   assert.deepEqual(snap.headlessWaitingContas, { 'acme/app#7': 'avulsa' });
-});
-
-test('snapshot expõe as chaves em distribuição além da fila de execução', () => {
-  const e = engineComSilenciada();
-  e.headlessDistribuindo = new Map([[PR.key, { pr: PR, desde: Date.now() }]]);
-  assert.deepEqual(e.snapshot().headlessDistributing, [PR.key]);
 });
 
 test('snapshot leva a posição e a recusa efetiva do agendador à tela', () => {
