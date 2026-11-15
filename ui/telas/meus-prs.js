@@ -7,7 +7,7 @@ import {
   effectiveHidden, hiddenFootLabel, myPRsEmptyMsg, mergeToastKind, buildFixPrompt,
   canMergeSelfAnalysis, qualityBlockTitle, selfAnalysisBadge, selfAnalysisToggle,
   selfAnalysisStale, listViewState, prKeyFromUrl,
-  festasPendentes, faixaDaAutoanaliseHtml, linhaDaAutoanalise,
+  faixaDaAutoanaliseHtml, linhaDaAutoanalise,
   tituloDoMergeBloqueado, notaDoMergeBloqueadoHtml, avisoDaBaseNoCard,
 } from '../pure.js';
 import { estado, escopo } from './estado.js';
@@ -18,11 +18,10 @@ import {
 import { scopeVisible, acctMark } from './contas.js';
 import { renderRadarNav } from './radar.js';
 import { renderMeusPrsRemoto, contarRemotos } from './listas-remotas.js';
-import { festejar } from './confete.js';
 import { markdownReutilizado as md } from './markdown.js';
 import { cardCheio } from './densidade.js';
 import { andamentoDoPr, iniciando, pedirAutoanalise, cancelarAutoanalise, dispensarFalha, aoMudarAndamento } from './autoanalise-andamento.js';
-import { faixaDe, barraDe, setaDoCard, linhaDoMeuPr, renderResumoDosMeus } from './prontidao.js';
+import { setaDoCard, linhaDoMeuPr } from './linhas-compactas.js';
 
 /* ---------- render: meus PRs (autoanálise) ---------- */
 // PRs cujo merge normal esbarrou na proteção de branch: mostram as saídas
@@ -61,21 +60,6 @@ function contagemMeusPrs() {
   const filtro = pr => scopeVisible(pr) && !ocultos.has(String(pr.key).toLowerCase());
   return todos.filter(filtro).length + contarRemotos(todos, 'myPrs', filtro);
 }
-// Análises que já viraram confete NESTA sessão da tela (PR mais o instante da análise).
-// Some com a página, de propósito: a festa é do momento em que a análise termina, e não um
-// estado que precise sobreviver a alguma coisa.
-const festejadas = new Set();
-
-// A festa da análise impecável (17/09/2026). Quem decide é a pura `festasPendentes`; aqui
-// só marca e anima. A marca entra ANTES da animação: animação que falhe não deixa o mesmo
-// resultado tentando festejar em todo ciclo do SSE.
-function festejarAnaliseImpecavel() {
-  for (const marca of festasPendentes(estado().selfAnalyses, festejadas)) {
-    festejadas.add(marca);
-    festejar();
-  }
-}
-
 aoMudarAndamento(() => renderMyPRs());
 
 function botaoDeAnaliseHtml(url, { emCurso, girando, rotulo }) {
@@ -119,8 +103,6 @@ function renderMyPRs() {
   // o estado de carregamento é do MOTOR, então olha a lista completa: com tudo oculto o
   // ciclo terminou bem e o vazio é escolha da pessoa, não falta de resposta
   const vs = listViewState({ lastCheckAt: estado().lastCheckAt, status: estado().status, length: todos.length });
-  // "1 pronto pra merge · 2 esperando · 1 travado", pela pílula Merge (07/11/2026)
-  renderResumoDosMeus(vs === 'list' ? visiveis : []);
   if (vs !== 'list' || !list.length) {
     $('#myPRs').innerHTML = `<div class="empty" style="border:0">${esc(myPRsEmptyMsg(vs, { escopoTodas: escopo() === 'all', ocultos: ocultos.length }))}</div>`;
     return;
@@ -205,10 +187,10 @@ function renderMyPRs() {
       }
       else mergeBtns = btnMerge(true, `Não dá pra mergear agora (${ms.status || ms.mergeable || 'estado desconhecido'})`);
     }
-    // Compacta (07/11/2026): uma linha com o ponto da conta, repo#N, o trio da prontidão,
-    // o Merge só quando a regra atual permite e a seta que abre o card cheio
-    const barraDoSelo = sel => (sel ? BARRA_DO_SELO[sel.cls] : barraDe(pr.key, { repoBloqueado: repoBlocked }));
-    if (!cardCheio(pr.key)) return linhaDoMeuPr(pr, { ...extrasDaLinha, mark: m, escondido, repoBloqueado: repoBlocked, barra: barraDoSelo(selfAnalysisBadge(a)), merge: mergeLivre && mergeBtns });
+    // Compacta (07/11/2026): uma linha com o ponto da conta, repo#N, o Merge só quando a
+    // regra atual permite e a seta que abre o card cheio
+    const barraDoSelo = sel => (sel ? BARRA_DO_SELO[sel.cls] : '');
+    if (!cardCheio(pr.key)) return linhaDoMeuPr(pr, { ...extrasDaLinha, mark: m, escondido, barra: barraDoSelo(selfAnalysisBadge(a)), merge: mergeLivre && mergeBtns });
     const sel = selfAnalysisBadge(a);
     const badge = sel ? `<span class="verdict ${sel.cls}"${sel.title ? ` title="${esc(sel.title)}"` : ''}>${esc(sel.label)}</span>` : '';
     const vis = selfAnalysisToggle(a);
@@ -250,14 +232,12 @@ function renderMyPRs() {
           ${setaDoCard(pr.key)}
         </div>
       </div>
-      ${faixaDe(pr.key, { repoBloqueado: repoBlocked })}
       ${faixaDaAutoanaliseHtml(andamento, { key: pr.key, url: pr.url })}
       ${daBase.html}
       ${repoBlocked ? notaDoMergeBloqueadoHtml() : ''}
       ${analysisPanel}
     </div>`;
   }).join('');
-  festejarAnaliseImpecavel();
 }
 // rodapé discreto da seção: "3 PRs ocultos · mostrar". A linha inteira é o controle
 // (um botão só), pra ser alcançável por teclado e leitor de tela sem inventar widget.

@@ -1,7 +1,7 @@
 // A autoanálise em andamento, por PR. O estado vivo vem do snapshot; aqui só o que a tela sabe
 // sozinha: o clique que ainda não virou sessão, o cancelamento pedido e a sessão que sumiu sem
 // deixar resultado. O desenho é ui/pure/autoanalise-faixa.js.
-import { andamentoDaAutoanalise, faixaDaAutoanaliseHtml, linhaDaAutoanalise, selfSessionKey, sessaoSumiuSemResultado, tempoDecorrido, tomDaProntidao } from '../pure.js';
+import { andamentoDaAutoanalise, faixaDaAutoanaliseHtml, linhaDaAutoanalise, selfSessionKey, sessaoSumiuSemResultado, tempoDecorrido, classeDoTom } from '../pure.js';
 import { estado } from './estado.js';
 import { api, toast } from './infra.js';
 
@@ -118,7 +118,7 @@ function pintarFaixa(faixa, m, key) {
 function pintarLinha(linha, m, key) {
   const estadoEl = linha.querySelector('.pl-estado');
   if (estadoEl) {
-    estadoEl.className = `pl-estado ${tomDaProntidao(m.tom)}`;
+    estadoEl.className = `pl-estado ${classeDoTom(m.tom)}`;
     estadoEl.lastChild.textContent = m.frase;
   }
   const molde = document.createElement('template');

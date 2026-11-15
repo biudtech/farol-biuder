@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 const io = (await import('../lib/io.js')).default;
 const { runProvedor, parseEnvelope } = await import('../lib/engine/session.js');
 const { ENV_HEADLESS } = await import('../lib/constants.js');
-const { IS_WIN, WORKSPACE } = await import('../lib/paths.js');
+const { WORKSPACE } = await import('../lib/paths.js');
 
 const BIN = path.join(BASE, 'bin');
 const REGISTRO = path.join(BASE, 'registro.jsonl');
@@ -41,11 +41,7 @@ before(() => {
   fs.mkdirSync(BIN, { recursive: true });
   fs.mkdirSync(WORKSPACE, { recursive: true });
   fs.writeFileSync(path.join(BIN, 'claude-falso.cjs'), FALSO);
-  if (IS_WIN) {
-    fs.writeFileSync(path.join(BIN, 'claude.cmd'), `@"${process.execPath}" "%~dp0claude-falso.cjs" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(BIN, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/claude-falso.cjs" "$@"\n`, { mode: 0o755 });
-  }
+  fs.writeFileSync(path.join(BIN, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/claude-falso.cjs" "$@"\n`, { mode: 0o755 });
   process.env.PATH = BIN + path.delimiter + process.env.PATH;
   process.env.FAROL_TESTE_REGISTRO = REGISTRO;
 });
@@ -68,9 +64,8 @@ function engineFalso() {
   };
 }
 
-// mesmo motivo do diagnostico-ia-execucao: no macOS o shell de login reordena o PATH
+// mesmo motivo do diagnostico-ia-execucao: o shell de login pode reordenar o PATH
 async function falsoResolve(t) {
-  if (IS_WIN) return true;
   const r = await io.runShell('command -v claude', { env: { ...process.env } });
   if (r.stdout.trim() === path.join(BIN, 'claude')) return true;
   t.skip(`o shell de login resolve outro claude (${r.stdout.trim()}), o falso não seria o executado`);

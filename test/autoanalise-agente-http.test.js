@@ -78,11 +78,9 @@ async function todasRecusam(cabecalhos, rotulo) {
 
 test('no desktop, sem credencial ou com credencial de outra classe, as três rotas respondem 401', async () => {
   const comum = emitirSessao('celular');
-  const casca = emitirSessao('casca', Date.now(), { classe: 'casca' });
   await todasRecusam({}, 'sem credencial');
   await todasRecusam(agente(comum), 'sessão comum no cabeçalho do agente');
   await todasRecusam({ Authorization: `Bearer ${comum}` }, 'Bearer geral');
-  await todasRecusam(agente(casca), 'sessão da casca');
   await todasRecusam({ 'x-farol-review-cap': 'x'.repeat(43), 'x-farol-session': 'y'.repeat(43) }, 'credenciais das sessões de IA');
 });
 

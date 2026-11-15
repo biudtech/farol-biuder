@@ -327,23 +327,6 @@ test('diffVs com lista vazia dos dois lados', () => {
   assert.deepEqual(P.diffVs(null, null), { added: [], removed: [] });
 });
 
-/* ---------- agrupamento e ordenação (aba Entregas) ---------- */
-
-test('groupBy preserva a ordem de primeira aparição', () => {
-  const g = P.groupBy([{ r: 'b' }, { r: 'a' }, { r: 'b' }], x => x.r);
-  assert.deepEqual([...g.keys()], ['b', 'a']);
-  assert.equal(g.get('b').length, 2);
-});
-
-test('lastMerge devolve a data mais recente sem mexer na lista', () => {
-  const lista = [{ mergedAt: '2026-07-01' }, { mergedAt: '2026-08-01' }, { mergedAt: '2026-07-15' }];
-  const copia = JSON.parse(JSON.stringify(lista));
-  assert.equal(P.lastMerge(lista), '2026-08-01');
-  assert.deepEqual(lista, copia, 'não pode reordenar a lista do chamador');
-  assert.equal(P.lastMerge([]), '');
-  assert.equal(P.lastMerge([{}]), '');
-});
-
 /* ---------- menções navegáveis (regra: citou X, clicou, chegou em X) ---------- */
 
 test('personMention: foto + @login, link pro perfil no GitHub', () => {
@@ -442,9 +425,9 @@ test('operationChecks: sem conta nenhuma devolve vazio (o banner de boas-vindas 
 
 test('parseGoto: separa tipo, alvo e seletor (o seletor pode conter ":")', () => {
   assert.deepEqual(P.parseGoto('aba:radar'), { tipo: 'aba', alvo: 'radar', seletor: '' });
-  assert.deepEqual(P.parseGoto('aba:destaques:#kudosPanel'), { tipo: 'aba', alvo: 'destaques', seletor: '#kudosPanel' });
+  assert.deepEqual(P.parseGoto('aba:time:#team'), { tipo: 'aba', alvo: 'time', seletor: '#team' });
   assert.deepEqual(P.parseGoto('sys:diag:#sys-row-log'), { tipo: 'sys', alvo: 'diag', seletor: '#sys-row-log' });
-  assert.deepEqual(P.parseGoto('deliv:repo:acme/app'), { tipo: 'deliv', alvo: 'repo', seletor: 'acme/app' });
+  assert.deepEqual(P.parseGoto('sys:diag:acme/app'), { tipo: 'sys', alvo: 'diag', seletor: 'acme/app' });
   // seletor CSS com ':' não pode ser picotado (o caso que motivou o resto.join(':'))
   assert.deepEqual(P.parseGoto('sys:accounts:.acct-label:nth-child(2)'),
     { tipo: 'sys', alvo: 'accounts', seletor: '.acct-label:nth-child(2)' });
@@ -452,28 +435,15 @@ test('parseGoto: separa tipo, alvo e seletor (o seletor pode conter ":")', () =>
   assert.deepEqual(P.parseGoto(null), { tipo: '', alvo: '', seletor: '' });
 });
 
-test('toolRefGoto: ref de ferramenta aponta pro painel dela dentro do próprio app', () => {
-  // o ref das sessões de ferramenta é o rótulo montado no lib/engine/tools.js:
-  // `Kudos` / `Kudos · <escopo>` e 'Diagnóstico do Farol'
-  assert.equal(P.toolRefGoto('Kudos'), 'aba:destaques:#kudosPanel');
-  assert.equal(P.toolRefGoto('Kudos · BIUD trabalho'), 'aba:destaques:#kudosPanel');
-  assert.equal(P.toolRefGoto('Diagnóstico do Farol'), 'sys:diag:#healthPanel');
-  // o que não é ferramenta não pode ganhar destino inventado
-  for (const cru of ['biudtech/farol#88', '(sem referência)', '', null, undefined, 'Kudoso', 'Diagnóstico']) {
-    assert.equal(P.toolRefGoto(cru), '', `"${cru}" não é ref de ferramenta`);
-  }
-});
-
-test('sessionRefMention: PR vai pro GitHub, ferramenta vai pro painel, resto fica texto', () => {
+test('sessionRefMention: PR vai pro GitHub, o resto (inclusive rótulo de sessão de ferramenta antiga) fica texto', () => {
   const pr = P.sessionRefMention('biudtech/farol#88', 'usage-sessions-ref');
   assert.match(pr, /href="https:\/\/github\.com\/biudtech\/farol\/pull\/88"/);
 
   const tool = P.sessionRefMention('Kudos · BIUD trabalho', 'usage-sessions-ref');
-  assert.match(tool, /data-goto="aba:destaques:#kudosPanel"/);
-  assert.match(tool, /class="usage-sessions-ref is-goto"/, 'mantém a classe de layout de quem chamou');
-  assert.match(tool, /role="button"/, 'navegável pelo teclado, igual aos outros data-goto');
-  assert.match(tool, /tabindex="0"/);
-  assert.doesNotMatch(tool, /<a /, 'destino é interno, não vira link externo');
+  assert.doesNotMatch(tool, /data-goto/, 'a ferramenta saiu: sem painel de destino');
+  assert.match(tool, /class="usage-sessions-ref"/, 'mantém a classe de layout de quem chamou');
+  assert.match(tool, /Kudos · BIUD trabalho/, 'o rótulo continua na tela');
+  assert.doesNotMatch(tool, /<a /);
 
   const nada = P.sessionRefMention('(sem referência)', 'usage-sessions-ref');
   assert.doesNotMatch(nada, /data-goto/, 'sem destino não ganha affordance de clique');
@@ -488,7 +458,7 @@ test('sessionRefCell: linha de PR ganha o atalho pra caixa de revisão, sem perd
   assert.match(cel, /<button/, 'destino interno é botão, não link');
   // ferramenta e sessão sem ref não têm revisão nenhuma pra abrir
   const tool = P.sessionRefCell('Kudos · BIUD trabalho');
-  assert.match(tool, /data-goto="aba:destaques:#kudosPanel"/);
+  assert.doesNotMatch(tool, /data-goto/);
   assert.doesNotMatch(tool, /data-review-key/, 'ferramenta não tem caixa de revisão');
   assert.doesNotMatch(P.sessionRefCell('(sem referência)'), /data-review-key/);
   assert.doesNotMatch(P.sessionRefCell(''), /data-review-key/);
@@ -531,8 +501,8 @@ test('reviewBoxHtml: decisão inexistente vira aviso honesto, não caixa em bran
   assert.doesNotMatch(html, /undefined/);
 });
 
-test('sessionRefMention: rótulo de ferramenta com aspas não escapa do atributo', () => {
-  // o escopo do kudos vem do nome da conta, que é config do usuário
+test('sessionRefMention: rótulo com aspas não escapa do atributo', () => {
+  // o rótulo gravado numa sessão antiga leva o nome da conta, que é config do usuário
   const html = P.sessionRefMention('Kudos · a"><b>x</b>', 'usage-sessions-ref');
   assert.doesNotMatch(html, /<b>/, 'markup do rótulo não pode virar markup na tela');
 });
@@ -567,259 +537,6 @@ test('INVARIANTE: toda menção de autor da UI passa pelo personMention (foto + 
     'menção de pessoa escrita à mão: use personMention(login) pra a foto e o link virem de graça');
 });
 
-test('deliveriesByRepo escapa o conteúdo e ordena pelo merge mais RECENTE (decisão de 10/08/2026)', () => {
-  const html = P.deliveriesByRepo([
-    { repo: 'acme/<b>x</b>', key: 'acme/x#1', url: 'https://u/1', title: 'um', author: 'a', mergedAt: '2026-08-01' },
-    { repo: 'acme/y', key: 'acme/y#2', url: 'https://u/2', title: 'dois', author: 'b', mergedAt: '2026-07-01' },
-    { repo: 'acme/y', key: 'acme/y#3', url: 'https://u/3', title: 'tres', author: 'c', mergedAt: '2026-07-02' },
-  ]);
-  assert.doesNotMatch(html, /acme\/<b>/, 'nome de repo não vira tag');
-  assert.match(html, /acme\/&lt;b&gt;x&lt;\/b&gt;/);
-  assert.ok(html.indexOf('acme/&lt;b&gt;') < html.indexOf('acme/y'),
-    'o repo com merge mais recente vem antes, mesmo entregando menos (o volume é papel dos cartões)');
-  assert.match(html, /2 autores/, 'conta autores distintos');
-});
-
-test('deliveriesByRepo desempata recência igual por volume', () => {
-  const html = P.deliveriesByRepo([
-    { repo: 'acme/x', key: 'acme/x#1', url: 'u', title: 't1', author: 'a', mergedAt: '2026-08-01T10:00:00Z' },
-    { repo: 'acme/y', key: 'acme/y#2', url: 'u', title: 't2', author: 'b', mergedAt: '2026-08-01T10:00:00Z' },
-    { repo: 'acme/y', key: 'acme/y#3', url: 'u', title: 't3', author: 'b', mergedAt: '2026-07-20T10:00:00Z' },
-  ]);
-  assert.ok(html.indexOf('acme/y') < html.indexOf('acme/x'), 'no empate de último merge, quem entregou mais vem antes');
-});
-
-test('deliveriesByRepo mostra progresso e badge de contagem por grupo', () => {
-  const html = P.deliveriesByRepo([
-    { repo: 'acme/x', key: 'acme/x#1', url: 'u', title: 't1', author: 'a', mergedAt: '2026-08-03' },
-    { repo: 'acme/x', key: 'acme/x#2', url: 'u', title: 't2', author: 'a', mergedAt: '2026-08-02' },
-    { repo: 'acme/y', key: 'acme/y#3', url: 'u', title: 't3', author: 'b', mergedAt: '2026-08-01' },
-  ]);
-  assert.match(html, /deliv-progress/);
-  assert.match(html, /<span class="count">2<\/span>/);
-});
-
-test('deliveriesByRepo pagina com "mostrar mais" acima do teto e some quando expandido', () => {
-  const items = Array.from({ length: 6 }, (_, i) => (
-    { repo: 'acme/x', key: `acme/x#${i}`, url: 'u', title: `t${i}`, author: 'a', mergedAt: `2026-08-0${i + 1}` }
-  ));
-  const fechado = P.deliveriesByRepo(items, { teto: 4 });
-  assert.match(fechado, /mostrar mais 2/);
-  const aberto = P.deliveriesByRepo(items, { teto: 4, expandedKeys: new Set(['repo:acme/x']) });
-  assert.match(aberto, /mostrar menos/);
-  assert.doesNotMatch(aberto, /mostrar mais/);
-});
-
-test('deliveriesByAuthor concorda no singular e no plural', () => {
-  const um = P.deliveriesByAuthor([{ repo: 'a/b', key: 'a/b#1', url: 'u', title: 't', author: 'alice', mergedAt: '2026-08-01' }]);
-  assert.match(um, /1 repo ·/);
-  const dois = P.deliveriesByAuthor([
-    { repo: 'a/b', key: 'a/b#1', url: 'u', title: 't', author: 'alice', mergedAt: '2026-08-01' },
-    { repo: 'a/c', key: 'a/c#2', url: 'u', title: 't', author: 'alice', mergedAt: '2026-08-01' },
-  ]);
-  assert.match(dois, /2 repos ·/);
-});
-
-test('deliveriesByAuthor nomeia quem não tem autor', () => {
-  assert.match(P.deliveriesByAuthor([{ repo: 'a/b', key: 'a/b#1', url: 'u', title: 't', mergedAt: '2026-08-01' }]),
-    /\(desconhecido\)/);
-});
-
-test('deliveriesByAuthor ordena por VOLUME, mesmo quando o menor grupo mergeou mais recentemente', () => {
-  const html = P.deliveriesByAuthor([
-    { repo: 'a/b', key: 'a/b#1', url: 'u', title: 't1', author: 'alice', mergedAt: '2026-08-01' },
-    { repo: 'a/b', key: 'a/b#2', url: 'u', title: 't2', author: 'alice', mergedAt: '2026-08-02' },
-    { repo: 'a/c', key: 'a/c#3', url: 'u', title: 't3', author: 'bob', mergedAt: '2026-08-03' },
-  ]);
-  assert.ok(html.indexOf('@alice') < html.indexOf('@bob'),
-    'alice tem 2 entregas e vem antes de bob, mesmo que bob tenha o merge mais recente');
-  assert.doesNotMatch(html, /deliv-rank/,
-    'a contagem do card informa o volume sem reintroduzir um ranking numérico decorativo');
-  // a legenda do sub-grupo é uma MENÇÃO de repo: leva ao repo no GitHub
-  assert.match(html, /deliv-caption"><a class="repo-mention" href="https:\/\/github\.com\/a\/b"/);
-});
-
-test('deliveriesByAuthor desempata volume por recência e empate total por login', () => {
-  const html = P.deliveriesByAuthor([
-    { repo: 'a/b', key: 'a/b#1', url: 'u', title: 't1', author: 'alice', mergedAt: '2026-08-02T10:00:00Z' },
-    { repo: 'a/c', key: 'a/c#2', url: 'u', title: 't2', author: 'alice', mergedAt: '2026-08-01T10:00:00Z' },
-    { repo: 'a/b', key: 'a/b#3', url: 'u', title: 't3', author: 'bob', mergedAt: '2026-08-03T10:00:00Z' },
-    { repo: 'a/c', key: 'a/c#4', url: 'u', title: 't4', author: 'bob', mergedAt: '2026-08-01T10:00:00Z' },
-    // carol/dave têm o mesmo volume e o mesmo último merge; a entrada vem invertida
-    // para provar que a última trava é o login, não a ordem acidental do payload.
-    { repo: 'a/d', key: 'a/d#5', url: 'u', title: 't5', author: 'dave', mergedAt: '2026-07-01T10:00:00Z' },
-    { repo: 'a/e', key: 'a/e#6', url: 'u', title: 't6', author: 'carol', mergedAt: '2026-07-01T10:00:00Z' },
-  ]);
-  assert.ok(html.indexOf('@bob') < html.indexOf('@alice'),
-    'com 2 entregas cada, bob vence pelo merge mais recente');
-  assert.ok(html.indexOf('@alice') < html.indexOf('@carol'),
-    'volume 2 continua à frente de volume 1');
-  assert.ok(html.indexOf('@carol') < html.indexOf('@dave'),
-    'empate completo usa login crescente e fica determinístico');
-});
-
-test('grupos de Pessoas nascem recolhidos, preservam abertos explícitos e Repositórios seguem abertos', () => {
-  const items = [
-    { repo: 'a/b', key: 'a/b#1', url: 'u', title: 't1', author: 'alice', mergedAt: '2026-08-02' },
-    { repo: 'a/c', key: 'a/c#2', url: 'u', title: 't2', author: 'bob', mergedAt: '2026-08-01' },
-  ];
-  const fechado = P.deliveriesByAuthor(items);
-  assert.match(fechado, /<details data-deliv-group="author:alice">/,
-    'a chave fica no details mesmo em grupo pequeno, sem depender de mostrar mais');
-  assert.doesNotMatch(fechado, /<details data-deliv-group="author:[^"]+" open>/,
-    'nenhuma pessoa nasce aberta');
-
-  const aberto = P.deliveriesByAuthor(items, { openKeys: new Set(['author:alice']) });
-  assert.match(aberto, /<details data-deliv-group="author:alice" open>/,
-    'uma abertura explícita sobrevive ao próximo render');
-  assert.match(aberto, /<details data-deliv-group="author:bob">/,
-    'abrir alice não abre os demais grupos');
-
-  const repos = P.deliveriesByRepo(items);
-  assert.match(repos, /<details data-deliv-group="repo:a\/b" open>/,
-    'o pedido é só para Pessoas; Repositórios preserva o default atual');
-});
-
-test('Pessoas combina openKeys com expandedKeys no segundo render', () => {
-  const items = Array.from({ length: 6 }, (_, i) => ({
-    repo: 'a/b', key: `a/b#${i + 1}`, url: 'u', title: `t${i + 1}`,
-    author: 'alice', mergedAt: `2026-08-0${i + 1}`,
-  }));
-  const html = P.deliveriesByAuthor(items, {
-    teto: 4,
-    expandedKeys: new Set(['author:alice']),
-    openKeys: new Set(['author:alice']),
-  });
-  assert.match(html, /<details data-deliv-group="author:alice" open>/,
-    'o estado do disclosure é independente da paginação');
-  assert.match(html, /mostrar menos/);
-});
-
-test('delivActivityChart: dia sem merge usa a classe "zero", NUNCA a "empty" global (que inflava a barra pra 54px)', () => {
-  const agora = Date.parse('2026-08-10T12:00:00-03:00');
-  const html = P.delivActivityChart([
-    { mergedAt: '2026-08-10T13:00:00Z' }, // hoje tem 1 merge
-  ], 7, agora);
-  assert.match(html, /deliv-bar-fill zero" style="height:0%"/, 'dia zerado leva a classe zero com altura 0');
-  assert.doesNotMatch(html, /deliv-bar-fill empty/,
-    '.empty é o estado vazio GLOBAL do app (padding 26px + borda tracejada): na barra, virava a 2ª mais alta do gráfico');
-  assert.match(html, /0 PRs/, 'tooltip do dia zerado diz 0');
-});
-
-test('delivCappedMsg fala o limite REAL vindo do server, nunca o 100 antigo', () => {
-  // DELIVERIES_LIMIT = 5000 (lib/paths.js); a mensagem afirmava 100 quando o teto era 1000
-  assert.match(P.delivCappedMsg(5000), /mais de 5000 entregas/);
-  // "atividade mais recente", não "mais recentes": o corte do gh e por --sort
-  // updated (aproximacao), e a mensagem nao pode prometer corte por data de merge
-  assert.match(P.delivCappedMsg(5000), /5000 de atividade mais recente/);
-  assert.match(P.delivCappedMsg(5000), /podem subestimar/);
-  assert.doesNotMatch(P.delivCappedMsg(5000), /\b100\b/);
-  assert.match(P.delivCappedMsg(undefined), /5000/, 'payload sem limit cai no valor real atual');
-});
-
-/* ---------- Entregas v2: busca, estatísticas, atividade, paginação ---------- */
-
-test('delivFilterItems filtra por título, autor ou repo, sem diferenciar caixa', () => {
-  const items = [
-    { repo: 'acme/api', title: 'corrige timeout', author: 'alice', mergedAt: '2026-08-01' },
-    { repo: 'acme/web', title: 'feature nova', author: 'bob', mergedAt: '2026-08-02' },
-  ];
-  assert.equal(P.delivFilterItems(items, '').length, 2, 'busca vazia devolve tudo');
-  assert.deepEqual(P.delivFilterItems(items, 'TIMEOUT').map(x => x.author), ['alice']);
-  assert.deepEqual(P.delivFilterItems(items, 'bob').map(x => x.repo), ['acme/web']);
-  assert.deepEqual(P.delivFilterItems(items, 'acme/web').map(x => x.author), ['bob']);
-  assert.equal(P.delivFilterItems(items, 'nada-bate').length, 0);
-});
-
-test('delivDayBuckets soma por dia LOCAL, mais antigo primeiro, hoje por último', () => {
-  const agora = new Date(2026, 7, 10, 15, 0, 0).getTime(); // seg-feira 10/08/2026 15h
-  const items = [
-    { mergedAt: new Date(2026, 7, 10, 8, 0).toISOString() },
-    { mergedAt: new Date(2026, 7, 10, 9, 0).toISOString() },
-    { mergedAt: new Date(2026, 7, 8, 23, 59).toISOString() },
-  ];
-  const buckets = P.delivDayBuckets(items, 7, agora);
-  assert.equal(buckets.length, 7);
-  assert.equal(buckets[buckets.length - 1].dayKey, '2026-08-10');
-  assert.equal(buckets[buckets.length - 1].n, 2, 'os dois PRs de hoje caem no último bucket');
-  assert.equal(buckets[buckets.length - 3].dayKey, '2026-08-08');
-  assert.equal(buckets[buckets.length - 3].n, 1);
-});
-
-test('delivStats: com período > 0 traz "hoje" e "média por dia" com pico', () => {
-  const agora = new Date(2026, 7, 10, 15, 0, 0).getTime();
-  const items = [
-    { repo: 'acme/api', author: 'alice', mergedAt: new Date(2026, 7, 10, 8, 0).toISOString() },
-    { repo: 'acme/api', author: 'alice', mergedAt: new Date(2026, 7, 10, 9, 0).toISOString() },
-    { repo: 'acme/web', author: 'bob', mergedAt: new Date(2026, 7, 9, 9, 0).toISOString() },
-  ];
-  const stats = P.delivStats(items, 7, agora);
-  assert.equal(stats.length, 4);
-  // `goto` é o atalho pra própria lista: "+N hoje" leva ao período Hoje
-  assert.deepEqual(stats[0], { rotulo: 'PRs mergeados', valor: '3', sub: '+2 hoje', goto: 'deliv:days:0' });
-  assert.equal(stats[1].valor, '2', 'duas pessoas entregando');
-  assert.equal(stats[1].goto, 'deliv:author:alice', 'o sub "@alice na frente" leva ao grupo dela');
-  assert.equal(stats[2].valor, '2', 'dois repos ativos');
-  assert.equal(stats[2].goto, 'deliv:repo:acme/api', 'o sub "repo na frente" leva ao grupo do repo');
-  assert.equal(stats[3].rotulo, 'Média por dia');
-  assert.match(stats[3].sub, /pico de 2/);
-});
-
-test('delivStats usa o mesmo desempate volume, recência e login da lista de Pessoas', () => {
-  const agora = new Date(2026, 7, 10, 15, 0, 0).getTime();
-  const base = [
-    { repo: 'a/x', author: 'alice', mergedAt: '2026-08-08T10:00:00Z' },
-    { repo: 'a/y', author: 'bob', mergedAt: '2026-08-09T10:00:00Z' },
-  ];
-  assert.equal(P.delivStats(base, 7, agora)[1].goto, 'deliv:author:bob',
-    'mesmo volume: o merge mais recente fica na frente');
-  const empateTotal = [
-    { repo: 'a/y', author: 'dave', mergedAt: '2026-08-09T10:00:00Z' },
-    { repo: 'a/x', author: 'carol', mergedAt: '2026-08-09T10:00:00Z' },
-  ];
-  assert.equal(P.delivStats(empateTotal, 7, agora)[1].goto, 'deliv:author:carol',
-    'empate total: login crescente mantém KPI e lista determinísticos');
-});
-
-test('delivStats: com período "Hoje" (0) traz "desde 00:00" e "último merge"', () => {
-  const agora = new Date(2026, 7, 10, 15, 0, 0).getTime();
-  const items = [{ repo: 'acme/api', author: 'alice', mergedAt: new Date(2026, 7, 10, 8, 0).toISOString() }];
-  const stats = P.delivStats(items, 0, agora);
-  assert.equal(stats[0].sub, 'desde 00:00');
-  assert.equal(stats[3].rotulo, 'Último merge');
-  assert.match(stats[3].sub, /@alice/);
-});
-
-test('delivStats devolve lista vazia quando não há entregas no período', () => {
-  assert.deepEqual(P.delivStats([], 7, Date.now()), []);
-});
-
-test('delivSliceRows corta no teto, tira legenda órfã e ignora o teto quando expandido', () => {
-  const rows = [
-    { ehPr: false, ehCap: true, cap: 'repo-a' },
-    { ehPr: true, id: 1 }, { ehPr: true, id: 2 },
-    { ehPr: false, ehCap: true, cap: 'repo-b' },
-    { ehPr: true, id: 3 },
-  ];
-  const fechado = P.delivSliceRows(rows, 2, false);
-  assert.equal(fechado.resto, 1);
-  assert.deepEqual(fechado.visiveis.map(r => r.id || r.cap), ['repo-a', 1, 2], 'a legenda órfã de repo-b sai da fatia');
-  const aberto = P.delivSliceRows(rows, 2, true);
-  assert.equal(aberto.resto, 0);
-  assert.equal(aberto.visiveis.length, 5);
-});
-
-test('delivEmptyState varia o texto com e sem busca, e as ações com o contexto', () => {
-  const semBusca = P.delivEmptyState({ query: '', canExpand: true, canClear: false });
-  assert.match(semBusca, /Nenhum PR mergeado neste período/);
-  assert.match(semBusca, /Ver 30 dias/);
-  assert.doesNotMatch(semBusca, /Limpar busca/);
-  const comBusca = P.delivEmptyState({ query: 'xyz', canExpand: false, canClear: true });
-  assert.match(comBusca, /Nada com “xyz”/);
-  assert.doesNotMatch(comBusca, /Ver 30 dias/);
-  assert.match(comBusca, /Limpar busca/);
-});
-
 /* ---------- helpers menores ---------- */
 
 test('ownerFromUrl extrai a org da URL de PR', () => {
@@ -827,18 +544,6 @@ test('ownerFromUrl extrai a org da URL de PR', () => {
   assert.equal(P.ownerFromUrl(''), '');
   assert.equal(P.ownerFromUrl(null), '');
   assert.equal(P.ownerFromUrl('não é url'), '');
-});
-
-test('repoShort tira a org e mantém o nome', () => {
-  assert.equal(P.repoShort('acme/app'), 'app');
-  assert.equal(P.repoShort('sem-barra'), 'sem-barra');
-});
-
-test('stripFence remove a cerca de código do relatório', () => {
-  assert.equal(P.stripFence('```json\n{"a":1}\n```'), '{"a":1}');
-  assert.equal(P.stripFence('```\ntexto\n```'), 'texto');
-  assert.equal(P.stripFence('sem cerca'), 'sem cerca');
-  assert.equal(P.stripFence(null), '');
 });
 
 test('hexToRgba converte e cai num laranja quando não dá', () => {
@@ -1935,17 +1640,6 @@ test('Consumo: resumo vazio vira mensagem de vazio, não markup quebrado', () =>
   assert.match(P.usageSessionsHtml({}), /Nenhuma sessão/);
 });
 
-test('Consumo: perfil Codex explica tokens, custo zero e plano ChatGPT sem fingir orçamento em US$', () => {
-  const html = P.usageBudgetHtml({ budgets: [{
-    id: 'cx1', label: 'Codex ChatGPT', kind: 'codex', blocked: false,
-    today: 0, sinceCutoff: 0, budgetDaily: 10, budgetTotal: null,
-  }] });
-  assert.match(html, /Codex · plano ChatGPT/);
-  assert.match(html, /tokens das sessões autônomas/);
-  assert.match(html, /US\$ 0,00/);
-  assert.doesNotMatch(html, /usage-meter/, 'teto em dólar não se aplica ao plano ChatGPT');
-});
-
 test('usageMatrixHtml: a legenda acompanha a métrica escolhida', () => {
   // guarda-corpo antes das asserções: se o fixture parar de produzir matriz (nome
   // de campo errado, dia fora da janela), a função cai no early return, a legenda
@@ -2038,21 +1732,6 @@ test('nenhum seletor de atributo escapa só a aspa (a barra tem que vir junto)',
 const MARK_T = { style: '--ac:#f00;', varStyle: '--ac:#f00;', dim: '', chip: '<span class="acct-chip">acme</span>', dot: '<span class="acct-dot"></span>', acct: { label: 'acme' } };
 const PR_T = (o = {}) => ({ key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7',
   title: 'Corrige o gate', author: 'alice', updatedAt: '2026-08-17T10:00:00Z', ...o });
-const CTX_PANO = { mark: MARK_T, actions: {}, staleStates: {}, todasContas: true, running: new Set(), waiting: [] };
-
-test('Panorama: o autor fica FORA da caixa que trunca o título', () => {
-  // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado em 11/08:
-  // com o @autor dentro do .pw-title (overflow hidden + ellipsis), título comprido
-  // empurrava foto e login pra fora da tela, sem aviso. Era regex no ui-widgets;
-  // agora renderiza.
-  const html = P.panoramaRowHtml(PR_T({ title: 'T'.repeat(300) }), CTX_PANO);
-  const linha = html.match(/<div class="pw-title">([\s\S]*?)<\/div>/);
-  assert.ok(linha, 'a linha do título existe');
-  assert.match(linha[1], /<span class="pw-title-txt"/, 'o texto do título tem elemento próprio, que é quem trunca');
-  assert.match(linha[1], /person-mention/, 'o autor está na LINHA, irmão do texto');
-  const txt = html.match(/<span class="pw-title-txt"[^>]*>([\s\S]*?)<\/span>/);
-  assert.doesNotMatch(txt[1], /person-mention/, 'e nunca DENTRO da caixa que trunca');
-});
 
 test('cards do Radar: título e autor saem escapados', () => {
   // A asserção NÃO procura por uma tag específica: o CodeQL reprovou a primeira
@@ -2063,7 +1742,7 @@ test('cards do Radar: título e autor saem escapados', () => {
   const PAYLOADS = ['<img src=x onerror=1>', '<SCRIPT>x</SCRIPT>', '<ScRiPt>x</ScRiPt>', '"><b>', "'><b>"];
   for (const carga of PAYLOADS) {
     const mau = PR_T({ title: carga, author: carga });
-    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T }), P.panoramaRowHtml(mau, CTX_PANO)]) {
+    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T })]) {
       assert.ok(!html.includes(carga), `a carga "${carga}" não pode aparecer crua`);
       assert.match(html, /&lt;|&quot;|&#39;/, 'e o que entrou saiu como entidade');
     }
@@ -2074,7 +1753,7 @@ test('cards do Radar: o escape não depende da caixa da tag', () => {
   // trava explícita do que o CodeQL apontou
   for (const tag of ['<script>', '<SCRIPT>', '<ScRiPt>']) {
     const mau = PR_T({ title: tag });
-    const html = P.panoramaRowHtml(mau, CTX_PANO);
+    const html = P.queueCardHtml(mau, { people: {}, mark: MARK_T });
     assert.doesNotMatch(html, new RegExp(tag.replace(/[<>]/g, m => '\\' + m), 'i'),
       `${tag} escapado em qualquer caixa`);
   }
@@ -2092,82 +1771,44 @@ test('queueCardHtml: sem autor não renderiza o seletor de papel', () => {
   assert.doesNotMatch(html, /papel-level/, 'PR sem autor não tem papel a marcar');
 });
 
-test('panoramaRowHtml: a precedência do botão é rodando > fila > revisar', () => {
-  const rodando = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, running: new Set(['acme/api#7']), waiting: ['acme/api#7'] });
-  assert.match(rodando, /Revisando…/, 'rodando ganha da fila');
-  const naFila = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, waiting: ['acme/api#7'] });
-  assert.match(naFila, /Na fila \(1\)/);
-  const livre = P.panoramaRowHtml(PR_T(), CTX_PANO);
-  assert.match(livre, /act-review/, 'sem nada em curso, dá pra revisar');
-});
-
-test('panoramaRowHtml: estado resolvido troca o botão por rótulo', () => {
-  const pedido = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'request_changes' } } });
-  assert.match(pedido, /aguardando o autor/);
-  assert.doesNotMatch(pedido, /act-review/, 'já pedi mudanças: não oferece revisar de novo');
-  const pendente = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'pending' } } });
-  assert.match(pendente, /aguardando você/);
-});
-
-test('panoramaRowHtml: commit novo depois da review reabre o botão', () => {
-  const base = { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'approve' } } };
-  assert.doesNotMatch(P.panoramaRowHtml(PR_T(), base), /act-review/, 'aprovado e parado: nada a fazer');
-  const stale = P.panoramaRowHtml(PR_T(), { ...base, staleStates: { 'acme/api#7': true } });
-  assert.match(stale, /act-review/, 'entrou commit novo: revisar de novo');
-  assert.match(stale, /commit novo/, 'e o tooltip diz por quê');
-});
-
-test('panoramaRowHtml: o selo da conta só aparece no escopo "todas"', () => {
-  assert.match(P.panoramaRowHtml(PR_T(), CTX_PANO), /acct-chip/);
-  const umaConta = P.panoramaRowHtml(PR_T({ mine: true }), { ...CTX_PANO, todasContas: false });
-  assert.doesNotMatch(umaConta, /acct-chip/);
-  assert.match(umaConta, /sua revisão/, 'numa conta só, o que importa é ser seu');
-});
-
 /* ---------- onda 5, quinto passo: o painel Sistema (perfis e contas) ----------
    Dois pedaços ficaram no app.js de propósito, porque são DOM e não markup: o guarda
    de foco (não reconstruir enquanto a pessoa digita num campo do bloco) e o
    `hint.hidden` do fim dos perfis, que o listener do seletor desfaz. */
 
 const CTX_SIS = {
-  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', dir: '/home/x/.claude' }], claudeProfileId: 'p1' },
+  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-ant-x', baseUrl: '' }], claudeProfileId: 'p1' },
   usage: { budgets: [] },
-  doctor: { claudeAuth: [{ id: 'p1', ready: true, account: 'alice' }, { id: '', ready: true }] },
+  doctor: { claudeAuth: [{ id: 'p1', ready: true, apiKeyMode: true }] },
   ehWin: true,
   accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
   acct: { alice: { label: 'Pessoal', color: '#f80' } },
 };
 
-test('claudeAuthBadge: acha o perfil, cai no padrão da máquina, e some sem dado', () => {
-  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /alice/);
-  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha a entrada do padrão');
+test('claudeAuthBadge: acha o perfil, cai no primeiro com chave, e some sem dado', () => {
+  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /chave configurada/);
+  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha o primeiro perfil com chave');
   assert.equal(P.claudeAuthBadge('p1', { doctor: {} }), '', 'sem doctor não inventa selo');
 });
 
-test('claudeAuthBadge: perfil Codex mostra a causa real quando o login ChatGPT nao confirmou', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: false,
-      codexLoginDetail: 'Logged in using API key',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  const html = P.claudeAuthBadge('codex', ctx);
-  assert.match(html, /SEM CODEX/);
-  assert.match(html, /Logged in using API key/);
+test('claudeAuthBadge: sem perfil nenhum diz SEM PERFIL, e perfil sem chave diz SEM CHAVE', () => {
+  assert.match(P.claudeAuthBadge('', { doctor: { claudeAuth: [] } }), /SEM PERFIL/);
+  assert.match(P.claudeAuthBadge('k', { doctor: { claudeAuth: [{ id: 'k', ready: false, apiKeyMode: true }] } }), /SEM CHAVE/);
 });
 
-test('claudeAuthBadge: perfil Codex confirma ChatGPT quando o doctor confirma', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: true,
-      codexLoginDetail: 'Logged in using ChatGPT',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  assert.match(P.claudeAuthBadge('codex', ctx), /Codex ChatGPT/);
+test('Consumo: o cartão do perfil é de chave de API, com teto e nota quando falta teto', () => {
+  const html = P.usageBudgetHtml({ budgets: [{ id: 'k1', label: 'Chave A', kind: 'apikey', blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }] });
+  assert.match(html, /Chave de API/);
+  assert.match(html, /Nenhum teto definido/);
+  assert.doesNotMatch(html, /assinatura|plano ChatGPT/i);
+});
+
+test('runtimeChecks: perfil de chave de API apontado que não resolve vira check do Diagnóstico', () => {
+  const checks = P.runtimeChecks({ root: false }, {}, { problemas: [{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-invalido' }] });
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].label, 'Perfil de chave de API');
+  assert.equal(checks[0].ok, false);
+  assert.match(checks[0].detail, /incompleto \(falta a chave\)/);
 });
 
 test('painel Sistema: os três construtores desenham com ctx cheio e com ctx vazio', () => {
@@ -2190,55 +1831,11 @@ test('accountsManagerHtml: conta silenciada muda rótulo e classe do botão', ()
   assert.match(html, /silenciada/, 'o estado aparece no texto de autenticação');
 });
 
-test('claudeProfilesHtml: sem perfil e com diretório legado oferece a migração', () => {
-  const legado = { ...CTX_SIS, config: { claudeProfiles: [], claudeConfigDir: '/home/x/.claude' } };
-  assert.match(P.claudeProfilesHtml(legado), /primeiro perfil/);
-  assert.doesNotMatch(P.claudeProfilesHtml(CTX_SIS), /primeiro perfil/, 'com perfil salvo, some');
-});
-
 test('claudeProfilesHtml: perfil de chave de API mostra os campos de teto', () => {
   const api = { ...CTX_SIS, config: { claudeProfiles: [{ id: 'p2', label: 'API', kind: 'apikey', apiKey: 'k', budgetDaily: 10 }], claudeProfileId: 'p2' } };
   const html = P.claudeProfilesHtml(api);
   assert.match(html, /cp-budget-daily/);
   assert.match(html, /value="10"/, 'o teto salvo aparece preenchido');
-});
-
-test('claudeProfilesHtml: perfil OpenRouter mostra campos de chave e hint do Skin', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: {
-      claudeProfiles: [{
-        id: 'or', label: 'OR', kind: 'openrouter', apiKey: 'sk-or-1',
-        baseUrl: 'https://openrouter.ai/api',
-      }],
-      claudeProfileId: 'or',
-    },
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /OpenRouter/);
-  assert.match(html, /data-kind="openrouter"/);
-  assert.doesNotMatch(html, /cp-login" data-id="or"/, 'OpenRouter não oferece login OAuth');
-  assert.match(html, /Anthropic Skin/);
-});
-
-test('claudeAuthBadge: perfil OpenRouter pronto', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  assert.match(P.claudeAuthBadge('or', ctx), /OpenRouter/);
-});
-
-test('claudeProfilesHtml: perfil Codex tambem oferece abrir sessao de login', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }], claudeProfileId: 'codex' },
-    doctor: { codexChatGPT: false, claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /class="btn sm cp-login" data-id="codex"/);
-  assert.match(html, /Abrir sessão de login/);
 });
 
 /* ---------- onda 5, sexto passo: o banner do topo ----------
@@ -2290,42 +1887,13 @@ test('vazio da fila: sem aprovação hoje, não inventa contagem', () => {
   assert.doesNotMatch(html, /aprovou/, 'zero não vira "aprovou 0"');
 });
 
-test('pedidosAntesDoInicio conta só mine, fora da fila e anteriores ao baseline', () => {
-  const baseline = { at: Date.parse('2026-10-10T12:00:00Z'), marcados: 3 };
-  const antes = '2026-10-01T00:00:00Z';
-  const depois = '2026-10-20T00:00:00Z';
-  const panorama = [
-    { key: 'a', mine: true, updatedAt: antes },
-    { key: 'b', mine: true, updatedAt: depois },
-    { key: 'c', mine: false, updatedAt: antes },
-    { key: 'd', mine: true, updatedAt: antes },
-  ];
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline }), 1);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline: null }), 0);
-});
-
-test('pedidosAntesDoInicio: baseline legado e PR já revisado por mim não contam', () => {
-  const antes = '2026-10-01T00:00:00Z';
-  const panorama = [{ key: 'a', mine: true, updatedAt: antes }, { key: 'r', mine: true, reviewedByMe: true, updatedAt: antes }];
-  const at = Date.parse('2026-10-10T12:00:00Z');
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: null } }), 0);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: 2 } }), 1);
-});
-
-test('vazio da fila com PRs anteriores ao baseline diz quantos e leva ao Panorama', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['biudtech'], intervalSeconds: 300, antesDoInicio: 14 });
-  assert.match(html, /14 PRs já pediam sua revisão antes do Farol começar a vigiar/);
-  assert.match(html, /class="btn sm eo-panorama"/);
-  assert.doesNotMatch(html, /Nada esperando por você/);
-});
-
 test('vazio da fila sem aprovados não oferece "Ver o que foi aprovado"', () => {
-  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
-  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
+  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300 }), /eo-resolved/);
+  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300 }), /eo-resolved/);
 });
 
-test('vazio da fila com antesDoInicio 0 é o vazio bom de sempre', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300, antesDoInicio: 0 });
+test('vazio da fila sem nada a contar é o vazio bom de sempre', () => {
+  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300 });
   assert.match(html, /Nada esperando por você/);
   assert.doesNotMatch(html, /eo-panorama/);
 });
@@ -2533,27 +2101,6 @@ test('runtimeChecks: sem root não inventa linha (Windows nem tem uid)', () => {
   assert.deepEqual(P.runtimeChecks({}), []);
   assert.deepEqual(P.runtimeChecks(null), [], 'doctor ainda não carregado não pode derrubar a tela');
   assert.deepEqual(P.runtimeChecks(undefined), []);
-});
-
-test('runtimeChecks: perfil Codex aparece na Visao geral com CLI e login separados', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: 'codex-cli 0.150.0', codexChatGPT: true, codexLoginDetail: 'Logged in using ChatGPT' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks.length, 2);
-  assert.deepEqual(checks.map(c => [c.label, c.ok]), [['Codex CLI', true], ['Login Codex', true]]);
-  assert.ok(checks.every(c => c.goto === 'sys:plans:#claudeProfilesManager'));
-});
-
-test('runtimeChecks: perfil Codex denuncia quando o app nao acha o codex do terminal', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: null, codexChatGPT: false, codexLoginDetail: 'codex login status falhou (código 1)' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks[0].ok, false);
-  assert.match(checks[0].detail, /PATH/);
-  assert.equal(checks[1].ok, false);
-  assert.match(checks[1].detail, /codex login status falhou/);
 });
 
 /* ---------- quarta porta: a UI não reconstrói a autoridade do merge ----------

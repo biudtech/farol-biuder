@@ -21,7 +21,6 @@ import { startFakeRtdb } from './helpers/fake-rtdb.js';
 import { startFakeIdentity } from './helpers/fake-identity.js';
 import { SYNC } from '../lib/constants.js';
 
-const { IS_WIN } = await import('../lib/paths.js');
 const { Engine } = await import('../server.js');
 const { sanearPolitica } = await import('../lib/sync/politica.js');
 const cachePolitica = await import('../lib/sync/cache-politica.js');
@@ -217,5 +216,5 @@ test('o cache da política não guarda segredo, e em POSIX tem modo 0600', async
   assert.equal(cru.includes(SENHA), false);
   assert.equal(cru.includes(API_KEY), false);
   assert.equal(cru.includes(e.sync.material.id), false, 'material de chave não mora aqui');
-  if (!IS_WIN) assert.equal(fs.statSync(cachePolitica.caminhoDoCache()).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(cachePolitica.caminhoDoCache()).mode & 0o777, 0o600);
 });

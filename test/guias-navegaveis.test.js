@@ -10,48 +10,29 @@ const RAIZ = path.join(import.meta.dirname, '..');
 const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8');
 const README = ler('README.md');
 
-/* Os guias que viajam com o app instalado saem do EMPACOTADOR, nunca de uma lista escrita
-   aqui, que envelheceria sozinha. Os testes de distribuição leem as seis rotas por conta
-   própria, porque o que eles provam é justamente a concordância entre elas; aqui basta a
-   fonte do pacote leve. */
-function listaDoPacote(variavel) {
-  const fonte = ler('tools/make-package.ps1');
-  const m = fonte.match(new RegExp(`foreach \\(\\$${variavel} in @\\(([\\s\\S]*?)\\)\\)`));
-  if (!m) throw new Error(`tools/make-package.ps1 sem a lista $${variavel}`);
-  return (m[1].match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
-}
+/* Os guias travados aqui são o CLAUDE.md (sumário) e os dois guias operacionais que sobraram
+   do corte de distribuição. A lista é esta, escrita de propósito: não há mais empacotador de
+   onde derivá-la. */
+const GUIAS_OPERACIONAIS = ['docs/REVIEW-GATES.md', 'docs/CONFIGURATION.md'];
 
-/** Caminhos relativos dos guias distribuídos: o CLAUDE.md e os guias da allowlist. */
+/** Caminhos relativos dos guias travados: o CLAUDE.md e os guias operacionais. */
 function guiasDistribuidos() {
-  return ['CLAUDE.md', ...listaDoPacote('doc').map((d) => `docs/${d}`)];
-}
-
-/** Tudo que viaja: arquivos (raiz, tools nomeados, guias) e pastas inteiras. */
-function alvosDistribuidos() {
-  return {
-    arquivos: new Set([
-      ...listaDoPacote('f'),
-      ...listaDoPacote('t').map((t) => `tools/${t}`),
-      ...guiasDistribuidos(),
-    ]),
-    pastas: listaDoPacote('d'),
-  };
+  return ['CLAUDE.md', ...GUIAS_OPERACIONAIS];
 }
 
 test('o README tem o mapa do codigo', () => {
   assert.match(README, /^## Mapa do código$/m, 'faltou a seção "Mapa do código" no README');
 });
 
-test('o mapa do README documenta as DUAS entradas, com o comando de cada uma', () => {
+test('o mapa do README documenta a entrada do motor, com o comando de cada script', () => {
   const pkg = JSON.parse(ler('package.json'));
   const mapa = README.split('## Mapa do código')[1] || '';
-  assert.ok(mapa.includes('`main.js`'), 'o mapa não cita main.js');
   assert.ok(mapa.includes('`server.js`'), 'o mapa não cita server.js');
-  for (const script of ['start', 'server']) {
+  for (const script of ['server']) {
     assert.ok(mapa.includes(`npm run ${script}`) || mapa.includes(`npm ${script}`),
       `o mapa não diz como rodar o script "${script}" (${pkg.scripts[script]})`);
   }
-  assert.equal(pkg.main, 'main.js', 'o package.json deixou de apontar main.js e o mapa mente');
+  assert.equal(pkg.main, undefined, 'o package.json voltou a declarar main e o mapa mente');
 });
 
 test('todo caminho do repositorio citado no mapa existe', () => {
@@ -65,10 +46,10 @@ test('todo caminho do repositorio citado no mapa existe', () => {
 
 /* O índice de cada guia distribuído é gerado, nunca escrito à mão: seção nova sem entrada no
    índice reprova aqui. O slug segue a regra do GitHub (minúsculas, pontuação fora, espaço vira
-   hífen, acento fica). Desde a Fase 1.5 os guias são o CLAUDE.md (sumário) e os quatro de docs/
-   que viajam por allowlist, e a lista sai do empacotador pelo helper, nunca escrita aqui.
+   hífen, acento fica). Desde a Fase 1.5 os guias são o CLAUDE.md (sumário) e os dois de docs/
+   que sobraram.
 
-   O README fica fora das quatro travas abaixo, de propósito: ele viaja, mas é a página pública
+   O README fica fora das travas abaixo, de propósito: ele viaja, mas é a página pública
    do repositório, lida no GitHub, e aponta legitimamente para .github/ e para o que não viaja. */
 const slugDeTitulo = (t) => t.toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').replace(/ /g, '-');
 
@@ -81,8 +62,6 @@ const PISO_DE_SECOES = {
   'CLAUDE.md': 7,
   'docs/CONFIGURATION.md': 3,
   'docs/REVIEW-GATES.md': 11,
-  'docs/MACOS.md': 3,
-  'docs/RELEASE.md': 4,
 };
 
 function destinoDoLink(guia, alvo) {
@@ -130,19 +109,6 @@ test('toda ancora citada num guia distribuido existe no documento de destino', (
   }
 });
 
-test('guia distribuido so aponta para o que tambem viaja com o app instalado', () => {
-  const { arquivos, pastas } = alvosDistribuidos();
-  for (const guia of guiasDistribuidos()) {
-    for (const m of ler(guia).matchAll(LINK_RELATIVO)) {
-      const alvo = m[1];
-      if (EXTERNO.test(alvo) || alvo.startsWith('#')) continue;
-      const destino = destinoDoLink(guia, alvo);
-      const viaja = arquivos.has(destino) || pastas.some((d) => destino === d || destino.startsWith(`${d}/`));
-      assert.ok(viaja, `${guia} aponta para ${destino}, que nao viaja com o app instalado (escreva o caminho entre crases, sem link)`);
-    }
-  }
-});
-
 test('nenhum paragrafo longo aparece em dois guias distribuidos', () => {
   const dono = new Map();
   const repetidos = [];
@@ -156,12 +122,6 @@ test('nenhum paragrafo longo aparece em dois guias distribuidos', () => {
   assert.deepEqual(repetidos, [], 'conteudo duplicado entre guias: a extracao move, nunca copia');
 });
 
-test('o README manda o usuario de macOS para o guia distribuido', () => {
-  const blocoMac = README.split('### macOS')[1]?.split('\n## ')[0] || '';
-  assert.ok(blocoMac.includes('docs/MACOS.md'), 'o bloco de instalacao do macOS no README nao aponta para docs/MACOS.md');
-  assert.ok(!/se[cç][aã]o ["“]?macOS["”]? do `CLAUDE\.md`/.test(blocoMac), 'o README ainda manda abrir a secao macOS do CLAUDE.md');
-});
-
 test('o CONTRIBUTING manda o recem-chegado pro mapa do codigo', () => {
   const contrib = ler('.github/CONTRIBUTING.md');
   assert.ok(contrib.includes('README.md#mapa-do-código'),
@@ -172,7 +132,7 @@ test('o CONTRIBUTING manda o recem-chegado pro mapa do codigo', () => {
    continua parecendo certo e o destino sumiu. Vale pros guias da raiz e pro docs/,
    menos as pastas de método e de plano, que citam caminho de worktree que não existe
    mais de propósito. */
-const GUIAS = ['README.md', 'CLAUDE.md', '.github/CONTRIBUTING.md', '.github/SECURITY.md', 'docs/QUALITY.md'];
+const GUIAS = ['README.md', 'CLAUDE.md', '.github/CONTRIBUTING.md', '.github/SECURITY.md', 'docs/QUALITY.md', ...GUIAS_OPERACIONAIS];
 
 test('todo link relativo dos guias aponta pra arquivo que existe', () => {
   for (const guia of GUIAS) {

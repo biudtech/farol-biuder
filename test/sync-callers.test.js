@@ -218,23 +218,3 @@ test('scanPushbacks: classificação deduplicada avança o marcador sem gravar p
   assert.deepEqual(e.pushbacks, {});
 });
 
-/* ---------- ferramenta ---------- */
-
-function esperar(cond, ms = 2000) {
-  return new Promise((resolve, reject) => {
-    const t0 = Date.now();
-    const iv = setInterval(() => {
-      if (cond()) { clearInterval(iv); resolve(); return; }
-      if (Date.now() - t0 > ms) { clearInterval(iv); reject(new Error('timeout esperando a condição')); }
-    }, 10);
-  });
-}
-
-test('ferramenta declara operationKind tool', async () => {
-  const e = motor({ text: 'resultado', sessionId: 's1' });
-  e.toolPrompt = () => 'prompt de teste';
-  const r = await e.launchTool('health');
-  assert.equal(r.ok, true);
-  await esperar(() => { const run = e.toolRunGet('health'); return run && run.status !== 'running'; });
-  assert.equal(e.opts[0].operationKind, 'tool');
-});

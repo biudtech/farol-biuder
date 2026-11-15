@@ -88,7 +88,7 @@ export async function mudarAtivacao(grupo, ativo, d = DEPS) {
       title: `Ativar o teto de ${grupo.nome || 'grupo'}?`,
       confirmLabel: 'Ativar teto',
       body: `<p><b>Acontece:</b> quando o gasto somado dos perfis controlados chegar ao teto, nenhuma sessão nova abre por eles, em nenhum aparelho que aceita admin. Se a soma não fechar, as revisões desses perfis esperam, inclusive as de clique.</p>
-        <p><b>Não acontece:</b> sessões em andamento não são interrompidas, e perfis não controlados (como o Codex) não entram na soma.</p>`,
+        <p><b>Não acontece:</b> sessões em andamento não são interrompidas, e perfis não controlados não entram na soma.</p>`,
     });
     if (!ok) return false;
   }

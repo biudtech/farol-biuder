@@ -285,8 +285,8 @@ test('comandosEmitidosHtml: nomeia o aparelho alvo e mostra o estado do recibo',
 // 28/09/2026 (fix round 1): `tomadaDialogo` saiu de vez. Sem "Tomar para este aparelho",
 // não existe mais leitura de aviso de posse alheia pra desenhar: era a única chamadora.
 
-test('oQueELocalHtml: nomeia Destaques, Kudos e Time como locais', () => {
-  assert.match(P.oQueELocalHtml(), /Destaques, Kudos e Time continuam locais/);
+test('oQueELocalHtml: nomeia a memória do Time como local', () => {
+  assert.match(P.oQueELocalHtml(), /memória do Time continua local/);
 });
 
 /* ---------- revisões de todos os aparelhos ---------- */
