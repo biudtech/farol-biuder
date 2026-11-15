@@ -24,6 +24,7 @@ const { createRtdbClient } = await import('../lib/sync/rtdb.js');
 const syncUsage = await import('../lib/engine/sync-usage.js');
 const { eventIdFor, accountHash, prHash } = await import('../lib/sync/keys.js');
 const { Engine } = await import('../server.js');
+const syncDireto = (await import('../lib/engine/sync.js')).default;
 
 const OUTBOX_FILE = path.join(FAROL_HOME, 'workspace', 'state', SYNC.OUTBOX_FILE);
 const API_KEY = 'chave-web-de-teste';
@@ -383,7 +384,7 @@ test('recusa do consumo não derruba a coordenação: 401 só em usageEvents dei
   for (let i = 0; i < 4; i++) {
     await engine.syncTick();
     assert.equal(engine.sync.status, 'conectado', `tick ${i}: o consumo não decide o estado da conexão`);
-    assert.equal(engine.syncSeguraAutomacao('o/r#11'), false, `tick ${i}: a automação segue livre`);
+    assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#11'), false, `tick ${i}: a automação segue livre`);
   }
   const ob = engine.snapshot().sync.outbox;
   assert.ok(ob.pendentes >= 1, 'o evento recusado fica na fila');

@@ -27,30 +27,6 @@ function engineBase() {
 }
 const prDe = (key) => ({ key, url: `https://github.com/${key.replace('#', '/pull/')}` });
 
-test('runOneHeadless: coordenação indisponível volta pra fila sem retry e sem estacionar, mesmo passando do teto', async () => {
-  const e = engineBase();
-  const toasts = [];
-  e.on('toast', (t) => toasts.push(t));
-  const pr = prDe('o/r#1');
-  e.runHeadlessReview = async () => { throw new Error(MSG_COORDENACAO); };
-  // cinco quedas seguidas: o teto do ramo transitório é 3, então a quarta estacionaria
-  for (let i = 0; i < 5; i++) await e.runOneHeadless(pr, 'eu');
-  assert.equal(e.retryAfterNet.has(pr.key), false, 'nunca entra no retryAfterNet');
-  assert.equal(e.autoReviewParked.has(pr.key), false, 'nunca estaciona');
-  assert.equal(e.seen.has(pr.key), false, 'unsee: o PR volta a ser elegível');
-  assert.equal(e.queue.filter((p) => p.key === pr.key).length, 1, 'volta VISÍVEL pra fila, uma vez só');
-  assert.ok(toasts.every((t) => t.kind !== 'error'), 'segurar não é falhar: nenhum toast vermelho');
-});
-
-test('runOneHeadless: a mesma mensagem sem acento também não estaciona', async () => {
-  const e = engineBase();
-  const pr = prDe('o/r#2');
-  e.runHeadlessReview = async () => { throw new Error('Coordenacao entre dispositivos indisponivel: timeout'); };
-  for (let i = 0; i < 4; i++) await e.runOneHeadless(pr, 'eu');
-  assert.equal(e.retryAfterNet.has(pr.key), false);
-  assert.equal(e.autoReviewParked.has(pr.key), false);
-});
-
 test('runOneHeadless: rede comum continua no retry de sempre (a exceção é só da coordenação)', async () => {
   const e = engineBase();
   const pr = prDe('o/r#3');

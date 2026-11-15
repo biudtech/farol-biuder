@@ -113,3 +113,31 @@ test('sem conseguir ler os reviews do head, o ciclo automático não posta às c
   assert.equal(r.motivo, 'estado-desconhecido');
   assert.equal(escritas, 0);
 });
+
+function pendencia(extra = {}) {
+  return {
+    id: 'd1', key: PR.key, createdAt: 1, status: 'pending', verdict: 'approve',
+    pr: { repo: 'o/r', number: 1, url: PR.url, author: 'dev', account: 'eu' }, headSha: HEAD, reasons: [],
+    payloads: { approve: aprovacao() }, ...extra,
+  };
+}
+
+test('leitura dos reviews indisponível também segura o reenvio automático', async () => {
+  const reenvio = motor();
+  reenvio.myReviewStates = async () => null;
+  reenvio.decisions.pending = [pendencia({ postRetry: { event: 'approve', attempts: 0 } })];
+  assert.equal(await reenvio.retryFailedPosts(), 0);
+  assert.equal(escritas, 0);
+  assert.equal(reenvio.decisions.pending.length, 1, 'a pendência segue na mesa para o próximo ciclo');
+});
+
+test('reenvio e clique de um head que já tem o meu review não escrevem de novo', async () => {
+  await motor().postReview(PR, aprovacao(), { via: 'revisao' });
+  const reenvio = motor();
+  reenvio.decisions.pending = [pendencia({ postRetry: { event: 'approve', attempts: 0 } })];
+  assert.equal(await reenvio.retryFailedPosts(), 1);
+  const clique = motor();
+  clique.decisions.pending = [pendencia()];
+  assert.equal((await clique.decide('d1', 'approve')).ok, true);
+  assert.equal(escritas, 1);
+});

@@ -659,16 +659,6 @@ test('preflightManual: livre é ok, sem reservar nem escrever nada', async () =>
   assert.equal(fake.tree(), null);
 });
 
-test('fachadas da Engine: syncAdmit e syncPreflightManual delegam ao coordenador', async () => {
-  const { Engine } = await import('../server.js');
-  const engine = new Engine();
-  engine.log = () => {};
-  const a = await engine.syncAdmit(ctxDe());
-  assert.equal(a.admitted, true, 'recurso desligado por padrão: admite');
-  assert.equal(a.handle.noop, true);
-  assert.deepEqual(await engine.syncPreflightManual(PR), { ok: true });
-});
-
 /* ---------- 20/09/2026: o aviso não descreve em terceira pessoa a máquina de quem lê ----
    A queixa, com print: "este commit já foi analisado por o aparelho Windows Predator i9
    4070", lido NO Windows Predator i9 4070. `nomeDoDispositivo` devolvia o nome do próprio

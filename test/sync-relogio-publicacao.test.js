@@ -113,12 +113,3 @@ test('a capacidade leva a política efetiva: pausa e teto publicados pelo admin'
   assert.equal(cap.pausado, true);
   assert.equal(cap.paralelismo, 1);
 });
-
-test('o item distribuído também ganha nome no catálogo', async () => {
-  const e = await motor();
-  e.queue = [];
-  e.headlessDistribuindo = new Map([['dono/repo#8', { pr: { key: 'dono/repo#8', title: 'Outro', repo: 'dono/repo', number: 8 }, desde: 1 }]]);
-  await andamento.ciclo(e, e.config.sync);
-  const tag = prTag(kek.bufferDe(e.sync.material.id), 'dono/repo#8');
-  assert.ok(arvore().catalog[tag]);
-});

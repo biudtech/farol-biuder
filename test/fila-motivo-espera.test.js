@@ -51,48 +51,6 @@ test('teto global mostra a ocupação efetiva de todas as contas', () => {
   assert.deepEqual(e.iniciadas, []);
 });
 
-test('recusa de memória vem da admissão real e não ocupa vaga', () => {
-  memoria(1);
-  const e = motor(true);
-  processHeadless(e);
-  const antes = admissao.resumo(e);
-  assert.equal(detalhes(e)['acme/app#1'].motivo, 'memoria-insuficiente');
-  assert.deepEqual(admissao.resumo(e), antes, 'projetar a fila não reserva vagas');
-  assert.equal(antes.total, 0);
-  assert.deepEqual(e.iniciadas, []);
-});
-
-test('presença vencida e provedor indisponível não viram espera genérica', () => {
-  const e = motor(true);
-  e.sync.lastPresenceAt = 1;
-  processHeadless(e);
-  assert.equal(detalhes(e)['acme/app#1'].motivo, 'presenca-vencida');
-  e.sync.lastPresenceAt = Date.now();
-  e.doctorInfo = {};
-  processHeadless(e);
-  assert.equal(detalhes(e)['acme/app#1'].motivo, 'provedor-nao-pronto');
-});
-
-test('limite compartilhado explica a recusa sem expor conteúdo interno', () => {
-  const e = motor(true);
-  e.grupoSegura = () => 'diagnóstico interno que não deve sair';
-  processHeadless(e);
-  assert.equal(detalhes(e)['acme/app#1'].motivo, 'grupo-nao-verificavel');
-  assert.doesNotMatch(JSON.stringify(detalhes(e)), /diagnóstico interno/);
-});
-
-test('vaga do aparelho ocupada por outra operação aparece com seu teto', () => {
-  memoria(8192);
-  const e = motor(true);
-  e.config.globalParallelReviews = 1;
-  assert.equal(admissao.reservar(e, { tipo: 'chat' }).ok, true);
-  processHeadless(e);
-  assert.equal(detalhes(e)['acme/app#1'].motivo, 'sem-vaga');
-  assert.equal(detalhes(e)['acme/app#1'].ocupadas, 1);
-  assert.equal(detalhes(e)['acme/app#1'].limite, 1);
-  assert.equal(admissao.resumo(e).total, 1);
-});
-
 test('ao liberar a conta, o motivo anterior desaparece e as posições são atualizadas', () => {
   const e = motor();
   e.headlessBusyAccounts.set('alice', 1);

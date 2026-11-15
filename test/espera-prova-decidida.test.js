@@ -6,7 +6,7 @@ import { criteriaFixture } from './helpers/criteria-fixture.js';
 // (bloqueiaAutomatico, skip-review.js) e a pendência ficou sete horas com o cartão "Recuperando
 // a análise" até o merge, sem nada a fazer. A recuperação segurada por decisão de gente no MESMO
 // head da espera agora resolve a pendência sem postar e sem mesa, no molde da espera do CI
-// (espera-ci.js, dispensar): `approval_not_needed`, `skip`, aviso uma vez, recibo publicado.
+// (espera-ci.js, dispensar): `approval_not_needed`, `skip`, aviso uma vez.
 // A exceção do meu pedido automático aberto (`pedidoMeuAberto`) continua: lá a rodada roda.
 import os from 'node:os';
 import path from 'node:path';
@@ -67,8 +67,6 @@ function motor() {
   e.log = (nivel, texto) => e.logs.push([nivel, texto]);
   e.toasts = [];
   e.eventos = [];
-  e.recibos = [];
-  e.syncAtualizarPublicacao = async (r) => { e.recibos.push(r); return { ok: true }; };
   e.on('toast', (t) => e.toasts.push(t.text));
   e.on('needs-decision', (p) => e.eventos.push(['needs-decision', p.item.key]));
   e.bloqueadoPorChecks = async () => ({ faltando: [] });
@@ -121,7 +119,6 @@ test('biud-frontend#1841: recuperação segurada por aprovação de gente no mes
   assert.deepEqual(envios, [], 'nada foi publicado');
   assert.deepEqual(e.eventos, [], 'sem mesa');
   assert.equal(e.consultasDoHistorico, 1, 'uma consulta só ao histórico');
-  assert.deepEqual(e.recibos.map((x) => [x.prKey, x.headSha, x.publicationState]), [[PR.key, HEAD, 'published']]);
   assert.ok(e.logs.some(([nivel, t]) => nivel === 'INFO' && t.includes(PR.key) && t.includes('ana')), JSON.stringify(e.logs));
   assert.equal(e.toasts.length, 1, e.toasts.join(' | '));
   assert.match(e.toasts[0], /@ana/);

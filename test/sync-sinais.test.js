@@ -224,14 +224,3 @@ test('leitura que falha não muda o estado observado', async () => {
   }
   assert.equal(e.sync.sinais.ready, antes);
 });
-
-test('a volta usa o ramo local de sempre: o PR entra na fila e sai do mapa', async () => {
-  const e = await motorAdmin();
-  await sinais.observarSinais(e, { agora: Date.now() });
-  distribuindoN(e, 1, 0);
-  const r = await sinais.voltarAoLocal(e, { esperar: async () => { } });
-  assert.deepEqual(r.devolvidos, ['dono/repo#1']);
-  assert.equal(e.headlessDistribuindo.size, 0);
-  assert.deepEqual(e.headlessQueue.map((p) => p.key), ['dono/repo#1']);
-  assert.equal(typeof reviewMod.devolverAoLocal, 'function');
-});

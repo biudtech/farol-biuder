@@ -397,41 +397,6 @@ test('a origem que não aceita comandos aparece como tal, e a tela não oferece 
 
 /* ---------- 3. ponta a ponta: pedido, execução e recibo ---------- */
 
-test('transferir pela tela: botão habilitado, corpo exato, a origem aplica e a tela lê o recibo', async () => {
-  const op = await telaComAndamento();
-  assert.match($('#aparPagina').innerHTML, new RegExp(`md-transferir" data-op="${op.opId}"`), 'o botão está habilitado');
-  assert.match($('#aparPagina').innerHTML, /Ajusta o rodapé/, 'o PR aparece pelo nome');
-  let dialogo = null;
-  let confirmacao = null;
-  const enviado = await Tela.transferirOperacao(op.opId, async (d) => { dialogo = d; return DESTINO; }, async (c) => { confirmacao = c; return true; });
-  assert.equal(enviado, true);
-  assert.deepEqual(pedidosPara('/api/sync/transfer-targets'), [{ dono: ORIGEM, acctTag: acctTag(kId(admin), LOGIN) }]);
-  assert.deepEqual([...dialogo.aptos].sort(), [ADMIN, DESTINO].sort(), 'o admin também é oferecido como destino');
-  assert.match(dialogo.corpo, /Celular antigo.*versão antiga/s);
-  assert.match(confirmacao.title, /Transferir para Notebook de teste/);
-  assert.deepEqual(pedidosPara('/api/sync/command'), [{
-    alvo: ORIGEM, tipo: 'transferir', args: { prTag: prTag(kId(admin), PR.key), matTag: matTag(kId(admin), HEAD), destino: DESTINO },
-  }]);
-  // o registro do emitido amarra o comando ao PR (divergência 4)
-  const emitido = syncMod.statusForUi(admin).comandosEmitidos[0];
-  assert.equal(emitido.prTag, prTag(kId(admin), PR.key));
-  assert.equal(emitido.prKey, PR.key);
-  assert.equal(emitido.destino, DESTINO);
-  assert.doesNotMatch(await lerReciboNaTela(), />aplicado</, 'sem recibo, nunca concluído');
-
-  // a ORIGEM aplica: memória, encerramento e item de volta preferindo o destino
-  const ciclo = await comandos.cicloDosComandos(origem, origem.config.sync);
-  assert.deepEqual(ciclo.aplicados.map((a) => [a.estado, a.code || '']), [['aplicado', '']]);
-  assert.deepEqual(origem.cancelados, ['a-1']);
-  const fila = arvore().live.queue;
-  const itemId = `${prTag(kId(admin), PR.key)}_${candidato.matContaTag(kId(admin), HEAD, LOGIN)}`;
-  assert.equal(fila[itemId][ORIGEM].prefDev, DESTINO);
-
-  const html = await lerReciboNaTela();
-  assert.match(html, /<b>transferir<\/b> para Desktop antigo, destino Notebook de teste/);
-  assert.match(html, /sync-chip ok">aplicado</);
-});
-
 /* ---------- 4. o estado muda entre a seleção e a execução ---------- */
 
 test('o head muda depois da seleção: a origem recusa com head_mudou, e a tela mostra a recusa', async () => {

@@ -128,10 +128,10 @@ test('projectSessions: o autor do PR chega inteiro no snapshot', () => {
 
 test('a sessão de revisão grava o autor no pr (senão a UI perde a foto)', () => {
   const raiz = path.join(import.meta.dirname, '..', 'lib', 'engine');
-  for (const arq of ['review.js']) {
-    const src = fs.readFileSync(path.join(raiz, arq), 'utf8');
-    const reg = src.match(/pr: \{ key: pr\.key,[^}]*\}/);
-    assert.ok(reg, `${arq}: sumiu o registro do pr na sessão`);
-    assert.match(reg[0], /author: pr\.author/, `${arq}: o card ao vivo precisa do autor pra mostrar a foto`);
-  }
+  // o registro da sessão sai de prDaSessao (conta-na-tela.js), chamado no runHeadlessReview
+  assert.ok(fs.readFileSync(path.join(raiz, 'review.js'), 'utf8').includes('pr: prDaSessao(engine, pr)'), 'review.js: sumiu o registro do pr na sessão');
+  const src = fs.readFileSync(path.join(raiz, 'conta-na-tela.js'), 'utf8');
+  const reg = src.match(/function prDaSessao\(engine, pr\) \{\n\s+return \{ key: pr\.key,[^}]*\}/);
+  assert.ok(reg, 'conta-na-tela.js: sumiu o registro do pr na sessão');
+  assert.match(reg[0], /author: pr\.author/, 'o card ao vivo precisa do autor pra mostrar a foto');
 });

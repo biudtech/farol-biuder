@@ -128,7 +128,6 @@ test('Engine real não alcança o transporte de publicação sem prova técnica'
   e.config = { accounts: [{ user: 'reviewer', owners: ['org'] }] };
   e.accountForPr = () => 'reviewer'; e.isMuted = () => false;
   e.token = 'fixture'; e.tokenFor = () => 'fixture'; e.log = () => {};
-  e.syncCoordenacaoAtiva = () => false;
   const original = io.run;
   let transport = 0;
   io.run = async () => { transport++; throw new Error('transporte não deveria ser alcançado'); };

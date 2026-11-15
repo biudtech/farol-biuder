@@ -38,16 +38,6 @@ function envelope(tipo) {
   return { protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('request_changes'), analysisStatus: 'complete', coverage: { total: 1, reviewed: ['a.ts'], missing: [] }, alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'fixture sintética sem consumidor' }], verdict: 'request_changes', decision: 'needs_decision', cardMet: true, reasons: ['bloqueio real'], reportMarkdown: 'relatório', payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'Tem um problema na validação do redirect.' } } };
 }
 
-function handleFalso() {
-  const h = { noop: false, leaseId: 'L1', attemptId: '', lost: false, done: false, completos: [] };
-  h.valido = () => true;
-  h.validoPor = () => true;
-  h.onLost = () => { };
-  h.complete = async (op) => { h.completos.push(op); h.done = true; return { ok: true }; };
-  h.abort = async () => { h.done = true; };
-  return h;
-}
-
 function motor(post, handle, tipo) {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
@@ -77,7 +67,6 @@ function motor(post, handle, tipo) {
   return e;
 }
 
-const POSSE_PERDIDA = { ok: false, estado: 'nao_enviada', motivo: 'posse-perdida', attempted: false, reviewId: '', error: 'a posse deste PR venceu antes do envio, então nada foi postado' };
 const INCERTA = { ok: false, estado: 'enviando', motivo: 'resultado-incerto', attempted: true, reviewId: '', error: 'uma postagem deste commit pode ter chegado ao GitHub e ainda não foi conferida; não posto de novo até conferir (gh: HTTP 502)' };
 
 for (const tipo of ['approve', 'request_changes']) {
@@ -114,25 +103,19 @@ for (const tipo of ['approve', 'request_changes']) {
 }
 
 for (const tipo of ['approve', 'request_changes']) {
-  test(`${tipo}: o funil recebe via revisao e o handle da sessão`, async () => {
-    const h = handleFalso();
-    const e = motor({ ok: true, estado: 'confirmada' }, h, tipo);
+  test(`${tipo}: o funil recebe via revisao, ancorado no head lido`, async () => {
+    const e = motor({ ok: true }, null, tipo);
     await e.runHeadlessReview(prDe('o/r#1'));
     assert.equal(e.chamadas.length, 1, JSON.stringify({pending:e.decisions.pending,logs:e.logs}));
     assert.equal(e.chamadas[0].opcoes.via, 'revisao');
-    assert.equal(e.chamadas[0].opcoes.handle, h);
-  });
-
-  test(`${tipo}: posse perdida no funil sobe como perda de coordenação`, async () => {
-    const e = motor(POSSE_PERDIDA, handleFalso(), tipo);
-    await assert.rejects(e.runHeadlessReview(prDe('o/r#2')), (err) => err.coordenacao === 'perdido');
-    assert.equal(e.decisions.pending.some((d) => d.key === 'o/r#2'), false);
+    assert.equal('handle' in e.chamadas[0].opcoes, false);
+    assert.equal(e.chamadas[0].payload.commit_id, HEAD);
   });
 }
 
 
 test('postagem incerta: vira pendência com o motivo, sem lançar', async () => {
-  const e = motor(INCERTA, handleFalso(), 'approve');
+  const e = motor(INCERTA, null, 'approve');
   await e.runHeadlessReview(prDe('o/r#3'));
   const item = e.decisions.pending.find((d) => d.key === 'o/r#3');
   assert.ok(item);
@@ -142,7 +125,7 @@ test('postagem incerta: vira pendência com o motivo, sem lançar', async () => 
 // Desde 01/10/2026 lacuna de cobertura e contestação não seguram a reprovação automática: o
 // bloqueio é postado e o card registra o que a leitura não cobriu (nada disso vai ao PR).
 test('request_changes com lacuna de cobertura e contestação: posta, e o card registra as duas', async () => {
-  const e = motor({ ok: true, estado: 'confirmada' }, handleFalso(), 'request_changes');
+  const e = motor({ ok: true }, null, 'request_changes');
   const base = envelope('request_changes');
   const comLacuna = {
     ...base,
@@ -151,7 +134,7 @@ test('request_changes com lacuna de cobertura e contestação: posta, e o card r
   };
   e.runClaudeStream = async (prompt, opts) => {
     if (typeof opts.onAdmitted === 'function') await opts.onAdmitted(null);
-    return { text: JSON.stringify({ result: JSON.stringify(comLacuna) }), sessionId: 's1', coordination: handleFalso() };
+    return { text: JSON.stringify({ result: JSON.stringify(comLacuna) }), sessionId: 's1' };
   };
   await e.runHeadlessReview(prDe('o/r#7'));
   assert.equal(e.chamadas.length, 1, 'o REQUEST_CHANGES foi postado');

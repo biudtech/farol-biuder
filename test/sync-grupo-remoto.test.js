@@ -22,6 +22,7 @@ import { startFakeIdentity } from './helpers/fake-identity.js';
 import { SYNC } from '../lib/constants.js';
 
 const { Engine } = await import('../server.js');
+const syncDireto = (await import('../lib/engine/sync.js')).default;
 const grupos = await import('../lib/engine/sync-grupo.js');
 const grupo = (await import('../lib/sync/grupo.js')).default;
 const envelope = (await import('../lib/sync/envelope.js')).default;
@@ -177,7 +178,7 @@ test('aceitar um teto de zero dólar não barra nada: configurar não é ativar'
   const r = grupos.aceitarGrupo(e, syncCfg(), { no: noPublicado(), admin: adminDoBanco(), autoridade: autoridade(), id: ID });
   assert.equal(r.grupo.tetoUsd, 0);
   assert.equal(e.config.parallel === undefined || typeof e.config.parallel === 'number', true);
-  assert.equal(e.syncSeguraAutomacao('dono/repo#1'), false, 'o teto configurado não segura automação nenhuma');
+  assert.equal(syncDireto.seguraAutomacao(e, 'dono/repo#1'), false, 'o teto configurado não segura automação nenhuma');
   const resumo = grupo.resumoDoGrupo(r.grupo, { vinculos: {} });
   assert.equal(resumo.estado, 'configurado', 'aparece como configurado, e é só isso que ele faz');
 });
