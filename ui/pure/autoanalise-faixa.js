@@ -4,7 +4,7 @@
 // resultado aparece no mesmo lugar quando termina.
 import { esc } from './comum.js';
 import { progressoDaSessao } from './sessao.js';
-import { tomDaProntidao } from './prontidao.js';
+import { classeDoTom } from './densidade.js';
 
 // Sem "Avaliação técnica": ela é da revisão, a autoanálise não roda (lib/engine/selfpr.js).
 export const ETAPAS_DA_AUTOANALISE = ['Código', 'Leitura', 'Verificação', 'Conclusão'];
@@ -57,7 +57,7 @@ function rodando(sess, itens, agora, etapaMinima) {
     return { ...base, tom: 'wait', texto: `Sem sinal do modelo ${p.texto.replace(/^sem sinal /, '')}. A sessão segue aberta.`, apoio: 'pode cancelar e tentar de novo', frase: 'Sem sinal', barra: 'indefinida' };
   }
   const comum = { ...base, tom: 'run', texto: textoDaEtapa(etapa, itens), apoio: '', frase: FRASE_DA_ETAPA[etapa], barra: 'indefinida', pct: 0 };
-  if (!total || etapa < 1 || sess.lidos == null) return comum;   // sem leitura observada não há contagem (Codex e Antigravity não reportam)
+  if (!total || etapa < 1 || sess.lidos == null) return comum;   // sem leitura observada não há contagem
   const contagem = `${lidos} de ${total}`;
   if (etapa !== 1) return { ...comum, apoio: `${contagem} arquivos` };
   return { ...comum, apoio: `${contagem} arquivos`, frase: `Lendo ${contagem}`, barra: 'definida', pct: Math.floor(lidos / total * 100) };
@@ -110,7 +110,7 @@ export function faixaDaAutoanaliseHtml(m, o = {}) {
   if (!m) return '';
   const agora = o.agora || Date.now();
   const etapas = m.tipo === 'falha' ? '<span class="aa-falha-titulo">A autoanálise não terminou</span>' : `<div class="aa-etapas">${etapasHtml(m)}</div>`;
-  return `<div class="aa-faixa ${tomDaProntidao(m.tom)}" data-aa-key="${esc(o.key)}" data-aa-etapa="${m.etapa}" data-aa-tipo="${m.tipo}" role="group" aria-label="Andamento da autoanálise">
+  return `<div class="aa-faixa ${classeDoTom(m.tom)}" data-aa-key="${esc(o.key)}" data-aa-etapa="${m.etapa}" data-aa-tipo="${m.tipo}" role="group" aria-label="Andamento da autoanálise">
     <div class="aa-topo">${etapas}<div class="aa-lado">${tempoHtml(m, agora)}${acaoHtml(m, o)}</div></div>
     ${barraHtml(m)}
     <div class="aa-rodape${m.barra ? '' : ' sem-barra'}"><span class="aa-texto" title="${esc(m.texto)}">${esc(m.texto)}</span><span class="aa-apoio">${esc(m.apoio || '')}</span></div>

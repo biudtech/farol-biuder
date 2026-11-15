@@ -51,7 +51,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 28, 'são 28 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 24, 'são 24 classes, incluindo a migração dos vistos sem decisão e a recusa da política de uso do modelo');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -72,9 +72,8 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
   assert.deepEqual(CLASSES.map(c => c.id), [
     // limite-da-organizacao ANTES de limite-plano: várias frases de teto da organização
     // contêm "usage limit" e seriam lidas como limite de janela (test/limite-do-claude.test.js)
-    // as do Antigravity logo depois de limite-plano, com a capacidade do modelo antes da cota
     'restart-fila', 'console-fechado', 'limite-da-organizacao', 'limite-plano',
-    'processos-indisponiveis', 'capacidade-agy', 'limite-agy', 'agy-print-timeout', 'agy-conta-trocada', 'agy-sem-login', 'assinatura-bloqueada',
+    'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'coordenacao-indisponivel', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem', 'ferramenta'
   ]);
@@ -732,12 +731,12 @@ test('busca sem mensagem tem classe própria e transitória', () => {
 });
 
 test('spawn EAGAIN volta para a fila sem confundir com credencial ou binário ausente', () => {
-  for (const erro of ['spawn agy EAGAIN', 'spawn /usr/bin/agy EAGAIN', 'spawn EAGAIN']) {
+  for (const erro of ['spawn claude EAGAIN', 'spawn /usr/bin/claude EAGAIN', 'spawn EAGAIN']) {
     const c = classify(erro);
     assert.equal(c.id, 'processos-indisponiveis');
     assert.equal(c.kind, 'transitorio');
   }
-  for (const erro of ['spawn agy ENOENT', 'spawn agy EACCES', 'Authentication required. Please visit the URL']) {
+  for (const erro of ['spawn claude ENOENT', 'spawn claude EACCES', 'Authentication required. Please visit the URL']) {
     assert.notEqual(classify(erro).id, 'processos-indisponiveis');
   }
 });
@@ -766,4 +765,11 @@ test('triage: WARN conhecido e ERROR desconhecido continuam contando', () => {
   assert.equal(r[0].id, 'limite-plano');
   const erro = triage([L('2026-08-06 14:12:35', 'ERROR', 'coisa nunca vista')]);
   assert.equal(erro[0].id, 'desconhecido', 'ERROR desconhecido continua contando');
+});
+
+test('sem perfil de chave de API é permanente e de credencial: esperar não resolve', () => {
+  const c = classify('sem perfil de chave de API utilizável: cadastre a chave em Sistema > Plano e chaves');
+  assert.equal(c.id, 'sem-perfil-de-chave');
+  assert.equal(c.kind, 'permanente');
+  assert.equal(c.grupo, 'credencial');
 });

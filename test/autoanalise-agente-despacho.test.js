@@ -34,8 +34,8 @@ const esperarFila = async (engine) => { for (let i = 0; i < 20 && (engine.headle
 
 test('dois pedidos de agente atrás de conta ocupada: o 1º esgota o orçamento e o 2º não abre sessão', async () => {
   const { engine, sessoes, toasts } = engineOcupado();
-  assert.equal((await engine.launchSelfAnalysis('https://github.com/acme/app/pull/1', 'restricted-read', undefined, true)).ok, true);
-  assert.equal((await engine.launchSelfAnalysis('https://github.com/acme/app/pull/2', 'restricted-read', undefined, true)).ok, true);
+  assert.equal((await engine.launchSelfAnalysis('https://github.com/acme/app/pull/1', 'restricted-read', true)).ok, true);
+  assert.equal((await engine.launchSelfAnalysis('https://github.com/acme/app/pull/2', 'restricted-read', true)).ok, true);
   await esperarFila(engine);
   assert.deepEqual(sessoes, ['acme/app#1']);
   assert.equal(engine.headlessQueue.length, 0, 'o recusado sai da fila');

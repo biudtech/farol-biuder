@@ -183,23 +183,14 @@ test('a Justiça de fila usa o nome novo do teto total', () => {
   assert.match(html, /<h4>Teto total deste aparelho<\/h4>/);
 });
 
-test('Contas: o perfil diz que escolhe o login do Claude, e que o modelo vem da Automação', () => {
+test('Contas: o perfil diz que escolhe a chave de API do Claude, e que o modelo vem da Automação', () => {
   const html = P.accountsManagerHtml({ accounts: [BIUDER], acct: {}, config: { claudeProfiles: [] } });
-  assert.match(html, /login do Claude \(plano\)/);
-  assert.match(html, /O modelo e o raciocínio vêm de Sistema &gt; Automação|O modelo e o raciocínio vêm de Sistema > Automação/);
+  assert.match(html, /perfil de chave de API/);
+  assert.match(html, /O modelo e o raciocínio vêm de Plano e chaves/);
   assert.doesNotMatch(html, /a-fieldlabel">perfil de IA</);
 });
 
-test('Automação: a co-assinatura avisa no app, não no PR, e respeita a conta', () => {
-  const desc = HTML.slice(HTML.indexOf('id="sys-row-coassinar"'), HTML.indexOf('id="sys-row-reviewfast"'));
-  assert.doesNotMatch(desc, /avisa no PR/);
-  assert.match(desc, /sem postar nada no PR/);
-  assert.match(desc, /espera você também não co-assina/);
-});
-
 test('Automação: nenhuma chave promete o que o engine não faz', () => {
-  assert.doesNotMatch(HTML, /código do qual você é dono, por exemplo/, 'a co-assinatura nunca vale onde você é dono');
-  assert.match(HTML, /Nunca co-assina onde você é dono do código pelo CODEOWNERS/);
   assert.match(HTML, /Não vale no modelo Auto/, 'o Auto fixa fast:false em toda faixa');
   assert.doesNotMatch(HTML, /org que está esperando há mais tempo/, 'o escalonador escolhe a org atendida há mais tempo');
   assert.doesNotMatch(HTML, /APPROVE destacando as ressalvas/);
