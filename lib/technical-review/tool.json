@@ -1,7 +1,7 @@
 {
   "pacote": "eng-behaviour",
-  "commit": "63c8d65cfec69ecfb173825a48bba6509bd05328",
-  "origem": "https://github.com/wandersonaadsantos/eng-behaviour.git",
+  "commit": "ed3e1535cb84faf572fe66c6dc13a1af441588ee",
+  "origem": "https://github.com/biudtech/eng-behaviour.git",
   "construcao": [
     [
       "pnpm",
