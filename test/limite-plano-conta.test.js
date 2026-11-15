@@ -1,7 +1,7 @@
 // O limite do plano do Claude é da ASSINATURA, não do PR (relato de 21/09/2026).
 //
 // A v2.62.9 fez cada PR esperar o reset depois de bater no limite. Medido na timeline do
-// GitHub logo depois: um aparelho já na v2.62.9 abriu revisão em 12 PRs diferentes em 34
+// GitHub logo depois: uma máquina já na v2.62.9 abriu revisão em 12 PRs diferentes em 34
 // segundos (23:53:49 a 23:54:23 UTC), e cada uma morreu em ~4 s. A espera era guardada POR
 // PR: o primeiro descobria o limite e os outros onze tinham de bater nele para descobrir
 // também, cada um pondo e tirando a label <conta>:revisando. E a espera morava só em

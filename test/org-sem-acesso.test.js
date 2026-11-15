@@ -1,4 +1,4 @@
-// Organização que a conta não consegue buscar (15/10/2026). Medido no celular: a conta do
+// Organização que a conta não consegue buscar (15/10/2026). Medido: a conta do
 // Alex tinha 11 orgs, a busca de `team-ascent-consulting` respondia `Invalid search query`
 // a cada ciclo, e o Panorama dela nunca subia, então o admin não via os PRs pedidos a ela.
 // ATENÇÃO à ordem: gh-queries destrutura io.run no LOAD, então o patch vem ANTES do server.

@@ -22,7 +22,6 @@ function motor() {
   engine.token = 'token-de-teste';
   engine.tokens = { eu: 'token-de-teste' };
   engine.config.accounts = [{ user: 'eu', owners: ['org'] }];
-  engine.config.sync.enabled = false;
   engine.seen = new Set();
   engine.headlessIniciando = new Set();
   engine.pushState = () => {};

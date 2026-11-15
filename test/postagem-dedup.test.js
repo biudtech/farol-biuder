@@ -1,4 +1,4 @@
-// Postagem sem coordenação entre aparelhos (Review Focus 4 do plano da fase 1): dois ciclos
+// Postagem sem coordenação (Review Focus 4 do plano da fase 1): dois ciclos
 // seguidos no mesmo PR e no mesmo head postam UMA vez só. O `gh` de mentira guarda o que foi
 // escrito em `/reviews` e devolve isso na leitura dos meus reviews, como o GitHub faria.
 import os from 'node:os';

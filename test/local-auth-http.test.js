@@ -3,7 +3,7 @@
 // ação (um teste por classe do inventário); o segredo não aparece em log, HTML, snapshot
 // nem URL; nenhum cookie; modo decidido no servidor; sessão sobrevive a reinício e some
 // com a revogação. O modo que exige é ligado aqui por config.localAuth = 'exigir', porque
-// ATIVACAO_AUTOMATICA_A4 segue false. FAROL_HOME temporário antes de qualquer import, e
+// o bind dos testes é o loopback. FAROL_HOME temporário antes de qualquer import, e
 // HOME/USERPROFILE junto: o boot da Engine escreve ~/.claude.json (ensureWorkspaceTrusted)
 // e teste nenhum pode mexer no arquivo real.
 import os from 'node:os';
@@ -23,7 +23,7 @@ const { startServer } = await import('../lib/http-server.js');
 const { LOG_FILE } = await import('../lib/paths.js');
 const { SPAWN_LOG_FILE } = await import('../lib/spawnlog.js');
 const { criarCodigo } = await import('../lib/local-auth/pareamento.js');
-const { revogarTodas } = await import('../lib/local-auth/sessoes.js');
+const { revogarTodas, emitirSessao } = await import('../lib/local-auth/sessoes.js');
 const { CLASSES } = await import('../lib/local-auth/inventario.js');
 
 const RAIZ = path.join(import.meta.dirname, '..');
@@ -109,7 +109,7 @@ async function comEspioes(fn) {
   try { await fn(chamadas); } finally { for (const [nome, f] of originais) engine[nome] = f; }
 }
 
-const GET_DA_CLASSE = new Set(['leitura-sensivel', 'leitura-baixo-risco', 'evento']);
+const GET_DA_CLASSE = new Set(['leitura-sensivel', 'evento']);
 
 test('desktop sem localAuth: a API responde como hoje e o status diz que não exige', async () => {
   const estado = await pedir('GET', '/api/state');
@@ -234,10 +234,10 @@ test('nenhuma resposta emite Set-Cookie', async () => {
 });
 
 test('modo decidido no servidor: User-Agent forjado não muda nada', async () => {
-  const celular = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) Termux/0.118' };
+  const telefone = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) Termux/0.118' };
   const desktop = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Electron/44.1.0' };
-  assert.equal((await pedir('GET', '/api/state', { cabecalhos: celular })).status, 200, 'UA de celular não liga a exigência');
-  assert.deepEqual(JSON.parse((await pedir('GET', '/api/auth/status', { cabecalhos: celular })).body), { exigida: false, autenticado: false });
+  assert.equal((await pedir('GET', '/api/state', { cabecalhos: telefone })).status, 200, 'UA de telefone não liga a exigência');
+  assert.deepEqual(JSON.parse((await pedir('GET', '/api/auth/status', { cabecalhos: telefone })).body), { exigida: false, autenticado: false });
   await comExigencia(async () => {
     assert.equal((await pedir('GET', '/api/state', { cabecalhos: desktop })).status, 401, 'UA de desktop não desliga a exigência');
   });
@@ -260,6 +260,38 @@ test('transporte da UI lê o SSE real com o cabeçalho no modo que exige', async
     });
     assert.ok(estado.decisions, 'o evento state chegou com o snapshot');
   });
+});
+
+// As duas rotas de sessão (lista e revogação) vieram de test/contrato-telas.test.js, que saiu
+// com as telas da sincronização: as rotas da A4 ficam, e a prova delas também.
+test('sessões da A4: a lista marca a atual e nunca leva hash inteiro nem token', async () => {
+  revogarTodas();
+  const minha = emitirSessao('navegador de teste');
+  emitirSessao('outro navegador');
+  const r = JSON.parse((await pedir('POST', '/api/auth/sessions', { corpo: {}, cabecalhos: bearer(minha) })).body);
+  assert.equal(r.ok, true);
+  assert.equal(r.sessoes.length, 2);
+  const atual = r.sessoes.find((s) => s.atual);
+  assert.equal(atual.rotulo, 'navegador de teste');
+  for (const s of r.sessoes) {
+    assert.match(s.id, /^[0-9a-f]{16}$/);
+    assert.deepEqual(Object.keys(s).sort(), ['atual', 'criadoEm', 'id', 'rotulo', 'ultimoUsoEm']);
+  }
+  assert.equal(JSON.stringify(r).includes(minha), false);
+});
+
+test('revogar uma sessão: some da lista, e revogar a própria avisa a tela', async () => {
+  revogarTodas();
+  const minha = emitirSessao('navegador de teste');
+  emitirSessao('outro navegador');
+  const post = async (rota, corpo, cabecalhos = {}) => JSON.parse((await pedir('POST', rota, { corpo, cabecalhos })).body);
+  const lista = (await post('/api/auth/sessions', {}, bearer(minha))).sessoes;
+  const outra = lista.find((s) => !s.atual);
+  assert.deepEqual(await post('/api/auth/revoke', { id: outra.id }, bearer(minha)), { ok: true, eraAtual: false });
+  const propria = lista.find((s) => s.atual);
+  assert.deepEqual(await post('/api/auth/revoke', { id: propria.id }, bearer(minha)), { ok: true, eraAtual: true });
+  assert.deepEqual(await post('/api/auth/revoke', { id: propria.id }), { ok: false, code: 'sessao_inexistente' });
+  assert.equal((await post('/api/auth/revoke', { id: 'nao-e-id' })).code, 'sessao_inexistente');
 });
 
 test('sessão sobrevive a reinício do engine e some depois da revogação', async () => {

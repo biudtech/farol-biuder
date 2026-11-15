@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 
 const { carimbarEPodar, tirarOrfas, ARQUIVO } = await import('../lib/engine/label-propria-orfa.js');
 const { ARQUIVO: PENDENTES } = await import('../lib/engine/labels-a-tirar.js');
-const { leaseVivo } = await import('../lib/sync/lease.js');
 const { TEMPOS } = await import('../lib/constants.js');
 
 after(() => fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }));
@@ -47,7 +46,7 @@ test('label que sumiu ou PR que saiu do panorama perde o carimbo', async () => {
   assert.deepEqual(e.labelPropriaVistaDesde, {});
 });
 
-test('com sessão viva deste aparelho no PR, não carimba', async () => {
+test('com sessão viva no PR, não carimba', async () => {
   const e = motor({ activeReviews: new Map([['s1', { keys: [PR.key] }]]) });
   await carimbarEPodar(e, [PR], T0);
   assert.deepEqual(e.labelPropriaVistaDesde, {});
@@ -65,17 +64,8 @@ test('passado o TTL de 3 h, entra em labels-a-tirar e remove', async () => {
   assert.deepEqual(chamadas, [`pr edit ${PR.url} --remove-label eu:revisando`]);
 });
 
-test('leaseVivo: ausente e expirado são false; vigente e sem expiresAt são true', async () => {
-  const ids = { uid: 'u', accountHash: 'a', prHash: 'p' };
-  const com = (data) => ({ get: async () => ({ ok: true, data }) });
-  assert.equal(await leaseVivo(com(null), ids, T0), false);
-  assert.equal(await leaseVivo(com({ leaseId: 'x', expiresAt: T0 - 1 }), ids, T0), false);
-  assert.equal(await leaseVivo(com({ leaseId: 'x', expiresAt: T0 + 1 }), ids, T0), true);
-  assert.equal(await leaseVivo(com({ leaseId: 'x' }), ids, T0), true);
-});
-
-// Observação contínua (onda final, 05/11/2026): o relógio da label própria só corre enquanto este
-// aparelho olha o PR a cada ciclo. Notebook fechado ou Farol parado por mais de alguns intervalos de
+// Observação contínua (onda final, 05/11/2026): o relógio da label própria só corre enquanto esta
+// máquina olha o PR a cada ciclo. Notebook fechado ou Farol parado por mais de alguns intervalos de
 // polling recomeçam a contagem, senão o B que viu a label do A, dormiu e acordou depois de 3 h
 // apagaria na hora a label de uma sessão nova do A.
 const PASSO = 10 * 60 * 1000;

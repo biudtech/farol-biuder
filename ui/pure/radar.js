@@ -15,7 +15,6 @@
 import { esc, fmtMoney, fmtRel, fmtStamp, fmtWhenDay, plural } from './comum.js';
 import { avatar, personMention } from './mencoes.js';
 import { papelPicker } from './pessoas.js';
-import { prCoordNoteHtml } from './sync.js';
 import { filaEsperaHtml } from './fila-espera.js';
 import { avisosDoCard, limitNoteHtml, othersLineHtml } from './revisando.js';
 
@@ -163,8 +162,8 @@ export function queueCardHtml(pr, ctx) {
   const seloRepedida = pr.reRequested ? '<span class="badge rev-pend">pedida de novo</span>' : '';
   const papel = pr.author ? ` ${papelPicker(pr.author, ctx.people)}` : '';
   // Os avisos da execução seguem a precedência do Claude Design (02/10/2026,
-  // ui/pure/revisando.js): parada, depois limite do plano, depois coordenação. Com alguém
-  // revisando, limite e coordenação somem, porque falam de uma revisão automática que não
+  // ui/pure/revisando.js): parada, depois limite do plano. Com alguém
+  // revisando, o limite some, porque fala de uma revisão automática que não
   // vai acontecer.
   // a decisão do motor por PR (conta, organização e autor); sem ela, a conta
   const automaticaDesativada = typeof ctx.manual === 'boolean' ? ctx.manual : m.acct?.autoReview === false;
@@ -173,9 +172,7 @@ export function queueCardHtml(pr, ctx) {
   const parked = parkedNoteHtml(parkedInfo, av.rotulo);
   const pessoas = av.forma ? othersLineHtml(av.logins, av.forma) : '';
   const limite = av.nota === 'limite' ? limitNoteHtml(ctx.limiteAte, av.formaLimite, av.rotulo) : '';
-  const coord = av.nota === 'coordenacao' ? prCoordNoteHtml(pr.key, ctx.sync) : '';
-  // A política local continua visível mesmo quando outro aparelho já está analisando.
-  const manual = automaticaDesativada ? `<div class="pr-coord">Revisão automática desativada para este PR neste aparelho. Para iniciar aqui, clique em ${esc(av.rotulo)}.</div>` : '';
+  const manual = automaticaDesativada ? `<div class="pr-coord">Revisão automática desativada para este PR. Para iniciar aqui, clique em ${esc(av.rotulo)}.</div>` : '';
   const conflito = (ctx.esperaConflito || {})[pr.key] ? '<div class="pr-coord">Em conflito com a base: a revisão automática abre quando o conflito for resolvido. O botão Revisar não espera.</div>' : '';
   const acaoRevisar = `<button class="btn primary sm act-review" data-url="${esc(pr.url)}">${av.rotulo}</button>`;
   // O ponto da conta abre a linha do PR, e não é filho do card: a grade tem uma coluna
@@ -188,7 +185,7 @@ export function queueCardHtml(pr, ctx) {
         <div class="pr-ref">${m.dot}<a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>${m.chip}${seloRascunho}${seloRepedida}</div>
         <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
         <div class="pr-sub">${personMention(pr.author, 'xs')} · atualizado ${fmtRel(pr.updatedAt)}${papel}</div>
-        ${parked}${pessoas}${limite}${coord}${manual}${conflito}
+        ${parked}${pessoas}${limite}${manual}${conflito}
       </div>
       <div class="pr-actions">
         ${acaoRevisar}
@@ -207,21 +204,19 @@ export function queueCardHtml(pr, ctx) {
 }
 
 // Pedido ja retirado da fila acionavel, mas ainda sem sessao ou decisao. Nao oferece
-// Revisar/Ignorar: a distribuicao ou o executor local ainda podem pega-lo, e um
+// Revisar/Ignorar: o executor ainda pode pega-lo, e um
 // segundo disparo aqui criaria duas revisoes para o mesmo commit.
 export function queueWaitingCardHtml(pr, ctx) {
   const m = ctx.mark;
-  const distribuindo = ctx.distribuindo === true;
-  const estado = distribuindo ? 'Esperando distribuição' : 'Na fila de execução';
-  const detalhe = distribuindo ? prCoordNoteHtml(pr.key, ctx.sync) : '';
-  const espera = distribuindo ? '' : filaEsperaHtml(ctx.espera);
+  const estado = 'Na fila de execução';
+  const espera = filaEsperaHtml(ctx.espera);
   return `<div class="card pr-card" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}" style="${m.style}">
     ${avatar(pr.author)}
     <div class="info">
       <div class="pr-ref">${m.dot}<a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>${m.chip}</div>
       <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
       <div class="pr-sub">${personMention(pr.author, 'xs')} · atualizado ${fmtRel(pr.updatedAt)}</div>
-      <div class="pr-coord">${estado}. Ainda não há resultado desta execução.</div>${espera}${detalhe}
+      <div class="pr-coord">${estado}. Ainda não há resultado desta execução.</div>${espera}
     </div>
     <div class="pr-actions"><a class="btn sm ghost" href="${esc(pr.url)}" target="_blank" rel="noreferrer">Abrir PR ↗</a>${ctx.pronLado || ''}</div>
   </div>`;

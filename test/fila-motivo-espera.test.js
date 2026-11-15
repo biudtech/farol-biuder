@@ -1,9 +1,7 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import os from 'node:os';
 import { processHeadless } from '../lib/engine/headless-fila.js';
 import { esperaParaTela } from '../lib/engine/conta-na-tela.js';
-import admissao from '../lib/engine/admissao.js';
 import { queueWaitingCardHtml } from '../ui/pure/radar.js';
 
 beforeEach(t => {
@@ -13,11 +11,10 @@ beforeEach(t => {
 afterEach(() => mock.restoreAll());
 
 const pr = (n, account = 'alice') => ({ key: `acme/app#${n}`, account, title: 'Corrige formulário', author: 'bob' });
-function motor(shared = false) {
+function motor() {
   const e = {
-    config: { parallelReviews: 1, globalParallelReviews: 2,
-      sync: { enabled: shared, shared: { enabled: shared }, aceitarAdmin: false } },
-    doctorInfo: { claude: 'pronto' }, sync: { lastPresenceAt: Date.now() },
+    config: { parallelReviews: 1, globalParallelReviews: 2 },
+    doctorInfo: { claude: 'pronto' },
     headlessQueue: [pr(1), pr(2)], headlessBusyAccounts: new Map(),
     orgLastStart: new Map(), headlessSeq: 0, iniciadas: [],
     accountForPr: p => p.account, headlessAcct: p => p.account,
@@ -26,10 +23,6 @@ function motor(shared = false) {
   return e;
 }
 function detalhes(e) { return esperaParaTela(e).headlessWaitingDetails; }
-function memoria(mb) {
-  mock.method(os, 'freemem', () => mb * 1024 * 1024);
-  mock.method(process, 'availableMemory', () => mb * 1024 * 1024);
-}
 
 test('o limite da conta explica a espera sem lançar outra sessão', () => {
   const e = motor();
@@ -80,11 +73,4 @@ test('falta de diagnóstico não inventa uma causa nem uma posição', () => {
   const html = queueWaitingCardHtml(pr(1), { mark });
   assert.match(html, /Motivo da espera ainda não confirmado/);
   assert.doesNotMatch(html, /Posição|Limite de revisões simultâneas/);
-});
-
-test('espera de distribuição não recebe posição ou recusa da fila local', () => {
-  const html = queueWaitingCardHtml(pr(1), { mark, distribuindo: true,
-    espera: { posicao: 1, total: 3, motivo: 'memoria-insuficiente' } });
-  assert.match(html, /Esperando distribuição/);
-  assert.doesNotMatch(html, /Posição|Memória disponível insuficiente/);
 });

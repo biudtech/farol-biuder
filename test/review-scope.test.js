@@ -352,8 +352,8 @@ test('tela distingue herança, autor, publicação e conta manual, e escapa text
 });
 
 // Revisão independente (12/11/2026): duas telas ainda decidiam só pela conta. O card da fila dizia
-// "desativada para esta conta" num PR da CNBB que ia ser revisado sozinho, e a fila vista de outro
-// aparelho oferecia ligar a conta inteira, o que ligaria a BIUD junto.
+// "desativada para esta conta" num PR da CNBB que ia ser revisado sozinho, e a tela
+// oferecia ligar a conta inteira, o que ligaria a BIUD junto.
 test('o card da fila segue a decisão do PR, e sem ela cai na conta', async () => {
   const P = await import('../ui/pure.js');
   const mark = { style: '', varStyle: '', dim: '', chip: '', dot: '', acct: { label: 'cnbb', autoReview: false } };
@@ -369,11 +369,3 @@ test('o motor manda para a tela, por PR, se a revisão inicia sozinha', () => {
   assert.deepEqual(e.inicioAutomaticoDaFila(), { [pr().key]: false, [CNBB().key]: true });
 });
 
-test('a fila vista de outro aparelho segue a regra da organização', async () => {
-  const filaEng = await import('../lib/engine/sync-fila.js');
-  const e = engine(SO_CNBB, false);
-  e.queue = [];
-  const fatos = filaEng.fatosDaFila(e);
-  assert.notEqual(filaEng.filaDoPr(e, fatos, { ...CNBB(), mine: true }).motivo, 'conta');
-  assert.equal(filaEng.filaDoPr(e, fatos, { ...pr(), mine: true }).motivo, 'conta');
-});

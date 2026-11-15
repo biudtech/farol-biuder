@@ -857,17 +857,6 @@ label.set-row { cursor: pointer; }
 .usage-kpi b { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.25; }
 .usage-kpi-sub { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .usage-kpi-spark { width: 100%; height: 26px; display: block; margin-top: 6px; }
-/* Marca de escopo quando o segmentado "Este aparelho | Todos os aparelhos" não existe (a
-   consolidação está desligada). Sem ela a aba mostrava números sem escopo nenhum,
-   visualmente idênticos à visão consolidada. Tom neutro de propósito: é uma escolha de
-   configuração, não uma falha de carregamento, e falha tem o callout de aviso. */
-.usage-escopo { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
-.usage-escopo b { font-size: 12.5px; font-weight: 650; color: var(--text); }
-.usage-escopo span { font-size: 11.5px; color: var(--faint); }
-@media (max-width: 620px) {
-  .usage-escopo { flex-direction: column; align-items: flex-start; gap: 1px; }
-}
-
 .usage-chart-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .usage-chart-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 .usage-chart-head h3 { margin: 0; font-size: 14px; font-weight: 650; }
@@ -1003,7 +992,7 @@ label.set-row { cursor: pointer; }
   .pr-actions .btn.icon { flex: 0 0 auto; }
 }
 /* ---------- escada de breakpoints (documento de design, 2a) ----------
-   O alvo é JANELA ESTREITA DE DESKTOP (Electron a partir de ~380px), não celular:
+   O alvo é JANELA ESTREITA DE DESKTOP (a partir de ~380px), não telefone:
    as 6 abas e os nomes delas continuam, roláveis no topo, e não existe barra inferior. */
 
 /* 820px: acima disso as ações cabem na mesma linha do título sem apertar, então o card
@@ -1264,7 +1253,7 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 .cp-teste-erro { color: var(--danger); }
 .origem { justify-self: end; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 2px 9px; white-space: nowrap; color: var(--muted); background: var(--surface-2); }
 .origem.validado { color: var(--ok); background: var(--ok-soft); }
-.origem.informado, .origem.detectado { color: var(--info); background: var(--info-soft); }
+.origem.informado { color: var(--info); background: var(--info-soft); }
 .origem.inferido { color: var(--accent); background: var(--accent-soft); }
 @media (max-width: 620px) {
   .cp-linha { grid-template-columns: minmax(0, 1fr) auto; }
@@ -1424,83 +1413,15 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 .fj-conta.is-cedendo .fj-barra > span { background: var(--urgent); }
 .fj-conta-num { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
-/* ---------- Sistema > Sincronização entre dispositivos ----------
-   Só tokens, nenhum hex novo. A cor da coordenação é deliberada: --info para espera e
-   --accent para atenção, nunca o --danger do estacionamento, porque segurar não é falhar. */
-.sync-sub-head { font-size: 13px; font-weight: 650; margin: var(--sp-5) 0 var(--sp-2); color: var(--text); }
-
-/* capacidade que existe e não está valendo (adendo, item 5): cada item é um bloco, para o
-   estado nunca se confundir com o motivo numa linha corrida */
-.cap-card .sync-sub-head { margin-top: 0; }
-.cap-lista { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: grid; gap: var(--sp-3); }
-.cap-item { display: grid; gap: 2px; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); }
-.cap-titulo { font-weight: 650; }
-.cap-estado { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn, var(--muted)); }
-.cap-motivo, .cap-falta { font-size: 13px; color: var(--muted); }
-.sync-card { padding: 0; border-left: 3px solid var(--ok); }
-.sync-card.warn { border-left-color: var(--accent); }
-.sync-card.bad { border-left-color: var(--danger); }
-.sync-card.off { border-left-color: var(--border); }
-.sync-topo { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: 12px var(--sp-4); border-bottom: 1px solid var(--border-soft); }
-.sync-titulo { font-size: 14px; font-weight: 650; }
-.sync-espaco { flex: 1; }
-.sync-corpo { padding: var(--sp-3) var(--sp-4); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
-.sync-campo { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
-.sync-campo > label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
-.sync-input { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12.5px; min-height: 31px; width: 100%; }
-.sync-input:focus { outline: none; border-color: var(--accent); }
-/* o olho fica DENTRO da moldura do campo: o input já tem largura total, então o botão
-   flutua sobre ele e o padding à direita reserva o espaço pro texto não passar por baixo */
-.sync-senha { position: relative; display: block; width: 100%; }
-.sync-senha > .sync-input { padding-right: 34px; }
-.sync-olho { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; background: none; border: 0; border-radius: 6px; color: var(--faint); cursor: pointer; }
-.sync-olho:hover { color: var(--text); background: var(--surface-3, var(--surface-2)); }
-.sync-olho:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.sync-olho > svg { width: 15px; height: 15px; }
-.sync-dica { font-size: 11px; color: var(--faint); }
-.sync-vago { color: var(--faint); }
-.sync-vazio { margin: var(--sp-3) 2px; font-size: 12.5px; }
-.sync-conta { margin: 0 var(--sp-4) var(--sp-3); border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
-.sync-conta-topo { display: flex; align-items: center; gap: 9px; padding: 9px 13px; border-bottom: 1px solid var(--border-soft); }
-.sync-conta-titulo { font-size: 12.5px; font-weight: 650; }
-.sync-conta-onde { font-size: 11.5px; color: var(--faint); margin-left: auto; font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; }
-.sync-conta-corpo { padding: 12px 13px; display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
-.sync-conta-corpo .sync-campo { flex: 1; min-width: 190px; }
-.sync-quem { color: var(--text); font-weight: 600; }
-.sync-conta-nota { padding: 0 13px 11px; margin: 0; font-size: 11.5px; color: var(--faint); text-wrap: pretty; }
-.sync-conta-nota-ruim { color: var(--danger); padding-top: 0; }
-.sync-degradada { margin: var(--sp-3) var(--sp-4); }
-.sync-rodape { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 var(--sp-4) 13px; }
-.sync-teste { font-size: 11.5px; color: var(--faint); }
-.sync-teste.ok { color: var(--ok); }
-.sync-teste.ruim { color: var(--danger); }
-.sync-lista { padding: 2px var(--sp-4); }
-.sync-linha { display: grid; grid-template-columns: minmax(0, 1fr) 90px 110px 150px; gap: var(--sp-3); align-items: center; padding: 10px 0; font-size: 12.5px; }
-.sync-linha + .sync-linha { border-top: 1px solid var(--border-soft); }
-.sync-linha.sync-head { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); padding-bottom: 6px; }
-/* A linha do Consumo consolidado tem TRÊS colunas (aparelho, sessões, custo · última), e a
-   .sync-linha genérica tem quatro, com um media query que esconde os filhos 2 e 3 no
-   estreito. Ali eles são justamente sessões e custo: a ≤720 px a tabela "Todos os
-   aparelhos" virava uma lista de nomes e mais nada (medido em 20/09/2026). A exceção é do
-   componente, como a da .apar-sessao, para não regredir os outros usos da .sync-linha. */
-.sync-linha.usage-dev { grid-template-columns: minmax(0, 1fr) 90px minmax(0, 190px); }
-.sync-nome { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-weight: 600; }
-.sync-fraco { color: var(--muted); }
-.sync-coord { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-3); align-items: center; padding: 11px 0; font-size: 12.5px; }
-.sync-coord + .sync-coord { border-top: 1px solid var(--border-soft); }
-.sync-ref { color: var(--accent); font-weight: 600; }
-.sync-o-que { display: block; color: var(--muted); margin-top: 1px; }
-.sync-o-que.sync-orfao { color: var(--accent); }
-.sync-legenda { font-size: 11.5px; color: var(--faint); margin: var(--sp-2) 2px 0; }
-.sync-chip { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 2px 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.sync-chip.ok { color: var(--ok); background: var(--ok-soft); }
-.sync-chip.warn { color: var(--accent); background: var(--accent-soft); }
-.sync-chip.bad { color: var(--danger); background: var(--danger-soft); }
-.sync-chip.info { color: var(--info); background: var(--info-soft); }
-.sync-chip.mute { color: var(--muted); background: var(--surface-2); }
-/* Anotação de coordenação no card da fila. Azul é espera (o PR está com outro aparelho),
-   âmbar é atenção (indisponível, teto de rodadas). O vermelho fica reservado ao
-   estacionamento, que é falha de verdade. */
+/* Selo de estado (Diagnóstico): ok, atenção, falha, informação e neutro. */
+.chip-estado { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 2px 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.chip-estado.ok { color: var(--ok); background: var(--ok-soft); }
+.chip-estado.warn { color: var(--accent); background: var(--accent-soft); }
+.chip-estado.bad { color: var(--danger); background: var(--danger-soft); }
+.chip-estado.info { color: var(--info); background: var(--info-soft); }
+.chip-estado.mute { color: var(--muted); background: var(--surface-2); }
+/* Anotação de espera no card da fila. Azul é espera, âmbar é atenção. O vermelho fica
+   reservado ao estacionamento, que é falha de verdade. */
 .pr-coord { margin-top: var(--sp-1); font-size: 11.5px; line-height: 1.35; color: var(--info); }
 .pr-coord.warn { color: var(--accent); }
 
@@ -1529,18 +1450,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 .queue-limit + .queue-limit { margin-top: -4px; }
 @media (max-width: 620px) {
   .queue-limit { padding: 10px 12px; }
-}
-/* Telas estreitas (o Farol aberto no navegador do celular, via Termux): os três campos
-   viram um por linha e a lista de aparelhos perde a coluna do sistema. */
-@media (max-width: 720px) {
-  .sync-corpo { grid-template-columns: 1fr; }
-  .sync-linha { grid-template-columns: minmax(0, 1fr) auto; }
-  .sync-linha > :nth-child(2), .sync-linha > :nth-child(3) { display: none; }
-  /* o consolidado preserva sessões e custo: empilhados e com o rótulo do data-rot, porque
-     o cabeçalho da tabela também some aqui */
-  .sync-linha.usage-dev { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
-  .sync-linha.usage-dev > :nth-child(2), .sync-linha.usage-dev > :nth-child(3) { display: block; }
-  .sync-linha.usage-dev.sync-head { display: none; }
 }
 
 /* ---------- pareamento da API local (A4) ----------
@@ -1594,275 +1503,15 @@ body.parear > *:not(.par-raiz) { display: none !important; }
 .falha-texto pre, #diagBox pre { margin: 8px 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 620px) { .falha-ref { width: 100%; } }
 
-/* ---------- visão compartilhada no Radar (B2, itens 2.7 a 2.9) ---------- */
 .pr-coord.bad { color: var(--danger); }
-.md-host { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
-.md-faixa { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 12.5px; color: var(--text); text-wrap: pretty; }
-.md-faixa.warn { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
-.md-faixa.ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
-.md-espaco { flex: 1; }
-.md-goto { color: var(--info); cursor: pointer; }
-.md-goto:hover { text-decoration: underline; }
-.md-pend, .md-op { display: flex; flex-direction: column; gap: 6px; }
-.md-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.md-titulo { font-size: 13.5px; font-weight: 650; overflow-wrap: anywhere; }
-.md-sub { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
-.md-fraco { font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
-.md-feed { margin: 0; padding-left: 18px; font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--faint); max-height: 140px; overflow-y: auto; }
-.md-feed li { overflow-wrap: anywhere; }
-.md-motivos { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text); }
-.md-motivos li { overflow-wrap: anywhere; }
-.md-payload { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
-.md-payload > summary { cursor: pointer; }
-.md-inline-arquivo { display: flex; flex-direction: column; gap: 4px; padding-left: 10px; border-left: 2px solid var(--border); }
-.md-inline { overflow-wrap: anywhere; }
-.md-nota { margin: 6px 0 0; font-size: 12px; color: var(--muted); text-wrap: pretty; }
-.md-vazio { margin: 0; padding: 10px 2px; font-size: 12.5px; color: var(--muted); }
-.md-ruim { color: var(--danger); }
-.md-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.md-acoes .md-nota { margin: 0; }
-.md-lista { padding: 0; display: flex; flex-direction: column; }
-.md-cmd, .md-rev { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 14px; border-top: 1px solid var(--border); font-size: 12.5px; min-width: 0; }
-.md-cmd:first-child, .md-rev:first-child { border-top: 0; }
-.md-rev-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.md-rev-topo { margin-bottom: 8px; }
-.md-escopo.active { border-color: var(--accent); color: var(--accent); }
-.md-envio { display: flex; flex-direction: column; gap: 10px; }
-.md-numeros { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; }
-.md-modal-acoes { flex-wrap: wrap; }
-@media (max-width: 860px) {
-  .md-numeros { gap: 12px; }
-}
-@media (max-width: 720px) {
-  .md-cmd .md-espaco, .md-rev .md-espaco { display: none; }
-}
-@media (max-width: 620px) {
-  .md-acoes { flex-direction: column; align-items: stretch; }
-  .md-acoes .btn, .md-rev .btn, .md-rev-topo .btn, .md-envio .btn, .md-modal-acoes .btn { min-height: 44px; justify-content: center; }
-  .md-rev-topo .btn { flex: 1; }
-  .md-modal-acoes { flex-direction: column-reverse; align-items: stretch; }
-  .md-goto { min-height: 44px; display: inline-flex; align-items: center; }
-}
-/* ---------- Sistema > Aparelhos e Grupos de consumo (C2, C4b) ----------
-   Reaproveitam o cartão e a lista da Sincronização (.sync-card, .sync-lista, .sync-chip);
-   o prefixo apar-/grupo- fica só no que é novo. No estreito, a linha do aparelho vira
-   bloco, as ações vão para baixo e todo alvo de toque chega a 44 px. */
-.apar-corpo { display: flex; flex-direction: column; gap: 10px; padding: 14px var(--sp-4); }
-.card.apar-corpo { padding: 14px 18px; }
-.apar-titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.apar-acao { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
-.apar-acao .sync-campo { flex: 1; min-width: 200px; }
-/* A GRADE mora na lista, e cada linha herda as colunas dela (subgrid). Antes cada
-   .apar-linha era um grid próprio com a mesma receita, e coluna dimensionada por conteúdo
-   (`auto`, a das ações) não pode ser igual em grids diferentes: no cabeçalho ela valia 0 px
-   (span vazio) e nas linhas, a largura dos botões, que depende do PAPEL do aparelho.
-   Medido a 1500 px em 20/09/2026: nome de 448 px no cabeçalho contra 0, 37 e 198 px nas
-   linhas, com o nome transbordando por cima da coluna do sistema. Quanto mais poder a linha
-   oferecia, menos nome cabia.
 
-   AS AÇÕES SAEM DA GRADE (21/09/2026). Com elas como quinta coluna, a largura real da
-   seção Sistema não comporta tudo numa linha: medido no app, a lista tem 862 px (o menu
-   lateral fica com o resto), a coluna de ações cabia em 247 px e a linha com "Designar como
-   admin" precisava de 429 px. Reservar os 429 deixaria 65 px para o nome, que é o bug de
-   novo. Então os botões descem para uma FAIXA própria, com a largura inteira: os quatro
-   valores continuam alinhados sob os cabeçalhos, e as ações cabem numa linha só. */
-.apar-lista { display: grid; grid-template-columns: minmax(0, 1fr) 90px 100px 130px; column-gap: var(--sp-3); }
-.apar-lista > * { grid-column: 1 / -1; }
-.apar-linha { display: grid; grid-template-columns: subgrid; gap: var(--sp-1) var(--sp-3); align-items: center; padding: 10px 0; font-size: 12.5px; }
-.apar-linha + .apar-linha { border-top: 1px solid var(--border-soft); }
-.apar-linha.apar-head { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); padding-bottom: 6px; }
-.apar-linha .sync-nome { flex-wrap: wrap; }
-/* a faixa das ações: linha própria, largura inteira, alinhada à esquerda como o nome que
-   ela acompanha. `1 / -1` vale em qualquer uma das três grades (4, 3 ou 1 coluna). */
-.apar-linha .row-actions { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; margin-top: 2px; }
-.apar-nota { margin: var(--sp-2) 2px var(--sp-3); font-size: 11.5px; color: var(--faint); text-wrap: pretty; }
-.apar-recusa { margin: 0; font-size: 12.5px; color: var(--danger); text-wrap: pretty; }
-.apar-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); align-items: end; }
-.apar-campo { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
-.apar-campo > span:first-child { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
-.apar-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
-.apar-aviso { margin-bottom: var(--sp-3); }
-.grupo-cartao { margin-bottom: var(--sp-3); }
-.grupo-rotulo { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
-.grupo-linha { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.grupo-gasto { font-size: 16px; font-weight: 650; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.grupo-vago { color: var(--faint); font-size: 12px; font-weight: 400; }
-.grupo-falta ul, .grupo-perfis ul { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
-.grupo-perfil { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--sp-3); align-items: center; padding: 10px 0; font-size: 12.5px; }
-.grupo-perfil + .grupo-perfil { border-top: 1px solid var(--border-soft); }
-.grupo-vinc { display: inline-flex; gap: 6px; align-items: center; }
-.grupo-vinc .sync-input { width: auto; max-width: 180px; }
-@media (max-width: 860px) {
-  .apar-grade { grid-template-columns: 1fr 1fr; }
-  /* quem troca de grade é sempre o container: a linha só herda (ver .apar-lista) */
-  .apar-lista { grid-template-columns: minmax(0, 1fr) 90px; }
-  .apar-linha > :nth-child(2), .apar-linha > :nth-child(4) { display: none; }
-}
-@media (max-width: 720px) {
-  .apar-duo, .apar-grade { grid-template-columns: 1fr; }
-  .apar-lista { grid-template-columns: minmax(0, 1fr); }
-  .grupo-perfil { grid-template-columns: minmax(0, 1fr); }
-  .apar-linha.apar-head { display: none; }
-  .apar-linha > :nth-child(2), .apar-linha > :nth-child(4) { display: inline; }
-  /* Com o cabeçalho escondido, cada valor diz o que é: sem isto a linha vira uma pilha de
-     valores crus (win32, v2.62.4, hoje 13:28) que só quem já conhece a tela decifra. O
-     rótulo vem do data-rot do próprio valor, então tela e rótulo nunca divergem. */
-  .apar-linha > [data-rot]::before, .sync-linha.usage-dev > [data-rot]::before {
-    content: attr(data-rot) ": "; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  }
-  .grupo-vinc { flex-wrap: wrap; }
-  .grupo-vinc .sync-input { max-width: none; flex: 1; }
-}
-@media (max-width: 620px) {
-  #devicesManager .btn, #groupsManager .btn, #devicesManager .sync-input, #groupsManager .sync-input { min-height: 44px; }
-  .apar-acao .sync-campo { min-width: 0; width: 100%; }
-}
-/* ---------- divergências de Aparelhos e Grupos (resolução de 16/09/2026) ----------
-   O cartão do que não está valendo repete o da Sincronização só no estreito (é onde o
-   celular chega primeiro); a linha do navegador pareado volta a mostrar pareado e usado no
-   estreito, empilhados, porque a regra genérica da .sync-linha os esconde; e o olho da
-   senha ganha alvo de toque junto com o campo. */
-.apar-so-estreito { display: none; }
-.apar-atalho { margin: var(--sp-2) 2px 0; }
-.modal-body .sync-senha { margin-top: var(--sp-2); }
-@media (max-width: 720px) {
-  .apar-so-estreito { display: block; }
-  .sync-linha.apar-sessao { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
-  .sync-linha.apar-sessao > :nth-child(2), .sync-linha.apar-sessao > :nth-child(3) { display: block; }
-  .sync-linha.apar-sessao > .btn { justify-self: start; }
-}
-@media (max-width: 620px) {
-  #devicesManager .sync-senha > .sync-input, .modal-body .sync-senha > .sync-input { padding-right: 48px; }
-  #devicesManager .sync-olho, .modal-body .sync-olho { width: 44px; height: 44px; right: 0; }
-}
-
-/* ---------- transferência e tomada pela tela (B2, item 2.9, quadro C8) ----------
-   A lista de destinos mora dentro do diálogo: apto em destaque, inapto apagado e sem
-   ação, cada um com o motivo. As opções de envio são os botões do próprio diálogo
-   (.md-modal-acoes), que já chegam a 44 px no estreito. */
-.md-destinos { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; }
-.md-destino { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 8px 12px; font-size: 12.5px; overflow-wrap: anywhere; }
-.md-destino + .md-destino { border-top: 1px solid var(--border-soft); }
-.md-destino.md-apto b { color: var(--ok); }
-.md-destino.md-inapto { color: var(--muted); }
-.md-destino.md-inapto b { font-weight: 600; }
-@media (max-width: 860px) {
-  .md-destinos { margin-top: 8px; }
-}
-@media (max-width: 720px) {
-  .md-destino { flex-direction: column; gap: 2px; }
-}
-@media (max-width: 620px) {
-  .md-destino { min-height: 44px; justify-content: center; }
-  .pr-coord .md-goto { min-height: 44px; }
-}
-
-.md-origem { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.md-pr { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.md-pr-titulo { overflow-wrap: anywhere; }
-.md-pr-autor { font-size: 12px; color: var(--muted); }
-.md-pr-generico { color: var(--text); }
-@media (max-width: 860px) {
-  .md-origem { max-width: 140px; }
-}
-@media (max-width: 620px) {
-  .md-pend .pr-ref-mention, .md-op .pr-ref-mention { min-height: 44px; display: inline-flex; align-items: center; }
-  .md-origem { max-width: none; white-space: normal; }
-}
-/* ---------- repetir, iniciar e designar admin pela tela (B2, itens 2.5 e 2.9) ----------
-   Os botões novos reaproveitam .md-acoes, .md-rev e a linha do aparelho, que já chegam a
-   44 px no estreito. Só as notas de "indisponível" são novas: na linha da revisão ela ocupa
-   a linha inteira em vez de espremer o chip, e na linha do aparelho ela quebra junto das
-   ações. */
-.md-rev .md-nota { flex-basis: 100%; margin: 0; }
-/* a nota de "designar: ..." mora na faixa das ações, e acompanha o alinhamento dela: com a
-   faixa à esquerda, empurrar a nota para a direita a deixava órfã do outro lado da tela */
-.apar-linha .row-actions .sync-fraco { flex-basis: 100%; text-align: left; }
-@media (max-width: 860px) {
-  .md-rev .md-nota { font-size: 11.5px; }
-}
-@media (max-width: 620px) {
-  .md-rev .md-nota { padding: 4px 0; }
-}
-
-/* ---------- Radar > Aparelhos: o controle dos executores pelo admin (28/09/2026) ----------
-   Desenho: docs/superpowers/specs/2026-09-28-controle-do-celular-anexos/HANDOFF-claude-design.md */
 .pill.warn { background: var(--accent-soft); color: var(--accent); }
-.apar-troca { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-4); }
-.apar-troca-item { display: flex; gap: 10px; align-items: center; text-align: left; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer; }
-.apar-troca-item.active { border-color: var(--accent); background: var(--surface-2); }
-.apar-troca-item small { display: block; color: var(--muted); font-size: 12px; }
-.apar-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--ok); }
-.apar-dot.pausado, .apar-dot.antigo { background: var(--accent); }
-.apar-dot.sem-sinal { background: var(--danger); }
-.apar-painel { margin-top: var(--sp-4); padding: 16px 18px; }
-.apar-topo { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; }
-.apar-nome { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.apar-nome h2 { margin: 0; font-size: 18px; font-weight: 650; }
-.apar-linha { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-.apar-teto { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
-.apar-fatos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; margin-top: 16px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.apar-fato { background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; }
-.apar-fato small { font-size: 12px; color: var(--muted); }
-.apar-fato b.ok { color: var(--ok); }
-.apar-fato b.bad { color: var(--danger); }
-.apar-fato b.warn { color: var(--accent); }
-.apar-painel .rot, .apar-fato .rot { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.apar-extra { display: flex; flex-wrap: wrap; gap: 14px 28px; margin-top: var(--sp-3); font-size: 13px; }
-.apar-aviso { margin-top: 12px; padding: 12px 16px; border-radius: var(--radius); font-size: 13.5px; }
-.apar-aviso b { font-weight: 650; }
-.apar-aviso p { margin: 0; color: var(--text); }
-.apar-aviso.warn { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-.apar-aviso.warn b { color: var(--accent); }
-.apar-aviso.bad { background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
-.apar-aviso.bad b { color: var(--danger); }
-.fila-filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.fila-filtro { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.fila-filtro.active { border-color: var(--accent); background: var(--surface-2); color: var(--text); }
-.fila-filtro span { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 0 7px; background: var(--border); color: var(--muted); }
-.fila-filtro span.urg { background: var(--accent-soft); color: var(--accent); }
-.fila-grupo { margin-top: var(--sp-4); }
-.fila-grupo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.fila-grupo-head h3 { margin: 0; font-size: 13.5px; font-weight: 650; }
-.fila-item { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-start; border-left: 3px solid var(--ambient); padding: 12px 14px; }
-.fila-item > .info { flex: 1 1 300px; min-width: 0; }
-.fila-item .pr-actions { flex-wrap: wrap; }
-.fila-item[data-estado="decidir"], .fila-item[data-estado="sem-automatica"] { border-left-color: var(--urgent); }
-.fila-item[data-estado="revisando"], .fila-item[data-estado="retry"] { border-left-color: var(--working); }
-.fila-item[data-estado="estacionado"] { border-left-color: var(--blocked); }
-.fila-item[data-estado="visto"] { border-left-color: var(--settled); }
-.fila-item[data-estado="ignorado"] { opacity: .72; }
-.fila-estado { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
-.fila-sem-acao { color: var(--muted); font-size: 12px; max-width: 220px; }
-.fila-ao-vivo { margin: 8px 0 0; padding: 8px 10px 8px 30px; background: var(--surface-2); border-radius: 8px; font-family: "Cascadia Code", Consolas, monospace; font-size: 11.5px; color: var(--muted); }
-.cmd-retorno { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; }
-.cmd-dot { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: currentColor; animation: pulse 1.6s infinite; }
-.cmd-lista { padding: 2px 16px; }
-.cmd-linha { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 10px 0; font-size: 12.5px; }
-.cmd-linha + .cmd-linha { border-top: 1px solid var(--border-soft); }
-.cmd-hora { width: 40px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
-.conta-remota { margin-bottom: var(--sp-2); }
-.conta-remota-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.conta-campo { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border-soft); }
-.conta-campo > div:first-child { flex: 1 1 200px; min-width: 0; font-size: 13.5px; }
-.conta-aviso { font-size: 12px; color: var(--accent); }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .seg button { border: 0; padding: 5px 16px; background: var(--surface); color: var(--muted); font-weight: 600; cursor: pointer; }
 .seg button.active { background: var(--accent); color: var(--accent-ink); }
-.fila-carregando > div { height: 84px; margin-top: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); animation: pulse 1.4s ease-in-out infinite; }
-.fila-falhou, .fila-antiga, .fila-vazia { border-radius: var(--radius); padding: 16px 18px; }
-.fila-falhou { background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
-.fila-falhou b { color: var(--danger); }
-.fila-antiga { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-.fila-antiga b { color: var(--accent); }
-.fila-vazia { border: 1px solid var(--border); background: var(--surface); }
-.fila-falhou p, .fila-antiga p, .fila-vazia p { margin: 6px 0 0; }
-.md-seu-aparelho { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 12px 14px; }
-.md-seu-aparelho > .info { flex: 1 1 260px; min-width: 0; }
 [aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
 @media (max-width: 720px) {
-  .fila-item .pr-actions { flex-basis: 100%; }
-  .fila-filtro, .seg button, .apar-troca-item, .fila-item .btn, .conta-campo select { min-height: 44px; }
+  .seg button { min-height: 44px; }
 }
 
 /* Cartão de sessão: porcentagem sobre dado real (tempo típico medido no histórico, ou
@@ -1951,14 +1600,7 @@ body.parear > *:not(.par-raiz) { display: none !important; }
 
 /* Fluxos de revisão: complemento do desenho, limitado aos componentes novos. */
 .set-list.review-tools > * + *, .review-tools .set-list > * + * { border-top: 1px solid var(--border-soft); }
-.set-head.review-tools, .review-tools .set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); padding: var(--sp-4) 0 var(--sp-3); }
-.set-head.review-tools h3, .review-tools .set-head h3 { margin: 0; font-size: 0.875rem; font-weight: 650; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.set-head.review-tools p, .review-tools .set-head p { margin: 0.1875rem 0 0; max-width: 38.75rem; font-size: 0.78125rem; color: var(--muted); text-wrap: pretty; }
-.set-head.review-tools .row-actions, .review-tools .set-head .row-actions { flex: none; }
-.set-block.review-tools, .review-tools .set-block { padding: var(--sp-3) 0; }
 .set-subtitle.review-tools, .review-tools .set-subtitle { margin: 0 0 var(--sp-2); font-size: 0.75rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
-.set-actions.review-tools, .review-tools .set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
-.set-actions.review-tools .set-msg, .review-tools .set-actions .set-msg { margin: 0; }
 .set-ctl.review-tools input[type="number"], .review-tools .set-ctl input[type="number"], .set-ctl.review-tools input[type="time"], .review-tools .set-ctl input[type="time"], .set-ctl.review-tools input[type="search"], .review-tools .set-ctl input[type="search"] {
   width: 6rem; padding: 0.375rem 0.625rem; background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 0.5rem; font: inherit; font-size: 0.78125rem;
@@ -2103,7 +1745,6 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
 @media (max-width: 38.75rem) {
 .btn.review-tools, .review-tools .btn, .btn.sm.review-tools, .review-tools .btn.sm, .seg-btn.review-tools, .review-tools .seg-btn, .nav-item.review-tools, .review-tools .nav-item, .rsub.review-tools, .review-tools .rsub, .sys-nav-item.review-tools, .review-tools .sys-nav-item, .rgroup-head.review-tools, .review-tools .rgroup-head, .link-btn.review-tools, .review-tools .link-btn, .set-ctl.review-tools select, .review-tools .set-ctl select, .set-ctl.review-tools input, .review-tools .set-ctl input, .field.review-tools input, .review-tools .field input, .field.review-tools select, .review-tools .field select, .check-opt.review-tools, .review-tools .check-opt, .disc.review-tools > summary, .review-tools .disc > summary, .setup.review-tools > summary, .review-tools .setup > summary { min-height: 2.75rem; }
 .btn.sm.review-tools, .review-tools .btn.sm { padding: 0.5625rem 0.8125rem; }
-.set-head.review-tools, .review-tools .set-head { flex-direction: column; gap: var(--sp-2); }
 .irow.review-tools, .review-tools .irow { grid-template-columns: minmax(0, 1fr); }
 .irow-acts.review-tools, .review-tools .irow-acts { justify-content: flex-start; }
 .step.review-tools, .review-tools .step { grid-template-columns: auto minmax(0, 1fr); }
@@ -2134,9 +1775,9 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
 .session-card .sess-progress:not([aria-valuenow]) .op-bar { display: none; }
 .session-card .sess-progress .sess-base { flex-basis: 100%; }
 #activeWrap { scroll-margin-top: calc(var(--topbar-h) + 3.5rem); }
-.review-tools .set-head > div, .review-tools .field { min-width: 0; }
+.review-tools .field { min-width: 0; }
 .review-tools .irow-head h4, .review-tools h4.set-title { margin: 0; font: inherit; font-weight: 600; }
-.review-tools .set-head .row-actions, .review-tools .set-ctl { max-width: 100%; }
+.review-tools .set-ctl { max-width: 100%; }
 .review-tools .field input[type="file"] { max-width: 100%; padding: var(--sp-2); font-size: .75rem; }
 .review-tools input[type="file"]::file-selector-button { margin-right: var(--sp-2); padding: .375rem .625rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .review-tools .set-msg, .review-tools .set-desc { overflow-wrap: anywhere; }
@@ -2156,7 +1797,6 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
   .review-tools .rgroup-head .g-wait { display: block; flex-basis: 100%; margin-left: 0; text-align: left; }
   #queueSection { flex-wrap: wrap; }
   .review-tools.queue-grouping { flex-wrap: wrap; }
-  .review-tools .set-head .row-actions { flex-wrap: wrap; }
 }
 
 

@@ -1,6 +1,6 @@
 // Pareamento da API local (A4, spec 7.A4 itens 3 e 4). Imprime um código novo SÓ na saída
-// do terminal, ou revoga todas as sessões e códigos com --revogar-todas. Roda no próprio
-// aparelho, com o mesmo FAROL_HOME do engine (lib/paths.js resolve). O código nunca vai
+// do terminal, ou revoga todas as sessões e códigos com --revogar-todas. Roda na própria
+// máquina, com o mesmo FAROL_HOME do engine (lib/paths.js resolve). O código nunca vai
 // para log, arquivo em claro nem linha de comando de outro processo, e o comando não
 // aceita segredo por argumento.
 import { executadoDireto } from '../lib/paths.js';

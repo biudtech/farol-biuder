@@ -16,42 +16,16 @@ test('atualização periódica repinta indicadores, recursos e modelos quando ch
   t.mock.method(globalThis, 'fetch', async url => ({ json: async () => activityReport([{ device: 'local', rows }],
     Object.fromEntries(new URL(url, 'http://localhost').searchParams), clock) }));
   const { renderActivity } = await import('../ui/telas/consumo-atividade.js?refresh');
-  await renderActivity({ window: 30, scope: 'local' });
+  await renderActivity({ window: 30 });
   assert.match(doc.querySelector('#activityBody').innerHTML, /Revisões concluídas.*?<b>1<\/b>/s);
   rows.push(row(2));
   clock += 31000;
-  await renderActivity({ window: 30, scope: 'local' });
+  await renderActivity({ window: 30 });
   const body = doc.querySelector('#activityBody').innerHTML;
   assert.match(body, /Revisões concluídas.*?<b>2<\/b>/s);
   assert.match(body, /Tokens registrados · entrada \+ saída<\/span><b>30<\/b>/);
   assert.match(body, /Sonnet<\/span><span>2 execuções/);
   assert.match(doc.querySelector('#activityHistory').innerHTML, /de 2 execuções/);
-});
-
-test('trocar a fonte limpa filtros incompatíveis nos dois sentidos', async t => {
-  const { doc } = instalarDom();
-  const listeners = new Map();
-  doc.querySelector('#usageActivity').addEventListener = (name, fn) => listeners.set(name, fn);
-  const requests = [];
-  t.mock.method(Date, 'now', () => NOW);
-  t.mock.method(globalThis, 'fetch', async url => {
-    const query = Object.fromEntries(new URL(url, 'http://localhost').searchParams);
-    requests.push(query);
-    return { json: async () => activityReport([{ device: 'local', rows: [row(1)] }], query, NOW) };
-  });
-  const { renderActivity } = await import('../ui/telas/consumo-atividade.js?scope');
-  await renderActivity({ window: 30, scope: 'local' });
-  listeners.get('change')({ target: { dataset: { activityFilter: 'repo' }, value: 'org/repo' } });
-  await setImmediate();
-  assert.equal(requests.at(-1).repo, 'org/repo');
-  await renderActivity({ window: 30, scope: 'all' });
-  assert.equal(requests.at(-1).repo, 'all');
-  listeners.get('change')({ target: { dataset: { activityFilter: 'account' }, value: 'a'.repeat(64) } });
-  await setImmediate();
-  assert.equal(requests.at(-1).account, 'a'.repeat(64));
-  await renderActivity({ window: 30, scope: 'local' });
-  assert.equal(requests.at(-1).account, 'all');
-  assert.match(doc.querySelector('#activityBody').innerHTML, /Revisões concluídas.*?<b>1<\/b>/s);
 });
 
 test('tabela vazia vira estado vazio e a tela usa um termo só para execução', async () => {

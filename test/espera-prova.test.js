@@ -45,8 +45,6 @@ const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
 const reviewMod = (await import('../lib/engine/review.js')).default;
-const pendencia = (await import('../lib/sync/pendencia.js')).default;
-const fila = (await import('../lib/sync/fila.js')).default;
 const { separarPendentes, staleCardMeta } = await import('../ui/pure/review.js');
 const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
 const { technicalPublication } = await import('../lib/technical-review/publication.js');
@@ -426,16 +424,6 @@ test('mudança para publicação manual não abandona a análise ainda bloqueada
   assert.equal(e.decisionForUi(pronta).technical.state, 'pass');
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
   assert.deepEqual(envios, []);
-});
-
-test('outros aparelhos: a espera da prova viaja como fato e não pede ninguém', () => {
-  const p = pendencia.projetarPendencia({ key: PR.key, pr: { account: 'eu' }, verdict: 'approve', esperaProva: { desde: 1 } }, { kId: Buffer.alloc(32, 1) });
-  assert.equal(p.espera, 'prova');
-  assert.equal(pendencia.esperaLida('prova'), 'prova');
-  assert.equal(pendencia.deveNotificar('x', { notificadas: new Set(), vistos: {}, espera: 'prova' }), false);
-  assert.equal(pendencia.esperaLida('outra'), '', 'lixo segue pendência comum');
-  const f = fila.estadoDaFila(PR.key, { pendentes: new Map([[PR.key, 5]]), esperandoProva: new Set([PR.key]) });
-  assert.deepEqual(f, { estado: 'decidir', motivo: 'espera-prova', desde: 5, ate: 0 });
 });
 
 // Revisão do Codex no PR #245 (17/10/2026): três furos, cada um provado aqui antes da correção.

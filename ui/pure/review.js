@@ -109,7 +109,6 @@ const REROUND_MOTIVO = {
     : 'a última tentativa falhou e ficou estacionada. Volto sozinho se chegar commit novo ou pedirem revisão de novo.'),
   outros_revisando: (d) => `${d} já está revisando este PR.`,
   saiu_de_cena: () => 'saí de cena porque outra pessoa pegou este PR.',
-  coordenacao: () => 'outro aparelho seu está cuidando deste PR.',
   pendencia_viva: () => 'há outra decisão deste PR esperando você.',
   consciencia: () => 'outra pessoa já deu um review decisivo neste commit.',
   ancora: () => 'já tentei neste commit e a revisão não terminou. Volto sozinho se chegar commit novo ou pedirem revisão de novo.',
@@ -165,9 +164,7 @@ export function reRoundBoxHtml(st) {
 
 // Pendência que espera o CI NÃO precisa de você (30/09/2026): o Farol aprova sozinho quando
 // a pipe fechar. Tudo que conta ou lista "Precisa de você" na tela passa por aqui, para o
-// número e o rótulo dizerem a mesma coisa que o engine faz. Para os OUTROS aparelhos o fato
-// viaja desde 01/10/2026 (motivo `espera-ci` na fila e `espera` na pendência), e a tela deles
-// separa do mesmo jeito em ui/pure/aparelhos-fila.js.
+// número e o rótulo dizerem a mesma coisa que o engine faz.
 // A que busca a prova técnica (17/10/2026, lib/engine/espera-prova.js) também não precisa:
 // o Farol recupera a análise no mesmo commit, com recuo entre tentativas, na mesma seção.
 // A recuperação PAUSADA por algo que só uma pessoa desfaz (`pedeVoce`: automação desligada,

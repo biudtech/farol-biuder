@@ -235,10 +235,8 @@ export function claudeProfilesHtml(ctx) {
   return rows + addForm;
 }
 
-// As palavras da política da conta, um lugar só (30/09/2026): o cartão de Sistema > Contas e
-// os controles à distância de Radar > Aparelhos (ui/pure/aparelhos-painel.js) editam os
-// MESMOS quatro campos, e com cada tela escrevendo o seu texto o mesmo campo tinha dois
-// nomes. Cada opção é [valor gravado, texto].
+// As palavras da política da conta, um lugar só (30/09/2026): com cada tela escrevendo o seu
+// texto, o mesmo campo tinha dois nomes. Cada opção é [valor gravado, texto].
 export const POLITICA_DA_CONTA_TEXTOS = Object.freeze({
   autoReview: {
     rotulo: 'quando chega um PR pra você',

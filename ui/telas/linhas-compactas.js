@@ -35,7 +35,7 @@ function linhaDaFila(pr, o) {
 function linhaDaFilaDeExecucao(pr, o) {
   return linhaCompactaHtml({
     key: pr.key, url: pr.url, titulo: pr.title, inicio: avatar(pr.author), style: o.mark.style, classe: 'fila-linha',
-    estado: fraseDaFilaDeExecucao(o.distribuindo),
+    estado: fraseDaFilaDeExecucao(),
   });
 }
 

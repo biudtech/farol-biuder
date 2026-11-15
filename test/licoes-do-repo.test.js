@@ -32,7 +32,7 @@ const pb = (o) => ({ status: 'confirmed', source: 'auto', confidence: 'high', at
 
 const BASE = {
   'biudtech/infra-k8s#151': pb({ author: 'alexpraxedes', outcome: 'mixed', note: 'o PR de que eu dependia já tinha sido mesclado' }),
-  'biudtech/infra-k8s#120': pb({ author: 'outra', outcome: 'author_right', note: 'sync-wave 0 é o padrão do repo', at: AGORA - 1000 }),
+  'biudtech/infra-k8s#120': pb({ author: 'outra', outcome: 'author_right', note: 'a onda 0 é o padrão do repo', at: AGORA - 1000 }),
   'biudtech/infra-k8s#99': pb({ author: 'outra', outcome: 'we_right', note: 'o autor acatou inteiro' }),
   'biudtech/infra-k8s#98': pb({ author: 'outra', outcome: 'author_right', note: 'ainda não confirmado', status: 'pending' }),
   'biudtech/biud-core#10': pb({ author: 'outra', outcome: 'author_right', note: 'de outro repositório' })

@@ -10,7 +10,7 @@
 // virar blocker, nao no comeco da analise. Sem poder reconferir, o ponto nao e blocker.
 //
 // Este teste trava o texto no template E no prompt montado, porque o template e
-// ressincronizado a cada boot (server.js, lista `synced`): regra que existisse so no
+// ressincronizado a cada boot (server.js, lista `espelhados`): regra que existisse so no
 // repositorio nunca chegaria nas copias ja instaladas.
 import os from 'node:os';
 import path from 'node:path';
@@ -51,6 +51,6 @@ test('a regra chega no prompt montado da revisão', () => {
 
 test('o prompt do protocolo é ressincronizado a cada boot, senão a regra não chega em quem já instalou', () => {
   const server = fs.readFileSync('server.js', 'utf8');
-  const bloco = server.slice(server.indexOf('const synced = ['), server.indexOf('const synced = [') + 900);
+  const bloco = server.slice(server.indexOf('const espelhados = ['), server.indexOf('const espelhados = [') + 900);
   assert.match(bloco, /pr-review-auto\.md/);
 });

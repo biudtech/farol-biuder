@@ -87,12 +87,11 @@ function espionar(nomes) {
   return { chamadas, restaurar: () => { for (const nome of nomes) engine[nome] = originais[nome]; } };
 }
 
-const ESPIOES = ['snapshot', 'syncEstadoDaLimpeza', 'setJiraCredential', 'decide', 'launchReview', 'removeTeamMember', 'checkNow'];
+const ESPIOES = ['snapshot', 'setJiraCredential', 'decide', 'launchReview', 'removeTeamMember', 'checkNow'];
 
 // Um representante por classe do inventário da seção 7.A4 da spec.
 const CLASSES_A4 = [
   { classe: 'leitura sensível', method: 'GET', rota: '/api/state', espiao: 'snapshot' },
-  { classe: 'leitura de baixo risco', method: 'POST', rota: '/api/sync/cleanup-state', corpo: {}, espiao: 'syncEstadoDaLimpeza' },
   { classe: 'evento em tempo real', method: 'GET', rota: '/api/events', espiao: 'snapshot' },
   { classe: 'ação que recebe segredo', method: 'POST', rota: '/api/jira/credential', corpo: { siteId: 's1', email: 'a@b.c', token: 'segredo' }, espiao: 'setJiraCredential' },
   { classe: 'ação que posta ou escreve no GitHub', method: 'POST', rota: '/api/decide', corpo: { id: 'd1', action: 'approve' }, espiao: 'decide' },
@@ -210,7 +209,7 @@ test('janela do Electron: Host 127.0.0.1:<porta>, GET sem Origin e POST com a pr
   }
 });
 
-test('navegador do próprio aparelho: Host e Origin em localhost:<porta>', async () => {
+test('navegador da própria máquina: Host e Origin em localhost:<porta>', async () => {
   const espiao = espionar(ESPIOES);
   try {
     const pagina = await pedir('/app.css', { headers: { host: `localhost:${porta}` } });

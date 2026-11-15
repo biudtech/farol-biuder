@@ -66,8 +66,8 @@ test('loopback: os três nomes locais e o bind ausente', () => {
 });
 
 test('bind fora do loopback exige autenticação', () => {
-  assert.equal(exigeAutenticacao({ modoCelular: false, config: {}, ativacaoAutomatica: true, bindForaDoLoopback: true }), true);
-  assert.equal(exigeAutenticacao({ modoCelular: false, config: {}, ativacaoAutomatica: true, bindForaDoLoopback: false }), false);
+  assert.equal(exigeAutenticacao({ config: {}, bindForaDoLoopback: true }), true);
+  assert.equal(exigeAutenticacao({ config: {}, bindForaDoLoopback: false }), false);
 });
 
 test('o servidor escuta no bind configurado', async () => {

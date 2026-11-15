@@ -1,7 +1,7 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 // Abandonar cedo o que ja virou trabalho perdido (23/09/2026).
 //
-// Medido nos 25 reviews de biudtech/infra-k8s deste aparelho: a passada de #145 rodou
+// Medido nos 25 reviews de biudtech/infra-k8s desta máquina: a passada de #145 rodou
 // 16m55 e custou US$ 3,37 pra terminar como `already_reviewed`, e a de #150 rodou 8m31
 // e custou US$ 2,74 pra terminar como `superseded`. Nos dois casos o Farol so descobriu
 // no FIM, depois de pagar a sessao inteira. O vigia pergunta durante a sessao.
@@ -26,7 +26,7 @@ after(() => {
 const HEAD = 'a'.repeat(40);
 const HEAD_NOVO = 'b'.repeat(40);
 const PR = { key: 'o/r#150', repo: 'o/r', number: 150, url: 'https://github.com/o/r/pull/150',
-  requested: true, title: 'sync waves', author: 'alex' };
+  requested: true, title: 'ondas de deploy', author: 'alex' };
 
 /* ---------- a decisão, pura ---------- */
 

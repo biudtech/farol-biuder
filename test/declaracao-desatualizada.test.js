@@ -20,7 +20,6 @@ const { technicalGap, technicalSummary, ehLacunaDura, LACUNA_DE_DECLARACAO } = a
 const { pausaDaRecuperacao } = await import('../lib/engine/recuperacao-prova.js');
 const { lacunasExigidas } = await import('../lib/engine/busca-da-prova.js');
 const { defeitosDoPr } = await import('../lib/engine/desfecho-automatico.js');
-const { codigoDaRecusaDecisao } = await import('../lib/sync/recusa-decisao.js');
 const { technicalPrompt } = await import('../lib/technical-review/prompt.js');
 const { shouldAutoReject } = await import('../lib/engine/approval-policy.js');
 after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -71,9 +70,8 @@ test('é lacuna dura com texto próprio: nunca vira ressalva, nem "tentará nova
   assert.ok(exigidas.includes(LACUNA_DE_DECLARACAO), exigidas.join(' | '));
 });
 
-test('configuração do aparelho nunca vira pedido de mudanças no PR', () => {
+test('configuração da instalação nunca vira pedido de mudanças no PR', () => {
   assert.deepEqual(defeitosDoPr({ approvalEvidence: [LACUNA_DE_DECLARACAO] }), []);
-  assert.equal(codigoDaRecusaDecisao({ blocked: 'technical_review', error: LACUNA_DE_DECLARACAO }), 'technical_review:declaracao-desatualizada');
   const engine = { rejectPolicyFor: () => 'request_changes', accountForPr: () => 'eu', config: {}, myLogins: () => [] };
   const reprovado = { analysisStatus: 'complete', verdict: 'request_changes', technicalReview: relatorio('f1'),
     payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'Os testes foram apagados.' } } };

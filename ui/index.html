@@ -76,8 +76,6 @@
   <!-- ============ RADAR ============ -->
   <section id="tab-radar" class="tabpane active" role="tabpanel" aria-labelledby="tabbtn-radar" tabindex="0">
     <div id="identityStrip" class="identity-strip" hidden></div>
-    <!-- visão compartilhada: modo da distribuição e compartilhamento bloqueado (telas/radar-compartilhado.js) -->
-    <div id="mdFaixa" class="md-host" role="status" aria-live="polite" hidden></div>
 
     <div class="meta-line">
       <span id="metaCheck">…</span>
@@ -90,7 +88,6 @@
     <div class="radar-topo">
     <div class="radar-subs" id="radarSubs" role="tablist" aria-label="Seções do Radar">
       <button class="rsub active" id="rsub-mim" data-sub="mim" role="tab" aria-selected="true" aria-controls="rpane-mim">Pra mim <span class="count" id="rcMim" hidden></span></button>
-      <button class="rsub" id="rsub-apar" data-sub="apar" role="tab" aria-selected="false" aria-controls="rpane-apar" hidden>Aparelhos <span class="count" id="rcApar" hidden></span></button>
     </div>
     <div class="densidade" id="densidade" role="group" aria-label="Densidade da lista">
       <button type="button" class="dens on" data-densidade="compacta" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Compacta</button>
@@ -134,33 +131,6 @@
     <p class="section-desc">PRs em que pediram a sua revisão e que ainda esperam uma decisão.</p>
     <div id="queue" class="cards"></div>
 
-    <!-- Seus aparelhos: o resumo de cada executor; a página dele é Radar > Aparelhos
-         (telas/radar-aparelhos.js) -->
-    <div id="mdSeusAparelhos" hidden></div>
-
-    <div id="mdCompartilhado" hidden>
-      <div id="mdCandidatosWrap" hidden>
-        <div class="section-head">
-          <h2>Esperando colocação no conjunto</h2>
-          <span class="section-sub">só o aparelho que distribui enxerga esta fila</span>
-        </div>
-        <div id="mdCandidatos" class="cards"></div>
-      </div>
-      <div id="mdComandosWrap" hidden>
-        <div class="section-head">
-          <h2>Comandos enviados deste aparelho</h2>
-          <span class="section-sub">quem emitiu foi este Farol; comando de outro aparelho não aparece aqui</span>
-        </div>
-        <div id="mdComandos"></div>
-      </div>
-      <div id="mdTomadasWrap" hidden>
-        <div class="section-head">
-          <h2>Tomadas feitas por este aparelho</h2>
-          <span class="section-sub">cada uma pode ter custado uma análise duplicada</span>
-        </div>
-        <div id="mdTomadas"></div>
-      </div>
-    </div>
 
     <div id="resolvedWrap" hidden>
       <div class="section-head"><h2>Revisões recentes</h2></div>
@@ -168,19 +138,8 @@
       <div id="resolved" class="rows"></div>
     </div>
 
-    <div id="mdHistorico" hidden>
-      <div class="section-head"><h2>Revisões de todos os aparelhos</h2></div>
-      <div id="mdRevisoes"></div>
-      <div class="section-head"><h2>Enviar o histórico deste aparelho</h2></div>
-      <div id="mdEnvio"></div>
-      <div class="section-head"><h2>O que é só deste aparelho</h2></div>
-      <div id="mdLocal"></div>
-    </div>
     </div>
 
-    <div class="rpane" id="rpane-apar" role="tabpanel" aria-labelledby="rsub-apar" tabindex="0">
-      <div id="aparPagina"></div>
-    </div>
 
   </section>
 
@@ -195,17 +154,7 @@
   <section id="tab-consumo" class="tabpane" role="tabpanel" aria-labelledby="tabbtn-consumo" tabindex="0">
     <div class="section-head">
       <h2>Consumo</h2>
-      <!-- Segmentado da consolidação (T24). Só aparece com a consolidação ligada:
-           sem ela não há nada de outros aparelhos pra mostrar, e um botão que não faz
-           nada é pior que botão nenhum. -->
-      <div class="seg" id="usageDevice" role="group" aria-label="Aparelhos" hidden>
-        <button class="seg-btn active" data-escopo="este" aria-pressed="true">Este aparelho</button>
-        <button class="seg-btn" data-escopo="todos" aria-pressed="false">Todos os aparelhos</button>
-      </div>
-      <!-- A janela vale para as DUAS visões (o consolidado busca por ?days=), então ela
-           mora no cabeçalho da seção e não dentro do painel local, que fica escondido
-           em "Todos os aparelhos". Ali dentro, trocar de visão fazia o seletor sumir
-           junto, sem a janela deixar de valer. -->
+      <!-- A janela mora no cabeçalho da seção: vale para a atividade e para o painel técnico. -->
       <div class="seg" id="usageWindow" role="group" aria-label="Janela">
         <button class="seg-btn" data-window="1" aria-pressed="false">Hoje</button>
         <button class="seg-btn" data-window="7" aria-pressed="false">7 dias</button>
@@ -215,8 +164,6 @@
     </div>
     <p class="section-desc">O trabalho realizado pelo Farol e os recursos usados em cada execução. Registro permanente; não altera nenhuma decisão da automação.</p>
 
-    <!-- "Todos os aparelhos" é uma SEGUNDA visão, nunca uma reescrita da primeira:
-         "Este aparelho" volta ao painel de sempre, sem nenhuma diferença. -->
     <div id="usageActivity"></div>
     <div id="usageBudgetTop" class="card usage-chart-card">
       <div class="usage-chart-head">
@@ -226,7 +173,6 @@
       <div id="usageBudget" class="usage-budget"></div>
     </div>
     <details class="disc" id="usageAdvanced"><summary>Matriz e histórico técnico · totais gerais, sem os filtros acima</summary><div class="disc-body">
-    <div id="usageConsolidado" hidden></div>
     <div id="usageLocal">
     <div id="usageKpis" class="usage-kpis"></div>
 
@@ -310,18 +256,6 @@
           <button class="sys-nav-item" id="sysbtn-jira" data-section="jira" role="tab" aria-selected="false" aria-controls="sys-jira">
             <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9.5h18M8 14h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Jira
-          </button>
-          <button class="sys-nav-item" id="sysbtn-sync" data-section="sync" role="tab" aria-selected="false" aria-controls="sys-sync">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.5 3v4h-4M4.5 21v-4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Sincronização
-          </button>
-          <button class="sys-nav-item" id="sysbtn-devices" data-section="devices" role="tab" aria-selected="false" aria-controls="sys-devices">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="13" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 19h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="16.5" y="8.5" width="5" height="11" rx="1.2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-            Aparelhos
-          </button>
-          <button class="sys-nav-item" id="sysbtn-groups" data-section="groups" role="tab" aria-selected="false" aria-controls="sys-groups">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="8" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16.5" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 19c.6-3 2.6-4.5 5-4.5s4.4 1.5 5 4.5M13.5 18.5c.4-2.2 1.6-3.4 3-3.4s2.6 1.2 3 3.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Grupos de consumo
           </button>
           <button class="sys-nav-item" id="sysbtn-plans" data-section="plans" role="tab" aria-selected="false" aria-controls="sys-plans">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78m.27-2.34L19.07 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 8l-1.5 1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -418,7 +352,7 @@
             <div class="set-row" id="sys-row-paralelas">
               <div class="set-txt">
                 <label class="set-title" for="setParallelReviews">Revisões paralelas por conta</label>
-                <p class="set-desc">Quantas revisões automáticas a mesma conta roda ao mesmo tempo. O padrão (1) revisa em série; subir acelera fila cheia, mas gasta o limite do plano mais rápido e pesa mais na máquina. Contas diferentes já revisam em paralelo entre si. É sempre por conta, com ou sem o compartilhamento entre aparelhos: o total do aparelho é a linha de baixo.</p>
+                <p class="set-desc">Quantas revisões automáticas a mesma conta roda ao mesmo tempo. O padrão (1) revisa em série; subir acelera fila cheia, mas gasta o limite do plano mais rápido e pesa mais na máquina. Contas diferentes já revisam em paralelo entre si. É sempre por conta: o total da instalação é a linha de baixo.</p>
               </div>
               <div class="set-ctl">
                 <select id="setParallelReviews">
@@ -431,8 +365,8 @@
             </div>
             <div class="set-row" id="sys-row-teto-global">
               <div class="set-txt">
-                <label class="set-title" for="setGlobalParallelReviews">Teto total deste aparelho</label>
-                <p class="set-desc">Limite do TOTAL de revisões automáticas rodando ao mesmo tempo neste aparelho, somando todas as contas. Sem teto (padrão), vale só o limite por conta da linha de cima. Ligue se a máquina ou a API sentirem o volume: a vaga que liberar vai para a org atendida há mais tempo, não para a primeira da fila. Com o compartilhamento entre aparelhos, o admin pode definir este mesmo número à distância ("Teto total do aparelho", em Sistema → Aparelhos e em Radar → Aparelhos): vale o menor dos dois.</p>
+                <label class="set-title" for="setGlobalParallelReviews">Teto total desta instalação</label>
+                <p class="set-desc">Limite do TOTAL de revisões automáticas rodando ao mesmo tempo nesta instalação, somando todas as contas. Sem teto (padrão), vale só o limite por conta da linha de cima. Ligue se a máquina ou a API sentirem o volume: a vaga que liberar vai para a org atendida há mais tempo, não para a primeira da fila.</p>
               </div>
               <div class="set-ctl">
                 <select id="setGlobalParallelReviews">
@@ -474,30 +408,6 @@
           <div id="jiraSitesManager" class="cards"></div>
         </div>
 
-        <!-- Sincronização entre dispositivos -->
-        <div class="sys-section" id="sys-sync" role="tabpanel" aria-labelledby="sysbtn-sync" tabindex="0">
-          <div class="section-head"><h2>Sincronização entre dispositivos</h2></div>
-          <p class="section-desc">Opcional. Evita que dois aparelhos seus revisem o mesmo PR e mostra o consumo de todos juntos. Cada aparelho continua com o próprio histórico e funciona sem internet.</p>
-          <div class="callout info">
-            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 7.4v3.8M8 5.1v.6" stroke-linecap="round"/></svg>
-            <span><b>O conteúdo compartilhado entre seus aparelhos é cifrado.</b> Catálogo e resultados podem incluir títulos de PR e relatórios. Ao abrir “Ver ao vivo”, as últimas 120 linhas de atividade, inclusive mensagens e descrições de ferramentas, são enviadas cifradas para uma chave temporária do observador. Trechos de prompt ou diff presentes nessa atividade também podem entrar na captura; credenciais reconhecidas são ocultadas. Sobem em claro o SHA do commit analisado (na reserva do PR e no recibo; ele pode levar direto ao repositório, quando o repositório é público), o nome do aparelho (vazio usa o nome da máquina), o sistema operacional, a versão do Farol e, no consumo, o modelo, o perfil, os tokens e o custo de cada sessão, além de identificadores e horários de cada análise. Conta do GitHub e PR sobem como resumo criptográfico (SHA-256) sem segredo: quem já conhece o nome consegue conferir.</span>
-          </div>
-          <div id="syncManager"></div>
-        </div>
-
-        <!-- Aparelhos -->
-        <div class="sys-section" id="sys-devices" role="tabpanel" aria-labelledby="sysbtn-devices" tabindex="0">
-          <div class="section-head"><h2>Aparelhos</h2></div>
-          <p class="section-desc">Os aparelhos da sua conta de sincronização, quem administra o conjunto e o que cada um aceita receber. Aposentar não apaga nada e pode ser desfeito.</p>
-          <div id="devicesManager"></div>
-        </div>
-
-        <!-- Grupos de consumo -->
-        <div class="sys-section" id="sys-groups" role="tabpanel" aria-labelledby="sysbtn-groups" tabindex="0">
-          <div class="section-head"><h2>Grupos de consumo</h2></div>
-          <p class="section-desc">Um grupo soma o gasto dos perfis vinculados em todos os aparelhos e pode ter um teto. Só o admin cria e ativa. Enquanto o teto não está ativo, quem segura sessão é o orçamento de cada perfil.</p>
-          <div id="groupsManager"></div>
-        </div>
 
         <!-- Plano e chaves -->
         <div class="sys-section" id="sys-plans" role="tabpanel" aria-labelledby="sysbtn-plans" tabindex="0">
@@ -655,7 +565,7 @@
           <p class="section-desc">O compromisso de privacidade, a licença e quem constrói o projeto.</p>
           <div class="card about-card" id="aboutPrivacy">
             <h3 class="about-title">Privacidade</h3>
-            <p>O Farol não coleta nem envia nenhum dado a quem o mantém. Não existe telemetria nem servidor do projeto: os registros ficam na sua instalação, em <code>~/.farol</code> (log de falhas, consumo, decisões de review, configurações). A sincronização opcional compartilha dados com seus outros aparelhos pelo Firebase que você configurou; o conteúdo compartilhado e o espelho sob demanda são cifrados, conforme a seção Sincronização.</p>
+            <p>O Farol não coleta nem envia nenhum dado a quem o mantém. Não existe telemetria nem servidor do projeto: os registros ficam na sua instalação, em <code>~/.farol</code> (log de falhas, consumo, decisões de review, configurações).</p>
             <p>O tráfego de rede é todo em seu nome, com as suas credenciais: GitHub pelo seu <code>gh</code> e o provedor de IA pelo Claude Code configurado. As automações que postam review são opt-in, e quem as liga responde pelo que é postado.</p>
           </div>
           <div class="card about-card" id="aboutLicense">

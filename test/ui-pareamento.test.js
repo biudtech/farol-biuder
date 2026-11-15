@@ -32,13 +32,13 @@ test('a recusa diz qual é, e a contagem só aparece quando existe', () => {
 });
 
 test('o HTML traz os dois passos, o comando nas duas sintaxes e nenhum destino morto', () => {
-  const html = pareamentoHtml({ rotuloSugerido: 'Chrome do celular', ehWindows: false });
+  const html = pareamentoHtml({ rotuloSugerido: 'Chrome do telefone', ehWindows: false });
   assert.match(html, /Parear este navegador/);
   assert.match(html, /node tools\/farol-parear\.js/);
   assert.ok(html.includes('node .\\tools\\farol-parear.js'), 'a sintaxe do PowerShell também aparece');
   assert.match(html, /id="parCodigo"/);
   assert.match(html, /id="parRotulo"/);
-  assert.match(html, /value="Chrome do celular"/);
+  assert.match(html, /value="Chrome do telefone"/);
   assert.doesNotMatch(html, /<a /, 'nada de link nesta tela: não há para onde navegar antes de parear');
 });
 
@@ -119,7 +119,7 @@ test('o rascunho do que foi digitado sobrevive, e some quando pareia', () => {
 });
 
 test('o rótulo sugerido nomeia o navegador, sem inventar dado', () => {
-  assert.equal(rotuloSugerido({ userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/140 Mobile Safari/537.36' }), 'Chrome do celular');
+  assert.equal(rotuloSugerido({ userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/140 Mobile Safari/537.36' }), 'Chrome do telefone');
   assert.equal(rotuloSugerido({ userAgent: 'Mozilla/5.0 (Windows NT 10.0) Firefox/141.0' }), 'Firefox');
   assert.equal(rotuloSugerido({ userAgent: '' }), 'Navegador');
 });

@@ -226,12 +226,11 @@ function dadosDaFila() {
   const q = semAtivas(estado().queue || []).filter(scopeVisible);
   const decisoes = new Set((estado().decisions?.pending || []).map(d => d.key));
   const acionaveis = new Set(q.map(pr => pr.key));
-  const distribuindo = new Set(estado().headlessDistributing || []);
-  const esperando = new Set([...(estado().headlessWaiting || []), ...distribuindo]);
+  const esperando = new Set(estado().headlessWaiting || []);
   const aguardando = semAtivas(estado().headlessWaitingPrs || []).filter(pr => scopeVisible(pr)
     && esperando.has(pr.key) && !acionaveis.has(pr.key) && !decisoes.has(pr.key));
   const total = q.length + aguardando.length;
-  return { q, aguardando, distribuindo, total };
+  return { q, aguardando, total };
 }
 // O card da fila, ou a linha da Compacta com a frase, o trio da prontidão e o Revisar
 // Se a revisão deste PR espera clique: a decisão que o motor mandou (conta, organização e autor)
@@ -252,7 +251,7 @@ function renderQueue() {
   // A seleção do papel e os rascunhos não são substituídos por um snapshot.
   const qbox = $('#queue');
   if (document.activeElement && qbox.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-  const { q, aguardando, distribuindo, total } = dadosDaFila();
+  const { q, aguardando, total } = dadosDaFila();
   renderResumoPraMim(scopeVisible, total);
   const people = peopleOf();   // idem renderDecisions: um mapa só pra toda a passada
   $('#queueCount').hidden = total === 0;
@@ -298,11 +297,11 @@ function renderQueue() {
   const varias = Object.keys(noTopo).length > 1;
   const avisos = Object.entries(noTopo).map(([conta, v]) => queueLimitHtml(acctOf({ account: conta }), v.ate, v.n, varias)).join('');
   const rows = q.map((pr, i) => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFila(pr, i + 1, {
-    people, mark: acctMark(pr), parked, sync: estado().sync,
+    people, mark: acctMark(pr), parked,
     limiteAte: limiteDe(pr), limiteNoTopo: !!noTopo[contaDe(pr)], manual: manualDe(pr),
     esperaConflito: estado().esperaConflito,
   }) })).concat(aguardando.map(pr => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFilaDeExecucao(pr, {
-    mark: acctMark(pr), sync: estado().sync, distribuindo: distribuindo.has(pr.key),
+    mark: acctMark(pr),
     espera: (estado().headlessWaitingDetails || {})[pr.key],
   }) })));
   box.innerHTML = avisos + groupedQueue(rows, queueGrouping, closedQueueGroups);

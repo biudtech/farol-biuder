@@ -24,14 +24,14 @@ beforeEach(() => { fs.rmSync(LOCAL_AUTH_DIR, { recursive: true, force: true }); 
 after(() => { fs.rmSync(HOME, { recursive: true, force: true }); });
 
 test('o token tem 32 bytes em base64url e o arquivo guarda só o hash', () => {
-  const token = emitirSessao('celular', T0);
+  const token = emitirSessao('navegador', T0);
   assert.match(token, /^[A-Za-z0-9_-]{43}$/);
   const texto = fs.readFileSync(sessoesPath(), 'utf8');
   assert.equal(texto.includes(token), false, 'o token em claro não pode ir para o disco');
   const [s] = JSON.parse(texto);
   assert.deepEqual(Object.keys(s).sort(), ['criadoEm', 'hash', 'rotulo', 'ultimoUsoEm']);
   assert.match(s.hash, /^[0-9a-f]{64}$/);
-  assert.equal(s.rotulo, 'celular');
+  assert.equal(s.rotulo, 'navegador');
 });
 
 test('token válido passa; errado, malformado ou vazio não', () => {

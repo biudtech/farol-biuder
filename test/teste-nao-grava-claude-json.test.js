@@ -2,7 +2,7 @@
 //
 // O boot da Engine pré-confia o workspace gravando no ~/.claude.json, e cada arquivo de
 // teste que sobe a Engine fazia isso no arquivo REAL, o mesmo que o Claude Code das sessões
-// abertas grava. Medido no aparelho do dono: 980 dos 1146 projetos do arquivo eram
+// abertas grava. Medido na máquina do dono: 980 dos 1146 projetos do arquivo eram
 // workspaces temporários de teste, e uma dessas gravações coincidiu com o arquivo ficando
 // inválido (um "}" sobrando no fim). Sob o executor de testes o arquivo fica no HOME isolado.
 import os from 'node:os';

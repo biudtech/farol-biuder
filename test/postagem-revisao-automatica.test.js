@@ -1,6 +1,6 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
-// A revisão automática com a arbitragem de postagem: passa o handle da sessão ao funil,
-// trata posse perdida como perda de coordenação e não como falha de rede.
+// A revisão automática até a postagem: o funil recebe a via e o head lido, e a falha no
+// envio vira pendência com o motivo.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -38,7 +38,7 @@ function envelope(tipo) {
   return { protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('request_changes'), analysisStatus: 'complete', coverage: { total: 1, reviewed: ['a.ts'], missing: [] }, alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'fixture sintética sem consumidor' }], verdict: 'request_changes', decision: 'needs_decision', cardMet: true, reasons: ['bloqueio real'], reportMarkdown: 'relatório', payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'Tem um problema na validação do redirect.' } } };
 }
 
-function motor(post, handle, tipo) {
+function motor(post, tipo) {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
@@ -57,22 +57,18 @@ function motor(post, handle, tipo) {
   e.myReviewsWithTime = async () => [];
   e.chamadas = [];
   e.postReview = async (pr, payload, opcoes) => { e.chamadas.push({ payload, opcoes }); return post; };
-  e.runClaudeStream = async (prompt, opts) => {
-    if (typeof opts.onAdmitted === 'function') await opts.onAdmitted(null);
-    return { text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1', coordination: handle };
-  };
+  e.runClaudeStream = async () => ({ text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1' });
   e.toasts = [];
   e.on('toast', (t) => e.toasts.push(t));
-  e.config.sync = { ...e.config.sync, enabled: true, coordination: { enabled: true } };
   return e;
 }
 
-const INCERTA = { ok: false, estado: 'enviando', motivo: 'resultado-incerto', attempted: true, reviewId: '', error: 'uma postagem deste commit pode ter chegado ao GitHub e ainda não foi conferida; não posto de novo até conferir (gh: HTTP 502)' };
+// o que o postReview devolve quando o gh falha no envio (lib/engine/decision.js)
+const FALHA_NO_ENVIO = { ok: false, attempted: true, error: 'gh: HTTP 502: Bad Gateway' };
 
 for (const tipo of ['approve', 'request_changes']) {
   test(`${tipo}: silenciar com modelo em andamento conclui e posta pelo funil real`, async () => {
-    const e = motor({ ok: true }, null, tipo);
-    e.config.sync.enabled = false;
+    const e = motor({ ok: true }, tipo);
     e.config.accounts = [{ user: 'eu', owners: ['o'], muted: false }];
     e.token = 'tok-eu';
     e.tokens = { eu: 'tok-eu' };
@@ -104,7 +100,7 @@ for (const tipo of ['approve', 'request_changes']) {
 
 for (const tipo of ['approve', 'request_changes']) {
   test(`${tipo}: o funil recebe via revisao, ancorado no head lido`, async () => {
-    const e = motor({ ok: true }, null, tipo);
+    const e = motor({ ok: true }, tipo);
     await e.runHeadlessReview(prDe('o/r#1'));
     assert.equal(e.chamadas.length, 1, JSON.stringify({pending:e.decisions.pending,logs:e.logs}));
     assert.equal(e.chamadas[0].opcoes.via, 'revisao');
@@ -114,28 +110,26 @@ for (const tipo of ['approve', 'request_changes']) {
 }
 
 
-test('postagem incerta: vira pendência com o motivo, sem lançar', async () => {
-  const e = motor(INCERTA, null, 'approve');
-  await e.runHeadlessReview(prDe('o/r#3'));
+test('postagem que falha no envio: vira pendência com o motivo, sem lançar', async () => {
+  const e = motor(FALHA_NO_ENVIO, 'approve');
+  await assert.doesNotReject(e.runHeadlessReview(prDe('o/r#3')));
+  assert.equal(e.chamadas.length, 1, 'tentou postar uma vez');
   const item = e.decisions.pending.find((d) => d.key === 'o/r#3');
   assert.ok(item);
-  assert.ok((item.reasons || []).some((r) => r.kind === 'infra' && /pode ter chegado ao GitHub/.test(r.text)));
+  assert.ok((item.reasons || []).some((r) => r.kind === 'infra' && /falha ao postar o APPROVE: gh: HTTP 502/.test(r.text)));
 });
 
 // Desde 01/10/2026 lacuna de cobertura e contestação não seguram a reprovação automática: o
 // bloqueio é postado e o card registra o que a leitura não cobriu (nada disso vai ao PR).
 test('request_changes com lacuna de cobertura e contestação: posta, e o card registra as duas', async () => {
-  const e = motor({ ok: true }, null, 'request_changes');
+  const e = motor({ ok: true }, 'request_changes');
   const base = envelope('request_changes');
   const comLacuna = {
     ...base,
     coverage: { total: 3, reviewed: ['a.ts'], missing: ['b.ts', 'c.ts'] },
     contested: [{ source: 'Sonar', claim: 'y', label: 'pre_existente', evidence: 'diff vazio em services/' }],
   };
-  e.runClaudeStream = async (prompt, opts) => {
-    if (typeof opts.onAdmitted === 'function') await opts.onAdmitted(null);
-    return { text: JSON.stringify({ result: JSON.stringify(comLacuna) }), sessionId: 's1' };
-  };
+  e.runClaudeStream = async () => ({ text: JSON.stringify({ result: JSON.stringify(comLacuna) }), sessionId: 's1' });
   await e.runHeadlessReview(prDe('o/r#7'));
   assert.equal(e.chamadas.length, 1, 'o REQUEST_CHANGES foi postado');
   assert.equal(e.chamadas[0].payload.event, 'REQUEST_CHANGES');

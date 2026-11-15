@@ -33,11 +33,8 @@ import { sysGoTo, renderSettings, renderPlatformSettings } from './telas/sistema
 import { initCaixaRevisao } from './telas/caixa-revisao.js';
 import { initAtalhos } from './telas/atalhos.js';
 import { initPaleta, rotularBtnCmdK } from './telas/paleta.js';
-import { initTema, syncTheme } from './telas/tema.js';
+import { initTema, temaDaConfig } from './telas/tema.js';
 import { initPerfilPessoa } from './telas/perfil-pessoa.js';
-import { registrarTelaRadarCompartilhado, aoAndamentoRemoto, aoPendenciasRemotas } from './telas/radar-compartilhado.js';
-import { initListasRemotas, aoListasRemotas } from './telas/listas-remotas.js';
-import { registrarTelaRadarAparelhos } from './telas/radar-aparelhos.js';
 import { initRota, depoisDoEstado, sincronizarUrl } from './telas/rota.js';
 import { criarAgendaVisual } from './telas/pintura.js';
 import { gruposDaPintura } from './telas/pintura-estado.js';
@@ -289,8 +286,6 @@ const pinturas = criarAgendaVisual({
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
     relogio: tickCountdown,
     consumo: () => pintarTelaRegistrada('consumo'),
-    compartilhado: () => pintarTelaRegistrada('radar-compartilhado'),
-    aparelhos: () => pintarTelaRegistrada('radar-aparelhos'),
   }),
   oculta: () => document.hidden,
   agendar: fn => requestAnimationFrame(fn),
@@ -299,7 +294,7 @@ aoMudarRadarSub(() => { if (estado()) { pinturas.invalidar(); pinturas.pintar();
 // densidade Compacta/Expandida e o que está aberto nela redesenham o Radar pelo mesmo caminho
 initDensidade(() => { if (estado()) { pinturas.invalidar(); pinturas.pintar(); } });
 function repintarPorEstado(campos, imediato = false) {
-  if (!campos || campos.includes('config')) { syncTheme(estado().config); }
+  if (!campos || campos.includes('config')) { temaDaConfig(estado().config); }
   pinturas.invalidar(campos);
   // A rota é aplicada com estado atual, sem esperar animação ou uma janela reaparecer.
   depoisDoEstado();
@@ -369,21 +364,6 @@ function connect() {
     handleActivity(id, item, lidos);
     pinturas.invalidar(['activity']);
   });
-  // visão compartilhada (andamento e pendências de outros aparelhos): delta próprio, nunca o
-  // estado inteiro. O bootstrap só entrega; quem entende é telas/radar-compartilhado.js.
-  es.addEventListener('sync-live', (e) => {
-    const d = safeJsonParse(e.data); if (!d) return;
-    aoAndamentoRemoto(d);
-  });
-  es.addEventListener('sync-pending', (e) => {
-    const d = safeJsonParse(e.data); if (!d) return;
-    aoPendenciasRemotas(d);
-  });
-  // listas de outros aparelhos: idem, quem entende é telas/listas-remotas.js
-  es.addEventListener('sync-lists', (e) => {
-    const d = safeJsonParse(e.data); if (!d) return;
-    aoListasRemotas(d);
-  });
   // credencial revogada ou vencida com a página aberta (A4)
   es.addEventListener('nao-autenticado', () => {
     es.close();
@@ -440,14 +420,6 @@ function connect() {
 // 'sistema' (telasRegistradas() devolve na ordem de registro, e precisa continuar
 // time, sistema, consumo).
 registrarTelaConsumo();
-// a visão compartilhada do Radar registra por último, pelo mesmo motivo: registrar no import
-// a poria antes de 'sistema' e mudaria a ordem garantida acima
-registrarTelaRadarCompartilhado();
-// Radar > Aparelhos lê o que a visão compartilhada acumula, e por isso registra depois dela
-registrarTelaRadarAparelhos();
-// listas de outros aparelhos: quando chega projeção nova, quem as lê se redesenha pelas
-// funções que o bootstrap já chama por snapshot
-initListasRemotas(() => { pinturas.invalidar(['sync']); });
 
 /* O endereço da página reflete a tela (telas/rota.js): por último, para o ouvinte de clique
    e tecla dele rodar depois de todos os handlers acima, e com todas as telas registradas

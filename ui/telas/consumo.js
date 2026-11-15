@@ -4,12 +4,12 @@
 import {
   esc, usageMetricVal, usageStackLayers, usageHoverIndex, usageDayKeysBack, usageColorsFor,
   usageTooltipHtml, fmtUsageMetric, usageKpisHtml, usageMatrixHtml, usageBudgetHtml,
-  usageSessionsHtml, filaJustaHtml, usageConsolidadoEnvelopeHtml,
+  usageSessionsHtml, filaJustaHtml,
 } from '../pure.js';
 import { estado } from './estado.js';
 import { revisarUrls } from './revisar-urls.js';
 import { renderActivity } from './consumo-atividade.js';
-import { $, get, DIMENSAO_DO_CONSUMO, marcarSeg } from './infra.js';
+import { $, DIMENSAO_DO_CONSUMO, marcarSeg } from './infra.js';
 import { registrarTela } from './registro.js';
 
 /* ---------- Consumo de tokens (tela própria, charts em SVG puro) ---------- */
@@ -137,14 +137,7 @@ function renderOrcamento() {
 function renderUsage() {
   renderFilaJusta();
   renderOrcamento();
-  renderUsageDeviceSeg();
-  renderActivity({ window: usageState.window, scope: usageDeviceState.escopo === 'todos' ? 'all' : 'local' });
-  const consolidado = usageDeviceState.escopo === 'todos';
-  const painelLocal = $('#usageLocal');
-  const painelTodos = $('#usageConsolidado');
-  if (painelLocal) painelLocal.hidden = consolidado;
-  if (painelTodos) painelTodos.hidden = !consolidado;
-  if (consolidado) { renderUsageConsolidado(); return; }
+  renderActivity({ window: usageState.window });
   const u = estado() && estado().usage;
   const kpisEl = $('#usageKpis'), tl = $('#usageTimeline'), legend = $('#usageLegend');
   const matrix = $('#usageMatrix'), matrixCap = $('#usageMatrixCaption');
@@ -166,83 +159,6 @@ function renderUsage() {
   sessions.innerHTML = usageSessionsHtml(u || {});
 }
 
-
-/* ---------- Consumo: este aparelho x todos os aparelhos (U4) ----------
-
-   "Este aparelho" volta ao renderUsage de sempre, sem NENHUMA diferença: a consolidação
-   é uma segunda visão, nunca uma reescrita da primeira. O segmentado só existe com a
-   consolidação ligada, porque sem ela não há o que consolidar. */
-const usageDeviceState = { escopo: 'este' };
-
-function usageConsolidadoVisivel() {
-  return !!(estado() && estado().sync && estado().sync.consolidation);
-}
-
-/* O marcador de escopo que fica no lugar do segmentado quando não há consolidação.
-   Medido em 20/09/2026 na instância isolada: com a consolidação desligada o #usageDevice
-   inteiro ficava display:none, e com ele sumia o rótulo "Este aparelho": a aba passava a
-   mostrar números sem marca de escopo, visualmente idênticos à visão consolidada.
-   O texto diz o MOTIVO (desligada, uma escolha de configuração) para não ser lido como
-   falha ao carregar o consolidado, que tem aviso próprio (usageConsolidadoEnvelopeHtml).
-   Criado aqui, e não no index.html, porque é o mesmo lugar que decide quando mostrá-lo. */
-function escopoLocalBox() {
-  const existente = $('#usageEscopoLocal');
-  if (existente) return existente;
-  const seg = $('#usageDevice');
-  if (!seg || !seg.parentNode) return null;
-  const el = document.createElement('div');
-  el.id = 'usageEscopoLocal';
-  el.className = 'usage-escopo';
-  el.title = 'A consolidação de todos os aparelhos está desligada em Sistema > Sincronização. Não é falha ao carregar.';
-  el.innerHTML = '<b>Este aparelho</b><span>consolidação entre aparelhos desligada</span>';
-  seg.parentNode.insertBefore(el, seg);
-  return el;
-}
-
-function renderUsageDeviceSeg() {
-  const box = $('#usageDevice');
-  if (!box) return;
-  box.hidden = !usageConsolidadoVisivel();
-  const marcador = escopoLocalBox();
-  if (marcador) marcador.hidden = !box.hidden;
-  // consolidação desligada no meio do caminho: a visão volta pra deste aparelho, senão
-  // a tela ficaria presa numa aba que não pode mais buscar nada
-  if (box.hidden && usageDeviceState.escopo !== 'este') usageDeviceState.escopo = 'este';
-}
-
-// O estado chega por push a cada ciclo de polling, e este painel é o único que faz IO
-// para pintar. Sem memória, cada push trocava o conteúdo por "Buscando…" (pisca) e
-// repetia o GET. A resposta anterior pinta na hora e a busca só se repete depois do
-// intervalo mínimo; trocar a janela busca na hora, porque aí a resposta é outra.
-const consolidadoCache = { janela: null, resposta: null, at: 0, buscando: false };
-const CONSOLIDADO_MIN_MS = 30000;
-
-async function renderUsageConsolidado() {
-  const alvo = $('#usageConsolidado');
-  if (!alvo) return;
-  const janela = usageState.window;
-  const serveCache = consolidadoCache.resposta && consolidadoCache.janela === janela;
-  alvo.innerHTML = serveCache
-    ? usageConsolidadoEnvelopeHtml(consolidadoCache.resposta)
-    : '<p class="vago">Buscando o consumo de todos os aparelhos…</p>';
-  const recente = consolidadoCache.janela === janela && consolidadoCache.at > 0
-    && (Date.now() - consolidadoCache.at) < CONSOLIDADO_MIN_MS;
-  if (recente || consolidadoCache.buscando) return;
-  consolidadoCache.buscando = true;
-  let r;
-  try { r = await get(`/api/sync/consolidated?days=${encodeURIComponent(janela)}`); }
-  finally { consolidadoCache.buscando = false; }
-  // a janela pode ter mudado enquanto a busca corria: resposta velha não pinta a tela
-  if (usageDeviceState.escopo !== 'todos' || usageState.window !== janela) return;
-  // `at` é carimbado SEMPRE, inclusive na falha: o get() devolve null quando a rede cai,
-  // e guardar só o sucesso deixava o throttle sem efeito justamente com o endpoint fora
-  // do ar (cada push repintava "Buscando…" e disparava outro GET). A resposta nula não
-  // entra no cache, para a tela não servir vazio como se fosse dado.
-  consolidadoCache.janela = janela;
-  consolidadoCache.at = Date.now();
-  if (r) consolidadoCache.resposta = r;
-  alvo.innerHTML = usageConsolidadoEnvelopeHtml(r);
-}
 
 // O período do Consumo, também endereçável (?janela=7): a rota e o clique passam por aqui.
 function janelaDoConsumo() { return usageState.window; }
@@ -269,14 +185,6 @@ function wireUsageControls() {
   bind('#usageMetric', 'metric', 'metric');
   document.querySelectorAll('#usageWindow .seg-btn').forEach(b => b.addEventListener('click', () => escolherJanelaDoConsumo(Number(b.dataset.window))));
   bind('#usageStack', 'dim', 'dim');
-  const dev = document.querySelector('#usageDevice');
-  if (dev) {
-    dev.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
-      marcarSeg(dev.querySelectorAll('.seg-btn'), x => x === b);
-      usageDeviceState.escopo = b.dataset.escopo;
-      renderUsage();
-    }));
-  }
 }
 wireUsageControls();
 

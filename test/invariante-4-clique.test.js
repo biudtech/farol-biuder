@@ -11,8 +11,8 @@
 //
 // A régua mudou em 18/10/2026 (a decisão sem mesa). Regra do dono: "Se foi configurado pra
 // aprovar sozinho ele aprova sozinho, se foi configurado pra reprovar sozinho ele reprova
-// sozinho, sem depender da minha ação." Clique no Panorama, URL colada, pedido do aparelho
-// admin, comando remoto e distribuição entre aparelhos são TODOS o dono mandando revisar, e
+// sozinho, sem depender da minha ação." Clique no Panorama, URL colada, pedido do
+// admin, comando remoto e distribuição são TODOS o dono mandando revisar, e
 // saem pela política da conta como a fila. O que continua sem postar sozinho é a origem
 // desconhecida: um objeto de PR sem marca nenhuma (desfecho-automatico.js, origemDoDono).
 // Runner nativo, ZERO deps.
@@ -58,9 +58,9 @@ function enginePermissivo() {
 const ORIGENS_DO_DONO = {
   fila: { requested: true },
   'clique no Panorama ou URL colada': { requested: false, manual: true },
-  'pedido do aparelho admin': { viaAdmin: true },
+  'pedido do admin': { viaAdmin: true },
   'comando remoto (repetir, tomar, transferir)': { viaComando: true },
-  'distribuição entre aparelhos': { viaComando: true, viaDistribuicao: true },
+  'distribuição': { viaComando: true, viaDistribuicao: true },
   'pendência relançada (reconferência técnica)': { origemDono: true },
 };
 

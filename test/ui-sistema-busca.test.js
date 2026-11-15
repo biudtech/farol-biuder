@@ -1,17 +1,14 @@
-// Busca do Sistema (índice, filtro) e seções que somem com a sincronização desligada.
+// Busca do Sistema (índice e filtro).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { SYS_INDEX, buscarNoSistema } from '../ui/pure/sistema-busca.js';
-import { secoesOcultasDoSistema } from '../ui/pure/sistema-secoes.js';
 
 const html = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8');
 
-test('a busca por "orçamento" acha Plano e chaves antes de Grupos', () => {
+test('a busca por "orçamento" acha Plano e chaves', () => {
   const hits = buscarNoSistema(SYS_INDEX, 'orçamento', () => '');
-  const secs = hits.map((h) => h.sec);
-  assert.ok(secs.includes('plans'));
-  assert.ok(secs.indexOf('plans') < secs.indexOf('groups'));
+  assert.ok(hits.map((h) => h.sec).includes('plans'));
 });
 
 test('consulta vazia não devolve nada', () => {
@@ -23,11 +20,4 @@ test('todo alvo "#id" do índice existe no index.html', () => {
     if (!e.at.startsWith('#')) continue;
     assert.ok(html.includes(`id="${e.at.slice(1)}"`), `alvo ${e.at} sem id no index.html`);
   }
-});
-
-test('seções da sincronização somem com ela desligada ou ausente', () => {
-  assert.deepEqual(secoesOcultasDoSistema({ sync: { enabled: false } }), ['devices', 'groups']);
-  assert.deepEqual(secoesOcultasDoSistema({}), ['devices', 'groups']);
-  assert.deepEqual(secoesOcultasDoSistema(undefined), ['devices', 'groups']);
-  assert.deepEqual(secoesOcultasDoSistema({ sync: { enabled: true } }), []);
 });

@@ -107,80 +107,22 @@ test('a tela de Contas grava o valor por extenso em cada seletor', () => {
   assert.doesNotMatch(fonte, /herda o global|alcanceDasChavesGerais/);
 });
 
-/* ---------- Radar > Aparelhos: os mesmos campos, com as mesmas palavras ---------- */
-
-const TAG = 'f'.repeat(32);
-const remoto = (politica) => P.contasDoAparelhoHtml({ deviceId: 'dCel', contas: [{ acctTag: TAG, nome: 'ana-exemplo', politica }] }, {});
-
-test('Radar > Aparelhos usa os rótulos e as opções do cartão de Contas, campo a campo', () => {
-  const T = P.POLITICA_DA_CONTA_TEXTOS;
-  const local = cartao([BIUDER]);
-  const longe = remoto({ autoReview: true, muted: false, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' });
-  for (const campo of ['autoReview', 'onClean', 'onCaveats', 'onReject']) {
-    assert.ok(local.includes(`<span class="a-fieldlabel">${T[campo].rotulo}</span>`), `cartão: ${campo}`);
-    assert.ok(longe.includes(`<div>${T[campo].rotulo}</div>`), `aparelho: ${campo}`);
-  }
-  for (const campo of ['onClean', 'onCaveats', 'onReject']) {
-    for (const [valor, texto] of T[campo].opcoes) {
-      // comparação de texto, sem regex: montar expressão a partir do rótulo pedia escape completo
-      const temOpcao = (html) => ['', ' selected'].some((marca) => html.includes(`<option value="${valor}"${marca}>${texto}</option>`));
-      assert.ok(temOpcao(local), `cartão: ${campo}=${valor}`);
-      assert.ok(temOpcao(longe), `aparelho: ${campo}=${valor}`);
-    }
-  }
-  // o seletor de dois botões leva o começo da mesma opção, e o texto inteiro na dica
-  assert.match(longe, /data-campo="autoReview"[^>]*data-valor="true"[^>]*>revisa sozinho<\/button>/);
-  assert.match(longe, /data-campo="autoReview"[^>]*data-valor="false"[^>]*title="só põe na fila \(você manda revisar; o resultado segue as regras abaixo\)">só põe na fila<\/button>/);
-  assert.doesNotMatch(longe, /Com blocker|destaca as ressalvas|Revisar sozinho/, 'os rótulos próprios desta tela saíram');
-});
-
-test('Radar > Aparelhos: com o sem ressalvas esperando, o com ressalvas fica desligado, como no cartão', () => {
-  const longe = remoto({ autoReview: true, muted: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' });
-  const sel = longe.slice(longe.indexOf('data-campo="onCaveats"') - 200).split('</select>')[0];
-  assert.match(sel, /data-campo="onCaveats"[^>]* disabled><option value="wait" selected>espera você \(o sem ressalvas espera\)<\/option>/);
-  assert.doesNotMatch(sel, /aprova \(as ressalvas ficam no app\)/);
-});
-
-test('o comando à distância se descreve com as palavras da opção escolhida', () => {
-  const cmd = { cmdId: 'c1', alvo: 'dCel', tipo: 'config-conta', campo: 'onCaveats', valor: 'approve', at: 1 };
-  const r = P.retornoDoComando([cmd], {}, () => true, { agora: 2 });
-  assert.match(r.html, /quando fica aprovável com ressalvas: aprova \(as ressalvas ficam no app\)/);
-});
-
 /* ---------- paralelismo: cada número diz uma coisa só ---------- */
 
-test('Automação: "por conta" é sempre por conta, e o total do aparelho tem um nome só', () => {
+test('Automação: "por conta" é sempre por conta, e o total da instalação tem um nome só', () => {
   const porConta = HTML.slice(HTML.indexOf('id="sys-row-paralelas"'), HTML.indexOf('id="sys-row-teto-global"'));
-  assert.match(porConta, /É sempre por conta, com ou sem o compartilhamento entre aparelhos/);
-  assert.doesNotMatch(porConta, /passa a ser o total do aparelho/);
+  assert.match(porConta, /É sempre por conta: o total da instalação é a linha de baixo/);
+  assert.doesNotMatch(porConta, /passa a ser o total/);
   const total = HTML.slice(HTML.indexOf('id="sys-row-teto-global"'), HTML.indexOf('id="sys-row-intervalo"'));
-  assert.match(total, /<label class="set-title" for="setGlobalParallelReviews">Teto total deste aparelho<\/label>/);
-  assert.match(total, /"Teto total do aparelho", em Sistema → Aparelhos e em Radar → Aparelhos\): vale o menor dos dois/);
+  assert.match(total, /<label class="set-title" for="setGlobalParallelReviews">Teto total desta instalação<\/label>/);
+  assert.doesNotMatch(total, /vale o menor dos dois/, 'não existe mais teto definido à distância');
   assert.match(total, /<option value="0">Sem teto total \(padrão\)<\/option>/);
   assert.doesNotMatch(HTML, /Teto global/);
 });
 
-test('Sistema > Aparelhos e Radar > Aparelhos chamam o teto do admin pelo mesmo nome', () => {
-  const politica = P.aparelhoPoliticaHtml({ deviceId: 'd1', name: 'Celular' }, { leitura: { estado: 'ok', existe: true, valida: true, versao: 1, politica: { pausado: false } } });
-  assert.match(politica, /<span>Teto total do aparelho<\/span>/);
-  assert.match(politica, /não definir \(vale o teto total do próprio aparelho, em Sistema → Automação\)/);
-  assert.doesNotMatch(politica, /Teto de paralelismo/);
-  const ap = { deviceId: 'd1', nome: 'Celular', platform: 'android', versao: P.VERSAO_DO_CONTROLE, vistoEm: Date.now(), abriu: true, pausado: false, paralelismo: 2, ocupadas: 1, iaPronta: true, aceitarAdmin: true, contas: [], falhas: [], publicadoEm: Date.now() };
-  const painel = P.painelDoAparelhoHtml(ap, {});
-  assert.match(painel, /Teto total do aparelho <select class="ap-teto"/);
-  assert.match(painel, /teto total do aparelho: 2/);
-  assert.match(painel, /<option value="">não definir \(vale o teto total do próprio aparelho\)<\/option>/);
-  assert.match(painel, /<option value="2" selected>2<\/option>/);
-  assert.doesNotMatch(painel, /Ao mesmo tempo/);
-  // total que o admin não pode definir (soma dos limites por conta): o seletor abre em "não definir"
-  const semTeto = P.painelDoAparelhoHtml({ ...ap, paralelismo: 6 }, {});
-  assert.match(semTeto, /<option value="" selected>não definir \(vale o teto total do próprio aparelho\)<\/option>/);
-  assert.match(semTeto, /teto total do aparelho: 6/);
-});
-
 test('a Justiça de fila usa o nome novo do teto total', () => {
   const html = P.filaJustaHtml({ porOrg: [], porPerfil: [], emCurso: 1, tetoGlobal: 3 });
-  assert.match(html, /<h4>Teto total deste aparelho<\/h4>/);
+  assert.match(html, /<h4>Teto total desta instalação<\/h4>/);
 });
 
 test('Contas: o perfil diz que escolhe a chave de API do Claude, e que o modelo vem da Automação', () => {

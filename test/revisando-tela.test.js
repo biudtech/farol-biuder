@@ -38,11 +38,11 @@ test('horaDoReset: hoje, amanhã e outro dia, nas duas formas', () => {
 
 /* ---------- a precedência (seção 2 do handoff) ---------- */
 
-test('1 e 8: ninguém revisando e nenhum registro: Revisar, coordenação como sempre', () => {
-  assert.deepEqual(avisosDoCard({}, {}), { rotulo: 'Revisar', nota: 'coordenacao', formaLimite: 'longa', forma: '', logins: [] });
+test('1 e 8: ninguém revisando e nenhum registro: Revisar, sem nota', () => {
+  assert.deepEqual(avisosDoCard({}, {}), { rotulo: 'Revisar', nota: '', formaLimite: 'longa', forma: '', logins: [] });
 });
 
-test('2 e 3: alguém revisando: fora de cena, sem limite nem coordenação', () => {
+test('2 e 3: alguém revisando: fora de cena, sem limite', () => {
   const av = avisosDoCard({ outrosRevisando: ['ana', 'bia'] }, { limiteAtivo: true });
   assert.equal(av.rotulo, 'Revisar junto');
   assert.equal(av.forma, 'fora');

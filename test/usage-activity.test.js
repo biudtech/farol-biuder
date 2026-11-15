@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { activityReport } from '../lib/usage/report.js';
 import { usageActivity } from '../lib/engine/usage-activity.js';
 import { activityBodyHtml, activityHistoryHtml } from '../ui/pure/consumo-atividade.js';
-import { accountHash } from '../lib/sync/keys.js';
 
 const NOW = Date.parse('2026-10-26T16:00:00Z');
 const query = { start: '2026-10-01', end: '2026-10-26' };
@@ -43,7 +42,7 @@ test('retentativa mantém a classificação quando a tentativa anterior está fo
   assert.equal(report(rows, { model: 'anterior' }).retries, 0);
 });
 
-test('identidade separa aparelho, conta, perfil e tipo; subagentes não viram reviews', () => {
+test('identidade separa máquina, conta, perfil e tipo; subagentes não viram reviews', () => {
   const rows = [row(), row({ account: 'other' }), row({ profileId: 'other' }), row({ kind: 'pushback' }), row({ modelUsage: { subagent: {} }, id: 'review-2' })];
   const r = activityReport([{ device: 'one', rows }, { device: 'two', rows: [row()] }], query, NOW);
   assert.equal(r.history.total, 6);
@@ -141,25 +140,4 @@ test('a projeção pública não expõe cursores, snapshots ou campos extras e e
   assert.equal(r.history.rows[0].apiKey, undefined);
   assert.doesNotMatch(activityHistoryHtml(r), /<img/);
   assert.match(activityHistoryHtml(r), /&lt;img/);
-});
-
-test('consulta consolidada usa somente uid configurado e filtra conta pelo hash existente', async () => {
-  const paths = [];
-  const event = row({ id: undefined, localId: 'r', account: undefined, accountHash: accountHash('dev'), ref: undefined, refHash: 'hash' });
-  const engine = { config: { sync: { enabled: true, consolidation: { enabled: true } } }, sync: { uid: 'owner', deviceId: 'd', status: 'conectado', client: {
-    get: async path => { paths.push(path); return { ok: true, data: path.endsWith('usageEvents') ? { d: { e: event } } : {} }; },
-  } } };
-  const response = await usageActivity(engine, new URLSearchParams({ scope: 'all', account: 'dev', start: '2026-10-01', end: '2026-10-26' }));
-  assert.equal(response.ok, true);
-  assert.equal(response.totals.attempts, 1);
-  assert.deepEqual(paths.sort(), ['/users/owner/devices', '/users/owner/usageEvents']);
-  assert.equal((await usageActivity({}, new URLSearchParams('scope=all'))).ok, false);
-});
-
-test('troca de identidade durante a consulta não entrega o histórico do usuário anterior', async () => {
-  const engine = { config: { sync: { enabled: true, consolidation: { enabled: true } } }, sync: { uid: 'before', status: 'conectado', client: {
-    get: async () => { engine.sync.uid = 'after'; return { ok: true, data: {} }; },
-  } } };
-  const response = await usageActivity(engine, new URLSearchParams('scope=all'));
-  assert.equal(response.ok, false);
 });

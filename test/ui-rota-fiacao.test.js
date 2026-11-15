@@ -23,8 +23,8 @@ irPara('/#sistema/accounts');
 
 await import('../ui/app.js');
 const { abaAtual, escopo } = await import('../ui/telas/estado.js');
-const { radarSubAtual, switchRadarSub } = await import('../ui/telas/radar.js');
-const { secaoDoSistema } = await import('../ui/telas/sistema.js');
+const { radarSubAtual } = await import('../ui/telas/radar.js');
+const { secaoDoSistema, switchSistemaSection } = await import('../ui/telas/sistema.js');
 
 // o connect() roda depois do precisaParear(), que é assíncrono
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise((r) => setTimeout(r, 10));
@@ -101,9 +101,11 @@ test('endereço inválido cai no padrão e o endereço é corrigido', () => {
 });
 
 test('trocar de lugar pela tela empilha; trocar de conta substitui', () => {
-  switchRadarSub('apar');
+  irPara('/sistema/contas');
+  disparar('popstate');
+  switchSistemaSection('jira');
   disparar('click');
-  assert.deepEqual(ultima(), ['push', '/radar/aparelhos']);
+  assert.deepEqual(ultima(), ['push', '/sistema/jira']);
   // a conta é filtro: a barra de contas só existe com duas contas, que o estado tem
   irPara('/radar/pra-mim?conta=bob');
   disparar('popstate');
@@ -114,7 +116,6 @@ test('trocar de lugar pela tela empilha; trocar de conta substitui', () => {
 });
 
 test('endereço de aba que saiu (Entregas, Destaques) cai no Radar, na sub-aba Pra mim, sem aviso, e o endereço diz isso', () => {
-  switchRadarSub('apar');
   const toasts = document.querySelector('#toasts').children;
   const antes = toasts.length;
   irPara('/entregas?dias=30');

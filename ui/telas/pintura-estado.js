@@ -12,13 +12,11 @@ function gruposDaPintura(pintar) {
     grupo('status', ['app', 'status', 'error', 'account', 'activeSessions', 'buscasPausadas']),
     grupo('sessoes', ['activeSessions', 'activity', 'headlessWaiting', 'headlessWaitingContas', 'accounts'], mim),
     grupo('decisoes', ['decisions', 'accounts', 'config', 'reRounds', 'pushbacks', 'activeSessions', 'headlessWaiting', 'headlessWaitingContas'], mim),
-    grupo('fila', ['queue', 'headlessWaitingPrs', 'activeSessions', 'decisions', 'headlessWaiting', 'headlessDistributing', 'headlessWaitingDetails', 'accounts', 'config', 'parked', 'sync', 'usage', 'status', 'lastCheckAt'], mim),
-    grupo('navegacao', ['queue', 'decisions', 'activeSessions', 'headlessWaiting', 'headlessDistributing', 'accounts', 'sync'], radar),
-    grupo('configuracoes', ['app', 'paths', 'config', 'accounts', 'account', 'contasGh', 'doctor', 'sync', 'jiraSites', 'modelos', 'capacidades'], sistema),
+    grupo('fila', ['queue', 'headlessWaitingPrs', 'activeSessions', 'decisions', 'headlessWaiting', 'headlessWaitingDetails', 'accounts', 'config', 'parked', 'usage', 'status', 'lastCheckAt'], mim),
+    grupo('navegacao', ['queue', 'decisions', 'activeSessions', 'headlessWaiting', 'accounts'], radar),
+    grupo('configuracoes', ['app', 'paths', 'config', 'accounts', 'account', 'contasGh', 'doctor', 'jiraSites', 'modelos'], sistema),
     grupo('relogio', ['lastCheckAt', 'nextCheckAt', 'status', 'activeSessions', 'activity']),
-    grupo('consumo', ['usage', 'config', 'sync', 'filaJusta', 'accounts', 'activeSessions'], () => telaVisivel('consumo')),
-    grupo('compartilhado', ['sync', 'config', 'accounts'], radar),
-    grupo('aparelhos', ['sync', 'config', 'accounts'], radar),
+    grupo('consumo', ['usage', 'config', 'filaJusta', 'accounts', 'activeSessions'], () => telaVisivel('consumo')),
   ];
 }
 export { gruposDaPintura };

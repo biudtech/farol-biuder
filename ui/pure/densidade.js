@@ -47,8 +47,8 @@ export function fraseDaFila(pr, o = {}) {
   return { texto: `${Number(o.posicao) || 1}º na fila`, tom: 'none' };
 }
 
-export function fraseDaFilaDeExecucao(distribuindo) {
-  return { texto: distribuindo ? 'Esperando distribuição' : 'Na fila de execução', tom: 'run' };
+export function fraseDaFilaDeExecucao() {
+  return { texto: 'Na fila de execução', tom: 'run' };
 }
 
 // Quantas revisões do histórico recente foram resolvidas hoje (dia local).

@@ -18,7 +18,7 @@ function decisaoLegada(n, extra = {}) {
     id: 'd' + n, key: `acme/app#${n}`, createdAt: 1700000000000 + n, verdict: 'approve', status: 'pending',
     pr: { repo: 'acme/app', number: n, url: `https://github.com/acme/app/pull/${n}`, title: 'ajuste', author: 'ana', account: 'rev' },
     headSha: 'a'.repeat(40), reportMarkdown: 'Revisão sem ressalvas.', reasons: [], attention: [],
-    sync: { leaseId: 'l-1', dono: 'dev-antigo', recibo: { estado: 'enviando', etag: 'x' }, publicadoEm: 1700000000500 },
+    sync: { posse: 'l-1', dono: 'dev-antigo', recibo: { estado: 'enviando', etag: 'x' }, publicadoEm: 1700000000500 },
     chat: { sessionId: 's-1', mensagens: [{ de: 'eu', texto: 'pode aprovar?' }] },
     selfAnalysis: { parecer: 'aprovavel', escondida: false, relatorio: 'texto interno' },
     esperaProva: { desde: 1700000001000, tentativas: 2, proximaEm: 1700000900000, impedimento: 'análise incompleta',

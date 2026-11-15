@@ -100,7 +100,7 @@ async function analysis() {
   calls = []; denied = []; sourceReads = 0; sourceTrees = 0;
   const cpu = process.cpuUsage(), started = performance.now(), memoryBefore = process.memoryUsage();
   const engine = new Engine();
-  engine.config = { ...engine.config, sync: {}, jiraSites: [], claudeProfiles: [], reReviewResume: false, reviewContextMode: mode, reviewNavigationFacts: navigation === 'on', reviewBatchedReads: reads === 'on',
+  engine.config = { ...engine.config, jiraSites: [], claudeProfiles: [], reReviewResume: false, reviewContextMode: mode, reviewNavigationFacts: navigation === 'on', reviewBatchedReads: reads === 'on',
     accounts: [{ user: 'fixture', owners: ['org'], onClean: 'wait', onCaveats: 'wait', onReject: 'wait', autoReview: false }] };
   engine.accountForPr = () => 'fixture'; engine.tokenFor = () => 'synthetic-token'; engine.ghEnv = () => ({});
   engine.resolveClaudeAuth = () => ({ kind: 'dir' }); engine.headSha = async () => H;

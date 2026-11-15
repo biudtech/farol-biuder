@@ -445,8 +445,8 @@ test('conta silenciada não age', async () => {
 });
 
 test('cancelamento ou posse perdida na última conferência não escreve', async () => {
-  const perdeu = () => { throw new Error('lease perdido'); };
-  await assert.rejects(retirar(comHistorico(30), 30, { antesDeEnviar: perdeu }), /lease perdido/);
+  const perdeu = () => { throw new Error('posse perdida'); };
+  await assert.rejects(retirar(comHistorico(30), 30, { antesDeEnviar: perdeu }), /posse perdida/);
   assert.deepEqual(eventos(), []);
 });
 

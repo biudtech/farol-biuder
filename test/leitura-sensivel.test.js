@@ -15,7 +15,7 @@ const POSIX = { home: '/home/ana' };
 
 test('POSIX: a lista fechada de credenciais do home avisa', () => {
   for (const relativo of ['.git-credentials', '.ssh/id_rsa', '.ssh/config', '.aws/credentials', '.gnupg/private-keys-v1.d/a.key', '.config/gh/hosts.yml',
-    '.codex/auth.json', '.claude/.credentials.json', '.claude-trabalho/.credentials.json', '.farol/sync-credentials.json', '.farol/jira-credentials.json']) {
+    '.codex/auth.json', '.claude/.credentials.json', '.claude-trabalho/.credentials.json', '.farol/jira-credentials.json']) {
     assert.equal(caminhoSensivel(`/home/ana/${relativo}`, POSIX), `/home/ana/${relativo}`, relativo);
   }
 });
@@ -25,7 +25,7 @@ test('o caminho diferencia caixa e a forma curta não ancora', () => {
   assert.equal(caminhoSensivel('/home/ana/.SSH/id_rsa', POSIX), null);
 });
 
-test('o que parece credencial e não é a do aparelho segue sem aviso', () => {
+test('o que parece credencial e não é a da máquina segue sem aviso', () => {
   const nao = [
     '/home/ana/.farol/workspace/state/pr-scope/o%2Fr%231/.ssh/id_rsa',
     '/home/ana/.farol/workspace/credentials.json',
