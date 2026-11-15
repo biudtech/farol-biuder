@@ -235,8 +235,7 @@ export function versaoClaudeCheck(v) {
    autônoma morra no instante do spawn, e foi exatamente o que aconteceu no Farol
    rodando em Android (Termux + proot Debian, 25/08/2026): o login padrão do proot
    é root, o Claude Code recusa `--dangerously-skip-permissions` com uid 0, e o
-   headless passa essa flag SEMPRE (é fixa em runClaudeStream, não sai do toggle
-   de skipPermissions, que só alcança as sessões de terminal). O resultado era um
+   headless passa essa flag SEMPRE (é fixa em runClaudeStream). O resultado era um
    "saiu com código 1" por ciclo, pra sempre, sem uma linha na tela dizendo por quê.
    Devolve lista (vazia quando não há o que dizer) pra compor com os outros checks. */
 export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {

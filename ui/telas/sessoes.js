@@ -46,7 +46,7 @@ function renderStatus() {
   if (s.status === 'checking') {
     pill.className = 'pill busy';
     pill.textContent = 'verificando…';
-    // um erro anterior deixava a op terminal no Map e o has() abaixo barrava o
+    // um erro anterior deixava a op encerrada no Map e o has() abaixo barrava o
     // widget novo pra sempre (B11): ciclo novo purga o que ja terminou
     const cur = ACTIVE_OPS.get('sys-polling');
     if (cur && cur.status !== 'running') {
@@ -76,11 +76,6 @@ function renderStatus() {
     pill.textContent = 'monitorando';
     closeOp('sys-polling', 'done', 'Verificação concluída');
   }
-
-  const sp = $('#sessionsPill');
-  const term = (s.activeSessions || []).filter(x => x.mode === 'terminal').length;
-  sp.hidden = term === 0;
-  if (!sp.hidden) sp.textContent = term === 1 ? '1 sessão de IA no terminal' : `${term} sessões de IA no terminal`;
 
   $('#appVer').textContent = s.app?.version ? `v${s.app.version}` : '';
 

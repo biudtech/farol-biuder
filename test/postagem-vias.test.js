@@ -118,21 +118,21 @@ test('reenvio automático com enviando pendente não posta nem gasta tentativa',
   assert.equal(a.decisions.pending[0].postRetry.attempts, 0);
 });
 
-test('chat depois de reinício não duplica review já publicado, nem num aparelho sem o arquivo local', async () => {
+test('clique depois de reinício não duplica review já publicado, nem num aparelho sem o arquivo local', async () => {
   const a = aparelho('dA');
-  const sub = { key: PR.key, payload: { event: 'APPROVE', body: CORPO, comments: [] } };
-  assert.equal((await a.postReviewFromSession(sub, a.createReviewPostCapability([PR.key], 'eu', 'chat', ''))).ok, true);
+  const payload = { event: 'APPROVE', body: CORPO, comments: [] };
+  assert.equal((await a.postReview(PR, payload, { via: 'clique' })).ok, true);
   const a2 = reiniciar(a);
-  const r = await a2.postReviewFromSession(sub, a2.createReviewPostCapability([PR.key], 'eu', 'chat', ''));
+  const r = await a2.postReview(PR, payload, { via: 'clique' });
   assert.equal(r.ok, true);
   assert.equal(r.deduped, true);
   const b = aparelho('dB');
-  const rb = await b.postReviewFromSession(sub, b.createReviewPostCapability([PR.key], 'eu', 'chat', ''));
+  const rb = await b.postReview(PR, payload, { via: 'clique' });
   assert.equal(rb.ok, true);
   assert.equal(gh.posts.length, 1);
 });
 
-test('myReviewStates indisponível não autoriza postagem: revisão automática, reenvio, clique e chat', async () => {
+test('myReviewStates indisponível não autoriza postagem: revisão automática, reenvio e clique', async () => {
   gh.estado.falharLeitura = true;
   const auto = aparelho('dA');
   const handle = await revisaoAdmitida(auto);
@@ -145,9 +145,6 @@ test('myReviewStates indisponível não autoriza postagem: revisão automática,
   clique.decisions.pending = [pendencia()];
   const rClique = await clique.decide('d1', 'approve');
   assert.equal(rClique.ok, false);
-  const chat = aparelho('dD');
-  const rChat = await chat.postReviewFromSession({ key: PR.key, payload: { event: 'APPROVE', body: CORPO, comments: [] } }, chat.createReviewPostCapability([PR.key], 'eu', 'chat', ''));
-  assert.equal(rChat.ok, false);
   assert.equal(gh.posts.length, 0);
 });
 

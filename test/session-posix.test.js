@@ -15,7 +15,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-// mesmo padrão de test/session-claude-profile.test.js: o mock precisa estar em vigor
+// o mock precisa estar em vigor
 // ANTES do require de lib/engine/session, que captura `spawn` no load
 import childProcess from 'node:child_process';
 const realSpawn = childProcess.spawn;
@@ -25,8 +25,8 @@ childProcess.spawn = function mockableSpawn(...args) {
   return realSpawn(...args);
 };
 
-const { runClaudeStream, buildSessionScript, killTree } = await import('../lib/engine/session.js');
-const { claudeAuthShellLines, claudeAuthPosixPrefix } = await import('../lib/parse.js');
+const { runClaudeStream, killTree } = await import('../lib/engine/session.js');
+const { claudeAuthPosixPrefix } = await import('../lib/parse.js');
 const { WORKSPACE } = await import('../lib/paths.js');
 const { bashDoTeste } = await import('./helpers/bash-real.js');
 import { execFileSync } from 'node:child_process';
@@ -59,11 +59,6 @@ function engineFalso(config = {}) {
     resolveClaudeAuth: () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' }),
   };
 }
-
-// Os `await` de topo vêm ANTES do primeiro caso: com `--test-force-exit`, o processo
-// encerra quando os casos já registrados terminam, e um `await` que só volta depois
-// disso deixa os casos seguintes CANCELADOS, numa rodada que ainda diz "0 falhas".
-const { pickLinuxTerminal, LINUX_TERMINALS } = await import('../lib/engine/session.js');
 
 test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', async () => {
   let capturado = null;
@@ -99,31 +94,6 @@ test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', async () 
 // ceder ao perfil escolhido no Farol depois do sourcing do profile.
 const UNSET = 'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN';
 
-function ordem(texto, ...pedacos) {
-  return pedacos.map(p => texto.indexOf(p));
-}
-
-function engineLinux(auth) {
-  return {
-    config: { skipPermissions: false, port: 47170 },
-    resolveClaudeAuth: () => auth,
-    primaryUser: () => 'default-user',
-  };
-}
-
-
-test('claudeAuthShellLines posix (sem perfil de chave de API): unset sem export nenhum', () => {
-  const linhas = claudeAuthShellLines(null);
-  // sem perfil, o certo é NÃO re-exportar nada: um ANTHROPIC_API_KEY herdado do profile
-  // mentiria sobre qual chave está em uso.
-  assert.deepEqual(linhas, [UNSET, '# sem perfil de chave de API']);
-});
-
-test('claudeAuthShellLines posix (chave de API): a própria chave é setada DEPOIS do unset', () => {
-  const linhas = claudeAuthShellLines({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: 'https://proxy.x' });
-  assert.deepEqual(linhas, [UNSET, `export ANTHROPIC_API_KEY='sk-ant-1'`, `export ANTHROPIC_BASE_URL='https://proxy.x'`]);
-});
-
 test('claudeAuthPosixPrefix: sem perfil de chave de API é só o unset', () => {
   assert.equal(claudeAuthPosixPrefix(null), `${UNSET}; `);
   assert.equal(claudeAuthPosixPrefix({ kind: 'apikey', apiKey: '' }), `${UNSET}; `);
@@ -135,32 +105,9 @@ test('claudeAuthPosixPrefix: perfil de chave remove só o token OAuth (a chave c
   assert.doesNotMatch(prefixo, /sk-ant-1/);
 });
 
-test('scripts POSIX: o segredo de saída é variável de shell, nunca exportada ao claude', () => {
-  const sessao = buildSessionScript(engineLinux(null), '/pr-review x', 'id1', 'bob', '', 'segredo1');
-  assert.match(sessao, /^FAROL_SESSION_SECRET='segredo1'$/m);
-  assert.equal(sessao.includes('export FAROL_SESSION_SECRET'), false);
-  assert.match(sessao, /-H "x-farol-session: \$FAROL_SESSION_SECRET"/);
-});
-
-test('buildSessionScript (sem perfil de chave de API): o unset vem antes da linha do claude e nada é exportado', () => {
-  const script = buildSessionScript(engineLinux(null), '/pr-review x', 'id1', 'bob');
-  const [iUnset, iClaude] = ordem(script, UNSET, '\nclaude ');
-  assert.ok(iUnset > 0, 'o unset existe no script');
-  assert.ok(iUnset < iClaude, 'tudo antes do exec do claude');
-  assert.doesNotMatch(script, /export (ANTHROPIC_|CLAUDE_CONFIG_DIR)/);
-});
-
-test('buildSessionScript (chave de API): a chave do perfil é exportada DEPOIS do unset', () => {
-  const script = buildSessionScript(engineLinux({ kind: 'apikey', apiKey: 'sk-ant-1', baseUrl: '' }), '/pr-review x', 'id1', 'bob');
-  const [iUnset, iChave, iClaude] = ordem(script, UNSET, "export ANTHROPIC_API_KEY='sk-ant-1'", '\nclaude ');
-  assert.ok(iUnset > 0 && iUnset < iChave, 'o unset não pode apagar a chave do próprio perfil');
-  assert.ok(iChave < iClaude);
-});
 
 
-
-// Prova de EXECUÇÃO (não só leitura do texto montado), no mesmo padrão da prova de injeção
-// que já existe em test/session-claude-profile.test.js: um profile sujo é sourceado e o
+// Prova de EXECUÇÃO (não só leitura do texto montado): um profile sujo é sourceado e o
 // prefixo roda depois dele, exatamente como o `/bin/sh -lc` faz com o `-l`.
 const bashDisponivel = !!bashDoTeste;
 
@@ -228,22 +175,4 @@ test('killTree posix: mata o grupo de processo inteiro, não só o líder', asyn
     await new Promise(r => setTimeout(r, 100));
   }
   assert.ok(grupoMorto, 'o grupo de processos continua vivo depois do killTree');
-});
-
-/* ---------- Linux experimental (v2.45.0): escolha do terminal ---------- */
-
-
-test('pickLinuxTerminal: primeiro candidato existente vence, com os args dele', () => {
-  const exists = c => c === 'konsole' || c === 'xterm';
-  assert.deepEqual(pickLinuxTerminal(LINUX_TERMINALS, exists), { cmd: 'konsole', args: ['-e'] });
-});
-
-test('pickLinuxTerminal: x-terminal-emulator (alternatives do Debian) tem prioridade', () => {
-  const tudo = () => true;
-  assert.equal(pickLinuxTerminal(LINUX_TERMINALS, tudo).cmd, 'x-terminal-emulator');
-});
-
-test('pickLinuxTerminal: nenhum terminal devolve null (o chamador avisa alto)', () => {
-  assert.equal(pickLinuxTerminal(LINUX_TERMINALS, () => false), null);
-  assert.equal(pickLinuxTerminal(null, () => true), null);
 });

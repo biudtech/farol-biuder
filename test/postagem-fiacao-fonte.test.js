@@ -20,9 +20,9 @@ test('revisão automática: toda postagem passa via revisao com o handle e lanç
     'cada postagem confere a posse logo depois');
 });
 
-test('reenvio, clique e sessão se identificam', () => {
+test('reenvio e clique se identificam', () => {
   const fonte = ler('lib/engine/decision.js');
-  for (const via of ['reenvio', 'clique', 'sessao']) assert.ok(fonte.includes(`{ via: '${via}', continuidade:`), `via ${via}`);
+  for (const via of ['reenvio', 'clique']) assert.ok(fonte.includes(`{ via: '${via}', continuidade:`), `via ${via}`);
 });
 
 // 30/09/2026: sexta via. A aprovação que esperava o CI posta quando ele fecha verde, sem
@@ -36,7 +36,7 @@ test('espera do CI se identifica e ancora no head lido', () => {
 
 test('nenhuma outra chamada a postReview em lib/ fora das vias conhecidas', () => {
   const conhecidas = new Map([
-    ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 3],
+    ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 2],
     ['lib/engine/espera-ci.js', 2], ['lib/engine/espera-pr-proprio.js', 1],
   ]);
   const dir = path.join(RAIZ, 'lib', 'engine');

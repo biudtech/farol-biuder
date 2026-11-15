@@ -1,6 +1,6 @@
 {
   "lib/engine/decision.js": {
-    "maxLines": 227,
+    "maxLines": 192,
     "jsonStringifyCru": 2,
     "profundidadeExcedida": 2
   },
@@ -17,14 +17,12 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 649,
+    "maxLines": 644,
     "profundidadeExcedida": 3
   },
   "lib/engine/session.js": {
-    "maxLines": 85,
     "emptyCatch": 1,
     "jsonParseCru": 3,
-    "processEnvDireto": 1,
     "ternarioAninhado": 1,
     "profundidadeExcedida": 7
   },
@@ -38,7 +36,7 @@
     "emptyCatch": 1,
     "jsonParseCru": 1,
     "jsonStringifyCru": 1,
-    "profundidadeExcedida": 13
+    "profundidadeExcedida": 12
   },
   "lib/parse.js": {
     "profundidadeExcedida": 2
@@ -47,7 +45,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 675,
+    "maxLines": 662,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,

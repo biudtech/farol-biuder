@@ -92,25 +92,14 @@ function assertNoDirectWriterInstruction(text, label) {
   }
 }
 
-test('protocolo do terminal usa somente writer local e recebe capability efêmera', () => {
-  const engine = new Engine();
-  engine.config.port = 47891;
+test('protocolo do workspace nunca instrui escrita direta no GitHub', () => {
   const workspaceProtocol = fs.readFileSync(path.join(TEMPLATE_DIR, 'CLAUDE.md'), 'utf8');
   const slashProtocol = fs.readFileSync(path.join(TEMPLATE_DIR, '.claude', 'commands', 'pr-review.md'), 'utf8');
 
-  assert.match(workspaceProtocol, /Toda postagem passa pelo writer local do app/i);
-  assert.match(workspaceProtocol, /\/api\/review\/post/);
-  assert.match(workspaceProtocol, /FAROL_REVIEW_CAP/);
-  assert.match(slashProtocol, /writer local/i);
-  assert.match(slashProtocol, /FAROL_REVIEW_CAP/);
   assertNoDirectWriterInstruction(workspaceProtocol, 'workspace-template/CLAUDE.md');
   assertNoDirectWriterInstruction(slashProtocol, 'comando /pr-review');
   assert.doesNotMatch(workspaceProtocol, /Sem inline,\s*direto:/i, 'instrução antiga de bypass não pode voltar');
   assert.doesNotMatch(workspaceProtocol, /Postar com inline:/i, 'instrução antiga de gh api não pode voltar');
-
-  const script = engine.buildSessionScript('/pr-review https://github.com/acme/repo/pull/688', 't1', 'eu', 'cap-terminal');
-  assert.match(script, /export FAROL_PORT='47891'/);
-  assert.match(script, /export FAROL_REVIEW_CAP='cap-terminal'/);
 });
 
 /* ---------- verificação empírica em paralelo (subagentes claim-verifier) ---------- */

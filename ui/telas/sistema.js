@@ -125,7 +125,6 @@ function renderSettings() {
   $('#setReReviewResume').checked = c.reReviewResume !== false;
   $('#setAutoPushback').checked = !!c.autoPushback;
   $('#setDebugSpawns').checked = !!c.debugSpawns;
-  $('#setSkipPerms').checked = c.skipPermissions !== false;
   $('#setSound').checked = !!c.soundEnabled;
   $('#setAutostart').checked = !!c.autostart;
 }

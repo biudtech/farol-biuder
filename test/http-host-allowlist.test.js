@@ -87,7 +87,7 @@ function espionar(nomes) {
   return { chamadas, restaurar: () => { for (const nome of nomes) engine[nome] = originais[nome]; } };
 }
 
-const ESPIOES = ['snapshot', 'syncEstadoDaLimpeza', 'setJiraCredential', 'decide', 'launchReview', 'removeTeamMember', 'checkNow', 'postReviewFromSession'];
+const ESPIOES = ['snapshot', 'syncEstadoDaLimpeza', 'setJiraCredential', 'decide', 'launchReview', 'removeTeamMember', 'checkNow'];
 
 // Um representante por classe do inventário da seção 7.A4 da spec.
 const CLASSES_A4 = [
@@ -282,10 +282,3 @@ test('Host inválido sem x-farol: a allowlist responde primeiro, com motivo host
   assertRecusa(r, 'host');
 });
 
-test('x-farol-review-cap continua sendo conferida depois da allowlist', async () => {
-  const r = await postJson('/api/review/post', { key: 'acme/app#1', payload: { event: 'APPROVE', body: 'Texto limpo.', comments: [] } }, { host: hostLocal(), 'x-farol': '1' });
-  assert.equal(r.status, 200);
-  const corpo = JSON.parse(r.corpo);
-  assert.equal(corpo.ok, false);
-  assert.equal(corpo.blocked, 'capability');
-});

@@ -126,7 +126,6 @@ body.electron.mac .topbar-main { padding-right: 22px; padding-left: 84px; }
 .pill.ok::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
 .pill.busy { background: var(--info-soft); color: var(--info); border-color: transparent; }
 .pill.err { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
-.pill.session { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 @keyframes pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 
 .tabs { display: flex; gap: 4px; margin: 0 auto; }
@@ -1015,7 +1014,6 @@ label.set-row { cursor: pointer; }
 }
 
 @media (max-width: 420px) {
-  #sessionsPill { display: none; }
   /* título de PR podia perder tudo pro ellipsis; em tela pequena vale mais ler o
      título em duas linhas do que ver "feat: adicion…" */
   .pr-title { white-space: normal; overflow: visible; }

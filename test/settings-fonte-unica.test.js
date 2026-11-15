@@ -31,7 +31,7 @@ function togglesDaTela() {
 
 test('toda preferência que a tela edita existe na tabela e é editável', () => {
   const daTela = togglesDaTela();
-  assert.ok(daTela.length >= 14, `esperava os toggles de Sistema, achei ${daTela.length}`);
+  assert.ok(daTela.length >= 13, `esperava os toggles de Sistema, achei ${daTela.length}`);
   const órfãs = daTela.filter(t => !EDITAVEIS.has(t.key));
   assert.deepEqual(órfãs.map(t => `${t.sel} -> ${t.key}`), [],
     'chave que a tela manda e o servidor não aceita é preferência que some em silêncio');
@@ -57,9 +57,9 @@ test('port existe no config mas NÃO é editável pela tela', () => {
 });
 
 test('saneamento: os defaults que ligados só desligam com valor explícito', () => {
-  // skipPermissions é o caso: chave ausente não pode virar "desligado"
-  assert.equal(sanear('skipPermissions', undefined, {}, {}), true);
-  assert.equal(sanear('skipPermissions', false, {}, {}), false);
+  // reReviewResume é o caso: chave ausente não pode virar "desligado"
+  assert.equal(sanear('reReviewResume', undefined, {}, {}), true);
+  assert.equal(sanear('reReviewResume', false, {}, {}), false);
   // e os opt-in são o contrário: só ligam com valor verdadeiro
   assert.equal(sanear('reviewFast', undefined, {}, {}), false);
   assert.equal(sanear('reviewFast', true, {}, {}), true);

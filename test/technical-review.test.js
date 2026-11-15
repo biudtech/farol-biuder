@@ -114,7 +114,7 @@ test('alteração de declaração e troca de repositório invalidam prova', () =
 });
 
 test('clique, endosso e reenvio sem avaliação não publicam aprovação', async () => {
-  for (const via of ['clique', 'coassinatura', 'reenvio', 'sessao', 'espera-ci']) {
+  for (const via of ['clique', 'coassinatura', 'reenvio', 'espera-ci']) {
     const r = await approvalRefusal({ ...engine, decisions: { pending: [] } },
       { key: 'org/repo#1', repo: 'org/repo' }, { event: 'APPROVE', commit_id: head, via });
     assert.equal(r.blocked, 'technical_review');

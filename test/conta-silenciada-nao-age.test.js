@@ -43,33 +43,6 @@ after(() => {
 
 beforeEach(() => { chamadas.length = 0; });
 
-test('silenciar durante terminal permite concluir pela identidade admitida, mas não abrir outra sessão', async () => {
-  for (const source of ['terminal']) {
-    const e = engineDoIncidente();
-    e.config.accounts[0].muted = false;
-    const cap = e.createReviewPostCapability([KEY_76], SILENCIADA, source, 'em-curso');
-    e.config.accounts[0].muted = true;
-    const r = await e.postReviewFromSession({ key: KEY_76, payload: { event: 'COMMENT', body: 'Verificação concluída.' } }, cap);
-    assert.equal(r.ok, true);
-    assert.equal(escritas().at(-1).env.GH_TOKEN, 'tok-silenciada');
-    assert.equal(e.createReviewPostCapability([KEY_76], SILENCIADA, source, 'nova'), '');
-    assert.equal((await e.postReview({ key: KEY_76, account: SILENCIADA }, { event: 'COMMENT', body: 'Outra ação.' }, { via: 'sessao', continuidade: {} })).blocked, 'conta_silenciada');
-    assert.equal((await e.postReviewFromSession({ key: 'biudtech/app#99', payload: { event: 'COMMENT', body: 'Outro PR.' } }, cap)).blocked, 'capability');
-    chamadas.length = 0;
-  }
-});
-
-test('revogar sessão revoga também a permissão de concluir silenciada', async () => {
-  const e = engineDoIncidente();
-  const cap = e.createReviewPostCapability([KEY_76], ATIVA, 'terminal', 't1');
-  const permissao = e.reviewPostCaps.get(cap).continuidade.get(KEY_76);
-  e.config.accounts[1].muted = true;
-  e.revokeReviewPostCapability(cap);
-  const r = await e.postReview({ key: KEY_76, account: ATIVA }, { event: 'COMMENT', body: 'Concluí.' }, { continuidade: permissao });
-  assert.equal(r.blocked, 'conta_silenciada');
-  assert.equal(escritas().length, 0);
-});
-
 test('decisão persistida mantém continuação no mesmo head, nunca em outra conta ou commit', async () => {
   const e = engineDoIncidente();
   e.config.accounts[0].muted = false;
@@ -262,12 +235,9 @@ test('launchReview: conta silenciada não abre revisão nem pelo clique, e o avi
   const e = engineSoSilenciada();
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); return { ok: true }; };
-  e.spawnConsole = () => { throw new Error('terminal não deveria abrir'); };
   const r = await e.launchReview([URL_76], 'auto', 'clique');
   assert.equal(r.ok, false);
   assert.equal(enfileirados.length, 0);
-  const r2 = await e.launchReview([URL_76], 'terminal', 'clique');
-  assert.equal(r2.ok, false, 'o terminal também roda com o GH_TOKEN da conta');
   const aviso = e.toasts.find((t) => t.kind === 'error' && /silenciada e não age/.test(t.text));
   assert.ok(aviso, 'erro visível na tela');
   assert.equal(escritas().length, 0);
@@ -293,7 +263,7 @@ test('porta de execução: conta silenciada é motivo próprio, e o enqueueHeadl
   assert.equal(recibo.detalhe.includes('código conta_silenciada'), false);
 });
 
-test('postagem: PR marcado com a conta silenciada recusa antes de qualquer gh (terminal, reenvio)', async () => {
+test('postagem: PR marcado com a conta silenciada recusa antes de qualquer gh (clique, reenvio)', async () => {
   const e = engineDoIncidente();
   const pr = { key: KEY_76, repo: 'biudtech/internal-auth', number: 76, account: SILENCIADA };
   const r = await e.postReview(pr, { event: 'COMMENT', body: 'Ok por aqui.' });

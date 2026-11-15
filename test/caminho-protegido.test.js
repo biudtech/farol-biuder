@@ -12,7 +12,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  PASTA_REDIGIDA, caminhoProtegido, politicaDoPatch, patchParaASessao, leituraInteiraPermitida, nomeMaterializado, caminhoDoPr,
+  PASTA_REDIGIDA, caminhoProtegido, politicaDoPatch, leituraInteiraPermitida, nomeMaterializado, caminhoDoPr,
 } = await import('../lib/review-source/caminho-protegido.js');
 const { KIND: ENV_KIND } = await import('../lib/review-source/env-changes.js');
 const { prPathFromRead, arquivoMaterializado, materializeScope, scopeBlock, blocoDosRedigidos } = await import('../lib/engine/pr-scope.js');
@@ -39,7 +39,6 @@ test('politicaDoPatch: arquivo de ambiente vira projeção das linhas alteradas,
   assert.equal(v.patchAvailable, false);
   assert.ok(v.envChanges && v.envChanges.text.includes('+DEBUG=true'));
   assert.ok(!v.envChanges.text.includes('PORT=3000'), 'linha de contexto não entra na projeção');
-  assert.equal(patchParaASessao('apps/web/.env.example', null, PATCH_ENV), v.envChanges.text);
 });
 
 test('politicaDoPatch: protegido que não é arquivo de ambiente não chega de jeito nenhum', () => {
@@ -48,7 +47,6 @@ test('politicaDoPatch: protegido que não é arquivo de ambiente não chega de j
     assert.equal(v.politica, 'protected-path', caminho);
     assert.equal(v.patchAvailable, false);
     assert.equal(v.envChanges, null);
-    assert.equal(patchParaASessao(caminho, null, PATCH_COMUM), '');
   }
   // rename vindo de caminho protegido: o patch traz o conteúdo de lá
   assert.equal(politicaDoPatch('config/app.txt', '.env', PATCH_COMUM).sensitivePath, true);
@@ -59,11 +57,9 @@ test('politicaDoPatch: caminho comum entrega o patch, e segredo reconhecido no c
   assert.equal(comum.protegido, false);
   assert.equal(comum.patchAvailable, true);
   assert.equal(comum.politica, null);
-  assert.equal(patchParaASessao('src/a.js', null, PATCH_COMUM), PATCH_COMUM);
   const comSegredo = politicaDoPatch('src/a.js', null, `@@ -1 +1 @@\n+const t = "${SEGREDO}";\n`);
   assert.equal(comSegredo.politica, 'sensitive-content');
   assert.equal(comSegredo.patchAvailable, false);
-  assert.equal(patchParaASessao('src/a.js', null, `@@ -1 +1 @@\n+const t = "${SEGREDO}";\n`), '');
 });
 
 test('politicaDoPatch: o template público só chega como chaves na execução restrita, que pede projeção', () => {
