@@ -102,16 +102,14 @@ test('o listener guarda a chave quando abre e tira quando fecha, e ignora quem n
   assert.deepEqual([...abertos], [], 'um <details> sem data-abre não é da conta deste Set');
 });
 
-test('as três listas que se redesenham a cada estado lembram o que foi aberto', () => {
+test('as duas listas que se redesenham a cada estado lembram o que foi aberto', () => {
   const ler = (f) => fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', f), 'utf8');
   const radar = ler('radar.js');
-  const meus = ler('meus-prs.js');
   assert.match(radar, /lembrarAbertos\(\$\('#decisions'\), radarAbertos\)/);
   assert.match(radar, /lembrarAbertos\(\$\('#resolved'\), radarAbertos\)/);
   assert.match(radar, /openKeys: radarAbertos/, 'Revisões recentes não recebe as chaves abertas');
-  assert.match(meus, /lembrarAbertos\(\$\('#myPRs'\), meusAbertos\)/);
   // todo "Ver relatório completo" desenhado pelas telas tem chave e lê o Set
-  for (const [nome, fonte, conjunto] of [['radar.js', radar, 'radarAbertos'], ['meus-prs.js', meus, 'meusAbertos']]) {
+  for (const [nome, fonte, conjunto] of [['radar.js', radar, 'radarAbertos']]) {
     const relatorios = fonte.match(/<details class="dec-report"[^>]*>/g) || [];
     assert.ok(relatorios.length > 0, `${nome} não desenha relatório`);
     for (const tag of relatorios) {

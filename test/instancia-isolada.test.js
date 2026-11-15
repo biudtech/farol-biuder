@@ -70,7 +70,7 @@ function rodarIsolada(corpo) {
     io.run = async (...a) => { chamadas.push(a); return { ok: true, code: 0, stdout: '{"labels":[{"name":"eu:revisando"}]}', stderr: '' }; };
     io.runShell = io.run;
     const engine = {
-      config: { accounts: [{ user: 'eu', owners: ['acme'] }] }, token: 'tok', myPRs: [], queue: [], panorama: [],
+      config: { accounts: [{ user: 'eu', owners: ['acme'] }] }, token: 'tok', queue: [], panorama: [],
       activeReviews: new Map([['s1', { id: 's1', mode: 'auto', keys: ['acme/app#7'] }]]),
       log() {}, emit() {}, pushState() {}, ghEnv: () => ({}), tokenFor: () => 'tok', refreshTokens: async () => {},
       accountForPr: () => 'eu', accountForOwner: () => 'eu', accountList() { return this.config.accounts; },
@@ -89,16 +89,6 @@ test('addInProgressLabel em isolada não chama gh nem devolve label', () => {
     return await addInProgressLabel(engine, { key: 'acme/app#7', url: 'https://github.com/acme/app/pull/7' });
   `);
   assert.deepEqual({ r: r.r, chamadas: r.chamadas }, { r: '', chamadas: 0 });
-});
-
-test('executarMerge em isolada recusa com instancia_isolada, sem gh', () => {
-  const r = rodarIsolada(`
-    const { executarMerge } = await import('${RAIZ_URL}/lib/engine/self-merge.js');
-    return await executarMerge(engine, { url: 'https://github.com/acme/app/pull/7', key: 'acme/app#7', repo: 'acme/app', acc: 'eu', me: 'eu', env: {}, analysis: {}, mode: 'squash' }, {});
-  `);
-  assert.equal(r.r.blocked, 'instancia_isolada');
-  assert.equal(r.r.ok, false);
-  assert.equal(r.chamadas, 0);
 });
 
 test('FAROL_HOME igual ao ~/.farol (com barra final) não é isolada', () => {

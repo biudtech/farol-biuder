@@ -1,9 +1,8 @@
-// Meus PRs de outros aparelhos na tela de verdade: o ui/app.js carregado contra
+// As listas de outros aparelhos na tela de verdade: o ui/app.js carregado contra
 // o DOM de mentira (test/helpers/dom-stub.js), no padrão de test/ui-radar-compartilhado.
 //
 // Prova que o bootstrap entrega `sync-lists` à tela, que a tela busca a projeção ao abrir,
-// que as linhas remotas entram na aba com origem e contagem sem dobra, que o escopo de
-// conta da barra filtra as linhas remotas, e que a falha da leitura do andamento é dita.
+// e que a falha da leitura do andamento é dita.
 // Não prova visual, CSS nem clique real: isso é a jornada no app.
 process.env.TZ = 'America/Sao_Paulo';
 
@@ -36,14 +35,14 @@ const esperar = () => new Promise((r) => setTimeout(r, 0)).then(() => quadros.pi
 
 const CONTAS = [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: ['beta'] }];
 
-function estado({ sync = {}, myPRs = [] } = {}) {
+function estado({ sync = {} } = {}) {
   return {
     app: { name: 'Farol', version: '2.59.7', platform: 'win32' },
     status: 'ocioso', account: { user: 'alice', tokenOk: true },
     accounts: CONTAS,
     config: { ghUser: 'alice', owners: ['acme'], accounts: CONTAS, intervalSeconds: 300, sync: {}, people: {}, claudeProfiles: [] },
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
-    queue: [], myPRs, hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
+    queue: [], decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {},
     usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
@@ -66,16 +65,13 @@ function projecao(escopos, extra = {}) {
   return { ok: true, estado: 'ligada', limiteMs: 180000, escopos, ...extra };
 }
 
-const LOCAL = { key: 'acme/app#35', url: 'https://github.com/acme/app/pull/35', title: 'Local', author: 'ana', repo: 'acme/app', number: 35, account: 'alice' };
 const PROJ = projecao([
   escopo('panorama', 'alice', [linha('acme/app#1', 'alice'), linha('acme/app#2', 'alice')]),
   escopo('panorama', 'bob', [linha('beta/api#5', 'bob')]),
-  escopo('myPrs', 'alice', [linha('acme/app#35', 'alice', { somenteLeitura: true }), linha('acme/app#36', 'alice', { somenteLeitura: true })]),
-  escopo('myPrs', 'bob', [linha('beta/api#7', 'bob', { somenteLeitura: true })]),
 ]);
 
 beforeEach(() => {
-  switchRadarSub('meus');
+  switchRadarSub('apar');
   PEDIDOS.length = 0;
   RESPOSTAS = {};
   Est.definirEscopo('all');
@@ -83,22 +79,12 @@ beforeEach(() => {
 
 test('ao abrir com a visão valendo, a tela busca a projeção das listas uma vez', async () => {
   RESPOSTAS['/api/sync/lists'] = PROJ;
-  emitir('state', estado({ myPRs: [LOCAL] }));
-  emitir('state', estado({ myPRs: [LOCAL] }));
+  emitir('state', estado());
+  emitir('state', estado());
   await esperar();
   const pedidos = PEDIDOS.filter((p) => p.url === '/api/sync/lists');
   assert.equal(pedidos.length, 1, 'uma busca só, não uma por snapshot');
   assert.deepEqual(pedidos[0].corpo, {});
-  assert.match($('#myPRsRemoto').innerHTML, /acme\/app#36/);
-});
-
-test('PR oculto em Meus PRs também some da linha remota', () => {
-  switchRadarSub('meus');
-  emitir('sync-lists', PROJ);
-  const e = estado();
-  e.hiddenPRs = ['acme/app#36'];
-  emitir('state', e);
-  assert.doesNotMatch($('#myPRsRemoto').innerHTML, /acme\/app#36/);
 });
 
 test('sync-live com falha diz que a leitura falhou e mantém o andamento', () => {
@@ -143,7 +129,7 @@ function comRelogio(ms, fn) {
 test('com a projeção já na tela, passar do piso não repete a busca', () => {
   emitir('sync-lists', PROJ);
   PEDIDOS.length = 0;
-  comRelogio(Date.now() + 10 * 60000, () => emitir('state', estado({ myPRs: [LOCAL] })));
+  comRelogio(Date.now() + 10 * 60000, () => emitir('state', estado()));
   assert.equal(PEDIDOS.filter((p) => p.url === '/api/sync/lists').length, 0, 'quem já tem a projeção acompanha pelo evento');
 });
 
@@ -158,54 +144,13 @@ test('a falha do andamento mostra a hora da última leitura BOA, não a da falha
   assert.match(html, /Mostrando o andamento de 10:00/);
 });
 
-test('sync-lists chega pelo bootstrap: origem, sem dobra, e a contagem da aba soma sem repetir', () => {
+test('sync-lists chega pelo bootstrap', () => {
   assert.equal(emitir('sync-lists', PROJ), 1, 'o bootstrap escuta sync-lists');
-  emitir('state', estado({ myPRs: [LOCAL] }));
-  const html = $('#myPRsRemoto').innerHTML;
-  assert.match(html, /acme\/app#36/);
-  assert.match(html, /beta\/api#7/);
-  assert.doesNotMatch(html, /acme\/app#35/, 'o PR daqui não aparece de novo');
-  assert.match(html, /do Notebook, só leitura/);
-  assert.equal($('#myPRsRemoto').hidden, false);
-  assert.equal($('#myPRsCount').textContent, '3', 'um daqui e dois de lá');
 });
 
-test('o escopo de conta da barra filtra as linhas remotas', () => {
-  emitir('sync-lists', PROJ);
-  Est.definirEscopo('alice');
-  emitir('state', estado({ myPRs: [LOCAL] }));
-  assert.doesNotMatch($('#myPRsRemoto').innerHTML, /beta\/api#7/, 'linha de outra conta fica de fora');
-  assert.match($('#myPRsRemoto').innerHTML, /acme\/app#36/);
-  assert.equal($('#myPRsCount').textContent, '2');
-});
-
-test('visão desligada esconde as linhas remotas; bloqueada diz que bloqueou', () => {
-  emitir('sync-lists', PROJ);
-  emitir('state', estado({ sync: { shared: false } }));
-  assert.equal($('#myPRsRemoto').hidden, true);
-  assert.doesNotMatch($('#myPRsRemoto').innerHTML, /acme\/app#36/);
-  emitir('state', estado({ sync: { bloqueioCompartilhamento: 'autenticacao-local' } }));
-  assert.equal($('#myPRsRemoto').hidden, false);
-  assert.match($('#myPRsRemoto').innerHTML, /bloque/);
-  assert.doesNotMatch($('#myPRsRemoto').innerHTML, /acme\/app#36/);
-});
-
-test('leitura que falhou e leitura velha aparecem com frases diferentes', () => {
-  emitir('state', estado());
-  emitir('sync-lists', projecao([escopo('myPrs', 'alice', [linha('acme/app#36', 'alice', { somenteLeitura: true })], { estado: 'falhou', falhaEm: Date.now() - 1000 })]));
-  const falhou = $('#myPRsRemoto').innerHTML;
-  assert.match(falhou, /leitura falhou/);
-  assert.match(falhou, /acme\/app#36/, 'a visão anterior continua');
-  emitir('sync-lists', projecao([escopo('myPrs', 'alice', [linha('acme/app#36', 'alice', { somenteLeitura: true })], { lidoEm: Date.now() - 600000 })]));
-  const velha = $('#myPRsRemoto').innerHTML;
-  assert.match(velha, /desatualizad/);
-  assert.doesNotMatch(velha, /leitura falhou/);
-});
-
-test('o contêiner de Meus PRs remoto existe no HTML, na sua sub-aba, e o do Panorama saiu', () => {
+test('os contêineres remotos de Meus PRs e do Panorama saíram do HTML', () => {
   const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
-  const meus = html.indexOf('id="rpane-meus"');
-  const iMeus = html.indexOf('id="myPRsRemoto"');
-  assert.ok(meus > 0 && iMeus > meus, 'Meus PRs remoto mora na sub-aba Meus PRs');
+  assert.equal(html.includes('id="rpane-meus"'), false);
+  assert.equal(html.includes('Remoto"'), false, 'nenhum contêiner de lista remota sobrou');
   assert.equal(html.includes('id="panoramaRemoto"'), false);
 });

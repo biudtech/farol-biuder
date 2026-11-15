@@ -76,22 +76,21 @@ test('boot conectando: segura a automação sem toast de login que não falta', 
 // Os outros testes chamam a fachada direto; este prova a FIAÇÃO, com todo colaborador de
 // rede do ciclo stubado (mesmo molde de test/check-resilience.test.js) e o syncTick
 // trocado por um espião que só registra a ordem.
-test('check() chama o syncTick uma vez por ciclo, depois do refreshMergeStates', async () => {
+test('check() chama o syncTick uma vez por ciclo', async () => {
   const { BASELINE_FILE, STATE_DIR } = await import('../lib/paths.js');
   const e = new Engine();
   const ordem = [];
   Object.assign(e, {
     seen: new Set(), reReviewedKeys: new Set(), decisions: { pending: [], resolved: [] }, queue: [],
     resolveAccount: async () => {}, refreshTokens: async () => { e.tokenOk = true; return true; },
-    searchPRs: async () => [], myAuthoredPRs: async () => [], enrichMyPRBranches: async () => {},
+    searchPRs: async () => [],
     refreshStaleStates: async () => {}, refreshReviewSignals: async () => {}, scanPushbacks: async () => {},
     schedule: () => {}, saveSeen: () => {},
   });
   e.config.accounts = [{ user: 'me', owners: ['acme'] }];
-  e.refreshMergeStates = async () => { ordem.push('merge'); };
   e.syncTick = async () => { ordem.push('sync'); return { ok: true }; };
   fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.writeFileSync(BASELINE_FILE, new Date().toISOString() + '\n');
   await e.check('test');
-  assert.deepEqual(ordem, ['merge', 'sync']);
+  assert.deepEqual(ordem, ['sync']);
 });

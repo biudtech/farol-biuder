@@ -34,10 +34,6 @@ test('o CLAUDE.md do workspace (que a sessão lê) também não', () => {
   assert.doesNotMatch(leia('workspace-template', 'CLAUDE.md'), NOME);
 });
 
-test('o protocolo da autoanálise também não', () => {
-  assert.doesNotMatch(leia('workspace-template', 'prompts', 'self-review.md'), NOME);
-});
-
 test('o prompt MONTADO da revisão não nomeia dono nenhum', () => {
   const e = new Engine();
   e.accountForPr = () => 'Gabrielk5';

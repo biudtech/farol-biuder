@@ -19,25 +19,6 @@ const { reviewCaps } = await import('../lib/engine/decision.js');
 
 let server, base, engine;
 
-test('rota restrita exige o gate HTTP e fixa o modo, sem aceitar downgrade no corpo', async () => {
-  const saved = { myPRs: engine.myPRs, headlessQueue: engine.headlessQueue, accountForPr: engine.accountForPr,
-    tokenFor: engine.tokenFor, processHeadless: engine.processHeadless, pushState: engine.pushState };
-  const url = 'https://github.com/fixture/repo/pull/937';
-  engine.myPRs = [{ url, key: 'fixture/repo#937', repo: 'fixture/repo', number: 937 }];
-  engine.headlessQueue = []; engine.accountForPr = () => 'fixture'; engine.tokenFor = () => 'fixture-token';
-  engine.processHeadless = engine.pushState = () => {};
-  try {
-    assert.equal((await postSemHeader('/api/self-review/restricted', { url })).status, 403);
-    assert.equal(engine.headlessQueue.length, 0);
-    const result = await post('/api/self-review/restricted', { url, isolation: 'unrestricted' });
-    assert.deepEqual(JSON.parse(result.body), { ok: true, isolation: 'restricted-read' });
-    assert.equal(engine.headlessQueue[0].isolation, 'restricted-read');
-    engine.headlessQueue = [];
-    assert.equal(JSON.parse((await post('/api/self-review', { url, isolation: 'unknown-mode' })).body).ok, false);
-    assert.equal(engine.headlessQueue.length, 0);
-  } finally { Object.assign(engine, saved); }
-});
-
 before(async () => {
   engine = new Engine();
   engine.config.port = 0; // porta efêmera: evita conflito com o Farol real ou outro teste
@@ -133,10 +114,16 @@ test('GET numa rota /api desconhecida devolve 405 (só POST é aceito além das 
   assert.deepEqual(JSON.parse(r.body), { error: 'method' });
 });
 
-test('POST /api/self-review/cancel existe e responde JSON (key desconhecida = ok:false)', async () => {
-  const r = await post('/api/self-review/cancel', { key: 'acme/app#404' });
-  assert.equal(r.status, 200, 'a rota existe (antes caía no 404 not found)');
-  assert.equal(JSON.parse(r.body).ok, false);
+// A autoanálise e Meus PRs saíram (corte da Fase 1, lote 11): as rotas deles não existem mais.
+test('as rotas da autoanálise e de ocultar PR saíram: POST cai no 404, e sem o x-farol segue 403', async () => {
+  const saidas = ['/api/self-review', '/api/self-review/restricted', '/api/self-review/merge', '/api/self-review/cancel',
+    '/api/self-review/visibility', '/api/self-review/agent/request', '/api/pr/hide', '/api/pr/unhide'];
+  for (const rota of saidas) {
+    const r = await post(rota, { url: 'https://github.com/acme/app/pull/404', key: 'acme/app#404' });
+    assert.equal(r.status, 404, rota);
+    assert.deepEqual(JSON.parse(r.body), { error: 'not found' }, rota);
+    assert.equal((await postSemHeader(rota, {})).status, 403, `${rota}: o gate global vem antes da rota`);
+  }
 });
 
 test('POST /api/review sem urls é recusado com 400 (o fallback "fila inteira" morreu)', async () => {
@@ -331,32 +318,6 @@ test('cap sem createdAt (formato antigo em memória) não ganha isenção: falha
     engine.activeReviews.delete('t15');
     engine.revokeReviewPostCapability(token);
   }
-});
-
-/* ---------- ocultar um PR de "Meus PRs" (mesmo molde do /api/self-review/visibility) ---------- */
-
-test('POST /api/pr/hide e /api/pr/unhide mexem no estado e aparecem no snapshot', async () => {
-  const CHAVE = 'acme/app#12';
-  engine.myPRs = [{ key: CHAVE, repo: 'acme/app', number: 12, url: 'https://github.com/acme/app/pull/12', title: 'velho', updatedAt: '2024-08-01T10:00:00Z' }];
-
-  const h = await post('/api/pr/hide', { key: CHAVE });
-  assert.equal(h.status, 200);
-  assert.deepEqual(JSON.parse(h.body), { ok: true });
-  assert.equal(engine.hiddenPRs[CHAVE].updatedAt, '2024-08-01T10:00:00Z', 'a rota gravou a entrada de verdade');
-  assert.deepEqual(JSON.parse((await get('/api/state')).body).hiddenPRs, [CHAVE], 'o snapshot publica a chave oculta');
-
-  const u = await post('/api/pr/unhide', { key: CHAVE });
-  assert.equal(u.status, 200);
-  assert.deepEqual(JSON.parse(u.body), { ok: true });
-  assert.equal(engine.hiddenPRs[CHAVE], undefined, 'mostrar de novo tira do estado');
-  assert.deepEqual(JSON.parse((await get('/api/state')).body).hiddenPRs, []);
-});
-
-test('POST /api/pr/hide sem o header x-farol continua 403 (o gate global vale pras rotas novas)', async () => {
-  const r = await postSemHeader('/api/pr/hide', { key: 'acme/app#12' });
-  assert.equal(r.status, 403);
-  assert.deepEqual(JSON.parse(r.body), { error: 'forbidden' });
-  assert.equal(engine.hiddenPRs['acme/app#12'], undefined, 'e nada foi gravado');
 });
 
 /* ---------- /api/log/triage: o log agrupado que o Diagnóstico mostra ----------

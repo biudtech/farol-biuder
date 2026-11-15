@@ -73,14 +73,6 @@ test('revisão headless: a sessão ativa preserva a conta admitida sem org próp
   assert.equal(e.accountForPr(vistos[0].pr), 'calado', 'quem lê o registro chega à conta certa');
 });
 
-test('autoanálise: a sessão ativa leva a conta também', async () => {
-  const e = engineComSilenciada();
-  const vistos = capturarRegistro(e);
-  await assert.rejects(e.runSelfAnalysis({ ...PR, author: 'calado' }), PAROU);
-  assert.equal(vistos.length, 1);
-  assert.equal(vistos[0].pr.account, 'calado');
-});
-
 // Desde 06/10/2026 a conta silenciada não lança revisão nem pelo clique (conta-que-age.js,
 // test/conta-silenciada-nao-age.test.js). O defeito que este caso trava continua o mesmo com
 // uma conta ATIVA sem organização: a tela tem de receber a conta do item, não a dona da org.

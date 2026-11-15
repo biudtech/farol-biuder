@@ -35,12 +35,12 @@ test('as quatro abas e as sub-abas do Radar', () => {
   }
   assert.equal(lerRota('/radar/pra-mim').sub, 'mim');
   assert.equal(lerRota('/radar/aparelhos').sub, 'apar');
-  assert.equal(lerRota('/radar/meus-prs').sub, 'meus');
-  // o Panorama saiu no corte da fase 1: o endereço antigo cai em Pra mim, sem lançar
+  // Meus PRs e o Panorama saíram no corte da fase 1: o endereço antigo cai em Pra mim, sem lançar
+  assert.equal(lerRota('/radar/meus-prs').sub, 'mim');
   assert.equal(lerRota('/radar/panorama').sub, 'mim');
   // sem barra inicial e na grafia antiga, com o hash, também
-  assert.equal(lerRota('#/radar/meus-prs').sub, 'meus');
-  assert.equal(lerRota('radar/meus-prs').sub, 'meus');
+  assert.equal(lerRota('#/radar/aparelhos').sub, 'apar');
+  assert.equal(lerRota('radar/aparelhos').sub, 'apar');
 });
 
 test('aparelho selecionado só existe em Radar > Aparelhos, e só como id opaco', () => {
@@ -50,7 +50,7 @@ test('aparelho selecionado só existe em Radar > Aparelhos, e só como id opaco'
   assert.equal(lerRota(`/radar/pra-mim/${id}`).aparelho, '');
   assert.equal(lerRota('/radar/aparelhos/<script>').aparelho, '');
   assert.equal(lerRota('/radar/aparelhos/a%2Fb').aparelho, '');
-  assert.equal(escreverRota({ aba: 'radar', sub: 'meus', aparelho: id }), '/radar/meus-prs');
+  assert.equal(escreverRota({ aba: 'radar', sub: 'mim', aparelho: id }), '/radar/pra-mim');
 });
 
 test('as doze seções do Sistema, com nome em português no endereço', () => {
@@ -118,7 +118,7 @@ test('caixa de revisão aberta: só chave de PR no formato owner/repo#N', () => 
 test('escrever e ler de volta dá a mesma rota (ida e volta)', () => {
   const casos = [
     { aba: 'radar', sub: 'apar', aparelho: 'dev-1', conta: 'alice', pr: 'a/b#1' },
-    { aba: 'radar', sub: 'meus' },
+    { aba: 'radar', sub: 'mim' },
     { aba: 'sistema', secao: 'diag', pr: 'x/y#9' },
     { aba: 'consumo' }, { aba: 'time', conta: 'bob' },
   ];
@@ -130,9 +130,9 @@ test('escrever e ler de volta dá a mesma rota (ida e volta)', () => {
 
 test('a tela manda tudo o que lembra; vale só o da aba à mostra', () => {
   // cada tela lembra a sua sub-aba, seção e aparelho mesmo quando não está à mostra
-  const tela = { aba: 'sistema', sub: 'meus', secao: 'accounts', aparelho: 'dev-1', conta: 'bob', janela: 7 };
+  const tela = { aba: 'sistema', sub: 'mim', secao: 'accounts', aparelho: 'dev-1', conta: 'bob', janela: 7 };
   assert.equal(escreverRota(tela), '/sistema/contas');
-  assert.equal(escreverRota({ ...tela, aba: 'radar' }), '/radar/meus-prs?conta=bob');
+  assert.equal(escreverRota({ ...tela, aba: 'radar' }), '/radar/pra-mim?conta=bob');
   assert.equal(escreverRota({ ...tela, aba: 'radar', sub: 'apar' }), '/radar/aparelhos/dev-1?conta=bob');
   assert.equal(escreverRota({ ...tela, aba: 'consumo' }), '/consumo?janela=7');
 });
@@ -149,7 +149,7 @@ test('empilhar x substituir no histórico', () => {
   assert.equal(mudancaDeRota(null, r('/radar')), 'replace', 'primeira escrita substitui');
   assert.equal(mudancaDeRota(r('/radar'), r('/radar/pra-mim')), '', 'mesma tela, nada a fazer');
   assert.equal(mudancaDeRota(r('/radar'), r('/sistema')), 'push', 'troca de aba empilha');
-  assert.equal(mudancaDeRota(r('/radar/pra-mim'), r('/radar/meus-prs')), 'push', 'troca de sub-aba empilha');
+  assert.equal(mudancaDeRota(r('/radar/pra-mim'), r('/radar/aparelhos')), 'push', 'troca de sub-aba empilha');
   assert.equal(mudancaDeRota(r('/radar/aparelhos/a'), r('/radar/aparelhos/b')), 'push', 'troca de aparelho empilha');
   assert.equal(mudancaDeRota(r('/sistema/contas'), r('/sistema/jira')), 'push', 'troca de seção empilha');
   assert.equal(mudancaDeRota(r('/radar'), r('/radar?conta=alice')), 'replace', 'conta substitui');

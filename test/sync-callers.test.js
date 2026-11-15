@@ -65,8 +65,6 @@ function motor(resposta) {
   e.pushState = () => { };
   e.refreshTokens = async () => { };
   e.log = () => { };
-  e.salvos = 0;
-  e.saveSelfAnalyses = () => { e.salvos++; };
   e.toasts = [];
   e.on('toast', (t) => e.toasts.push(t));
   e.opts = [];
@@ -75,62 +73,6 @@ function motor(resposta) {
 }
 
 const bloqueio = (reason, detail = {}) => ({ blocked: true, coordination: { admitted: false, reason, detail }, text: '', sessionId: null });
-
-/* ---------- autoanálise ---------- */
-
-test('autoanálise manda operationKind self e o head lido como versão material', async () => {
-  const e = motor(bloqueio('alheio'));
-  await e.runSelfAnalysis({ ...PR });
-  const op = e.opts[0];
-  assert.equal(op.operationKind, 'self');
-  assert.deepEqual(op.coordination, {
-    prKey: PR.key, account: 'eu', materialVersion: SHA, headSha: SHA, contaRodada: false, manual: true,
-    semCoordenacao: false, ignorarRecibo: false,
-    pr: { key: PR.key, url: PR.url, repo: PR.repo, number: PR.number, author: PR.author, account: 'eu' },
-  });
-});
-
-test('autoanálise bloqueada: toast com o motivo e nenhum registro gravado', async () => {
-  const adm = { admitted: false, reason: 'recibo', detail: { deviceName: 'notebook' } };
-  const e = motor({ blocked: true, coordination: adm, text: '', sessionId: null });
-  await e.runSelfAnalysis({ ...PR });
-  assert.equal(e.selfAnalyses[PR.key], undefined, 'bloqueio não vira análise');
-  assert.equal(e.salvos, 0);
-  assert.ok(e.toasts.some((t) => t.kind === 'info' && t.text === textoBloqueio(PR.key, adm)));
-  assert.equal(e.activeReviews.size, 0, 'a sessão some da tela');
-});
-
-test('autoanálise concluída grava o recibo not_applicable depois de salvar o registro', async () => {
-  const h = handleFalso();
-  const e = motor({ text: ENVELOPE, sessionId: 's1', coordination: h });
-  const ordem = [];
-  e.saveSelfAnalyses = () => { ordem.push('salvou'); };
-  const complete = h.complete;
-  h.complete = async (op) => { ordem.push('recibo'); return complete(op); };
-  await e.runSelfAnalysis({ ...PR });
-  assert.ok(e.selfAnalyses[PR.key], 'registro gravado');
-  assert.deepEqual(h.completos, [{ publicationState: 'not_applicable' }]);
-  assert.deepEqual(ordem, ['salvou', 'recibo']);
-  assert.equal(h.abortos, 0);
-});
-
-test('autoanálise descartada (head andou) devolve o lease sem recibo', async () => {
-  heads = [SHA, OUTRO];
-  const h = handleFalso();
-  const e = motor({ text: ENVELOPE, sessionId: 's1', coordination: h });
-  await e.runSelfAnalysis({ ...PR });
-  assert.equal(e.selfAnalyses[PR.key], undefined);
-  assert.equal(h.completos.length, 0);
-  assert.equal(h.abortos, 1);
-});
-
-test('autoanálise sem envelope válido devolve o lease no finally', async () => {
-  const h = handleFalso();
-  const e = motor({ text: 'prosa sem objeto nenhum', sessionId: 's1', coordination: h });
-  await assert.rejects(e.runSelfAnalysis({ ...PR }));
-  assert.equal(h.completos.length, 0);
-  assert.equal(h.abortos, 1);
-});
 
 /* ---------- pushback ---------- */
 

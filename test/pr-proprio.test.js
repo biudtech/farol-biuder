@@ -76,7 +76,7 @@ test('launchReview: PR do panorama cujo autor é a conta não enfileira e avisa'
   const r = await e.launchReview([URL_314], 'auto', 'clique');
   assert.equal(r.ok, false);
   assert.equal(enfileirados.length, 0, 'nem o clique abre revisão headless em PR próprio');
-  assert.ok(toasts.some(t => /autoanálise/.test(t.text)), 'o aviso aponta a autoanálise');
+  assert.ok(toasts.some(t => /revisão não abre em PR próprio/.test(t.text)), 'o aviso diz por que não abriu');
   assert.equal(e.seen.has(prDo('').key), false, 'PR barrado não é marcado como visto');
 });
 

@@ -50,8 +50,7 @@ const ESTADO = {
   },
   lastCheckAt: Date.now() - 60_000, nextCheckAt: Date.now() + 240_000,
   queue: [{ key: 'acme/api#1', url: 'u', title: 'Corrige o gate', author: 'bob', updatedAt: new Date().toISOString() }],
-  myPRs: [{ key: 'acme/api#3', url: 'u', title: 'Meu PR', author: 'alice', updatedAt: new Date().toISOString() }],
-  hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
+  decisions: { pending: [], resolved: [] },
   // sessão ativa de verdade no fixture: sem ela o cartão de "Analisando agora" nunca é
   // desenhado no smoke test, e ele é justamente um render de DADO — o lugar onde
   // objeto interpolado passa despercebido.
@@ -75,7 +74,7 @@ function semObjectObject(rotulo) {
   // motivos"). O guarda existe pra pegar OBJETO INTERPOLADO em render de DADO, e
   // incluir texto autoral só produziria falso positivo — que foi o que aconteceu ao
   // escrever a nota da v2.48.3.
-  const alvos = ['#decisions', '#queue', '#myPRs', '#resolved', '#team', '#usage', '#activeSessions'];
+  const alvos = ['#decisions', '#queue', '#resolved', '#team', '#usage', '#activeSessions'];
   for (const sel of alvos) {
     const html = document.querySelector(sel).innerHTML || '';
     assert.ok(!html.includes('[object Object]'), `${rotulo}: "${sel}" imprimiu [object Object]`);
@@ -127,7 +126,7 @@ test('as abas Destaques e Entregas saíram da página (corte do lote 7), inclusi
 });
 
 test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', () => {
-  const vazio = { ...ESTADO, queue: [], myPRs: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
+  const vazio = { ...ESTADO, queue: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
   assert.equal(emitir('state', vazio), 1);
 });
 

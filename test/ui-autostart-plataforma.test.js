@@ -28,9 +28,9 @@ for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolv
 const config = { intervalSeconds: 300, parallelReviews: 1, theme: 'dark', people: {}, accounts: [],
   mergeBlockedRepos: [], claudeProfiles: [], claudeProfileId: '' };
 const fixture = { app: { name: 'Farol', version: 'fixture', platform: 'linux' }, status: 'idle', config,
-  account: { user: 'fixture', tokenOk: true }, accounts: [], queue: [], panorama: [], myPRs: [], hiddenPRs: [],
+  account: { user: 'fixture', tokenOk: true }, accounts: [], queue: [], panorama: [],
   activeSessions: [], activity: {}, headlessWaiting: [], decisions: { pending: [], resolved: [] },
-  selfAnalyses: {}, reviewActions: {}, usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' },
+  reviewActions: {}, usage: {}, paths: { home: '/fixture', workspace: '/fixture/workspace' },
   update: {} };
 
 test('primeiro SSE Linux oculta autostart sem pintar Sistema nem alterar campo focado', () => {

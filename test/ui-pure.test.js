@@ -696,23 +696,7 @@ test('prKeyFromUrl não deriva chave de URL parecida com GitHub', () => {
   assert.equal(P.prKeyFromUrl('javascript:alert(1)//github.com/biudtech/app/pull/123'), '');
 });
 
-/* ---------- selfSessionKey + sessionProgress: a barra honesta da autoanálise ---------- */
-
-test('selfSessionKey acha o PR da sessão self dona do evento de atividade', () => {
-  const sessions = [
-    { id: 's1', mode: 'auto', keys: ['a/b#1'] },
-    { id: 's2', mode: 'self', keys: ['c/d#2'] }
-  ];
-  assert.equal(P.selfSessionKey(sessions, 's2'), 'c/d#2');
-});
-
-test('selfSessionKey devolve null pra sessão de revisão (auto) e pra id desconhecido', () => {
-  const sessions = [{ id: 's1', mode: 'auto', keys: ['a/b#1'] }];
-  assert.equal(P.selfSessionKey(sessions, 's1'), null, 'revisão headless não move o widget de autoanálise');
-  assert.equal(P.selfSessionKey(sessions, 's9'), null);
-  assert.equal(P.selfSessionKey(null, 's1'), null);
-  assert.equal(P.selfSessionKey([{ id: 's3', mode: 'self' }], 's3'), null, 'sessão self sem keys não inventa destino');
-});
+/* ---------- sessionProgress: sem denominador não há percentual ---------- */
 
 test('contagem de eventos não produz percentual de conclusão', () => {
   for (const n of [undefined, 0, 1, 10, 1e6]) assert.equal(P.sessionProgress(n), null);
@@ -1064,128 +1048,6 @@ test('logSummaryShort: sem grupo devolve vazio (a linha some, não mostra "0")',
   assert.equal(P.logSummaryShort(null, 3), '');
 });
 
-/* ---------- "Meus PRs": PR oculto ----------
-   O caso real: 3 PRs pessoais atualizados ha 738, 740 e 751 dias, que nunca vao mergear
-   e ocupavam a aba pra sempre. O motor guarda as chaves ocultas e continua mandando
-   myPRs COMPLETO, entao quem separa e a UI. */
-
-const PRS = [
-  { key: 'acme/app#1', title: 'um' },
-  { key: 'acme/app#2', title: 'dois' },
-  { key: 'acme/app#3', title: 'tres' }
-];
-
-test('splitHiddenPRs separa o que o motor marcou como oculto, preservando a ordem', () => {
-  const { visiveis, ocultos } = P.splitHiddenPRs(PRS, ['acme/app#2']);
-  assert.deepEqual(visiveis.map(p => p.key), ['acme/app#1', 'acme/app#3']);
-  assert.deepEqual(ocultos.map(p => p.key), ['acme/app#2']);
-});
-
-test('splitHiddenPRs: sem oculto nenhum a lista sai inteira do lado visivel', () => {
-  assert.deepEqual(P.splitHiddenPRs(PRS, []).visiveis.length, 3);
-  assert.deepEqual(P.splitHiddenPRs(PRS, []).ocultos, []);
-  assert.deepEqual(P.splitHiddenPRs(PRS, null).visiveis.length, 3);
-});
-
-test('splitHiddenPRs: com todos ocultos nao sobra visivel (o vazio que a tela precisa explicar)', () => {
-  const r = P.splitHiddenPRs(PRS, ['acme/app#1', 'acme/app#2', 'acme/app#3']);
-  assert.deepEqual(r.visiveis, []);
-  assert.equal(r.ocultos.length, 3);
-});
-
-test('splitHiddenPRs compara sem caixa: chave gravada com outra caixa nao reaparece', () => {
-  // o GitHub nao distingue maiuscula em owner/repo; comparar cru faria o PR ocultado
-  // voltar sozinho na proxima renderizacao
-  const r = P.splitHiddenPRs(PRS, ['ACME/App#2']);
-  assert.deepEqual(r.ocultos.map(p => p.key), ['acme/app#2']);
-});
-
-test('splitHiddenPRs: lista vazia e chave inexistente nao lancam', () => {
-  assert.deepEqual(P.splitHiddenPRs([], ['acme/app#9']), { visiveis: [], ocultos: [] });
-  assert.deepEqual(P.splitHiddenPRs(null, null), { visiveis: [], ocultos: [] });
-  assert.deepEqual(P.splitHiddenPRs([{}], []).visiveis.length, 1, 'PR sem key nunca conta como oculto');
-});
-
-test('effectiveHidden soma o que o motor confirmou com o que acabou de ser ocultado', () => {
-  assert.deepEqual(P.effectiveHidden(['acme/app#1'], ['acme/app#2'], []).sort(),
-    ['acme/app#1', 'acme/app#2']);
-});
-
-test('effectiveHidden tira o que acabou de ser reexibido, mesmo que o motor ainda liste', () => {
-  // o card tem que voltar no clique, nao no proximo push de estado
-  assert.deepEqual(P.effectiveHidden(['acme/app#1', 'acme/app#2'], [], ['acme/app#1']), ['acme/app#2']);
-});
-
-test('effectiveHidden: reexibir vence ocultar da mesma chave, e nao duplica', () => {
-  assert.deepEqual(P.effectiveHidden(['acme/app#1'], ['acme/app#1'], []), ['acme/app#1'], 'sem duplicata');
-  assert.deepEqual(P.effectiveHidden(['acme/app#1'], ['acme/app#1'], ['acme/app#1']), []);
-});
-
-test('effectiveHidden normaliza a caixa e aceita ausencia dos tres argumentos', () => {
-  assert.deepEqual(P.effectiveHidden(['ACME/App#1'], [], ['acme/app#1']), []);
-  assert.deepEqual(P.effectiveHidden(null, null, null), []);
-});
-
-test('hiddenFootLabel monta a linha do rodape, com plural e com a acao oposta', () => {
-  assert.equal(P.hiddenFootLabel(3, false), '3 PRs ocultos · mostrar');
-  assert.equal(P.hiddenFootLabel(3, true), '3 PRs ocultos · ocultar');
-  assert.equal(P.hiddenFootLabel(1, false), '1 PR oculto · mostrar');
-});
-
-test('hiddenFootLabel: sem oculto a linha SOME, nao mostra zero', () => {
-  assert.equal(P.hiddenFootLabel(0, false), '');
-  assert.equal(P.hiddenFootLabel(0, true), '');
-  assert.equal(P.hiddenFootLabel(null, false), '');
-  assert.equal(P.hiddenFootLabel(-1, false), '');
-});
-
-test('myPRsEmptyMsg: loading e error continuam falando do MOTOR, nao dos ocultos', () => {
-  assert.match(P.myPRsEmptyMsg('loading', {}), /Verificando/);
-  assert.match(P.myPRsEmptyMsg('error', { ocultos: 3 }), /não foi possível|Não foi possível/);
-});
-
-test('myPRsEmptyMsg: sem PR nenhum, a mensagem depende do escopo escolhido', () => {
-  assert.match(P.myPRsEmptyMsg('empty', { escopoTodas: true }), /organizações monitoradas/);
-  assert.match(P.myPRsEmptyMsg('empty', { escopoTodas: false }), /nesta conta/);
-});
-
-test('myPRsEmptyMsg: com TODOS ocultos a tela diz por que esta vazia e como desfazer', () => {
-  // o vazio em branco sem explicacao era o pior desfecho de ocultar tudo
-  const m = P.myPRsEmptyMsg('list', { ocultos: 3 });
-  assert.match(m, /3 PRs seus estão ocultos/);
-  assert.match(m, /mostrar/, 'diz onde clicar pra ver de novo');
-  assert.match(P.myPRsEmptyMsg('list', { ocultos: 1 }), /^1 PR seu está oculto/);
-});
-
-test('myPRsEmptyMsg: chamada sem opcoes nao lanca e cai no vazio de sempre', () => {
-  assert.match(P.myPRsEmptyMsg('empty'), /organizações monitoradas/);
-});
-
-/* ---------- G19 (I3): a recusa da guarda de merge nao e falha ---------- */
-
-test('mergeToastKind: a recusa da guarda de double-click sai como aviso, nao como erro', () => {
-  // o primeiro merge seguiu em frente; vermelho ali mente sobre o que aconteceu
-  assert.equal(P.mergeToastKind(P.MERGE_EM_ANDAMENTO), 'info');
-  assert.equal(P.mergeToastKind('merge já em andamento'), 'info');
-});
-
-test('mergeToastKind: qualquer outra falha continua vermelha', () => {
-  assert.equal(P.mergeToastKind('o PR recebeu commit depois da sua análise'), 'error');
-  assert.equal(P.mergeToastKind(''), 'error');
-  assert.equal(P.mergeToastKind(undefined), 'error', 'sem mensagem, o fallback do handler e falha de verdade');
-});
-
-test('os tres botoes de merge da UI usam mergeToastKind, nenhum ficou com toast fixo', () => {
-  // os tres (normal, auto, admin) passam pela MESMA guarda do mergeSelfPR: se um
-  // deles voltar a chamar toast('error', ...) direto, o clique duplo dele volta a
-  // piscar vermelho e so este teste avisa
-  const APP = fonteDasTelas();
-  const fixos = [...APP.matchAll(/toast\('error',\s*esc\(r\?\.error \|\| 'não consegui [^']*merge[^']*'\)\)/g)];
-  assert.deepEqual(fixos.map(m => m[0]), [], 'toast de merge com cor fixa ignora a recusa benigna da guarda');
-  assert.equal([...APP.matchAll(/mergeToastKind\(r\?\.error\)/g)].length, 3,
-    'os tres handlers de merge roteiam a cor pelo helper');
-});
-
 /* ---------- consumo: linha do tempo empilhada (area chart) ---------- */
 
 test('usageStackLayers: empilha 2 camadas, area soma os dois valores no topo', () => {
@@ -1306,73 +1168,6 @@ test('safeJsonParse: objeto valido volta, lixo vira null, nunca lanca', () => {
   assert.equal(P.safeJsonParse('{torto'), null);
   assert.equal(P.safeJsonParse(''), null);
   assert.equal(P.safeJsonParse(undefined), null);
-});
-
-test('buildFixPrompt: PR com achados inclui url, título, card, resumo, bloqueios e dicas', () => {
-  const p = P.buildFixPrompt({
-    key: 'o/r#1',
-    url: 'https://github.com/o/r/pull/1',
-    title: 'Corrige X',
-    card: 'card de exemplo',
-    summary: 'PR ok, mas com pendências.',
-    blockers: ['falta teste do caminho de erro'],
-    tips: ['extrair função duplicada'],
-  });
-  assert.match(p, /corrija os pontos levantados na revisão do PR o\/r#1, começando pelo que trava a aprovação/);
-  assert.match(p, /PR: https:\/\/github\.com\/o\/r\/pull\/1/);
-  assert.match(p, /Título: Corrige X/);
-  assert.match(p, /Card: card de exemplo/);
-  assert.match(p, /Resumo da revisão: PR ok, mas com pendências\./);
-  assert.match(p, /Pendências no PR que travam a aprovação \(prioridade\):\n- falta teste do caminho de erro/);
-  assert.match(p, /Melhorias sugeridas:\n- extrair função duplicada/);
-});
-
-test('buildFixPrompt: sem bloqueios muda a abertura pra "aplique as melhorias" e ignora campos ausentes', () => {
-  const p = P.buildFixPrompt({ key: 'o/r#2', blockers: [], tips: ['ajustar nome de variável'] });
-  assert.match(p, /aplique as melhorias sugeridas na revisão do PR o\/r#2/);
-  assert.doesNotMatch(p, /^PR: /m);
-  assert.doesNotMatch(p, /Pendências/);
-  assert.match(p, /Melhorias sugeridas:\n- ajustar nome de variável/);
-});
-
-/* ---------- buildFixPrompt: o que é do PR e o que é de fora (17/09/2026) ----------
-   Medido no engine-ai#214: o check obrigatório do Acrity estava vermelho por critério do
-   card, e o prompt mandava "implemente as correções no código" com esse item no topo da
-   lista. Quem recebeu foi procurar no código o que só o dono do card resolve. */
-
-test('buildFixPrompt: pendência de fora do PR sai em seção própria, com quem resolve', () => {
-  const p = P.buildFixPrompt({
-    key: 'o/r#3', headSha: 'abcdef1234567890',
-    blockers: ['falta teste do caminho de erro'],
-    externalBlockers: ['Dono do card: tirar o corpus de HMG do Cenário 4'],
-    tips: []
-  });
-  assert.match(p, /Pendências no PR que travam a aprovação \(prioridade\):\n- falta teste do caminho de erro/);
-  assert.match(p, /Pendências fora do PR[^\n]*:\n- Dono do card: tirar o corpus de HMG do Cenário 4/);
-  assert.match(p, /não se resolvem com commit/);
-});
-
-test('buildFixPrompt: só pendência de fora do PR não manda corrigir código', () => {
-  const p = P.buildFixPrompt({
-    key: 'o/r#4', blockers: [], tips: [],
-    externalBlockers: ['Dono do card: ajustar o critério']
-  });
-  assert.doesNotMatch(p, /corrija os pontos/);
-  assert.doesNotMatch(p, /Implemente/);
-  assert.match(p, /o que trava a aprovação está fora do PR/);
-});
-
-test('buildFixPrompt: nunca oferece contornar proteção como saída', () => {
-  const p = P.buildFixPrompt({ key: 'o/r#5', blockers: ['x'], externalBlockers: ['y'], tips: ['z'] });
-  assert.match(p, /nunca com bypass/i);
-});
-
-test('buildFixPrompt: ancora no head analisado para o que só vale nele', () => {
-  const p = P.buildFixPrompt({ key: 'o/r#6', headSha: 'abcdef1234567890', blockers: [], tips: ['Neste head (abcdef1): rode o sonar de novo'] });
-  assert.match(p, /Head analisado: abcdef1\b/);
-  assert.match(p, /"Neste head" só valem se o PR ainda estiver em abcdef1/);
-  const semHead = P.buildFixPrompt({ key: 'o/r#7', blockers: [], tips: ['x'] });
-  assert.doesNotMatch(semHead, /Head analisado/);
 });
 
 /* ---------- resolvedRow: por que o PR veio pra mim (16/08/2026) ----------
@@ -1980,7 +1775,7 @@ const DIAG_BASE = {
   doctor: { node: 'v24', gh: 'gh 2.0', claude: '/bin/claude', ghAuth: true, workspace: '/w' },
   paths: { home: '/h', workspace: '/w' },
   config: { intervalSeconds: 300 },
-  queue: [], panorama: [], myPRs: [], decisions: { pending: [] }, activeSessions: [],
+  queue: [], panorama: [], decisions: { pending: [] }, activeSessions: [],
 };
 
 
@@ -2101,52 +1896,6 @@ test('runtimeChecks: sem root não inventa linha (Windows nem tem uid)', () => {
   assert.deepEqual(P.runtimeChecks({}), []);
   assert.deepEqual(P.runtimeChecks(null), [], 'doctor ainda não carregado não pode derrubar a tela');
   assert.deepEqual(P.runtimeChecks(undefined), []);
-});
-
-/* ---------- quarta porta: a UI não reconstrói a autoridade do merge ----------
-   O `canMerge` do app.js era `!!(a && a.approvable)`, uma quarta cópia da regra que
-   o engine acabou de centralizar. A decisão saiu do render (que não tem harness) e
-   virou função pura, pra ficar travada em teste em vez de depender de disciplina. */
-
-test('canMergeSelfAnalysis decide por quality, nunca por approvable', () => {
-  const q = (status) => ({ quality: { status, reasons: [] } });
-  assert.equal(P.canMergeSelfAnalysis({ approvable: true, ...q('inconclusive') }), false,
-    'approvable true não libera quando a evidência não fecha');
-  assert.equal(P.canMergeSelfAnalysis({ approvable: false, ...q('eligible') }), true,
-    'approvable false não impede: a UI também deixou de tratar o parecer como autoridade');
-  assert.equal(P.canMergeSelfAnalysis({ approvable: true, ...q('ineligible') }), false);
-  assert.equal(P.canMergeSelfAnalysis({ approvable: true }), false, 'sem quality, fecha');
-  assert.equal(P.canMergeSelfAnalysis(null), false);
-  assert.equal(P.canMergeSelfAnalysis(undefined), false);
-});
-
-test('qualityReasonLabel traduz código em frase; o engine nunca escreve copy', () => {
-  assert.equal(P.qualityReasonLabel('COVERAGE_UNKNOWN'), 'Sem cobertura comprovada');
-  assert.equal(P.qualityReasonLabel('CARD_UNKNOWN'), 'Atendimento ao card não comprovado');
-  assert.equal(P.qualityReasonLabel('BLOCKER_PRESENT'), 'A análise apontou bloqueios');
-  // código desconhecido não pode virar buraco na tela nem vazar o código cru
-  assert.equal(P.qualityReasonLabel('COISA_NOVA'), 'Requisito de qualidade não atendido');
-  assert.equal(P.qualityReasonLabel(''), 'Requisito de qualidade não atendido');
-});
-
-test('qualityBlockTitle lidera com a frase principal e lista os detalhes', () => {
-  const titulo = P.qualityBlockTitle({
-    status: 'inconclusive',
-    reasons: [{ code: 'COVERAGE_UNKNOWN' }, { code: 'CARD_UNKNOWN' }]
-  });
-  assert.match(titulo, /não comprova qualidade suficiente/);
-  assert.match(titulo, /Sem cobertura comprovada/);
-  assert.match(titulo, /Atendimento ao card não comprovado/);
-  assert.doesNotMatch(titulo, /COVERAGE_UNKNOWN/, 'código de máquina não vira copy');
-});
-
-test('os códigos do P0b também têm frase; nenhum vaza cru na tela', () => {
-  const codigos = ['EVIDENCE_STALE', 'COVERAGE_LIMITS_MALFORMED', 'BLOCKERS_UNKNOWN', 'EXTERNAL_BLOCKER_PRESENT'];
-  for (const code of codigos) {
-    const frase = P.qualityReasonLabel(code);
-    assert.notEqual(frase, 'Requisito de qualidade não atendido', `${code} precisa de frase própria`);
-    assert.doesNotMatch(frase, /[A-Z]{4,}_/, 'a frase não pode carregar o código');
-  }
 });
 
 /* ---------- fila vazia com a automação PAUSADA por teto ---------- */

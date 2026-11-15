@@ -248,7 +248,7 @@ function estadoDaTela() {
     accounts: [{ user: LOGIN, owners: ['acme-exemplo'] }],
     config: { ghUser: LOGIN, owners: ['acme-exemplo'], accounts: [{ user: LOGIN, owners: ['acme-exemplo'] }], intervalSeconds: 300, sync: admin.config.sync, people: {}, claudeProfiles: [] },
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
-    queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
+    queue: [], panorama: [], decisions: { pending: [], resolved: [] },
     activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
     usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },

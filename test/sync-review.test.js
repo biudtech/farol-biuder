@@ -229,22 +229,6 @@ test('lease perdido limpa a entrada de retry que já existia', async () => {
   assert.equal(e.retryAfterNet.has(pr.key), false, 'o retry de antes não pode sobreviver à perda do lease');
 });
 
-// A autoanálise chega aqui com cancelled também. Sem ramo próprio, a pessoa lia
-// "Autoanálise cancelada", como se tivesse cancelado, e sem saber que a análise não
-// ficou registrada em lugar nenhum.
-test('autoanálise com lease perdido tem texto próprio, não o de cancelamento', async () => {
-  const perdido = async (op, admitir) => { await admitir(); throw Object.assign(new Error('cancelada por você'), { cancelled: true, coordenacao: 'perdido' }); };
-  const e = motor({ resposta: perdido });
-  e.runSelfAnalysis = async () => { throw Object.assign(new Error('cancelada por você'), { cancelled: true, coordenacao: 'perdido' }); };
-  const toasts = [];
-  e.on('toast', (t) => toasts.push(t.text));
-  await e.runOneHeadless({ ...prDe('o/r#7'), kind: 'self' }, 'eu');
-  assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /outro aparelho assumiu a coordenação; a autoanálise foi encerrada sem registrar/);
-  assert.doesNotMatch(toasts[0], /cancelada/);
-  assert.ok(e.logs.some((l) => /WARN .*autoanalise .*lease de coordenação perdido/.test(l)));
-});
-
 test('desfecho postado grava recibo published depois de registrar a decisão', async () => {
   const h = handleFalso();
   const e = motor({ resposta: resultado(envelopeApprove(), h) });

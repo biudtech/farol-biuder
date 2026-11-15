@@ -1,6 +1,6 @@
 // Quem abre é quem fecha, no mesmo lugar (08/11/2026, pedido do dono: clicar para expandir e ter
 // de clicar em outra região para recolher não é intuitivo). A posição foi medida no navegador, em
-// Pra mim e Meus PRs (mesmo x e y aberta e fechada); aqui ficam travadas as peças dela.
+// Pra mim (mesmo x e y aberta e fechada); aqui ficam travadas as peças dela.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,7 +17,7 @@ test('no card aberto, a seta fica no canto da seta da linha compacta', () => {
 });
 
 test('o conteúdo do card aberto não fica embaixo da seta', () => {
-  assert.match(css, /\.decision-head,\n\.card\.mypr-card:has\([^)]*\) \.pr-actions,\n\.card\.pr-card:has\([^)]*\) \.pr-actions \{ padding-right: 38px; \}/);
+  assert.match(css, /\.decision-head,\n\.card\.pr-card:has\([^)]*\) \.pr-actions \{ padding-right: 38px; \}/);
   assert.match(css, /@media \(max-width: 820px\) \{\n  \.card\.pr-card:has\([^)]*\) \.pr-actions \{ padding-right: 0; \}\n  \.card\.pr-card:has\([^)]*\) \.info \{ padding-right: 38px; \}/, 'ações em linha própria: reserva no título');
 });
 

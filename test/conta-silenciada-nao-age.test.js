@@ -322,15 +322,6 @@ test('decide: clique na pendência de conta silenciada não posta e avisa na tel
   assert.equal(escritas().length, 0);
 });
 
-test('Meus PRs: merge num PR da conta silenciada recusa antes de ler o PR', async () => {
-  const e = engineDoIncidente();
-  e.myPRs = [{ key: KEY_76, url: URL_76, repo: 'biudtech/internal-auth', number: 76, author: SILENCIADA, account: SILENCIADA }];
-  const r = await e.mergeSelfPR(URL_76);
-  assert.equal(r.ok, false);
-  assert.equal(r.blocked, 'conta_silenciada');
-  assert.equal(chamadas.length, 0);
-});
-
 test('conta-que-age: guardarPelaCapaz troca só da incapaz para a capaz', () => {
   const e = engineDoIncidente();
   const mapa = new Map();

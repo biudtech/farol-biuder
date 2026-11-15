@@ -28,29 +28,29 @@ const map = () => ({ complete: true, head: { metrics: { files: 2 } }, previous: 
 const selection = () => ({ schema: 1, snippets: [], references: [], omitted: [], limitations: [], impactedPaths: ['src/caller.js'],
   metrics: { budgetTokens: 1000, tokenEstimate: 50 } });
 
-test('review e autoanálise adquirem as mesmas fontes sem exigir perfil técnico ou clone pessoal', async () => {
+test('duas revisões adquirem as mesmas fontes sem exigir perfil técnico ou clone pessoal, cada uma na sua raiz', async () => {
   const calls = [], handles = [];
   analysis.sourceRuntime.prepareSources = async (_engine, target, options) => {
     calls.push({ target, head: options.expectedHead, signal: options.signal }); const handle = source(); handles.push(handle); return handle;
   };
   analysis.sourceRuntime.buildMap = async () => { throw new Error('Modo off não executa parser.'); };
-  const reviewEngine = engine(), selfEngine = engine('self');
+  const reviewEngine = engine(), outraEngine = engine();
   const review = await analysis.prepareAnalysisSource(reviewEngine, pr, 's1', H);
-  const self = await analysis.prepareAnalysisSource(selfEngine, pr, 's1', H);
-  assert.deepEqual(review.source.manifest, self.source.manifest);
+  const outra = await analysis.prepareAnalysisSource(outraEngine, pr, 's1', H);
+  assert.deepEqual(review.source.manifest, outra.source.manifest);
   assert.equal(calls.length, 2); assert.equal(calls[0].head, H); assert.equal(calls[1].head, H);
-  assert.notEqual(calls[0].signal, calls[1].signal); assert.equal(review.block, ''); assert.equal(self.block, '');
+  assert.notEqual(calls[0].signal, calls[1].signal); assert.equal(review.block, ''); assert.equal(outra.block, '');
   const a = analysis.preparedPatchScope(reviewEngine, pr, 's1', review);
-  const b = analysis.preparedPatchScope(selfEngine, pr, 's1', self);
+  const b = analysis.preparedPatchScope(outraEngine, { ...pr, key: 'org/repo#2', number: 2 }, 's1', outra);
   assert.deepEqual(a.total, b.total); assert.notEqual(a.root, b.root);
   assert.equal(fs.readFileSync(path.join(a.root, 'src/a.js'), 'utf8'), fs.readFileSync(path.join(b.root, 'src/a.js'), 'utf8'));
   assert.match(fs.readFileSync(path.join(a.root, 'src/b.bin'), 'utf8'), /sem patch textual/);
   assert.equal(reviewEngine.activeReviews.get('s1').totalArquivos, 2);
-  assert.equal(selfEngine.activeReviews.get('s1').scopeRoot, b.root);
+  assert.equal(outraEngine.activeReviews.get('s1').scopeRoot, b.root);
   const block = analysis.preparedPatchBlock(review, a);
   for (const sha of [H, B, M]) assert.ok(block.includes(sha));
   assert.match(block, /não comprova leitura/);
-  await analysis.releaseAnalysisSource(review, reviewEngine); await analysis.releaseAnalysisSource(self, selfEngine);
+  await analysis.releaseAnalysisSource(review, reviewEngine); await analysis.releaseAnalysisSource(outra, outraEngine);
   assert.deepEqual(handles.map(h => h.releases()), [1, 1]);
 });
 test('inventário preparado evita nova aquisição de patches na preparação da review', async () => {
@@ -63,29 +63,6 @@ test('inventário preparado evita nova aquisição de patches na preparação da
   await analysis.releaseAnalysisSource(result.prepared, e); assert.equal(handle.releases(), 1);
 });
 
-test('projeção restrita não reutiliza índice original nem muda a configuração de contexto', async () => {
-  const e = engine('self', 'assist'); e.config.reviewNavigationFacts = true;
-  let projection;
-  analysis.sourceRuntime.prepareSources = async (_engine, _pr, options) => {
-    projection = options.projection; return { ...source(), projection };
-  };
-  analysis.sourceRuntime.buildMap = async () => { throw new Error('Índice original não pode ser lido nesta execução.'); };
-  const result = await analysis.prepareAnalysisSource(e, { ...pr, isolation: 'restricted-read' }, 's1', H);
-  assert.ok(projection); assert.equal(result.source.projection, projection);
-  assert.equal(result.map, null); assert.equal(result.selection, null);
-  assert.equal(result.diagnostics.indexStatus, 'restricted-projection-not-indexed');
-  assert.equal(e.config.reviewContextMode, 'assist'); assert.equal(e.config.reviewNavigationFacts, true);
-  await analysis.releaseAnalysisSource(result, e);
-});
-
-test('cancelamento após aquisição da projeção ainda libera a fonte antes de qualquer retorno', async () => {
-  const e = engine('self', 'assist'), handle = source(); let complete;
-  analysis.sourceRuntime.prepareSources = () => new Promise(resolve => { complete = resolve; });
-  const preparing = analysis.prepareAnalysisSource(e, { ...pr, isolation: 'restricted-read' }, 's1', H);
-  assert.equal(cancelSession(e, 's1').ok, true); complete(handle);
-  await assert.rejects(preparing, error => error.cancelled === true);
-  assert.equal(handle.releases(), 1);
-});
 test('cancelar durante aquisição aborta a operação e libera fonte recém-adquirida', async () => {
   const e = engine(), handle = source(); let complete, signal;
   analysis.sourceRuntime.prepareSources = (_engine, _pr, options) => { signal = options.signal; return new Promise(resolve => { complete = resolve; }); };
@@ -95,7 +72,7 @@ test('cancelar durante aquisição aborta a operação e libera fonte recém-adq
   await assert.rejects(preparing, error => error.cancelled === true); assert.equal(handle.releases(), 1);
 });
 test('cancelar durante construção do mapa libera a fonte sem retornar análise parcial', async () => {
-  const e = engine('self', 'assist'), handle = source(); let started;
+  const e = engine('auto', 'assist'), handle = source(); let started;
   const entered = new Promise(resolve => { started = resolve; });
   analysis.sourceRuntime.prepareSources = async () => handle;
   analysis.sourceRuntime.buildMap = (_source, options) => new Promise((_resolve, reject) => {
@@ -157,7 +134,7 @@ test('matriz dos modos mede aquisição, mapa, seleção e injeção sem trabalh
 });
 test('falha observacional não injeta bloco nem altera herança, e assist informa tentativa sem bloco parcial', async () => {
   for (const mode of ['observe', 'assist']) {
-    const e = engine('self', mode), handle = source();
+    const e = engine('auto', mode), handle = source();
     analysis.sourceRuntime.prepareSources = async () => handle;
     analysis.sourceRuntime.buildMap = async () => map();
     analysis.sourceRuntime.selectContext = async () => { throw new Error('Seleção indisponível na fixture.'); };
