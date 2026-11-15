@@ -18,14 +18,12 @@ Leia isto antes de mexer em qualquer arquivo. Este documento existe pra que qual
 
 ## Os guias operacionais
 
-O conteúdo detalhado mora em quatro guias, que viajam junto com o app instalado:
+O conteúdo detalhado mora em dois guias operacionais:
 
 | guia | assunto |
 |---|---|
 | [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | o invariante 4 em detalhe: gates de postagem, dedup, re-revisão, autoanálise, checkpoint |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | assinatura e perfis do Claude, orçamento, modelo e esforço, Jira |
-| [`docs/MACOS.md`](docs/MACOS.md) | macOS, Linux e os pontos com branch de plataforma |
-| [`docs/RELEASE.md`](docs/RELEASE.md) | versionamento, checklist de release e governança do repositório |
 
 A documentação de sincronização entre dispositivos ainda não viaja com o app: ela depende de
 `firebase/`, que não faz parte da distribuição, e tem fase própria. O guia do Farol hospedado
@@ -34,14 +32,13 @@ A documentação de sincronização entre dispositivos ainda não viaja com o ap
 
 ## O que é
 
-Radar de Pull Requests em Electron. O engine (`server.js`, Node puro) monitora o GitHub com comandos `gh` (zero tokens de IA), serve a UI local por HTTP + SSE e orquestra sessões do Claude Code (headless pra revisão autônoma, terminal pra sessão interativa). O `main.js` é só o shell Electron (janela, bandeja, notificações).
+Revisor autônomo de Pull Requests. O engine (`server.js`, Node puro) monitora o GitHub com comandos `gh` (zero tokens de IA), serve a UI local por HTTP + SSE e orquestra sessões do Claude Code (headless pra revisão autônoma, terminal pra sessão interativa).
 
 ## Mapa de arquivos
 
 | Caminho | Papel |
 |---|---|
 | `server.js` | A classe `Engine`: estado, polling, fila e as **fachadas finas** que delegam pros colaboradores de `lib/engine/`. Deixou de ser "o engine inteiro" na Onda 2 (ver `docs/QUALITY.md`): hoje ~2/3 dos métodos são só fiação de delegação |
-| `main.js` | Shell Electron (janela, bandeja, notificações, autostart) |
 | **`lib/`** | **Funções puras e infraestrutura, sem estado do engine** |
 | `lib/paths.js` | Caminhos do app e `IS_WIN`/`IS_MAC` (fonte única do branch de plataforma). Também os sinais do motor como sidecar de casca nativa (28/10/2026): `modoCasca` (`FAROL_SHELL`, só `mac` ou `win`), `versaoDaCasca` (`FAROL_SHELL_VERSION`, só `X.Y.Z`), `bootstrapFeito`, `ambienteDoBootstrap` e `pidDoPai` (as marcas do motor reexecutado), `ENGINE_DIR` (`~/.farol/engine`), `CASCA_DIR` e `CASCA_FILE` (`~/.farol/state/casca.json`, fora do workspace, porque o workspace é o cwd de toda sessão de IA e o arquivo leva o código de pareamento em claro) |
 | `lib/io.js` | `run`/`runShell` (todo `gh` do Farol passa aqui; NUNCA lançam, devolvem `{ok,code,stdout,stderr}`), `readJson`, `copyRecursive`, `detectGitBash` |
@@ -253,16 +250,7 @@ Radar de Pull Requests em Electron. O engine (`server.js`, Node puro) monitora o
 | `ui/telas/` | As telas da UI (código que toca DOM e lê `estado()`), um módulo por assunto, 30 arquivos desde a Fase 1b (16/09/2026). As densidades Compacta e Expandida do Radar e o que está aberto nelas moram em `densidade.js` (preferência local com try/catch; `initDensidade` recebe a repintura do bootstrap), e `prontidao.js` junta o estado com o desenho da faixa para Pra mim, Meus PRs e Panorama. Cada uma se registra em `registro.js` (`registrarTela`) e o `ui/app.js` importa cada módulo; nenhuma importa o bootstrap de volta. As regras de quem mexe estão no `ui/telas/README.md`, e a trava do ciclo está em `test/ui-telas-contrato.test.js` |
 | `shell/win/` | **Casca nativa do Windows (C#/WinUI 3, 28/10/2026)**: o `Farol.exe` em MSIX que sobe o motor como sidecar (`FAROL_SHELL=win`), pareia pela A4, mostra a interface num WebView2 e cuida de bandeja, badge, avisos, autostart e instância única, sem regra de negócio. `Farol.Contrato` (net8.0 puro, sem WinUI, testado em qualquer SO) guarda a lógica: máquina do sidecar, parser do SSE, políticas e o `UpdateGate`, que adia o reinício do update do pacote enquanto o motor está ocupado; `Farol.Sidecar` é o motor como processo filho (Job Object, recuo de religação); `Farol.App` é a casca WinUI, que só compila no Windows; `Farol.Tests` é o xUnit sobre Contrato e Sidecar; `scripts/` traz build, test e lint, com `-Portable` para o subconjunto que compila fora do Windows. Guia em `shell/win/README.md`, medição de memória em `shell/win/docs/medicao.md` (ainda por fazer no Windows) |
 | `workspace-template/` | Workspace semeado em `~/.farol/workspace` (protocolo de review do Claude); `prompts/pr-review-auto.md` é a revisão headless, `prompts/self-review.md` é a autoanálise dos meus PRs (só leitura, nunca posta) |
-| `installer/install.ps1` / `uninstall.ps1` | Instalador Windows |
-| `installer/install.sh` / `uninstall.sh` | Instalador macOS |
-| `Instalar.cmd` / `Instalar.command` | Atalhos de duplo clique (Windows / macOS) |
-| `tools/make-package.ps1` | Gera o zip LEVE de distribuição (sem node_modules) com auditoria anti-vazamento |
-| `tools/make-installer.ps1` + `installer/farol.nsi` | Gera o INSTALADOR ÚNICO do Windows (`dist/Farol-Setup-vX.Y.Z.exe`, NSIS): um `.exe`, duplo clique instala e abre (roda o `install.ps1` por dentro). Requer `makensis` (vem com o Tauri em `AppData\Local\tauri\NSIS`). É o instalador de primeira instalação |
-| `tools/make-offline-mac.sh` | Gera o instalador OFFLINE do macOS (`dist/Farol-Instalar-mac.command`): autoextraível único, Electron embutido. RODA EM QUALQUER SO (baixa o zip darwin do GitHub e EMBUTE; o `.app` é montado no Mac na instalação, pois só o unzip do Mac preserva os symlinks do `.app`). Default Apple Silicon; `ARCH=x64` pra Intel. É BETA até validar num Mac real |
-| `tools/publish-release.ps1` | Publica a release no GitHub (`wandersonaadsantos/farol`): sobe o pacote leve (update) + o instalador único Windows. É como as cópias distribuídas recebem atualização |
-| `tools/release/` + `.github/workflows/release-nativo.yml` | **Release nativa** (plano 4 do Farol nativo, 28/10/2026): `baixar-node.sh`/`.ps1` (Node oficial com hash conferido contra o `SHASUMS256.txt`), `semente-do-motor.sh`/`.ps1` (o pacote leve vira a semente do motor), no macOS `montar-mac.sh`, `assinar-mac.sh`, `notarizar-mac.sh`, `dmg-mac.sh` e `appcast-mac.sh` (com `versao-maior.js`, a regra de versão que sobe), no Windows `montar-win.ps1`, `assinar-win.ps1` e `appinstaller-win.ps1` (MSIX e App Installer), e `anexos-da-release.js`, a lista ÚNICA do que sobe na release (da 3.0.0 em diante os quatro nativos são obrigatórios). A pipeline constrói tudo na tag `v3+` e publica pelo `publish-release.ps1` com `FAROL_SO_ANEXAR=1`. Guia em [`docs/RELEASE.md`](docs/RELEASE.md) |
-| `tools/make-icns.sh` | Gera `assets/farol.icns` (rodar num Mac) |
-| `shell/mac/` | **A casca nativa do macOS** (29/10/2026): app Swift 6/AppKit que sobe o motor como sidecar (`FAROL_SHELL=mac`), pareia pela A4, mostra a `ui/` num WKWebView e lê só os eventos `casca`, `aviso-nativo` e `casca-saida`; pacote `FarolKit` (FarolContrato puro, FarolSidecar IO, FarolApp AppKit); scripts em `shell/mac/scripts/`; não viaja no pacote leve do motor. Ver [`docs/MACOS.md`](docs/MACOS.md#casca-nativa-shellmac-29102026) |
+| `shell/mac/` | **A casca nativa do macOS** (29/10/2026): app Swift 6/AppKit que sobe o motor como sidecar (`FAROL_SHELL=mac`), pareia pela A4, mostra a `ui/` num WKWebView e lê só os eventos `casca`, `aviso-nativo` e `casca-saida`; pacote `FarolKit` (FarolContrato puro, FarolSidecar IO, FarolApp AppKit); scripts em `shell/mac/scripts/`; não viaja no pacote leve do motor. |
 | `docs/` | Documentação. Só os quatro guias da tabela "Os guias operacionais" viajam com o app (allowlist nas seis rotas, travada em `test/distribuicao-listas.test.js`); `docs/superpowers/`, `docs/QUALITY.md` e o resto ficam no repositório |
 
 ## Invariantes do projeto (não negociar)
@@ -322,9 +310,9 @@ Radar de Pull Requests em Electron. O engine (`server.js`, Node puro) monitora o
    ferramentas da avaliação vivem no armazenamento privado do Farol, nunca no repositório
    revisado. Ver [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md), seção "A decisão sem mesa".
 
-5. **Toda diferença de SO passa por `IS_WIN`/`IS_MAC`/`IS_LINUX`** (fonte única em `lib/paths.js`), nunca por checagens soltas espalhadas. Doutrina desde a v2.45.0: o que é POSIX genuíno (runShell, spawn headless, killTree, PATH do boot) ramifica em `!IS_WIN` e vale pra mac E linux; o que é mac de verdade (`open`, `Farol.app`) usa `IS_MAC`; o ramo Linux (experimental) fica ao lado, ver [`docs/MACOS.md`](docs/MACOS.md#linux-experimental-v2450), que também traz os pontos com branch de plataforma.
+5. **Toda diferença de SO passa por `IS_WIN`/`IS_MAC`/`IS_LINUX`** (fonte única em `lib/paths.js`), nunca por checagens soltas espalhadas. Doutrina desde a v2.45.0: o que é POSIX genuíno (runShell, spawn headless, killTree, PATH do boot) ramifica em `!IS_WIN` e vale pra mac E linux; o que é mac de verdade (`open`, `Farol.app`) usa `IS_MAC`; o ramo Linux (experimental) fica ao lado.
 6. **Texto da UI e comentários em português, sem travessão.** Use vírgula, parênteses ou dois pontos.
-7. **O zip de distribuição é auditado** (`make-package.ps1` falha se detectar estado, config, token ou conta pessoal). Não enfraqueça a auditoria. Desde 16/09/2026 a varredura de conteúdo lê TODO arquivo do pacote, sem lista de extensão (a lista anterior deixava `ui/favicon.svg` e `installer/farol.nsi` fora, medido no caminho real), e `test/pacote-auditoria.test.js` reprova quem reintroduzir o filtro.
+7. **Não há pacote de distribuição.** O Farol roda do clone como `node server.js`; instalador, zip auditado e release de pacote saíram no corte da fase 1.
 
 ## Como rodar e testar sem estragar nada
 
@@ -338,15 +326,9 @@ Radar de Pull Requests em Electron. O engine (`server.js`, Node puro) monitora o
 - **`tools/quality/` continua, e não é o eng-behaviour.** É o enforcement mecânico local do Farol, e ele cobre dois tipos de coisa. (a) A face mecânica de regras que no catálogo são de julgamento: `jsonParseCru`, `jsonStringifyCru`, `processEnvDireto`, `portaLiteral` e `tempoMagico` são todos casos de `core.duplication.business-rule`, fonte de verdade única, que o catálogo não verifica por ferramenta porque distinguir invariante compartilhado de coincidência de valor exige entender o domínio. Aqui o domínio é conhecido e os santuários são nomeados, então dá pra medir. (b) Eixos que o catálogo não tem: `emptyCatch`, `varUse`, `ternarioAninhado` e `profundidadeExcedida`. **Uma divergência declarada:** `maxLines` (400) mede tamanho de arquivo, e `core.file.single-responsibility` rejeita esse eixo por princípio. O contador fica como ratchet sobre dívida já medida, não como afirmação de que tamanho é o critério; se ele sai, é decisão do dono, não descuido. **Ele conta o EXCESSO de linhas úteis sobre o teto, não 0/1** (22/09/2026): binário, ele deixava crescer o arquivo que já estava na baseline, e foi assim que o `server.js` foi de 905 linhas (Onda 2) a 2326 com o gate verde. Ver `docs/QUALITY.md`, "Por que o `maxLines` conta linhas, e não arquivos".
 - **Gate de qualidade** (rodar antes de QUALQUER entrega): `npm run check && npm run lint && npm test`, e `npm run eng` antes de empurrar. O `lint` é o gate de ratchet do enforcement mecânico em Node puro (`tools/quality/`): compara as violações com `baseline.json` e reprova qualquer contagem que SUBA. Corrigiu dívida? `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão. O `check` valida a sintaxe (`tools/check-syntax.js` roda `node --check` por processo filho em TODO `.js` do projeto, ESM nativo desde a migração; a lista é DESCOBERTA e o próprio gate imprime quantos achou, então não existe número escrito aqui para apodrecer; `package.json` tem `"type": "module"`); o `test` roda a rede (`node --test`, runner nativo, ZERO dependências): funções puras + smoke de boot com `FAROL_HOME` temporário. Verde em todos é pré-requisito. A rede vive em `test/` e é o que protege a decomposição do engine em ondas (ver `docs/QUALITY.md`, o contrato de qualidade extraído do lace-be-fastify).
 - As buscas `gh search prs` são read-only; rodar `check` contra o GitHub real é seguro.
-- **As travas de navegação e distribuição** (Fase 0 da reorganização, 14/09/2026):
-  `test/distribuicao-listas.test.js` deriva as QUATRO listas fixas do que viaja
-  (`install.ps1`, `install.sh`, `install-linux.sh`, `make-package.ps1`) e reprova
-  divergência entre elas, que é o modo de falha silenciosa que já custou a pasta
-  `tools/` no Mac (PR #36). `test/guias-navegaveis.test.js` trava o mapa do código no
-  README contra os scripts do `package.json`, o índice do `CLAUDE.md` contra as próprias
-  seções, e qualquer link relativo morto nos guias. Pasta de topo nova exige as quatro
-  listas na MESMA tarefa, e uma instalação real a partir do zip antes do commit: suíte
-  verde não prova que o instalador copiou o que precisava.
+- **A trava de navegação**: `test/guias-navegaveis.test.js` trava o mapa do código no
+  README contra os scripts do `package.json`, o índice do `CLAUDE.md` e dos dois guias
+  operacionais contra as próprias seções, e qualquer link relativo morto nos guias.
 
 ## Menções navegáveis (regra de usabilidade, v2.40.1)
 

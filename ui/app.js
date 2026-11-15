@@ -1,14 +1,13 @@
 /* Farol · UI: consome o engine local via SSE + fetch. Sem frameworks. */
 
 import {
-  safeJsonParse, parseGoto, avisoDeAbaDesligada,
+  safeJsonParse, parseGoto,
 } from './pure.js';
 import { telasRegistradas, telaPorId } from './telas/registro.js';
 import { tokenLocal, FonteDeEventosAutenticada, OCIOSO_MS, recusaDeLoginExterno } from './transporte.js';
 import { montarPareamento, precisaParear, voltarDoPareamento } from './telas/pareamento.js';
 import {
   estado, abaAtual, definirEstado, definirEscopo, definirAba,
-  teamHighlightsEnabled, deliveriesEnabled,
   ehMac, ehElectron, definirPlataforma,
 } from './telas/estado.js';
 import {
@@ -18,25 +17,20 @@ import {
 export { toast } from './telas/infra.js';
 import {
   rebuildAccounts,
-  renderAccountBar, renderIdentity, renderSilenced,
+  renderAccountBar, renderIdentity,
   initContasTriggers, escopoGuardado,
 } from './telas/contas.js';
-import { gotoDeliv } from './telas/entregas.js';
-import { loadHighlights, loadTeam } from './telas/time.js';
-import { renderTools } from './telas/ferramentas.js';
+import { loadTeam } from './telas/time.js';
 import { ping, notifyNewPRs, avisoDaBase } from './telas/avisos.js';
-import { interventionReceived, interventionsFromState } from './telas/interventions.js';
 import { initTweaks } from './telas/acoes.js';
 import { registrarTelaConsumo } from './telas/consumo.js';
 import { renderStatus, tickCountdown, renderActive, handleActivity } from './telas/sessoes.js';
-import { renderChat, chatKeyAtual, initChatTriggers, handleChatActivity } from './telas/chat.js';
 import {
-  renderDecisions, renderQueue, renderPanorama, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
+  renderDecisions, renderQueue, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
 } from './telas/radar.js';
-import { renderMyPRs, initReviewersButton, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
+import { renderMyPRs, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
 import { observarCancelamentos } from './telas/autoanalise-andamento.js';
 import { initDensidade } from './telas/densidade.js';
-import { renderUpdate } from './telas/sistema-atualizacao.js';
 import { sysGoTo, renderSettings, renderPlatformSettings } from './telas/sistema.js';
 import { initCaixaRevisao } from './telas/caixa-revisao.js';
 import { initAtalhos } from './telas/atalhos.js';
@@ -66,13 +60,9 @@ if (isElectron) document.body.classList.add('electron');
    O estado (PLATAFORMA) e as duas funções moram em telas/estado.js desde a Task 10a (Fase
    1b): telas/sistema-perfis.js também precisa perguntar "é Windows?" pro editor de perfis
    Claude, e um módulo de tela não pode importar o bootstrap de volta. */
-function aplicaPlataforma(p, casca) {
+function aplicaPlataforma(p) {
   definirPlataforma(p);
   document.body.classList.toggle('mac', ehMac());
-  // A casca nativa em que a página roda (snapshot.casca do motor): o CSS dá o recuo dos
-  // semáforos da casca Mac por <html data-casca>, o mesmo do Electron no macOS.
-  if (casca === 'mac' || casca === 'win') document.documentElement.dataset.casca = casca;
-  else delete document.documentElement.dataset.casca;
   renderPlatformSettings();
   rotularBtnCmdK();   // o botão é da paleta; quem sabe rotulá-lo é telas/paleta.js
 }
@@ -83,24 +73,12 @@ definirEscopo(escopoGuardado());   // 'all' ou o login de uma conta; chave e def
 // espelha a aba no <body> pro CSS ajustar a largura útil (a aba Sistema tem sidebar e
 // precisa de mais). switchTab não roda no boot, então a aba inicial é marcada aqui.
 document.body.dataset.tab = abaAtual();
-function syncOptionalTabsVisibility() {
-  const features = [
-    { tab: 'destaques', enabled: teamHighlightsEnabled() },
-    { tab: 'entregas', enabled: deliveriesEnabled() },
-  ];
-  for (const feature of features) {
-    $(`#tabbtn-${feature.tab}`).hidden = !feature.enabled;
-    $(`#tab-${feature.tab}`).hidden = !feature.enabled;
-    if (!feature.enabled && abaAtual() === feature.tab) switchTab('radar');
-  }
-}
-
 // fan-out de render das seções sensíveis a CONTA (escopo/identidade/fila/decisões):
 // o handler de 'state' do SSE e o rerenderScope (troca de escopo, sem esperar
 // estado novo) desenhavam essas nove chamadas, na MESMA ordem, em dois lugares.
 // Uma função só, usada pelos dois; o que cada um faz ANTES e DEPOIS continua
 // distinto (o handler de 'state' também troca o snapshot inteiro e cobre as
-// telas sem conta própria; rerenderScope só isso, mais destaques/time se
+// telas sem conta própria; rerenderScope só isso, mais time se
 // estiverem na aba ativa).
 function renderScopedSections() {
   pinturas.invalidar();
@@ -117,13 +95,12 @@ function renderScopedSections() {
 function rerenderScope() {
   if (!estado()) return;
   renderScopedSections();
-  if ($('#tab-destaques').classList.contains('active')) { loadHighlights(); renderTools(); }
   if ($('#tab-time').classList.contains('active')) loadTeam();
 }
 initTweaks(rerenderScope);
 
-/* Gatilhos da barra de contas e do resumo de silenciadas: moram em
-   telas/contas.js, dono de renderAccountBar/renderSilenced.
+/* Gatilhos da barra de contas: moram em
+   telas/contas.js, dono de renderAccountBar.
    initContasTriggers(rerenderScope) recebe o re-render de escopo, que
    conhece todas as telas e por isso fica aqui. Chamada no mesmo ponto
    relativo em que os dois listeners moravam. */
@@ -172,12 +149,6 @@ window.addEventListener('resize', () => {
 });
 
 function switchTab(name) {
-  const desligada = (name === 'destaques' && !teamHighlightsEnabled()) || (name === 'entregas' && !deliveriesEnabled());
-  if (desligada) {
-    toast('info', avisoDeAbaDesligada(name));
-    name = 'radar';
-    switchRadarSub('mim');   // senão o Radar abre na sub-aba que estava, e o aviso não faz sentido
-  }
   definirAba(name);
   document.body.dataset.tab = name;   // largura útil por aba (ver body[data-tab] no app.css)
   // aria-selected junto com a classe: a classe pinta, o aria é o que o leitor de tela lê
@@ -212,13 +183,10 @@ initCaixaRevisao();
    aba escondida não rola).
 
    Formatos aceitos (data-goto):
-     aba:<nome>                        → só troca de aba (radar, entregas, …)
+     aba:<nome>                        → só troca de aba (radar, time, …)
      aba:<nome>:<seletor CSS>          → idem + rola e pisca o alvo
      sys:<secao>                       → aba Sistema + seção
      sys:<secao>:<seletor CSS>         → idem + rola e pisca o alvo
-     deliv:repo:<owner/repo>           → Entregas, visão por repo, no grupo
-     deliv:author:<login>              → Entregas, visão por pessoa, no grupo
-     deliv:days:<0|7|15|30>            → Entregas, troca o período
 
    Quem emite passa o valor CRU; a leitura é sempre por dataset (nada de parse
    de HTML). Elemento com data-goto ganha o affordance de clique no CSS
@@ -245,7 +213,6 @@ function goTo(spec) {
     switchTab('sistema');
     return sysGoTo(alvo, seletor || null);
   }
-  if (tipo === 'deliv') return gotoDeliv(alvo, seletor, switchTab);
 }
 
 document.addEventListener('click', (e) => {
@@ -263,27 +230,13 @@ document.addEventListener('keydown', (e) => {
   goTo(el.dataset.goto);
 });
 
-// Deep-link de alerta: rola até o card do PR e dá um pulso de destaque.
-// Ordem de busca = onde a ação mora (decisão > fila > meus PRs > panorama > recentes).
-function openIntervention(target) {
-  if (target?.type === 'pr') {
-    if (target.account && estado()?.accounts?.some(a => a.user.toLowerCase() === target.account.toLowerCase())) {
-      definirEscopo(target.account); renderAccountBar(); rerenderScope();
-    }
-    return focusPr(target.url);
-  }
-  if (target?.type !== 'system') return;
-  switchTab('sistema'); sysGoTo(target.section);
-}
-
+// Ordem de busca = onde a ação mora (decisão > fila > meus PRs).
 function subabaDoPr(url) {
   const s = estado() || {};
   if ((s.decisions?.pending || []).some(d => d.pr?.url === url)) return 'mim';
   if ((s.queue || []).some(pr => pr.url === url)) return 'mim';
-  const esperando = new Set([...(s.headlessWaiting || []), ...(s.headlessDistributing || [])]);
-  if ((s.panorama || []).some(pr => pr.url === url && esperando.has(pr.key))) return 'mim';
+  if ((s.headlessWaitingPrs || []).some(pr => pr.url === url)) return 'mim';
   if ((s.myPRs || []).some(pr => pr.url === url)) return 'meus';
-  if ((s.panorama || []).some(pr => pr.url === url)) return 'pano';
   return 'mim';
 }
 function focusPr(url, tentativa = 0) {
@@ -291,7 +244,7 @@ function focusPr(url, tentativa = 0) {
   // O painel pode ainda não ter DOM: escolhe pelos dados antes de procurar o card.
   switchRadarSub(subabaDoPr(url));
   switchTab('radar');
-  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#myPRs .mypr-card', '#panorama [data-url]', '#resolved [data-url]']
+  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#myPRs .mypr-card', '#resolved [data-url]']
     .map(s => `${s}[data-url="${CSS.escape(url)}"]`).join(', ');
   const card = document.querySelector(sel);
   if (!card) {
@@ -323,19 +276,6 @@ initPaleta(switchTab, switchRadarSub);
    keydown do document (o Ctrl+K da paleta registra ANTES deste). */
 initAtalhos(switchTab);
 
-/* Chat com o Claude: os gatilhos que abrem a conversa (.act-chat e a busca por
-   URL) moram em telas/chat.js. Chamada aqui, no mesmo ponto relativo em que os
-   dois listeners moravam, pra não mudar a ordem dos handlers de click do
-   document. */
-initChatTriggers();
-
-/* Meus PRs: botão Reviewers. Mora em telas/meus-prs.js (a tela dona do botão);
-   initReviewersButton(switchTab) recebe a navegação de que precisa pra levar à
-   aba Sistema. Chamada aqui, no mesmo ponto relativo em que o listener morava,
-   no MESMO elemento #myPRs (o listener de meus-prs.js cuida do resto dos
-   cliques do card). */
-initReviewersButton(switchTab);
-
 /* ---------- SSE ---------- */
 let TENTATIVAS_RECONEXAO = 0;
 
@@ -353,13 +293,13 @@ function pintarTelaRegistrada(id) {
 const preservarConfiguracao = criarPreservacaoDeFormulario();
 const pinturas = criarAgendaVisual({
   grupos: gruposDaPintura({
-    plataforma: () => aplicaPlataforma(estado().app?.platform, estado().casca),
+    plataforma: () => aplicaPlataforma(estado().app?.platform),
     contas: () => { rebuildAccounts(); renderAccountBar(); renderIdentity(); },
     status: renderStatus, sessoes: renderActive, decisoes: renderDecisions, fila: renderQueue,
-    meus: renderMyPRs, panorama: renderPanorama,
-    silenciadas: renderSilenced, navegacao: () => renderRadarNav(contagemMeusPrs()),
+    meus: renderMyPRs,
+    navegacao: () => renderRadarNav(contagemMeusPrs()),
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
-    ferramentas: renderTools, atualizacao: renderUpdate, relogio: tickCountdown,
+    relogio: tickCountdown,
     consumo: () => pintarTelaRegistrada('consumo'),
     compartilhado: () => pintarTelaRegistrada('radar-compartilhado'),
     aparelhos: () => pintarTelaRegistrada('radar-aparelhos'),
@@ -371,7 +311,7 @@ aoMudarRadarSub(() => { if (estado()) { pinturas.invalidar(); pinturas.pintar();
 // densidade Compacta/Expandida e o que está aberto nela redesenham o Radar pelo mesmo caminho
 initDensidade(() => { if (estado()) { pinturas.invalidar(); pinturas.pintar(); } });
 function repintarPorEstado(campos, imediato = false) {
-  if (!campos || campos.includes('config')) { syncTheme(estado().config); syncOptionalTabsVisibility(); }
+  if (!campos || campos.includes('config')) { syncTheme(estado().config); }
   pinturas.invalidar(campos);
   // A rota é aplicada com estado atual, sem esperar animação ou uma janela reaparecer.
   depoisDoEstado();
@@ -418,7 +358,6 @@ function connect() {
     const primeiro = !estado();
     definirEstado({ ...d, activity: limitarAtividadeVisual(d.activity, d.activeSessions) });
     observarCancelamentos();
-    interventionsFromState(d, openIntervention);
     repintarPorEstado(null, primeiro);
   });
   // Estado por DIFERENÇA (lib/estado-delta.js): o engine manda só os campos de topo
@@ -433,7 +372,7 @@ function connect() {
     const novo = { ...atual, ...d.campos };
     for (const chave of d.removidos || []) delete novo[chave];
     if (Object.hasOwn(d.campos, 'activity')) novo.activity = limitarAtividadeVisual(novo.activity, novo.activeSessions);
-    definirEstado(novo); observarCancelamentos(); interventionsFromState(novo, openIntervention);
+    definirEstado(novo); observarCancelamentos();
     repintarPorEstado([...Object.keys(d.campos), ...(d.removidos || [])]);
   });
   // o app.js só entrega o evento: quem calcula o que ele significa é quem é
@@ -445,17 +384,6 @@ function connect() {
     pinturas.invalidar(['activity']);
     updateAnalysisProgress(id, item);
   });
-  es.addEventListener('chat', (e) => {
-    const c = safeJsonParse(e.data); if (!c) return;
-    const chatKey = chatKeyAtual();
-    if (chatKey && c.key === chatKey) renderChat(c);
-  });
-  // idem: telas/chat.js já é dono de chatKeyAtual(), então é quem decide o que
-  // um evento de atividade do chat significa.
-  es.addEventListener('chat-activity', (e) => {
-    const d = safeJsonParse(e.data); if (!d) return; const { key, text } = d;
-    handleChatActivity(key, text);
-  });
   // visão compartilhada (andamento e pendências de outros aparelhos): delta próprio, nunca o
   // estado inteiro. O bootstrap só entrega; quem entende é telas/radar-compartilhado.js.
   es.addEventListener('sync-live', (e) => {
@@ -466,7 +394,7 @@ function connect() {
     const d = safeJsonParse(e.data); if (!d) return;
     aoPendenciasRemotas(d);
   });
-  // Panorama e Meus PRs de outros aparelhos: idem, quem entende é telas/listas-remotas.js
+  // Meus PRs de outros aparelhos: idem, quem entende é telas/listas-remotas.js
   es.addEventListener('sync-lists', (e) => {
     const d = safeJsonParse(e.data); if (!d) return;
     aoListasRemotas(d);
@@ -489,8 +417,6 @@ function connect() {
   es.addEventListener('auto-approved', () => ping());
   es.addEventListener('auto-rejected', () => ping());
   es.addEventListener('auto-commented', () => ping());
-  es.addEventListener('intervention', e => interventionReceived(safeJsonParse(e.data), openIntervention));
-  es.addEventListener('focus-intervention', e => openIntervention(safeJsonParse(e.data)));
   es.addEventListener('focus-pr', (e) => {
     const d = safeJsonParse(e.data); if (!d) return; const { url } = d;
     focusPr(url);
@@ -506,7 +432,7 @@ function connect() {
     $('#statusPill').textContent = 'reconectando…';
     TENTATIVAS_RECONEXAO++;
     // a tela inteira passa a dizer que está velha: sem isto ela continua exibindo o
-    // panorama e a contagem regressiva como se estivessem vivos
+    // lista e a contagem regressiva como se estivessem vivos
     document.body.classList.add('sem-engine');
     const f = $('#connLost');
     if (f) {
@@ -522,23 +448,23 @@ function connect() {
   });
 }
 
-// 'entregas', 'destaques', 'time' e 'sistema' já se registraram sozinhas ao serem
+// 'time' e 'sistema' já se registraram sozinhas ao serem
 // importadas (import estático roda antes deste ponto, na ordem em que aparecem lá em
 // cima; telas/sistema.js é importado depois de telas/time.js, por isso 'sistema'
-// registra depois de 'destaques'/'time'). Só 'consumo' precisa ser CHAMADA aqui: ela
+// registra depois de 'time'). Só 'consumo' precisa ser CHAMADA aqui: ela
 // não se registra ao ser importada porque telas/consumo.js é importado bem mais
 // acima, antes de telas/sistema.js, e se registrasse no import passaria à frente de
 // 'sistema' (telasRegistradas() devolve na ordem de registro, e precisa continuar
-// entregas, destaques, time, sistema, consumo).
+// time, sistema, consumo).
 registrarTelaConsumo();
 // a visão compartilhada do Radar registra por último, pelo mesmo motivo: registrar no import
 // a poria antes de 'sistema' e mudaria a ordem garantida acima
 registrarTelaRadarCompartilhado();
 // Radar > Aparelhos lê o que a visão compartilhada acumula, e por isso registra depois dela
 registrarTelaRadarAparelhos();
-// Panorama e Meus PRs de outros aparelhos: quando chega projeção nova, as duas abas (e as
-// contagens das sub-abas) se redesenham pelas funções que o bootstrap já chama por snapshot
-initListasRemotas(() => { pinturas.invalidar(['myPRs', 'panorama', 'sync']); });
+// Meus PRs de outros aparelhos: quando chega projeção nova, a aba (e as contagens das
+// sub-abas) se redesenha pelas funções que o bootstrap já chama por snapshot
+initListasRemotas(() => { pinturas.invalidar(['myPRs', 'sync']); });
 
 /* O endereço da página reflete a tela (telas/rota.js): por último, para o ouvinte de clique
    e tecla dele rodar depois de todos os handlers acima, e com todas as telas registradas
@@ -547,7 +473,7 @@ initRota({ switchTab, rerenderScope });
 
 /* A4: antes de qualquer coisa, a página pergunta se este navegador pode entrar. Com a
    exigência ligada e sem credencial, a interface inteira vira o pareamento: nada do estado,
-   do log, do chat ou dos eventos é pedido antes. Sem exigência, nada muda. */
+   do log ou dos eventos é pedido antes. Sem exigência, nada muda. */
 // A recarga pelo login de fora fica marcada nesta aba: se o portão devolver 401 de novo em
 // menos de um minuto, a página avisa em vez de recarregar outra vez (sem laço).
 const RECARGA_PELO_LOGIN = 'farol-recarga-pelo-login';

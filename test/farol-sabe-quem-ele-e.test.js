@@ -8,7 +8,7 @@
 // escreveu, exatamente o contrario do que o review publicado deve parecer.
 //
 // Duas camadas, porque prompt e defesa de geracao e nao garantia:
-//   1. a sessao passa a receber QUEM ela e (o login que vai postar), na revisao e no chat;
+//   1. a sessao passa a receber QUEM ela e (o login que vai postar), na revisao;
 //   2. o gate deterministico de linguagem publica recusa o corpo que menciona a propria
 //      conta, do mesmo jeito que ja recusa vocabulario de proveniencia.
 import os from 'node:os';
@@ -20,7 +20,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const prompt = (await import('../lib/engine/review-prompt.js')).default;
-const chat = (await import('../lib/engine/chat.js')).default;
 const pub = (await import('../lib/engine/public-review.js')).default;
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
@@ -50,14 +49,6 @@ test('o prompt da revisão carrega a identidade da conta que vai postar', () => 
   e.personProfileBlock = () => '';
   e.reviewFormatBlock = () => '';
   const p = e.headlessPromptFor('https://github.com/o/r/pull/1', 'outro');
-  assert.match(p, /@Gabrielk5/);
-  assert.match(p, /primeira pessoa/i);
-});
-
-test('o chat também sabe quem ele é (foi de lá que saiu o comentário do caso)', () => {
-  const e = new Engine();
-  e.accountForPr = () => LOGIN;
-  const p = chat.chatPreamble(e, 'o/r#1150', 'https://github.com/o/r/pull/1150', false);
   assert.match(p, /@Gabrielk5/);
   assert.match(p, /primeira pessoa/i);
 });

@@ -28,7 +28,7 @@ import { strip } from '../tools/quality/strip.js';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const VARRIDOS = ['lib', 'test', 'tools'];
-const SOLTOS = ['server.js', 'main.js'];
+const SOLTOS = ['server.js'];
 
 /**
  * Chamadas que podem disparar o programa git.
@@ -142,7 +142,7 @@ test('a varredura enxerga as chamadas que existem hoje', () => {
   const todas = todasAsChamadas();
   assert.ok(todas.length >= 5, 'esperava achar as chamadas de git do repo, achei ' + todas.length);
   const arquivos = new Set(todas.map(c => c.rel));
-  for (const esperado of ['tools/eng-behaviour/gate.js', 'test/eng-behaviour-gate.test.js', 'test/protocolo-versionado.test.js']) {
+  for (const esperado of ['test/protocolo-versionado.test.js']) {
     assert.ok(arquivos.has(esperado), esperado + ' dispara git e a varredura nao viu');
   }
 });

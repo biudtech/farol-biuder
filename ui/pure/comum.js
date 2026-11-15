@@ -54,12 +54,6 @@ export function listViewState({ lastCheckAt, status, length }) {
 // tira acento pra "revisao" achar "Revisão"
 export function sysNorm(s) { return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase(); }
 
-export function repoShort(repo) { return repo.split('/').slice(1).join('/') || repo; }
-
-export function stripFence(s) {
-  return String(s || '').trim().replace(/^```[a-z]*\s*\r?\n/i, '').replace(/\r?\n```\s*$/, '').trim();
-}
-
 export function hexToRgba(hex, a) {
   const m = String(hex || '').replace('#', '');
   if (m.length !== 6) return `rgba(255,180,84,${a})`;
@@ -77,15 +71,6 @@ export function sameSet(a, b) {
 export function diffVs(base, list) {
   const B = new Set((base || []).map(x => x.toLowerCase())), L = new Set((list || []).map(x => x.toLowerCase()));
   return { added: (list || []).filter(x => !B.has(x.toLowerCase())), removed: (base || []).filter(x => !L.has(x.toLowerCase())) };
-}
-
-// maior mergedAt de uma lista (ISO ordena lexicograficamente)
-export function lastMerge(list) { return (list.map(x => x.mergedAt || '').sort().slice(-1)[0]) || ''; }
-
-export function groupBy(items, keyFn) {
-  const m = new Map();
-  for (const it of items) { const k = keyFn(it); (m.get(k) || m.set(k, []).get(k)).push(it); }
-  return m;
 }
 
 // "5h57" / "48min": duração pra leitura humana, sem biblioteca.

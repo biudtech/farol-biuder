@@ -239,10 +239,8 @@ export function versaoClaudeCheck(v) {
    de skipPermissions, que só alcança as sessões de terminal). O resultado era um
    "saiu com código 1" por ciclo, pra sempre, sem uma linha na tela dizendo por quê.
    Devolve lista (vazia quando não há o que dizer) pra compor com os outros checks. */
-export function runtimeChecks(doctor, config = {}, claudePerfis = {}) {
+export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {
   const d = doctor || {};
-  const perfis = Array.isArray(config.claudeProfiles) ? config.claudeProfiles : [];
-  const usaCodex = perfis.some(p => p && p.kind === 'codex');
   const checks = [];
   if (d.root) {
     checks.push({
@@ -253,52 +251,20 @@ export function runtimeChecks(doctor, config = {}, claudePerfis = {}) {
         + 'nessa condição e toda revisão autônoma falha no spawn. Crie um usuário não-root e rode o Farol por ele'
     });
   }
-  if (usaCodex) {
-    const temCli = !!d.codex;
-    let loginDetail = d.codexLoginDetail || '';
-    if (!loginDetail && temCli) loginDetail = 'rode codex login no terminal do sistema';
-    if (!loginDetail) loginDetail = 'instale o Codex CLI e rode codex login';
-    checks.push({
-      ok: temCli, label: 'Codex CLI',
-      goto: 'sys:plans:#claudeProfilesManager',
-      detail: temCli ? d.codex : 'codex não encontrado no PATH do processo do Farol'
-    });
-    checks.push({
-      ok: d.codexChatGPT === true, label: 'Login Codex',
-      goto: 'sys:plans:#claudeProfilesManager',
-      detail: d.codexChatGPT === true ? 'autenticado no plano ChatGPT' : loginDetail
-    });
-  }
-  checks.push(...checksDoAgy(d, perfis));
   for (const p of (claudePerfis && Array.isArray(claudePerfis.problemas)) ? claudePerfis.problemas : []) {
-    checks.push({ ok: false, label: 'Perfil de assinatura', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
+    checks.push({ ok: false, label: 'Perfil de chave de API', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
   }
   return checks;
 }
 
-// Antigravity (20/10/2026): com perfil `agy` salvo, o CLI ausente e o perfil sem login
-// derrubam a sessão no começo. O doctor diz a versão e se cada pasta tem login (lib/agy/doctor.js).
-function checksDoAgy(d, perfis) {
-  const agy = perfis.filter(p => p && p.kind === 'agy');
-  if (!agy.length) return [];
-  const goto = 'sys:plans:#claudeProfilesManager';
-  const checks = [{ ok: !!d.agy, label: 'Antigravity CLI', goto, detail: d.agy ? `versão ${d.agy}` : 'agy não encontrado: instale o Antigravity CLI pelo instalador oficial' }];
-  const lidos = Array.isArray(d.agyPerfis) ? d.agyPerfis : [];
-  for (const p of agy) {
-    const lido = lidos.find(x => x && x.id === p.id);
-    if (lido && lido.login === false) checks.push({ ok: false, label: `Login do Antigravity em ${p.label || p.id}`, goto, detail: 'sem login na pasta deste perfil: use Abrir sessão de login no cartão dele' });
-  }
-  return checks;
-}
-
-// A2: o texto diz o que a sessão FAZ nesse caso (cai na assinatura legada da máquina), sem
-// fingir que o perfil escolhido está valendo.
+// A2: o texto diz o que a sessão FAZ nesse caso (usa o primeiro perfil de chave de API
+// utilizável, ou nenhum), sem fingir que o perfil escolhido está valendo.
 function perfilProblemaTexto(p) {
   const onde = p.escopo === 'conta' ? `a conta @${p.user}` : 'o padrão do Farol';
   const causa = p.code === 'perfil-invalido'
-    ? `aponta para o perfil "${p.profileId}", que está incompleto (falta a pasta ou a chave)`
+    ? `aponta para o perfil "${p.profileId}", que está incompleto (falta a chave)`
     : `aponta para o perfil "${p.profileId}", que não existe mais`;
-  return `${onde} ${causa}: as sessões dela estão usando a assinatura legada da máquina até você escolher outro perfil`;
+  return `${onde} ${causa}: as sessões dela não usam esse perfil até você escolher outro`;
 }
 
 
@@ -317,45 +283,4 @@ export function settingsIgnoradasTexto(r) {
   const nomes = lista.map((k) => `"${k}"`).join(', ');
   if (lista.length === 1) return `${nomes} não foi salva: o servidor não reconhece essa preferência.`;
   return `${nomes} não foram salvas: o servidor não reconhece essas preferências.`;
-}
-
-// Release de ponte (desenho 4.7 do Farol nativo): a 3.x não roda nesta casca Electron.
-// O instalador do sistema atual vem primeiro; anexo ausente vira texto, nunca link morto.
-// No Linux não há casca nativa: o texto aponta o modo servidor, sem link de dmg nem msix.
-export function pontePainelHtml(u, plataforma) {
-  const p = u?.ponte ?? {};
-  const versoes = `<span class="up-ver">v${esc(u.current)} → v${esc(p.versao)}</span>`;
-  if (plataforma === 'linux') {
-    return `
-      ${versoes}
-      <span class="up-note">Esta é a última versão do Farol nesta casca (Electron). No Linux não há app nativo: a v${esc(p.versao)} em diante roda no modo servidor (<code>node server.js</code>, com o pacote leve da release), e estado e configurações em <code>~/.farol</code> continuam valendo.</span>`;
-  }
-  const item = (rotulo, href) => href
-    ? `<a class="btn primary sm" href="${esc(href)}" target="_blank" rel="noreferrer">Baixar para ${rotulo}</a>`
-    : `<span>${rotulo}: ainda sem instalador para este sistema</span>`;
-  const mac = item('macOS (.dmg)', p.dmg);
-  const win = item('Windows (.msix)', p.msix);
-  const links = plataforma === 'darwin' ? [mac, win] : [win, mac];
-  return `
-      ${versoes}
-      <span class="up-note">Esta é a última versão do Farol nesta casca (Electron). Baixe o Farol nativo: a v${esc(p.versao)} em diante só sai como app nativo, e estado e configurações em <code>~/.farol</code> continuam valendo.</span>
-      ${links.join(' ')}`;
-}
-
-// A linha do status do update que diz por que o Farol ainda não aplicou a versão nova: o
-// que está segurando e desde quando (lib/engine/update.js, marcarAdiado). Sem ela, um
-// update detectado e não aplicado parecia defeito (25/09/2026).
-// Instalação que não se atualiza sozinha: diz o motivo em vez de oferecer um botão que
-// falharia (engine.update.indisponivel, lib/engine/update.js).
-export function updateIndisponivelHtml(u) {
-  const motivo = u?.indisponivel;
-  if (motivo === 'checkout-git') return '<span class="up-note">Atualização automática indisponível nesta instalação: ela roda de um checkout git. Atualize com git pull.</span>';
-  if (motivo === 'externo') return '<span class="up-note">Atualização administrada por fora desta instalação.</span>';
-  return '';
-}
-
-export function updateAdiadoHtml(u) {
-  const a = u && u.adiado;
-  if (!a || !a.motivo) return '';
-  return ` <b>Esperando:</b> ${esc(a.motivo)} (desde ${fmtClock(a.desde)}). Aplica sozinho assim que ficar livre.`;
 }

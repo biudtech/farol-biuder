@@ -1,16 +1,16 @@
-/* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição, kudos,
-   diagnóstico, doctor, atualização), os cliques de Panorama/Sessões ativas/Fila/
+/* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição,
+   doctor), os cliques de Sessões ativas/Fila/
    Decisões pendentes, e o laço que liga settingsMap aos toggles de Sistema. */
 
 import { settingsIgnoradasTexto } from '../pure.js';
 import { estado } from './estado.js';
 import {
-  $, api, get, toast, toastRich, confirmModal, showOp, closeOp, copyToClipboard,
+  $, api, get, toast, toastRich, confirmModal,
 } from './infra.js';
 import { TWEAK, scopeVisible, prUser, guardarMutedHandling, guardarIdentityStyle } from './contas.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
 import { revisarUrls } from './consumo.js';
-import { kudosScopeKey, loadLog } from './ferramentas.js';
+import { loadLog } from './diagnostico.js';
 import { cancelarSessao } from './sessao-cancelar.js';
 
 /* decisão pendente: caminho ÚNICO de POST, usado pelo card (#decisions) e pela paleta
@@ -76,52 +76,8 @@ function initTweaks(rerenderScope) {
   if (mh) { mh.value = TWEAK.muted; mh.onchange = () => { TWEAK.muted = mh.value; guardarMutedHandling(mh.value); rerenderScope(); }; }
   if (is) { is.value = TWEAK.ident; is.onchange = () => { TWEAK.ident = is.value; guardarIdentityStyle(is.value); rerenderScope(); }; }
 }
-$('#btnKudos').onclick = async () => {
-  const btn = $('#btnKudos');
-  const opId = 'tool-kudos';
-  showOp(opId, { type: 'tool', title: 'Gerando kudos', inline: true, container: btn.parentElement });
-  const r = await api('/api/tool', { name: 'kudos', scope: kudosScopeKey() });
-  if (r?.ok) closeOp(opId, 'done', 'Kudos gerado');
-  else { closeOp(opId, 'error', r?.error || 'não consegui gerar'); toast('info', r?.error || 'não consegui gerar'); }
-};
-$('#btnHealth').onclick = async () => {
-  const btn = $('#btnHealth');
-  const opId = 'tool-health';
-  showOp(opId, { type: 'tool', title: 'Diagnosticando', inline: true, container: btn.parentElement });
-  const r = await api('/api/tool', { name: 'health' });
-  if (r?.ok) closeOp(opId, 'done', 'Diagnóstico completo');
-  else closeOp(opId, 'error', r?.error || 'falha no diagnóstico');
-};
 $('#btnDoctor').onclick = async () => { await get('/api/doctor'); };
-$('#btnUpdateCheck').onclick = async () => {
-  const btn = $('#btnUpdateCheck');
-  const opId = 'sys-update-check';
-  btn.disabled = true;
-  btn.textContent = '↑ Verificando…';
-  showOp(opId, { type: 'update', title: 'Verificando atualizações', inline: true, container: $('#updateBox') || document.body });
-  await get('/api/doctor');
-  closeOp(opId, 'done', 'Verificação concluída');
-  setTimeout(() => { btn.disabled = false; btn.textContent = '↑ Verificar agora'; }, 1000);
-  toast('ok', 'Verificação de atualização feita.', 2500);
-};
 $('#btnLogRefresh').onclick = loadLog;
-
-$('#panorama').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.pano-review');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Revisando…';
-    revisarUrls([btn.dataset.url]);
-    return;
-  }
-  // .act-chat é ouvido globalmente (document); só o copiar precisa de listener aqui,
-  // mesmo padrão de "cada seção escuta o seu" usado em Revisões recentes (#resolved).
-  const cp = e.target.closest('.rr-copy');
-  if (cp) {
-    const ok = await copyToClipboard(cp.dataset.url || cp.dataset.key || '');
-    toast(ok ? 'ok' : 'error', ok ? 'URL do PR copiada.' : 'Não consegui copiar (permissão do navegador).', 2500);
-  }
-});
 
 $('#activeSessions').addEventListener('click', (e) => {
   const btn = e.target.closest('.act-cancel');
@@ -175,34 +131,18 @@ $('#esperaCi').addEventListener('click', cliqueNoCardDeDecisao);
 const settingsMap = [
   ['#setInterval', 'intervalSeconds', el => parseInt(el.value, 10)],
   ['#setReviewModel', 'reviewModel', el => el.value],
-  ['#setCodexReviewModel', 'codexReviewModel', el => el.value],
-  ['#setAgyReviewModel', 'agyReviewModel', el => el.value],
   ['#setParallelReviews', 'parallelReviews', el => parseInt(el.value, 10)],
   ['#setGlobalParallelReviews', 'globalParallelReviews', el => parseInt(el.value, 10)],
   // radio: o change borbulha até o container, então e.target já é o rádio marcado
   ['#setReviewEffort', 'reviewEffort', el => el.value],
-  ['#setCodexReviewEffort', 'codexReviewEffort', el => el.value],
-  ['#setAgyReviewEffort', 'agyReviewEffort', el => el.value],
   ['#setAutoPushback', 'autoPushback', el => el.checked],
-  ['#setAutoUpdate', 'autoUpdate', el => el.checked],
   ['#setDebugSpawns', 'debugSpawns', el => el.checked],
   ['#setReviewFast', 'reviewFast', el => el.checked],
-  ['#setCoAssinarReview', 'coAssinarReview', el => el.checked],
-  ['#setRevisarJunto', 'revisarComOutrosRevisando', el => el.checked],
   ['#setAguardarCi', 'aguardarCiParaRevisar', el => el.checked],
   ['#setAguardarCiAprovar', 'aguardarCiParaAprovar', el => el.checked],
   ['#setReReviewResume', 'reReviewResume', el => el.checked],
   ['#setSkipPerms', 'skipPermissions', el => el.checked],
   ['#setSound', 'soundEnabled', el => el.checked],
-  ['#setVoiceEnabled', 'voiceEnabled', el => el.checked],
-  ['#setVoiceEvents', 'voiceEvents', el => Array.from(el.selectedOptions, o => o.value)],
-  ['#setVoiceVolume', 'voiceVolume', el => Number(el.value)],
-  ['#setVoiceQuietEnabled', 'voiceQuietEnabled', el => el.checked],
-  ['#setVoiceQuietStart', 'voiceQuietStart', el => el.value],
-  ['#setVoiceQuietEnd', 'voiceQuietEnd', el => el.value],
-  ['#setInterventionReminder', 'interventionReminderMinutes', el => Number(el.value)],
-  ['#setTeamHighlights', 'teamHighlights', el => el.checked],
-  ['#setDeliveriesEnabled', 'deliveriesEnabled', el => el.checked],
   ['#setAutostart', 'autostart', el => el.checked]
 ];
 for (const [sel, key, read] of settingsMap) {

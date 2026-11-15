@@ -5,9 +5,7 @@ import { esc, sysNorm, SYS_INDEX, buscarNoSistema, secoesOcultasDoSistema } from
 import { estado, ehWin, ehMac, ehElectron } from './estado.js';
 import { $, sysFlash } from './infra.js';
 import { registrarTela } from './registro.js';
-import { loadLog } from './ferramentas.js';
-import { loadReviewerCands, renderReviewersEditor } from './reviewers.js';
-import { renderReleaseNotes } from './novidades.js';
+import { loadLog } from './diagnostico.js';
 import { renderAccountsManager } from './sistema-contas.js';
 import { renderClaudeProfiles } from './sistema-perfis.js';
 import { renderJiraSites } from './sistema-jira.js';
@@ -17,13 +15,7 @@ import { renderAparelhos, carregarAparelhos } from './sistema-aparelhos.js';
 import { renderGrupos } from './sistema-grupos.js';
 import { renderDoctor } from './sistema-ambiente.js';
 import { renderAbout } from './sistema-sobre.js';
-import { renderInterventionSettings } from './intervention-settings.js';
-import { initSpecialists, renderSpecialistAccounts } from './specialists.js';
-import { initReviewAudits } from './review-audits.js';
-import { initCapacity } from './capacity.js';
 import { initSetup, renderSetup } from './setup.js';
-import { initPreferencesTransfer } from './preferences-transfer.js';
-import { initReviewLabels } from './review-labels.js';
 import { syncTheme } from './tema.js';
 import { renderAutomationSettings } from './sistema-automacao.js';
 
@@ -115,13 +107,11 @@ $('#sysResults').addEventListener('click', (e) => {
 });
 
 function renderSettings() {
-  renderReleaseNotes();
   renderAbout();
   const c = estado().config;
   syncTheme(c);
   if (!document.activeElement || !$('#setupSteps').contains(document.activeElement)) renderSetup();
   renderReposBloqueados();
-  renderReviewersEditor();
   renderClaudeProfiles();
   renderJiraSites();
   renderSync();
@@ -131,25 +121,14 @@ function renderSettings() {
   $('#setGlobalParallelReviews').value = String(c.globalParallelReviews || 0);
   renderAutomationSettings(c);
   $('#setReviewFast').checked = c.reviewFast === true;
-  $('#setCoAssinarReview').checked = c.coAssinarReview === true;
-  // revisar junto ligado tira o efeito de "Aprovar junto": não há saída de cena para co-assinar.
-  // O valor salvo de "Aprovar junto" fica como está; só a linha avisa e o switch esmaece.
-  const revisarJunto = c.revisarComOutrosRevisando === true;
-  $('#setRevisarJunto').checked = revisarJunto;
-  $('#notaAprovarJuntoSemEfeito').hidden = !revisarJunto;
-  $('#sys-row-coassinar').classList.toggle('sem-efeito', revisarJunto);
   $('#setAguardarCi').checked = c.aguardarCiParaRevisar === true;
   $('#setAguardarCiAprovar').checked = c.aguardarCiParaAprovar === true;
-  // padrão ligado desde 06/11/2026: só o false explícito desliga, como no autoUpdate
+  // padrão ligado desde 06/11/2026: só o false explícito desliga
   $('#setReReviewResume').checked = c.reReviewResume !== false;
   $('#setAutoPushback').checked = !!c.autoPushback;
-  $('#setAutoUpdate').checked = c.autoUpdate !== false;
   $('#setDebugSpawns').checked = !!c.debugSpawns;
   $('#setSkipPerms').checked = c.skipPermissions !== false;
   $('#setSound').checked = !!c.soundEnabled;
-  renderInterventionSettings(c); renderSpecialistAccounts();
-  $('#setTeamHighlights').checked = c.teamHighlights === true;
-  $('#setDeliveriesEnabled').checked = c.deliveriesEnabled === true;
   $('#setAutostart').checked = !!c.autostart;
 }
 
@@ -165,24 +144,19 @@ function renderPlatformSettings() {
 }
 
 // Import estático roda ANTES do corpo do app.js: assim como telas/time.js registra
-// 'destaques'/'time' e telas/entregas.js registra 'entregas' ao serem importados, este
+// 'time' ao ser importado, este
 // módulo registra 'sistema' ao ser importado. A ÚNICA restrição real de ordem
-// (telasRegistradas() devolve na ordem de registro, e precisa continuar entregas,
-// destaques, time, sistema, consumo) é a de 'consumo': telas/consumo.js não se
+// (telasRegistradas() devolve na ordem de registro, e precisa continuar time,
+// sistema, consumo) é a de 'consumo': telas/consumo.js não se
 // registra ao ser importado, e sim quando o app.js chama registrarTelaConsumo() no
 // corpo, depois do import deste módulo — se consumo se registrasse ao ser importado,
 // ele poderia passar à frente de 'sistema' dependendo da ordem dos imports. 'sistema'
 // não tem essa restrição: só precisa que o IMPORT deste módulo, no app.js, venha
 // depois do import de telas/time.js.
-initSpecialists();
-initReviewAudits();
-initCapacity();
 initSetup();
-initPreferencesTransfer();
-initReviewLabels();
 registrarTela({
   id: 'sistema',
-  aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); loadReviewerCands(); },
+  aoEntrar: () => { switchSistemaSection(); loadLog(); carregarAparelhos(); },
   aoEstado: () => { ocultarSecoesInertes(); if ($('#tab-sistema').classList.contains('active')) { renderDoctor(); renderAccountsManager(); renderAparelhos(); renderGrupos(); } },
 });
 

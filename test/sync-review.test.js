@@ -73,6 +73,8 @@ function handleFalso() {
 // recebe `admitir` e decide quando (ou se) a admissão aconteceu.
 function motor({ resposta, policy = 'approve', coordenacao = true } = {}) {
   const e = new Engine();
+  e.config.claudeProfiles = [{ id: 'ka', label: 'Chave A', kind: 'apikey', apiKey: 'sk-fixture-retomada', baseUrl: '' }];
+  e.config.claudeProfileId = 'ka';
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
   e.isMuted = () => false;
@@ -483,8 +485,8 @@ test('retomada recusada que recomeça do zero não reserva outra rodada', async 
     },
   });
   const pr = prDe('o/r#20', { rodadaAutomatica: true, retomarSid: 'sessao-anterior-1', knownHead: HEAD });
-  // a referência mora no Map durável; contexto 'dir' sem perfil é o desta Engine
-  retomada.guardarRetomada(e, pr, { retomarSid: 'sessao-anterior-1', knownHead: HEAD, provedor: 'dir', perfilId: '' });
+  // a referência mora no Map durável; contexto 'apikey' com o perfil 'ka' é o desta Engine
+  retomada.guardarRetomada(e, pr, { retomarSid: 'sessao-anterior-1', knownHead: HEAD, provedor: 'apikey', perfilId: 'ka' });
   await e.runHeadlessReview(pr);
   assert.equal(e.opts.length, 2);
   assert.equal(e.opts[0].coordination.contaRodada, true, 'a tentativa com --resume conta o round');
@@ -536,7 +538,7 @@ for (const [kind, preserva] of [['review', true], ['pushback', false], ['self', 
       },
     });
     const pr = prDe('o/r#23', { retomarSid: 'sessao-anterior-2', knownHead: HEAD });
-    retomada.guardarRetomada(e, pr, { retomarSid: 'sessao-anterior-2', knownHead: HEAD, provedor: 'dir', perfilId: '' });
+    retomada.guardarRetomada(e, pr, { retomarSid: 'sessao-anterior-2', knownHead: HEAD, provedor: 'apikey', perfilId: 'ka' });
     await e.runHeadlessReview(pr);
     assert.ok(ghCalls.some((c) => c.includes('--add-label')), 'a primeira tentativa pôs a label');
     assert.equal(ghCalls.some((c) => c.includes('--remove-label')), !preserva);

@@ -33,7 +33,6 @@ function fixture(state = 'OPEN') {
   engine.refreshStaleStates = async () => {};
   engine.refreshReviewSignals = async () => {};
   engine.scanPushbacks = async () => {};
-  engine.checkUpdate = async () => {};
   engine.saveSeen = () => {};
   engine.bloqueadoPorHistorico = async () => ({ bloqueado: false });
   engine.bloqueadoPorChecks = async () => ({ bloqueado: false });

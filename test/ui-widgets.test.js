@@ -73,85 +73,6 @@ test('erro de checagem nao trava o widget sys-polling pra sempre (B11)', () => {
     'op terminal e purgada no comeco do ciclo seguinte, senao o has() barra o novo widget');
 });
 
-/* ---------- corrida de respostas na aba Entregas (M19) ---------- */
-
-test('loadDeliveries descarta resposta velha por token de requisicao (M19)', () => {
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(fn[0], /const rid = \+\+deliveriesReqSeq/, 'cada carga pega um token novo');
-  assert.match(fn[0], /if \(rid !== deliveriesReqSeq\) return/,
-    'resposta de carga superada nao pinta a tela (padrao da guarda do openChat)');
-  const posGuarda = fn[0].indexOf('rid !== deliveriesReqSeq');
-  const posClose = fn[0].indexOf('closeOp(');
-  assert.ok(posGuarda !== -1 && posGuarda < posClose,
-    'a guarda vem ANTES do closeOp: resposta velha nao encerra a op da carga nova');
-});
-
-test('loadDeliveries não chama a rota quando Entregas está desligado', () => {
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(fn[0], /if \(!deliveriesEnabled\(\)\) return;/,
-    'a guarda vem antes de renderizar ou chamar get(\/api\/deliveries)');
-  assert.ok(fn[0].indexOf('deliveriesEnabled()') < fn[0].indexOf("get('/api/deliveries"));
-});
-
-test('Entregas guarda disclosure de Pessoas separado e confirma o reset pela resposta do novo contexto', () => {
-  assert.match(APPJS, /let deliveriesOpen = new Set\(\)/,
-    'details aberto/fechado não pode reutilizar deliveriesExpanded (mostrar mais/menos)');
-  const fn = APPJS.match(/async function loadDeliveries\([\s\S]*?\n\}/);
-  assert.ok(fn, 'loadDeliveries existe');
-  assert.match(APPJS, /let deliveriesDataContext = null/,
-    'o estado registra a org/período da última resposta aceita');
-  assert.match(fn[0], /const requestContext = JSON\.stringify\(\[requestOrg, requestDays\]\)/,
-    'a carga captura o contexto resolvido antes da chamada assíncrona');
-  const posGuarda = fn[0].indexOf('rid !== deliveriesReqSeq');
-  const posContexto = fn[0].indexOf('deliveriesDataContext !== requestContext');
-  assert.ok(posGuarda !== -1 && posGuarda < posContexto,
-    'resposta velha não pode confirmar nem resetar o contexto de disclosure');
-  assert.match(fn[0], /if \(deliveriesDataContext !== requestContext\) resetDeliveriesDisclosure\(\);\s*\n\s*deliveriesDataContext = requestContext/,
-    'contexto novo fecha reabertura da UI velha durante a carga; refresh igual preserva o atalho');
-  const render = APPJS.match(/function renderDeliveries\([\s\S]*?\n\}/);
-  assert.match(render[0], /openKeys: deliveriesOpen/,
-    'o renderer puro recebe as chaves abertas explicitamente');
-  assert.match(APPJS, /function resetDeliveriesDisclosure\(\) \{ deliveriesOpen = new Set\(\); \}/,
-    'o reset de disclosure tem uma operação nomeada');
-  assert.match(APPJS, /\$\('#delivOrg'\)[\s\S]{0,300}resetDeliveriesDisclosure\(\);\s*\n\s*loadDeliveries\(\)/,
-    'trocar organização fecha os grupos da organização anterior');
-  assert.match(APPJS, /\$\('#delivDays'\)[\s\S]{0,500}resetDeliveriesDisclosure\(\);\s*\n\s*loadDeliveries\(\)/,
-    'trocar período fecha os grupos do período anterior');
-  assert.match(APPJS, /if \(nextDays === deliveriesDays\) return/,
-    'clicar no período já ativo não fecha disclosures nem refaz a consulta');
-});
-
-test('toggle nativo de details atualiza Pessoas e mostrar mais preserva o card aberto', () => {
-  assert.match(APPJS,
-    /addEventListener\('toggle',[\s\S]*?details\[data-deliv-group\^="author:"\][\s\S]*?deliveriesOpen\.add\(key\)[\s\S]*?deliveriesOpen\.delete\(key\)[\s\S]*?true\)/,
-    'toggle não borbulha: a delegação usa capture e sincroniza o Set de Pessoas');
-  const handler = APPJS.match(/\$\('#deliveries'\)\.addEventListener\('click',[\s\S]*?\n\}\);/);
-  assert.ok(handler, 'handler delegado de Entregas existe');
-  assert.match(handler[0], /mais\.closest\('details\[open\]'\)[\s\S]*?deliveriesOpen\.add\(key\)/,
-    'antes do re-render de mostrar mais, o details aberto é preservado até se o toggle ainda estiver enfileirado');
-});
-
-test('atalho @pessoa abre explicitamente o grupo, sem mudar o default recolhido', () => {
-  // gotoDeliv mora em ui/telas/entregas.js (Fase 1b, Task 7) e recebe switchTab por
-  // parâmetro: é primitiva do shell (troca de aba, aciona aoEntrar de toda tela) e
-  // não pode ser importada de lá sem criar ciclo com o bootstrap.
-  const fn = APPJS.match(/function gotoDeliv\(kind, valor, switchTab\) \{[\s\S]*?\n\}/);
-  assert.ok(fn, 'gotoDeliv existe');
-  assert.match(fn[0], /if \(by === 'author'\) deliveriesOpen\.add\('author:' \+ valor\);\s*\n\s*renderDeliveries\(\)/,
-    'clicar em @fulano na frente é intenção explícita de abrir aquele grupo');
-  assert.match(fn[0], /if \(abaAtual\(\) !== 'entregas'\) switchTab\('entregas'\)/,
-    'atalho dentro da própria tela não inicia uma carga que substituiria o alvo recém-aberto');
-});
-
-test('seta do accordion acompanha o atributo open no próprio summary', () => {
-  assert.match(CSS, /\.deliv-card details\[open\] > summary\.deliv-sum::after \{[^}]*transform: rotate\(90deg\)/,
-    'summary já é .deliv-sum; não existe um .deliv-sum filho dentro dele');
-  assert.doesNotMatch(CSS, /details\[open\] > summary \.deliv-sum::after/,
-    'o seletor antigo nunca casava e deixava a seta apontando para a direita com o corpo aberto');
-});
-
 /* ---------- estagio da sessao ativa (B13) ---------- */
 
 test('o cabecalho da sessao mostra a etapa REAL, nao a idade da sessao', () => {
@@ -195,9 +116,9 @@ test('rebuildAccounts saneia o SCOPE persistido a cada snapshot (B15)', () => {
 
 test('accountBarVisible: so nas abas onde o filtro por conta age', () => {
   assert.equal(P.accountBarVisible(2, 'radar'), true);
-  assert.equal(P.accountBarVisible(2, 'destaques'), true);
+  assert.equal(P.accountBarVisible(2, 'destaques'), false, 'a aba saiu: allowlist, sem a barra');
   assert.equal(P.accountBarVisible(2, 'time'), true);
-  assert.equal(P.accountBarVisible(2, 'entregas'), false, 'Entregas filtra por org propria, nada ali respeita SCOPE');
+  assert.equal(P.accountBarVisible(2, 'entregas'), false, 'a aba saiu: allowlist, sem a barra');
   assert.equal(P.accountBarVisible(2, 'sistema'), false);
   assert.equal(P.accountBarVisible(2, 'consumo'), false);
   assert.equal(P.accountBarVisible(1, 'radar'), false, 'conta unica nao tem o que filtrar');
@@ -209,35 +130,6 @@ test('renderAccountBar consome a allowlist pura (B14)', () => {
   assert.ok(fn, 'renderAccountBar existe');
   assert.match(fn[0], /accountBarVisible\(/);
   assert.doesNotMatch(fn[0], /abaAtual\(\) === 'sistema'/, 'a denylist antiga saiu');
-});
-
-/* ---------- atividade do chat e encerramento (B16) ---------- */
-
-test('chat-activity atualiza a pill via updateOp, nao atropela o container (B16)', () => {
-  // Correção 4 da Task 11a: o cálculo saiu do connect() (ui/app.js, que só
-  // entrega o evento) para handleChatActivity, em telas/chat.js, que já é
-  // dono de chatKeyAtual().
-  const fn = APPJS.match(/function handleChatActivity\([\s\S]*?\n\}/);
-  assert.ok(fn, 'handleChatActivity existe');
-  assert.match(fn[0], /updateOp\(/, 'o texto vivo entra como step da operacao');
-  assert.doesNotMatch(fn[0], /\.textContent = text/,
-    'textContent no container destroi a pill que o renderChat criou dentro dele');
-});
-
-test('closeChat encerra a operacao do chat antes de soltar a chave (B16)', () => {
-  // recorte ancorado no inicio da PROXIMA funcao: o closeChat de uma linha so
-  // faria a regex de bloco (ate \n}) engolir o renderChat e casar falso-verde
-  const fn = APPJS.match(/function closeChat\(\)[\s\S]*?(?=\nfunction renderChat\()/);
-  assert.ok(fn, 'closeChat existe imediatamente antes do renderChat');
-  assert.match(fn[0], /closeOp\(`chat-\$\{chatKey\}`/,
-    'fechar o painel no meio da resposta nao pode vazar a op no ACTIVE_OPS');
-});
-
-test('a fase generica do chat roda so no primeiro paint, nao a cada snapshot (B16)', () => {
-  const fn = APPJS.match(/function renderChat\([\s\S]*?\n\}/);
-  assert.ok(fn, 'renderChat existe');
-  assert.doesNotMatch(fn[0], /Math\.random\(\)/,
-    'fase sorteada a cada snapshot atropelava o texto real vindo do chat-activity');
 });
 
 /* ---------- marcadores de sessao do merge (B17) ---------- */
@@ -285,8 +177,8 @@ test('listViewState: lista com item sempre mostra a lista, mesmo se o ciclo mais
   assert.equal(P.listViewState({ lastCheckAt: null, status: 'checking', length: 1 }), 'list');
 });
 
-test('renderMyPRs, renderQueue e renderPanorama decidem o empty state pelo listViewState, nao so pelo tamanho', () => {
-  for (const nome of ['renderMyPRs', 'renderQueue', 'renderPanorama']) {
+test('renderMyPRs e renderQueue decidem o empty state pelo listViewState, nao so pelo tamanho', () => {
+  for (const nome of ['renderMyPRs', 'renderQueue']) {
     const fn = APPJS.match(new RegExp(`function ${nome}\\([\\s\\S]*?\\n\\}`));
     assert.ok(fn, `${nome} existe`);
     assert.match(fn[0], /listViewState\(/,
@@ -305,14 +197,14 @@ test('renderMyPRs, renderQueue e renderPanorama decidem o empty state pelo listV
    eles protegiam está em test/diagnostico-falhas-tela.test.js e em
    test/diagnostico-unificado.test.js, que olham a saída do engine. */
 
-test('a aba Sistema mostra o resumo agrupado do log, sem mexer no botao de zerar', () => {
+test('a aba Sistema mostra o resumo agrupado do log, e o botao de zerar saiu', () => {
   const fn = APPJS.match(/async function loadLog\(\)[\s\S]*?\n\}/);
   assert.ok(fn, 'loadLog existe');
   assert.match(fn[0], /get\('\/api\/log\/triage'\)/);
   assert.match(fn[0], /logSummaryShort\(grupos \|\| \[\], 3\)/, 'os 3 maiores grupos');
   assert.match(HTML, /<p class="sys-note" id="logResumo" hidden><\/p>/,
     'o resumo mora em paragrafo proprio: a .section-head e flex e quebra cedo');
-  assert.match(HTML, /id="btnLogClear"/, 'o botao de zerar segue onde estava');
+  assert.doesNotMatch(HTML, /id="btnLogClear"/, 'o botao de zerar saiu com a rota /api/log/clear (corte do lote 7)');
   assert.match(HTML, /id="logBox"/, 'o despejo cru continua disponivel embaixo');
 });
 
@@ -414,22 +306,6 @@ test('o rodape dos ocultos usa o texto puro e alterna estado so da tela', () => 
    que só existem no app.js/index.html: o título que trunca sem comer o autor e
    o handler ÚNICO de navegação interna. */
 
-test('Panorama: o CSS que impede o título de empurrar o autor pra fora', () => {
-  // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado aqui em
-  // 11/08: com o @autor dentro do .pw-title (overflow hidden + ellipsis), título
-  // comprido empurrava foto e login pra fora da tela, sem aviso.
-  //
-  // A metade de MARKUP deste teste saiu daqui na onda 5: o card do panorama virou
-  // panoramaRowHtml, em ui/pure.js, e lá dá pra renderizar de verdade em vez de
-  // casar regex no fonte. Ver "Panorama: o autor fica FORA da caixa que trunca o
-  // título" em ui-pure.test.js. O que sobra aqui é o par de CSS, que segue sendo
-  // texto porque app.css não é executável.
-  assert.match(CSS, /\.pw-title-txt \{[^}]*text-overflow: ellipsis/,
-    'quem corta é o texto, não a linha inteira');
-  assert.match(CSS, /\.pw-title \.person-mention \{[^}]*flex: none/,
-    'a menção do autor não encolhe junto com o título');
-});
-
 // Corpos de todos os `@media (max-width: N px)` concatenados (chaves equilibradas).
 function corposDaMedia(largura) {
   const marca = `@media (max-width: ${largura}px)`;
@@ -450,14 +326,7 @@ test('topbar em 768 px: Verificar agora vira só o ícone até 900 px', () => {
     'o rótulo some até 900 px, senão a aba Sistema é cortada em 768 px');
 });
 
-test('Panorama no celular: título em duas linhas, autor embaixo e alvos de 40 px', () => {
-  const m = corposDaMedia(420);
-  assert.match(m, /\.pw-title-txt\s*\{[^}]*white-space:\s*normal[^}]*-webkit-line-clamp:\s*2/);
-  assert.match(m, /\.pw-title \.person-mention\s*\{[^}]*flex-basis:\s*100%/);
-  assert.match(m, /\.pw-acts \.btn\s*\{[^}]*min-width:\s*40px[^}]*min-height:\s*40px/);
-});
-
-test('navegação interna tem UM handler só, delegado, e entende os 3 tipos', () => {
+test('navegação interna tem UM handler só, delegado, e entende os 2 tipos', () => {
   const fn = APPJS.match(/function goTo\(spec\) \{[\s\S]*?\n\}/);
   assert.ok(fn, 'goTo existe');
   assert.match(fn[0], /const \{ tipo, alvo, seletor \} = parseGoto\(spec\);/,
@@ -466,9 +335,8 @@ test('navegação interna tem UM handler só, delegado, e entende os 3 tipos', (
     'aba: repassa o seletor (destino de ferramenta precisa dele)');
   assert.match(fn[0], /switchTab\('sistema'\);\s*\n\s*return sysGoTo\(alvo, seletor \|\| null\);/,
     'sys: troca a aba ANTES do sysGoTo (elemento em aba escondida não rola)');
-  // switchTab vai por parâmetro: gotoDeliv mora em ui/telas/entregas.js e não pode
-  // importar o bootstrap de volta (mesmo motivo do teste de gotoDeliv acima)
-  assert.match(fn[0], /if \(tipo === 'deliv'\) return gotoDeliv\(alvo, seletor, switchTab\);/);
+  // o tipo 'deliv' (Entregas) saiu no lote 7 do corte
+  assert.doesNotMatch(fn[0], /deliv/);
   // mesma ordem do sysGoTo, pelo mesmo motivo, e sem piscar painel escondido
   assert.match(APPJS, /function gotoAba\(nome, at\) \{\s*\n\s*switchTab\(nome\);/,
     'gotoAba troca a aba ANTES de procurar o alvo');
@@ -501,7 +369,7 @@ test('toda menção com data-goto é anunciada como botão (role + tabindex)', (
 
 /* ---------- progresso: regua unica, sem percentual chutado ---------- */
 
-test('progresso literal no app.js so existe no paint inicial (<= 10); o resto sai da regua sessionProgress', () => {
+test('progresso literal no app.js so existe no paint inicial (<= 10)', () => {
   // o bug de origem (16/08/2026): barra da autoanalise fixa em "progress: 25"
   // ate concluir do nada. A regra agora e central: percentual de meio de fluxo
   // vem SEMPRE de sessionProgress (ui/pure.js); literal so pro primeiro paint,
@@ -509,7 +377,6 @@ test('progresso literal no app.js so existe no paint inicial (<= 10); o resto sa
   const chutes = [...APPJS.matchAll(/progress:\s*(\d+)/g)].filter(m => Number(m[1]) > 10);
   assert.deepEqual(chutes.map(m => m[0]), [],
     'percentual literal acima de 10 no app.js: use sessionProgress (ui/pure.js), a regua unica de progresso');
-  assert.ok(APPJS.includes('sessionProgress('), 'a regua central sumiu do app.js');
 });
 
 /* ---------- o vazio da fila nomeia a org CERTA ----------
@@ -580,21 +447,13 @@ test('card da fila: o ponto da conta fica na linha do PR, e a grade tem só avat
 
 test('Visão geral abre pelos checks de saúde e o aplicar só realça com diferença selecionada', () => {
   const pos = (id) => HTML.indexOf(`id="${id}"`);
-  assert.ok(pos('doctor') > 0 && pos('doctor') < pos('updateBox'), 'doctor antes do updateBox');
-  assert.ok(pos('updateBox') < pos('setupManager'), 'updateBox antes do setupManager');
-  assert.ok(pos('setupManager') < pos('reviewLabels'), 'setupManager antes do reviewLabels');
-  assert.ok(pos('reviewLabels') < pos('preferencesTransfer'), 'reviewLabels antes do preferencesTransfer');
-  assert.match(HTML, /<button class="btn sm" type="button" id="preferencesApply"/, 'aplicar nasce sem primary');
-  const atualizacao = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'sistema-atualizacao.js'), 'utf8');
-  assert.doesNotMatch(atualizacao, /O botão abaixo/);
+  assert.ok(pos('doctor') > 0 && pos('doctor') < pos('setupManager'), 'doctor antes do setupManager');
 });
 
-test('atalhos A/M/C passam pela confirmação e o botão de reviewers diz o que faz', () => {
+test('atalhos A/M/C passam pela confirmação', () => {
   const raiz = path.join(import.meta.dirname, '..');
   const atalhos = fs.readFileSync(path.join(raiz, 'ui/telas/atalhos.js'), 'utf8');
   assert.match(atalhos, /sempre: true/);
   assert.match(atalhos, /decideComConfirmacao/);
   assert.deepEqual(atalhos.match(/.*\.click\(\).*/g), ["  if (btn.dataset.action === 'skip') { btn.click(); return; }"], 'só o pular clica no botão');
-  const meus = fs.readFileSync(path.join(raiz, 'ui/telas/meus-prs.js'), 'utf8');
-  assert.match(meus, /Pedir reviewers no GitHub/);
 });
