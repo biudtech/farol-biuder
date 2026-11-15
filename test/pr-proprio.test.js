@@ -80,15 +80,66 @@ test('launchReview: PR do panorama cujo autor é a conta não enfileira e avisa'
   assert.equal(e.seen.has(prDo('').key), false, 'PR barrado não é marcado como visto');
 });
 
-test('launchReview: URL avulsa (sem autor) não é barrada pela lista, e não vai ao GitHub só para ler o autor', async () => {
+// A URL avulsa chega sem autor. Sem a lista de Meus PRs, quem prova que o PR é da conta é uma
+// leitura do autor no GitHub, antes da porta de execução (lib/engine/autor-do-pr.js).
+const autorNoGh = (login) => (cmd, args) => {
+  const ehAutor = cmd === 'gh' && args[0] === 'pr' && args[1] === 'view' && args.includes('author');
+  return Promise.resolve({ ok: true, code: 0, stdout: ehAutor ? JSON.stringify({ author: { login } }) : '', stderr: '' });
+};
+
+test('launchReview: URL avulsa de PR da própria conta é barrada pelo autor lido do GitHub', async () => {
   const e = engineDe('wandersonbiuder');
+  runImpl = autorNoGh('WandersonBiuder');
+  const enfileirados = [];
+  const toasts = [];
+  e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
+  e.on('toast', (t) => toasts.push(t));
+  const r = await e.launchReview([URL_314], 'auto', 'clique');
+  assert.equal(r.ok, false);
+  assert.equal(enfileirados.length, 0, 'a URL colada não abre revisão headless em PR próprio');
+  assert.ok(toasts.some(t => /revisão não abre em PR próprio/.test(t.text)));
+  assert.equal(chamadas.filter(c => c.args.includes('author')).length, 1, 'uma leitura do autor, só para o item sem autor');
+});
+
+test('launchReview: URL avulsa de PR de outra pessoa segue, com o autor lido no item', async () => {
+  const e = engineDe('wandersonbiuder');
+  runImpl = autorNoGh('Alexpraxedes');
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
   e.on('toast', () => { });
   const r = await e.launchReview([URL_314], 'auto', 'clique');
-  assert.equal(r.ok, true, 'sem autor conhecido o gate não bloqueia (falta de dado nunca bloqueia)');
+  assert.equal(r.ok, true);
   assert.equal(enfileirados.length, 1);
+  assert.equal(enfileirados[0].author, 'Alexpraxedes');
+});
+
+test('launchReview: URL avulsa com a leitura do autor falhando segue (falta de dado nunca bloqueia)', async () => {
+  const e = engineDe('wandersonbiuder');
+  runImpl = () => Promise.resolve({ ok: false, code: 1, stdout: '', stderr: 'rede' });
+  const enfileirados = [];
+  e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
+  e.on('toast', () => { });
+  const r = await e.launchReview([URL_314], 'auto', 'clique');
+  assert.equal(r.ok, true);
+  assert.equal(enfileirados.length, 1);
+  assert.equal(enfileirados[0].author, '');
+});
+
+test('portão de postagem: decisivo em item sem autor lê o autor antes de enviar e recusa o PR próprio', async () => {
+  const { recusaPorEstado } = await import('../lib/engine/postagem-portao.js');
+  const e = engineDe('wandersonbiuder');
+  runImpl = autorNoGh('wandersonbiuder');
+  const proprio = await recusaPorEstado(e, prDo(''), { event: 'APPROVE', body: 'ok' });
+  assert.equal(proprio.blocked, 'pr_proprio');
+  assert.equal(proprio.attempted, false);
+  const rc = await recusaPorEstado(e, prDo(''), { event: 'REQUEST_CHANGES', body: 'x' });
+  assert.equal(rc.blocked, 'pr_proprio');
+  chamadas.length = 0;
+  assert.equal(await recusaPorEstado(e, prDo(''), { event: 'COMMENT', body: 'x' }), null, 'COMMENT não é decisivo e não custa leitura');
   assert.equal(chamadas.length, 0);
+  runImpl = autorNoGh('Alexpraxedes');
+  e.prState = async () => 'OPEN';
+  assert.equal(await recusaPorEstado(e, prDo(''), { event: 'APPROVE', body: 'ok' }), null, 'PR de outra pessoa segue');
 });
 
 test('launchReview: PR de outra pessoa segue normalmente', async () => {

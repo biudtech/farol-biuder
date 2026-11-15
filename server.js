@@ -194,8 +194,6 @@ class Engine extends EventEmitter {
     // assinatura do Claude -> { ate, em }: até quando ela está no limite do plano
     carregarLimites(this);
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
-    this.adminBlockedRepos = {};      // repo -> true quando admin nao fura o ruleset (o UI esconde "Merge admin")
-    this.ruleBlockCache = {};         // "repo@base" -> { blocked, at } cache do ruleset bloqueante
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
     this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
@@ -831,7 +829,7 @@ class Engine extends EventEmitter {
       // G15: owners cuja busca RESPONDEU neste ciclo (list !== null). A poda do
       // estacionamento mais abaixo só pode agir sobre a key de um owner que está
       // neste Set; owner que falhou não prova PR nenhum fechado (mesmo padrão do
-      // G5 em autOk/authOk, ver reconcileHiddenPRs).
+      // G5 em autOk/authOk).
       const ownersOk = new Set();
       // G15 (re-revisão): owners que ainda estão na config, em QUALQUER conta.
       // Fato determinístico, não depende de rede: um owner removido do monitoramento
