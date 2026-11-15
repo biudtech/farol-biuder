@@ -1,9 +1,9 @@
 /* Plano e chaves (A2, brief B2 item 2.2): o resultado do teste de um perfil e o aviso de
    perfil apontado que a resolução não usa. PURAS.
 
-   A regra desta tela é a ORIGEM: cada informação diz se foi informada por você ou é
-   desconhecida. A chave nunca é validada (isso exigiria uma chamada paga), e a tela diz
-   isso em vez de calar. O nome comercial do plano nunca aparece. */
+   A regra desta tela é a ORIGEM: cada informação diz se foi informada por você, validada
+   pelo Claude Code (perfil de assinatura), lida dos arquivos ou desconhecida. A chave de API
+   nunca é validada (isso exigiria uma chamada paga), e a tela diz isso em vez de calar. O nome comercial do plano nunca aparece. */
 import { esc, fmtClock } from './comum.js';
 
 const ROTULOS = {
@@ -57,7 +57,7 @@ function perfilTesteHtml(dados = {}) {
 
 const TEXTO_DO_PROBLEMA = {
   'perfil-inexistente': (id) => `aponta para o perfil "${id}", que não existe mais`,
-  'perfil-invalido': (id) => `aponta para o perfil "${id}", que está incompleto (falta a chave)`,
+  'perfil-invalido': (id) => `aponta para o perfil "${id}", que está incompleto (falta a chave, ou a pasta fica fora do HOME do Farol)`,
 };
 
 /** O aviso de perfil apontado que a resolução não consegue usar (A2): erro, nunca silêncio. */

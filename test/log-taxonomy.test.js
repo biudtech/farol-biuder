@@ -752,4 +752,8 @@ test('sem perfil de chave de API é permanente e de credencial: esperar não res
   assert.equal(c.id, 'sem-perfil-de-chave');
   assert.equal(c.kind, 'permanente');
   assert.equal(c.grupo, 'credencial');
+  // desde 15/11/2026 o perfil pode ser de assinatura: a frase da sessão mudou, a classe não
+  const novo = classify('sem perfil do Claude utilizável (assinatura ou chave de API): faça o login do perfil ou cadastre a chave em Sistema > Plano e chaves');
+  assert.equal(novo.id, 'sem-perfil-de-chave');
+  assert.equal(novo.kind, 'permanente');
 });

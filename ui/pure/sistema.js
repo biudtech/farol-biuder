@@ -238,6 +238,19 @@ export function versaoClaudeCheck(v) {
    headless passa essa flag SEMPRE (é fixa em runClaudeStream). O resultado era um
    "saiu com código 1" por ciclo, pra sempre, sem uma linha na tela dizendo por quê.
    Devolve lista (vazia quando não há o que dizer) pra compor com os outros checks. */
+/* O texto do check "Claude Code" de Sistema > Visão geral: o CLI existe E o perfil que o motor
+   vai usar tem credencial (lib/engine/perfil-claude.js, prontidaoParaDoctor). Diz qual tipo de
+   perfil está pronto, ou o que falta; perfil de assinatura sem login não é perfil pronto. */
+export function detalheDoClaudeCode(d) {
+  const doctor = d || {};
+  if (!doctor.claude) return 'claude não encontrado no PATH';
+  if (doctor.claudePerfilPronto === true) {
+    return `${doctor.claude}, com perfil de ${doctor.claudePerfilTipo === 'assinatura' ? 'assinatura' : 'chave de API'} pronto`;
+  }
+  if (doctor.claudePerfilFalta === 'login') return `${doctor.claude}, mas falta entrar com a assinatura do perfil em Plano e chaves`;
+  return `${doctor.claude}, mas sem perfil utilizável: entre com a assinatura ou cadastre uma chave de API em Plano e chaves`;
+}
+
 export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {
   const d = doctor || {};
   const checks = [];
@@ -251,7 +264,7 @@ export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {
     });
   }
   for (const p of (claudePerfis && Array.isArray(claudePerfis.problemas)) ? claudePerfis.problemas : []) {
-    checks.push({ ok: false, label: 'Perfil de chave de API', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
+    checks.push({ ok: false, label: 'Perfil do Claude', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
   }
   return checks;
 }

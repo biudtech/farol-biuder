@@ -1,4 +1,4 @@
-/* Farol · UI: perfis de chave de API do Claude e o orçamento de cada perfil (Sistema). O
+/* Farol · UI: perfis do Claude (assinatura e chave de API) e o orçamento de cada perfil (Sistema). O
    orçamento não é assunto à parte: ele edita campos de dentro do MESMO perfil
    (budgetDaily, budgetByWeekday, budgetDates, budgetTotal, budgetSince), então é
    profundidade do perfil, não um terceiro tema. Contas do GitHub são outro estado
@@ -12,9 +12,11 @@ import { estado } from './estado.js';
 import { $, api, toast } from './infra.js';
 import { rebuildAccounts } from './contas.js';
 import { renderAccountsManager } from './sistema-contas.js';
+import { renderLoginWeb, tratouLoginWeb } from './login-claude.js';
 
-// Gerenciador de perfis de chave de API do Claude (Sistema): cada perfil é
-// {id,label,kind:'apikey',apiKey,baseUrl}, com o selo de chave configurada (badge, via doctor).
+// Gerenciador de perfis do Claude (Sistema): cada perfil é {id,label,kind:'dir',dir} (assinatura;
+// o login entra pela tela, telas/login-claude.js) ou {id,label,kind:'apikey',apiKey,baseUrl},
+// com o selo do estado de cada um (badge, via doctor).
 
 function saveClaudeProfiles(profiles, defaultId) {
   estado().config.claudeProfiles = profiles;
@@ -44,8 +46,9 @@ export function renderClaudeProfiles() {
   // guarda de foco: não reconstrói enquanto você digita num campo deste bloco
   if (document.activeElement && box.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   box.innerHTML = perfilProblemasHtml((estado().claudePerfis || {}).problemas)
-    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor });
+    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor, claudePerfis: estado().claudePerfis });
   renderTestes();
+  renderLoginWeb();
 }
 
 /* editor de perfis de chave de API do Claude: adicionar / remover / editar */
@@ -117,12 +120,19 @@ function tratouOrcamento(t) {
 
 $('#claudeProfilesManager').addEventListener('click', (e) => {
   const t = e.target;
-  if (tratouOrcamento(t)) return;
+  if (tratouOrcamento(t) || tratouLoginWeb(t)) return;
   // mostrar/ocultar a chave de um perfil já salvo (não é validação nem salvamento, só
   // alterna o type do input entre password e text).
   if (t.classList.contains('cp-toggle-key')) {
     const input = e.currentTarget.querySelector(`.cp-apikey[data-id="${CSS.escape(t.dataset.id)}"]`);
     if (input) input.type = input.type === 'password' ? 'text' : 'password';
+    return;
+  }
+  if (t.id === 'btnCpAddAssinatura') {
+    const label = ($('#cpAddAssinaturaLabel').value || '').trim();
+    if (!label) return toast('error', 'Dê um nome ao perfil.', 3000);
+    // sem pasta: o motor usa a do próprio perfil, dentro do HOME do Farol
+    saveClaudeProfiles([...(estado().config.claudeProfiles || []), { id: genId(), label, kind: 'dir', dir: '' }]);
     return;
   }
   if (t.id === 'btnCpAdd') {

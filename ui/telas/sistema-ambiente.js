@@ -1,14 +1,10 @@
 /* Farol · UI: saúde do ambiente (Sistema > Visão geral). */
 
-import { esc, escAttrSelector, operationChecks, runtimeChecks, versaoClaudeCheck } from '../pure.js';
+import { esc, escAttrSelector, operationChecks, runtimeChecks, versaoClaudeCheck, detalheDoClaudeCode } from '../pure.js';
 import { estado, ehWin } from './estado.js';
 import { $ } from './infra.js';
 
 /* ---------- render: saúde do ambiente ---------- */
-function detalheDoClaude(d) {
-  if (!d.claude) return 'claude não encontrado no PATH';
-  return d.claudePerfilPronto === true ? `${d.claude}, com perfil de chave de API pronto` : `${d.claude}, mas sem perfil de chave de API utilizável: cadastre a chave em Plano e chaves`;
-}
 
 function renderDoctor() {
   const d = estado() && estado().doctor;
@@ -23,8 +19,8 @@ function renderDoctor() {
       detail: d.ghAuth ? 'autenticada no gh' : 'sem token: rode gh auth login (conta de trabalho)',
       goto: estado().config.ghUser ? `sys:accounts:.acct-label[data-user="${escAttrSelector(estado().config.ghUser)}"]` : 'sys:accounts:#accountsManager'
     },
-    // o CLI existe E há um perfil de chave de API utilizável: sem um dos dois a sessão não abre
-    { ok: !!d.claude && d.claudePerfilPronto === true, label: 'Claude Code', detail: detalheDoClaude(d), goto: 'sys:plans:#claudeProfilesManager' },
+    // o CLI existe E o perfil que o motor vai usar tem credencial: sem um dos dois a sessão não abre
+    { ok: !!d.claude && d.claudePerfilPronto === true, label: 'Claude Code', detail: detalheDoClaudeCode(d), goto: 'sys:plans:#claudeProfilesManager' },
     // o check acima diz se o CLI EXISTE; este diz se ele está em dia, porque é o CLI
     // que decide para qual modelo o apelido (opus, sonnet, haiku) aponta
     ...versaoClaudeCheck((estado().modelos || {}).cli),

@@ -15,7 +15,7 @@ function rotasServidas() {
 test('o extrator de rotas não está cego', () => {
   const servidas = rotasServidas();
   assert.ok(servidas.has('/api/decide'));
-  assert.ok(servidas.size >= 27, `esperava pelo menos 27 rotas, achei ${servidas.size}`);
+  assert.ok(servidas.size >= 30, `esperava pelo menos 30 rotas, achei ${servidas.size}`);
 });
 
 test('toda rota servida tem classe no inventário', () => {
@@ -40,9 +40,11 @@ test('nenhuma rota aparece em duas classes', () => {
 // O corte da Fase 1 (lote 13b) tirou as 31 rotas da coordenação entre instalações, e com elas a
 // classe de leitura de baixo risco, que só tinha uma delas: as não públicas foram de 56 a 25. O
 // título contava 57 e eram 58 com as duas públicas; agora são 27.
-test('as classes da spec cobrem os 27 caminhos, e as públicas são só as duas de autenticação', () => {
+// Em 15/11/2026 a assinatura do Claude voltou (decisão do dono) e com ela o login pela tela:
+// /api/claude/login-web/start, /code e /cancel. As não públicas foram de 25 a 28, e o total de 27 a 30.
+test('as classes da spec cobrem os 30 caminhos, e as públicas são só as duas de autenticação', () => {
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 25);
+  assert.equal(naoPublicas.length, 28);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
   assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
 });

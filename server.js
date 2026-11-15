@@ -142,7 +142,7 @@ class Engine extends EventEmitter {
     this.config.claudeProfiles = normalizeClaudeProfiles(this.config.claudeProfiles);
     this.config.claudeProfileId = normalizeClaudeProfileId(this.config.claudeProfileId);
     // config antiga com chaves de formatos que saíram (corte 09) não derruba o boot: chave sem
-    // leitor é ignorada, e perfil que não é de chave de API cai fora no normalizeClaudeProfiles
+    // leitor é ignorada, e perfil que não é de assinatura nem de chave de API cai fora no normalizeClaudeProfiles
     this.config.reviewModel = sanitizeClaudeModel(this.config.reviewModel) || '';
     this.config.reviewEffort = sanitizeClaudeEffort(this.config.reviewEffort) || '';
     // intervalo do polling: o caminho HTTP (updateSettings) já clampa em 180..3600, mas
@@ -629,7 +629,7 @@ class Engine extends EventEmitter {
     delete env.GH_TOKEN;
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
-    // chave de API do Claude que o Farol usa pra esta conta: ver resolveClaudeAuth
+    // perfil do Claude (assinatura ou chave de API) que o Farol usa pra esta conta: ver resolveClaudeAuth
     // (perfil por conta > perfil padrão do Farol > primeiro perfil utilizável).
     applyClaudeAuthEnv(env, this.resolveClaudeAuth(user));
     return env;
@@ -1180,23 +1180,14 @@ class Engine extends EventEmitter {
   }
 
   // qual AUTENTICAÇÃO usar pras sessões desta conta GitHub. Cascata: 1) accounts[].claudeProfileId
-  // da própria conta; 2) claudeProfileId global (padrão do Farol); 3) o primeiro perfil de chave
-  // de API utilizável. null = sem perfil utilizável (a sessão não abre; lib/engine/perfil-claude.js).
+  // da própria conta; 2) claudeProfileId global (padrão do Farol); 3) o primeiro perfil utilizável,
+  // de assinatura ou de chave de API. null = sem perfil utilizável (a sessão não abre;
+  // lib/engine/perfil-claude.js).
   resolveClaudeAuth(user) { return perfilMod.authDaConta(this.config, user); }
 
-  // status de TODOS os perfis de chave de API salvos, pro doctor mostrar quem está pronto.
-  // Não toca disco nem rede: "pronto" é "a chave está preenchida".
-  allClaudeAuthInfo() {
-    return (this.config.claudeProfiles || []).map(p => ({
-      id: p.id,
-      label: p.label,
-      // orcamento (blocked/today/sinceCutoff) NAO viaja mais aqui: o doctor e um
-      // cache (boot/Verificar agora/salvar perfis) e congelava o cartao da aba
-      // Consumo enquanto o gate real recalculava ao vivo. A fonte unica do
-      // orcamento e usageSummary().budgets, refeita a cada pushState (v2.40.0).
-      ready: !!p.apiKey, apiKeyMode: true,
-    }));
-  }
+  // status de TODOS os perfis salvos, pro doctor mostrar quem está pronto: chave preenchida
+  // ou pasta da assinatura com login gravado. Não abre o CLI nem toca a rede.
+  allClaudeAuthInfo() { return perfilMod.infoDosPerfis(this.config); }
 
   async doctor({ forcarVersaoClaude = false } = {}) {
     const leitura = {};
@@ -1228,8 +1219,8 @@ class Engine extends EventEmitter {
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
       home: HOME,
       workspace: WORKSPACE,
-      claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil de chave de API salvo
-      claudePerfilPronto: perfilMod.temPerfilUtilizavel(this.config), // há perfil de chave de API utilizável?
+      claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
+      ...perfilMod.prontidaoParaDoctor(this.config, primary), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
     };
     if (forcarVersaoClaude || this.claudeVersao) {
@@ -1326,7 +1317,7 @@ class Engine extends EventEmitter {
       app: { name: APP_NAME, version: APP_VERSION, platform: process.platform },
       modelos: catalogoDeModelos(this.claudeVersao || null),
       // perfil apontado que a resolução não usa (A2): a queda não é silenciosa
-      claudePerfis: { problemas: perfilMod.problemasDePerfil(this.config) },
+      claudePerfis: perfilMod.perfisParaTela(this), // e o uso do plano de cada perfil de assinatura
       status: this.status,
       error: this.lastError,
       baseline: this.baseline ??= lerBaseline(BASELINE_FILE),   // desde quando vigia (lido uma vez)
@@ -1576,7 +1567,10 @@ class Engine extends EventEmitter {
     iniciarManutencaoDoEngine(this);
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();
-    this.doctor().catch(() => {});
+    // Só o engine que subiu de verdade lê o uso do plano do Claude (lib/engine/uso-do-plano.js):
+    // o de teste nunca abre o CLI. A chave divide a linha com o doctor porque o server.js está
+    // no teto do ratchet de tamanho.
+    this.usoDoPlanoLigado = true; this.doctor().catch(() => {});
     // label presa por morte do processo: limpa antes do primeiro ciclo, pra a
     // frota não continuar saindo de cena por uma sessão que não existe mais
     if (this.inflightRecuperado && this.inflightRecuperado.length) {

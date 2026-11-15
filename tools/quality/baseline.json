@@ -45,7 +45,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 542,
+    "maxLines": 536,
     "jsonStringifyCru": 1,
     "processEnvDireto": 5,
     "ternarioAninhado": 3,

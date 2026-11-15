@@ -1586,6 +1586,27 @@ body.parear > *:not(.par-raiz) { display: none !important; }
 
 #sys-plans-modelo { margin-bottom: var(--sp-3); }
 
+/* Uso do plano e validade do login do Claude (12/11/2026, de volta em 15/11/2026; ui/pure/uso-do-plano.js): uma
+   coluna por janela (nome e percentual, barra, quando volta) e a linha do login embaixo.
+   A barra é azul, âmbar a partir de 70% e vermelha a partir de 90%. */
+.uso-plano { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 100%; }
+.uso-janelas { display: flex; flex-wrap: wrap; gap: 6px var(--sp-4); }
+.uso-janela { display: flex; flex-direction: column; gap: 4px; width: 150px; }
+.uso-topo { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 12px; }
+.uso-nome { color: var(--muted); }
+.uso-pct { font-weight: 600; font-variant-numeric: tabular-nums; }
+.uso-barra { display: block; height: 4px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.uso-fill { display: block; height: 100%; border-radius: 99px; background: var(--info); }
+.uso-volta { font-size: 11.5px; color: var(--muted); }
+.uso-janela.uso-alto .uso-pct { color: var(--accent); font-weight: 700; }
+.uso-janela.uso-alto .uso-fill { background: var(--accent); }
+.uso-janela.uso-critico .uso-pct { color: var(--danger); font-weight: 700; }
+.uso-janela.uso-critico .uso-fill { background: var(--danger); }
+.uso-login { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); font-size: 12px; color: var(--muted); }
+.uso-login-txt { color: var(--muted); }
+/* o painel do login da assinatura pela tela (ui/pure/login-web.js) fica acima dos cartões */
+.cp-login-web { margin-bottom: var(--sp-3); }
+
 /* Agrupamento e roteiro usam os mesmos tokens nos dois temas. */
 .queue-group { padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .queue-group > summary { cursor: pointer; color: var(--text); font-weight: 600; }
