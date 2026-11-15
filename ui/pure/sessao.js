@@ -179,19 +179,11 @@ export function feedLine(it) {
 // Compatibilidade dos widgets: quantidade de eventos não mede conclusão.
 export function sessionProgress() { return null; }
 
-// O terminal de revisão segura o PR contra outra revisão neste aparelho (revisao-em-curso.js)
-// até a janela avisar que fechou. Se esse aviso se perde, o botão LIBERA o PR: o Farol não
-// fecha a janela, só deixa de contá-la. Login e sessão sem PR não seguram nada.
-export function liberaTerminal(s = {}) {
-  return s.mode === 'terminal' && s.login !== true && Array.isArray(s.keys) && s.keys.length > 0;
-}
-
 export function temCancelamento(s = {}) {
-  return !!s.cancellable || liberaTerminal(s);
+  return !!s.cancellable;
 }
 
 export function textoDoCancelamento(s = {}) {
-  if (liberaTerminal(s)) return 'Liberar PR';
   return s.cancelled ? 'Cancelando…' : 'Cancelar';
 }
 

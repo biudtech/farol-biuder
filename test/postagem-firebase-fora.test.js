@@ -66,7 +66,7 @@ test('a premissa: coordenação ligada e sem conexão', async () => {
   assert.notEqual(e.sync.status, 'conectado');
 });
 
-for (const [via, handle] of [['clique', undefined], ['sessao', undefined], ['revisao', NOOP]]) {
+for (const [via, handle] of [['clique', undefined], ['revisao', NOOP]]) {
   test(`ato explícito (${via}${handle ? ' sem coordenação' : ''}) posta com o Firebase fora do ar`, async () => {
     const e = await motorForaDoAr();
     postagens.length = 0;

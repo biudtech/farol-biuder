@@ -345,7 +345,7 @@ test('espera do CI com coordenação: `nao_enviada` da credencial também vai pa
 
 test('sessão interativa e co-assinatura passam pela mesma boca, e a sessão pode tentar de novo', async () => {
   const e = motor();
-  for (const via of ['sessao', 'coassinatura', 'reenvio', 'espera-ci', 'clique']) {
+  for (const via of ['coassinatura', 'reenvio', 'espera-ci', 'clique']) {
     const r = await e.postReview(PR(11), { event: 'COMMENT', body: `Valor: ${GH}.` }, { via });
     assert.equal(r.blocked, BLOQUEIO_CREDENCIAL, via);
     assert.notEqual(r.attempted, true, `${via}: a capability da sessão não é consumida`);

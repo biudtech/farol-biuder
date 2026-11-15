@@ -1,6 +1,5 @@
 // A fiação do caminho protegido nas sessões de verdade (06/11/2026, revisão do PR #350): o que o
-// lançador RECEBE (guardas e MCP), a leitura observada que chega ao gate da revisão, e o escopo
-// gravado para a revisão no terminal.
+// lançador RECEBE (guardas e MCP), e a leitura observada que chega ao gate da revisão.
 // Os testes dirigem runHeadlessReview e launchReview com o lançador dublado,
 // no mesmo molde de test/analysis-source-flows.test.js: nada aqui lê o fonte.
 import { criteriaFixture } from './helpers/criteria-fixture.js';
@@ -16,9 +15,6 @@ const { sourceRuntime } = await import('../lib/engine/analysis-source.js');
 const { observeReadEvent, observarLeitura } = await import('../lib/engine/read-evidence.js');
 const { ARQUIVO_DE_GUARDAS } = await import('../lib/engine/guardas-da-sessao.js');
 const { arquivoMaterializado } = await import('../lib/engine/pr-scope.js');
-const { nomeMaterializado } = await import('../lib/review-source/caminho-protegido.js');
-const { abrirRevisaoNoTerminal } = await import('../lib/engine/escopo-do-terminal.js');
-const { WORKSPACE } = await import('../lib/paths.js');
 const io = (await import('../lib/io.js')).default;
 const original = { ...sourceRuntime }, runOriginal = io.run;
 afterEach(() => { Object.assign(sourceRuntime, original); io.run = runOriginal; });
@@ -119,66 +115,11 @@ test('a leitura observada da projeção chega ao gate da revisão (leiturasProva
   }
 });
 
-/* ---------- revisão no terminal ---------- */
+/* ---------- o protocolo ---------- */
 
-const PATCHES_DO_GITHUB = [
-  { filename: 'src/a.js', status: 'modified', patch: '@@ -1 +1 @@\n-old\n+new' },
-  { filename: 'apps/.env.d/prod.env', status: 'modified', patch: '@@ -1 +1 @@\n-API_KEY=velho\n+API_KEY=novo' },
-];
-
-test('o terminal grava o escopo, passa escopo= e abre o claude com as guardas', async () => {
-  const e = setup();
-  e.queue = [{ ...pr }];
-  e.bloqueiaAutomatico = async () => false;
-  io.run = async (_command, args) => {
-    if (args.join(' ').includes('pulls/1/files')) return { ok: true, stdout: JSON.stringify([PATCHES_DO_GITHUB]) };
-    return { ok: true, stdout: '[]' };
-  };
-  const abertos = [];
-  e.spawnConsole = (slash, label, keys) => { abertos.push({ slash, label, keys }); return { ok: true }; };
-  const r = await e.launchReview([pr.url], 'terminal', 'clique');
-  assert.equal(r.ok, true, JSON.stringify(r));
-  assert.equal(abertos.length, 1);
-  const m = abertos[0].slash.match(/^\/pr-review (\S+) escopo=(\S+)$/);
-  assert.ok(m, abertos[0].slash);
-  assert.equal(m[1], pr.url);
-  assert.doesNotMatch(m[2], /%|\\/, 'a raiz atravessa o .cmd do Windows: sem % e sem barra invertida');
-  const raiz = path.join(WORKSPACE, ...m[2].split('/'));
-  assert.equal(fs.readFileSync(path.join(raiz, 'src', 'a.js'), 'utf8'), PATCHES_DO_GITHUB[0].patch);
-  // `apps/.env.d/` é pasta protegida, então o arquivo não tem projeção: nem o marcador é gravado
-  // (a leitura dele seria uma entrega conferível de um conteúdo que a sessão nunca viu)
-  const redigido = path.join(raiz, ...nomeMaterializado('apps/.env.d/prod.env').split('/'));
-  assert.equal(fs.existsSync(redigido), false, 'protegido sem projeção não tem arquivo no escopo');
-  assert.equal(fs.existsSync(path.join(raiz, 'apps', '.env.d')), false, 'nada no caminho original');
-  assert.doesNotMatch(fs.readdirSync(raiz).join(' '), /velho/);
-
-  // as guardas entram com "Sessão no terminal sem pedir permissões" desligada e ligada (ligada é o
-  // padrão desde 06/11/2026): a flag de permissões vem antes, e o --settings nunca sai
-  for (const skipPermissions of [false, true]) {
-    e.config.skipPermissions = skipPermissions;
-    const flag = skipPermissions ? ' --dangerously-skip-permissions' : '';
-    const script = e.buildSessionScript(abertos[0].slash, 't1', 'fixture', 'cap');
-    assert.ok(script.includes(`claude${flag} --settings '${ARQUIVO_DE_GUARDAS}' '${abertos[0].slash}'`), script);
-  }
-});
-
-test('o terminal abre mesmo sem conseguir ler os patches, só sem escopo=', async () => {
-  const e = setup();
-  e.queue = [{ ...pr }];
-  e.bloqueiaAutomatico = async () => false;
-  io.run = async () => ({ ok: false, code: 1, stdout: '', stderr: 'fora do ar' });
-  const abertos = [];
-  e.spawnConsole = (slash) => { abertos.push(slash); return { ok: true }; };
-  await e.launchReview([pr.url], 'terminal', 'clique');
-  assert.deepEqual(abertos, [`/pr-review ${pr.url}`]);
-});
-
-test('o protocolo do pr-reviewer descreve a raiz de escopo do terminal e o nome achatado', () => {
+test('o protocolo do pr-reviewer descreve o nome achatado da projeção', () => {
   const agente = fs.readFileSync(path.join(import.meta.dirname, '..', 'workspace-template', '.claude', 'agents', 'pr-reviewer.md'), 'utf8');
-  assert.match(agente, /escopo=<raiz>/);
   assert.match(agente, /_farol_redigido_\/_apps%2Fweb%2F\.env\.local\.redigido/);
-  const comando = fs.readFileSync(path.join(import.meta.dirname, '..', 'workspace-template', '.claude', 'commands', 'pr-review.md'), 'utf8');
-  assert.match(comando, /escopo=<raiz>/);
 });
 
 /* ---------- rename vindo de caminho protegido (revisão do head 3f580395) ---------- */
@@ -271,60 +212,4 @@ test('patch ausente ou truncado: na revisão, ler o marcador ou o fragmento inte
   assert.match(motivos, /arquivo sem conteúdo integral no escopo \(patch ausente, binário ou truncado\): img\/logo\.png/);
   assert.match(motivos, /arquivo sem conteúdo integral no escopo \(patch ausente, binário ou truncado\): src\/grande\.js/);
   assert.doesNotMatch(motivos, /sem conteúdo integral no escopo \(patch ausente, binário ou truncado\): src\/a\.js/);
-});
-
-test('patch ausente: o escopo do terminal grava o marcador dizendo que lê-lo não cobre nada', async () => {
-  const e = setup();
-  e.queue = [{ ...pr }];
-  e.bloqueiaAutomatico = async () => false;
-  io.run = async (_command, args) => (args.join(' ').includes('pulls/1/files')
-    ? { ok: true, stdout: JSON.stringify([[{ filename: 'img/logo.png', status: 'modified' }, { filename: '.env', status: 'modified' }]]) }
-    : { ok: true, stdout: '[]' });
-  const abertos = [];
-  e.spawnConsole = (slash) => { abertos.push(slash); return { ok: true }; };
-  await e.launchReview([pr.url], 'terminal', 'clique');
-  const raiz = path.join(WORKSPACE, ...abertos[0].match(/escopo=(\S+)/)[1].split('/'));
-  const texto = fs.readFileSync(path.join(raiz, 'img', 'logo.png'), 'utf8');
-  assert.match(texto, /não é o conteúdo do arquivo: lê-lo não cobre nada, declare o caminho em coverage\.missing/);
-  assert.equal(fs.existsSync(path.join(raiz, ...nomeMaterializado('.env').split('/'))), false, 'protegido sem projeção: nada no disco');
-});
-
-// Patch truncado pela API (contagem de + e - abaixo de additions e deletions): o terminal não tem o
-// gate de cobertura que recusa o crédito na revisão e na autoanálise, então o fragmento gravado
-// tem de se dizer fragmento antes do primeiro trecho, e o patch inteiro segue sem aviso.
-test('patch truncado: o escopo do terminal grava o fragmento com o aviso antes do primeiro trecho', async () => {
-  const e = setup();
-  e.queue = [{ ...pr }];
-  e.bloqueiaAutomatico = async () => false;
-  const FRAGMENTO = '@@ -1,900 +1,900 @@\n-x\n+y';
-  const COMPLETO = '@@ -1 +1 @@\n-old\n+new';
-  io.run = async (_command, args) => (args.join(' ').includes('pulls/1/files')
-    ? { ok: true, stdout: JSON.stringify([[
-      { filename: 'src/grande.js', status: 'modified', additions: 900, deletions: 900, patch: FRAGMENTO },
-      { filename: 'src/a.js', status: 'modified', additions: 1, deletions: 1, patch: COMPLETO }]]) }
-    : { ok: true, stdout: '[]' });
-  const abertos = [];
-  e.spawnConsole = (slash) => { abertos.push(slash); return { ok: true }; };
-  await e.launchReview([pr.url], 'terminal', 'clique');
-  const raiz = path.join(WORKSPACE, ...abertos[0].match(/escopo=(\S+)/)[1].split('/'));
-  const truncado = fs.readFileSync(path.join(raiz, 'src', 'grande.js'), 'utf8');
-  const inicio = truncado.indexOf('@@');
-  assert.match(truncado.slice(0, inicio), /patch truncado pela API do GitHub: .*declare o caminho em coverage\.missing/);
-  assert.equal(truncado.slice(inicio), FRAGMENTO, 'o fragmento continua inteiro depois do aviso');
-  assert.equal(fs.readFileSync(path.join(raiz, 'src', 'a.js'), 'utf8'), COMPLETO, 'patch completo não ganha aviso');
-});
-
-/* ---------- reserva do PR durante a preparação do terminal (revisão do head df581c00) ---------- */
-
-test('o terminal libera só a reserva que fez: a chave que a fila já tinha reservado continua lá', async () => {
-  const e = setup();
-  const outro = { ...pr, key: 'org/repo#2', number: 2, url: 'https://github.com/org/repo/pull/2' };
-  e.headlessIniciando = new Set([pr.key]);
-  io.run = async () => ({ ok: false, code: 1, stdout: '', stderr: 'fora do ar' });
-  const durante = [];
-  e.spawnConsole = () => { durante.push([...e.headlessIniciando].sort()); return { ok: true }; };
-  e.emit = () => {};
-  await abrirRevisaoNoTerminal(e, [{ ...pr }, outro]);
-  assert.deepEqual(durante, [[pr.key, outro.key]], 'as duas chaves ficam reservadas até a janela abrir');
-  assert.deepEqual([...e.headlessIniciando], [pr.key], 'a reserva da fila sobrevive; a do terminal sai');
 });

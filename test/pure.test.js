@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const farol = (await import('../server.js')).default;
 const { modelLabel, isPermanentBranch, parseAccounts,
-  normalizeClaudeProfiles, applyClaudeAuthEnv, claudeAuthShellLines } = farol;
+  normalizeClaudeProfiles, applyClaudeAuthEnv } = farol;
 const {
   sanitizeModel, sanitizeClaudeModel, sanitizeClaudeDir,
 } = await import('../lib/parse.js');
@@ -250,23 +250,6 @@ test('applyClaudeAuthEnv: OAuth herdado não substitui o perfil escolhido nem o 
     applyClaudeAuthEnv(env, auth);
     assert.deepEqual(env, { ...esperado, OUTRA_VAR: 'preservada' }, `perfil ${auth ? auth.kind : 'nenhum'}`);
   }
-});
-
-// no posix a lista abre com o unset das vars de auth da máquina (G21, ver POSIX_AUTH_UNSET
-// em lib/parse.js): o profile do usuário é sourceado DEPOIS do env montado, então limpar só
-// o env não basta. A ordem é contrato: o perfil resolvido vem sempre DEPOIS do unset. As
-// vars são as mesmas de auth Claude que applyClaudeAuthEnv apaga, incluindo o token OAuth.
-const UNSET_POSIX = 'unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CONFIG_DIR CLAUDE_CODE_OAUTH_TOKEN';
-
-test('claudeAuthShellLines: sem perfil de chave de API só limpa, não exporta nada', () => {
-  assert.deepEqual(claudeAuthShellLines(null), [UNSET_POSIX, '# sem perfil de chave de API']);
-  assert.deepEqual(claudeAuthShellLines({ kind: 'apikey', apiKey: '' }), [UNSET_POSIX, '# sem perfil de chave de API']);
-});
-
-test('claudeAuthShellLines: kind apikey, com escaping de aspa simples na chave', () => {
-  const lines = claudeAuthShellLines({ kind: 'apikey', apiKey: "sk-ant-123' ; touch /tmp/PROOF #", baseUrl: '' });
-  // a chave do próprio perfil é setada DEPOIS do unset, senão o unset a apagaria junto
-  assert.deepEqual(lines, [UNSET_POSIX, `export ANTHROPIC_API_KEY='sk-ant-123'\\'' ; touch /tmp/PROOF #'`, '# sem base url propria']);
 });
 
 test('logStamp: carimbo do farol.log em Brasília com offset explícito, nunca UTC cru', async () => {

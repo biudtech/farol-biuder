@@ -310,9 +310,6 @@ export function usageBudgetHtml(u) {
       <span class="usage-meter-track"><span class="usage-meter-fill${over ? ' over' : ''}" style="width:${Math.max(2, pct).toFixed(0)}%"></span></span>
     </div>`;
   };
-  // a lacuna do terminal interativo vale pra qualquer perfil COM TETO (antes era
-  // só chave de API, porque só ela tinha teto): o aviso segue o teto, não o tipo
-  const temTetoAlgum = perfis.some(p => p.budgetDaily != null || p.budgetTotal != null);
   return perfis.map(p => {
     const statusCls = p.blocked ? 'bad' : 'ok';
     // "tem teto" passou a considerar os overrides: perfil que só configurou sábado
@@ -355,12 +352,7 @@ export function usageBudgetHtml(u) {
       ${meters}
       ${nota}
     </div>`;
-  }).join('')
-    // lacuna declarada (auditoria de 10/08): a sessao interativa de terminal usa a
-    // MESMA credencial do perfil, mas o claude interativo nao emite stream-json,
-    // entao esse gasto nao tem como entrar na medicao nem no teto. Sem declarar,
-    // o cartao prometia um teto que um dos caminhos de gasto nunca encontra.
-    + (temTetoAlgum ? '<span class="usage-budget-note">Sessões interativas no terminal usam a mesma credencial, mas não entram na medição nem no teto: o Claude não reporta esse consumo ao Farol.</span>' : '');
+  }).join('');
 }
 
 export function usageSessionsHtml(u) {

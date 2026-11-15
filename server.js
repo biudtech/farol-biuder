@@ -3,8 +3,8 @@ import { repescarRetry } from './lib/engine/review-retry.js';
 assertExternalNodeRuntime();
 // Farol: engine de monitoramento de PRs + servidor http local da UI.
 // Porta a logica do antigo pr-reviewer.ps1: o polling do GitHub roda aqui
-// (so comandos gh, sem gastar tokens de IA); a revisao em si abre uma sessao
-// interativa do Claude Code em um terminal proprio, com /pr-review <urls>.
+// (so comandos gh, sem gastar tokens de IA); a revisao em si roda numa sessao
+// headless do Claude Code.
 // Zero dependencias externas: roda com Node puro (e dentro do Electron).
 import fs from 'node:fs';
 import { politicaDeInicio, normalizarRegras, contaTemAutomatico } from './lib/engine/review-scope.js';
@@ -31,7 +31,7 @@ import { gravarLinhaDeLog } from './lib/log-arquivo.js';
 import { ACCOUNT_PALETTE } from './lib/taxonomy.js'; // resto da taxonomia é usado nos colaboradores (review/pushback)
 import {
   parseAccounts, parsePeople, migrateSeniorityToPeople,
-  normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv, claudeAuthShellLines,
+  normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
 import { loopback } from './lib/http-guard.js';
@@ -101,10 +101,9 @@ aplicarPathDoBoot(extras, [path.join(os.homedir(), '.local', 'bin')]);
 
 // A telemetria do GitHub CLI relanca um "gh send-telemetry" DESTACADO (sem console)
 // que roda tzutil /g; como processo destacado nao herda o console oculto do Farol,
-// o Windows aloca um console novo VISIVEL e o terminal padrao (Windows Terminal)
-// pisca uma janela a cada batch. Todos os filhos herdam process.env (ghEnv espalha,
+// o Windows aloca um console novo VISIVEL e pisca uma janela a cada batch. Todos os filhos herdam process.env (ghEnv espalha,
 // e chamadas gh sem env herdam direto), entao UMA linha aqui cobre gh direto, gh
-// dentro das sessoes do claude e as sessoes de terminal.
+// dentro das sessoes do claude.
 process.env.GH_TELEMETRY = 'false';
 
 // Os padrões vêm da tabela ÚNICA (lib/settings.js), que é também quem diz o que a
@@ -144,7 +143,7 @@ class Engine extends EventEmitter {
     this.config = { ...DEFAULTS, ...configSalva };
     // bind é só de arquivo e chega ao listen e à allowlist: saneia aqui, uma vez, para todo leitor
     this.config.bind = sanear('bind', this.config.bind, this.config, PARSERS);
-    delete this.config.autoOpenReview; // chave antiga (terminal); o modo autonomo tem semantica nova
+    delete this.config.autoOpenReview; // chave antiga (sessão interativa); o modo autonomo tem semantica nova
     this.config.accounts = parseAccounts(this.config.accounts); // normaliza (array de {user,owners})
     // idem accounts/people acima: config.json pode estar malformado (editado à mão,
     // corrompido, versão antiga/incompatível) — normaliza no boot pra nunca derrubar o
@@ -195,7 +194,6 @@ class Engine extends EventEmitter {
     carregarLimites(this);
     this.staleInfo = {};              // key do PR -> { stale, head, lastState } (gate da re-revisao automatica; interno, fora do snapshot)
     this.activeReviews = new Map();  // id -> { keys, label, mode, startedAt }
-    this.reviewPostCaps = new Map(); // capabilities efêmeras de escrita de terminal (nunca persistidas nem expostas)
     this.sessionSeq = 0;
     this.headlessQueue = [];
     this.headlessBusyAccounts = new Map(); // conta -> nº de revisões headless rodando (teto por conta = config.parallelReviews, default 1)
@@ -682,7 +680,6 @@ class Engine extends EventEmitter {
     delete env.GH_TOKEN;
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
-    env.FAROL_PORT = String(this.config.port || DEFAULT_PORT);
     // chave de API do Claude que o Farol usa pra esta conta: ver resolveClaudeAuth
     // (perfil por conta > perfil padrão do Farol > primeiro perfil utilizável).
     applyClaudeAuthEnv(env, this.resolveClaudeAuth(user));
@@ -1095,15 +1092,6 @@ class Engine extends EventEmitter {
     return reReq;
   }
 
-  // --- sessao de revisao no Claude (terminal proprio, interativo) ---
-  // A sessão de terminal grava um script bash e o abre no emulador de terminal Linux.
-  // Sessão/stream (terminal + headless): colaborador lib/engine/session.js (Onda 2).
-  buildSessionScript(slash, id, user, reviewCap = '', segredo = '') { return sessionMod.buildSessionScript(this, slash, id, user, reviewCap, segredo); }
-  spawnConsoleLinux(slash, label, keys = [], account) { return sessionMod.spawnConsoleLinux(this, slash, label, keys, account); }
-  sessionExit(id) { return sessionMod.sessionExit(this, id); }
-  spawnConsole(slash, label, keys = [], account) { return sessionMod.spawnConsole(this, slash, label, keys, account); }
-  handleSessionExit(opts) { return sessionMod.handleSessionExit(this, opts); }
-
   // Pipeline de revisão headless: colaborador lib/engine/review.js (gate intacto, Onda 2).
   prFromUrl(url) { return reviewMod.prFromUrl(this, url); }
   async launchReview(urls, mode = 'auto', origem = 'auto', extras = {}) { return reviewMod.launchReview(this, urls, mode, origem, extras); }
@@ -1244,11 +1232,7 @@ class Engine extends EventEmitter {
   checksVermelhos(result) { return decisionMod.checksVermelhos(result); }
   async postReview(pr, payload, opcoes) { return decisionMod.postReview(this, pr, payload, opcoes); }
   async reconciliarPostagensIncertas() { return arbitragemMod.reconciliarPostagensIncertas(this); }
-  async postReviewFromSession(submission, capability) { return decisionMod.postReviewFromSession(this, submission, capability); }
   decisionForUi(item) { return decisionMod.decisionForUi(item); }
-  createReviewPostCapability(keys, account, source, ownerId) { return decisionMod.createReviewPostCapability(this, keys, account, source, ownerId); }
-  revokeReviewPostCapability(token) { return decisionMod.revokeReviewPostCapability(this, token); }
-  revokeReviewPostCapabilitiesByOwner(ownerId) { return decisionMod.revokeReviewPostCapabilitiesByOwner(this, ownerId); }
   writeMemory(result, actionLabel) { return decisionMod.writeMemory(this, result, actionLabel); }
   removeTeamMember(login) { return decisionMod.removeTeamMember(this, login); }
   async decide(id, action, ...opcoes) { return decisionMod.decide(this, id, action, ...opcoes); }
@@ -1329,8 +1313,7 @@ class Engine extends EventEmitter {
       ghAuth: auth.ok && !!auth.stdout.trim(),
       // rodar como root quebra a revisão autônoma INTEIRA, e não é opção de
       // config: o `--dangerously-skip-permissions` do headless é fixo na linha
-      // do runClaudeStream (só as sessões de terminal olham skipPermissions),
-      // então desligar o toggle não salva ninguém. Sem este campo, o sintoma é
+      // do runClaudeStream, sem chave que o desligue. Sem este campo, o sintoma é
       // um "saiu com código 1" por ciclo, pra sempre, com o doctor todo verde.
       root: rodandoComoRoot(),
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
@@ -1822,10 +1805,10 @@ function start(onReady) {
 }
 
 const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
-  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
+  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv };
 export default farol;
 export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
-  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv, claudeAuthShellLines };
+  normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv };
 
 // execucao direta: modo servidor (`node server.js`)
 if (executadoDireto(import.meta.url)) {

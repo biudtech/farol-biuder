@@ -211,11 +211,11 @@ test('sessão com loja própria captura checkpoint nela, sem tocar a da revisão
   assert.equal(readCheckpoint(checkpointPath(prKey)).entries.length, 0, 'e não contamina a loja da revisão');
 });
 
-test('sessão sem a propriedade checkpoint continua ignorada (terminal, chat, ferramenta)', async () => {
+test('sessão sem a propriedade checkpoint continua ignorada (ferramenta, contestação)', async () => {
   const id = 'a8';
   const prKey = 'org/repo#103';
-  const engine = engineFalso(id, prKey, { mode: 'terminal', checkpoint: undefined });
-  engine.activeReviews.set(id, { id, mode: 'terminal', pr: { key: prKey } });
+  const engine = engineFalso(id, prKey, { mode: 'tool', checkpoint: undefined });
+  engine.activeReviews.set(id, { id, mode: 'tool', pr: { key: prKey } });
 
   await rodarSessaoComMarcador(engine, id, {
     claim: 'x', file: 'f.ts', line: 1, verdict: 'confirmado', evidence: 'e',

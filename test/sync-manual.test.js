@@ -266,7 +266,7 @@ test('redoReceipt não apaga o recibo quando o clique seria barrado por outro mo
 });
 
 test('redoReceipt não apaga o recibo quando há revisão deste PR em curso neste aparelho', async () => {
-  for (const sessao of [{ mode: 'auto', keys: [KEY] }, { mode: 'terminal', keys: [KEY] }]) {
+  for (const sessao of [{ mode: 'auto', keys: [KEY] }]) {
     fake.setTree({ users: { u1: { receipts: { [IDS.accountHash]: { [IDS.prHash]: { [FP]: recibo() } } } } } });
     const e = motorConectado();
     e.activeReviews.set('viva', { id: 'viva', ...sessao });

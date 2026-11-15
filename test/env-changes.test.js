@@ -5,7 +5,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ehArquivoDeAmbiente, projetarMudancasDeAmbiente, KIND } from '../lib/review-source/env-changes.js';
-import { parsePatchPages } from '../lib/engine/pr-scope.js';
 
 const SEGREDO = 'Zk3vQ9pLm2Xw7Rt5Yb8Nc1Df4Gh6Jk0S';
 const PATCH_REAL = [
@@ -267,22 +266,3 @@ test('sufixo de chave ou de segredo não é arquivo de ambiente', () => {
   assert.equal(ehArquivoDeAmbiente('.env.production.local'), true);
 });
 
-test('a queda da autoanálise não leva caminho protegido cru ao disco da sessão', () => {
-  const patch = `@@ -1,2 +1,3 @@ AUTH_SECRET=${SEGREDO}\n INTERNAL_PROXY_SECRET=${SEGREDO}\n+FEATURE=true\n`;
-  const [env, protegido, comum] = parsePatchPages([[{ filename: '.env.dev', patch }, { filename: 'secrets/a.json', patch }, { filename: 'src/a.js', patch: '@@ -1 +1 @@\n+a' }]]);
-  assert.ok(env.patch.includes('+FEATURE=true'));
-  assert.ok(!env.patch.includes(SEGREDO));
-  assert.equal(protegido.patch, '');
-  assert.equal(protegido.patchStatus, 'unavailable');
-  assert.equal(comum.patch, '@@ -1 +1 @@\n+a');
-});
-
-test('a queda da autoanálise olha também o nome anterior e o conteúdo', () => {
-  const patch = `@@ -1,2 +1,3 @@ AUTH_SECRET=${SEGREDO}\n+FEATURE=true\n`;
-  const [renomeado, comToken] = parsePatchPages([[
-    { filename: 'notas.txt', previous_filename: '.env.prod', patch },
-    { filename: 'src/a.js', patch: '@@ -1 +1 @@\n+GH_TOKEN=ghp_' + 'z'.repeat(36) },
-  ]]);
-  assert.equal(renomeado.patch, '');
-  assert.equal(comToken.patch, '');
-});

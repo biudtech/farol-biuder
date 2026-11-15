@@ -130,7 +130,7 @@ test('montarInflight: três estados, formato exato e sem duplicar', () => {
   e.headlessQueue.push({ key: 'o/r#2', url: 'u2', title: 't2', author: 'b' });
   e.headlessQueue.push({ key: 'o/r#4', url: 'u4', title: 't4', knownHead: 'h4' });
   e.activeReviews.set('a1', { mode: 'auto', pr: { key: 'o/r#3', url: 'u3', title: 't3', author: 'c' }, sessionId: 'sessao-exec-03', headSha: 'h3' });
-  e.activeReviews.set('a2', { mode: 'terminal', pr: { key: 'o/r#8' } });
+  e.activeReviews.set('a2', { mode: 'tool', pr: { key: 'o/r#8' } });
   e.headlessQueue.push({ key: 'o/r#3', url: 'u3' });
   const lista = r.montarInflight(e);
   for (const item of lista) assert.deepEqual(Object.keys(item), [...r.CAMPOS_INFLIGHT]);

@@ -3,11 +3,16 @@ import assert from 'node:assert/strict';
 import env from '../lib/env.js';
 
 test('env e preguicoso: stub setado DEPOIS do require e enxergado', () => {
-  delete process.env.FAROL_REVIEW_CMD;
-  assert.equal(env.reviewCmdStub(), undefined);
-  process.env.FAROL_REVIEW_CMD = 'node fake.js';
-  assert.equal(env.reviewCmdStub(), 'node fake.js');
-  delete process.env.FAROL_REVIEW_CMD;
+  const antes = process.env.FAROL_HEADLESS_CMD;
+  try {
+    delete process.env.FAROL_HEADLESS_CMD;
+    assert.equal(env.headlessCmdStub(), undefined);
+    process.env.FAROL_HEADLESS_CMD = 'node fake.js';
+    assert.equal(env.headlessCmdStub(), 'node fake.js');
+  } finally {
+    if (antes === undefined) delete process.env.FAROL_HEADLESS_CMD;
+    else process.env.FAROL_HEADLESS_CMD = antes;
+  }
 });
 
 test('debugSpawns liga e desliga pelo setter', () => {

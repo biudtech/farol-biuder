@@ -100,7 +100,7 @@ test('projectSessions: entrega contagem compacta e nunca vaza fileBlobs nem o ma
 });
 
 test('projectSessions: sessão sem agente passa intocada (sem campos novos)', () => {
-  const [p] = projectSessions([{ id: 't1', mode: 'terminal', keys: [] }]);
+  const [p] = projectSessions([{ id: 'a1', mode: 'auto', keys: [] }]);
   assert.equal('agents' in p, false);
   assert.equal('agentsLive' in p, false);
 });

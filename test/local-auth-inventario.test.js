@@ -50,9 +50,10 @@ test('nenhuma rota aparece em duas classes', () => {
 // O corte da Fase 1 (lote 8) tirou /api/specialists e /api/capacity (77 virou 75).
 // O corte da Fase 1 (lote 11) tirou a autoanálise e Meus PRs: /api/self-review, /restricted, /merge, /visibility, /cancel, /agent/request, /agent/read, /agent/list, /api/pr/hide e /api/pr/unhide (69 virou 59).
 // O corte da Fase 1 (lote 9, só Claude) tirou /api/claude-login, /api/claude/login-web/start, /code e /cancel, /api/claude/profile-adopt e /api/self-review/restricted/codex (75 virou 69).
-test('as classes da spec cobrem os 59 caminhos, e as públicas são só as duas de autenticação', () => {
+// O corte da Fase 1 (lote 12) tirou a sessão de terminal: /api/review/post e /api/session-exit (59 virou 57).
+test('as classes da spec cobrem os 57 caminhos, e as públicas são só as duas de autenticação', () => {
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 58);
+  assert.equal(naoPublicas.length, 56);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
   assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-baixo-risco', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
 });

@@ -88,8 +88,6 @@ $('#activeSessions').addEventListener('click', (e) => {
 $('#queue').addEventListener('click', (e) => {
   const rev = e.target.closest('.act-review');
   if (rev) { revisarUrls([rev.dataset.url]); return; }
-  const term = e.target.closest('.act-terminal');
-  if (term) { revisarUrls([term.dataset.url], {}, 'terminal'); return; }
   const ign = e.target.closest('.act-ignore');
   if (ign) {
     const key = ign.dataset.key;
@@ -141,7 +139,6 @@ const settingsMap = [
   ['#setAguardarCi', 'aguardarCiParaRevisar', el => el.checked],
   ['#setAguardarCiAprovar', 'aguardarCiParaAprovar', el => el.checked],
   ['#setReReviewResume', 'reReviewResume', el => el.checked],
-  ['#setSkipPerms', 'skipPermissions', el => el.checked],
   ['#setSound', 'soundEnabled', el => el.checked],
   ['#setAutostart', 'autostart', el => el.checked]
 ];

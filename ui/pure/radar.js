@@ -197,10 +197,9 @@ export function queueCardHtml(pr, ctx) {
       </div>
       <!-- O menu abre DENTRO do card, empurrando o conteúdo, em vez de flutuar por cima:
            num card já estreito, dropdown flutuante sai da tela ou cobre o card vizinho.
-           Terminal e Ignorar vieram pra cá porque Ignorar é destrutivo e estava a um
+           Ignorar veio pra cá porque é destrutivo e estava a um
            toque de distância do Revisar. -->
       <div class="pr-menu" data-menu="${esc(pr.key)}" hidden>
-        <button class="act-terminal" data-url="${esc(pr.url)}">Revisar no terminal (interativo)</button>
         <a href="${esc(pr.url)}" target="_blank" rel="noreferrer">Abrir no GitHub ↗</a>
         <button class="danger act-ignore" data-key="${esc(pr.key)}">Marcar como visto sem revisar</button>
       </div>

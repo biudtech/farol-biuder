@@ -20,7 +20,7 @@ function keyDaUrl(url) {
 // estado().queue deixava a confirmação sem abrir quando o clique vinha de
 // Resolvidos ou de Decisões, que é justamente onde o PR não está na lista. A lista
 // fica como degrau de recuo para chamador que não passe as urls.
-async function tratarCoordenacaoDoClique(resp, mode, urls = []) {
+async function tratarCoordenacaoDoClique(resp, urls = []) {
   const porKey = new Map(urls.map((u) => [keyDaUrl(u), u]).filter(([k]) => k));
   for (const c of syncConfirmacoesDoClique(resp)) {
     if (c.tipo === 'aviso') { toast('info', c.texto, 7000); continue; }
@@ -29,20 +29,18 @@ async function tratarCoordenacaoDoClique(resp, mode, urls = []) {
     if (!url) { toast('info', `${c.key}: a coordenação segurou a revisão, e o PR não está mais na tela.`, 6000); continue; }
     // uma confirmação por vez é o ponto: são modais, e empilhar dois esconderia um
     const ok = await confirmModal({ title: c.titulo, confirmLabel: c.acao, body: c.corpo });
-    if (ok) revisarUrls([url], { [c.override]: true }, mode);
+    if (ok) revisarUrls([url], { [c.override]: true });
   }
 }
 
 /* Boca ÚNICA do clique Revisar. Todos os caminhos (fila, "revisar de novo",
-   revisar tudo, terminal) passam por aqui, pela mesma razão do enqueueHeadless no
+   revisar tudo) passam por aqui, pela mesma razão do enqueueHeadless no
    engine: garantia que precisa valer sempre mora no estrangulamento, e não em cada
    chamador. Sem isto, o botão que alguém acrescentasse amanhã ignoraria a confirmação
    da coordenação em silêncio. */
-function revisarUrls(urls, extras = {}, mode = 'auto') {
-  const corpo = { urls, ...extras };
-  if (mode === 'terminal') corpo.mode = 'terminal';
-  return api('/api/review', corpo).then(r => {
-    if (r && Array.isArray(r.coordenacao) && r.coordenacao.length) tratarCoordenacaoDoClique(r, mode, urls);
+function revisarUrls(urls, extras = {}) {
+  return api('/api/review', { urls, ...extras }).then(r => {
+    if (r && Array.isArray(r.coordenacao) && r.coordenacao.length) tratarCoordenacaoDoClique(r, urls);
     return r;
   });
 }

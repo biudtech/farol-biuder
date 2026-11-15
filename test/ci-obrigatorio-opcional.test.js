@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ciForaDaDecisaoBlock } from '../lib/engine/review-prompt.js';
 import { esperaCiCardMeta, staleCardMeta, tituloDoAprovarDesligado, fraseDoCi, accountsManagerHtml } from '../ui/pure.js';
-import { flagSemPermissoes, buildSessionScript } from '../lib/engine/session.js';
 
 const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 // a seção v2.78.42 do CHANGELOG, a deste PR
@@ -88,25 +87,6 @@ test('desligar só é seguro com check obrigatório no ruleset: a linha da chave
   }
 });
 
-test('sessão no terminal sem pedir permissões: ligada por padrão, mas como root a flag não entra', () => {
-  const engine = { config: { skipPermissions: true, port: 47170 }, resolveClaudeAuth: () => null, primaryUser: () => 'default-user' };
-  const getuidOriginal = process.getuid;
-  const comUid = (uid, fn) => { process.getuid = () => uid; try { return fn(); } finally { process.getuid = getuidOriginal; } };
-  try {
-    comUid(1000, () => {
-      assert.equal(flagSemPermissoes(engine), ' --dangerously-skip-permissions');
-      assert.match(buildSessionScript(engine, '/pr-review x', 'id1', 'default-user'), /claude --dangerously-skip-permissions/);
-    });
-    comUid(0, () => {
-      assert.equal(flagSemPermissoes(engine), '', 'o Claude Code recusa a flag como root: a sessão morreria ao abrir');
-      assert.doesNotMatch(buildSessionScript(engine, '/pr-review x', 't1', 'default-user'), /--dangerously-skip-permissions/);
-    });
-    comUid(1000, () => assert.equal(flagSemPermissoes({ config: { skipPermissions: false } }), '', 'desligada continua sem a flag'));
-  } finally {
-    if (getuidOriginal === undefined) delete process.getuid;
-  }
-});
-
 test('o padrão ausente do card é o lado seguro, e todo chamador das telas passa a chave', () => {
   // ui/pure/review.js trata o argumento ausente como ligado (trava o Aprovar); o engine trata a
   // config ausente como desligada. Por isso nenhum chamador pode omitir o argumento.
@@ -131,15 +111,13 @@ test('o padrão ausente do card é o lado seguro, e todo chamador das telas pass
 
 test('Sistema > Automação: as chaves que nascem ligadas só desligam com false explícito', () => {
   const sistema = ler('ui/telas/sistema.js');
-  for (const linha of [
-    "$('#setReReviewResume').checked = c.reReviewResume !== false;",
-    "$('#setSkipPerms').checked = c.skipPermissions !== false;",
-  ]) assert.ok(sistema.includes(linha), linha);
+  const linha = "$('#setReReviewResume').checked = c.reReviewResume !== false;";
+  assert.ok(sistema.includes(linha), linha);
 });
 
 test('uma config com o marcador do esquema 2 não reabre a migração', async () => {
   const M = (await import('../lib/engine/contas-migracao.js')).default;
-  const comMarcador = { esquemaConfig: 2, aguardarCiParaAprovar: true, skipPermissions: false, reReviewResume: false };
+  const comMarcador = { esquemaConfig: 2, aguardarCiParaAprovar: true, reReviewResume: false };
   assert.deepEqual(M.migrarPadroes(comMarcador), { mudou: false, valores: {}, mudancas: [] }, 'a escolha gravada fica');
 });
 
@@ -169,7 +147,7 @@ test('Sistema > Automação: a linha virou chave, ligada à preferência, e os p
   const linha = (id) => html.slice(html.indexOf(`id="${id}"`), html.indexOf('</label>', html.indexOf(`id="${id}"`)));
   assert.match(linha('sys-row-aguardarciaprovar'), /<input id="setAguardarCiAprovar" type="checkbox">/);
   assert.match(linha('sys-row-aguardarciaprovar'), /Desligado \(padrão\)/);
-  for (const id of ['sys-row-rereviewresume', 'sys-row-skipperms']) {
+  for (const id of ['sys-row-rereviewresume']) {
     assert.match(linha(id), /Ligado \(padrão\)/, id);
     assert.doesNotMatch(linha(id), /Desligado \(padrão\)/, id);
   }
@@ -246,12 +224,12 @@ test('sem check obrigatório no ruleset: a leitura marca, e o aviso da aprovaç�
   assert.deepEqual(avisoDaAprovacao({ checksObrigatorios: [] }), [], 'CI obrigatório verde: sem aviso');
 });
 
-test('migração do esquema 2: o que se distingue como escolha fica; o indistinguível segue a migração única, com rastro', async () => {
+test('migração do esquema 2: o que se distingue como escolha fica; o indistinguível segue a migração única', async () => {
   const M = (await import('../lib/engine/contas-migracao.js')).default;
-  const jaNoPadraoNovo = M.migrarPadroes({ esquemaConfig: 1, skipPermissions: true, reReviewResume: true, aguardarCiParaAprovar: false });
+  const jaNoPadraoNovo = M.migrarPadroes({ esquemaConfig: 1, reReviewResume: true, aguardarCiParaAprovar: false });
   assert.deepEqual([jaNoPadraoNovo.valores, jaNoPadraoNovo.mudancas], [{}, []], 'true gravado é escolha ou já o padrão: nada muda, nada vai ao rastro');
-  const indistinguivel = M.migrarPadroes({ esquemaConfig: 1, skipPermissions: false, reReviewResume: true, aguardarCiParaAprovar: false });
-  assert.deepEqual(indistinguivel.valores, { skipPermissions: true });
-  assert.deepEqual(indistinguivel.mudancas, [{ conta: null, campo: 'skipPermissions', de: false, para: true }], 'a troca fica visível no rastro');
+  const indistinguivel = M.migrarPadroes({ esquemaConfig: 1, reReviewResume: false, aguardarCiParaAprovar: false });
+  assert.deepEqual(indistinguivel.valores, { reReviewResume: true });
+  assert.deepEqual(indistinguivel.mudancas, [], 'reReviewResume não muda risco: fora do rastro da política');
   assert.match(ler('docs/CONFIGURATION.md'), /indistinguível do padrão antigo/);
 });

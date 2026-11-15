@@ -250,7 +250,7 @@ test('fora do ar: o clique posta pelo caminho sem Firebase, e o automático segu
 
 test('COMMENT não passa pela arbitragem, mesmo com a coordenação ligada', async () => {
   const a = aparelho('dA');
-  const r = await a.postReview(PR, { event: 'COMMENT', body: 'Pergunta sobre o fluxo de retry.', comments: [] }, { via: 'sessao' });
+  const r = await a.postReview(PR, { event: 'COMMENT', body: 'Pergunta sobre o fluxo de retry.', comments: [] }, { via: 'clique' });
   assert.equal(r.ok, true);
   assert.equal(r.estado, undefined);
   assert.equal(fs.existsSync(a.postagensArquivo), false);
