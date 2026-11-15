@@ -43,6 +43,8 @@ function engineCom({ reReviewResume = false } = {}) {
   const chamadas = [];
   const atividades = [];
   const e = new Engine();
+  e.config.claudeProfiles = [{ id: 'ka', label: 'Chave A', kind: 'apikey', apiKey: 'sk-fixture-retomada', baseUrl: '' }];
+  e.config.claudeProfileId = 'ka';
   e.accountForPr = () => 'trabalho';
   e.approvePolicyFor = () => 'wait';
   e.rejectPolicyFor = () => 'wait';
@@ -67,10 +69,10 @@ function engineCom({ reReviewResume = false } = {}) {
 }
 
 // A referência de retomada mora no Map durável (lib/engine/retomada-duravel.js): o
-// pr.retomarSid sozinho não retoma mais. Contexto 'dir' sem perfil é o que a Engine
-// deste teste resolve (config sem claudeProfiles).
+// pr.retomarSid sozinho não retoma mais. Contexto 'apikey' com o perfil 'ka' é o que a
+// Engine deste teste resolve.
 function semear(e, sid, knownHead = HEAD) {
-  retomada.guardarRetomada(e, PR_BASE, { retomarSid: sid, knownHead, provedor: 'dir', perfilId: '' });
+  retomada.guardarRetomada(e, PR_BASE, { retomarSid: sid, knownHead, provedor: 'apikey', perfilId: 'ka' });
 }
 
 test('retomarSid válido entra como --resume mesmo com reReviewResume desligado', async () => {

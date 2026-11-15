@@ -20,7 +20,7 @@ import { ghPrUrl } from './mencoes.js';
 
 const ABAS_DA_ROTA = ['radar', 'time', 'consumo', 'sistema'];
 // nome na URL <-> nome interno (o data-sub / data-section do index.html)
-const SUBS_DO_RADAR = { 'pra-mim': 'mim', aparelhos: 'apar', 'meus-prs': 'meus', panorama: 'pano' };
+const SUBS_DO_RADAR = { 'pra-mim': 'mim', aparelhos: 'apar', 'meus-prs': 'meus' };
 const SECOES_DO_SISTEMA = {
   'visao-geral': 'overview', contas: 'accounts', automacao: 'automation', jira: 'jira',
   sincronizacao: 'sync', aparelhos: 'devices', grupos: 'groups', plano: 'plans',

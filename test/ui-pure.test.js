@@ -1640,17 +1640,6 @@ test('Consumo: resumo vazio vira mensagem de vazio, não markup quebrado', () =>
   assert.match(P.usageSessionsHtml({}), /Nenhuma sessão/);
 });
 
-test('Consumo: perfil Codex explica tokens, custo zero e plano ChatGPT sem fingir orçamento em US$', () => {
-  const html = P.usageBudgetHtml({ budgets: [{
-    id: 'cx1', label: 'Codex ChatGPT', kind: 'codex', blocked: false,
-    today: 0, sinceCutoff: 0, budgetDaily: 10, budgetTotal: null,
-  }] });
-  assert.match(html, /Codex · plano ChatGPT/);
-  assert.match(html, /tokens das sessões autônomas/);
-  assert.match(html, /US\$ 0,00/);
-  assert.doesNotMatch(html, /usage-meter/, 'teto em dólar não se aplica ao plano ChatGPT');
-});
-
 test('usageMatrixHtml: a legenda acompanha a métrica escolhida', () => {
   // guarda-corpo antes das asserções: se o fixture parar de produzir matriz (nome
   // de campo errado, dia fora da janela), a função cai no early return, a legenda
@@ -1743,21 +1732,6 @@ test('nenhum seletor de atributo escapa só a aspa (a barra tem que vir junto)',
 const MARK_T = { style: '--ac:#f00;', varStyle: '--ac:#f00;', dim: '', chip: '<span class="acct-chip">acme</span>', dot: '<span class="acct-dot"></span>', acct: { label: 'acme' } };
 const PR_T = (o = {}) => ({ key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7',
   title: 'Corrige o gate', author: 'alice', updatedAt: '2026-08-17T10:00:00Z', ...o });
-const CTX_PANO = { mark: MARK_T, actions: {}, staleStates: {}, todasContas: true, running: new Set(), waiting: [] };
-
-test('Panorama: o autor fica FORA da caixa que trunca o título', () => {
-  // regressão do defeito de "Revisões recentes" (v2.39.0) reencontrado em 11/08:
-  // com o @autor dentro do .pw-title (overflow hidden + ellipsis), título comprido
-  // empurrava foto e login pra fora da tela, sem aviso. Era regex no ui-widgets;
-  // agora renderiza.
-  const html = P.panoramaRowHtml(PR_T({ title: 'T'.repeat(300) }), CTX_PANO);
-  const linha = html.match(/<div class="pw-title">([\s\S]*?)<\/div>/);
-  assert.ok(linha, 'a linha do título existe');
-  assert.match(linha[1], /<span class="pw-title-txt"/, 'o texto do título tem elemento próprio, que é quem trunca');
-  assert.match(linha[1], /person-mention/, 'o autor está na LINHA, irmão do texto');
-  const txt = html.match(/<span class="pw-title-txt"[^>]*>([\s\S]*?)<\/span>/);
-  assert.doesNotMatch(txt[1], /person-mention/, 'e nunca DENTRO da caixa que trunca');
-});
 
 test('cards do Radar: título e autor saem escapados', () => {
   // A asserção NÃO procura por uma tag específica: o CodeQL reprovou a primeira
@@ -1768,7 +1742,7 @@ test('cards do Radar: título e autor saem escapados', () => {
   const PAYLOADS = ['<img src=x onerror=1>', '<SCRIPT>x</SCRIPT>', '<ScRiPt>x</ScRiPt>', '"><b>', "'><b>"];
   for (const carga of PAYLOADS) {
     const mau = PR_T({ title: carga, author: carga });
-    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T }), P.panoramaRowHtml(mau, CTX_PANO)]) {
+    for (const html of [P.queueCardHtml(mau, { people: {}, mark: MARK_T })]) {
       assert.ok(!html.includes(carga), `a carga "${carga}" não pode aparecer crua`);
       assert.match(html, /&lt;|&quot;|&#39;/, 'e o que entrou saiu como entidade');
     }
@@ -1779,7 +1753,7 @@ test('cards do Radar: o escape não depende da caixa da tag', () => {
   // trava explícita do que o CodeQL apontou
   for (const tag of ['<script>', '<SCRIPT>', '<ScRiPt>']) {
     const mau = PR_T({ title: tag });
-    const html = P.panoramaRowHtml(mau, CTX_PANO);
+    const html = P.queueCardHtml(mau, { people: {}, mark: MARK_T });
     assert.doesNotMatch(html, new RegExp(tag.replace(/[<>]/g, m => '\\' + m), 'i'),
       `${tag} escapado em qualquer caixa`);
   }
@@ -1797,82 +1771,44 @@ test('queueCardHtml: sem autor não renderiza o seletor de papel', () => {
   assert.doesNotMatch(html, /papel-level/, 'PR sem autor não tem papel a marcar');
 });
 
-test('panoramaRowHtml: a precedência do botão é rodando > fila > revisar', () => {
-  const rodando = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, running: new Set(['acme/api#7']), waiting: ['acme/api#7'] });
-  assert.match(rodando, /Revisando…/, 'rodando ganha da fila');
-  const naFila = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, waiting: ['acme/api#7'] });
-  assert.match(naFila, /Na fila \(1\)/);
-  const livre = P.panoramaRowHtml(PR_T(), CTX_PANO);
-  assert.match(livre, /act-review/, 'sem nada em curso, dá pra revisar');
-});
-
-test('panoramaRowHtml: estado resolvido troca o botão por rótulo', () => {
-  const pedido = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'request_changes' } } });
-  assert.match(pedido, /aguardando o autor/);
-  assert.doesNotMatch(pedido, /act-review/, 'já pedi mudanças: não oferece revisar de novo');
-  const pendente = P.panoramaRowHtml(PR_T(), { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'pending' } } });
-  assert.match(pendente, /aguardando você/);
-});
-
-test('panoramaRowHtml: commit novo depois da review reabre o botão', () => {
-  const base = { ...CTX_PANO, actions: { 'acme/api#7': { kind: 'approve' } } };
-  assert.doesNotMatch(P.panoramaRowHtml(PR_T(), base), /act-review/, 'aprovado e parado: nada a fazer');
-  const stale = P.panoramaRowHtml(PR_T(), { ...base, staleStates: { 'acme/api#7': true } });
-  assert.match(stale, /act-review/, 'entrou commit novo: revisar de novo');
-  assert.match(stale, /commit novo/, 'e o tooltip diz por quê');
-});
-
-test('panoramaRowHtml: o selo da conta só aparece no escopo "todas"', () => {
-  assert.match(P.panoramaRowHtml(PR_T(), CTX_PANO), /acct-chip/);
-  const umaConta = P.panoramaRowHtml(PR_T({ mine: true }), { ...CTX_PANO, todasContas: false });
-  assert.doesNotMatch(umaConta, /acct-chip/);
-  assert.match(umaConta, /sua revisão/, 'numa conta só, o que importa é ser seu');
-});
-
 /* ---------- onda 5, quinto passo: o painel Sistema (perfis e contas) ----------
    Dois pedaços ficaram no app.js de propósito, porque são DOM e não markup: o guarda
    de foco (não reconstruir enquanto a pessoa digita num campo do bloco) e o
    `hint.hidden` do fim dos perfis, que o listener do seletor desfaz. */
 
 const CTX_SIS = {
-  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', dir: '/home/x/.claude' }], claudeProfileId: 'p1' },
+  config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-ant-x', baseUrl: '' }], claudeProfileId: 'p1' },
   usage: { budgets: [] },
-  doctor: { claudeAuth: [{ id: 'p1', ready: true, account: 'alice' }, { id: '', ready: true }] },
+  doctor: { claudeAuth: [{ id: 'p1', ready: true, apiKeyMode: true }] },
   ehWin: true,
   accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
   acct: { alice: { label: 'Pessoal', color: '#f80' } },
 };
 
-test('claudeAuthBadge: acha o perfil, cai no padrão da máquina, e some sem dado', () => {
-  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /alice/);
-  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha a entrada do padrão');
+test('claudeAuthBadge: acha o perfil, cai no primeiro com chave, e some sem dado', () => {
+  assert.match(P.claudeAuthBadge('p1', CTX_SIS), /chave configurada/);
+  assert.match(P.claudeAuthBadge('', CTX_SIS), /a-claude/, 'id vazio acha o primeiro perfil com chave');
   assert.equal(P.claudeAuthBadge('p1', { doctor: {} }), '', 'sem doctor não inventa selo');
 });
 
-test('claudeAuthBadge: perfil Codex mostra a causa real quando o login ChatGPT nao confirmou', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: false,
-      codexLoginDetail: 'Logged in using API key',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  const html = P.claudeAuthBadge('codex', ctx);
-  assert.match(html, /SEM CODEX/);
-  assert.match(html, /Logged in using API key/);
+test('claudeAuthBadge: sem perfil nenhum diz SEM PERFIL, e perfil sem chave diz SEM CHAVE', () => {
+  assert.match(P.claudeAuthBadge('', { doctor: { claudeAuth: [] } }), /SEM PERFIL/);
+  assert.match(P.claudeAuthBadge('k', { doctor: { claudeAuth: [{ id: 'k', ready: false, apiKeyMode: true }] } }), /SEM CHAVE/);
 });
 
-test('claudeAuthBadge: perfil Codex confirma ChatGPT quando o doctor confirma', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: {
-      codexChatGPT: true,
-      codexLoginDetail: 'Logged in using ChatGPT',
-      claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }]
-    }
-  };
-  assert.match(P.claudeAuthBadge('codex', ctx), /Codex ChatGPT/);
+test('Consumo: o cartão do perfil é de chave de API, com teto e nota quando falta teto', () => {
+  const html = P.usageBudgetHtml({ budgets: [{ id: 'k1', label: 'Chave A', kind: 'apikey', blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }] });
+  assert.match(html, /Chave de API/);
+  assert.match(html, /Nenhum teto definido/);
+  assert.doesNotMatch(html, /assinatura|plano ChatGPT/i);
+});
+
+test('runtimeChecks: perfil de chave de API apontado que não resolve vira check do Diagnóstico', () => {
+  const checks = P.runtimeChecks({ root: false }, {}, { problemas: [{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-invalido' }] });
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].label, 'Perfil de chave de API');
+  assert.equal(checks[0].ok, false);
+  assert.match(checks[0].detail, /incompleto \(falta a chave\)/);
 });
 
 test('painel Sistema: os três construtores desenham com ctx cheio e com ctx vazio', () => {
@@ -1895,55 +1831,11 @@ test('accountsManagerHtml: conta silenciada muda rótulo e classe do botão', ()
   assert.match(html, /silenciada/, 'o estado aparece no texto de autenticação');
 });
 
-test('claudeProfilesHtml: sem perfil e com diretório legado oferece a migração', () => {
-  const legado = { ...CTX_SIS, config: { claudeProfiles: [], claudeConfigDir: '/home/x/.claude' } };
-  assert.match(P.claudeProfilesHtml(legado), /primeiro perfil/);
-  assert.doesNotMatch(P.claudeProfilesHtml(CTX_SIS), /primeiro perfil/, 'com perfil salvo, some');
-});
-
 test('claudeProfilesHtml: perfil de chave de API mostra os campos de teto', () => {
   const api = { ...CTX_SIS, config: { claudeProfiles: [{ id: 'p2', label: 'API', kind: 'apikey', apiKey: 'k', budgetDaily: 10 }], claudeProfileId: 'p2' } };
   const html = P.claudeProfilesHtml(api);
   assert.match(html, /cp-budget-daily/);
   assert.match(html, /value="10"/, 'o teto salvo aparece preenchido');
-});
-
-test('claudeProfilesHtml: perfil OpenRouter mostra campos de chave e hint do Skin', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: {
-      claudeProfiles: [{
-        id: 'or', label: 'OR', kind: 'openrouter', apiKey: 'sk-or-1',
-        baseUrl: 'https://openrouter.ai/api',
-      }],
-      claudeProfileId: 'or',
-    },
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /OpenRouter/);
-  assert.match(html, /data-kind="openrouter"/);
-  assert.doesNotMatch(html, /cp-login" data-id="or"/, 'OpenRouter não oferece login OAuth');
-  assert.match(html, /Anthropic Skin/);
-});
-
-test('claudeAuthBadge: perfil OpenRouter pronto', () => {
-  const ctx = {
-    ...CTX_SIS,
-    doctor: { claudeAuth: [{ id: 'or', label: 'OR', openrouterMode: true, ready: true }] },
-  };
-  assert.match(P.claudeAuthBadge('or', ctx), /OpenRouter/);
-});
-
-test('claudeProfilesHtml: perfil Codex tambem oferece abrir sessao de login', () => {
-  const ctx = {
-    ...CTX_SIS,
-    config: { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }], claudeProfileId: 'codex' },
-    doctor: { codexChatGPT: false, claudeAuth: [{ id: 'codex', label: 'Codex', codexMode: true, ready: true }] },
-  };
-  const html = P.claudeProfilesHtml(ctx);
-  assert.match(html, /class="btn sm cp-login" data-id="codex"/);
-  assert.match(html, /Abrir sessão de login/);
 });
 
 /* ---------- onda 5, sexto passo: o banner do topo ----------
@@ -1995,42 +1887,13 @@ test('vazio da fila: sem aprovação hoje, não inventa contagem', () => {
   assert.doesNotMatch(html, /aprovou/, 'zero não vira "aprovou 0"');
 });
 
-test('pedidosAntesDoInicio conta só mine, fora da fila e anteriores ao baseline', () => {
-  const baseline = { at: Date.parse('2026-10-10T12:00:00Z'), marcados: 3 };
-  const antes = '2026-10-01T00:00:00Z';
-  const depois = '2026-10-20T00:00:00Z';
-  const panorama = [
-    { key: 'a', mine: true, updatedAt: antes },
-    { key: 'b', mine: true, updatedAt: depois },
-    { key: 'c', mine: false, updatedAt: antes },
-    { key: 'd', mine: true, updatedAt: antes },
-  ];
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline }), 1);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(['d']), baseline: null }), 0);
-});
-
-test('pedidosAntesDoInicio: baseline legado e PR já revisado por mim não contam', () => {
-  const antes = '2026-10-01T00:00:00Z';
-  const panorama = [{ key: 'a', mine: true, updatedAt: antes }, { key: 'r', mine: true, reviewedByMe: true, updatedAt: antes }];
-  const at = Date.parse('2026-10-10T12:00:00Z');
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: null } }), 0);
-  assert.equal(P.pedidosAntesDoInicio({ panorama, queueKeys: new Set(), baseline: { at, marcados: 2 } }), 1);
-});
-
-test('vazio da fila com PRs anteriores ao baseline diz quantos e leva ao Panorama', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['biudtech'], intervalSeconds: 300, antesDoInicio: 14 });
-  assert.match(html, /14 PRs já pediam sua revisão antes do Farol começar a vigiar/);
-  assert.match(html, /class="btn sm eo-panorama"/);
-  assert.doesNotMatch(html, /Nada esperando por você/);
-});
-
 test('vazio da fila sem aprovados não oferece "Ver o que foi aprovado"', () => {
-  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
-  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300, antesDoInicio: 0 }), /eo-resolved/);
+  assert.doesNotMatch(P.queueEmptyOkHtml({ aprovados: 0, owners: [], intervalSeconds: 300 }), /eo-resolved/);
+  assert.match(P.queueEmptyOkHtml({ aprovados: 2, owners: [], intervalSeconds: 300 }), /eo-resolved/);
 });
 
-test('vazio da fila com antesDoInicio 0 é o vazio bom de sempre', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300, antesDoInicio: 0 });
+test('vazio da fila sem nada a contar é o vazio bom de sempre', () => {
+  const html = P.queueEmptyOkHtml({ aprovados: 0, owners: ['acme'], intervalSeconds: 300 });
   assert.match(html, /Nada esperando por você/);
   assert.doesNotMatch(html, /eo-panorama/);
 });
@@ -2238,27 +2101,6 @@ test('runtimeChecks: sem root não inventa linha (Windows nem tem uid)', () => {
   assert.deepEqual(P.runtimeChecks({}), []);
   assert.deepEqual(P.runtimeChecks(null), [], 'doctor ainda não carregado não pode derrubar a tela');
   assert.deepEqual(P.runtimeChecks(undefined), []);
-});
-
-test('runtimeChecks: perfil Codex aparece na Visao geral com CLI e login separados', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: 'codex-cli 0.150.0', codexChatGPT: true, codexLoginDetail: 'Logged in using ChatGPT' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks.length, 2);
-  assert.deepEqual(checks.map(c => [c.label, c.ok]), [['Codex CLI', true], ['Login Codex', true]]);
-  assert.ok(checks.every(c => c.goto === 'sys:plans:#claudeProfilesManager'));
-});
-
-test('runtimeChecks: perfil Codex denuncia quando o app nao acha o codex do terminal', () => {
-  const checks = P.runtimeChecks(
-    { root: false, codex: null, codexChatGPT: false, codexLoginDetail: 'codex login status falhou (código 1)' },
-    { claudeProfiles: [{ id: 'codex', label: 'Codex', kind: 'codex' }] }
-  );
-  assert.equal(checks[0].ok, false);
-  assert.match(checks[0].detail, /PATH/);
-  assert.equal(checks[1].ok, false);
-  assert.match(checks[1].detail, /codex login status falhou/);
 });
 
 /* ---------- quarta porta: a UI não reconstrói a autoridade do merge ----------

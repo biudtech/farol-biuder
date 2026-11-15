@@ -343,30 +343,6 @@ export function reviewBoxHtml(d) {
   </div>`;
 }
 
-// O estado do GitHub vence o histórico local pelo mesmo motivo do kindDaRevisao
-// (ui/pure/radar.js): o que outro aparelho postou só existe lá.
-const CHIP_DO_GH = {
-  APPROVED: '<span class="badge rev-ok" title="Seu último review decisivo neste PR, no GitHub, aprovou">✅ você aprovou</span>',
-  CHANGES_REQUESTED: '<span class="badge rev-rc" title="Seu último review decisivo neste PR, no GitHub, pediu mudanças">✋ você pediu mudanças</span>',
-};
-
-export function reviewChip(pr, actions, estadosGh) {
-  const a = (actions || {})[pr.key];
-  if (a && a.kind === 'pending' && a.esperaCi) return '<span class="badge rev-ok" title="Aprovável. O Farol espera o CI obrigatório e aprova sozinho quando ele fechar verde neste commit">⏳ esperando o CI</span>';
-  if (a && a.kind === 'pending' && a.esperaProva && a.pedeVoce !== true) return '<span class="badge rev-pend" title="A análise está em recuperação automática. Nada é publicado sem evidência; não exige decisão manual">⏳ recuperando a análise</span>';
-  if (a && a.kind === 'pending' && a.esperaProva) return '<span class="badge rev-pend" title="A recuperação da análise está pausada por algo que só você resolve; o card em Precisa de você diz o quê">🟡 aguardando você (recuperação pausada)</span>';
-  if (a && a.kind === 'pending') return '<span class="badge rev-pend" title="A análise terminou e está esperando a sua decisão em Precisa de você">🟡 aguardando você</span>';
-  const gh = String((estadosGh || {})[pr.key]);
-  if (Object.hasOwn(CHIP_DO_GH, gh)) return CHIP_DO_GH[gh];
-  if (a) {
-    if (a.kind === 'approve') return `<span class="badge rev-ok" title="APPROVE postado${a.auto ? ' automaticamente pelo protocolo' : ' por você'} via Farol">✅ você aprovou</span>`;
-    if (a.kind === 'request_changes') return '<span class="badge rev-rc" title="REQUEST CHANGES postado por você via Farol">✋ você pediu mudanças</span>';
-    if (a.kind === 'comment') return '<span class="badge rev-cm" title="COMMENT postado por você via Farol">💬 você comentou</span>';
-  }
-  if (pr.reviewedByMe) return '<span class="badge rev-ok" title="Você já revisou este PR no GitHub">✔ revisado por você</span>';
-  return '';
-}
-
 export const PB_OPTS = [['', 'sem contestação'], ['author_right', 'o autor tinha razão'], ['we_right', 'nós tínhamos razão'], ['mixed', 'meio-termo']];
 
 export const PB_SHORT = { author_right: 'autor tinha razão', we_right: 'nós tínhamos razão', mixed: 'meio-termo' };

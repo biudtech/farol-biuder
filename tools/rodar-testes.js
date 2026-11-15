@@ -14,7 +14,7 @@ if (!Number.isInteger(concorrencia) || concorrencia < 1 || concorrencia > 4) {
 // O próprio Node define o contexto correto para os arquivos que vai executar.
 const env = semAsVariaveis(['NODE_TEST_CONTEXT']);
 const resultado = spawnSync(process.execPath, [
-  '--test', `--test-concurrency=${concorrencia}`, '--test-force-exit', '--test-timeout=120000',
+  '--test', `--test-concurrency=${concorrencia}`, '--test-timeout=120000',
   ...process.argv.slice(2),
 ], { cwd: path.resolve(import.meta.dirname, '..'), stdio: 'inherit', env });
 if (resultado.error) console.error(resultado.error.message);

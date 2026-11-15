@@ -11,24 +11,10 @@ import assert from 'node:assert/strict';
 import { arquivosDosPuros } from './helpers/fontes-ui.js';
 
 const CONGELADA = [
-  // faixa de prontidão (checks, reviewers, merge) e as densidades Compacta e Expandida do
-  // Radar (07/11/2026): ui/pure/prontidao.js, ui/pure/prontidao-html.js e ui/pure/densidade.js
-  "ROTULOS_DA_PRONTIDAO",
-  "tomDaProntidao",
-  "pilulasDaProntidao",
-  "formaCurtaDaProntidao",
-  "pontosDaProntidao",
-  "resumoDaProntidao",
-  "barraDaProntidao",
-  "linhasDoDetalhe",
-  "iconeDaProntidao",
+  // as densidades Compacta e Expandida do Radar (07/11/2026): ui/pure/densidade.js. A faixa de
+  // prontidão (ui/pure/prontidao.js e prontidao-html.js) saiu no corte da fase 1.
+  "classeDoTom",
   "chaveCurta",
-  "detalheDaPilulaHtml",
-  "faixaDaProntidaoHtml",
-  "trioCurtoHtml",
-  "pontosDaProntidaoHtml",
-  "legendaDosPontosHtml",
-  "resumoDaProntidaoHtml",
   "setaDaLinhaHtml",
   "linhaCompactaHtml",
   "ETAPAS_DA_AUTOANALISE",
@@ -48,14 +34,6 @@ const CONGELADA = [
   "resolvidasHoje",
   "rodapeDasRecentes",
   "resumoPraMimHtml",
-  // o Antigravity em Plano e chaves (20/10/2026, ui/pure/agy.js): a cota ao vivo e o cartão
-  "camposAgyHtml",
-  "cotaAgyHtml",
-  // cadeia de perfis em Plano e chaves (20/10/2026, ui/pure/cadeia.js)
-  "alternarNaCadeia",
-  "cadeiaHtml",
-  "estadoDaCadeiaTexto",
-  "moverNaCadeia",
   // a URL reflete a tela (18/10/2026): ui/pure/rota.js traduz endereço <-> rota; desde
   // 20/10/2026 a rota mora no caminho, e enderecoDaPagina converte o hash antigo
   "enderecoDaPagina",
@@ -88,7 +66,6 @@ const CONGELADA = [
   "horaDoReset",
   "limitNoteHtml",
   "othersLineHtml",
-  "pwOthersHtml",
   "queueLimitHtml",
   // controle do celular (28/09/2026): ui/pure/aparelhos-fila.js e ui/pure/aparelhos-painel.js
   // limpeza da v2.65.0: a fila do aparelho usa estes rotulos de compartilhado.js; sairam
@@ -256,7 +233,6 @@ const CONGELADA = [
   "logSummaryLines",
   "logSummaryShort",
   "logTailLines",
-  "loginWebHtml",
   "md",
   "mergeToastKind",
   "mesclarListaRemota",
@@ -275,15 +251,12 @@ const CONGELADA = [
   "ordemDoEscalonador",
   "orgsMonitoradas",
   "ownerFromUrl",
-  "panoramaRemotoHtml",
-  "panoramaRowHtml",
   "papelOf",
   "papelPicker",
   "parkedNoteHtml",
   "pareamentoHtml",
   "parseGoto",
   // o estoque que o baseline deixou fora da fila (30/10/2026, ui/pure/radar.js)
-  "pedidosAntesDoInicio",
   "perfilProblemasHtml",
   "perfilTesteHtml",
   "personMention",
@@ -312,7 +285,6 @@ const CONGELADA = [
   "repoMention",
   "resolvedRow",
   "reviewBoxHtml",
-  "reviewChip",
   "revisaoAbertaHtml",
   "opcoesDaDecisao",
   "motivosDaPendenciaHtml",

@@ -51,7 +51,8 @@ const ENVELOPE = {
   ...criteriaFixture('approve'), analysisStatus: 'complete', verdict: 'approve', decision: 'needs_decision', cardMet: true,
   reasons: [], reportMarkdown: 'relatório', payloads: {}
 };
-const CONTEXTO = { provedor: 'dir', perfilId: '' };
+const PERFIL = { id: 'ka', label: 'Chave A', kind: 'apikey', apiKey: 'sk-fixture-retomada', baseUrl: '' };
+const CONTEXTO = { provedor: 'apikey', perfilId: 'ka' };
 const RESPOSTA = () => ({ text: JSON.stringify({ result: JSON.stringify(ENVELOPE) }), sessionId: 'sessao-nova-0001' });
 
 beforeEach(() => {
@@ -66,8 +67,8 @@ beforeEach(() => {
 function lerInflight() { return JSON.parse(fs.readFileSync(INFLIGHT, 'utf8')); }
 function linha(key) { return lerInflight().find(i => i.key === key); }
 
-// referência como a Engine deste teste a produziria: config sem claudeProfiles
-// resolve { kind: 'dir', id: '' }
+// referência como a Engine deste teste a produziria: o perfil de chave de API do motor()
+// resolve { kind: 'apikey', id: 'ka' }
 function semear(e, extra = {}) {
   return retomada.guardarRetomada(e, PR, { retomarSid: SID, knownHead: HEAD, ...CONTEXTO, sessionId: SID, headSha: HEAD, ...extra });
 }
@@ -75,6 +76,8 @@ function semear(e, extra = {}) {
 // Engine real com o mínimo stubado (mesmo recorte de test/retomada-apos-falha.test.js)
 function motor() {
   const e = new Engine();
+  e.config.claudeProfiles = [PERFIL];
+  e.config.claudeProfileId = 'ka';
   e.log = () => { };
   e.accountForPr = () => 'trabalho';
   // política da conta gravada por extenso e lida pelos métodos reais do motor (contas-config.js)
@@ -112,7 +115,7 @@ test('writeInflight grava execução, fila e pendente no formato exato', () => {
   assert.equal(linha(PR.key).estado, 'pendente');
   assert.equal(linha(PR.key).retomarSid, SID);
   assert.equal(linha(PR.key).knownHead, HEAD);
-  assert.equal(linha(PR.key).provedor, 'dir');
+  assert.equal(linha(PR.key).provedor, 'apikey');
   assert.equal(linha('o/r#22').estado, 'fila');
   assert.equal(linha('o/r#22').retomarSid, 'sessao-fila-0022');
   assert.equal(linha('o/r#23').estado, 'execucao');
@@ -131,7 +134,7 @@ test('dois reinícios antes da retomada não perdem a referência', () => {
   assert.ok(entrada, 'o segundo reinício ainda encontra a referência');
   assert.equal(entrada.retomarSid, SID);
   assert.equal(entrada.knownHead, HEAD);
-  assert.equal(entrada.provedor, 'dir');
+  assert.equal(entrada.provedor, 'apikey');
   assert.equal(linha(PR.key).retomarSid, SID);
 });
 
@@ -149,7 +152,7 @@ test('referência preservada enquanto espera vaga na fila, inclusive depois de r
   assert.equal(item.estado, 'fila');
   assert.equal(item.retomarSid, SID);
   assert.equal(item.knownHead, HEAD);
-  assert.equal(item.provedor, 'dir');
+  assert.equal(item.provedor, 'apikey');
   const b = new Engine();
   assert.equal(b.retomadas.get(PR.key).retomarSid, SID, 'crash com o PR na fila não perde a referência');
 });
@@ -195,8 +198,8 @@ test('o sid da sessão nova vai pro disco com head e contexto enquanto ela roda'
   assert.equal(visto.retomarSid, 'sessao-viva-0001');
   assert.equal(visto.sessionId, 'sessao-viva-0001');
   assert.equal(visto.knownHead, HEAD);
-  assert.equal(visto.provedor, 'dir');
-  assert.equal(visto.perfilId, '');
+  assert.equal(visto.provedor, 'apikey');
+  assert.equal(visto.perfilId, 'ka');
 });
 
 test('queda transitória: a referência vai pro disco com head e contexto e sobrevive ao reinício', async () => {
@@ -209,8 +212,8 @@ test('queda transitória: a referência vai pro disco com head e contexto e sobr
   assert.equal(item.estado, 'pendente');
   assert.equal(item.retomarSid, SID);
   assert.equal(item.knownHead, HEAD);
-  assert.equal(item.provedor, 'dir');
-  assert.equal(item.perfilId, '');
+  assert.equal(item.provedor, 'apikey');
+  assert.equal(item.perfilId, 'ka');
   const b = new Engine();
   assert.equal(b.retomadas.get(PR.key).retomarSid, SID, 'o retry deixou de ser só memória');
 });
@@ -313,8 +316,8 @@ for (const [nome, headSha] of [['vazio', async () => ''], ['exceção', async ()
 
 test('perfil diferente do que originou a sessão: não retoma, sessão nova sem bloco', async () => {
   const e = motor();
-  e.config = { ...e.config, claudeProfiles: [{ id: 'p2', label: 'P2', kind: 'dir', dir: path.join(HOME, 'cfg-p2') }], claudeProfileId: 'p2' };
-  semear(e); // originada no perfil legado ('')
+  e.config = { ...e.config, claudeProfiles: [PERFIL, { id: 'p2', label: 'P2', kind: 'apikey', apiKey: 'sk-fixture-p2', baseUrl: '' }], claudeProfileId: 'p2' };
+  semear(e); // originada no perfil 'ka'
   await e.runHeadlessReview({ ...PR });
   assert.equal(e.chamadas.length, 1);
   assert.equal(e.chamadas[0].extraArgs.includes('--resume'), false);

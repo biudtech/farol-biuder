@@ -24,7 +24,7 @@ let CAIXA = null;
 
 // Cada pedido de abertura ganha uma geração; fechar ou pedir outra caixa a invalida. A busca da
 // decisão é assíncrona, e a que termina depois de a rota mudar não abre nem empilha nada
-// (revisão do Codex sobre a 8c1a1e2, achado 6). Enquanto a busca corre, a chave pedida já é a
+// (revisão externa sobre a 8c1a1e2, achado 6). Enquanto a busca corre, a chave pedida já é a
 // caixa da rota: o endereço não a perde, e trocar de rota a cancela.
 let GERACAO = 0;
 let PEDIDA = '';

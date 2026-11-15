@@ -1,11 +1,11 @@
-// Panorama e Meus PRs de outros aparelhos, e o nome do PR na visão compartilhada: a parte
+// Meus PRs de outros aparelhos, e o nome do PR na visão compartilhada: a parte
 // PURA da tela (ui/pure/listas-remotas.js e ui/pure/pr-compartilhado.js).
 process.env.TZ = 'America/Sao_Paulo';
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  estadoDasListas, estadoDoEscopo, mesclarListaRemota, panoramaRemotoHtml, meusPrsRemotoHtml,
+  estadoDasListas, estadoDoEscopo, mesclarListaRemota, meusPrsRemotoHtml,
   prIdentificadoHtml, itensDaFila, filaDoAparelhoHtml,
 } from '../ui/pure.js';
 
@@ -124,30 +124,14 @@ test('os que não abriram são somados', () => {
 
 /* ---------- HTML ---------- */
 
-test('linha remota do Panorama: menção navegável, origem, hora e nenhuma ação', () => {
-  const m = mesclarListaRemota([{ key: 'acme/app#1' }, { key: 'acme/app#9' }], listas([escopo('panorama', [linha('acme/app#2', { isDraft: true })])]), 'panorama', { sync: SYNC, agora: AGORA });
-  const html = panoramaRemotoHtml(m, { agora: AGORA });
-  assert.match(html, /3 PRs: 2 deste aparelho e 1 de 1 outro/);
-  assert.match(html, /pr-ref-mention[^>]*href="https:\/\/github\.com\/acme\/app\/pull\/2"/);
-  assert.match(html, /person-mention[^>]*href="https:\/\/github\.com\/ana"/);
-  assert.match(html, />Notebook</);
-  assert.match(html, /atualizado 09:59/);
-  assert.match(html, /rascunho/);
-  assert.match(html, /só leitura/);
-  assert.doesNotMatch(html, /<button/, 'nenhum botão em linha de outro aparelho');
-});
-
 test('sem linha remota e sem aviso, o bloco some; com estado, ele diz o estado', () => {
-  assert.equal(panoramaRemotoHtml(mesclarListaRemota([], listas([]), 'panorama', { sync: SYNC, agora: AGORA }), { agora: AGORA }), '');
-  assert.equal(panoramaRemotoHtml(mesclarListaRemota([], listas([]), 'panorama', { sync: { shared: false }, agora: AGORA }), { agora: AGORA }), '', 'desligada não polui a aba');
-  const bloqueada = panoramaRemotoHtml(mesclarListaRemota([], listas([]), 'panorama', { sync: { shared: true, bloqueioCompartilhamento: 'x' }, agora: AGORA }), { agora: AGORA });
-  assert.match(bloqueada, /bloque/);
-  const semFrota = panoramaRemotoHtml(mesclarListaRemota([], listas([], { estado: 'sem-frota' }), 'panorama', { sync: SYNC, agora: AGORA }), { agora: AGORA });
-  assert.match(semFrota, /nenhum outro aparelho/i);
-  const falhou = panoramaRemotoHtml(mesclarListaRemota([], listas([escopo('panorama', [linha('acme/app#2')], { estado: 'falhou', falhaEm: AGORA - 1000 })]), 'panorama', { sync: SYNC, agora: AGORA }), { agora: AGORA });
-  assert.match(falhou, /leitura falhou/);
-  const naoAbriu = panoramaRemotoHtml(mesclarListaRemota([], listas([escopo('panorama', [], { naoAbriram: 1 })]), 'panorama', { sync: SYNC, agora: AGORA }), { agora: AGORA });
-  assert.match(naoAbriu, /1 item de outro aparelho não abriu e ficou de fora/);
+  const bloco = (sync, lista) => meusPrsRemotoHtml(mesclarListaRemota([], lista, 'myPrs', { sync, agora: AGORA }));
+  assert.equal(bloco(SYNC, listas([])), '');
+  assert.equal(bloco({ shared: false }, listas([])), '', 'desligada não polui a aba');
+  assert.match(bloco({ shared: true, bloqueioCompartilhamento: 'x' }, listas([])), /bloque/);
+  assert.match(bloco(SYNC, listas([], { estado: 'sem-frota' })), /nenhum outro aparelho/i);
+  assert.match(bloco(SYNC, listas([escopo('myPrs', [linha('acme/app#2')], { estado: 'falhou', falhaEm: AGORA - 1000 })])), /leitura falhou/);
+  assert.match(bloco(SYNC, listas([escopo('myPrs', [], { naoAbriram: 1 })])), /1 item de outro aparelho não abriu e ficou de fora/);
 });
 
 test('aparelho que não é o admin não mostra linha nem faixa das listas dos outros', () => {
@@ -156,13 +140,13 @@ test('aparelho que não é o admin não mostra linha nem faixa das listas dos ou
   const locais = [{ key: 'acme/app#1' }, { key: 'acme/app#2' }];
   const m = mesclarListaRemota(locais, soAdmin, 'myPrs', { sync: SYNC, agora: AGORA });
   assert.deepEqual([m.remotas.length, m.deste, m.total, m.avisos.length], [0, 2, 2, 0], 'a contagem da aba é só a deste aparelho');
-  assert.equal(panoramaRemotoHtml(mesclarListaRemota([], soAdmin, 'panorama', { sync: SYNC, agora: AGORA }), { agora: AGORA }), '');
+  assert.equal(meusPrsRemotoHtml(mesclarListaRemota([], soAdmin, 'myPrs', { sync: SYNC, agora: AGORA })), '');
   assert.equal(meusPrsRemotoHtml(m), '', 'nem a faixa de estado aparece');
 });
 
 test('texto vindo de outro aparelho é escapado', () => {
-  const m = mesclarListaRemota([], listas([escopo('panorama', [linha('acme/app#2', { title: '<img src=x onerror=1>' })], { aparelho: '<b>x</b>' })]), 'panorama', { sync: SYNC, agora: AGORA });
-  const html = panoramaRemotoHtml(m, { agora: AGORA });
+  const m = mesclarListaRemota([], listas([escopo('myPrs', [linha('acme/app#2', { title: '<img src=x onerror=1>' })], { aparelho: '<b>x</b>' })]), 'myPrs', { sync: SYNC, agora: AGORA });
+  const html = meusPrsRemotoHtml(m);
   assert.doesNotMatch(html, /<img src=x|<b>x/);
   assert.match(html, /&lt;img src=x onerror=1&gt;/);
 });
