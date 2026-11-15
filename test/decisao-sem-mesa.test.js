@@ -161,7 +161,7 @@ async function revisar(e, n, { marcas, extra } = {}) {
   await e.runHeadlessReview(PR(n, marcas));
 }
 
-const violacao = (achados = [{ file: 'src/a.ts', line: 12, message: 'regra de negócio duplicada no controller' }]) => async (ctx) => ({
+const violacao = (achados = [{ rule: 'core.duplication.business-rule', file: 'src/a.ts', line: 12, message: 'regra de negócio duplicada no controller' }]) => async (ctx) => ({
   ...technicalReport(ctx.head, ctx.repo), verdict: 'fail',
   rules: [{ rule: 'core.duplication.business-rule', verdict: 'fail', causa: 'a regra de desconto foi copiada em dois lugares' }],
   findings: achados,
@@ -223,6 +223,81 @@ test('modo enforce recupera texto contraditório mesmo com blocker persistente',
   assert.deepEqual(envios.map(p => p.event), ['REQUEST_CHANGES']);
 });
 
+// backoffice#365 (14/11/2026), primeira rodada: a sessão pediu mudanças por dois pontos dela e o
+// texto saiu como ela escreveu. O bloqueio que a avaliação técnica tinha confirmado (medida em px)
+// ficou de fora, e o autor só soube dele na rodada seguinte, depois de corrigir o resto.
+test('pedido de mudanças escrito pela sessão leva na frente o defeito que o app confirmou', async () => {
+  const e = motor();
+  technicalRuntime.finishTechnicalReview = async (ctx) => ({
+    ...technicalReport(ctx.head, ctx.repo), verdict: 'fail',
+    rules: [{ rule: 'frontend.component.scalable-units', verdict: 'fail' }],
+    findings: [{ rule: 'frontend.component.scalable-units', file: 'src/Card.tsx', message: 'unidade fixa escalavel na linha 102: text-[11px]; use rem ou token escalavel' }],
+  });
+  const blocker = { ...criteriaFixture('request_changes').findings[0], severity: 'blocking', title: 'Cor fora dos tokens', summary: 'Use os tokens antes do merge.', file: 'src/impressao.ts', line: 85 };
+  await revisar(e, 160, { extra: { verdict: 'request_changes', findings: [blocker], payloads: {
+    request_changes: { event: 'REQUEST_CHANGES', body: 'As cores fixas em `src/impressao.ts` precisam virar tokens.', comments: [] },
+  } } });
+  assert.deepEqual(envios.map((p) => p.event), ['REQUEST_CHANGES']);
+  const corpo = envios[0].body;
+  assert.match(corpo, /^Antes do merge, isto precisa ser resolvido:/, 'a seção do app abre o texto');
+  assert.match(corpo, /^ {2}- medida fixa em px .*: em `src\/Card\.tsx:102`$/m);
+  assert.match(corpo, /As cores fixas em `src\/impressao\.ts` precisam virar tokens\./, 'o texto da sessão continua inteiro');
+  assert.equal(corpo.split('Antes do merge, isto precisa ser resolvido:').length, 2, 'a seção entra uma vez só');
+  assert.doesNotMatch(corpo, /scalable-units|text-\[11px\]/);
+  assert.deepEqual(publicReviewLanguageIssues(envios[0], 'eu'), [], corpo);
+  assert.equal(resolvida(e, 160).status, 'auto_rejected');
+  // o card da rodada em que a sessão pediu mudanças também diz o que o app confirmou
+  assert.deepEqual(textos(resolvida(e, 160)).filter((t) => t.startsWith('violação técnica confirmada')),
+    ['violação técnica confirmada: medida fixa em px onde a interface deve acompanhar a fonte do usuário (use rem ou token escalável): em `src/Card.tsx:102`']);
+});
+
+test('a seção do defeito no pedido é idempotente e não toca resultado sem defeito', () => {
+  const technicalReview = {
+    rules: [{ rule: 'frontend.component.scalable-units', verdict: 'fail' }],
+    findings: [{ rule: 'frontend.component.scalable-units', file: 'a.tsx', message: 'unidade fixa escalavel na linha 3: w-[9px]' }],
+  };
+  const comments = [{ path: 'b.ts', line: 1, body: 'aqui' }];
+  const result = { approvalEvidence: ['violação técnica confirmada'], technicalReview,
+    payloads: { approve: { event: 'APPROVE', body: 'ok' }, request_changes: { event: 'REQUEST_CHANGES', body: 'Texto da sessão.', comments } } };
+  const uma = auto.payloadsComDefeito(result);
+  assert.match(uma.request_changes.body, /^Antes do merge[\s\S]*em `a\.tsx:3`\n\nTexto da sessão\.$/);
+  assert.deepEqual(uma.request_changes.comments, comments, 'os comentários de linha da sessão seguem');
+  assert.deepEqual(uma.approve, result.payloads.approve);
+  const duas = auto.payloadsComDefeito({ ...result, payloads: uma });
+  assert.equal(duas.request_changes.body, uma.request_changes.body, 'aplicar de novo não repete a seção');
+  assert.equal(auto.payloadDoDefeito({ ...result, payloads: uma }, ['violação técnica confirmada']).body, uma.request_changes.body);
+  // sem texto da sessão, o pedido fica só com a seção (é o que a mesa posta se o dono pedir mudanças)
+  const soSecao = auto.payloadsComDefeito({ ...result, payloads: { approve: result.payloads.approve } });
+  assert.match(soSecao.request_changes.body, /^Antes do merge[\s\S]*`a\.tsx:3`$/);
+  // sem defeito do PR, ou sem payloads, nada muda
+  const limpo = { approvalEvidence: [], payloads: result.payloads };
+  assert.equal(auto.payloadsComDefeito(limpo), limpo.payloads);
+  assert.equal(auto.payloadsComDefeito({ approvalEvidence: ['violação técnica confirmada'] }), undefined);
+});
+
+test('o motivo do card diz a regra e o lugar, e só a violação ganha detalhe', () => {
+  const technicalReview = {
+    rules: [{ rule: 'frontend.component.scalable-units', verdict: 'fail' }, { rule: 'core.suppression.declared', verdict: 'fail' }],
+    findings: [{ rule: 'frontend.component.scalable-units', file: 'a.tsx', message: 'unidade fixa escalavel na linha 3: w-[9px]' }],
+  };
+  assert.equal(auto.defeitoNoCard('violação técnica confirmada', { technicalReview }),
+    'violação técnica confirmada: medida fixa em px onde a interface deve acompanhar a fonte do usuário (use rem ou token escalável): em `a.tsx:3`; '
+    + 'supressão de lint, ou supressão sem identificador e motivo no mesmo comentário');
+  assert.equal(auto.defeitoNoCard('violação técnica confirmada', { technicalReview: { rules: [], findings: [] } }), 'violação técnica confirmada');
+  assert.equal(auto.defeitoNoCard('achados técnicos não resolvidos', { technicalReview }), 'achados técnicos não resolvidos');
+  // o card cita menos lugares que o texto público, para o teto de tamanho não cortar um motivo
+  const muitos = { rules: technicalReview.rules, findings: [1, 2, 3].map((n) => ({ rule: 'frontend.component.scalable-units', file: `f${n}.tsx`, message: `unidade fixa escalavel na linha ${n}: w-[9px]` })) };
+  assert.match(auto.defeitoNoCard('violação técnica confirmada', { technicalReview: muitos }), /: em `f1\.tsx:1`, `f2\.tsx:2` e outros; supressão de lint/);
+  // sem defeito do PR, o resultado não ganha nada
+  assert.deepEqual(auto.comDefeitoDoApp({ approvalEvidence: [], reasons: [{ text: 'x' }] }), {});
+  // o motivo já posto pela rodada não repete
+  const antes = [{ text: 'violação técnica confirmada', kind: 'gate' }, { text: 'ponto da sessão', kind: 'content' }];
+  const depois = auto.comMotivosDoDefeito(antes, ['violação técnica confirmada'], { technicalReview });
+  assert.equal(depois.length, 2);
+  assert.match(depois[0].text, /^violação técnica confirmada: medida fixa em px/);
+  assert.deepEqual(depois[1], antes[1]);
+});
+
 // ---------------------------------------------------------------- origem
 
 for (const [origem, marcas] of [
@@ -271,14 +346,16 @@ test('veredito aprovar com violação técnica confirmada e a conta reprovando s
   // nome de regra e causa vêm do catálogo privado da avaliação técnica: nunca no texto público (PR #253).
   // O lugar do achado é do próprio PR e vai, para o autor saber o que corrigir (engine-ai#1031)
   assert.doesNotMatch(corpo, /core\.duplication|regra de desconto/);
-  assert.match(corpo, /violação confirmada de um padrão técnico do repositório, em `src\/a\.ts`/);
+  assert.match(corpo, /^ {2}- regra de negócio repetida em mais de um lugar, sem fonte única: em `src\/a\.ts`$/m);
   assert.match(corpo, /Revise o tratamento de erro antes do merge\./, 'o pedido que a sessão escreveu vem junto');
   assert.equal(envios[0].commit_id, HEAD);
   assert.deepEqual(publicReviewLanguageIssues(envios[0], 'eu'), [], 'passa pela trava de linguagem');
   const d = resolvida(e, 10);
   assert.equal(d.status, 'auto_rejected');
   assert.equal(d.action, 'request_changes');
-  assert.ok(textos(d).includes('violação técnica confirmada'), textos(d).join(' | '));
+  // o card diz o motivo e o lugar, uma vez só (backoffice#365: vinha "violação técnica confirmada" repetido)
+  assert.deepEqual(textos(d).filter((t) => t.startsWith('violação técnica confirmada')),
+    ['violação técnica confirmada: regra de negócio repetida em mais de um lugar, sem fonte única: em `src/a.ts`']);
   assert.equal(pendente(e, 10), undefined);
   assert.deepEqual(e.eventos, [['auto-rejected', 'acme/app#10']]);
 });
@@ -631,6 +708,62 @@ test('a violação diz o motivo de cada regra que bloqueia, agrupando os lugares
   const nova = { rules: [{ rule: 'nova.regra', verdict: 'fail' }], findings: [{ rule: 'nova.regra', file: 'a.ts', message: 'x na linha 3' }] };
   assert.match(auto.payloadDoDefeito({ technicalReview: nova }, ['violação técnica confirmada']).body,
     /^- há violação confirmada de um padrão técnico do repositório, em `a\.ts:3`$/m);
+});
+
+// backoffice#365 (14/11/2026): a regra de px reprovava, mas os achados dela não estavam no relatório
+// (o corte de dez ficou com sugestões de organização). O texto saiu só com a frase genérica e o autor
+// não soube o que corrigir. Regra que bloqueia sem lugar citável sai ao menos com o motivo.
+test('regra que bloqueia sem achado citável sai com o motivo, mesmo sem o lugar', () => {
+  const technicalReview = {
+    rules: [
+      { rule: 'frontend.component.named-implementation', verdict: 'fail' },
+      { rule: 'frontend.component.scalable-units', verdict: 'fail' },
+    ],
+    findings: [{ rule: 'frontend.component.named-implementation', file: 'src/index.ts', message: 'ponto de entrada reexporta do irmao' }],
+  };
+  const rc = auto.payloadDoDefeito({ technicalReview }, ['violação técnica confirmada']);
+  assert.match(rc.body, /^- há violação confirmada de um padrão técnico do repositório:$/m);
+  assert.match(rc.body, /^ {2}- medida fixa em px .*\(use rem ou token escalável\)$/m, 'o motivo sai sem lugar inventado');
+  assert.doesNotMatch(rc.body, /index\.ts|scalable-units|named-implementation| em `/);
+  assert.deepEqual(publicReviewLanguageIssues(rc, 'eu'), [], rc.body);
+  // com outra regra citada pelo lugar, a que ficou sem achado entra na mesma lista
+  const duas = {
+    rules: [{ rule: 'core.suppression.declared', verdict: 'fail' }, { rule: 'frontend.component.scalable-units', verdict: 'fail' }],
+    findings: [{ rule: 'core.suppression.declared', file: 'a.ts', message: 'supressor na linha 3 e proibido' }],
+  };
+  const corpo = auto.payloadDoDefeito({ technicalReview: duas }, ['violação técnica confirmada']).body;
+  assert.match(corpo, /^ {2}- supressão de lint.*: em `a\.ts:3`$/m);
+  assert.match(corpo, /^ {2}- medida fixa em px .*\)$/m);
+  // regra descontada como dívida fora das linhas não bloqueia e não entra
+  const divida = { rules: [{ rule: 'frontend.component.scalable-units', verdict: 'fail', dividaForaDasLinhas: true }], findings: [] };
+  assert.doesNotMatch(auto.payloadDoDefeito({ technicalReview: divida }, ['violação técnica confirmada']).body, /medida fixa/);
+  // regra sem frase pública e sem lugar não ganha linha vazia: fica a frase da categoria
+  const semFrase = { rules: [{ rule: 'nova.regra', verdict: 'fail' }], findings: [] };
+  assert.match(auto.payloadDoDefeito({ technicalReview: semFrase }, ['violação técnica confirmada']).body, /repositório$/);
+  // regra sem frase ao lado de outra com frase entra como "outro padrão", para a lista não parecer completa
+  const mista = { rules: [{ rule: 'nova.regra', verdict: 'fail' }, { rule: 'frontend.component.scalable-units', verdict: 'fail' }], findings: [] };
+  const corpoMisto = auto.payloadDoDefeito({ technicalReview: mista }, ['violação técnica confirmada']).body;
+  assert.match(corpoMisto, /^ {2}- outro padrão técnico do repositório$/m);
+  assert.match(corpoMisto, /^ {2}- medida fixa em px /m);
+  assert.doesNotMatch(corpoMisto, /nova\.regra/);
+});
+
+// As duas pontas do backoffice#365 juntas: o relatório montado com dez sugestões e os achados de px
+// chega ao texto público citando o lugar do px.
+test('com dez sugestões de organização no relatório, o pedido cita o lugar do achado que bloqueia', async () => {
+  const { relatorioTecnico } = await import('../lib/technical-review/runtime.js');
+  const organizacao = Array.from({ length: 10 }, (_, i) => ({ rule: 'frontend.component.named-structural-branches', file: `src/c${i}.tsx`, message: 'componente possui multiplos retornos visuais' }));
+  const px = { rule: 'frontend.component.scalable-units', file: 'src/Card.tsx', message: 'unidade fixa escalavel na linha 35: text-[11px]; use rem ou token escalavel' };
+  const divida = { rule: 'core.suppression.declared', file: 'src/antigo.ts', message: 'supressor na linha 9 e proibido', foraDasLinhas: true };
+  const technicalReview = relatorioTecnico({ repo: 'o/r', base: 'b'.repeat(40), head: HEAD, profile: { fingerprint: 'p' }, objections: { fingerprint: 'h' } },
+    { catalogFingerprint: 'c', verdict: 'fail', coverage: {}, findings: [divida, ...organizacao, px],
+      rules: [{ rule: 'frontend.component.named-structural-branches', verdict: 'fail' }, { rule: 'frontend.component.scalable-units', verdict: 'fail' }] },
+    { privateEvidence: 'x.json' });
+  assert.deepEqual(technicalReview.findings.map((f) => f.file).slice(0, 2), ['src/Card.tsx', 'src/c0.tsx'], 'bloqueia, depois organização');
+  assert.ok(!technicalReview.findings.includes(divida), 'a dívida fora das linhas é a primeira a sair do corte');
+  const rc = auto.payloadDoDefeito({ technicalReview }, ['violação técnica confirmada']);
+  assert.match(rc.body, /^ {2}- medida fixa em px .*: em `src\/Card\.tsx:35`$/m);
+  assert.doesNotMatch(rc.body, /src\/c\d|antigo/);
 });
 
 test('todo motivo público passa pela trava de linguagem e cobre só regra que bloqueia', async () => {

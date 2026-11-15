@@ -210,7 +210,8 @@ function pintarBarra(wrap, id, p) {
     card.classList.toggle('sess-concluida', p.estado === 'concluida');
   }
   const medido = Number.isFinite(p.pct);
-  wrap.querySelector('.sess-pct').textContent = medido ? `${Math.floor(p.pct)}%` : 'Em andamento';
+  // no fechamento o número diz "lidos": 100% ali é leitura declarada, não conclusão
+  wrap.querySelector('.sess-pct').textContent = medido ? (p.rotuloPct || `${Math.floor(p.pct)}%`) : 'Em andamento';
   wrap.querySelector('.op-bar-fill').style.width = medido ? `${p.pct}%` : '0%';
   wrap.querySelector('.op-bar').hidden = !medido;
   wrap.querySelector('.sess-estado').textContent = p.texto;

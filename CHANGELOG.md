@@ -9,6 +9,36 @@ Convenção: cada versão tem uma linha de resumo e os grupos **Novidades**,
 o `publish-release.ps1` anexa sozinho o rodapé padrão (**Instalar / Atualizar**
 e **Anexos**, de `tools/release-footer.md`) e o título **Farol vX.Y.Z**.
 
+## v2.80.1
+
+O pedido de mudanças automático diz qual padrão técnico reprovou, mesmo quando não há lugar para citar.
+
+### Correções
+
+- **Pedido de mudanças sem motivo:** quando a avaliação técnica reprovava um PR e o modelo tinha aprovado, o texto publicado podia sair só com "há violação confirmada de um padrão técnico do repositório", sem dizer o quê nem onde. Agora ele diz qual padrão reprovou (por exemplo, medida fixa em px) e, quando o achado está no relatório, o arquivo e a linha.
+- **Achado que bloqueia perdia a vaga:** o relatório técnico guarda dez achados, e sugestões de organização podiam ocupar todos, deixando de fora o único que segurava o merge. O que bloqueia agora entra primeiro.
+- **Bloqueio escondido na primeira rodada:** quando a própria revisão pedia mudanças por outros pontos, o que a avaliação técnica tinha confirmado ficava fora do texto, e o autor só descobria na rodada seguinte, depois de corrigir o resto. Agora todo pedido de mudanças abre com o que o Farol confirmou, com arquivo e linha.
+- **Revisão tratava bloqueio como sugestão:** a revisão podia listar em "não segura o merge" um item pelo qual o Farol reprova, e até aprovar com ele presente. Ela passa a ser avisada de que esses itens bloqueiam, e a tratá-los como tal no texto.
+- **Motivo no card:** em Revisões recentes e em Precisa de você, o motivo "violação técnica confirmada" aparecia repetido e sem dizer qual regra. Agora diz a regra e os arquivos, uma vez só.
+
+Fica de fora desta versão: a revisão feita no terminal ou pelo chat ainda posta só o texto dela, sem a parte do Farol.
+
+## v2.80.0
+
+O consumo de cada plano do Claude e a data em que o login vence aparecem na tela, sem terminal.
+
+### Novidades
+
+- **Uso do plano por perfil:** em Sistema, Plano e chaves, cada perfil do Claude por assinatura mostra quanto da sessão, da semana e da semana por modelo já foi usado, com a hora em que cada janela volta. A barra fica âmbar a partir de 70% e vermelha a partir de 90%. O Farol lê sozinho a cada cinco minutos, pelo comando de uso do próprio Claude Code, que não chama modelo e não gasta nada do plano. Vale para perfil ligado ou desligado na ordem de uso, e aparece na ordem de uso e no cartão do perfil.
+- **Quando o login vence:** cada perfil mostra o dia e a hora em que o login deixa de se renovar sozinho, e quanto falta. O Farol avisa quando faltarem três dias e de novo no último dia, e mostra o login vencido em vermelho. A renovação continua sendo pela sessão de login do perfil.
+
+O percentual lido é informação: a ordem de uso continua trocando de perfil só quando o plano chega ao limite, como antes. Se uma atualização do Claude Code mudar o texto do uso, a tela passa a dizer que o uso não foi lido, em vez de mostrar número errado, e a data do vencimento continua aparecendo.
+
+### Correções
+
+- **Analisando agora na Compacta:** o cartão fechado mostra as mesmas três caixas do cartão aberto (checks obrigatórios, reviewers com as fotos e merge), além da barra e de quantos arquivos já foram lidos. Antes ele apertava tudo em três pílulas sem rótulo. O log, as etapas e a equipe da sessão continuam escondidos até abrir o cartão.
+- **Fim da análise sem barra:** em "modelo concluiu, verificando e decidindo", a barra de leitura continua na tela, e o número diz "lidos", para 100% não parecer que a análise terminou. Antes a barra sumia e ficava só "Em andamento".
+
 ## v2.79.13
 
 O Automático por organização passa a funcionar com a conta em "só põe na fila".
