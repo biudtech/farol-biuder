@@ -185,28 +185,6 @@ function argsDaTransferencia(e, destino = 'dB') {
   return { prTag: prTag(kId(e), PR.key), matTag: matTag(kId(e), PR.headSha), destino };
 }
 
-test('transferir: manda a memória, encerra a sessão daqui e devolve o item preferindo o destino', async () => {
-  const e = await motor();
-  appendCheckpointEntry(checkpointPath(PR.key, 'review'), PR.key, '', { claim: 'a', file: 'x.ts', line: 1, verdict: 'confirmado', evidence: 'e', sessionId: 's1', headSha: 'sha3', at: '2026-09-16T10:00:00' });
-  await capacidadeDoDestino(e);
-  const r = await transfEng.transferir(e, e.config.sync, argsDaTransferencia(e));
-  assert.equal(r.ok, true, r.motivo);
-  assert.deepEqual(e.cancelados, ['s1:transferida'], 'a sessão de origem termina, marcada como transferida');
-  assert.ok(Object.keys(arvore().checkpoints.review).length, 'a memória subiu antes');
-  const registro = arvore().live.queue[r.itemId][e.sync.deviceId];
-  assert.equal(registro.prefDev, 'dB');
-  assert.ok(registro.prefAte > Date.now());
-});
-
-test('sessão que já tinha terminado não deixa a marca de transferência para trás', async () => {
-  const e = await motor();
-  e.cancelSession = () => ({ ok: false, error: 'sessão não encontrada (já terminou?)' });
-  await capacidadeDoDestino(e);
-  const r = await transfEng.transferir(e, e.config.sync, argsDaTransferencia(e));
-  assert.equal(r.ok, true, r.motivo);
-  assert.equal(fechamento.foiTransferida(e, PR.key), false);
-});
-
 test('transferir para destino sem a credencial da conta é recusado, e a sessão continua', async () => {
   const e = await motor();
   await capacidadeDoDestino(e, { contasComToken: [] });
@@ -261,19 +239,5 @@ test('modo ativo recusa transferir para executor sem suporte, preservando a sess
   const r = await transfEng.transferir(e, e.config.sync, argsDaTransferencia(e));
   assert.equal(r.ok, false);
   assert.match(r.motivo, /não suporta/);
-  assert.deepEqual(e.cancelados, []);
-});
-
-test('falha ao enviar memória de rodada não encerra a origem', async () => {
-  const e = await motor();
-  await capacidadeDoDestino(e, { reviewRoundsSchema: 1 });
-  e.sync.historicoDesde = 1;
-  saveRound({ schema: 1, id: 'd'.repeat(32), scope: scopeFor(PR.key, LOGIN), parents: [],
-    headSha: PR.headSha, baseSha: 'base', at: 1, findings: [], unresolved: [], files: [] });
-  const put = e.sync.client.put.bind(e.sync.client);
-  e.sync.client.put = async (key, ...args) => key.includes('/reviewBodies/') ? { ok: false } : put(key, ...args);
-  const r = await transfEng.transferir(e, e.config.sync, argsDaTransferencia(e));
-  assert.equal(r.ok, false);
-  assert.match(r.motivo, /memória/);
   assert.deepEqual(e.cancelados, []);
 });

@@ -412,10 +412,6 @@ test('ciclo: PR fechado é do reconcilePending, leitura que falha espera, coorde
   assert.equal(e.salvas, 0);
   gh.leituraFalha = false;
   leiturasDoPr = 0;
-  e.syncCoordenacaoAtiva = () => true;
-  e.sync = { status: 'desconectado' };
-  assert.equal(await esperaProva.varrerEsperas(e), 0);
-  assert.equal(leiturasDoPr, 0, 'coordenação ligada e fora do ar: espera a conexão, como o reenvio');
 });
 
 test('mudança para publicação manual não abandona a análise ainda bloqueada', async () => {
@@ -780,61 +776,3 @@ test('ressalva real após recuperar a prova continua obedecendo à aprovação m
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });
 
-function coordenado(e, recibo, { leituraFalha = false } = {}) {
-  const apagados = [];
-  e.config.sync = { enabled: true, coordination: { enabled: true } };
-  e.syncCoordenacaoAtiva = () => true;
-  e.sync = {
-    status: 'conectado', uid: 'u1', deviceId: 'este', recibosVistos: { [PR.key]: {} }, agora: () => Date.now(),
-    client: {
-      get: async () => (leituraFalha ? { ok: false, code: 'indisponivel' } : { ok: true, data: recibo, etag: 'etag-1' }),
-      del: async (caminho, opcoes) => { apagados.push([caminho, opcoes.ifMatch]); return { ok: true }; },
-    },
-  };
-  return apagados;
-}
-
-test('furo 3: com coordenação, o recibo pendente DESTE aparelho para este head é invalidado antes do relançamento', async () => {
-  const e = motor();
-  await revisado(e, INCOMPLETA);
-  const apagados = coordenado(e, { outcome: 'completed', publicationState: 'pending', deviceId: 'este', expiresAt: Date.now() + 1e9 });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.equal(apagados.length, 1, 'o recibo que barraria a admissão como "recibo" sai');
-  assert.equal(apagados[0][1], 'etag-1', 'condicionado ao etag lido');
-  assert.match(apagados[0][0], /\/receipts\/.+\/review_/);
-  assert.equal(e.sync.recibosVistos[PR.key], undefined);
-  assert.equal(pendente(e).blockedKind, 'stale_head');
-});
-
-test('furo 3: recibo publicado, de outro aparelho ou leitura que falha: não apaga e não relança', async () => {
-  for (const [recibo, opcoes] of [
-    [{ outcome: 'completed', publicationState: 'published', deviceId: 'este', expiresAt: Date.now() + 1e9 }, {}],
-    [{ outcome: 'completed', publicationState: 'pending', deviceId: 'outro', expiresAt: Date.now() + 1e9 }, {}],
-    [{ outcome: 'completed', publicationState: 'failed', deviceId: 'este', postagens: { approve: { state: 'uncertain' } }, expiresAt: Date.now() + 1e9 }, {}],
-    [null, { leituraFalha: true }],
-  ]) {
-    const e = motor();
-    await revisado(e, INCOMPLETA);
-    const apagados = coordenado(e, recibo, opcoes);
-    e.salvas = 0;
-    assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-    assert.deepEqual(apagados, []);
-    assert.equal(pendente(e).blockedKind, undefined);
-    assert.equal(e.salvas, 0);
-  }
-  const e = motor();
-  await revisado(e, INCOMPLETA);
-  const apagados = coordenado(e, null);
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1, 'sem recibo nenhum, relança normalmente');
-  assert.deepEqual(apagados, []);
-});
-
-test('recibo legado de recusa antes do POST pode ser recuperado pelo mesmo aparelho', async () => {
-  const e = motor();
-  await revisado(e, INCOMPLETA);
-  const apagados = coordenado(e, { outcome: 'completed', publicationState: 'failed', deviceId: 'este', expiresAt: Date.now() + 1e9 });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.equal(apagados.length, 1);
-  assert.deepEqual(envios, []);
-  assert.deepEqual(e.eventos, []);
-});

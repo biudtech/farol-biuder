@@ -260,13 +260,6 @@ test('falha permanente: a referência sai junto', async () => {
 
 /* ---------- Tarefa 4: validação antes de reutilizar ---------- */
 
-function coordenado(e, admissao) {
-  e.syncCoordenacaoAtiva = () => true;
-  e.syncAdmit = async () => admissao;
-  e.syncRegistrarEspera = () => { };
-  delete e.runClaudeStream; // volta pra fachada real: admissão antes de qualquer provedor
-}
-
 test('retomada local válida depois de reiniciar: --resume com o bloco, e a referência é consumida pelo resultado', async () => {
   const a = motor();
   semear(a);
@@ -352,31 +345,6 @@ test('revisão equivalente já concluída depois da queda: não retoma', async (
   assert.equal(e.chamadas[0].guardada, false);
 });
 
-test('recibo de outro aparelho na admissão: consome a referência sem abrir sessão', async () => {
-  const e = motor();
-  semear(e);
-  coordenado(e, { admitted: false, reason: 'recibo', detail: { deviceName: 'notebook' } });
-  await e.runHeadlessReview({ ...PR });
-  assert.equal(spawnsDoCli, 0);
-  assert.equal(e.decididos.length, 0);
-  assert.equal(e.retomadas.has(PR.key), false);
-});
-
-for (const reason of ['alheio', 'indisponivel']) {
-  test(`recusa da coordenação (${reason}) antes do provedor: sem sessão e sem consumir a retomada`, async () => {
-    const e = motor();
-    semear(e);
-    coordenado(e, { admitted: false, reason, detail: { deviceName: 'notebook' } });
-    await e.runHeadlessReview({ ...PR });
-    assert.equal(spawnsDoCli, 0, 'nenhum spawn do CLI');
-    assert.equal(e.decididos.length, 0);
-    assert.equal(e.retomadas.get(PR.key).retomarSid, SID);
-    assert.equal(linha(PR.key).estado, 'pendente', 'espera de lease sobrevive a reinício');
-    const b = new Engine();
-    assert.equal(b.retomadas.get(PR.key).retomarSid, SID);
-  });
-}
-
 /* ---------- Tarefa 5: diagnóstico distingue retomada, recusa do CLI e sessão nova ---------- */
 
 test('desfecho retomada: opts, registro ativo e resultado dizem retomada', async () => {
@@ -430,27 +398,6 @@ test('desfecho nenhuma: sem referência, e também com o resumeSid incremental d
   assert.equal(e.chamadas[0].opcao, 'nenhuma');
   assert.equal(e.chamadas[0].registro, 'nenhuma');
   assert.equal(e.decididos[0].resumeOutcome, 'nenhuma');
-});
-
-test('admissão recusada na tentativa de retomada: o registro volta pra nenhuma, sem sessão', async () => {
-  const e = motor();
-  semear(e);
-  let registroNoFim = null;
-  e.syncCoordenacaoAtiva = () => true;
-  e.syncRegistrarEspera = () => { };
-  e.runClaudeStream = async (prompt, opts) => {
-    e.chamadas.push({ opcao: opts.resumeOutcome, registro: (e.activeReviews.get(opts.id) || {}).resumeOutcome });
-    return { blocked: true, coordination: { admitted: false, reason: 'alheio', detail: {} }, text: '', sessionId: null };
-  };
-  const tratar = e.syncRegistrarEspera;
-  e.syncRegistrarEspera = (key, adm) => {
-    registroNoFim = [...e.activeReviews.values()].find(s => (s.keys || []).includes(PR.key)).resumeOutcome;
-    return tratar(key, adm);
-  };
-  await e.runHeadlessReview({ ...PR });
-  assert.equal(e.chamadas[0].opcao, 'retomada', 'a tentativa foi de retomada');
-  assert.equal(registroNoFim, 'nenhuma', 'nada abriu, então o desfecho efetivo é nenhuma');
-  assert.equal(e.retomadas.get(PR.key).retomarSid, SID, 'e a referência fica');
 });
 
 test('rodarSessao em motor mínimo (sem activeReviews) não lança e devolve o desfecho', async () => {

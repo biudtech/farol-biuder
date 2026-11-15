@@ -122,29 +122,6 @@ test('executor antigo fica explicitamente incompatível, nunca presumido pronto'
   assert.equal((await readRemoteRounds(engine, scope)).ok, true);
 });
 
-test('contexto do segundo aparelho herda a rodada pela mesma implementação usada na revisão', async () => {
-  const { engine } = bank();
-  await publishRound(engine, round());
-  const ctx = await prepareRoundReview(engine, { key: 'o/r#1' }, 'h2', { baseSha: 'base' });
-  assert.equal(ctx.parents.length, 1);
-  assert.equal(ctx.parents[0].unresolved.length, 75);
-  assert.equal(readRounds(scope).rounds.length, 1, 'cache persistido sobrevive a reinício');
-});
-
-test('PUT recusado mantém contexto inconclusivo mesmo com leitura remota vazia bem-sucedida', async () => {
-  const { engine } = bank(), key = 'o/failure#2';
-  engine.config.reviewRoundsMode = 'enforce';
-  saveRound({ ...round(), scope: scopeFor(key, 'eu') });
-  engine.sync.client.put = async () => ({ ok: false });
-  const context = await prepareRoundReview(engine, { key }, 'h2', { baseSha: 'base' });
-  assert.equal(context.status, 'unavailable');
-  assert.ok(context.reason);
-  const result = { analysisStatus: 'complete', findings: [], decision: 'auto_approve', verdict: 'approve' };
-  await finishRoundReview(engine, { key }, context, { status: 'complete', files: [], baseSha: 'base' }, result);
-  assert.ok(result.roundReview.integrity.includes(context.reason));
-  assert.equal(publicationRefusal(engine, { via: 'revisao', roundReview: result.roundReview }, { event: 'APPROVE' }).blocked, 'round_memory');
-});
-
 test('ligar compartilhamento não exporta a memória anterior ao marco', async () => {
   const { engine, nodes } = bank();
   engine.sync.historicoDesde = 100;

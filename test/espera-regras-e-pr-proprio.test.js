@@ -190,24 +190,6 @@ test('carimbo atual: a busca relança pela falta de prova, e a tentativa conta q
 });
 
 
-test('relançamento pela regra respeita o recibo de outro aparelho: não relança nem carimba', async () => {
-  const e = motor();
-  await revisado(e, PR, INCOMPLETA);
-  const marca = pendente(e).esperaProva;
-  delete marca.regras;
-  marca.tentativas = esperaProva.MAX_TENTATIVAS;
-  e.config.sync = { enabled: true, coordination: { enabled: true } };
-  e.syncCoordenacaoAtiva = () => true;
-  e.sync = {
-    status: 'conectado', uid: 'u1', deviceId: 'este', recibosVistos: {}, agora: () => Date.now(),
-    client: { get: async () => ({ ok: true, data: { outcome: 'completed', publicationState: 'pending', deviceId: 'outro', expiresAt: Date.now() + 1e9 }, etag: 'e1' }), del: async () => ({ ok: true }) },
-  };
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  const d = pendente(e);
-  assert.equal(d.blockedKind, undefined);
-  assert.equal(d.esperaProva.regras, undefined, 'sem relançar, o carimbo não muda: tenta de novo no próximo ciclo');
-});
-
 // ---------------------------------------------------------------- defeito 2: PR da própria conta
 
 test('gate: PR da própria conta nunca é aprovado nem reprovado sozinho (caixa ignorada)', () => {

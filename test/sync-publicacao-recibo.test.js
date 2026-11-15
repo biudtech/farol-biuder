@@ -145,35 +145,6 @@ function pendencia(extra = {}) {
   };
 }
 
-test('syncAtualizarPublicacao: sem coordenação devolve coordenacao-desligada e não toca o banco (CT-COMPAT)', async () => {
-  const e = motor({ coordenacao: false });
-  const r = await e.syncAtualizarPublicacao({ account: 'eu', prKey: KEY, headSha: HEAD, operationKind: 'review', publicationState: 'published' });
-  assert.deepEqual(r, { ok: false, motivo: 'coordenacao-desligada' });
-  assert.equal(fake.requests.length, 0);
-});
-
-test('syncAtualizarPublicacao: sem conexão ou sem conta e head recusa sem tocar o banco', async () => {
-  const e = motor();
-  assert.deepEqual(await e.syncAtualizarPublicacao({ account: '', prKey: KEY, headSha: HEAD, publicationState: 'published' }), { ok: false, motivo: 'contexto-incompleto' });
-  assert.deepEqual(await e.syncAtualizarPublicacao({ account: 'eu', prKey: KEY, headSha: '', publicationState: 'published' }), { ok: false, motivo: 'contexto-incompleto' });
-  e.sync.status = 'erro';
-  assert.deepEqual(await e.syncAtualizarPublicacao({ account: 'eu', prKey: KEY, headSha: HEAD, publicationState: 'published' }), { ok: false, motivo: 'sem-conexao' });
-  assert.equal(fake.requests.length, 0);
-});
-
-test('decide com postagem ok deixa o recibo do head published, e o outro aparelho nunca o vê como órfão', async () => {
-  await gravar();
-  const e = motor();
-  e.decisions = { pending: [pendencia()], resolved: [] };
-  const r = await e.decide('d-7', 'approve');
-  assert.equal(r.ok, true);
-  assert.equal(e.postados.length, 1);
-  const recibo = await noBanco();
-  assert.equal(recibo.publicationState, 'published');
-  const muitoDepois = Date.now() + 5 * SYNC.ORPHAN_AFTER_MS;
-  assert.equal(receiptOrphanState(recibo, { lastSeenAt: 1 }, muitoDepois), 'ativo', 'publicado nunca vira "Refazer" pago em outro aparelho');
-});
-
 test('decide com postagem que falhou deixa o recibo como estava', async () => {
   await gravar();
   const e = motor({ postOk: false });
@@ -181,24 +152,6 @@ test('decide com postagem que falhou deixa o recibo como estava', async () => {
   const r = await e.decide('d-7', 'approve');
   assert.equal(r.ok, false);
   assert.equal((await noBanco()).publicationState, 'pending');
-});
-
-test('decide que acha o review já no PR (already_reviewed) também publica o recibo', async () => {
-  await gravar();
-  const e = motor({ states: ['APPROVED'] });
-  e.decisions = { pending: [pendencia()], resolved: [] };
-  const r = await e.decide('d-7', 'approve');
-  assert.equal(r.ok, true);
-  assert.equal(e.postados.length, 0, 'nada repostado');
-  assert.equal((await noBanco()).publicationState, 'published');
-});
-
-test('retryFailedPosts que consegue postar publica o recibo que tinha ficado failed', async () => {
-  await gravar({ publicationState: 'failed' });
-  const e = motor();
-  e.decisions = { pending: [pendencia({ postRetry: { event: 'approve', attempts: 0 } })], resolved: [] };
-  assert.equal(await e.retryFailedPosts(), 1);
-  assert.equal((await noBanco()).publicationState, 'published');
 });
 
 test('coordenação desligada: decide posta como sempre e nenhuma requisição vai ao banco (CT-COMPAT)', async () => {

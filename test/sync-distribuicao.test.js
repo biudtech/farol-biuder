@@ -528,71 +528,6 @@ test('enqueueHeadless devolve desfecho: saída de cena e duplicado deixam de ser
   assert.deepEqual(reviewMod.enqueueHeadless(e, prDe(2)), { ok: false, code: 'duplicado' });
 });
 
-test('com a distribuição ligada, o item vira candidato e fica visível esperando', async () => {
-  const e = motorFila(await motorDistribuidor());
-  comoExecutor(e);
-  const r = reviewMod.enqueueHeadless(e, prDe(7));
-  assert.deepEqual(r, { ok: true, via: 'distribuicao' });
-  assert.equal(e.headlessQueue.length, 0, 'não entra na fila local');
-  assert.ok(e.headlessDistribuindo.get('dono/repo#7'), 'o PR fica visível como esperando distribuição');
-  await esperarAte(() => e.sync.candidatos instanceof Map && e.sync.candidatos.size === 1);
-  assert.equal(Object.keys(no('live/queue')).length, 1);
-});
-
-// O PR do caminho automático chega aqui SEM head: o head só é lido dentro do
-// runHeadlessReview. Medido na bancada com engines reais (16/09/2026): a publicação
-// devolvia `forma`, o item voltava ao ramo local e a primeira revisão de um PR novo NUNCA
-// distribuía, com a distribuição ligada e a frota inteira apta.
-test('PR sem head conhecido distribui: o head é lido antes de publicar', async () => {
-  const e = motorFila(await motorDistribuidor());
-  let pedidos = 0;
-  e.headSha = async () => { pedidos += 1; return 'sha-lido-do-gh'; };
-  // A confirmação pode chegar depois de o servidor já ter escrito o candidato.
-  // A leitura espera o desfecho, não uma suposição de 50 ms de rede local.
-  const put = e.sync.client.put.bind(e.sync.client);
-  e.sync.client.put = async (...args) => {
-    const resposta = await put(...args);
-    await new Promise(resolve => setTimeout(resolve, 75));
-    return resposta;
-  };
-  comoExecutor(e);
-  const r = reviewMod.enqueueHeadless(e, prDe(11, { headSha: undefined }));
-  assert.deepEqual(r, { ok: true, via: 'distribuicao' });
-  await esperarAte(() => e.sync.candidatos instanceof Map && e.sync.candidatos.size === 1);
-  assert.equal(pedidos, 1, 'o head é lido uma vez, no aparelho que publica');
-  assert.equal(e.headlessQueue.length, 0, 'não cai no ramo local');
-  assert.equal(Object.keys(no('live/queue')).length, 1);
-  const publicados = [...e.sync.candidatos.values()].map((c) => c.pr.headSha);
-  assert.deepEqual(publicados, ['sha-lido-do-gh'], 'o candidato viaja com o head lido');
-});
-
-// Head que não se lê não vira candidato sem material: sem ele o executor não teria contra o
-// que conferir o head atual, e a atribuição seria cega. O item volta ao ramo local.
-test('head que não se lê devolve o item ao ramo local, sem publicar', async () => {
-  const e = motorFila(await motorDistribuidor());
-  e.headSha = async () => '';
-  comoExecutor(e);
-  const r = reviewMod.enqueueHeadless(e, prDe(12, { headSha: undefined }));
-  assert.deepEqual(r, { ok: true, via: 'distribuicao' });
-  await esperarAte(() => e.headlessQueue.length === 1);
-  assert.equal(e.headlessQueue.length, 1, 'o PR volta para o escalonador local');
-  assert.deepEqual(Object.keys(no('live/queue')), [], 'nada foi publicado');
-});
-
-// G8: o relançamento da re-revisão já decidiu o head. Reler agora publicaria um head mais
-// novo que o da rodada pedida, e o executor revisaria outro material.
-test('head do relançamento manda: knownHead viaja, e o gh não é consultado', async () => {
-  const e = motorFila(await motorDistribuidor());
-  let pedidos = 0;
-  e.headSha = async () => { pedidos += 1; return 'sha-mais-novo'; };
-  comoExecutor(e);
-  reviewMod.enqueueHeadless(e, prDe(13, { headSha: undefined, knownHead: 'sha-da-rerodada' }));
-  await esperarAte(() => e.sync.candidatos instanceof Map && e.sync.candidatos.size === 1);
-  assert.equal(pedidos, 0, 'o head já conhecido dispensa a consulta');
-  const publicados = [...e.sync.candidatos.values()].map((c) => c.pr.headSha);
-  assert.deepEqual(publicados, ['sha-da-rerodada']);
-});
-
 // C5d: sem prontidão fresca do distribuidor o item fica no escalonador local, mesmo com
 // autoridade fresca e a distribuição ligada.
 test('sem prontidão fresca, o item fica local', async () => {
@@ -682,56 +617,6 @@ test('registro quebrado de um publicador não apaga o registro bom do outro', as
   assert.deepEqual(itens[0].publicadores, [e.sync.deviceId]);
   assert.equal(itens[0].owner, 'dono', 'o nome sai do registro válido');
   assert.equal(defeituosos.length, 1);
-});
-
-// O giro completo do relógio: agenda, renova a prontidão e responde.
-test('um giro completo atribui, aceita, enfileira no ramo local e renova a prontidão', async () => {
-  const e = motorFila(await motorDistribuidor());
-  e.enfileirarDaDistribuicao = (pr, admissaoId) => reviewMod.enfileirarDaDistribuicao(e, pr, admissaoId);
-  await publicarComoExecutor(e, prDe(3), { agora: T });
-  comoExecutor(e);
-  await publicacao.publicarCapacidade(e, e.config.sync);
-  const giro = await dist.cicloDaDistribuicao(e, e.config.sync, { agora: T });
-  assert.equal(giro.ok, true);
-  assert.equal(giro.saudavel.ok, true);
-  assert.equal(giro.resposta.aceitas.length, 1);
-  assert.equal(e.headlessQueue.length, 1, 'voltou pelo ramo local');
-  assert.equal(admissao.resumo(e).total, 1, 'uma vaga só: o aceite já reservou');
-  const pronto = no('live/control')['ready'];
-  assert.equal(pronto.sequencia, 1);
-  assert.ok(pronto.sig);
-  // a sequência ANDA a cada renovação: é ela que prova frescor no outro aparelho, e um
-  // valor repetido seria reentrega, que por contrato não renova nada
-  await publicarComoExecutor(e, prDe(31), { agora: T + 10 });
-  await dist.cicloDaDistribuicao(e, e.config.sync, { agora: T + 10 });
-  assert.equal(no('live/control')['ready'].sequencia, 2);
-});
-
-// A vaga é reservada no ACEITE e só é devolvida por quem executa (freeHeadlessSlot, pelo
-// admissaoId que viaja no PR). Enfileirar que NÃO leva o item (saída de cena registrada
-// depois da publicação, ou o mesmo PR já na fila local) deixava a reserva presa para
-// sempre: com teto 1, o aparelho passava a recusar toda atribuição seguinte por sem_vaga,
-// sem nada rodando.
-test('enfileiramento que não leva o item devolve a vaga', async () => {
-  const e = motorFila(await motorDistribuidor());
-  const pr = prDe(21);
-  const vaga = admissao.reservar(e, { tipo: 'review', ref: pr.key, agora: T });
-  e.skipComentado = { [pr.key]: true };
-  const r = reviewMod.enfileirarDaDistribuicao(e, pr, vaga.id);
-  assert.deepEqual(r, { ok: false, code: 'saida-de-cena' });
-  assert.equal(e.headlessQueue.length, 0);
-  assert.equal(admissao.resumo(e).total, 0, 'a vaga volta: ninguém vai executar este item');
-});
-
-test('enfileiramento que leva o item mantém a vaga com quem vai executar', async () => {
-  const e = motorFila(await motorDistribuidor());
-  const pr = prDe(22);
-  comoExecutor(e);
-  const vaga = admissao.reservar(e, { tipo: 'review', ref: pr.key, agora: T });
-  const r = reviewMod.enfileirarDaDistribuicao(e, pr, vaga.id);
-  assert.deepEqual(r, { ok: true, via: 'local' });
-  assert.equal(e.headlessQueue[0].admissaoId, vaga.id);
-  assert.equal(admissao.resumo(e).total, 1);
 });
 
 // Transferência voluntária (7.C7b) para um aparelho que NÃO publicou o candidato. Medido na
@@ -863,31 +748,6 @@ async function esperarAte(teste) {
   for (let i = 0; i < 40 && !teste(); i += 1) await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
-test('o fim da revisão distribuída fecha o item, mesmo sem concluir', async () => {
-  const e = motorQueExecuta(motorFila(await motorDistribuidor()), async () => { throw new Error('revisão não concluída'); });
-  const r = await publicarComoExecutor(e, prDe(62), { agora: T });
-  await reviewMod.runOneHeadless(e, { ...prDe(62), viaDistribuicao: true, itemIdDistribuido: r.itemId }, LOGIN);
-  await esperarAte(() => !no('live/queue')[r.itemId]);
-  assert.equal(no('live/queue')[r.itemId], undefined, 'o mesmo head não fica para outra rodada');
-});
-
-// Medido na bancada (17/09/2026): a transferência encerra a sessão daqui e publica o item
-// com a preferência pelo destino; o fim da sessão encerrada fechava o item logo depois,
-// apagando justamente esse registro, e a origem estacionava o PR como "cancelada por
-// você". Sessão encerrada por transferência não é desfecho daqui.
-test('sessão encerrada pela transferência não fecha o item nem estaciona o PR', async () => {
-  const cancelada = Object.assign(new Error('sessão cancelada'), { cancelled: true });
-  const e = motorQueExecuta(motorFila(await motorDistribuidor()), async () => { throw cancelada; });
-  e.autoReviewParked = new Set();
-  const r = await publicarComoExecutor(e, prDe(71), { agora: T });
-  fechamento.marcarTransferida(e, prDe(71).key);
-  await reviewMod.runOneHeadless(e, { ...prDe(71), viaDistribuicao: true, itemIdDistribuido: r.itemId }, LOGIN);
-  await new Promise((resolve) => setTimeout(resolve, 100));
-  assert.ok(no('live/queue')[r.itemId], 'o registro com a preferência pelo destino fica');
-  assert.equal(e.autoReviewParked.has(prDe(71).key), false, 'transferir não é cancelar');
-  assert.equal(fechamento.foiTransferida(e, prDe(71).key), false, 'a marca é consumida');
-});
-
 test('cancelamento de verdade continua estacionando', async () => {
   const cancelada = Object.assign(new Error('sessão cancelada'), { cancelled: true });
   const e = motorQueExecuta(motorFila(await motorDistribuidor()), async () => { throw cancelada; });
@@ -903,17 +763,6 @@ test('a revisão local, fora da distribuição, não mexe no conjunto', async ()
   await reviewMod.runOneHeadless(e, prDe(63), LOGIN);
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.ok(no('live/queue')[r.itemId], 'o candidato de outro caminho continua lá');
-});
-
-test('o aceite leva a identidade do item até quem executa', async () => {
-  const e = motorFila(await motorDistribuidor());
-  e.enfileirarDaDistribuicao = (pr, id) => reviewMod.enfileirarDaDistribuicao(e, pr, id);
-  const r = await publicarComoExecutor(e, prDe(64), { agora: T });
-  comoExecutor(e);
-  await publicacao.publicarCapacidade(e, e.config.sync);
-  await dist.cicloDoAgendador(e, e.config.sync, { agora: T });
-  await dist.aceitarAtribuicoes(e, e.config.sync, no('live/assign'), { agora: T });
-  assert.equal(e.headlessQueue[0].itemIdDistribuido, r.itemId);
 });
 
 test('quem publicou esquece o item que saiu do conjunto e deixa de esperar por ele', async () => {

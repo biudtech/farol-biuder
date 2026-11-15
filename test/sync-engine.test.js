@@ -22,6 +22,7 @@ import { startFakeIdentity } from './helpers/fake-identity.js';
 import { SYNC } from '../lib/constants.js';
 
 const { Engine } = await import('../server.js');
+const syncDireto = (await import('../lib/engine/sync.js')).default;
 
 const CRED_FILE = path.join(FAROL_HOME, SYNC.CREDENTIALS_FILE);
 const DEVICE_FILE = path.join(FAROL_HOME, 'workspace', 'state', SYNC.DEVICE_FILE);
@@ -87,8 +88,8 @@ test('(a) boot com sync ausente: desligado, nenhuma rede e nenhum arquivo de sin
   assert.equal(login.ok, false);
   assert.equal(login.code, 'desligado');
   assert.equal((await engine.syncTest()).ok, false);
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), false);
-  assert.equal(engine.syncCoordenacaoAtiva(), false);
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), false);
+  assert.equal(syncDireto.coordenacaoAtiva(engine), false);
   assert.equal(controle.chamadas, 0, 'nenhuma chamada ao fetch injetado');
   assert.equal(fs.existsSync(CRED_FILE), false, 'sync-credentials.json não nasce');
   assert.equal(fs.existsSync(DEVICE_FILE), false, 'sync-device.json não nasce');
@@ -226,20 +227,20 @@ test('(h) snapshot nunca carrega senha, refresh token, ID token nem auth=; e-mai
 });
 
 test('(g) seguraAutomacao: desligada não segura; ligada segura sem conexão e com espera vigente', async () => {
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), false, 'coordenação desligada nunca segura');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), false, 'coordenação desligada nunca segura');
   await salvarSync(syncCfg({ coordination: { enabled: true } }));
-  assert.equal(engine.syncCoordenacaoAtiva(), true);
+  assert.equal(syncDireto.coordenacaoAtiva(engine), true);
   assert.equal(engine.sync.status, 'conectado', 'ligar a coordenação não derruba a conexão');
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), false, 'conectado e sem espera: não segura');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), false, 'conectado e sem espera: não segura');
 
-  engine.syncRegistrarEspera('o/r#1', { admitted: false, reason: 'alheio', detail: { deviceName: 'Notebook' } });
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), true, 'espera vigente segura');
-  assert.equal(engine.syncSeguraAutomacao('o/r#2'), false, 'a espera é por PR');
+  syncDireto.registrarEspera(engine, 'o/r#1', { admitted: false, reason: 'alheio', detail: { deviceName: 'Notebook' } });
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), true, 'espera vigente segura');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#2'), false, 'a espera é por PR');
   assert.equal(engine.snapshot().sync.espera['o/r#1'].deviceName, 'Notebook');
-  engine.syncRegistrarEspera('o/r#3', { admitted: false, reason: 'recibo', detail: {} });
+  syncDireto.registrarEspera(engine, 'o/r#3', { admitted: false, reason: 'recibo', detail: {} });
   assert.equal(engine.sync.espera['o/r#3'], undefined, 'recibo não vira espera');
   engine.sync.espera['o/r#1'].until = Date.now() - 1;
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), false, 'espera vencida solta');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), false, 'espera vencida solta');
 
   controle.fora = true;
   engine.sync.lastPresenceAt -= SYNC.PRESENCE_TICK_MS;
@@ -247,8 +248,8 @@ test('(g) seguraAutomacao: desligada não segura; ligada segura sem conexão e c
   await engine.syncTick();
   assert.equal(engine.sync.status, 'erro');
   assert.equal(engine.sync.lastError.code, 'indisponivel');
-  assert.equal(engine.syncSeguraAutomacao('o/r#9'), true, 'fora de conectado segura qualquer PR');
-  assert.equal(engine.syncSeguraAutomacao('o/r#8'), true);
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#9'), true, 'fora de conectado segura qualquer PR');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#8'), true);
   assert.equal(toasts.filter((t) => /aparelhos/.test(t.text)).length, 1, 'avisa uma vez por janela');
   // o segundo tick sem rede tenta reconectar e ouve a MESMA recusa: o farol.log é de
   // falha, não de estado, então a queda sai uma vez só
@@ -259,7 +260,7 @@ test('(g) seguraAutomacao: desligada não segura; ligada segura sem conexão e c
   controle.fora = false;
   await engine.syncTick();
   assert.equal(engine.sync.status, 'conectado', 'o tick seguinte reconecta sozinho');
-  assert.equal(engine.syncSeguraAutomacao('o/r#9'), false);
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#9'), false);
   await salvarSync(syncCfg());
 });
 
@@ -302,7 +303,7 @@ test('(d) logout apaga a credencial e volta a sem-credencial', async () => {
   const avisosAntes = toasts.length;
   await salvarSync(syncCfg({ coordination: { enabled: true } }));
   assert.equal(engine.sync.status, 'sem-credencial');
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), true, 'sem credencial segura a automação');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), true, 'sem credencial segura a automação');
   const avisos = toasts.slice(avisosAntes);
   assert.equal(avisos.length, 1);
   assert.match(avisos[0].text, /nenhum login/, 'o aviso diz o que falta de verdade');

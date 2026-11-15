@@ -1,15 +1,10 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
-// Retentativa da postagem da revisão automática (18/09/2026).
+// Retentativa da postagem da revisão automática.
 //
-// Caso real: com a coordenação ligada, a revisão automática gravava a intenção de postar
-// antes de existir o recibo do head, a regra do banco recusava, e o PR caía em "falha
-// técnica ao postar" sem nenhuma retentativa: a mensagem não era classificada como
-// passageira, então o reenvio dos ciclos seguintes (retryFailedPosts) nem armava. O clique
-// depois passava, porque o recibo já estava lá.
-//
-// Duas camadas: até 3 retentativas com 2 s entre elas dentro da própria sessão, e, se
-// ainda assim não sair, o reenvio dos ciclos seguintes armado. Só para recusa que NÃO
-// chegou à rede; incerto, posse e commit novo nunca repetem.
+// A leitura dos meus reviews do head que falha no GitHub recusa a postagem sem nada ter
+// saído. Duas camadas: até 3 retentativas com 2 s entre elas dentro da própria sessão, e,
+// se ainda assim não sair, o reenvio dos ciclos seguintes armado. Só para recusa que NÃO
+// chegou à rede; o que pode ter chegado ao GitHub nunca repete aqui.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -26,12 +21,12 @@ isolateTechnicalTool();
 
 const fanout = (await import('../lib/engine/fanout.js')).default;
 const io = (await import('../lib/io.js')).default;
-const arbitragem = (await import('../lib/engine/postagem-arbitragem.js')).default;
+const retentativaMod = (await import('../lib/engine/postagem-retentativa.js')).default;
 const { TEMPOS } = await import('../lib/constants.js');
 
 const esperas = [];
-const esperarOriginal = arbitragem.retentativa.esperar;
-arbitragem.retentativa.esperar = async (ms) => { esperas.push(ms); };
+const esperarOriginal = retentativaMod.retentativa.esperar;
+retentativaMod.retentativa.esperar = async (ms) => { esperas.push(ms); };
 
 const prMetricsOriginal = fanout.prMetrics;
 fanout.prMetrics = async () => null;
@@ -39,7 +34,7 @@ const runOriginal = io.run;
 io.run = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
 after(() => {
   fanout.prMetrics = prMetricsOriginal;
-  arbitragem.retentativa.esperar = esperarOriginal;
+  retentativaMod.retentativa.esperar = esperarOriginal;
   io.run = runOriginal;
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ }
 });
@@ -54,17 +49,7 @@ function envelope(tipo) {
   return { protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('request_changes'), analysisStatus: 'complete', coverage: { total: 1, reviewed: ['a.ts'], missing: [] }, alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'fixture sintética sem consumidor' }], verdict: 'request_changes', decision: 'needs_decision', cardMet: true, reasons: ['bloqueio real'], reportMarkdown: 'relatório', payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'Tem um problema na validação do redirect.' } } };
 }
 
-function handleFalso() {
-  const h = { noop: false, leaseId: 'L1', attemptId: '', lost: false, done: false, completos: [] };
-  h.valido = () => true;
-  h.validoPor = () => true;
-  h.onLost = () => { };
-  h.complete = async (op) => { h.completos.push(op); h.done = true; return { ok: true }; };
-  h.abort = async () => { h.done = true; };
-  return h;
-}
-
-function motor(post, handle, tipo) {
+function motor(post, tipo) {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
@@ -89,27 +74,22 @@ function motor(post, handle, tipo) {
     if (fila.length > 1) return fila.shift();
     return fila[0];
   };
-  e.runClaudeStream = async (prompt, opts) => {
-    if (typeof opts.onAdmitted === 'function') await opts.onAdmitted(null);
-    return { text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1', coordination: handle };
-  };
+  e.runClaudeStream = async () => ({ text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1' });
   e.toasts = [];
   e.on('toast', (t) => e.toasts.push(t));
-  e.config.sync = { ...e.config.sync, enabled: true, coordination: { enabled: true } };
   return e;
 }
 
 
-const REGISTRO = { ok: false, estado: 'nao_enviada', motivo: 'registro-indisponivel', attempted: false, reviewId: '', error: 'não deu para gravar a intenção de postar no banco compartilhado, então nada foi postado' };
-const INCERTA = { ok: false, estado: 'enviando', motivo: 'resultado-incerto', attempted: true, reviewId: '', error: 'uma postagem deste commit pode ter chegado ao GitHub e ainda não foi conferida; não posto de novo até conferir (gh: HTTP 502)' };
-const ALHEIA = { ok: false, estado: 'nao_enviada', motivo: 'posse-alheia', attempted: false, reviewId: '', error: 'outro aparelho está com este PR agora, então nada foi postado' };
-const HEAD_MUDOU = { ok: false, estado: 'nao_enviada', motivo: 'head-mudou', attempted: false, reviewId: '', error: 'chegou commit novo depois da decisão, então nada foi postado para o commit novo' };
-const OK = { ok: true, estado: 'confirmada' };
+const DESCONHECIDO = { ok: false, estado: 'nao_enviada', motivo: 'estado-desconhecido', attempted: false, error: 'Não foi possível conferir as decisões deste commit no GitHub.' };
+const NA_REDE = { ok: false, attempted: true, error: 'gh: HTTP 502' };
+const FECHADO = { ok: false, blocked: 'pr_fechado', attempted: false, estado: 'MERGED', error: 'o PR já foi mergeado, então o review não foi postado' };
+const OK = { ok: true };
 
 for (const tipo of ['approve', 'request_changes']) {
-  test(`${tipo}: registro indisponível duas vezes e depois sai; espera 2 s entre as tentativas`, async () => {
+  test(`${tipo}: estado desconhecido duas vezes e depois sai; espera 2 s entre as tentativas`, async () => {
     esperas.length = 0;
-    const e = motor([REGISTRO, REGISTRO, OK], handleFalso(), tipo);
+    const e = motor([DESCONHECIDO, DESCONHECIDO, OK], tipo);
     await e.runHeadlessReview(prDe('o/r#10'));
     assert.equal(e.chamadas.length, 3);
     assert.deepEqual(esperas, [TEMPOS.POSTAGEM_RETENTATIVA_MS, TEMPOS.POSTAGEM_RETENTATIVA_MS]);
@@ -119,7 +99,7 @@ for (const tipo of ['approve', 'request_changes']) {
 
   test(`${tipo}: no máximo 3 retentativas; depois vira pendência com o reenvio dos ciclos armado`, async () => {
     esperas.length = 0;
-    const e = motor(REGISTRO, handleFalso(), tipo);
+    const e = motor(DESCONHECIDO, tipo);
     await e.runHeadlessReview(prDe('o/r#11'));
     assert.equal(e.chamadas.length, 4, 'a primeira e mais 3');
     assert.equal(esperas.length, 3);
@@ -129,48 +109,31 @@ for (const tipo of ['approve', 'request_changes']) {
   });
 }
 
-
-test('resultado incerto nunca repete: pode ter chegado ao GitHub', async () => {
+test('falha que chegou à rede nunca repete dentro da sessão: pode ter chegado ao GitHub', async () => {
   esperas.length = 0;
-  const e = motor(INCERTA, handleFalso(), 'approve');
+  const e = motor(NA_REDE, 'approve');
   await e.runHeadlessReview(prDe('o/r#12'));
   assert.equal(e.chamadas.length, 1);
   assert.equal(esperas.length, 0);
 });
 
-test('posse de outro aparelho e commit novo não repetem nem armam reenvio', async () => {
-  for (const [n, falha] of [[13, ALHEIA], [14, HEAD_MUDOU]]) {
-    esperas.length = 0;
-    const e = motor(falha, handleFalso(), 'request_changes');
-    await e.runHeadlessReview(prDe(`o/r#${n}`));
-    assert.equal(e.chamadas.length, 1, falha.motivo);
-    assert.equal(esperas.length, 0, falha.motivo);
-    const item = e.decisions.pending.find((d) => d.key === `o/r#${n}`);
-    assert.equal(item && item.postRetry, null, falha.motivo);
-  }
-});
-
-test('falhaPassageira: só recusa que não chegou à rede e cuja causa passa sozinha', () => {
-  assert.equal(arbitragem.falhaPassageira(REGISTRO), true);
-  assert.equal(arbitragem.falhaPassageira({ ...REGISTRO, motivo: 'estado-desconhecido' }), true);
-  assert.equal(arbitragem.falhaPassageira({ ...REGISTRO, attempted: true }), false);
-  assert.equal(arbitragem.falhaPassageira(INCERTA), false);
-  assert.equal(arbitragem.falhaPassageira(ALHEIA), false);
-  assert.equal(arbitragem.falhaPassageira(HEAD_MUDOU), false);
-  assert.equal(arbitragem.falhaPassageira(OK), false);
-  assert.equal(arbitragem.falhaPassageira(null), false);
-});
-
-test('lease que vence entre as tentativas encerra como perda de coordenação, sem postar de novo', async () => {
+test('PR fechado não repete nem arma reenvio', async () => {
   esperas.length = 0;
-  const h = handleFalso();
-  const e = motor(REGISTRO, h, 'approve');
-  const postar = e.postReview;
-  e.postReview = async (...args) => {
-    const r = await postar(...args);
-    h.valido = () => false; // venceu durante a espera de 2 s
-    return r;
-  };
-  await assert.rejects(e.runHeadlessReview(prDe('o/r#15')), (err) => err.coordenacao === 'perdido');
-  assert.equal(e.chamadas.length, 1, 'sem lease, a segunda tentativa não sai');
+  const e = motor(FECHADO, 'request_changes');
+  await e.runHeadlessReview(prDe('o/r#13'));
+  assert.equal(e.chamadas.length, 1);
+  assert.equal(esperas.length, 0);
+  const item = e.decisions.pending.find((d) => d.key === 'o/r#13');
+  assert.ok(!(item && item.postRetry));
+});
+
+test('falhaPassageira: só a recusa que não chegou à rede e cuja causa passa sozinha', () => {
+  const { falhaPassageira } = retentativaMod;
+  assert.equal(falhaPassageira(DESCONHECIDO), true);
+  assert.equal(falhaPassageira({ ...DESCONHECIDO, attempted: true }), false);
+  assert.equal(falhaPassageira({ ...DESCONHECIDO, motivo: 'outro-motivo' }), false);
+  assert.equal(falhaPassageira(NA_REDE), false);
+  assert.equal(falhaPassageira(FECHADO), false);
+  assert.equal(falhaPassageira(OK), false);
+  assert.equal(falhaPassageira(null), false);
 });

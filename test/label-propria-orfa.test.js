@@ -65,26 +65,6 @@ test('passado o TTL de 3 h, entra em labels-a-tirar e remove', async () => {
   assert.deepEqual(chamadas, [`pr edit ${PR.url} --remove-label eu:revisando`]);
 });
 
-const sync = (get) => ({ syncCoordenacaoAtiva: () => true, sync: { status: 'conectado', uid: 'u', deviceId: 'd', client: { get } } });
-
-test('com coordenação ligada e lease vivo de outro aparelho, não carimba nem remove', async () => {
-  const e = motor(sync(async () => ({ ok: true, data: { leaseId: 'x', expiresAt: T0 + 1e9 } })));
-  const chamadas = [];
-  const run = async (...a) => { chamadas.push(a); return { ok: true }; };
-  await tirarOrfas(e, [PR], { agora: T0, run });
-  await tirarOrfas(e, [PR], { agora: T0 + 10 * TEMPOS.SINAL_REVISAO_TTL_MS, run });
-  assert.deepEqual(e.labelPropriaVistaDesde, {});
-  assert.deepEqual(chamadas, []);
-});
-
-test('leitura do lease que falha conta como vivo', async () => {
-  const ids = { uid: 'u', accountHash: 'a', prHash: 'p' };
-  assert.equal(await leaseVivo({ get: async () => ({ ok: false }) }, ids, T0), null);
-  const e = motor(sync(async () => ({ ok: false, code: 'x' })));
-  await tirarOrfas(e, [PR], { agora: T0, run: async () => ({ ok: true }) });
-  assert.deepEqual(e.labelPropriaVistaDesde, {});
-});
-
 test('leaseVivo: ausente e expirado são false; vigente e sem expiresAt são true', async () => {
   const ids = { uid: 'u', accountHash: 'a', prHash: 'p' };
   const com = (data) => ({ get: async () => ({ ok: true, data }) });
@@ -150,46 +130,3 @@ test('ao carregar, carimbo com mais de 2 x TTL é descartado', async () => {
   assert.equal(e.labelPropriaVistaDesde[PR.key], agora);
 });
 
-// Com a coordenação ligada a remoção passa pelo mesmo CAS de lease da pendência comum: entre ler o
-// lease ausente e remover, outro aparelho da mesma conta pode ter aberto uma revisão no PR.
-function rtdb({ recusa = false } = {}) {
-  let no = null, versao = 0;
-  const ops = [];
-  const client = {
-    get: async () => ({ ok: true, data: no, etag: `e${versao}` }),
-    put: async (_p, v, { ifMatch } = {}) => {
-      ops.push('put');
-      if (recusa || ifMatch !== `e${versao}`) return { ok: false, code: 'indisponivel' };
-      no = v; versao++;
-      return { ok: true, etag: `e${versao}` };
-    },
-    del: async (_p, { ifMatch } = {}) => {
-      ops.push('del');
-      if (ifMatch !== `e${versao}`) return { ok: false, code: 'indisponivel' };
-      no = null; versao++;
-      return { ok: true };
-    },
-  };
-  return { ops, client };
-}
-const coordenado = (client) => ({ syncCoordenacaoAtiva: () => true, sync: { status: 'conectado', uid: 'u', deviceId: 'd', client } });
-
-test('com coordenação, sem a posse do lease a órfã não é removida e fica pendente', async () => {
-  const { client, ops } = rtdb({ recusa: true });
-  const e = comIntervalo(coordenado(client));
-  const chamadas = [];
-  await observar(e, T0, T0 + TEMPOS.SINAL_REVISAO_TTL_MS, { run: async (...a) => { chamadas.push(a); return { ok: true }; } });
-  assert.deepEqual(chamadas, [], 'sem o CAS, nenhum gh');
-  assert.ok(ops.includes('put'), 'a remoção disputou o lease');
-  assert.equal(Object.keys(JSON.parse(fs.readFileSync(PENDENTES, 'utf8'))).length, 1, 'a pendência segue para o próximo ciclo');
-});
-
-test('com coordenação e a posse do lease, remove e solta o lease', async () => {
-  const { client, ops } = rtdb();
-  const e = comIntervalo(coordenado(client));
-  const chamadas = [];
-  await observar(e, T0, T0 + TEMPOS.SINAL_REVISAO_TTL_MS, { run: async (_c, args) => { chamadas.push(args.join(' ')); return { ok: true, stderr: '' }; } });
-  assert.deepEqual(chamadas, [`pr edit ${PR.url} --remove-label eu:revisando`]);
-  assert.deepEqual(ops, ['put', 'del']);
-  assert.deepEqual(e.labelPropriaVistaDesde, {});
-});

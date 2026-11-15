@@ -39,7 +39,6 @@ import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursiv
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
 import decisionMod from './lib/engine/decision.js';
-import arbitragemMod from './lib/engine/postagem-arbitragem.js';
 import ghMod from './lib/engine/gh-queries.js';
 import limiteGhMod from './lib/engine/limite-gh.js';
 import { chavesEstacionadas, ancoraAposReinicio } from './lib/engine/estado-do-boot.js';
@@ -779,9 +778,6 @@ class Engine extends EventEmitter {
       // por gh na mão): tira o card de "Precisa de você", que antes ficava preso pra
       // sempre porque só o clique no botão esvaziava decisions.pending
       try { await this.reconcilePending(); } catch (e) { this.log('WARN', `reconcilePending: ${e.message}`); }
-      // postagem incerta (CT-POST): confere no GitHub se ela saiu ANTES de qualquer reenvio,
-      // que é o passo logo abaixo; com a coordenação desligada não faz nada
-      try { await this.reconciliarPostagensIncertas(); } catch (e) { this.log('WARN', `reconciliar postagens: ${e.message}`); }
       // posts que falharam por instabilidade transitória (rede, gateway do GitHub fora
       // do ar) tentam de novo sozinhos aqui, reusando o payload já decidido: roda DEPOIS
       // do reconcilePending de propósito, pra nunca reenviar em cima de uma pendência que
@@ -985,8 +981,6 @@ class Engine extends EventEmitter {
         if (inflight.has(p.key)) return false;
         if (this.autoReviewParked.has(p.key)) return false;
         if (this.retryAfterNet.has(p.key)) return false;
-        // coordenação entre aparelhos: conexão fora ou espera anotada segura (D11)
-        if (this.syncSeguraAutomacao(p.key)) return false;
         // teto do grupo que não dá para verificar (C4b): espera, sem estacionar
         if (this.grupoSegura(acct)) return false;
         // assinatura do Claude no limite do plano: nem entra na fila até o reset, senão
@@ -1099,8 +1093,6 @@ class Engine extends EventEmitter {
   headlessAcct(pr) { return reviewMod.headlessAcct(this, pr); }
   processHeadless() { return reviewMod.processHeadless(this); }
   freeHeadlessSlot(acct, pr) { return reviewMod.freeHeadlessSlot(this, acct, pr); }
-  enfileirarDaDistribuicao(pr, admissaoId) { return reviewMod.enfileirarDaDistribuicao(this, pr, admissaoId); }
-  devolverAoLocal(pr) { return reviewMod.devolverAoLocal(this, pr); }
   async runOneHeadless(pr, acct) { return reviewMod.runOneHeadless(this, pr, acct); }
   // re-revisão automática pós-push (round 2 sem clique): gate + lançamento + âncora
   reReviewTargets(inflightKeys, agora) { return reviewMod.reReviewTargets(this, inflightKeys, agora); }
@@ -1231,7 +1223,6 @@ class Engine extends EventEmitter {
   checkpointGap(result) { return decisionMod.checkpointGap(result); }
   checksVermelhos(result) { return decisionMod.checksVermelhos(result); }
   async postReview(pr, payload, opcoes) { return decisionMod.postReview(this, pr, payload, opcoes); }
-  async reconciliarPostagensIncertas() { return arbitragemMod.reconciliarPostagensIncertas(this); }
   decisionForUi(item) { return decisionMod.decisionForUi(item); }
   writeMemory(result, actionLabel) { return decisionMod.writeMemory(this, result, actionLabel); }
   removeTeamMember(login) { return decisionMod.removeTeamMember(this, login); }
@@ -1425,9 +1416,6 @@ class Engine extends EventEmitter {
   // Sincronização entre dispositivos: colaborador lib/engine/sync.js, o único que junta
   // config, credencial, aparelho e cliente do Firebase. A senha do login atravessa só a
   // fachada de login e nunca volta em resultado nenhum.
-  syncCoordenacaoAtiva() { return syncMod.coordenacaoAtiva(this); }
-  syncSeguraAutomacao(key) { return syncMod.seguraAutomacao(this, key); }
-  syncRegistrarEspera(key, admissao) { return syncMod.registrarEspera(this, key, admissao); }
   syncLogin(credenciais, fetchImpl) { return syncMod.syncLogin(this, credenciais, fetchImpl); }
   syncUnlock(dados) { return syncMod.syncUnlock(this, dados); }
   // usado pela chave do conjunto: abrir a chave muda o que este aparelho anuncia
@@ -1465,10 +1453,7 @@ class Engine extends EventEmitter {
   syncTick() { return syncMod.syncTick(this); }
   syncConfirmarConexao() { return syncMod.syncTick(this, { apenasConexao: true }); }
   syncAplicarConfig() { return syncMod.aplicarConfig(this); }
-  syncAdmit(ctx) { return syncMod.admit(this, ctx); }
-  syncPreflightManual(pr) { return syncMod.preflightManual(this, pr); }
   syncRedoReceipt(key) { return syncMod.redoReceipt(this, key); }
-  syncAtualizarPublicacao(dados) { return syncMod.syncAtualizarPublicacao(this, dados); }
   // gancho do consumo (usage.js): no-op com a consolidação entre aparelhos desligada
   syncEnqueueUsage(sessao) { return syncUsageMod.enqueueUsage(this, sessao); }
   syncConsolidated(days) { return syncUsageMod.consolidated(this, days); }
@@ -1625,10 +1610,6 @@ class Engine extends EventEmitter {
       if (!dona) continue;
       if (this.isMuted(dona) || !this.tokenFor(dona) || !politicaDeInicio(this, p).automatic) continue;
       if (this.autoReviewParked.has(p.key) || this.skipComentado[p.key]) continue;
-      // D19: PR segurado pela coordenação não vai rodar agora, então não é disputa; sem
-      // isto a outra conta cederia a vez pra quem não pode usá-la. A fachada falta no
-      // engine mínimo dos testes da cota, e ausência vale como coordenação desligada.
-      if (typeof this.syncSeguraAutomacao === 'function' && this.syncSeguraAutomacao(p.key)) continue;
       espera.add(dona);
     }
     return this.accountList()

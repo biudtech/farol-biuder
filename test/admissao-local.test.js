@@ -185,35 +185,6 @@ function engineFila(prs, extra = {}) {
 
 const tres = [{ key: 'a/x#1', acct: 'c1' }, { key: 'b/x#2', acct: 'c2' }, { key: 'c/x#3', acct: 'c3' }];
 
-test('com a admissão ativa, três contas e teto 1 abrem UMA sessão', () => {
-  comMemoria(4096);
-  const e = engineFila(tres);
-  reviewMod.processHeadless(e);
-  assert.equal(e.ran.length, 1);
-  assert.equal(e.headlessQueue.length, 2, 'os outros esperam na fila, sem estacionar');
-  assert.equal(admissao.resumo(e).total, 1);
-});
-
-test('a espera não perde a demanda: liberada a vaga, o próximo sai', () => {
-  comMemoria(4096);
-  const e = engineFila(tres);
-  reviewMod.processHeadless(e);
-  const pr = { key: e.ran[0].split('@')[0], admissaoId: [...e.admissao.reservas.keys()][0] };
-  reviewMod.freeHeadlessSlot(e, 'c1', pr);
-  assert.equal(admissao.resumo(e).total, 0, 'qualquer desfecho libera a reserva');
-  reviewMod.processHeadless(e);
-  assert.equal(e.ran.length, 2);
-});
-
-test('sem memória medida, a fila não anda e nada é estacionado', () => {
-  os.freemem = () => 0;
-  delete process.availableMemory;
-  const e = engineFila(tres);
-  reviewMod.processHeadless(e);
-  assert.deepEqual(e.ran, []);
-  assert.equal(e.headlessQueue.length, 3);
-});
-
 test('teto do aparelho maior deixa várias contas rodarem juntas', () => {
   comMemoria(4096);
   const e = engineFila(tres, { config: { parallelReviews: 1, globalParallelReviews: 3, sync: { enabled: true, shared: { enabled: true } } } });
@@ -376,29 +347,6 @@ test('pausado: só com o compartilhamento ligado, o admin aceito e a política p
     assert.equal(admissao.pausado(motor({ config: { sync: sync(true, false) } })), false, 'sem compartilhamento não há política de aparelho');
     cachePolitica.gravarPolitica({ uid: 'u1', dev: 'd1', generation: 1, versao: 2, politica: { pausado: false } });
     assert.equal(admissao.pausado(motor({ config: { sync: sync(true) } })), false);
-  } finally {
-    cachePolitica.apagarPolitica();
-  }
-});
-
-test('aparelho pausado não varre pushback; sem a pausa, a varredura segue', async () => {
-  const cachePolitica = (await import('../lib/sync/cache-politica.js')).default;
-  const pushbackMod = (await import('../lib/engine/pushback.js')).default;
-  const aceitando = { enabled: true, shared: { enabled: true }, aceitarAdmin: true };
-  const chamadas = [];
-  const engine = () => motor({
-    config: { autoPushback: true, sync: aceitando },
-    reviewActions: () => { chamadas.push('pushback'); return []; },
-    panorama: [], log: () => {}, emit: () => {},
-  });
-  const pr = { key: 'acme/app#1', url: 'https://github.com/acme/app/pull/1' };
-  try {
-    cachePolitica.gravarPolitica({ uid: 'u1', dev: 'd1', generation: 1, versao: 1, politica: { pausado: true } });
-    await pushbackMod.scanPushbacks(engine());
-    assert.deepEqual(chamadas, [], 'pausado, a varredura de pushback nem lista os alvos');
-    cachePolitica.gravarPolitica({ uid: 'u1', dev: 'd1', generation: 1, versao: 2, politica: { pausado: false } });
-    await pushbackMod.scanPushbacks(engine());
-    assert.ok(chamadas.includes('pushback'), 'sem a pausa, a varredura roda');
   } finally {
     cachePolitica.apagarPolitica();
   }

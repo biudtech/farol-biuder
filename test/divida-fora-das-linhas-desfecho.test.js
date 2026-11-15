@@ -145,7 +145,7 @@ function sessaoComDivida(e, { corrigir = true, erro, bloqueada = false, malforma
   e.runClaudeStream = async (prompt) => {
     chamadas++;
     if (chamadas > 1 && erro) throw erro;
-    if (chamadas === 2 && bloqueada) return { blocked: true, coordination: { admitted: false, reason: 'indisponivel' } };
+    if (chamadas === 2 && bloqueada) return null;
     if (chamadas === 2 && malformada) return { text: '{ invalido', sessionId: 's1' };
     const resposta = await rodar();
     const result = JSON.parse(resposta.text);
@@ -243,7 +243,7 @@ test('interrupção de rede durante a correção continua sendo falha recuperáv
   assert.deepEqual(envios, []);
 });
 
-for (const politica of ['request_changes', 'wait']) test(`pausa de admissão não publica texto antigo nem esgota a correção, com defeito real e reprovação=${politica}`, async () => {
+for (const politica of ['request_changes', 'wait']) test(`correção sem resposta não publica texto antigo nem esgota a correção, com defeito real e reprovação=${politica}`, async () => {
   const e = motor();
   e.config.accounts[0].onReject = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973), supressor(1940)], {});
@@ -257,7 +257,7 @@ for (const politica of ['request_changes', 'wait']) test(`pausa de admissão nã
   assert.equal(pausada.technicalReview.escopoSessaoPendente, true);
   assert.ok(pausada.esperaProva, 'impedimento temporário mantém recuperação automática');
   assert.ok(pausada.technicalReview.rules.some(r => r.verdict === 'fail' && !r.dividaForaDasLinhas), 'o defeito real permanece na prova');
-  assert.ok(e.decisionForUi(pausada).reasons.some(r => r.kind === 'gate' && /não foi admitida/.test(r.text)), 'a pausa tem diagnóstico visível');
+  assert.ok(e.decisionForUi(pausada).reasons.some(r => r.kind === 'gate' && /não devolveu resposta/.test(r.text)), 'a pausa tem diagnóstico visível');
   pausada.esperaProva.proximaEm = Date.now() + 60_000;
   assert.equal(await e.varrerEsperas(), 0, 'a recuperação respeita o recuo, sem sessão imediata');
   assert.equal(chamadas(), 2);

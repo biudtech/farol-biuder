@@ -172,33 +172,6 @@ function prontidaoFresca(e) {
   };
 }
 
-test('revisar: enfileira AQUI mesmo com a distribuição valendo, tira do estacionamento e nunca vira clique', async () => {
-  const e = await motor({ distribuicao: true });
-  prontidaoFresca(e);
-  e.sync.autoridade = fresca();
-  // a premissa: um PR automático qualquer iria para a distribuição
-  const restaurar = comoExecutor(e);
-  assert.equal(reviewMod.enqueueHeadless(e, { key: 'acme/app#99', headSha: 's', author: 'x', repo: 'acme/app', number: 99 }).via, 'distribuicao');
-  restaurar();
-  e.autoReviewParked.add(PR.key);
-  e.parkedMotivos = { [PR.key]: { at: new Date().toISOString(), tipo: 'esgotado', motivo: 'm' } };
-  e.retryAfterNet.set(PR.key, { tries: 1, pr: PR });
-  const cmdId = await emitirPara(e, 'revisar', { prTag: prTag(kId(e), PR.key) });
-  await aplicar(e);
-  assert.deepEqual([recibo(cmdId).estado, recibo(cmdId).code], ['aplicado', '']);
-  const item = e.headlessQueue.find((p) => p.key === PR.key);
-  assert.ok(item, 'entrou na fila LOCAL, não na distribuição');
-  assert.equal(item.viaAdmin, true);
-  assert.equal(item.viaComando, true);
-  assert.equal('manual' in item, false, 'CT-FIO: não é clique');
-  assert.equal('requested' in item, false, 'CT-FIO: sem requested, nunca aprova sozinho');
-  assert.equal(e.headlessDistribuindo.has(PR.key), false);
-  assert.equal(e.autoReviewParked.has(PR.key), false, 'saiu do estacionamento');
-  assert.equal(e.retryAfterNet.has(PR.key), false, 'o retry não vira segunda revisão');
-  assert.equal(e.queue.some((p) => p.key === PR.key), false);
-  assert.equal(e.seen.has(PR.key), true);
-});
-
 test('revisar: o gate de consciência segura, e o recibo diz qual; o estacionamento fica', async () => {
   const e = await motor();
   e.autoReviewParked.add(PR.key);

@@ -65,109 +65,12 @@ function motor({ coordenacao = true, preflight = null } = {}) {
 
 const bloqueado = (reason, detail = {}) => ({ ok: false, reason, detail });
 
-test('preflight bloqueado devolve coordenacao sem enfileirar e sem tirar o PR da fila', async () => {
-  const detail = { deviceId: 'd2', deviceName: 'notebook', since: 1 };
-  const e = motor({ preflight: bloqueado('alheio', detail) });
-  const r = await e.launchReview([URL_PR], 'auto', 'clique');
-  assert.equal(r.ok, false);
-  assert.deepEqual(r.coordenacao, [{ key: KEY, reason: 'alheio', detail }]);
-  assert.equal(e.enfileirados.length, 0);
-  assert.equal(e.queue.some((p) => p.key === KEY), true, 'o card continua na fila');
-  assert.equal(e.seen.has(KEY), false);
-});
-
-test('semCoordenacao contorna só o indisponivel', async () => {
-  const ok = motor({ preflight: bloqueado('indisponivel', { motivo: 'sem rede' }) });
-  const r1 = await ok.launchReview([URL_PR], 'auto', 'clique', { semCoordenacao: true });
-  assert.equal(r1.ok, true);
-  assert.equal(ok.enfileirados[0].semCoordenacao, true);
-  assert.equal(ok.enfileirados[0].manual, true);
-  assert.equal(ok.enfileirados[0].ignorarRecibo, false);
-
-  for (const reason of ['recibo', 'alheio']) {
-    const e = motor({ preflight: bloqueado(reason) });
-    const r = await e.launchReview([URL_PR], 'auto', 'clique', { semCoordenacao: true });
-    assert.equal(r.ok, false, `semCoordenacao não contorna ${reason}`);
-    assert.equal(r.coordenacao[0].reason, reason);
-    assert.equal(e.enfileirados.length, 0);
-  }
-});
-
-test('ignorarRecibo contorna só o recibo', async () => {
-  const ok = motor({ preflight: bloqueado('recibo', { deviceName: 'desktop' }) });
-  const r1 = await ok.launchReview([URL_PR], 'auto', 'clique', { ignorarRecibo: true });
-  assert.equal(r1.ok, true);
-  assert.equal(ok.enfileirados[0].ignorarRecibo, true);
-  assert.equal(ok.enfileirados[0].semCoordenacao, false);
-
-  for (const reason of ['indisponivel', 'alheio']) {
-    const e = motor({ preflight: bloqueado(reason) });
-    const r = await e.launchReview([URL_PR], 'auto', 'clique', { ignorarRecibo: true });
-    assert.equal(r.ok, false, `ignorarRecibo não contorna ${reason}`);
-    assert.equal(e.enfileirados.length, 0);
-  }
-});
-
-test('alheio não tem override: nem as duas flags juntas passam', async () => {
-  const e = motor({ preflight: bloqueado('alheio') });
-  const r = await e.launchReview([URL_PR], 'auto', 'clique', { semCoordenacao: true, ignorarRecibo: true });
-  assert.equal(r.ok, false);
-  assert.equal(e.enfileirados.length, 0);
-});
-
-test('override sem bloqueio correspondente cai: a coordenação normal vale', async () => {
-  const e = motor({ preflight: { ok: true } });
-  const r = await e.launchReview([URL_PR], 'auto', 'clique', { semCoordenacao: true, ignorarRecibo: true });
-  assert.equal(r.ok, true);
-  assert.equal(r.coordenacao, undefined, 'sem bloqueio a resposta é a de sempre');
-  assert.equal(e.enfileirados[0].semCoordenacao, false);
-  assert.equal(e.enfileirados[0].ignorarRecibo, false);
-});
-
-test('lote misto: o liberado segue e o bloqueado volta na resposta', async () => {
-  const e = motor();
-  const URL2 = 'https://github.com/acme/app/pull/2';
-  e.queue.push({ key: 'acme/app#2', url: URL2, repo: 'acme/app', number: 2, author: 'dev' });
-  e.syncPreflightManual = async (pr) => (pr.key === KEY ? bloqueado('alheio') : { ok: true });
-  const r = await e.launchReview([URL_PR, URL2], 'auto', 'clique');
-  assert.equal(r.ok, true);
-  assert.deepEqual(r.coordenacao.map((c) => c.key), [KEY]);
-  assert.deepEqual(e.enfileirados.map((p) => p.key), ['acme/app#2']);
-  assert.equal(e.queue.some((p) => p.key === KEY), true);
-});
-
-test('caminho automático não faz preflight e descarta override que tenha vazado pro objeto', async () => {
-  const e = motor({ preflight: bloqueado('alheio') });
-  e.queue[0].semCoordenacao = true;
-  e.queue[0].ignorarRecibo = true;
-  const r = await e.launchReview([URL_PR], 'auto', 'auto', { semCoordenacao: true });
-  assert.equal(r.ok, true);
-  assert.equal(e.preflights.length, 0, 'automação é segurada no toReview e no gate do spawn');
-  assert.equal(e.enfileirados[0].semCoordenacao, false);
-  assert.equal(e.enfileirados[0].ignorarRecibo, false);
-});
-
 test('coordenação desligada: launchReview é o de antes (sem preflight e sem campo novo)', async () => {
   const e = motor({ coordenacao: false, preflight: bloqueado('alheio') });
   const r = await e.launchReview([URL_PR], 'auto', 'clique', { semCoordenacao: true });
   assert.deepEqual(r, { ok: true, mode: 'auto' });
   assert.equal(e.preflights.length, 0);
   assert.equal(e.enfileirados.length, 1);
-});
-
-test('override vale pra UMA admissão: o PR que sai da sessão não carrega o contorno', async () => {
-  const e = motor();
-  e.accountForPr = () => 'eu';
-  e.headSha = async () => HEAD;
-  e.fetchPrFiles = async () => null;
-  e.bloqueadoPorChecks = async () => ({ faltando: [] });
-  let visto = null;
-  e.runClaudeStream = async (prompt, opts) => { visto = opts.coordination; return { blocked: true, coordination: { admitted: false, reason: 'alheio', detail: {} }, text: '', sessionId: null }; };
-  const pr = { key: KEY, url: URL_PR, repo: 'acme/app', number: 1, author: 'dev', manual: true, semCoordenacao: true };
-  await e.runHeadlessReview(pr);
-  assert.equal(visto.semCoordenacao, true, 'a admissão desta sessão recebeu o override');
-  assert.equal(pr.semCoordenacao, false, 'retry e fila não herdam o contorno');
-  assert.equal(pr.ignorarRecibo, false);
 });
 
 /* ---------- Refazer neste aparelho ---------- */
@@ -207,16 +110,6 @@ function motorConectado() {
   e.launchReview = async (urls, mode, origem, extras) => { e.relancados.push({ urls, mode, origem, extras }); return { ok: true, mode }; };
   return e;
 }
-
-test('redoReceipt apaga o recibo do head atual e relança pelo clique com ignorarRecibo', async () => {
-  fake.setTree({ users: { u1: { receipts: { [IDS.accountHash]: { [IDS.prHash]: { [FP]: recibo() } } } } } });
-  const e = motorConectado();
-  const r = await e.syncRedoReceipt(KEY);
-  assert.deepEqual(r, { ok: true });
-  assert.equal(reciboNoBanco(), undefined, 'recibo apagado');
-  assert.equal(e.sync.recibosVistos[KEY], undefined, 'a tela deixa de mostrar o órfão');
-  assert.deepEqual(e.relancados, [{ urls: [URL_PR], mode: 'auto', origem: 'clique', extras: { ignorarRecibo: true } }]);
-});
 
 // "Refazer" existe para destravar a análise que ficou pela metade num aparelho que
 // sumiu. Apagar o recibo de uma análise PUBLICADA jogaria fora a prova dela, e a mesma

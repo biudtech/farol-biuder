@@ -332,7 +332,7 @@ test('espera do CI: CI verde não publica o texto recortado, e a pendência vai 
   semValor(e);
 });
 
-test('espera do CI com coordenação: `nao_enviada` da credencial também vai para a pessoa', async () => {
+test('espera do CI: `nao_enviada` da credencial também vai para a pessoa', async () => {
   const e = motor({ checks: [{ nome: 'test', estado: 'rodando' }], reprova: 'wait' });
   sessaoQueAprova(e, 'Leitura completa, sem bloqueios.');
   gh.rollup = [check('test', null, 'IN_PROGRESS'), check('audit', 'SUCCESS')];

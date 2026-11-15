@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { SYNC } from '../lib/constants.js';
 
 const { Engine } = await import('../server.js');
+const syncDireto = (await import('../lib/engine/sync.js')).default;
 
 const DEVICE_FILE = path.join(FAROL_HOME, 'workspace', 'state', SYNC.DEVICE_FILE);
 
@@ -67,7 +68,7 @@ test('boot conectando: segura a automação sem toast de login que não falta', 
   const toasts = [];
   engine.on('toast', (t) => toasts.push(t));
   assert.equal(engine.sync.status, 'conectando');
-  assert.equal(engine.syncSeguraAutomacao('o/r#1'), true, 'fail-closed enquanto a primeira conexão não acontece');
+  assert.equal(syncDireto.seguraAutomacao(engine, 'o/r#1'), true, 'fail-closed enquanto a primeira conexão não acontece');
   assert.equal(toasts.some((t) => /nenhum login/.test(t.text)), false, 'o aparelho TEM login: o aviso não pode dizer que falta');
   assert.equal(toasts.length, 0, 'conectando é passagem de um ciclo, não indisponibilidade');
 });

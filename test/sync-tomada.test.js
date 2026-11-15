@@ -139,21 +139,3 @@ test('o comando tomar exige confirmação explícita e a conta (Task 3, 28/09/20
     { tipo: 'tomar', args: { prTag: PR, matTag: MAT, acctTag: ACCT, confirmado: true } },
   );
 });
-
-test('o funil pergunta pela geração antes de enviar, e leitura indisponível não autoriza', () => {
-  const arbitragem = fs.readFileSync(new URL('../lib/engine/postagem-arbitragem.js', import.meta.url), 'utf8');
-  assert.match(arbitragem, /handle\.geracaoCorrente\(\)/);
-  assert.match(arbitragem, /posse-tomada/);
-  const coord = fs.readFileSync(new URL('../lib/sync/coordinator.js', import.meta.url), 'utf8');
-  const i = coord.indexOf('async function geracaoCorrente');
-  assert.ok(i > 0);
-  assert.match(coord.slice(i, i + 400), /if \(!lido \|\| !lido\.ok\) return false;/, 'sem leitura, não publica');
-});
-
-test('a tomada só acontece com pedido explícito E confirmado', () => {
-  const coord = fs.readFileSync(new URL('../lib/sync/coordinator.js', import.meta.url), 'utf8');
-  assert.match(coord, /ctx\.tomar === true && ctx\.confirmado === true/);
-  const review = fs.readFileSync(new URL('../lib/engine/review.js', import.meta.url), 'utf8');
-  assert.match(review, /tomar, confirmado: tomar/, 'o pedido vem do item, e é consumido de uma vez');
-  assert.match(review, /pr\.tomarLease = false;/);
-});

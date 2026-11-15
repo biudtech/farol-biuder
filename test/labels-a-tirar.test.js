@@ -148,41 +148,6 @@ test('404 sem consulta conclusiva não é prova de que a tag saiu', async () => 
   assert.equal(Object.values(lerArquivo()).length, 1);
 });
 
-test('limpeza adiada disputa o lease e preserva a revisão de outro aparelho', async () => {
-  const { startFakeRtdb } = await import('./helpers/fake-rtdb.js');
-  const { createRtdbClient } = await import('../lib/sync/rtdb.js');
-  const { acquireLease, releaseLease, leasePath } = await import('../lib/sync/lease.js');
-  const { accountHash, prHash } = await import('../lib/sync/keys.js');
-  const fake = await startFakeRtdb({ token: 'synthetic-token' });
-  const client = createRtdbClient({ databaseUrl: fake.url, getIdToken: async () => ({ ok: true, idToken: 'synthetic-token' }) });
-  const ids = { uid: 'u1', accountHash: accountHash('eu'), prHash: prHash(PR.key) };
-  const now = Date.now();
-  const data = { leaseId: 'other', deviceId: 'other-device', operationKind: 'review', headSha: 'a'.repeat(40), nowMs: now, farolVersion: '2.77.9' };
-  try {
-    assert.equal((await acquireLease(client, ids, data)).ok, true);
-    const e = motor({ syncCoordenacaoAtiva: () => true, sync: { status: 'conectado', client, uid: 'u1', deviceId: 'this-device' } });
-    anotar(e, PR, 'eu:revisando'); let called = 0;
-    await tirarPendentes(e, async () => { called++; return { ok: true }; }, now);
-    assert.equal(called, 0); assert.equal(Object.values(lerArquivo()).length, 1);
-    await releaseLease(client, ids, { leaseId: 'other' });
-    await tirarPendentes(e, async () => {
-      called++;
-      const concurrent = await acquireLease(client, ids, { ...data, leaseId: 'next-review', nowMs: Date.now() });
-      assert.equal(concurrent.ok, false); assert.equal(concurrent.reason, 'alheio');
-      return { ok: true };
-    }, Date.now());
-    assert.equal(called, 1); assert.deepEqual(lerArquivo(), {});
-    assert.equal((await client.get(leasePath(ids.uid, ids.accountHash, ids.prHash))).data, null);
-  } finally { await fake.close(); }
-});
-
-test('coordenação indisponível adia limpeza automática sem perder a pendência', async () => {
-  const e = motor({ syncCoordenacaoAtiva: () => true, sync: { status: 'desconectado' } });
-  anotar(e, PR, 'eu:revisando'); let called = false;
-  await tirarPendentes(e, async () => { called = true; return { ok: true }; });
-  assert.equal(called, false); assert.equal(Object.values(lerArquivo()).length, 1);
-});
-
 test('caixa e representação antiga não duplicam pendência da mesma tag', () => {
   const e = motor();
   e.labelsATirar = { [PR.key]: { url: PR.url, label: 'Eu:Revisando', desde: 100 } };
@@ -206,24 +171,11 @@ test('uma revisão local com outra caixa na chave também adia a limpeza', async
   assert.equal(called, false); assert.equal(Object.values(lerArquivo()).length, 1);
 });
 
-test('limpeza manual adiada reserva a dona da tag, mas autentica com a conta que remove', async () => {
-  const { startFakeRtdb } = await import('./helpers/fake-rtdb.js');
-  const { createRtdbClient } = await import('../lib/sync/rtdb.js');
-  const { acquireLease, releaseLease } = await import('../lib/sync/lease.js');
-  const { accountHash, prHash } = await import('../lib/sync/keys.js');
-  const fake = await startFakeRtdb({ token: 'synthetic-token' });
-  const client = createRtdbClient({ databaseUrl: fake.url, getIdToken: async () => ({ ok: true, idToken: 'synthetic-token' }) });
-  const ids = { uid: 'u1', accountHash: accountHash('colleague'), prHash: prHash(PR.key) };
-  const data = { leaseId: 'other-review', deviceId: 'other-device', operationKind: 'review', headSha: 'a'.repeat(40), nowMs: Date.now(), farolVersion: '2.77.9' };
-  try {
-    assert.equal((await acquireLease(client, ids, data)).ok, true);
-    const e = motor({ tokenFor: account => account === 'eu' ? 'synthetic-token' : '', ghEnv: account => ({ ACTOR: account }), syncCoordenacaoAtiva: () => true, sync: { status: 'conectado', client, uid: 'u1', deviceId: 'this-device' } });
-    anotar(e, PR, 'colleague:revisando', Date.now(), 'eu'); let called = 0;
-    const run = async (_cmd, args, options) => { called++; assert.equal(options.env.ACTOR, 'eu'); assert.equal(args.at(-1), 'colleague:revisando'); return { ok: true }; };
-    await tirarPendentes(e, run); assert.equal(called, 0); assert.equal(Object.values(lerArquivo()).length, 1);
-    await releaseLease(client, ids, { leaseId: 'other-review' });
-    await tirarPendentes(e, run); assert.equal(called, 1); assert.deepEqual(lerArquivo(), {});
-  } finally { await fake.close(); }
+test('limpeza manual adiada de tag de outra conta autentica com a conta que remove', async () => {
+  const e = motor({ tokenFor: account => account === 'eu' ? 'synthetic-token' : '', ghEnv: account => ({ ACTOR: account }) });
+  anotar(e, PR, 'colleague:revisando', Date.now(), 'eu'); let called = 0;
+  const run = async (_cmd, args, options) => { called++; assert.equal(options.env.ACTOR, 'eu'); assert.equal(args.at(-1), 'colleague:revisando'); return { ok: true }; };
+  await tirarPendentes(e, run); assert.equal(called, 1); assert.deepEqual(lerArquivo(), {});
 });
 
 for (const [origem, limpar] of [

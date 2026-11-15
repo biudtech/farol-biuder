@@ -200,47 +200,12 @@ test('evento de valor desconhecido usa a reserva e marca parcialmente estimado',
   assert.equal(cgEng.resumoParaTela(e)[0].parcialmenteEstimado, true);
 });
 
-test('lacuna deixa o orçamento não verificável e segura o automático e o clique, sem estacionar', async () => {
-  const e = await motorComGrupo();
-  await rollupDe(e, 'dB', { seq: 1 });
-  await capacidadeDe(e, 'dB', { seq: 3 });
-  await cgEng.recalcular(e, e.config.sync);
-  assert.equal(e.grupoSegura(LOGIN), 'lacuna');
-  assert.equal(e.budgetBlockedFor(LOGIN), null, 'não verificável não é estouro: não entra no fluxo que estaciona');
-  const iniciadas = [];
-  Object.assign(e, { headlessQueue: [{ key: 'org/r#1', manual: true }], headlessBusyAccounts: new Map() });
-  e.accountForPr = () => LOGIN;
-  e.runOneHeadless = (pr) => iniciadas.push(pr.key);
-  reviewMod.processHeadless(e);
-  assert.deepEqual(iniciadas, [], 'o clique também não atravessa');
-  assert.equal(e.headlessQueue.length, 1, 'o PR espera na fila');
-  assert.equal(e.autoReviewParked.size, 0, 'nada estacionado');
-});
-
 test('evento inválido também deixa não verificável', async () => {
   const e = await motorComGrupo();
   await e.sync.client.put(`/users/u1/usageDaily/dB/${HOJE()}`, { v: 1, u: Date.now(), seq: 1, g: { [G]: { c: 'muito', s: 1, d: 0 } } }, {});
   await capacidadeDe(e, 'dB');
   await cgEng.recalcular(e, e.config.sync);
   assert.equal(e.grupoSegura(LOGIN), 'invalido');
-});
-
-test('outra conta, sem teto de grupo que a segure, continua saindo', async () => {
-  const e = await motorComGrupo();
-  await rollupDe(e, 'dB', { seq: 1 });
-  await capacidadeDe(e, 'dB', { seq: 3 });
-  await cgEng.recalcular(e, e.config.sync);
-  const iniciadas = [];
-  Object.assign(e, { headlessQueue: [{ key: 'org/r#1' }, { key: 'outra/r#2' }], headlessBusyAccounts: new Map() });
-  e.accountForPr = (pr) => (pr.key.startsWith('outra') ? 'outra-conta' : LOGIN);
-  // a outra conta usa um perfil vinculado a um grupo que não está ativo aqui: o teto não a alcança
-  const OUTRO = { id: 'p2', label: 'Outro', kind: 'apikey' };
-  assert.equal(vinculo.vincular(OUTRO.id, { grupo: 'f'.repeat(32), tipo: 'api', agora: Date.now() - 1000 }), true);
-  e.profileOfAccount = (acct) => (acct === LOGIN ? PERFIL : OUTRO);
-  e.runOneHeadless = (pr) => iniciadas.push(pr.key);
-  comoExecutor(e);
-  reviewMod.processHeadless(e);
-  assert.deepEqual(iniciadas, ['outra/r#2'], 'a conta segurada não trava a fila das outras');
 });
 
 test('perfil vinculado como tipo sem métrica aparece como não controlado', async () => {

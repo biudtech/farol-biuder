@@ -62,7 +62,6 @@ function motor() {
   e.pushState = () => { };
   e.writeMemory = () => { };
   e.skipComentado = {};
-  e.postagensArquivo = path.join(FAROL_HOME, `postagens-${Math.random().toString(16).slice(2)}.json`);
   return e;
 }
 
@@ -75,17 +74,12 @@ function pendencia(extra = {}) {
 }
 
 
-test('pré-condição: engine de teste nasce com a coordenação desligada', () => {
-  assert.equal(motor().syncCoordenacaoAtiva(), false);
-});
-
-test('postReview: APPROVE ancorado sai numa chamada só, com o payload normalizado, sem registro de postagem', async () => {
+test('postReview: APPROVE ancorado sai numa chamada só, com o payload normalizado', async () => {
   const e = motor();
   respostas = [OK_POST];
   const r = await e.postReview(PR, { event: 'APPROVE', body: `  ${CORPO}  `, comments: [], commit_id: HEAD });
   assert.equal(r.ok, true);
   assert.deepEqual(chamadas, [{ cmd: 'gh', args: POST, conteudo: arquivo({ event: 'APPROVE', body: CORPO, comments: [], commit_id: HEAD }) }]);
-  assert.equal(fs.existsSync(e.postagensArquivo), false);
 });
 
 test('postReview: 422 sem inline recua a âncora numa segunda chamada', async () => {
