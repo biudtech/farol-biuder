@@ -23,7 +23,7 @@ function linha(key, resolvedAt, extra) {
     ...extra,
   };
 }
-const ctx = (openKeys) => ({ pushbacks: {}, chip: '', chatBadge: '', agora: AG, openKeys });
+const ctx = (openKeys) => ({ pushbacks: {}, chip: '', agora: AG, openKeys });
 // o <details> de uma parte da linha, com os atributos da tag de abertura
 function tagDe(html, classe) {
   const m = new RegExp(`<details class="${classe}"([^>]*)>`).exec(html);
@@ -46,7 +46,7 @@ test('o relatório que a pessoa abriu sai aberto no redesenho seguinte', () => {
 });
 
 test('sem openKeys a linha sai como sempre saiu: tudo fechado', () => {
-  const html = P.resolvedRow(linha('a/b#1', AG), { pushbacks: {}, chip: '', chatBadge: '', agora: AG });
+  const html = P.resolvedRow(linha('a/b#1', AG), { pushbacks: {}, chip: '', agora: AG });
   assert.equal(aberto(tagDe(html, 'dec-report')), false);
   assert.equal(aberto(tagDe(html, 'resolved-attn')), false);
 });

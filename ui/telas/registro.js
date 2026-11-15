@@ -1,7 +1,7 @@
 // Quais telas existem e o que cada uma faz ao entrar e ao chegar estado novo.
 //
 // POR QUE EXISTE: até a Fase 1b o switchTab listava as abas pelo nome
-// (`if (name === 'entregas') loadDeliveries()`) e o connect() listava os renderizadores,
+// (`if (name === 'time') loadTeam()`) e o connect() listava os renderizadores,
 // quinze chamadas em sequência. Com o código das abas em módulos, isso obrigaria o módulo a
 // importar o bootstrap de volta, que é ciclo. Aqui a dependência é de mão única: a tela se
 // declara, o bootstrap percorre.

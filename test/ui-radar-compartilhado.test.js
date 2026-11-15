@@ -45,11 +45,11 @@ function estado({ sync = {}, cfgSync = {} } = {}) {
     app: { name: 'Farol', version: '2.59.5', platform: 'win32' },
     status: 'ocioso', account: { user: 'alice', tokenOk: true },
     accounts: [{ user: 'alice', owners: ['acme-exemplo'] }],
-    config: { ghUser: 'alice', owners: ['acme-exemplo'], accounts: [{ user: 'alice', owners: ['acme-exemplo'] }], intervalSeconds: 300, sync: cfgSync, people: {}, defaultReviewers: {}, projectReviewers: {}, claudeProfiles: [] },
+    config: { ghUser: 'alice', owners: ['acme-exemplo'], accounts: [{ user: 'alice', owners: ['acme-exemplo'] }], intervalSeconds: 300, sync: cfgSync, people: {}, claudeProfiles: [] },
     lastCheckAt: Date.now(), nextCheckAt: Date.now() + 60000,
     queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
-    activeSessions: [], headlessWaiting: [], chats: {}, reviewActions: {}, staleStates: {},
-    usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [], update: { state: 'idle' },
+    activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
+    usage: {}, usageSessions: [], pushbacks: {}, team: [], update: { state: 'idle' },
     paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
     // o aparelho de teste aceitou o controle: só assim ele aparece na aba Aparelhos (29/09/2026)
     sync: { enabled: true, shared: true, bloqueioCompartilhamento: '', deviceId: 'dEu', devices: DEVICES, distribuicao: { modo: 'distribuido', esperando: [] }, comandosEmitidos: [], tomadasSofridas: [], paineis: { aparelhos: [{ deviceId: 'dOutro', abriu: true, aceitarAdmin: true, contas: [] }] }, ...sync },
@@ -82,7 +82,7 @@ test('com a visão valendo, as seções aparecem e a faixa do modo sai do snapsh
   assert.equal($('#mdHistorico').hidden, false);
   assert.equal($('#mdFaixa').hidden, false);
   assert.match($('#mdFaixa').innerHTML, /fila distribuída/);
-  assert.match($('#mdLocal').innerHTML, /Destaques, Kudos e Time/);
+  assert.match($('#mdLocal').innerHTML, /memória do Time continua local/);
 });
 
 test('bloqueada pelo Farol: as seções somem e a faixa diz bloqueada', () => {
@@ -108,7 +108,7 @@ test('PR solicitado continua na fila visível enquanto a distribuição espera a
   const pr = { key: 'acme-exemplo/engine-ai#454', url: 'https://github.com/acme-exemplo/engine-ai/pull/454',
     title: 'Corrige a entrega', author: 'bruno-exemplo', account: 'alice', mine: true, updatedAt: new Date().toISOString() };
   const snap = estado();
-  snap.panorama = [pr];
+  snap.headlessWaitingPrs = [pr];
   snap.headlessDistributing = [pr.key];
   emitir('state', snap);
   assert.equal($('#queueCount').textContent, '1');
@@ -125,7 +125,7 @@ test('fila local em espera aparece uma vez e não duplica um item acionável', (
   const pr = { key: 'acme-exemplo/backoffice#140', url: 'https://github.com/acme-exemplo/backoffice/pull/140',
     title: 'Ajusta formulário', author: 'bruno-exemplo', account: 'alice', mine: true, updatedAt: new Date().toISOString() };
   const snap = estado();
-  snap.panorama = [pr];
+  snap.headlessWaitingPrs = [pr];
   snap.headlessWaiting = [pr.key];
   snap.headlessWaitingDetails = { [pr.key]: {
     posicao: 3, total: 7, motivo: 'limite-conta', ocupadas: 2, limite: 2,

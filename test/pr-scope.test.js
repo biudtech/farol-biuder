@@ -116,9 +116,7 @@ test('o arquivo é criado com permissão restrita e sem seguir link plantado', (
   const root = path.join(FAROL_HOME, 'm5');
   materializeScope(root, [{ path: 'a.js', patch: 'x', status: 'modified' }]);
   const st = fs.statSync(path.join(root, 'a.js'));
-  if (process.platform !== 'win32') {
-    assert.equal(st.mode & 0o777, 0o600, 'ninguém além do dono lê o patch');
-  }
+  assert.equal(st.mode & 0o777, 0o600, 'ninguém além do dono lê o patch');
   assert.ok(st.isFile());
 });
 

@@ -13,11 +13,10 @@ process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-model
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const {
-  sanitizeModel, sanitizeEffort, sanitizeCodexEffort, sanitizeClaudeModel, sanitizeAgyModel,
-  effortForModel, MODEL_ALIASES, EFFORT_LEVELS, CODEX_EFFORT_LEVELS,
+  sanitizeModel, sanitizeEffort, sanitizeClaudeModel,
+  effortForModel, MODEL_ALIASES, EFFORT_LEVELS,
 } = await import('../lib/parse.js');
 const { buildModelFlags } = await import('../lib/engine/session.js');
-const { codexSelection, codexArgs } = await import('../lib/codex/stream.js');
 const { modelLabel } = await import('../lib/format.js');
 
 /* ---------- sanitizeModel ---------- */
@@ -68,8 +67,7 @@ test('sanitizeModel: rejeita metacaractere de shell (injeção)', () => {
 test('sanitizeModel: aceita nome completo validado (escotilha pra modelo novo)', () => {
   assert.equal(sanitizeModel('claude-opus-5'), 'claude-opus-5');
   assert.equal(sanitizeModel('claude-sonnet-4-6'), 'claude-sonnet-4-6');
-  assert.equal(sanitizeModel('gpt-4o'), 'gpt-4o');
-  assert.equal(sanitizeModel('gpt-5.5'), 'gpt-5.5');
+  assert.equal(sanitizeModel('gpt-4o'), null, 'modelo de outro provedor não entra na linha do claude');
   // e só o que casa a regex estrita
   assert.equal(sanitizeModel('claude-opus-5; whoami'), null);
   assert.equal(sanitizeModel('gpt-5.5; whoami'), null);
@@ -80,22 +78,19 @@ test('sanitizeModel: aceita nome completo validado (escotilha pra modelo novo)',
 
 /* ---------- sanitizeEffort ---------- */
 
-test('sanitizeEffort: vazio e os níveis dos dois CLIs passam', () => {
+test('sanitizeEffort: vazio e os níveis do Claude Code passam', () => {
   assert.equal(sanitizeEffort(''), '');
   assert.equal(sanitizeEffort(null), '');
   for (const n of EFFORT_LEVELS) assert.equal(sanitizeEffort(n), n, `nível ${n}`);
   assert.deepEqual(EFFORT_LEVELS, ['low', 'medium', 'high', 'xhigh']);
-  assert.deepEqual(CODEX_EFFORT_LEVELS, ['minimal', 'low', 'medium', 'high', 'xhigh']);
-  assert.equal(sanitizeEffort('minimal'), 'minimal');
+  assert.equal(sanitizeEffort('minimal'), null, 'o nível mínimo era do Codex');
 });
 
 test('sanitizeEffort: normaliza espaço e caixa', () => {
   assert.equal(sanitizeEffort('  HIGH '), 'high');
 });
 
-test('sanitizeCodexEffort acompanha a allowlist do config-reference do Codex CLI', () => {
-  assert.equal(sanitizeCodexEffort('minimal'), 'minimal');
-  assert.equal(sanitizeCodexEffort('xhigh'), 'xhigh');
+test('sanitizeEffort rejeita o que o Claude Code não aceita na revisão desacompanhada', () => {
   assert.equal(sanitizeEffort('max'), null);
   assert.equal(sanitizeEffort('ultra'), null);
   assert.equal(sanitizeEffort('ultracode'), null);
@@ -136,7 +131,7 @@ test('buildModelFlags: modelo e esforço juntos, nessa ordem', () => {
 
 test('buildModelFlags: esforço sem modelo é válido', () => {
   assert.equal(buildModelFlags({ reviewEffort: 'high' }), ' --effort high');
-  assert.equal(buildModelFlags({ reviewEffort: 'minimal' }), '', 'Claude filtra esforço exclusivo do Codex');
+  assert.equal(buildModelFlags({ reviewEffort: 'minimal' }), '', 'esforço fora da allowlist não entra na linha');
 });
 
 test('buildModelFlags: Haiku na config antiga não vira flag (11/11/2026: fraco demais para ambiguidade)', () => {
@@ -154,7 +149,7 @@ test('buildModelFlags: config envenenada nunca chega na linha', () => {
   // defesa em profundidade: mesmo que o config.json escape do saneamento de boot
   assert.equal(buildModelFlags({ reviewModel: 'opus && calc.exe', reviewEffort: 'high;id' }), '');
   assert.equal(buildModelFlags({ reviewModel: 'opus[1m]' }), '');
-  assert.equal(buildModelFlags({ reviewModel: 'gpt-5.5', reviewEffort: 'minimal' }), '', 'modelo e esforço Codex não entram no claude -p');
+  assert.equal(buildModelFlags({ reviewModel: 'gpt-5.5', reviewEffort: 'minimal' }), '', 'modelo e esforço de outro provedor não entram no claude -p');
   assert.equal(buildModelFlags({ reviewModel: { toString: () => 'opus; id' } }), '');
 });
 
@@ -217,41 +212,6 @@ test('modelLabel: auto tem rótulo humano', () => {
   assert.equal(modelLabel('AUTO'), 'Auto (custo-benefício)');
 });
 
-/* ---------- Codex: configuração própria, modo rápido e retomada ---------- */
-
-test('codexSelection usa somente as chaves Codex', () => {
-  const cfg = {
-    reviewModel: 'opus', reviewEffort: 'low',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'high',
-  };
-  assert.deepEqual(codexSelection(cfg), { model: 'gpt-5.6-terra', effort: 'high' });
-});
-
-test('codexSelection: modo rápido preserva minimal/low e derruba os demais pra medium', () => {
-  assert.equal(codexSelection({ codexReviewEffort: 'minimal' }, { fast: true }).effort, 'minimal');
-  assert.equal(codexSelection({ codexReviewEffort: 'low' }, { fast: true }).effort, 'low');
-  assert.equal(codexSelection({ codexReviewEffort: 'xhigh' }, { fast: true }).effort, 'medium');
-  assert.equal(codexSelection({}, { fast: true }).effort, 'medium');
-});
-
-test('codexArgs monta modelo/esforço sem aceitar configuração Claude', () => {
-  const args = codexArgs({
-    reviewModel: 'opus', reviewEffort: 'xhigh',
-    codexReviewModel: 'gpt-5.6-terra', codexReviewEffort: 'minimal',
-  });
-  assert.equal(args[args.indexOf('--model') + 1], 'gpt-5.6-terra');
-  assert.ok(args.includes('model_reasoning_effort="minimal"'));
-  assert.equal(args.includes('opus'), false);
-});
-
-test('codexArgs converte --resume do fluxo comum em codex exec resume', () => {
-  const sid = '019abcde-1234-7890-abcd-0123456789ab';
-  const args = codexArgs({ codexReviewModel: 'gpt-5.6-terra' }, { extraArgs: ['--resume', sid] });
-  assert.deepEqual(args.slice(0, 4), ['-a', 'never', 'exec', 'resume']);
-  assert.equal(args.includes('--color'), false, 'resume não aceita a opção de cor do exec comum');
-  assert.deepEqual(args.slice(-2), [sid, '-']);
-});
-
 /* ---------- modo rápido: o esforço cai na LINHA DE COMANDO, não só no prompt ----------
    Medido em 17/08/2026 (#776): com fast ligado e effort default, a "leitura" ainda
    levava 6m28s, quase tudo raciocínio pré-comando. O prompt não alcança essa parte;
@@ -281,12 +241,8 @@ test('buildModelFlags: fast + stub continua vazio (contrato da bateria stubada)'
   assert.equal(buildModelFlags({ reviewModel: 'opus' }, { stub: true, fast: true }), '');
 });
 
-test('modelos fracos de todos os provedores são recusados pela config (11/11/2026)', () => {
-  for (const m of ['haiku', 'claude-haiku-4-5', 'gpt-6-luna', 'gpt-5.6-luna']) assert.equal(sanitizeModel(m), null, m);
-  assert.equal(sanitizeAgyModel('gemini-3.8-flash-medium'), null);
-  assert.equal(sanitizeAgyModel('gemini-3.8-flash-low'), null);
-  assert.equal(sanitizeAgyModel('gpt-oss-120b-medium'), null);
-  assert.equal(sanitizeAgyModel('claude-haiku-4-5'), null);
-  assert.equal(sanitizeAgyModel('gemini-3.8-flash-high'), 'gemini-3.8-flash-high');
-  assert.equal(sanitizeModel('gpt-6.1-terra'), 'gpt-6.1-terra');
+test('modelo fraco é recusado pela config (11/11/2026), e modelo de outro provedor também', () => {
+  for (const m of ['haiku', 'claude-haiku-4-5']) assert.equal(sanitizeModel(m), null, m);
+  for (const m of ['gpt-6-luna', 'gpt-6.1-terra', 'gemini-3.8-flash-high']) assert.equal(sanitizeModel(m), null, m);
+  assert.equal(sanitizeClaudeModel('gpt-6.1-sol'), null);
 });

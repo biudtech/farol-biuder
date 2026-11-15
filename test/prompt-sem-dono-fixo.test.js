@@ -2,7 +2,7 @@
 //
 // O Farol roda na maquina de varias pessoas, e a sessao escreve com a conta de QUEM a
 // instalou. Mesmo assim o protocolo mandava "escreva como o Wanderson escreveria",
-// "tom do Wanderson", "expliquem pro Wanderson", e o chat dizia "conversa ao vivo com o
+// "tom do Wanderson", "expliquem pro Wanderson", e o chat (hoje removido) dizia "conversa ao vivo com o
 // Wanderson". Na instalacao do Gabriel, a sessao recebia ordem de escrever com a voz de
 // quem nao assina o review, e de falar com uma pessoa que nao esta na conversa. E a
 // mesma familia do @Gabrielk5 citando @Gabrielk5: o app sabia tudo sobre o PR e nada
@@ -20,7 +20,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const prompt = (await import('../lib/engine/review-prompt.js')).default;
-const chat = (await import('../lib/engine/chat.js')).default;
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
 
@@ -44,13 +43,6 @@ test('o prompt MONTADO da revisão não nomeia dono nenhum', () => {
   e.accountForPr = () => 'Gabrielk5';
   const p = e.headlessPromptFor('https://github.com/o/r/pull/1', 'outro');
   assert.doesNotMatch(p, NOME, 'inclui perfil do autor, formato do review e review de terceiros');
-});
-
-test('o preâmbulo do chat não nomeia dono nenhum, nos dois modos', () => {
-  const e = new Engine();
-  e.accountForPr = () => 'Gabrielk5';
-  assert.doesNotMatch(chat.chatPreamble(e, 'o/r#1', 'https://github.com/o/r/pull/1', false), NOME);
-  assert.doesNotMatch(chat.chatPreamble(e, 'o/r#1', 'https://github.com/o/r/pull/1', true), NOME);
 });
 
 /* ---------- o que entra no lugar ---------- */

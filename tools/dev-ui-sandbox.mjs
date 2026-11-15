@@ -6,7 +6,7 @@
 // .claude/launch.json. O caminho vem de FAROL_UI_SANDBOX quando definido; senao cai
 // num diretorio previsivel dentro do temp do SO.
 //
-// Ele NUNCA deve virar caminho de producao: autoReview e autoUpdate ficam desligados
+// Ele NUNCA deve virar caminho de producao: autoReview fica desligado
 // pelo config do sandbox, e o processo serve so pra olhar a interface.
 import os from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,7 @@ fs.mkdirSync(path.join(HOME, 'workspace', 'state'), { recursive: true, mode: 0o7
 // do materializeScope em lib/engine/pr-scope.js.
 const cfg = path.join(HOME, 'config.json');
 try {
-  fs.writeFileSync(cfg, JSON.stringify({ port: 47192, autoReview: false, autoUpdate: false }, null, 2),
+  fs.writeFileSync(cfg, JSON.stringify({ port: 47192, autoReview: false }, null, 2),
     { encoding: 'utf8', mode: 0o600, flag: 'wx' });
 } catch (err) {
   if (err.code !== 'EEXIST') throw err;

@@ -138,10 +138,7 @@ test('linha de comando: sem o arquivo de decisões sai com erro, sem inventar co
   assert.equal(r.stdout, '');
 });
 
-test('o simulador não viaja em nenhuma rota de pacote nem é usado em runtime', () => {
-  for (const rota of ['tools/make-package.ps1', 'tools/make-package.sh', 'tools/make-installer.ps1', 'tools/make-offline-mac.sh']) {
-    assert.equal(fs.readFileSync(path.join(RAIZ, rota), 'utf8').includes('simular-politica'), false, rota);
-  }
+test('o simulador não é usado em runtime', () => {
   const fonte = fs.readdirSync(path.join(RAIZ, 'lib'), { recursive: true }).filter(n => String(n).endsWith('.js'));
   for (const nome of fonte) assert.equal(fs.readFileSync(path.join(RAIZ, 'lib', nome), 'utf8').includes('simular-politica'), false, nome);
 });

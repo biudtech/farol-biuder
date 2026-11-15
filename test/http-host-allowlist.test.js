@@ -30,7 +30,6 @@ function iniciar(eng) {
 before(async () => {
   engine = new Engine();
   engine.config.port = 0; // porta efêmera: a efetiva diverge da config de propósito
-  engine.config.deliveriesEnabled = true; // senão /api/deliveries nem chega ao espião
   server = await iniciar(engine);
   porta = server.address().port;
 });
@@ -88,17 +87,17 @@ function espionar(nomes) {
   return { chamadas, restaurar: () => { for (const nome of nomes) engine[nome] = originais[nome]; } };
 }
 
-const ESPIOES = ['snapshot', 'fetchDeliveries', 'setJiraCredential', 'decide', 'launchReview', 'clearLog', 'checkNow', 'postReviewFromSession'];
+const ESPIOES = ['snapshot', 'syncEstadoDaLimpeza', 'setJiraCredential', 'decide', 'launchReview', 'removeTeamMember', 'checkNow', 'postReviewFromSession'];
 
 // Um representante por classe do inventário da seção 7.A4 da spec.
 const CLASSES_A4 = [
   { classe: 'leitura sensível', method: 'GET', rota: '/api/state', espiao: 'snapshot' },
-  { classe: 'leitura de baixo risco', method: 'GET', rota: '/api/deliveries?days=7', espiao: 'fetchDeliveries' },
+  { classe: 'leitura de baixo risco', method: 'POST', rota: '/api/sync/cleanup-state', corpo: {}, espiao: 'syncEstadoDaLimpeza' },
   { classe: 'evento em tempo real', method: 'GET', rota: '/api/events', espiao: 'snapshot' },
   { classe: 'ação que recebe segredo', method: 'POST', rota: '/api/jira/credential', corpo: { siteId: 's1', email: 'a@b.c', token: 'segredo' }, espiao: 'setJiraCredential' },
   { classe: 'ação que posta ou escreve no GitHub', method: 'POST', rota: '/api/decide', corpo: { id: 'd1', action: 'approve' }, espiao: 'decide' },
   { classe: 'ação que abre sessão paga', method: 'POST', rota: '/api/review', corpo: { urls: ['https://github.com/acme/app/pull/1'] }, espiao: 'launchReview' },
-  { classe: 'ação destrutiva', method: 'POST', rota: '/api/log/clear', corpo: {}, espiao: 'clearLog' },
+  { classe: 'ação destrutiva', method: 'POST', rota: '/api/team/remove', corpo: { login: 'alguem' }, espiao: 'removeTeamMember' },
   { classe: 'demais ações', method: 'POST', rota: '/api/check', corpo: {}, espiao: 'checkNow' },
 ];
 

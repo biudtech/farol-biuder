@@ -32,7 +32,7 @@ async function startApp(decisions = []) {
   const engine = new Engine();
   engine.decisions = { pending: [], resolved: decisions };
   engine.migrarIgnorados = () => {};
-  engine.checkUpdate = engine.doctor = engine.check = async () => {};
+  engine.doctor = engine.check = async () => {};
   engine.inflightRecuperado = [];
   await engine.start();
   return engine;

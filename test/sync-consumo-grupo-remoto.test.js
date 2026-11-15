@@ -76,7 +76,7 @@ function fresca() {
   return { fresca: true, agora: Date.now(), ultimaMudancaEm: Date.now(), intervaloMs: SYNC.AUTORIDADE_INTERVALO_MS };
 }
 
-const PERFIL = { id: 'p1', label: 'Principal', kind: 'claude' };
+const PERFIL = { id: 'p1', label: 'Principal', kind: 'apikey' };
 
 // Motor com um grupo ATIVO aceito, o perfil vinculado e dB na frota.
 async function motorComGrupo({ tetoUsd = 10, periodo = 'dia', tipo = 'assinatura', perfil = PERFIL, vincular = true } = {}) {
@@ -233,15 +233,18 @@ test('outra conta, sem teto de grupo que a segure, continua saindo', async () =>
   const iniciadas = [];
   Object.assign(e, { headlessQueue: [{ key: 'org/r#1' }, { key: 'outra/r#2' }], headlessBusyAccounts: new Map() });
   e.accountForPr = (pr) => (pr.key.startsWith('outra') ? 'outra-conta' : LOGIN);
-  e.profileOfAccount = (acct) => (acct === LOGIN ? PERFIL : { id: 'codex1', kind: 'codex' });
+  // a outra conta usa um perfil vinculado a um grupo que não está ativo aqui: o teto não a alcança
+  const OUTRO = { id: 'p2', label: 'Outro', kind: 'apikey' };
+  assert.equal(vinculo.vincular(OUTRO.id, { grupo: 'f'.repeat(32), tipo: 'api', agora: Date.now() - 1000 }), true);
+  e.profileOfAccount = (acct) => (acct === LOGIN ? PERFIL : OUTRO);
   e.runOneHeadless = (pr) => iniciadas.push(pr.key);
   comoExecutor(e);
   reviewMod.processHeadless(e);
   assert.deepEqual(iniciadas, ['outra/r#2'], 'a conta segurada não trava a fila das outras');
 });
 
-test('Codex aparece como não controlado', async () => {
-  const e = await motorComGrupo({ perfil: { id: 'cx', label: 'Codex', kind: 'codex' }, tipo: 'codex' });
+test('perfil vinculado como tipo sem métrica aparece como não controlado', async () => {
+  const e = await motorComGrupo({ perfil: { id: 'cx', label: 'Sem métrica', kind: 'apikey' }, tipo: 'codex' });
   await rollupDe(e, 'dB', { c: 99 });
   await capacidadeDe(e, 'dB');
   await cgEng.recalcular(e, e.config.sync);
@@ -258,7 +261,7 @@ test('vínculo de tipo não controlado fica fora do teto, mesmo com perfil medid
   await rollupDe(e, 'dB', { c: 99 });
   await capacidadeDe(e, 'dB');
   await cgEng.recalcular(e, e.config.sync);
-  assert.equal(cgEng.statusDoGrupo(e, LOGIN), null, 'perfil claude vinculado como codex não é controlado');
+  assert.equal(cgEng.statusDoGrupo(e, LOGIN), null, 'perfil vinculado como tipo sem métrica não é controlado');
   assert.equal(e.budgetBlockedFor(LOGIN), null);
 });
 

@@ -122,7 +122,7 @@ test('a configuração entra em número e em sim ou não, sem login de conta nem
 });
 
 test('a tela usa o Markdown único na cópia, e o export antigo saiu da tela', () => {
-  const tela = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'ferramentas.js'), 'utf8');
+  const tela = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'diagnostico.js'), 'utf8');
   assert.match(tela, /\/api\/diagnostics/);
   assert.doesNotMatch(tela, /diagnosticsText/);
   const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');

@@ -11,9 +11,7 @@ const { caminhoSensivel, TETO_DE_CAMINHOS } = await import('../lib/engine/leitur
 const { ARQUIVO_DE_MEDICOES } = await import('../lib/engine/medicoes-leitura.js');
 const { observarLeitura } = await import('../lib/engine/read-evidence.js');
 
-const POSIX = { home: '/home/ana', plataforma: 'linux' };
-const WINDOWS = { home: 'C:\\Users\\ana', plataforma: 'win32' };
-const MAC = { home: '/Users/ana', plataforma: 'darwin' };
+const POSIX = { home: '/home/ana' };
 
 test('POSIX: a lista fechada de credenciais do home avisa', () => {
   for (const relativo of ['.git-credentials', '.ssh/id_rsa', '.ssh/config', '.aws/credentials', '.gnupg/private-keys-v1.d/a.key', '.config/gh/hosts.yml',
@@ -22,32 +20,8 @@ test('POSIX: a lista fechada de credenciais do home avisa', () => {
   }
 });
 
-test('Windows: as mesmas pastas, em qualquer caixa e nas três grafias do caminho', () => {
-  for (const relativo of ['.ssh\\id_rsa', '.aws\\credentials', '.gnupg\\a', '.config\\gh\\hosts.yml', '.codex\\auth.json', '.claude\\.credentials.json', '.farol\\sync-credentials.json']) {
-    assert.ok(caminhoSensivel(`C:\\Users\\ana\\${relativo}`, WINDOWS), relativo);
-  }
-  assert.ok(caminhoSensivel('c:/users/ANA/.SSH/id_rsa', WINDOWS));
-  assert.ok(caminhoSensivel('/c/Users/ana/.ssh/id_rsa', WINDOWS));
-  assert.ok(caminhoSensivel('\\\\?\\C:\\Users\\ana\\.ssh\\id_rsa', WINDOWS));
-  assert.ok(caminhoSensivel('C:\\Users\\ana\\projeto\\..\\.ssh\\id_rsa', WINDOWS));
-  assert.ok(caminhoSensivel('C:\\Users\\ana\\.git-credentials', WINDOWS));
-});
-
-test('Windows: a forma curta do home ancora igual, nos dois sentidos', () => {
-  const longo = { home: 'C:\\Users\\wanderson', plataforma: 'win32' };
-  assert.ok(caminhoSensivel('C:\\Users\\WANDER~1\\.ssh\\id_rsa', longo));
-  assert.ok(caminhoSensivel('C:\\Users\\WANDER~1\\.git-credentials', longo));
-  assert.ok(caminhoSensivel('c:/users/wander~2/.aws/credentials', longo));
-  assert.ok(caminhoSensivel('C:\\Users\\wanderson\\.ssh\\id_rsa', { home: 'C:\\Users\\WANDER~1', plataforma: 'win32' }));
-  assert.ok(caminhoSensivel('C:\\Users\\WANDER~1\\Contas\\T\\.credentials.json', { ...longo, perfis: [{ dir: 'C:\\Users\\wanderson\\Contas\\T' }] }));
-  // outra pessoa, forma curta que não é prefixo, e a mesma grafia fora do Windows não ancoram
-  assert.equal(caminhoSensivel('C:\\Users\\MARIA~1\\.ssh\\id_rsa', longo), null);
-  assert.equal(caminhoSensivel('C:\\Users\\WANDER~1\\projeto\\.ssh\\id_rsa', longo), null);
+test('o caminho diferencia caixa e a forma curta não ancora', () => {
   assert.equal(caminhoSensivel('/home/ana~1/.ssh/id_rsa', POSIX), null);
-});
-
-test('caixa só é dobrada onde o sistema de arquivos dobra', () => {
-  assert.ok(caminhoSensivel('/Users/ana/.SSH/id_rsa', MAC));
   assert.equal(caminhoSensivel('/home/ana/.SSH/id_rsa', POSIX), null);
 });
 
@@ -75,10 +49,8 @@ test('o que parece credencial e não é a do aparelho segue sem aviso', () => {
   ];
   for (const caminho of nao) assert.equal(caminhoSensivel(caminho, POSIX), null, caminho);
   for (const valor of [null, undefined, 42, {}, '/home/ana/.ssh/a\0b']) assert.equal(caminhoSensivel(valor, POSIX), null);
-  // no Windows, caminho sem unidade não dá para ancorar, e POSIX não lê caminho do Windows
-  assert.equal(caminhoSensivel('\\Users\\ana\\.ssh\\id_rsa', WINDOWS), null);
+  // o motor roda em Linux: caminho do Windows não é lido
   assert.equal(caminhoSensivel('C:\\Users\\ana\\.ssh\\id_rsa', POSIX), null);
-  assert.equal(caminhoSensivel('C:\\Users\\ana\\projeto\\.ssh\\id_rsa', WINDOWS), null);
 });
 
 test('perfil do Claude com pasta de qualquer nome vale pela lista da config', () => {
@@ -87,7 +59,6 @@ test('perfil do Claude com pasta de qualquer nome vale pela lista da config', ()
   assert.equal(caminhoSensivel('/home/ana/contas/trabalho/settings.json', { ...POSIX, perfis }), null);
   assert.equal(caminhoSensivel('/home/ana/contas/outro/.credentials.json', { ...POSIX, perfis }), null);
   assert.equal(caminhoSensivel('/opt/perfil/.credentials.json', { ...POSIX, perfis: [{ dir: '/opt/perfil' }] }), null, 'fora do home não entra');
-  assert.ok(caminhoSensivel('C:\\Users\\ana\\Contas\\T\\.credentials.json', { ...WINDOWS, perfis: [{ dir: 'c:/users/ana/contas/t' }] }));
 });
 
 const medicoes = () => {

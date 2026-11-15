@@ -12,7 +12,7 @@
 //
 // O caminho exercitado aqui é o mesmo do app real: o handler de `state` do SSE, que é
 // o orquestrador de render (chama ~15 funções de tela numa tacada). Disparar um estado
-// plausível nele passa por status, contas, fila, decisões, Meus PRs, panorama,
+// plausível nele passa por status, contas, fila, decisões, Meus PRs,
 // configurações, ferramentas e atualização.
 //
 // Limite honesto: o DOM é um stub burro (test/helpers/dom-stub.js). Verde aqui NÃO diz
@@ -43,25 +43,22 @@ const ESTADO = {
   config: {
     ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }],
     intervalSeconds: 300, autoReview: true, autoApproveAll: false,
-    parallelReviews: 1, theme: 'dark', autoUpdate: true, autoPushback: true,
-    reviewModel: '', reviewEffort: '', codexReviewModel: '', codexReviewEffort: '',
+    parallelReviews: 1, theme: 'dark', autoPushback: true,
+    reviewModel: '', reviewEffort: '',
     mergeBlockedRepos: [], soundEnabled: true,
-    teamHighlights: false, deliveriesEnabled: false,
-    defaultReviewers: { acme: ['bob'] }, projectReviewers: { 'acme/api': ['carol'] },
     people: { bob: { papel: 'senior' } }, claudeProfiles: [], claudeProfileId: '',
   },
   lastCheckAt: Date.now() - 60_000, nextCheckAt: Date.now() + 240_000,
   queue: [{ key: 'acme/api#1', url: 'u', title: 'Corrige o gate', author: 'bob', updatedAt: new Date().toISOString() }],
-  panorama: [{ key: 'acme/web#2', url: 'u', title: 'Sobe versão', author: 'carol', updatedAt: new Date().toISOString(), mine: true }],
   myPRs: [{ key: 'acme/api#3', url: 'u', title: 'Meu PR', author: 'alice', updatedAt: new Date().toISOString() }],
   hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
   // sessão ativa de verdade no fixture: sem ela o cartão de "Analisando agora" nunca é
   // desenhado no smoke test, e ele é justamente um render de DADO — o lugar onde
   // objeto interpolado passa despercebido.
   activeSessions: [{ id: 'sess-1', mode: 'auto', label: 'acme/repo#42', startedAt: 1755600000000, cancellable: true, pr: { url: 'https://github.com/acme/repo/pull/42', user: 'alice' } }],
-  headlessWaiting: ['acme/repo#43'], chats: {}, reviewActions: {}, staleStates: {},
-  usage: {}, usageSessions: [], toolRuns: {}, pushbacks: {}, team: [], highlights: [],
-  update: { state: 'idle' }, doctor: null, deliveries: null,
+  headlessWaiting: ['acme/repo#43'], reviewActions: {}, staleStates: {},
+  usage: {}, usageSessions: [], pushbacks: {}, team: [],
+  update: { state: 'idle' }, doctor: null,
   // o painel Sistema le daqui; sem isto o renderDoctor quebra, e foi o proprio teste
   // que apontou o fixture incompleto
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
@@ -78,7 +75,7 @@ function semObjectObject(rotulo) {
   // motivos"). O guarda existe pra pegar OBJETO INTERPOLADO em render de DADO, e
   // incluir texto autoral só produziria falso positivo — que foi o que aconteceu ao
   // escrever a nota da v2.48.3.
-  const alvos = ['#decisions', '#queue', '#panorama', '#myPRs', '#resolved', '#team', '#usage', '#reviewersEditor', '#activeSessions'];
+  const alvos = ['#decisions', '#queue', '#myPRs', '#resolved', '#team', '#usage', '#activeSessions'];
   for (const sel of alvos) {
     const html = document.querySelector(sel).innerHTML || '';
     assert.ok(!html.includes('[object Object]'), `${rotulo}: "${sel}" imprimiu [object Object]`);
@@ -89,7 +86,7 @@ test('o app.js carrega e registra o handler de state do SSE', () => {
   assert.ok(listeners.has('state'), 'sem isto a tela nunca receberia estado nenhum');
 });
 
-test('a ordem REAL de registro das telas é entregas, destaques, time, sistema, consumo, radar-compartilhado, radar-aparelhos', () => {
+test('a ordem REAL de registro das telas é time, sistema, consumo, radar-compartilhado, radar-aparelhos', () => {
   // test/ui-telas-registro.test.js só prova a propriedade genérica (a ordem de
   // registro é preservada); este aqui trava o valor de verdade. A ordem nasce do
   // encadeamento de imports estáticos do ui/app.js (cada import estático roda por
@@ -101,7 +98,7 @@ test('a ordem REAL de registro das telas é entregas, destaques, time, sistema, 
   assert.deepEqual(
     telasRegistradas().map(t => t.id),
     // radar-compartilhado registra por último, chamada explícita depois do Consumo (ui/app.js)
-    ['entregas', 'destaques', 'time', 'sistema', 'consumo', 'radar-compartilhado', 'radar-aparelhos'],
+    ['time', 'sistema', 'consumo', 'radar-compartilhado', 'radar-aparelhos'],
     'ordem de registro mudou: um import novo em algum módulo de tela reordenou o encadeamento em silêncio'
   );
 });
@@ -120,33 +117,24 @@ test('desenhar a tela com um estado plausível não levanta exceção', () => {
   semObjectObject('estado cheio');
 });
 
-test('Destaques e Entregas só ficam visíveis quando habilitados em Sistema', () => {
-  const destaques = document.querySelector('#tabbtn-destaques');
-  const entregas = document.querySelector('#tabbtn-entregas');
-  emitir('state', { ...ESTADO, config: { ...ESTADO.config, teamHighlights: false, deliveriesEnabled: false } });
-  assert.equal(destaques.hidden, true);
-  assert.equal(entregas.hidden, true);
-  emitir('state', { ...ESTADO, config: { ...ESTADO.config, teamHighlights: true, deliveriesEnabled: true } });
-  assert.equal(destaques.hidden, false);
-  assert.equal(entregas.hidden, false);
+test('as abas Destaques e Entregas saíram da página (corte do lote 7), inclusive o botão e o painel', () => {
+  // o DOM de mentira devolve um elemento para qualquer seletor: a prova é o HTML servido
+  const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
+  for (const aba of ['destaques', 'entregas']) {
+    assert.doesNotMatch(html, new RegExp(`id="(tabbtn|tab)-${aba}"`), `aba ${aba}`);
+  }
+  assert.equal(emitir('state', ESTADO), 1, 'o estado segue desenhando sem elas');
 });
 
 test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', () => {
-  const vazio = { ...ESTADO, queue: [], panorama: [], myPRs: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
+  const vazio = { ...ESTADO, queue: [], myPRs: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
   assert.equal(emitir('state', vazio), 1);
 });
 
-test('config sem reviewers e sem pessoas não explode', () => {
-  // exercita o editor de Reviewers e o picker de papel com os mapas vazios, que é o
-  // caminho onde o ctx faltando quebrava
-  const magro = { ...ESTADO, config: { ...ESTADO.config, defaultReviewers: {}, projectReviewers: {}, people: {} } };
+test('config sem pessoas não explode', () => {
+  // exercita o picker de papel com o mapa vazio
+  const magro = { ...ESTADO, config: { ...ESTADO.config, people: {} } };
   assert.equal(emitir('state', magro), 1);
-});
-
-test('org de config sem conta dona (o bloco "Outros") não explode', () => {
-  // é exatamente o ramo que a chamada corrompida quebrava primeiro
-  const orfa = { ...ESTADO, config: { ...ESTADO.config, defaultReviewers: { semdono: ['x'] }, projectReviewers: { 'semdono/repo': ['y'] } } };
-  assert.equal(emitir('state', orfa), 1);
 });
 
 test('decisão pendente com motivos e ressalvas não explode', () => {
@@ -199,7 +187,7 @@ test('aba Sistema ativa: doctor, contas e perfis desenham sem explodir', () => {
   const comSistema = {
     ...ESTADO,
     doctor: { gh: { ok: true, detail: 'ok' }, claude: { ok: true, detail: 'ok' }, account: { ok: true, detail: 'alice' } },
-    config: { ...ESTADO.config, claudeProfiles: [{ id: 'p1', label: 'Pessoal', dir: '/tmp/x' }], claudeProfileId: 'p1' },
+    config: { ...ESTADO.config, claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-x', baseUrl: '' }], claudeProfileId: 'p1' },
   };
   assert.equal(emitir('state', comSistema), 1);
   document.querySelector('#tab-sistema').classList.remove('active');

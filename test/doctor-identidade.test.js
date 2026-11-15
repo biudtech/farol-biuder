@@ -62,7 +62,6 @@ function engineMudo() {
   e.log = () => { };
   e.on('toast', () => { });
   e.pushState = () => { };
-  e.checkUpdate = async () => { };
   return e;
 }
 

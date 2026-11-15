@@ -10,7 +10,6 @@ import { verificacaoObservada } from '../lib/engine/selfpr.js';
 import { checkpointPath, readCheckpoint } from '../lib/engine/verification-checkpoint.js';
 import { assertRestrictedTools } from '../lib/engine/restricted-launch.js';
 import { observeReadEvent, observarLeitura } from '../lib/engine/read-evidence.js';
-import { IS_WIN } from '../lib/paths.js';
 
 const base = await fs.mkdtemp(path.join(os.tmpdir(), 'farol-isolation-test-'));
 after(() => fs.rm(base, { recursive: true, force: true }));
@@ -49,31 +48,28 @@ test('fonte incompleta, patch ausente, traversal, segredo e cancelamento recusam
   await assert.rejects(prepareSelfIsolation(prepared(), { base, signal: controller.signal }), { name: 'AbortError' });
   assert.equal(isolationMode('restricted-read'), 'restricted-read');
   assert.throws(() => isolationMode('bypass'), /não suportado/);
-  if (IS_WIN) {
-    for (const path of ['.. /outside.txt', 'NUL', 'con .txt', 'COM¹.js', 'trailing./x.js', 'safe/x.']) {
-      await assert.rejects(prepareSelfIsolation(prepared([{ path, patch: '+safe', patchStatus: 'available' }]), { base }), /Windows/);
-    }
-  }
 });
 
 test('ambiente do filho não herda tokens GitHub, API, opções Node ou diretórios temporários compartilhados', () => {
   const inherited = { PATH: '/bin', HOME: '/home/test', GH_TOKEN: 'fake', ANTHROPIC_API_KEY: 'fake',
     NODE_OPTIONS: '--require unsafe', TEMP: '/shared', CLAUDE_CONFIG_DIR: '/other-profile' };
-  const auth = { kind: 'dir', dir: '/chosen-profile' };
+  const auth = { kind: 'apikey', apiKey: 'sk-chosen-profile', baseUrl: '' };
   const env = restrictedEnvironment(inherited, auth, base);
-  assert.equal(env.CLAUDE_CONFIG_DIR, auth.dir);
+  assert.equal(env.ANTHROPIC_API_KEY, auth.apiKey, 'só a chave do perfil escolhido entra, nunca a herdada');
+  assert.equal(env.CLAUDE_CONFIG_DIR, undefined);
   assert.equal(env.TEMP, path.join(base, 'runtime'));
-  for (const key of ['GH_TOKEN', 'ANTHROPIC_API_KEY', 'NODE_OPTIONS']) assert.equal(env[key], undefined);
+  for (const key of ['GH_TOKEN', 'NODE_OPTIONS']) assert.equal(env[key], undefined);
   assert.equal(inherited.TEMP, '/shared'); assert.equal(inherited.CLAUDE_CONFIG_DIR, '/other-profile');
 });
 
 test('provedor incompatível, MCP, retomada e snapshot forjado não iniciam fallback', async () => {
   const selfIsolation = await prepareSelfIsolation(prepared(), { base });
   for (const [opts, auth] of [
-    [{ selfIsolation, operationKind: 'self' }, { kind: 'codex' }],
-    [{ selfIsolation, operationKind: 'review' }, { kind: 'dir', dir: '/profile' }],
-    [{ selfIsolation, operationKind: 'self', extraArgs: ['--resume', 'old'] }, { kind: 'dir', dir: '/profile' }],
-    [{ selfIsolation: { ...selfIsolation }, operationKind: 'self' }, { kind: 'dir', dir: '/profile' }]
+    [{ selfIsolation, operationKind: 'self' }, { kind: 'dir', dir: '/profile' }],
+    [{ selfIsolation, operationKind: 'self' }, { kind: 'apikey', apiKey: '' }],
+    [{ selfIsolation, operationKind: 'review' }, { kind: 'apikey', apiKey: 'sk-profile' }],
+    [{ selfIsolation, operationKind: 'self', extraArgs: ['--resume', 'old'] }, { kind: 'apikey', apiKey: 'sk-profile' }],
+    [{ selfIsolation: { ...selfIsolation }, operationKind: 'self' }, { kind: 'apikey', apiKey: 'sk-profile' }]
   ]) await assert.rejects(restrictedLaunch(opts, auth, {}));
 });
 

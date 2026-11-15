@@ -28,7 +28,7 @@ import { strip } from '../tools/quality/strip.js';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const VARRIDOS = ['lib', 'test', 'tools'];
-const SOLTOS = ['server.js', 'main.js'];
+const SOLTOS = ['server.js'];
 
 /**
  * Chamadas que podem disparar o programa git.

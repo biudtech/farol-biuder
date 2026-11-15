@@ -1,16 +1,16 @@
-/* Farol · UI: Panorama e Meus PRs de outros aparelhos (visão compartilhada, 7.C3).
+/* Farol · UI: Meus PRs de outros aparelhos (visão compartilhada, 7.C3).
 
    A projeção chega por dois caminhos: `POST /api/sync/lists` quando a página abre (o que o
    relógio do engine já leu) e o evento SSE `sync-lists`, que o bootstrap só repassa. O HTML
    mora em ui/pure/listas-remotas.js; aqui mora o que toca DOM, estado() e rede.
 
-   As duas abas continuam donas das próprias listas (telas/radar.js e telas/meus-prs.js):
-   elas chamam `renderPanoramaRemoto`/`renderMeusPrsRemoto` com a lista local e o filtro que
-   já aplicam, e recebem de volta quantas linhas remotas entraram, para a contagem da aba
-   somar sem repetir. Quando chega projeção nova, a tela pede o redesenho pela função que o
-   bootstrap injeta em `initListasRemotas` (nunca importando as abas: seria ciclo). */
+   A aba continua dona da própria lista (telas/meus-prs.js): ela chama `renderMeusPrsRemoto`
+   com a lista local e o filtro que já aplica, e recebe de volta quantas linhas remotas
+   entraram, para a contagem da aba somar sem repetir. Quando chega projeção nova, a tela
+   pede o redesenho pela função que o bootstrap injeta em `initListasRemotas` (nunca
+   importando a aba: seria ciclo). */
 
-import { mesclarListaRemota, panoramaRemotoHtml, meusPrsRemotoHtml } from '../pure.js';
+import { mesclarListaRemota, meusPrsRemotoHtml } from '../pure.js';
 import { estado } from './estado.js';
 import { $, api } from './infra.js';
 
@@ -48,12 +48,6 @@ function mesclar(locais, tipo, filtro) {
 }
 
 // Devolve quantas linhas remotas entraram na aba, já sem as que a lista local tem.
-function renderPanoramaRemoto(locais, filtro) {
-  const m = mesclar(locais, 'panorama', filtro);
-  pintar('#panoramaRemoto', panoramaRemotoHtml(m));
-  return m.remotas.length;
-}
-
 function renderMeusPrsRemoto(locais, filtro) {
   const m = mesclar(locais, 'myPrs', filtro);
   pintar('#myPRsRemoto', meusPrsRemotoHtml(m));
@@ -75,4 +69,4 @@ function dadosDasListas() {
   return LISTAS.dados;
 }
 
-export { initListasRemotas, aoListasRemotas, renderPanoramaRemoto, renderMeusPrsRemoto, dadosDasListas, contarRemotos };
+export { initListasRemotas, aoListasRemotas, renderMeusPrsRemoto, dadosDasListas, contarRemotos };

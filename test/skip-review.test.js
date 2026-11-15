@@ -1,10 +1,9 @@
 // UM Farol por PR (v2.51.0). O que dá pra provar sem rede é o que importa aqui:
-// a leitura dos sinais é PURA (labels legadas E refs, com a união no gate), o
-// gate é síncrono e sem IO (mesmo contrato do reReviewTargets: quem decide
-// gastar sessão Claude tem que ser testável), a saída de cena é DURÁVEL (era o
-// defeito da v2.49.0: adiava cinco minutos e revisava depois), ela CADUCA quando
-// a sessão do colega morre sem deixar review, e a co-assinatura é opt-in com
-// gates próprios. Desde 28/08/2026 (incidente do biud-frontend#845) a saída de
+// a leitura dos sinais é PURA (a label), o gate é síncrono e sem IO (mesmo contrato do
+// reReviewTargets: quem decide gastar sessão Claude tem que ser testável), a saída de cena é
+// DURÁVEL (era o defeito da v2.49.0: adiava cinco minutos e revisava depois) e ela CADUCA
+// quando a sessão do colega morre sem deixar review. A co-assinatura e as refs de transição
+// saíram no corte da fase 1. Desde 28/08/2026 (incidente do biud-frontend#845) a saída de
 // cena é SILENCIOSA no GitHub: nada de comentário público (era template
 // detectável), a âncora nasce da decisão e o aviso é um toast no app.
 import os from 'node:os';
@@ -24,7 +23,7 @@ import fs from 'node:fs';
 const skip = await import('../lib/engine/skip-review.js');
 const io = (await import('../lib/io.js')).default;
 const { TEMPOS } = await import('../lib/constants.js');
-const { revisandoPorOutros, revisandoPorSinais, textoDoPulo, outrosRevisando, standDownCaducou, quemAprovou } = skip;
+const { revisandoPorOutros, textoDoPulo, outrosRevisando, standDownCaducou } = skip;
 
 const TTL = TEMPOS.SINAL_REVISAO_TTL_MS;
 
@@ -33,7 +32,6 @@ const TTL = TEMPOS.SINAL_REVISAO_TTL_MS;
 // Os `await` de topo vêm ANTES do primeiro caso: com `--test-force-exit`, o processo
 // encerra quando os casos já registrados terminam, e um `await` que só volta depois
 // disso deixa os casos seguintes CANCELADOS, numa rodada que ainda diz "0 falhas".
-const { parseCodeowners } = await import('../lib/engine/codeowners.js');
 
 test('revisandoPorOutros: acha a label de outra pessoa', () => {
   assert.deepEqual(revisandoPorOutros(['thiagocarvalho-dev:revisando'], 'wandersonbiuder'), ['thiagocarvalho-dev']);
@@ -137,50 +135,7 @@ test('revisandoPorOutros: entrada torta nunca lança', () => {
   assert.deepEqual(revisandoPorOutros([null, '', ':revisando'], 'eu'), []);
 });
 
-/* ---------- leitura das refs (PURA) ---------- */
-
-const sinal = (number, login, epochMs) => ({ ref: `refs/farol/revisando/${number}/${login}/${epochMs}`, number, login, epochMs });
-
-test('revisandoPorSinais: acha a ref de outra pessoa no PR certo', () => {
-  const agora = 1756400000000;
-  const entries = [sinal(845, 'ana', agora - 1000), sinal(846, 'zoe', agora - 1000)];
-  assert.deepEqual(revisandoPorSinais(entries, 845, 'eu', agora, TTL), ['ana'], 'a ref do PR 846 não fala deste PR');
-});
-
-test('revisandoPorSinais: a MINHA própria ref não me barra, mesmo com outra caixa', () => {
-  const agora = 1756400000000;
-  assert.deepEqual(revisandoPorSinais([sinal(1, 'WandersonBiuder', agora)], 1, 'wandersonbiuder', agora, TTL), []);
-});
-
-test('revisandoPorSinais: acrity NUNCA entra na conta (review de ferramenta não dispensa olho humano)', () => {
-  const agora = 1756400000000;
-  assert.deepEqual(revisandoPorSinais([sinal(1, 'acrity', agora), sinal(1, 'ana', agora)], 1, 'eu', agora, TTL), ['ana']);
-});
-
-test('revisandoPorSinais: o TTL vale pros DOIS lados do relógio', () => {
-  const agora = 1756400000000;
-  const entries = [
-    sinal(1, 'morta', agora - TTL - 1000),          // sessão morta há mais de um TTL
-    sinal(1, 'viva', agora - 1000),                 // sessão de agora
-    sinal(1, 'relogio-adiantado', agora + TTL + 1000), // máquina alheia com relógio adiantado
-  ];
-  assert.deepEqual(revisandoPorSinais(entries, 1, 'eu', agora, TTL), ['viva'],
-    'ref imortal de relógio adiantado é ignorada igual à expirada');
-});
-
-test('revisandoPorSinais: dedup sem caixa, primeira grafia, ordem estável', () => {
-  const agora = 1756400000000;
-  const entries = [sinal(1, 'Zoe', agora), sinal(1, 'ana', agora), sinal(1, 'zoe', agora - 1)];
-  assert.deepEqual(revisandoPorSinais(entries, 1, 'eu', agora, TTL), ['ana', 'Zoe']);
-});
-
-test('revisandoPorSinais: entrada torta nunca lança', () => {
-  assert.deepEqual(revisandoPorSinais(null, 1, 'eu', 1, TTL), []);
-  assert.deepEqual(revisandoPorSinais('nao-e-array', 1, 'eu', 1, TTL), []);
-  assert.deepEqual(revisandoPorSinais([null, {}, { number: 1 }], 1, 'eu', 1, TTL), []);
-});
-
-/* ---------- o gate: síncrono, sem IO, união das duas fontes ---------- */
+/* ---------- o gate: síncrono, sem IO ---------- */
 
 test('outrosRevisando: lê só o que os ciclos já trouxeram, nunca chama gh', () => {
   const engine = {
@@ -192,46 +147,6 @@ test('outrosRevisando: lê só o que os ciclos já trouxeram, nunca chama gh', (
   // PR de uma busca antiga (sem o campo labels) degrada pra "ninguém revisando",
   // que é o comportamento de antes desta feature: falta de dado nunca pula revisão
   assert.deepEqual(outrosRevisando(engine, {}), []);
-});
-
-test('outrosRevisando: UNIÃO das labels legadas com as refs, ordem estável', () => {
-  const engine = {
-    accountForPr: () => 'eu',
-    reviewSignals: new Map([['o/r', [sinal(1, 'zoe', Date.now())]]]),
-  };
-  const pr = { key: 'o/r#1', repo: 'o/r', number: 1, labels: ['ana:revisando'] };
-  assert.deepEqual(outrosRevisando(engine, pr), ['ana', 'zoe'], 'colega de versão antiga (label) e de versão nova (ref) contam juntos');
-});
-
-test('outrosRevisando: dedup sem caixa entre as fontes, primeira grafia (a da label) vence', () => {
-  const engine = {
-    accountForPr: () => 'eu',
-    reviewSignals: new Map([['o/r', [sinal(1, 'Ana', Date.now())]]]),
-  };
-  const pr = { key: 'o/r#1', repo: 'o/r', number: 1, labels: ['ana:revisando'] };
-  assert.deepEqual(outrosRevisando(engine, pr), ['ana']);
-});
-
-test('outrosRevisando: ref expirada não conta, e a minha ref não me barra', () => {
-  const agora = Date.now();
-  const engine = {
-    accountForPr: () => 'eu',
-    reviewSignals: new Map([['o/r', [sinal(1, 'ana', agora - TTL - 60000), sinal(1, 'EU', agora)]]]),
-  };
-  assert.deepEqual(outrosRevisando(engine, { key: 'o/r#1', repo: 'o/r', number: 1, labels: [] }), []);
-});
-
-test('outrosRevisando: engine sem snapshot de refs degrada pras labels (transição)', () => {
-  const engine = { accountForPr: () => 'eu' }; // sem reviewSignals nenhum
-  assert.deepEqual(outrosRevisando(engine, { key: 'o/r#1', repo: 'o/r', number: 1, labels: ['ana:revisando'] }), ['ana']);
-});
-
-test('outrosRevisando: refs de outro repo não vazam pra este PR', () => {
-  const engine = {
-    accountForPr: () => 'eu',
-    reviewSignals: new Map([['o/outro', [sinal(1, 'ana', Date.now())]]]),
-  };
-  assert.deepEqual(outrosRevisando(engine, { key: 'o/r#1', repo: 'o/r', number: 1, labels: [] }), []);
 });
 
 /* ---------- texto do toast (era o comentário público até 28/08/2026) ---------- */
@@ -248,12 +163,6 @@ test('textoDoPulo: plural e lista com "e" no fim', () => {
   assert.match(textoDoPulo(['ana', 'zoe']), /@ana e @zoe já estão revisando/);
   assert.match(textoDoPulo(['ana', 'bia', 'zoe']), /@ana, @bia e @zoe/);
   assert.equal(textoDoPulo([]), '');
-});
-
-test('textoDaCoassinatura: humano e sem vazar automação', () => {
-  const t = skip.textoDaCoassinatura('ana');
-  assert.match(t, /@ana/);
-  assert.doesNotMatch(t, /Farol|automa|bot|IA|co-assin/i);
 });
 
 /* ---------- caducidade (PURA) ---------- */
@@ -283,58 +192,7 @@ test('standDownCaducou: com duas pessoas, basta uma seguir viva pra não caducar
   assert.equal(standDownCaducou({ quem: ['ana', 'zoe'] }, [], []), true);
 });
 
-test('quemAprovou: só considera quem eu saí de cena por causa', () => {
-  const reg = { quem: ['ana'] };
-  assert.equal(quemAprovou(reg, [{ quem: 'ana', state: 'APPROVED' }]), 'ana');
-  assert.equal(quemAprovou(reg, [{ quem: 'ana', state: 'CHANGES_REQUESTED' }]), '');
-  // aprovação de terceiro que não é quem pegou o PR não conta
-  assert.equal(quemAprovou(reg, [{ quem: 'bob', state: 'APPROVED' }]), '');
-});
-
-/* ---------- autoridade na saída de cena (regra PLANA, 28/08/2026 à tarde) ----------
-   A saída de cena não consulta mais cobreMinhaExigencia (ver alguém revisando
-   SEMPRE segura o automático); o CODEOWNERS só responde se eu sou AUTORIDADE,
-   porque isso gateia a co-assinatura ("nunca co-assino onde sou autoridade"). */
-
-const PR_AUT = { key: 'o/r#1', url: 'https://github.com/o/r/pull/1', repo: 'o/r', number: 1 };
-
-// semeia o cache do CODEOWNERS pra decisão sair sem rede nenhuma
-function engineComRegras(regrasTexto, extra = {}) {
-  return {
-    accountForPr: () => 'eu',
-    tokenFor: () => 'tok',
-    codeownersCache: new Map([['o/r', { regras: parseCodeowners(regrasTexto), at: Date.now() }]]),
-    fetchPrFiles: async () => [{ path: 'src/x.ts' }],
-    ...extra,
-  };
-}
-
-test('autoridadeNaSaida: sou dono de arquivo do PR, autoridade true', async () => {
-  assert.equal(await skip.autoridadeNaSaida(engineComRegras('* @eu'), { ...PR_AUT }), true);
-});
-
-test('autoridadeNaSaida: dono é outra pessoa, autoridade false', async () => {
-  assert.equal(await skip.autoridadeNaSaida(engineComRegras('* @ana'), { ...PR_AUT }), false);
-});
-
-test('autoridadeNaSaida: repo sem CODEOWNERS é conclusivo, autoridade false', async () => {
-  const engine = engineComRegras('');
-  assert.equal(await skip.autoridadeNaSaida(engine, { ...PR_AUT }), false);
-});
-
-// CODEOWNERS ilegível cai no lado seguro TRUE: co-assinar sem saber se sou
-// autoridade é pior que não co-assinar
-test('autoridadeNaSaida: sem token (CODEOWNERS ilegível) cai no lado seguro true', async () => {
-  const engine = engineComRegras('* @ana', { tokenFor: () => null });
-  assert.equal(await skip.autoridadeNaSaida(engine, { ...PR_AUT }), true);
-});
-
-test('autoridadeNaSaida: diff não medido cai no mesmo lado seguro true', async () => {
-  const engine = engineComRegras('* @ana', { fetchPrFiles: async () => { throw new Error('rede'); } });
-  assert.equal(await skip.autoridadeNaSaida(engine, { ...PR_AUT }), true);
-});
-
-/* ---------- saída de cena e co-assinatura ---------- */
+/* ---------- saída de cena ---------- */
 
 function engineFalso(extra = {}) {
   return {
@@ -366,12 +224,11 @@ const PR = { key: 'o/r#1', url: 'https://github.com/o/r/pull/1', repo: 'o/r', nu
 test('saiDeCena: grava a âncora POR HEAD e avisa por toast, sem gh nenhum', async (t) => {
   const engine = engineFalso();
   t.after(espiaGh(engine));
-  const ok = await skip.saiDeCena(engine, PR, ['ana'], 'sha1', true);
+  const ok = await skip.saiDeCena(engine, PR, ['ana'], 'sha1');
   assert.equal(ok, true);
   assert.equal(engine.rodou.length, 0, 'NENHUM gh roda (nem pr comment, nem nada): zero rastro público');
   assert.equal(engine.skipComentado['o/r#1'].head, 'sha1');
   assert.deepEqual(engine.skipComentado['o/r#1'].quem, ['ana']);
-  assert.equal(engine.skipComentado['o/r#1'].autoridade, true);
   const toast = engine.toasts.find(x => x.ev === 'toast');
   assert.ok(toast, 'o aviso existe, só que no app');
   assert.match(toast.payload.text, /@ana já está revisando/);
@@ -389,82 +246,7 @@ test('saiDeCena: sem ninguém revisando não registra saída nenhuma', async (t)
   assert.equal(engine.rodou.length, 0);
 });
 
-test('coAssinar: posta APPROVE em meu nome, ancorado no head endossado, e marca a âncora', async (t) => {
-  const postados = [];
-  const engine = engineFalso({ postados });
-  // o endosso é relido no mesmo sha antes de postar (26/09/2026)
-  const original = io.run;
-  io.run = (cmd, args) => { engine.rodou.push(args); return Promise.resolve({ ok: true, stdout: '[{"quem":"ana","tipo":"User","state":"APPROVED","commit_id":"sha1"}]', stderr: '' }); };
-  t.after(() => { io.run = original; });
-  engine.skipComentado['o/r#1'] = { head: 'sha1', quem: ['ana'] };
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), true);
-  assert.equal(postados[0].event, 'APPROVE');
-  assert.equal(postados[0].commit_id, 'sha1');
-  assert.match(postados[0].body, /@ana/);
-  assert.equal(engine.skipComentado['o/r#1'].coAssinado, true);
-});
-
-// 29/09/2026: co-assinar é aprovar em seu nome, e a conta que manda esperar você não
-// aprova por ninguém. A chave geral deixou de passar por cima da política da conta.
-test('coAssinar: conta que espera você aprovar não co-assina, e nenhum gh roda', async (t) => {
-  const postados = [];
-  const politicas = [];
-  const engine = engineFalso({ postados, approvePolicyFor: (conta, limpo) => { politicas.push([conta, limpo]); return 'wait'; } });
-  t.after(espiaGh(engine));
-  engine.skipComentado['o/r#1'] = { head: 'sha1', quem: ['ana'] };
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), false);
-  assert.equal(postados.length, 0);
-  assert.equal(engine.rodou.length, 0, 'sai antes de consultar o GitHub');
-  assert.deepEqual(politicas, [['eu', true]], 'pergunta a política de aprovável sem ressalvas da conta dona');
-  engine.approvePolicyFor = () => 'approve';
-  const original = io.run;
-  io.run = () => Promise.resolve({ ok: true, stdout: '[{"quem":"ana","tipo":"User","state":"APPROVED","commit_id":"sha1"}]', stderr: '' });
-  t.after(() => { io.run = original; });
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), true, 'com a conta aprovando sozinha, co-assina como antes');
-});
-
-// postar review não é idempotente: sem confirmar o que já existe, não posta
-test('coAssinar: não posta quando eu já aprovei este head', async (t) => {
-  const postados = [];
-  const engine = engineFalso({ postados, myReviewStates: async () => ['APPROVED'] });
-  t.after(espiaGh(engine));
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), false);
-  assert.equal(postados.length, 0);
-});
-
-test('coAssinar: reprovação própria no mesmo head também impede aprovação automática', async t => {
-  const postados = [];
-  const engine = engineFalso({ postados, myReviewStates: async () => ['CHANGES_REQUESTED'] });
-  const original = io.run;
-  io.run = async () => ({ ok: true, stdout: '[{"quem":"ana","tipo":"User","state":"APPROVED","commit_id":"sha1"}]' });
-  t.after(() => { io.run = original; });
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), false);
-  assert.equal(postados.length, 0);
-  assert.equal(engine.skipComentado[PR.key]?.coAssinado, undefined);
-});
-
-test('coAssinar: parecer que aparece no funil não é anunciado como aprovação nova', async t => {
-  const engine = engineFalso({ postReview: async (_pr, _payload, options) => {
-    assert.equal(options.via, 'coassinatura');
-    return { ok: true, alreadyReviewed: true };
-  } });
-  const original = io.run;
-  io.run = async () => ({ ok: true, stdout: '[{"quem":"ana","tipo":"User","state":"APPROVED","commit_id":"sha1"}]' });
-  t.after(() => { io.run = original; });
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), false);
-  assert.equal(engine.skipComentado[PR.key]?.coAssinado, undefined);
-  assert.deepEqual(engine.toasts, []);
-});
-
-test('coAssinar: sem conseguir confirmar meus reviews (null), não posta', async (t) => {
-  const postados = [];
-  const engine = engineFalso({ postados, myReviewStates: async () => null });
-  t.after(espiaGh(engine));
-  assert.equal(await skip.coAssinar(engine, PR, 'ana', 'sha1'), false);
-  assert.equal(postados.length, 0);
-});
-
-/* ---------- o ciclo: seguir fora, caducar ou co-assinar ---------- */
+/* ---------- o ciclo: seguir fora ou caducar ---------- */
 
 // espião que devolve uma lista de reviews de outros pelo caminho do gh api
 function espiaReviews(engine, lista) {
@@ -486,7 +268,7 @@ test('seguirForaDeCena: sessão do colega morreu sem review, a saída caduca', a
   assert.equal(engine.skipComentado['o/r#1'], undefined, 'âncora some');
 });
 
-test('seguirForaDeCena: com a chave DESLIGADA, aprovação do colega não co-assina', async (t) => {
+test('seguirForaDeCena: aprovação do colega não vira aprovação minha, e o PR segue fora', async (t) => {
   const postados = [];
   const engine = engineFalso({ postados });
   t.after(espiaReviews(engine, [{ quem: 'ana', state: 'APPROVED', commit_id: 'sha1' }]));
@@ -496,36 +278,14 @@ test('seguirForaDeCena: com a chave DESLIGADA, aprovação do colega não co-ass
   assert.equal(postados.length, 0, 'nada foi postado');
 });
 
-test('seguirForaDeCena: com a chave LIGADA, aprovação do colega vira co-assinatura', async (t) => {
-  const postados = [];
-  const engine = engineFalso({ postados });
-  engine.config.coAssinarReview = true;
-  t.after(espiaReviews(engine, [{ quem: 'ana', state: 'APPROVED', commit_id: 'sha1' }]));
-  engine.skipComentado['o/r#1'] = { head: 'sha1', quem: ['ana'] };
-  const fora = await skip.seguirForaDeCena(engine, { ...PR, labels: [] }, engine.skipComentado['o/r#1'], 'sha1');
-  assert.equal(fora, true);
-  assert.equal(postados[0].event, 'APPROVE');
-});
-
-// pedido de mudanças do colega NÃO é aprovação: nada é co-assinado, e o PR
+// pedido de mudanças do colega NÃO é aprovação: nada é postado, e o PR
 // continua fora de cena (um Farol por PR), esperando o autor corrigir
-test('seguirForaDeCena: colega pediu mudanças, não co-assina e segue fora', async (t) => {
+test('seguirForaDeCena: colega pediu mudanças, nada é postado e segue fora', async (t) => {
   const postados = [];
   const engine = engineFalso({ postados });
-  engine.config.coAssinarReview = true;
   t.after(espiaReviews(engine, [{ quem: 'ana', state: 'CHANGES_REQUESTED', commit_id: 'sha1' }]));
   engine.skipComentado['o/r#1'] = { head: 'sha1', quem: ['ana'] };
   assert.equal(await skip.seguirForaDeCena(engine, { ...PR, labels: [] }, engine.skipComentado['o/r#1'], 'sha1'), true);
-  assert.equal(postados.length, 0);
-});
-
-test('seguirForaDeCena: já co-assinado não posta de novo', async (t) => {
-  const postados = [];
-  const engine = engineFalso({ postados });
-  engine.config.coAssinarReview = true;
-  t.after(espiaReviews(engine, [{ quem: 'ana', state: 'APPROVED', commit_id: 'sha1' }]));
-  engine.skipComentado['o/r#1'] = { head: 'sha1', quem: ['ana'], coAssinado: true };
-  await skip.seguirForaDeCena(engine, { ...PR, labels: [] }, engine.skipComentado['o/r#1'], 'sha1');
   assert.equal(postados.length, 0);
 });
 

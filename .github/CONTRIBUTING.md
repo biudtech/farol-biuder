@@ -20,7 +20,7 @@ um PR na hora:
 4. **Nada é postado no GitHub sem gate.** Auto-approve e auto-reject passam por `shouldAutoApprove` / `shouldAutoReject`. Não afrouxe esses gates.
 5. **Diferença de sistema operacional passa por `IS_WIN` / `IS_MAC` / `IS_LINUX`** (fonte única em `lib/paths.js`), nunca por checagem solta.
 6. **Texto de UI e comentário em português, sem travessão.** Use vírgula, parênteses ou dois pontos.
-7. **O zip de distribuição é auditado** por `tools/make-package.ps1`. Não enfraqueça a auditoria.
+7. **Não há pacote de distribuição**: o Farol roda do clone, como `node server.js`.
 
 ## Ambiente
 
@@ -82,8 +82,7 @@ mover a catraca quando o número melhora de verdade, nunca para esconder piora.
 
 ## O que fica com o mantenedor
 
-Versionamento, geração de instalador e publicação de release seguem o checklist de
-[`docs/RELEASE.md`](../docs/RELEASE.md) (seções "Versionamento" e "Release") e são executados pela conta dona do
+Versionamento e publicação de release são executados pela conta dona do
 repositório. Nada disso é esperado de quem contribui.
 
 ## Reportando problema

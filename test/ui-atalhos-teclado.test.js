@@ -14,7 +14,6 @@ doc.querySelector = (sel) => {
   if (sel === '#decisions .decision.kbd-sel') return cardSelecionado;
   return consultaOriginal(sel);
 };
-doc.querySelector('#chatPanel').hidden = true;
 let onKeydown;
 doc.addEventListener = (tipo, fn) => { if (tipo === 'keydown' && !onKeydown) onKeydown = fn; };
 
