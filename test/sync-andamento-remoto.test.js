@@ -379,7 +379,7 @@ test('consumo pendente não bloqueia confirmação de presença nem atualizaçã
 test('o início da sincronização não aguarda uma consulta GitHub longa', async () => {
   const e = new Engine();
   e.migrarIgnorados = () => {};
-  e.checkUpdate = e.doctor = async () => {};
+  e.doctor = async () => {};
   let anunciado = false, liberar;
   e._tickSeguro = async () => { anunciado = true; };
   e.check = () => new Promise(resolve => { liberar = resolve; });

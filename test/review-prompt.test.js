@@ -44,21 +44,10 @@ test('headlessPromptFor: sem lotes, o prompt não ganha o bloco de fan-out', () 
   assert.doesNotMatch(prompt, /PR GRANDE/, 'PR pequeno segue no passe único');
 });
 
-test('Destaques desligado remove do prompt o trabalho de procurar elogio', () => {
-  const engine = new Engine();
-  engine.config.teamHighlights = false;
-  const prompt = engine.headlessPromptFor(URL_PR, 'alice');
+test('o prompt da revisão não pede destaque nem elogio compartilhável', () => {
+  const prompt = new Engine().headlessPromptFor(URL_PR, 'alice');
   assert.match(prompt, /Destaques do time desligado/);
   assert.doesNotMatch(prompt, /"highlight"|memory\.highlight|digno de compartilhar/);
-});
-
-test('Destaques ligado mantém o campo no prompt da revisão', () => {
-  const engine = new Engine();
-  engine.config.teamHighlights = true;
-  const prompt = engine.headlessPromptFor(URL_PR, 'alice');
-  assert.match(prompt, /"highlight"/);
-  assert.match(prompt, /memory\.highlight/);
-  assert.doesNotMatch(prompt, /Destaques do time desligado/);
 });
 
 test('headlessPromptFor: COM lotes, o bloco de fan-out chega no prompt', () => {
@@ -119,12 +108,9 @@ test('protocolo do terminal usa somente writer local e recebe capability efêmer
   assert.doesNotMatch(workspaceProtocol, /Sem inline,\s*direto:/i, 'instrução antiga de bypass não pode voltar');
   assert.doesNotMatch(workspaceProtocol, /Postar com inline:/i, 'instrução antiga de gh api não pode voltar');
 
-  const windowsScript = engine.buildSessionScript('/pr-review https://github.com/acme/repo/pull/688', 'eu', 'cap-terminal');
-  const macScript = engine.buildSessionScriptMac('/pr-review https://github.com/acme/repo/pull/688', 't1', 'eu', 'cap-terminal');
-  assert.match(windowsScript, /set "FAROL_PORT=47891"/);
-  assert.match(windowsScript, /set "FAROL_REVIEW_CAP=cap-terminal"/);
-  assert.match(macScript, /export FAROL_PORT='47891'/);
-  assert.match(macScript, /export FAROL_REVIEW_CAP='cap-terminal'/);
+  const script = engine.buildSessionScript('/pr-review https://github.com/acme/repo/pull/688', 't1', 'eu', 'cap-terminal');
+  assert.match(script, /export FAROL_PORT='47891'/);
+  assert.match(script, /export FAROL_REVIEW_CAP='cap-terminal'/);
 });
 
 /* ---------- verificação empírica em paralelo (subagentes claim-verifier) ---------- */

@@ -22,19 +22,18 @@ function grupo(extra = {}) {
 }
 
 const PERFIS = [
-  { id: 'pPessoal', label: 'Pessoal' },
+  { id: 'pPessoal', label: 'Pessoal', kind: 'apikey' },
   { id: 'pLab', label: 'Chave de laboratório', kind: 'apikey' },
-  { id: 'pCodex', label: 'Codex', kind: 'codex' },
-  { id: 'pRoteador', label: 'Roteador', kind: 'openrouter' },
+  { id: 'pCodex', label: 'Chave do roteador', kind: 'apikey' },
+  { id: 'pRoteador', label: 'Outra chave', kind: 'apikey' },
 ];
 
 /* ---------- tipo do perfil ---------- */
 
 test('grupoTipoDoPerfil: o tipo do vínculo sai do kind do perfil, na allowlist do engine', () => {
-  assert.equal(P.grupoTipoDoPerfil({ id: 'x' }), 'assinatura', 'perfil de pasta não carrega kind e é assinatura');
   assert.equal(P.grupoTipoDoPerfil({ kind: 'apikey' }), 'api');
-  assert.equal(P.grupoTipoDoPerfil({ kind: 'openrouter' }), 'openrouter');
-  assert.equal(P.grupoTipoDoPerfil({ kind: 'codex' }), 'codex');
+  assert.equal(P.grupoTipoDoPerfil({ id: 'x' }), '', 'perfil sem kind (formato que saiu) não vira tipo');
+  assert.equal(P.grupoTipoDoPerfil({ kind: 'openrouter' }), '');
   assert.equal(P.grupoTipoDoPerfil({ kind: 'inventado' }), '', 'kind desconhecido não vira tipo controlado por omissão');
 });
 
@@ -90,12 +89,12 @@ test('grupoCartaoHtml: parcialmente estimado é declarado', () => {
   assert.match(html, /parcialmente estimado/);
 });
 
-test('grupoCartaoHtml: controlados pelo rótulo do perfil, e Codex em seção própria sem valor', () => {
+test('grupoCartaoHtml: controlados pelo rótulo do perfil, e não controlados em seção própria sem valor', () => {
   const html = P.grupoCartaoHtml(grupo({ controlados: ['pPessoal', 'pLab'], naoControlados: ['pCodex'] }), { perfis: PERFIS });
   assert.match(html, /Pessoal/);
   assert.match(html, /Chave de laboratório/);
   assert.match(html, /Não controlados/);
-  assert.match(html, /Codex/);
+  assert.match(html, /Chave do roteador/);
   assert.match(html, /não entra na soma/);
 });
 

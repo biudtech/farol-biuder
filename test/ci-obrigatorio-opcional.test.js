@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ciForaDaDecisaoBlock } from '../lib/engine/review-prompt.js';
 import { esperaCiCardMeta, staleCardMeta, tituloDoAprovarDesligado, fraseDoCi, accountsManagerHtml } from '../ui/pure.js';
-import { flagSemPermissoes, buildLoginScript, buildLoginScriptMac } from '../lib/engine/session.js';
+import { flagSemPermissoes, buildSessionScript } from '../lib/engine/session.js';
 
 const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 // a seção v2.78.42 do CHANGELOG, a deste PR
@@ -79,10 +79,6 @@ test('desligar só é seguro com check obrigatório no ruleset: a linha da chave
   assert.match(ler('docs/REVIEW-GATES.md'), /desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho/);
   assert.doesNotMatch(ler('docs/REVIEW-GATES.md'), /e é por isso que desligar é seguro/);
   assert.match(secaoDoChangelog(), /Só desligue onde o check é obrigatório no ruleset/);
-  const notas = ler('ui/telas/release-notes.js');
-  const nota = notas.slice(notas.indexOf("['2.78.42'"), notas.indexOf("['2.78.41'"));
-  assert.match(nota, /só desligue onde o check é obrigatório no ruleset/);
-  assert.doesNotMatch(nota, /o merge segue barrado pelo GitHub'/);
   assert.match(ler('lib/settings.js'), /Só é seguro onde o check é obrigatório no ruleset/);
   // o card da espera desligada e o título dos seletores da conta também condicionam a barreira ao ruleset
   const card = esperaCiCardMeta({ id: '1', key: 'o/r#1', verdict: 'approve', esperaCi: { checks: [] }, reasons: [] }, false).statusHtml;
@@ -93,17 +89,17 @@ test('desligar só é seguro com check obrigatório no ruleset: a linha da chave
 });
 
 test('sessão no terminal sem pedir permissões: ligada por padrão, mas como root a flag não entra', () => {
-  const engine = { config: { skipPermissions: true, port: 47170 } };
+  const engine = { config: { skipPermissions: true, port: 47170 }, resolveClaudeAuth: () => null, primaryUser: () => 'default-user' };
   const getuidOriginal = process.getuid;
   const comUid = (uid, fn) => { process.getuid = () => uid; try { return fn(); } finally { process.getuid = getuidOriginal; } };
   try {
     comUid(1000, () => {
       assert.equal(flagSemPermissoes(engine), ' --dangerously-skip-permissions');
-      assert.match(buildLoginScript(engine, ''), /claude --dangerously-skip-permissions/);
+      assert.match(buildSessionScript(engine, '/pr-review x', 'id1', 'default-user'), /claude --dangerously-skip-permissions/);
     });
     comUid(0, () => {
       assert.equal(flagSemPermissoes(engine), '', 'o Claude Code recusa a flag como root: a sessão morreria ao abrir');
-      assert.doesNotMatch(buildLoginScript(engine, '') + buildLoginScriptMac(engine, '', 't1'), /--dangerously-skip-permissions/);
+      assert.doesNotMatch(buildSessionScript(engine, '/pr-review x', 't1', 'default-user'), /--dangerously-skip-permissions/);
     });
     comUid(1000, () => assert.equal(flagSemPermissoes({ config: { skipPermissions: false } }), '', 'desligada continua sem a flag'));
   } finally {
@@ -138,7 +134,6 @@ test('Sistema > Automação: as chaves que nascem ligadas só desligam com false
   for (const linha of [
     "$('#setReReviewResume').checked = c.reReviewResume !== false;",
     "$('#setSkipPerms').checked = c.skipPermissions !== false;",
-    "$('#setAutoUpdate').checked = c.autoUpdate !== false;",
   ]) assert.ok(sistema.includes(linha), linha);
 });
 
@@ -174,7 +169,7 @@ test('Sistema > Automação: a linha virou chave, ligada à preferência, e os p
   const linha = (id) => html.slice(html.indexOf(`id="${id}"`), html.indexOf('</label>', html.indexOf(`id="${id}"`)));
   assert.match(linha('sys-row-aguardarciaprovar'), /<input id="setAguardarCiAprovar" type="checkbox">/);
   assert.match(linha('sys-row-aguardarciaprovar'), /Desligado \(padrão\)/);
-  for (const id of ['sys-row-rereviewresume', 'sys-row-autoupdate', 'sys-row-skipperms']) {
+  for (const id of ['sys-row-rereviewresume', 'sys-row-skipperms']) {
     assert.match(linha(id), /Ligado \(padrão\)/, id);
     assert.doesNotMatch(linha(id), /Desligado \(padrão\)/, id);
   }

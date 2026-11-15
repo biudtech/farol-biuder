@@ -14,7 +14,7 @@ import fs from 'node:fs';
 process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-migracao-'));
 const CONFIG = path.join(process.env.FAROL_HOME, 'config.json');
 fs.writeFileSync(CONFIG, JSON.stringify({
-  port: 47197, autoReview: false, autoApproveAll: true, updateRepo: '',
+  port: 47197, autoReview: false, autoApproveAll: true,
   accounts: [
     { user: 'herda', owners: ['org1'] },
     { user: 'propria', owners: ['org2'], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes' },
@@ -402,7 +402,7 @@ test('o marcador é explícito: config já marcada não é tocada, nem com o tot
 const SYNC_DE_TESTE = { enabled: true, shared: { enabled: true }, databaseUrl: 'http://127.0.0.1:1', apiKey: 'k', projectId: 'p' };
 
 test('no engine: uma vez só, com rastro, e quem depois tira o teto de propósito fica sem teto', () => {
-  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, updateRepo: '', parallelReviews: 3, sync: SYNC_DE_TESTE, accounts: [{ user: 'a', owners: [] }, { user: 'b', owners: [] }] }));
+  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, parallelReviews: 3, sync: SYNC_DE_TESTE, accounts: [{ user: 'a', owners: [] }, { user: 'b', owners: [] }] }));
   fs.rmSync(POLITICA_HISTORICO_FILE, { force: true });
   const e = new Engine();
   assert.equal(e.config.globalParallelReviews, 3);
@@ -421,7 +421,7 @@ test('no engine: uma vez só, com rastro, e quem depois tira o teto de propósit
 });
 
 test('instalação sem compartilhamento: o boot grava o marcador e não inventa teto', () => {
-  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, updateRepo: '', parallelReviews: 4, accounts: [{ user: 'a', owners: [] }] }));
+  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, parallelReviews: 4, accounts: [{ user: 'a', owners: [] }] }));
   const e = new Engine();
   assert.equal(e.config.globalParallelReviews, 0);
   assert.equal(lerJson(CONFIG).esquemaConfig, M.ESQUEMA_PADROES);
@@ -434,27 +434,24 @@ test('instalação sem compartilhamento: o boot grava o marcador e não inventa 
    "CI obrigatório antes da aprovação" desligado; "Retomar a sessão na segunda rodada" e "Sessão
    no terminal sem pedir permissões" ligados. O saveConfig grava a config inteira, então o padrão
    antigo estava no arquivo de todo mundo sem escolha: a migração vale uma vez, pelo marcador, e o
-   que a pessoa escolher depois dela fica. "Atualizar sozinho" já nasceu ligado (v2.46.0): um
-   `false` no arquivo é escolha, e a migração não toca nele. */
+   que a pessoa escolher depois dela fica. */
 
 test('os padrões novos na tabela de preferências', () => {
   const def = (k) => SETTINGS.find((x) => x.key === k).def;
   assert.equal(def('aguardarCiParaAprovar'), false);
   assert.equal(def('reReviewResume'), true);
   assert.equal(def('skipPermissions'), true);
-  assert.equal(def('autoUpdate'), true);
-  for (const k of ['aguardarCiParaAprovar', 'reReviewResume', 'skipPermissions', 'autoUpdate']) assert.ok(EDITAVEIS.has(k), k);
+  for (const k of ['aguardarCiParaAprovar', 'reReviewResume', 'skipPermissions']) assert.ok(EDITAVEIS.has(k), k);
 });
 
 test('migrarPadroes: config do esquema 1 com o padrão antigo gravado recebe os padrões novos, uma vez', () => {
-  const antiga = { esquemaConfig: 1, reReviewResume: false, skipPermissions: false, aguardarCiParaAprovar: true, autoUpdate: false };
+  const antiga = { esquemaConfig: 1, reReviewResume: false, skipPermissions: false, aguardarCiParaAprovar: true };
   const r = M.migrarPadroes(antiga);
   assert.equal(r.mudou, true);
   assert.equal(r.esquemaConfig, M.ESQUEMA_PADROES);
   assert.deepEqual(r.valores, { reReviewResume: true, skipPermissions: true, aguardarCiParaAprovar: false });
   assert.deepEqual(r.mudancas, [{ conta: null, campo: 'aguardarCiParaAprovar', de: true, para: false }, { conta: null, campo: 'skipPermissions', de: false, para: true }],
     'a política e a postura de segurança vão ao rastro; reReviewResume não');
-  assert.equal('autoUpdate' in r.valores, false, 'autoUpdate false é escolha de alguém');
   assert.deepEqual(M.migrarPadroes({ ...antiga, ...r.valores, esquemaConfig: r.esquemaConfig }), { mudou: false, valores: {}, mudancas: [] });
   assert.deepEqual(M.migrarPadroes({ esquemaConfig: 2, reReviewResume: false }), { mudou: false, valores: {}, mudancas: [] }, 'escolha depois do marcador fica');
   const nova = M.migrarPadroes({});
@@ -463,14 +460,14 @@ test('migrarPadroes: config do esquema 1 com o padrão antigo gravado recebe os 
 });
 
 test('no engine: o boot liga os dois padrões e desliga o CI uma vez; a escolha feita depois sobrevive ao reinício', () => {
-  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, updateRepo: '', esquemaConfig: 1, reReviewResume: false, skipPermissions: false,
-    aguardarCiParaAprovar: true, autoUpdate: false, accounts: [{ user: 'a', owners: [] }] }));
+  fs.writeFileSync(CONFIG, JSON.stringify({ port: 47197, esquemaConfig: 1, reReviewResume: false, skipPermissions: false,
+    aguardarCiParaAprovar: true, accounts: [{ user: 'a', owners: [] }] }));
   fs.rmSync(POLITICA_HISTORICO_FILE, { force: true });
   const e = new Engine();
   const gravado = lerJson(CONFIG);
-  assert.deepEqual([e.config.reReviewResume, e.config.skipPermissions, e.config.aguardarCiParaAprovar, e.config.autoUpdate], [true, true, false, false]);
-  assert.deepEqual([gravado.reReviewResume, gravado.skipPermissions, gravado.aguardarCiParaAprovar, gravado.autoUpdate, gravado.esquemaConfig],
-    [true, true, false, false, M.ESQUEMA_PADROES]);
+  assert.deepEqual([e.config.reReviewResume, e.config.skipPermissions, e.config.aguardarCiParaAprovar], [true, true, false]);
+  assert.deepEqual([gravado.reReviewResume, gravado.skipPermissions, gravado.aguardarCiParaAprovar, gravado.esquemaConfig],
+    [true, true, false, M.ESQUEMA_PADROES]);
   assert.deepEqual(lerJson(POLITICA_HISTORICO_FILE).filter((h) => h.campo === 'aguardarCiParaAprovar').map((h) => [h.de, h.para, h.origem]), [[true, false, 'migração']]);
   assert.deepEqual(lerJson(POLITICA_HISTORICO_FILE).filter((h) => h.campo === 'skipPermissions').map((h) => [h.de, h.para, h.origem]), [[false, true, 'migração']],
     'a sessão de terminal sem pedir permissões fica registrada como mudança da migração');
@@ -484,6 +481,6 @@ test('no engine: o boot liga os dois padrões e desliga o CI uma vez; a escolha 
 test('no engine: instalação nova nasce com os padrões novos e o marcador', () => {
   fs.rmSync(CONFIG, { force: true });
   const e = new Engine();
-  assert.deepEqual([e.config.reReviewResume, e.config.skipPermissions, e.config.aguardarCiParaAprovar, e.config.autoUpdate], [true, true, false, true]);
+  assert.deepEqual([e.config.reReviewResume, e.config.skipPermissions, e.config.aguardarCiParaAprovar], [true, true, false]);
   assert.equal(lerJson(CONFIG).esquemaConfig, M.ESQUEMA_PADROES);
 });

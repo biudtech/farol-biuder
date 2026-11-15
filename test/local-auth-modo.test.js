@@ -64,8 +64,6 @@ test('proot-distro também é celular: kernel falso do proot ou /system do Andro
 });
 
 test('fora do celular nenhum sinal liga o modo', () => {
-  assert.equal(detectarModoCelular({ platform: 'win32', env: {}, osrelease: '' }), false, 'Windows');
-  assert.equal(detectarModoCelular({ platform: 'darwin', env: {}, osrelease: '' }), false, 'macOS');
   assert.equal(detectarModoCelular(DESKTOP), false, 'Linux comum');
   assert.equal(detectarModoCelular({ ...DESKTOP, osrelease: '5.15.167.4-microsoft-standard-WSL2\n' }), false, 'WSL');
   assert.equal(detectarModoCelular({ ...DESKTOP, env: { TERMUX_VERSION: '   ', PREFIX: '/data/data/com.termuxfalso/usr' } }), false, 'prefixo parecido e versão em branco não contam');

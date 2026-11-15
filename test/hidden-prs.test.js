@@ -56,7 +56,6 @@ function checkEngine(estadoInicial) {
   e.refreshStaleStates = async () => { };
   e.refreshReviewSignals = async () => { }; // sinal por ref é rede: fora do ciclo de teste
   e.scanPushbacks = async () => { };
-  e.checkUpdate = async () => { };
   e.schedule = () => { };
   e.saveSeen = () => { };
   e.launchReview = () => { throw new Error('nenhuma revisão deveria rodar neste teste'); };

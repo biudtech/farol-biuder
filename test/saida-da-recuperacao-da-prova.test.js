@@ -49,8 +49,7 @@ const { AUTOMACAO_DESLIGADA, registrarPausa } = await import('../lib/engine/recu
 const pendencia = (await import('../lib/sync/pendencia.js')).default;
 const fila = (await import('../lib/sync/fila.js')).default;
 const { fatosDaFila } = await import('../lib/engine/sync-fila.js');
-const { badgeDe } = await import('../lib/engine/avisos-nativos.js');
-const { separarPendentes, staleCardMeta, reviewBoxHtml, reviewChip } = await import('../ui/pure/review.js');
+const { separarPendentes, staleCardMeta, reviewBoxHtml } = await import('../ui/pure/review.js');
 
 after(() => {
   io.run = runReal;
@@ -261,16 +260,12 @@ test('B7: pendência pausada conta no contador, no ícone, no card e na projeç�
   const { precisam, esperandoCi } = separarPendentes([tela]);
   assert.equal(precisam.length, 1, 'dentro de Precisa de você');
   assert.equal(esperandoCi.length, 0);
-  assert.deepEqual(badgeDe({ decisions: { pending: [tela] } }).contador, 1, 'o ícone conta');
   const meta = staleCardMeta(tela, null);
   assert.match(meta.statusHtml, /precisa de você/i);
   assert.match(meta.statusHtml, /revis(e|ão) de novo/i, 'diz o que destrava');
   assert.doesNotMatch(meta.statusHtml, /sem decisão manual|não exige decisão manual/);
   assert.equal(meta.cardClass, 'urgent');
   assert.doesNotMatch(reviewBoxHtml(tela), /sem decisão manual/);
-  const chip = reviewChip({ key: PR.key }, e.reviewActions(), {});
-  assert.doesNotMatch(chip, /não exige decisão manual/);
-  assert.match(chip, /aguardando você/);
   // projeção: pendência comum com o impedimento como motivo, sem estado novo
   const p = pendencia.projetarPendencia(d, { kId: Buffer.alloc(32, 1) });
   assert.equal(p.espera, '', 'não é espera automática');
@@ -329,7 +324,6 @@ test('B7: marca pausada gravada antes do pedeVoce entra em Precisa de você na v
   await esperaProva.reverQuandoAProvaMudar(e);
   assert.equal(d.esperaProva.pedeVoce, true);
   assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 1);
-  assert.equal(badgeDe({ decisions: { pending: [e.decisionForUi(d)] } }).contador, 1);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'avisa uma vez só');
 });
 

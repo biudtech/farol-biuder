@@ -40,7 +40,7 @@ test('o arquivo mora fora do config.json', () => {
 // O writeJsonAtomic escreve num .tmp com o modo default e o rename entrega ESSE
 // modo ao arquivo final. Restringir uma vez só no cadastro não sobrevive à escrita
 // seguinte, e o removeCredential reabriria os tokens dos OUTROS sites.
-test('o arquivo de credencial nunca fica legível por outros', { skip: process.platform === 'win32' }, () => {
+test('o arquivo de credencial nunca fica legível por outros', () => {
   cred.setCredential('s9', { email: 'a@b.com', token: 'tok' });
   assert.equal(fs.statSync(cred.credentialsPath()).mode & 0o077, 0);
   cred.setCredential('s8', { email: 'a@b.com', token: 'tok' });

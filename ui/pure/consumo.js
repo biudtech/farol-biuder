@@ -312,21 +312,14 @@ export function usageBudgetHtml(u) {
   };
   // a lacuna do terminal interativo vale pra qualquer perfil COM TETO (antes era
   // só chave de API, porque só ela tinha teto): o aviso segue o teto, não o tipo
-  const temTetoAlgum = perfis.some(p => p.kind !== 'codex' && (p.budgetDaily != null || p.budgetTotal != null));
+  const temTetoAlgum = perfis.some(p => p.budgetDaily != null || p.budgetTotal != null);
   return perfis.map(p => {
-    const isApiKey = p.kind === 'apikey' || p.kind === 'openrouter';
-    const isCodex = p.kind === 'codex';
     const statusCls = p.blocked ? 'bad' : 'ok';
     // "tem teto" passou a considerar os overrides: perfil que só configurou sábado
     // TEM teto, e dizer "nenhum teto definido" ali seria falso
     const temOverride = Object.keys(p.budgetByWeekday || {}).length > 0 || Object.keys(p.budgetDates || {}).length > 0;
-    const temTeto = !isCodex && (p.budgetDaily != null || p.budgetTotal != null || temOverride);
-    // "coberto pela assinatura" era o status FIXO de todo perfil de assinatura,
-    // porque ele nunca podia ter teto. Agora pode, então o status segue o teto:
-    // sem teto, a frase de sempre; com teto, a mesma régua da chave de API.
-    let statusSemTeto = 'coberto pela assinatura';
-    if (isApiKey) statusSemTeto = 'no orçamento';
-    else if (isCodex) statusSemTeto = 'coberto pelo plano ChatGPT';
+    const temTeto = (p.budgetDaily != null || p.budgetTotal != null || temOverride);
+    const statusSemTeto = 'no orçamento';
     // "estourado" seria mentira quando o gasto ainda não passou do teto e o que
     // barrou foi a projeção: o chip tem que concordar com a nota logo abaixo
     const previsto = String(p.reason || '').endsWith('-previsto');
@@ -341,23 +334,15 @@ export function usageBudgetHtml(u) {
     const medidorTotal = p.budgetTotal != null ? meter('Teto total', p.sinceCutoff, p.budgetTotal) : '';
     const meters = medidorDiario + medidorTotal;
     const irAoTeto = `sys:plans:.cp-budget-daily[data-id="${escAttrSelector(p.id)}"]`;
-    // tres casos excludentes, um por linha: sem chave de API, com chave e sem teto,
-    // e com teto batido. A cadeia de ternarios que estava aqui escondia qual deles
-    // ganhava quando mais de um parecia valer.
-    const NOTA_ASSINATURA = '<span class="usage-budget-note">O gasto em tokens não vira fatura por sessão neste perfil, mas o teto vale como ritmo do dia a dia.</span>';
-    const NOTA_CODEX = '<span class="usage-budget-note">O Codex informa os tokens das sessões autônomas. O Farol registra esse volume, mas mantém US$ 0,00 porque o plano ChatGPT não expõe uma fatura por sessão.</span>';
+    // casos excludentes, um por linha: sem teto, com teto previsto e com teto batido
     const NOTA_PAUSADO = '<span class="usage-budget-note">Automação de gasto pausada pra este perfil (revisão automática, retentativa e busca de contestações).</span>';
     const notaPrevisto = `<span class="usage-budget-note">A próxima revisão (${esc(fmtMoney(p.tipicoReview || 0))} em média) não caberia no teto, então a automação parou antes de gastar. O clique manual continua liberado.</span>`;
     const notaSemTeto = `<span class="usage-budget-note">Nenhum teto definido pra este perfil (<span class="is-goto" data-goto="${esc(irAoTeto)}" role="button" tabindex="0">definir em Sistema → Plano e chaves</span>).</span>`;
     let nota = '';
-    if (!temTeto && isCodex) nota = NOTA_CODEX;
-    else if (!temTeto && !isApiKey) nota = NOTA_ASSINATURA;
-    else if (!temTeto) nota = notaSemTeto;
+    if (!temTeto) nota = notaSemTeto;
     else if (previsto) nota = notaPrevisto;
     else if (p.blocked) nota = NOTA_PAUSADO;
-    let kindTxt = 'Claude · assinatura';
-    if (isApiKey) kindTxt = 'Chave de API';
-    else if (isCodex) kindTxt = 'Codex · plano ChatGPT';
+    const kindTxt = 'Chave de API';
     // o nome do perfil leva ao card DELE em Sistema (o input do nome carrega o
     // mesmo id; seletor montado aqui porque CSS.escape não existe no pure.js)
     const alvoPerfil = `sys:plans:.cp-label[data-id="${escAttrSelector(p.id)}"]`;
@@ -375,7 +360,7 @@ export function usageBudgetHtml(u) {
     // MESMA credencial do perfil, mas o claude interativo nao emite stream-json,
     // entao esse gasto nao tem como entrar na medicao nem no teto. Sem declarar,
     // o cartao prometia um teto que um dos caminhos de gasto nunca encontra.
-    + (temTetoAlgum ? '<span class="usage-budget-note">Sessões interativas no terminal usam a mesma credencial, mas não entram na medição nem no teto: Claude e Codex não reportam esse consumo ao Farol.</span>' : '');
+    + (temTetoAlgum ? '<span class="usage-budget-note">Sessões interativas no terminal usam a mesma credencial, mas não entram na medição nem no teto: o Claude não reporta esse consumo ao Farol.</span>' : '');
 }
 
 export function usageSessionsHtml(u) {

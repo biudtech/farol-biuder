@@ -222,7 +222,6 @@ function engineDeCheck(contas, tokens) {
   e.refreshStaleStates = async () => { };
   e.refreshReviewSignals = async () => { };
   e.scanPushbacks = async () => { };
-  e.checkUpdate = async () => { };
   e.launchReview = () => { throw new Error('launchReview não deveria rodar neste teste'); };
   e.schedule = () => { };
   e.saveSeen = () => { };
@@ -330,14 +329,6 @@ test('Meus PRs: merge num PR da conta silenciada recusa antes de ler o PR', asyn
   assert.equal(r.ok, false);
   assert.equal(r.blocked, 'conta_silenciada');
   assert.equal(chamadas.length, 0);
-});
-
-test('sinal legado: a coleta de ref órfã não apaga nada com a conta silenciada', async () => {
-  const e = engineSoSilenciada();
-  const { gcSignals } = await import('../lib/engine/review-signal.js');
-  const corridas = [];
-  await gcSignals(e, 'biudtech/app', SILENCIADA, [{ ref: 'refs/farol/revisando/1/x/1', epochMs: 1 }], Date.now(), async (...a) => { corridas.push(a); return { ok: true }; });
-  assert.equal(corridas.length, 0);
 });
 
 test('conta-que-age: guardarPelaCapaz troca só da incapaz para a capaz', () => {

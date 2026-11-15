@@ -83,14 +83,6 @@ function rodarIsolada(corpo) {
   return JSON.parse(saida.trim().split('\n').pop());
 }
 
-test('gcSignals em isolada não apaga ref no GitHub', () => {
-  const r = rodarIsolada(`
-    const { gcSignals } = await import('${RAIZ_URL}/lib/engine/review-signal.js');
-    await gcSignals(engine, 'acme/app', 'eu', [{ ref: 'refs/farol/revisando/7/ana/1', number: 7, login: 'ana', epochMs: 1 }], Date.now());
-  `);
-  assert.equal(r.chamadas, 0);
-});
-
 test('addInProgressLabel em isolada não chama gh nem devolve label', () => {
   const r = rodarIsolada(`
     const { addInProgressLabel } = await import('${RAIZ_URL}/lib/engine/review.js');
@@ -106,18 +98,6 @@ test('executarMerge em isolada recusa com instancia_isolada, sem gh', () => {
   `);
   assert.equal(r.r.blocked, 'instancia_isolada');
   assert.equal(r.r.ok, false);
-  assert.equal(r.chamadas, 0);
-});
-
-test('remover a label pela tela em isolada recusa antes de cancelar a sessão', () => {
-  const r = rodarIsolada(`
-    const { command } = await import('${RAIZ_URL}/lib/engine/review-label-control.js');
-    return await command(engine, { url: 'https://github.com/acme/app/pull/7', action: 'remove', label: 'eu:revisando' });
-  `);
-  assert.equal(r.r.ok, false);
-  assert.equal(r.r.blocked, 'instancia_isolada');
-  assert.match(r.r.error, /instanciaIsoladaPosta/);
-  assert.deepEqual(r.cancelados, [], 'nenhuma sessão é cancelada por uma remoção que não vai acontecer');
   assert.equal(r.chamadas, 0);
 });
 
@@ -211,7 +191,7 @@ function pegar(porta, rota) {
   });
 }
 
-test('servidor filho com FAROL_HOME temporário expõe doctor.instanciaIsolada=true', { skip: process.platform === 'win32', timeout: 60000 }, async () => {
+test('servidor filho com FAROL_HOME temporário expõe doctor.instanciaIsolada=true', { timeout: 60000 }, async () => {
   const home = fs.mkdtempSync(path.join(BASE, 'srv-'));
   const porta = await portaLivre();
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ port: porta, autoReview: false }));

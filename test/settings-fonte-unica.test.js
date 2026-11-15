@@ -31,7 +31,7 @@ function togglesDaTela() {
 
 test('toda preferência que a tela edita existe na tabela e é editável', () => {
   const daTela = togglesDaTela();
-  assert.ok(daTela.length >= 15, `esperava os toggles de Sistema, achei ${daTela.length}`);
+  assert.ok(daTela.length >= 14, `esperava os toggles de Sistema, achei ${daTela.length}`);
   const órfãs = daTela.filter(t => !EDITAVEIS.has(t.key));
   assert.deepEqual(órfãs.map(t => `${t.sel} -> ${t.key}`), [],
     'chave que a tela manda e o servidor não aceita é preferência que some em silêncio');
@@ -57,29 +57,22 @@ test('port existe no config mas NÃO é editável pela tela', () => {
 });
 
 test('saneamento: os defaults que ligados só desligam com valor explícito', () => {
-  // autoUpdate é o caso: chave ausente não pode virar "desligado"
-  assert.equal(sanear('autoUpdate', undefined, {}, {}), true);
-  assert.equal(sanear('autoUpdate', false, {}, {}), false);
+  // skipPermissions é o caso: chave ausente não pode virar "desligado"
+  assert.equal(sanear('skipPermissions', undefined, {}, {}), true);
+  assert.equal(sanear('skipPermissions', false, {}, {}), false);
   // e os opt-in são o contrário: só ligam com valor verdadeiro
   assert.equal(sanear('reviewFast', undefined, {}, {}), false);
   assert.equal(sanear('reviewFast', true, {}, {}), true);
-  assert.equal(sanear('teamHighlights', undefined, {}, {}), false);
-  assert.equal(sanear('teamHighlights', true, {}, {}), true);
-  assert.equal(sanear('deliveriesEnabled', undefined, {}, {}), false);
-  assert.equal(sanear('deliveriesEnabled', true, {}, {}), true);
 });
 
 test('saneamento: valor inválido mantém o anterior, não derruba pro padrão', () => {
   // semântica de sempre: a tela mostra o que o engine aceitou no próximo estado
   const fns = {
     sanitizeClaudeModel: () => null, sanitizeClaudeEffort: () => null,
-    sanitizeCodexModel: () => null, sanitizeCodexEffort: () => null,
     sanitizeParallelReviews: () => null,
   };
   assert.equal(sanear('reviewModel', 'lixo', { reviewModel: 'opus' }, fns), 'opus');
   assert.equal(sanear('reviewEffort', 'lixo', { reviewEffort: 'high' }, fns), 'high');
-  assert.equal(sanear('codexReviewModel', 'lixo', { codexReviewModel: 'gpt-5.6-terra' }, fns), 'gpt-5.6-terra');
-  assert.equal(sanear('codexReviewEffort', 'lixo', { codexReviewEffort: 'medium' }, fns), 'medium');
   assert.equal(sanear('parallelReviews', 99, { parallelReviews: 3 }, fns), 3);
 });
 

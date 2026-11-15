@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Simulador de política: o que mudaria nas postagens automáticas já feitas com a política
 // atual de cada conta e com uma alternativa. Só leitura, só linha de comando: sem rede, sem
-// gravar nada, sem postar. Não viaja no pacote (fora da lista de tools do make-package).
+// gravar nada, sem postar. Ferramenta de mantenedor, fora do runtime.
 //
 //   node tools/simular-politica.js
 //   node tools/simular-politica.js --politica '{"onClean":"wait"}'

@@ -45,7 +45,6 @@ function cmdStatic() { return [
   { kind: 'section', label: 'Ir para Precisa de você', hint: 'seção', run: () => irParaSubDoRadar('mim', 'decisionsWrap') },
   { kind: 'section', label: 'Ir para Sua fila', hint: 'seção', run: () => irParaSubDoRadar('mim', 'queueSection') },
   { kind: 'section', label: 'Ir para Meus PRs', hint: 'seção', run: () => irParaSubDoRadar('meus') },
-  { kind: 'section', label: 'Ir para Panorama', hint: 'seção', run: () => irParaSubDoRadar('pano') },
   { kind: 'action', label: 'Verificar agora', hint: 'ação', run: () => $('#btnCheck').click() },
   { kind: 'action', label: 'Alternar tema', hint: 'ação', run: () => $('#btnTheme').click() },
   { kind: 'action', label: 'Atalhos de teclado', hint: '?', run: () => kbdHelp() },

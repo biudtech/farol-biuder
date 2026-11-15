@@ -3,7 +3,7 @@
 // Medido no spawns.log de 05/10/2026: 19.832 chamadas gh num dia, a maior parte leitura
 // repetida a cada ciclo (180 s) de PR parado: os ramos dos meus PRs (4.202), o head e os meus
 // reviews para o "commit depois do meu review" (cerca de 7 mil), os comentários do autor para
-// o pushback (1.166 de cada tipo) e a release do update (300). Aqui as funções reais rodam dez
+// o pushback (1.166 de cada tipo). Aqui as funções reais rodam dez
 // ciclos com o gh contado por tipo: PR parado custa a leitura do primeiro ciclo e nada mais;
 // PR que mudou (updatedAt novo) custa uma leitura de novo.
 import os from 'node:os';
@@ -19,7 +19,6 @@ const io = (await import('../lib/io.js')).default;
 const { Engine } = await import('../server.js');
 const selfpr = await import('../lib/engine/selfpr.js');
 const pushback = await import('../lib/engine/pushback.js');
-const update = await import('../lib/engine/update.js');
 
 const runReal = io.run;
 let chamadas;
@@ -29,7 +28,6 @@ function tipo(args) {
   if (a.startsWith('pr view') && a.includes('--json headRefOid')) return 'head';
   if (/pulls\/\d+\/reviews/.test(a)) return 'reviews';
   if (/issues\/\d+\/comments|pulls\/\d+\/comments/.test(a)) return 'comentarios';
-  if (a.startsWith('release view')) return 'release';
   return 'outro';
 }
 io.run = async (_cmd, args) => {
@@ -40,7 +38,6 @@ io.run = async (_cmd, args) => {
   if (t === 'reviews' && args.join(' ').includes('submitted_at] | sort')) return { ok: true, code: 0, stderr: '', stdout: '2026-10-01T10:00:00Z\n' };
   if (t === 'reviews') return { ok: true, code: 0, stderr: '', stdout: JSON.stringify({ state: 'APPROVED', commit: 'h1' }) };
   if (t === 'comentarios') return { ok: true, code: 0, stderr: '', stdout: '[]' };
-  if (t === 'release') return { ok: true, code: 0, stderr: '', stdout: JSON.stringify({ tagName: 'v0.0.1', assets: [] }) };
   return { ok: false, code: 1, stdout: '', stderr: 'inesperado' };
 };
 after(() => { io.run = runReal; fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); });
@@ -52,7 +49,7 @@ const PRS = (updatedAt) => Array.from({ length: 5 }, (_, i) => ({
 
 function motor() {
   const e = Object.create(Engine.prototype);
-  e.config = { updateRepo: 'acme/farol', autoPushback: true };
+  e.config = { autoPushback: true };
   e.accountForPr = () => 'eu';
   e.tokenFor = () => 'tok';
   e.ghEnv = () => ({});
@@ -85,7 +82,6 @@ async function ciclo(e, prs) {
       e.pushbackScanned[pr.key] = det.marker;
     }
   }
-  await update.checkUpdate(e);
 }
 
 test('dez ciclos com os cinco PRs parados: cada leitura acontece no primeiro ciclo e não se repete', async () => {
@@ -93,7 +89,6 @@ test('dez ciclos com os cinco PRs parados: cada leitura acontece no primeiro cic
   for (let i = 0; i < 10; i++) await ciclo(e, PRS('2026-10-05T10:00:00Z'));
   assert.equal(chamadas.ramos, 5, 'um pr view por PR meu, não um por ciclo (antes: 50)');
   assert.equal(chamadas.head, 5, 'um head por PR revisado (antes: 50)');
-  assert.equal(chamadas.release, 1, 'a release, uma vez no intervalo de checagem (antes: 10)');
   assert.equal(chamadas.comentarios, 10, 'os dois tipos de comentário, uma vez por PR (antes: 100)');
   assert.ok(chamadas.reviews <= 15, `reviews: ${chamadas.reviews} (antes: 150)`);
 });

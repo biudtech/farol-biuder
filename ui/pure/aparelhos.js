@@ -181,14 +181,14 @@ function linhaDoAparelho(d, opcoes) {
 }
 
 // A versão mínima vem do snapshot (a MESMA constante que decide a cobertura); sem ela, a
-// nota não inventa número. O atalho leva a "Verificar atualização", na Visão geral.
+// nota não inventa número.
 function notaDaCobertura(devices, cobertura, versaoMinima) {
   const contas = new Set();
   for (const d of devices) for (const c of aparelhosContasNaoCobertas(cobertura, d)) contas.add(c);
   if (!contas.size) return '';
   const nomes = [...contas].map((c) => esc(c)).join(', ');
   const versao = versaoMinima ? `anterior à ${esc(versaoMinima)}` : 'anterior à da postagem coordenada';
-  return `<p class="apar-nota">"Garantia não coberta": um aparelho em versão ${versao} não participa da arbitragem de postagem. Nas contas que ele também revisa (${nomes}), dois Farois podem postar no mesmo PR até ele ser atualizado. <span class="btn sm ghost" data-goto="sys:overview:#updateBox" role="button" tabindex="0">Como atualizar o Farol</span></p>`;
+  return `<p class="apar-nota">"Garantia não coberta": um aparelho em versão ${versao} não participa da arbitragem de postagem. Nas contas que ele também revisa (${nomes}), dois Farois podem postar no mesmo PR até ele ser atualizado.</p>`;
 }
 
 // Só este aparelho ativo: nada é compartilhado, porque a frota exige OUTRO aparelho pronto

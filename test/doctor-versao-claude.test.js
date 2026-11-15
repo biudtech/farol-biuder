@@ -16,7 +16,7 @@ const originais = { run: io.run, runShell: io.runShell, fetch: globalThis.fetch 
 let instalada, consultasCli, consultasRegistro, registro;
 const antigo = () => versao.avaliarVersao({ instalada: '2.1.301', maisRecente: '2.1.310', datas: { '2.1.302': '2026-10-01T00:00:00Z' } });
 function motor() {
-  const e = new Engine(); e.log = () => {}; e.pushState = () => {}; e.checkUpdate = async () => {};
+  const e = new Engine(); e.log = () => {}; e.pushState = () => {};
   e.claudeVersao = antigo(); e.versaoClaudeLidaEm = Date.now();
   return e;
 }
