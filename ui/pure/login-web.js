@@ -7,7 +7,8 @@ import { esc } from './comum.js';
 const SO_HTTPS = /^https:\/\/[^\s"'<>]+$/;
 /**
  * O painel do login pela tela.
- * @param {{ estado?: 'abrindo'|'link'|'enviando'|'erro'|'feito', perfil?: string, url?: string, motivo?: string }} dados
+ * `recomecar`: o motor recusou por já haver um login aberto, e o painel oferece cancelá-lo.
+ * @param {{ estado?: 'abrindo'|'link'|'enviando'|'erro'|'feito', perfil?: string, url?: string, motivo?: string, recomecar?: boolean }} dados
  */
 function loginWebHtml(dados = {}) {
   const d = dados || {};
@@ -20,7 +21,7 @@ function loginWebHtml(dados = {}) {
   }
   const url = SO_HTTPS.test(String(d.url || '')) ? d.url : '';
   if (!url) {
-    return `<div class="card acct-add cp-login-web" role="alert">${titulo}<div class="a-hint">${esc(d.motivo || 'não deu para abrir o login agora')}</div>${cancelar}</div>`;
+    return `<div class="card acct-add cp-login-web" role="alert">${titulo}<div class="a-hint">${esc(d.motivo || 'não deu para abrir o login agora')}</div>${d.recomecar ? '<button class="btn sm" id="cpLoginWebRecomecar">Cancelar o login aberto e começar de novo</button>' : ''}${cancelar}</div>`;
   }
   const erro = d.estado === 'erro' && d.motivo ? `<div class="a-hint cp-teste-erro" role="alert">${esc(d.motivo)}</div>` : '';
   const enviando = d.estado === 'enviando';

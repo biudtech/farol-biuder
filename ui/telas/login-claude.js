@@ -38,9 +38,19 @@ function abrirLoginWeb(profileId) {
     // fechado antes do link chegar: o login aberto no engine não tem mais tela, encerra
     if (!vigente(n)) { if (r && r.ok) api('/api/claude/login-web/cancel', { loginId: r.loginId }); return; }
     if (r && r.ok) loginWeb = { ...loginWeb, estado: 'link', url: r.url, loginId: r.loginId };
+    // já há um login aberto no motor (outra aba, ou esta página recarregada): o painel oferece
+    // cancelar aquele e começar de novo, em vez de derrubá-lo calado
+    else if (r && r.code === 'login-em-curso') loginWeb = { ...loginWeb, estado: 'erro', motivo: r.motivo, recomecar: true, profileId, perfilAberto: r.perfilAberto || '' };
     else loginWeb = { ...loginWeb, estado: 'erro', motivo: (r && r.motivo) || 'não deu para abrir o login agora' };
     renderLoginWeb();
   });
+}
+
+function recomecarLogin() {
+  if (!loginWeb || !loginWeb.recomecar) return;
+  const { profileId, perfilAberto } = loginWeb;
+  loginWeb = null;
+  api('/api/claude/login-web/cancel', { profileId: perfilAberto }).then(() => abrirLoginWeb(profileId));
 }
 
 function enviarCodigoDoLogin() {
@@ -73,6 +83,7 @@ function fecharLoginWeb() {
 export function tratouLoginWeb(t) {
   if (t.classList.contains('cp-login')) { abrirLoginWeb(t.dataset.id || ''); return true; }
   if (t.id === 'cpLoginWebEnviar') { enviarCodigoDoLogin(); return true; }
+  if (t.id === 'cpLoginWebRecomecar') { recomecarLogin(); return true; }
   if (t.id === 'cpLoginWebCancelar') { fecharLoginWeb(); return true; }
   return false;
 }

@@ -152,6 +152,8 @@ const CONGELADA = [
   // a assinatura do Claude voltou em 15/11/2026: login pela tela (ui/pure/login-web.js) e
   // uso do plano com a validade do login (ui/pure/uso-do-plano.js)
   "loginWebHtml",
+  // o texto do check "Claude Code" (15/11/2026, ui/pure/sistema.js): qual perfil está pronto
+  "detalheDoClaudeCode",
   "usoDoPlanoHtml",
   "validadeDoLoginHtml",
   "personMention",

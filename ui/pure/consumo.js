@@ -332,7 +332,7 @@ export function usageBudgetHtml(u) {
     if (!temTeto) nota = notaSemTeto;
     else if (previsto) nota = notaPrevisto;
     else if (p.blocked) nota = NOTA_PAUSADO;
-    const kindTxt = 'Chave de API';
+    const kindTxt = p.kind === 'assinatura' ? 'Assinatura' : 'Chave de API';
     // o nome do perfil leva ao card DELE em Sistema (o input do nome carrega o
     // mesmo id; seletor montado aqui porque CSS.escape não existe no pure.js)
     const alvoPerfil = `sys:plans:.cp-label[data-id="${escAttrSelector(p.id)}"]`;

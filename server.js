@@ -1220,7 +1220,7 @@ class Engine extends EventEmitter {
       home: HOME,
       workspace: WORKSPACE,
       claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
-      claudePerfilPronto: perfilMod.temPerfilUtilizavel(this.config), // há perfil utilizável (assinatura ou chave)?
+      ...perfilMod.prontidaoParaDoctor(this.config, primary), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
     };
     if (forcarVersaoClaude || this.claudeVersao) {
