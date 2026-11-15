@@ -251,7 +251,7 @@ export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {
     });
   }
   for (const p of (claudePerfis && Array.isArray(claudePerfis.problemas)) ? claudePerfis.problemas : []) {
-    checks.push({ ok: false, label: 'Perfil de chave de API', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
+    checks.push({ ok: false, label: 'Perfil do Claude', goto: 'sys:plans:#claudeProfilesManager', detail: perfilProblemaTexto(p) });
   }
   return checks;
 }

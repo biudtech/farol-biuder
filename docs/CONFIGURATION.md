@@ -231,6 +231,39 @@ $env:CLAUDE_CONFIG_DIR="C:\Users\voce\.claude-pessoal"; claude login
 
 O que acontece com a revisão estacionada, e quando ela volta a rodar, está em [`REVIEW-GATES.md`](REVIEW-GATES.md#ciclo-de-vida-e-higiene-onda-3-dos-gaps-da-auditoria-de-15082026).
 
+### Perfil de assinatura e login pela tela no motor hospedado (15/11/2026)
+
+Decisão do dono de 15/11/2026: o motor hospedado usa o Claude pelo plano de assinatura. O perfil de assinatura por pasta, que o corte da fase 1 tinha tirado, voltou ao lado do perfil de chave de API, que continua valendo. O que esta subseção diz vale sobre o texto mais antigo desta seção, que ainda descreve o app de desktop.
+
+**Os dois tipos de perfil** (`config.claudeProfiles`, saneados em `normalizeClaudeProfiles` de `lib/parse.js`):
+
+| tipo | forma | o que a sessão recebe |
+|---|---|---|
+| assinatura | `{ id, label, kind: "dir", dir }` | `CLAUDE_CONFIG_DIR` com a pasta do perfil, e nenhuma chave de API |
+| chave de API | `{ id, label, kind: "apikey", apiKey, baseUrl }` | `ANTHROPIC_API_KEY` (e `ANTHROPIC_BASE_URL`, se houver), e nenhuma pasta |
+
+Nos dois casos o ambiente do processo filho é limpo antes: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_OAUTH_TOKEN` e `CLAUDE_CONFIG_DIR` herdados do ambiente do motor nunca chegam à sessão (`applyClaudeAuthEnv`), e a linha do shell repete a limpeza depois do profile do usuário (`claudeAuthPosixPrefix`). Travado em `test/assinatura-ambiente-do-filho.test.js`. Perfil de outro tipo que ainda esteja num `config.json` antigo (login da máquina, pasta sem `kind`, Codex, Antigravity, OpenRouter) é ignorado na leitura, sem derrubar o boot.
+
+**Onde a pasta do perfil mora.** Dentro do HOME do Farol (`~/.farol`), porque no container só esse volume persiste: login gravado fora dele some no próximo deploy. Com `dir` vazio, que é como a tela cria o perfil, a pasta é `~/.farol/claude/<id do perfil>`, uma por perfil (`CLAUDE_PERFIS_DIR` em `lib/paths.js`). Pasta informada à mão no arquivo só vale se for absoluta, ficar dentro do HOME do Farol e fora do workspace das sessões; fora disso o perfil não resolve e aparece como perfil inválido na tela e no Diagnóstico (`lib/engine/pasta-do-perfil.js`).
+
+**Qual perfil a sessão usa.** A regra não mudou (`authDaConta` em `lib/engine/perfil-claude.js`, que o `resolveClaudeAuth` chama): o perfil próprio da conta do GitHub, se houver; senão o perfil padrão; senão o primeiro perfil utilizável da lista. O motor não troca de perfil sozinho. Quando o plano chega ao limite, a fila espera a hora do reset no mesmo perfil, sem estacionar e sem abrir sessão (`lib/engine/limite-plano.js`); sem hora informada, espera uma hora e tenta de novo.
+
+**Login pela tela.** O motor não tem terminal. Em Sistema, Plano e chaves, o botão Entrar com a assinatura do cartão do perfil chama `POST /api/claude/login-web/start`: o motor roda `claude auth login` na pasta do perfil e devolve o link de autorização. A pessoa abre o link, entra com a conta do plano e cola na tela o código que a página da Anthropic mostra; `POST /api/claude/login-web/code` entrega o código à entrada padrão do Claude Code, e saída 0 é login feito. `POST /api/claude/login-web/cancel` encerra. Há um login por vez no motor (o segundo pedido com um em curso é recusado com `login-em-curso`), aberto por no máximo dez minutos. O código é credencial de uso único: vai só para o processo do Claude Code e não aparece em log, em arquivo de estado, no snapshot nem em aviso, e o motivo de uma recusa volta para a tela sem o link e sem o código (`lib/engine/login-web.js`, travado em `test/login-web.test.js` e `test/login-web-http.test.js`). O login pelo terminal não existe mais.
+
+**Testar perfil.** No perfil de assinatura, o teste roda `claude auth status --json` contra uma cópia efêmera da configuração da pasta, com a credencial lida da pasta original, e não grava nada (`lib/engine/perfil-assinatura.js`). No perfil de chave de API ele só confere a forma, porque validar a chave exigiria uma chamada paga.
+
+O que não foi medido com um Claude Code real neste repositório: o login que dá certo de ponta a ponta e a leitura do uso do plano dentro do container. Os testes usam um processo no lugar do `claude`.
+
+### Uso do plano e validade do login (12/11/2026)
+
+Cada perfil do Claude por assinatura mostra, no próprio cartão, quanto de cada janela do plano já foi usado (sessão, semana e semana por modelo), a hora em que cada uma volta, e o dia e a hora em que o login deixa de se renovar sozinho. Perfil de chave de API não entra: não há uso do plano para ler.
+
+A fonte é o comando de uso do próprio Claude Code (`claude -p "/usage" --output-format json`), que não chama modelo e não gasta nada do plano. O Farol lê sozinho, com cache de cinco minutos (`TEMPOS.CLAUDE_USO_CACHE_MS`) e uma leitura de cada vez, contra uma cópia efêmera da configuração do perfil: a configuração não é escrita e a credencial não é lida pelo Farol. Como o comando consulta a API, o Claude Code renova o token de acesso vencido na credencial da pasta original, como faz em qualquer sessão; isso não muda a validade do login. Quando o Claude Code não responde, a última leitura boa continua na tela por até uma hora, com o aviso de que não foi possível atualizar. A validade do login vem do campo `credential_expires_at` da mesma resposta. Medido em 12/11/2026, ela fica cerca de 28 dias depois do login e não anda quando o token de acesso é renovado, então a data mostrada é a de refazer o login.
+
+O Farol avisa por toast quando faltarem três dias (`TEMPOS.CLAUDE_VENCE_AVISO_MS`) e de novo no último dia (`TEMPOS.CLAUDE_VENCE_ULTIMO_DIA_MS`), uma vez por faixa, e mostra o login vencido em vermelho. Renovar é entrar de novo pelo botão Entrar com a assinatura; depois de um login que dá certo, o uso e a validade guardados daquela pasta são lidos de novo.
+
+O percentual lido é informação, não gate: a fila só espera quando o plano chega ao limite. O texto do uso é em inglês e não é contrato do Claude Code; se ele mudar, a tela diz que o uso não foi lido, e a data do vencimento continua aparecendo. O módulo é `lib/engine/uso-do-plano.js`, a tela é `ui/pure/uso-do-plano.js`, o que vai ao snapshot é `claudePerfis.uso`, e o teste é `test/uso-do-plano.test.js`.
+
 ## Cadeia de perfis e provedores (20/10/2026)
 
 Pedido do dono: "definir por ordem qual a conta que consome primeiro e qual é fallback da conta prioritária, assim sempre vou ter algumas opções sem travar o Farol". Com o exemplo dele: Gemini X principal, Gemini Y fallback 1, Claude Max BIUD fallback 2. "Caso estourou a conta Gemini X, salva quando volta o limite e vai direto pra Gemini Y, e assim por diante, e segue a prioridade de qual vai consumir primeiro."

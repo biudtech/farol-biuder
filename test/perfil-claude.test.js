@@ -85,7 +85,7 @@ test('o snapshot leva os problemas, e o Diagnóstico mostra um check por problem
   const s = e.snapshot();
   assert.equal(s.claudePerfis.problemas.length, 1);
   const checks = runtimeChecks({}, {}, s.claudePerfis);
-  const alvo = checks.find((c) => c.label === 'Perfil de chave de API');
+  const alvo = checks.find((c) => c.label === 'Perfil do Claude');
   assert.ok(alvo, 'check presente');
   assert.equal(alvo.ok, false);
   assert.match(alvo.detail, /não existe/);
@@ -94,8 +94,8 @@ test('o snapshot leva os problemas, e o Diagnóstico mostra um check por problem
 });
 
 test('sem problema, nenhum check de perfil aparece', () => {
-  assert.equal(runtimeChecks({}, {}, { problemas: [] }).some((c) => c.label === 'Perfil de chave de API'), false);
-  assert.equal(runtimeChecks({}, {}).some((c) => c.label === 'Perfil de chave de API'), false);
+  assert.equal(runtimeChecks({}, {}, { problemas: [] }).some((c) => c.label === 'Perfil do Claude'), false);
+  assert.equal(runtimeChecks({}, {}).some((c) => c.label === 'Perfil do Claude'), false);
 });
 
 test('a resolução real usa a mesma regra de perfil utilizável', () => {

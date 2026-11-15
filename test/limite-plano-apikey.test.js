@@ -196,7 +196,8 @@ test('credencial expirada estaciona a revisão, sem laço de retentativa', async
 test('o perfil de chave de API é do Claude, e o limite é lido pela tabela única de falhas', () => {
   const agora = new Date(2026, 9, 20, 12, 0).getTime();
   assert.equal(prov.provedorDoPerfil(A).id, 'claude');
-  assert.equal(prov.provedorDoPerfil({ kind: 'dir' }), null, 'outros formatos não são mais de provedor nenhum');
+  assert.equal(prov.provedorDoPerfil({ kind: 'dir' }).id, 'claude', 'a assinatura por pasta voltou em 15/11/2026');
+  assert.equal(prov.provedorDoPerfil({ kind: 'maquina' }), null, 'outros formatos não são mais de provedor nenhum');
   assert.equal(prov.semCustoEmDolar('apikey'), false);
   assert.deepEqual(prov.modeloDoProvedor({ reviewModel: 'opus', reviewEffort: 'high' }, 'claude'), { modelo: 'opus', esforco: 'high' });
   const lido = prov.limiteDaMensagem('claude', "You've hit your usage limit · resets 5:50pm", agora);

@@ -319,7 +319,7 @@ test('tela: sem leitura, leitura com erro e perfil de outro provedor', () => {
 
 test('tela: a validade do login muda de tom perto do vencimento e depois dele', () => {
   const vence = AGORA + 2 * TEMPOS.DIA_MS + TEMPOS.HORA_MS;
-  assert.match(validadeDoLoginHtml({ venceEm: vence, faixaDoLogin: 'perto' }, AGORA), /pill session">Login vence em 2 dias<[\s\S]*Renove pela sessão de login/);
+  assert.match(validadeDoLoginHtml({ venceEm: vence, faixaDoLogin: 'perto' }, AGORA), /pill session">Login vence em 2 dias<[\s\S]*Renove pelo botão Entrar com a assinatura/);
   assert.match(validadeDoLoginHtml({ venceEm: AGORA + 5 * TEMPOS.HORA_MS, faixaDoLogin: 'ultimo-dia' }, AGORA), /pill err">Login vence em 5 h</);
   assert.match(validadeDoLoginHtml({ venceEm: AGORA - TEMPOS.HORA_MS, faixaDoLogin: 'vencido' }, AGORA), /pill err">Login vencido<[\s\S]*Desde (hoje|ontem) \d\d:\d\d\./);
   assert.match(validadeDoLoginHtml({ venceEm: AGORA + TEMPOS.DIA_MS * 1.5, faixaDoLogin: '' }, AGORA), /faltam 1 dia\)/);

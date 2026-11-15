@@ -19,6 +19,7 @@
 // Compara sem caixa e preserva o valor original quando ele e valido.
 import { esc, fmtMoney, fmtClock } from './comum.js';
 import { reviewScopeHtml } from './review-scope.js';
+import { usoDoPlanoHtml } from './uso-do-plano.js';
 
 export function validScope(scope, users) {
   if (!scope || scope === 'all') return 'all';
@@ -89,15 +90,17 @@ export function claudeAuthBadge(id, ctx) {
   const all = (ctx.doctor && ctx.doctor.claudeAuth) || [];
   // sem perfil nenhum a sessão não abre: o selo diz isso em vez de sumir. Doctor que ainda
   // não chegou (sem a lista) não diz nada.
-  if (!all.length) return ctx.doctor && Array.isArray(ctx.doctor.claudeAuth) ? '<span class="a-claude bad" title="Cadastre uma chave de API em Plano e chaves">SEM PERFIL</span>' : '';
-  // id === '' é a conta sem perfil próprio e sem padrão salvo: vale o primeiro com chave
+  if (!all.length) return ctx.doctor && Array.isArray(ctx.doctor.claudeAuth) ? '<span class="a-claude bad" title="Entre com a assinatura ou cadastre uma chave de API em Plano e chaves">SEM PERFIL</span>' : '';
+  // id === '' é a conta sem perfil próprio e sem padrão salvo: vale o primeiro pronto
   const info = all.find(x => x.id === id) || all.find(x => x.ready) || all[0];
+  if (!info.ready && info.assinaturaMode) return `<span class="a-claude bad" title="Perfil de assinatura sem login: use Entrar com a assinatura">SEM LOGIN</span>`;
   if (!info.ready) return `<span class="a-claude bad" title="Perfil de chave de API sem chave preenchida">SEM CHAVE</span>`;
   // bloqueio de orçamento vem de ctx.usage.budgets (fonte única, viva a cada
   // pushState, v2.40.0); o doctor parou de carregar blocked/reason, e este selo
   // lia de lá (achado da revisão adversarial: o ramo tinha virado código morto).
   const budget = ((ctx.usage && ctx.usage.budgets) || []).find(b => b.id === (info.id || id)) || {};
   if (budget.blocked) return seloOrcamento(budget);
+  if (info.assinaturaMode) return `<span class="a-claude ok" title="Login da assinatura gravado na pasta do perfil">assinatura com login</span>`;
   return `<span class="a-claude ok" title="Autenticação por chave de API">🔑 chave configurada</span>`;
 }
 
@@ -199,7 +202,9 @@ export function claudeProfilesHtml(ctx) {
     const budgetInfo = ((ctx.usage && ctx.usage.budgets) || []).find(x => x.id === p.id);
     // todo o orçamento sai de budgetEditorHtml: teto base, por dia da semana e por data única
     const camposOrcamento = budgetEditorHtml(p, budgetInfo);
-    const camposChave = `
+    const assinatura = p.kind === 'dir';
+    const uso = assinatura ? usoDoPlanoHtml(((ctx.claudePerfis || {}).uso || {})[p.id]) : '';
+    const camposChave = assinatura ? '<div class="a-hint">Assinatura do Claude: o login fica guardado no próprio Farol, numa pasta só deste perfil.</div>' : `
       <div class="a-editrow">
         <input class="cp-apikey" type="password" data-id="${esc(p.id)}" value="${esc(p.apiKey || '')}" placeholder="chave de API" spellcheck="false" autocomplete="off">
         <button class="btn icon sm ghost cp-toggle-key" data-id="${esc(p.id)}" title="Mostrar/ocultar a chave" aria-label="Mostrar/ocultar a chave">👁</button>
@@ -214,14 +219,24 @@ export function claudeProfilesHtml(ctx) {
         ${claudeAuthBadge(p.id, ctx)}
       </div>
       ${camposChave + camposOrcamento}
+      ${uso}
       <div class="cp-teste" data-teste="${esc(p.id)}"></div>
     </div>
     <div class="a-actions">
+      ${assinatura ? `<button class="btn sm cp-login" data-id="${esc(p.id)}">Entrar com a assinatura</button>` : ''}
       <button class="btn sm cp-testar" data-id="${esc(p.id)}">Testar perfil</button>
       <button class="btn sm danger-ghost cp-remove" data-id="${esc(p.id)}">Remover</button>
     </div>
   </div>`;
   }).join('');
+  const addAssinatura = `<div class="card acct-add">
+    <div class="a-add-title">Adicionar perfil de assinatura</div>
+    <div class="a-editrow">
+      <input id="cpAddAssinaturaLabel" placeholder="nome (ex.: Plano Max da BIUD)" spellcheck="false">
+      <button class="btn sm" id="btnCpAddAssinatura">Adicionar</button>
+    </div>
+    <div class="a-hint">Depois de adicionar, use Entrar com a assinatura no cartão do perfil: o Farol mostra o link de login e você cola o código que a página devolver.</div>
+  </div>`;
   const addForm = `<div class="card acct-add">
     <div class="a-add-title">Adicionar perfil de chave de API</div>
     <div class="a-editrow">
@@ -232,7 +247,8 @@ export function claudeProfilesHtml(ctx) {
     </div>
     <div class="a-hint" id="cpAddHint">Deixe a URL base em branco pra usar a Anthropic direto. Um endpoint customizado (um proxy, por exemplo) precisa falar a API de Mensagens da Anthropic.</div>
   </div>`;
-  return rows + addForm;
+  // o painel do login pela tela (ui/pure/login-web.js) é pintado aqui pela ui/telas/login-claude.js
+  return '<div id="cpLoginWeb"></div>' + rows + addAssinatura + addForm;
 }
 
 // As palavras da política da conta, um lugar só (30/09/2026): com cada tela escrevendo o seu

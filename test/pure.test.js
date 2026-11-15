@@ -101,7 +101,9 @@ test('normalizeClaudeProfiles: não-array vira [] (string, número, objeto, null
   assert.deepEqual(normalizeClaudeProfiles(null), []);
 });
 
-test('normalizeClaudeProfiles: perfil de outro formato (pasta, máquina, OpenRouter, Codex, Antigravity) é ignorado, sem erro', () => {
+// Desde 15/11/2026 o perfil de assinatura (kind 'dir') voltou e fica na leitura; a pasta sem
+// kind, formato de antes do corte 09, continua ignorada.
+test('normalizeClaudeProfiles: perfil de outro formato (pasta sem kind, máquina, OpenRouter, Codex, Antigravity) é ignorado, sem erro', () => {
   const out = normalizeClaudeProfiles([
     { id: 'a', label: 'A', dir: 'C:\\a' },
     { id: 'b', label: 'B', kind: 'dir', dir: 'C:\\b' },
@@ -111,7 +113,10 @@ test('normalizeClaudeProfiles: perfil de outro formato (pasta, máquina, OpenRou
     { id: 'f', label: 'F', kind: 'agy' },
     { id: 'g', label: 'G', kind: 'apikey', apiKey: 'sk-ant-g' },
   ]);
-  assert.deepEqual(out, [{ id: 'g', label: 'G', kind: 'apikey', apiKey: 'sk-ant-g', baseUrl: '' }]);
+  assert.deepEqual(out, [
+    { id: 'b', label: 'B', kind: 'dir', dir: 'C:\\b' },
+    { id: 'g', label: 'G', kind: 'apikey', apiKey: 'sk-ant-g', baseUrl: '' },
+  ]);
 });
 
 test('normalizeClaudeProfiles: kind "apikey" exige apiKey válida, baseUrl é opcional', () => {

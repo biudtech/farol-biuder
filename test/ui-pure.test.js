@@ -1601,7 +1601,7 @@ test('Consumo: o cartão do perfil é de chave de API, com teto e nota quando fa
 test('runtimeChecks: perfil de chave de API apontado que não resolve vira check do Diagnóstico', () => {
   const checks = P.runtimeChecks({ root: false }, {}, { problemas: [{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-invalido' }] });
   assert.equal(checks.length, 1);
-  assert.equal(checks[0].label, 'Perfil de chave de API');
+  assert.equal(checks[0].label, 'Perfil do Claude');
   assert.equal(checks[0].ok, false);
   assert.match(checks[0].detail, /incompleto \(falta a chave\)/);
 });
