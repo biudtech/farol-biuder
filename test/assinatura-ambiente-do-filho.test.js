@@ -70,6 +70,14 @@ function engineCom(perfis, padrao) {
   e.pushState = () => { };
   e.doctor = async () => ({});
   Object.assign(e.config, { claudeProfiles: normalizeClaudeProfiles(perfis), claudeProfileId: padrao, accounts: [] });
+  // o login gravado na pasta de cada perfil de assinatura: sem ele a sessão nem abre
+  // (test/assinatura-sem-login.test.js). O motor só confere que o arquivo existe.
+  for (const p of e.config.claudeProfiles.filter((x) => x.kind === 'dir')) {
+    const dir = p.dir || path.join(CLAUDE_PERFIS_DIR, p.id);
+    if (!dir.startsWith(FAROL_HOME + path.sep)) continue;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.credentials.json'), '{}');
+  }
   return e;
 }
 
