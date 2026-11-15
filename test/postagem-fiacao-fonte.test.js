@@ -34,14 +34,9 @@ test('espera do CI se identifica e ancora no head lido', () => {
   assert.ok(fonte.includes("engine.postReview(pr, novo, { via: 'espera-ci', continuidade: item })"), 'a reconstrução usa a mesma via');
 });
 
-test('co-assinatura coordenada: âncora obrigatória e recuo proibido', () => {
-  const fonte = ler('lib/engine/coassinatura-coordenada.js');
-  assert.ok(fonte.includes("{ via: 'coassinatura', handle, commitIdObrigatorio: head, recuoPermitido: false }"));
-});
-
 test('nenhuma outra chamada a postReview em lib/ fora das vias conhecidas', () => {
   const conhecidas = new Map([
-    ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 3], ['lib/engine/skip-review.js', 1], ['lib/engine/coassinatura-coordenada.js', 1],
+    ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 3],
     ['lib/engine/espera-ci.js', 2], ['lib/engine/espera-pr-proprio.js', 1],
   ]);
   const dir = path.join(RAIZ, 'lib', 'engine');

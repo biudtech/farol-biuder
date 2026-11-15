@@ -42,7 +42,7 @@ const ESTADO = {
     intervalSeconds: 300, parallelReviews: 1, theme: 'dark', mergeBlockedRepos: [],
     people: {}, claudeProfiles: [], claudeProfileId: '',
   },
-  queue: [], panorama: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
+  queue: [], myPRs: [], hiddenPRs: [], selfAnalyses: {}, decisions: { pending: [], resolved: [] },
   activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
   usage: {}, usageSessions: [], pushbacks: {}, team: [],
   update: { state: 'idle' }, doctor: null,
@@ -101,20 +101,20 @@ test('endereço inválido cai no padrão e o endereço é corrigido', () => {
 });
 
 test('trocar de lugar pela tela empilha; trocar de conta substitui', () => {
-  switchRadarSub('pano');
+  switchRadarSub('meus');
   disparar('click');
-  assert.deepEqual(ultima(), ['push', '/radar/panorama']);
+  assert.deepEqual(ultima(), ['push', '/radar/meus-prs']);
   // a conta é filtro: a barra de contas só existe com duas contas, que o estado tem
-  irPara('/radar/panorama?conta=bob');
+  irPara('/radar/meus-prs?conta=bob');
   disparar('popstate');
   assert.equal(escopo(), 'bob');
-  irPara('/radar/panorama');
+  irPara('/radar/meus-prs');
   disparar('popstate');
   assert.equal(escopo(), 'all', 'sem conta no endereço, numa aba com a barra, é Todas');
 });
 
 test('endereço de aba que saiu (Entregas, Destaques) cai no Radar, na sub-aba Pra mim, sem aviso, e o endereço diz isso', () => {
-  switchRadarSub('pano');
+  switchRadarSub('meus');
   const toasts = document.querySelector('#toasts').children;
   const antes = toasts.length;
   irPara('/entregas?dias=30');
@@ -135,14 +135,14 @@ test('clique que não muda nada não escreve no histórico', () => {
 // ---------------------------------------------------------------- revisão do Codex sobre 8c1a1e2
 
 test('Codex 4: conta que não está configurada no endereço cai em Todas na hora, e o endereço é corrigido', () => {
-  irPara('/radar/panorama?conta=bob');
+  irPara('/radar/meus-prs?conta=bob');
   disparar('popstate');
   assert.equal(escopo(), 'bob', 'controle: conta configurada vale');
-  irPara('/radar/panorama?conta=fulano');
+  irPara('/radar/meus-prs?conta=fulano');
   disparar('popstate');
   assert.equal(escopo(), 'all', 'conta desconhecida não vira escopo, nem guardado');
   assert.equal(localStorage.getItem('farol-scope'), 'all');
-  assert.deepEqual(ultima(), ['replace', '/radar/panorama']);
+  assert.deepEqual(ultima(), ['replace', '/radar/meus-prs']);
 });
 
 test('Codex 6: caixa de revisão cuja busca termina depois de a rota mudar não abre nem empilha', async () => {

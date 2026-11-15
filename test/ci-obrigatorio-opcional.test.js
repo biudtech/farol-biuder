@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ciForaDaDecisaoBlock } from '../lib/engine/review-prompt.js';
 import { esperaCiCardMeta, staleCardMeta, tituloDoAprovarDesligado, fraseDoCi, accountsManagerHtml } from '../ui/pure.js';
-import { flagSemPermissoes, buildLoginScript } from '../lib/engine/session.js';
+import { flagSemPermissoes, buildSessionScript } from '../lib/engine/session.js';
 
 const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 // a seção v2.78.42 do CHANGELOG, a deste PR
@@ -89,17 +89,17 @@ test('desligar só é seguro com check obrigatório no ruleset: a linha da chave
 });
 
 test('sessão no terminal sem pedir permissões: ligada por padrão, mas como root a flag não entra', () => {
-  const engine = { config: { skipPermissions: true, port: 47170 } };
+  const engine = { config: { skipPermissions: true, port: 47170 }, resolveClaudeAuth: () => null, primaryUser: () => 'default-user' };
   const getuidOriginal = process.getuid;
   const comUid = (uid, fn) => { process.getuid = () => uid; try { return fn(); } finally { process.getuid = getuidOriginal; } };
   try {
     comUid(1000, () => {
       assert.equal(flagSemPermissoes(engine), ' --dangerously-skip-permissions');
-      assert.match(buildLoginScript(engine, ''), /claude --dangerously-skip-permissions/);
+      assert.match(buildSessionScript(engine, '/pr-review x', 'id1', 'default-user'), /claude --dangerously-skip-permissions/);
     });
     comUid(0, () => {
       assert.equal(flagSemPermissoes(engine), '', 'o Claude Code recusa a flag como root: a sessão morreria ao abrir');
-      assert.doesNotMatch(buildLoginScript(engine, '', 't1'), /--dangerously-skip-permissions/);
+      assert.doesNotMatch(buildSessionScript(engine, '/pr-review x', 't1', 'default-user'), /--dangerously-skip-permissions/);
     });
     comUid(1000, () => assert.equal(flagSemPermissoes({ config: { skipPermissions: false } }), '', 'desligada continua sem a flag'));
   } finally {

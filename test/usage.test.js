@@ -358,7 +358,7 @@ test('usageSummary.budgets: espelha profileBudgetStatus ao vivo e NUNCA vaza a c
   usage.applyUsage(store, usage.localDay(), 'review', 'a', 'x', u, 'p1');
   const profiles = [
     { id: 'p1', label: 'Chave', kind: 'apikey', apiKey: 'sk-SEGREDO', baseUrl: 'http://x', budgetDaily: 3, budgetTotal: 100, budgetSince: '2026-08-01' },
-    { id: 'p2', label: 'Assinatura', dir: 'C:\\x' },
+    { id: 'p2', label: 'Sem teto', kind: 'apikey', apiKey: 'sk-OUTRA', baseUrl: '' },
   ];
   const sum = usage.usageSummary({ usage: store, config: { claudeProfiles: profiles } });
   assert.equal(sum.budgets.length, 2);
@@ -371,9 +371,9 @@ test('usageSummary.budgets: espelha profileBudgetStatus ao vivo e NUNCA vaza a c
   assert.equal('apiKey' in b1, false, 'a chave nunca trafega');
   assert.equal('baseUrl' in b1, false);
   const b2 = sum.budgets[1];
-  assert.equal(b2.kind, 'assinatura');
+  assert.equal(b2.kind, 'apikey');
   assert.equal(b2.blocked, false);
-  assert.equal(b2.budgetDaily, null, 'perfil de assinatura não tem teto');
+  assert.equal(b2.budgetDaily, null, 'perfil sem teto salvo não tem teto');
   assert.equal(JSON.stringify(sum).includes('sk-SEGREDO'), false, 'nenhum campo do payload carrega a chave');
 });
 
@@ -584,27 +584,17 @@ test('profileBudgetStatus: sem projeção (tipico 0) mantém o gate de antes', (
   assert.equal(usage.profileBudgetStatus({ id: 'p1', kind: 'apikey', budgetDaily: 10 }, store, 0).blocked, false);
 });
 
-test('budgetsFrom: perfil de assinatura agora expõe teto e gasto, sem vazar segredo', () => {
+test('budgetsFrom: perfil expõe teto e gasto, sem vazar segredo', () => {
   const store = usage.defaultUsage();
   const u = usage.extractUsage({ usage: { input_tokens: 1 }, total_cost_usd: 3 }, 'x');
   usage.applyUsage(store, usage.localDay(), 'review', 'a', 'x', u, 'p1');
-  const [b] = usage.budgetsFrom(store, [{ id: 'p1', label: 'Pessoal', dir: '/tmp/x', budgetDaily: 10 }], 4);
-  assert.equal(b.kind, 'assinatura');
+  const [b] = usage.budgetsFrom(store, [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-SEGREDO', baseUrl: 'http://x', budgetDaily: 10 }], 4);
+  assert.equal(b.kind, 'apikey');
   assert.equal(b.budgetDaily, 10);
   assert.equal(b.today, 3);
   assert.equal(b.tipicoReview, 4);
   assert.equal('apiKey' in b, false);
-  assert.equal('dir' in b, false);
-});
-
-test('budgetsFrom: perfil Codex mantém identidade própria e orçamento em US$ nunca bloqueia', () => {
-  const store = usage.defaultUsage();
-  const profile = { id: 'cx1', label: 'Codex ChatGPT', kind: 'codex', budgetDaily: 1 };
-  const [b] = usage.budgetsFrom(store, [profile], 20);
-  assert.equal(b.kind, 'codex');
-  assert.equal(b.blocked, false, 'projeção de custo Claude não pode pausar o Codex');
-  assert.equal(b.sugestaoDiaria, 0, 'não sugere dólar quando o CLI não informa custo');
-  assert.equal(usage.profileBudgetStatus(profile, store, 20).blocked, false);
+  assert.equal('baseUrl' in b, false);
 });
 
 /* ---------- teto por dia da semana e por data única (v2.50.0) ----------

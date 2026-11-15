@@ -5,6 +5,11 @@ import { estado, ehWin } from './estado.js';
 import { $ } from './infra.js';
 
 /* ---------- render: saúde do ambiente ---------- */
+function detalheDoClaude(d) {
+  if (!d.claude) return 'claude não encontrado no PATH';
+  return d.claudePerfilPronto === true ? `${d.claude}, com perfil de chave de API pronto` : `${d.claude}, mas sem perfil de chave de API utilizável: cadastre a chave em Plano e chaves`;
+}
+
 function renderDoctor() {
   const d = estado() && estado().doctor;
   const box = $('#doctor');
@@ -18,7 +23,8 @@ function renderDoctor() {
       detail: d.ghAuth ? 'autenticada no gh' : 'sem token: rode gh auth login (conta de trabalho)',
       goto: estado().config.ghUser ? `sys:accounts:.acct-label[data-user="${escAttrSelector(estado().config.ghUser)}"]` : 'sys:accounts:#accountsManager'
     },
-    { ok: !!d.claude, label: 'Claude Code', detail: d.claude || 'claude não encontrado no PATH', goto: 'sys:plans:#claudeProfilesManager' },
+    // o CLI existe E há um perfil de chave de API utilizável: sem um dos dois a sessão não abre
+    { ok: !!d.claude && d.claudePerfilPronto === true, label: 'Claude Code', detail: detalheDoClaude(d), goto: 'sys:plans:#claudeProfilesManager' },
     // o check acima diz se o CLI EXISTE; este diz se ele está em dia, porque é o CLI
     // que decide para qual modelo o apelido (opus, sonnet, haiku) aponta
     ...versaoClaudeCheck((estado().modelos || {}).cli),
@@ -37,7 +43,7 @@ function renderDoctor() {
       <span class="led"></span>
       <div><div class="label">${esc(c.label)}</div><div class="detail">${esc(c.detail)}</div></div>
     </div>`).join('');
-  $('#about').innerHTML = `O polling usa só o GitHub CLI (zero tokens de IA). Claude ou Codex entram apenas quando uma sessão de IA é aberta.`;
+  $('#about').innerHTML = `O polling usa só o GitHub CLI (zero tokens de IA). O Claude Code entra apenas quando uma sessão de IA é aberta.`;
   // versão e caminho dos dados moram no rodapé da sidebar, visíveis em qualquer seção.
   $('#sysFoot').innerHTML = `<span>Farol v${esc(estado().app.version)}</span><br>dados em <code>${esc(estado().paths.home)}</code>`;
 }

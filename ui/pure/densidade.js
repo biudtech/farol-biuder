@@ -38,12 +38,11 @@ export function fraseDaEspera(ciObrigatorio) {
   return { texto: ciObrigatorio ? 'Esperando os checks · posta sozinho' : 'Resolvendo sozinho', tom: 'run' };
 }
 
-// O PR da fila numa frase: parado, automática desligada na conta, checks rodando, pedido de
-// novo ou a posição na fila.
+// O PR da fila numa frase: parado, automática desligada na conta, pedido de novo ou a posição
+// na fila.
 export function fraseDaFila(pr, o = {}) {
   if (o.parado) return { texto: 'Revisão automática parada', tom: 'fail' };
   if (o.manual) return { texto: 'Revisão automática desligada', tom: 'none' };
-  if (o.checksRodando) return { texto: 'Checks obrigatórios rodando', tom: 'wait' };
   if (pr?.reRequested) return { texto: 'Pedida de novo', tom: 'wait' };
   return { texto: `${Number(o.posicao) || 1}º na fila`, tom: 'none' };
 }
@@ -81,4 +80,43 @@ export function resumoPraMimHtml(contagem = {}) {
   const itens = ITENS_DO_RESUMO.filter(([campo]) => Number(contagem[campo]) > 0).map(([campo, tom, goto, texto]) =>
     `<button type="button" class="pron-resumo-item" data-goto="${goto}"><span class="pl-estado ${tom}"><span class="pl-pt" aria-hidden="true"></span></span>${esc(texto(Number(contagem[campo])))}</button>`);
   return itens.length ? `<div class="pron-resumo-mim" aria-label="Resumo do que está acontecendo">${itens.join('')}</div>` : '';
+}
+
+// Cinco tons, nenhuma cor nova: ok (--settled), run (--working), wait (--urgent), fail
+// (--blocked) e none (--muted). Tom desconhecido vira o neutro.
+const TONS = new Set(['ok', 'run', 'wait', 'fail', 'none']);
+export function classeDoTom(tom) {
+  return `t-${TONS.has(tom) ? tom : 'none'}`;
+}
+
+// "owner/repo#N" vira "repo#N", como no desenho da linha compacta
+export function chaveCurta(key) {
+  return String(key || '').replace(/^[^/]+\//, '');
+}
+
+const SETA = { abrir: '<path d="M6 9l6 6 6-6"/>', recolher: '<path d="M6 15l6-6 6 6"/>' };
+
+// A seta que abre o card cheio de um PR na Compacta (e recolhe, no card aberto).
+export function setaDaLinhaHtml(key, aberta, rotulo = '') {
+  const acao = aberta ? 'Recolher' : 'Expandir';
+  return `<button type="button" class="pron-seta" data-linha="${esc(key)}" aria-expanded="${!!aberta}" aria-label="${acao} ${esc(rotulo || key)}" title="${acao}">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${aberta ? SETA.recolher : SETA.abrir}</svg></button>`;
+}
+
+function estadoDaLinha(estado) {
+  if (!estado || !estado.texto) return '';
+  return `<span class="pl-estado ${classeDoTom(estado.tom)}"><span class="pl-pt" aria-hidden="true"></span>${esc(estado.texto)}</span>`;
+}
+
+// Uma linha da Compacta: barra de estado, o começo (ponto da conta ou avatar), repo#N, título
+// cortado, o estado numa frase, a ação principal e a seta. O.attrs leva os atributos que o
+// listener da seção precisa (data-id da decisão, por exemplo).
+export function linhaCompactaHtml(o = {}) {
+  const ref = `<a class="pl-ref${o.refClasse ? ` ${o.refClasse}` : ''}" href="${esc(o.url || '#')}" target="_blank" rel="noreferrer" title="${esc(o.key)}">${esc(chaveCurta(o.key))}</a>`;
+  return `<div class="pr-linha ${o.classe || ''} ${o.barra || ''}" data-key="${esc(o.key)}" data-url="${esc(o.url || '')}" ${o.attrs || ''} style="${o.style || ''}">
+    ${o.inicio || ''}
+    <div class="pl-main">${ref}<span class="pl-titulo" title="${esc(o.titulo)}">${esc(o.titulo)}</span></div>
+    ${estadoDaLinha(o.estado)}${o.meio || ''}${o.acoes || ''}
+    ${setaDaLinhaHtml(o.key, false, o.key)}${o.rodape || ''}
+  </div>`;
 }

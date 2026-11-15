@@ -108,7 +108,7 @@ test('PR solicitado continua na fila visível enquanto a distribuição espera a
   const pr = { key: 'acme-exemplo/engine-ai#454', url: 'https://github.com/acme-exemplo/engine-ai/pull/454',
     title: 'Corrige a entrega', author: 'bruno-exemplo', account: 'alice', mine: true, updatedAt: new Date().toISOString() };
   const snap = estado();
-  snap.panorama = [pr];
+  snap.headlessWaitingPrs = [pr];
   snap.headlessDistributing = [pr.key];
   emitir('state', snap);
   assert.equal($('#queueCount').textContent, '1');
@@ -125,7 +125,7 @@ test('fila local em espera aparece uma vez e não duplica um item acionável', (
   const pr = { key: 'acme-exemplo/backoffice#140', url: 'https://github.com/acme-exemplo/backoffice/pull/140',
     title: 'Ajusta formulário', author: 'bruno-exemplo', account: 'alice', mine: true, updatedAt: new Date().toISOString() };
   const snap = estado();
-  snap.panorama = [pr];
+  snap.headlessWaitingPrs = [pr];
   snap.headlessWaiting = [pr.key];
   snap.headlessWaitingDetails = { [pr.key]: {
     posicao: 3, total: 7, motivo: 'limite-conta', ocupadas: 2, limite: 2,

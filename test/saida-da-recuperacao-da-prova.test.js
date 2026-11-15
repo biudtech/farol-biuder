@@ -49,7 +49,7 @@ const { AUTOMACAO_DESLIGADA, registrarPausa } = await import('../lib/engine/recu
 const pendencia = (await import('../lib/sync/pendencia.js')).default;
 const fila = (await import('../lib/sync/fila.js')).default;
 const { fatosDaFila } = await import('../lib/engine/sync-fila.js');
-const { separarPendentes, staleCardMeta, reviewBoxHtml, reviewChip } = await import('../ui/pure/review.js');
+const { separarPendentes, staleCardMeta, reviewBoxHtml } = await import('../ui/pure/review.js');
 
 after(() => {
   io.run = runReal;
@@ -266,9 +266,6 @@ test('B7: pendência pausada conta no contador, no ícone, no card e na projeç�
   assert.doesNotMatch(meta.statusHtml, /sem decisão manual|não exige decisão manual/);
   assert.equal(meta.cardClass, 'urgent');
   assert.doesNotMatch(reviewBoxHtml(tela), /sem decisão manual/);
-  const chip = reviewChip({ key: PR.key }, e.reviewActions(), {});
-  assert.doesNotMatch(chip, /não exige decisão manual/);
-  assert.match(chip, /aguardando você/);
   // projeção: pendência comum com o impedimento como motivo, sem estado novo
   const p = pendencia.projetarPendencia(d, { kId: Buffer.alloc(32, 1) });
   assert.equal(p.espera, '', 'não é espera automática');

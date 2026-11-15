@@ -1,4 +1,4 @@
-// O Radar: os cards da fila e do panorama, a nota de PR estacionado e o vazio que
+// O Radar: os cards da fila, a nota de PR estacionado e o vazio que
 // confirma o que o app fez. Extraído do ui/pure.js na Fase 1a da reorganização; o
 // conteúdo não mudou.
 //
@@ -15,10 +15,9 @@
 import { esc, fmtMoney, fmtRel, fmtStamp, fmtWhenDay, plural } from './comum.js';
 import { avatar, personMention } from './mencoes.js';
 import { papelPicker } from './pessoas.js';
-import { reviewChip } from './review.js';
 import { prCoordNoteHtml } from './sync.js';
 import { filaEsperaHtml } from './fila-espera.js';
-import { avisosDoCard, limitNoteHtml, othersLineHtml, pwOthersHtml } from './revisando.js';
+import { avisosDoCard, limitNoteHtml, othersLineHtml } from './revisando.js';
 
 /* A automação está pausada por teto de gasto? PURA.
 
@@ -90,16 +89,6 @@ function orgsDaConta(a) {
   return (Array.isArray(a.owners) ? a.owners : []).map(o => String(o || '').trim()).filter(Boolean);
 }
 
-// Quantos PRs já pediam minha revisão antes do Farol começar a vigiar (o baseline os marcou
-// como vistos): mine, fora da fila, não revisado por mim e sem atividade depois do baseline
-// (a linha do panorama só traz updatedAt). Baseline legado (sem `marcados`) ou ausente: 0,
-// porque nele não dá para afirmar que o PR saiu da fila pelo baseline e não por outro motivo.
-export function pedidosAntesDoInicio({ panorama, queueKeys, baseline } = {}) {
-  if (!baseline || !Number.isFinite(baseline.at) || !Number.isFinite(baseline.marcados)) return 0;
-  return (panorama || []).filter(pr => pr.mine && !pr.reviewedByMe && !queueKeys?.has(pr.key)
-    && Date.parse(pr.updatedAt) < baseline.at).length;
-}
-
 export function queueEmptyOkHtml(ctx = {}) {
   const aprovados = ctx.aprovados || 0;
   const orgs = (ctx.owners || []).map(o => `<b>${esc(o)}</b>`).join(', ');
@@ -124,21 +113,7 @@ export function queueEmptyOkHtml(ctx = {}) {
       </div>
     </div>`;
   }
-  const antes = ctx.antesDoInicio || 0;
   const botaoAprovados = aprovados ? '<button class="btn sm ghost eo-resolved">Ver o que foi aprovado</button>' : '';
-  if (antes > 0) {
-    const tituloAntes = `${antes} ${antes === 1 ? 'PR já pedia' : 'PRs já pediam'} sua revisão antes do Farol começar a vigiar`;
-    return `<div class="empty-ok">
-      <div class="eo-check" aria-hidden="true">i</div>
-      <div class="eo-title">${tituloAntes}</div>
-      <p class="eo-sub">Eles ficam fora da fila para não disparar revisões de estoque. Cada um pode ser revisado pelo Panorama.</p>
-      <div class="eo-acts">
-        <button class="btn sm eo-panorama">Ver no Panorama</button>
-        ${botaoAprovados}
-        <button class="btn sm ghost eo-check-now">Verificar agora</button>
-      </div>
-    </div>`;
-  }
   return `<div class="empty-ok">
       <div class="eo-check" aria-hidden="true">✓</div>
       <div class="eo-title">Nada esperando por você</div>
@@ -189,12 +164,12 @@ export function queueCardHtml(pr, ctx) {
   const papel = pr.author ? ` ${papelPicker(pr.author, ctx.people)}` : '';
   // Os avisos da execução seguem a precedência do Claude Design (02/10/2026,
   // ui/pure/revisando.js): parada, depois limite do plano, depois coordenação. Com alguém
-  // revisando e a chave de revisar junto desligada, limite e coordenação somem, porque
-  // falam de uma revisão automática que não vai acontecer.
+  // revisando, limite e coordenação somem, porque falam de uma revisão automática que não
+  // vai acontecer.
   // a decisão do motor por PR (conta, organização e autor); sem ela, a conta
   const automaticaDesativada = typeof ctx.manual === 'boolean' ? ctx.manual : m.acct?.autoReview === false;
   const parkedInfo = (ctx.parked || {})[pr.key];
-  const av = avisosDoCard(pr, { temParada: !!parkedInfo, limiteAtivo: !automaticaDesativada && Number(ctx.limiteAte) > Date.now(), limiteNoTopo: !!ctx.limiteNoTopo, revisarJunto: !automaticaDesativada && !!ctx.revisarJunto });
+  const av = avisosDoCard(pr, { temParada: !!parkedInfo, limiteAtivo: !automaticaDesativada && Number(ctx.limiteAte) > Date.now(), limiteNoTopo: !!ctx.limiteNoTopo });
   const parked = parkedNoteHtml(parkedInfo, av.rotulo);
   const pessoas = av.forma ? othersLineHtml(av.logins, av.forma) : '';
   const limite = av.nota === 'limite' ? limitNoteHtml(ctx.limiteAte, av.formaLimite, av.rotulo) : '';
@@ -214,7 +189,6 @@ export function queueCardHtml(pr, ctx) {
         <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
         <div class="pr-sub">${personMention(pr.author, 'xs')} · atualizado ${fmtRel(pr.updatedAt)}${papel}</div>
         ${parked}${pessoas}${limite}${coord}${manual}${conflito}
-        ${ctx.pronCorpo || ''}
       </div>
       <div class="pr-actions">
         ${acaoRevisar}
@@ -252,101 +226,4 @@ export function queueWaitingCardHtml(pr, ctx) {
     </div>
     <div class="pr-actions"><a class="btn sm ghost" href="${esc(pr.url)}" target="_blank" rel="noreferrer">Abrir PR ↗</a>${ctx.pronLado || ''}</div>
   </div>`;
-}
-
-const KIND_DO_GH = { APPROVED: 'approve', CHANGES_REQUESTED: 'request_changes' };
-
-// Qual revisão MINHA vale neste PR, nesta ordem: pendência na mesa deste aparelho, último
-// estado decisivo meu no GitHub, histórico local, e por fim 'revisado' sem estado
-// conhecido. O GitHub vem antes do histórico porque um CHANGES_REQUESTED postado por
-// outro aparelho não existe no histórico local, e o reviewedByMe sozinho virava
-// "aprovado" aqui. Sem estado conhecido o PR não finge aprovação.
-function kindDaRevisao(pr, actions, estadosGh) {
-  const ra = (actions || {})[pr.key];
-  if (ra && ra.kind === 'pending') return 'pending';
-  const gh = String((estadosGh || {})[pr.key]);
-  if (Object.hasOwn(KIND_DO_GH, gh)) return KIND_DO_GH[gh];
-  if (ra) return ra.kind;
-  return pr.reviewedByMe ? 'revisado' : null;
-}
-
-export function panoramaRowHtml(pr, ctx) {
-  const chip = reviewChip(pr, ctx.actions, ctx.reviewStatesGh);
-  const m = ctx.mark;
-  // estado da SUA revisão: aprovado/mudanças pedidas/revisado = resolvido (sem botão de
-  // re-revisar); pendente = já na fila de decisão; senão, dá pra revisar.
-  const kind = kindDaRevisao(pr, ctx.actions, ctx.reviewStatesGh);
-    // re-request (o autor pediu sua revisão DE NOVO): não é mais "resolvido/aguardando o
-    // autor", voltou a ser acionável (a review antiga foi dismissed no GitHub).
-    const reviewed = (kind === 'approve' || kind === 'request_changes' || kind === 'revisado') && !pr.reRequested;
-    const isPending = kind === 'pending';
-    // stale = você revisou e entrou commit novo depois: o "Re-revisar" volta a valer
-  const stale = reviewed && !!(ctx.staleStates || {})[pr.key];
-    // roda de verdade x só espera a vez: mesma distinção do "Meus PRs", pra não
-    // rotular de "Revisando…" um PR que ainda nem começou (B: fila e panorama divergiam)
-  const running = (ctx.running || new Set()).has(pr.key);
-  const qpos = running ? 0 : (ctx.waiting || []).indexOf(pr.key) + 1;
-    const queued = qpos > 0;
-    const showBtn = (!reviewed || stale) && !isPending && !running && !queued;
-  // tres estados excludentes, um por linha. A cadeia de ternarios escondia qual
-  // deles ganhava quando mais de um parecia valer.
-  let settledLabel = '';
-  if (kind === 'request_changes') settledLabel = 'aguardando o autor';
-  else if (isPending) settledLabel = 'aguardando você';
-  else if (kind === 'revisado') settledLabel = 'revisado por você';
-  else if (reviewed) settledLabel = 'nada a fazer';
-  // mesma regra do settledLabel: a ordem de precedencia (rodando > na fila >
-  // botao > estado final) agora esta na sequencia dos if, nao aninhada num ternario.
-  const BTN_RODANDO = '<button class="btn sm ghost pano-review" disabled>Revisando…</button>';
-  const btnFila = `<button class="btn sm ghost pano-review" disabled>Na fila (${qpos})</button>`;
-  // quatro motivos possiveis pra este botao existir, e o tooltip diz qual e. Como
-  // cadeia de ternario dentro do template eles ficavam ilegiveis e ainda somavam
-  // no gate; nomeados, da pra ler a precedencia de cima pra baixo.
-  let tituloRevisar = 'Revisar sob demanda: o resultado sempre passa por você, nada é postado sozinho';
-  if (pr.reRequested) tituloRevisar = 'O autor pediu sua revisão de novo (re-request): a review anterior foi dispensada';
-  else if (stale) tituloRevisar = 'Entrou commit novo depois da sua review: revisar de novo';
-  else if (pr.mine) tituloRevisar = 'Revisar (seu review pedido)';
-  const rotuloRevisar = (stale || pr.reRequested) ? 'Re-revisar' : 'Revisar';
-  const btnRevisar = `<button class="btn sm ghost act-review pano-review" data-url="${esc(pr.url)}" title="${tituloRevisar}">${rotuloRevisar}</button>`
-  const clsMine = pr.mine ? 'mine' : '';
-  const clsRev = chip ? 'reviewed' : '';
-  let seloConta = '';
-  if (ctx.todasContas && m.chip) seloConta = m.chip;
-  else if (pr.mine) seloConta = '<span class="badge">sua revisão</span>';
-  const seloRascunhoP = pr.isDraft ? '<span class="badge">rascunho</span>' : '';
-  const seloRepedidaP = pr.reRequested ? '<span class="badge rev-pend">pedida de novo</span>' : '';
-  const sepTitulo = pr.title ? '<span class="pw-sep">·</span>' : '';
-  let tail = `<span class="settled">${esc(settledLabel)}</span>`;
-  if (running) tail = BTN_RODANDO;
-  else if (queued) tail = btnFila;
-  else if (showBtn) tail = btnRevisar;
-    return `
-    <div class="prow ${clsMine} ${clsRev}" style="${m.varStyle}${m.dim}">
-      <span class="status-dot" aria-hidden="true"></span>
-      <div class="pw-main">
-        <div class="pw-head">
-          <a class="pw-ref" href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>
-          ${seloConta}
-          ${seloRascunhoP}
-          ${seloRepedidaP}
-          ${chip}
-          ${pwOthersHtml(pr.outrosRevisando)}
-        </div>
-        <div class="pw-title">
-          <span class="pw-title-txt" title="${esc(pr.title)}">${esc(pr.title)}</span>
-          ${sepTitulo}${personMention(pr.author, 'xs')}
-        </div>
-        ${ctx.pronCorpo || ''}
-      </div>
-      <div class="pw-side">
-        ${ctx.pronPontos || ''}
-        <span class="pw-when">${fmtRel(pr.updatedAt)}</span>
-        <div class="pw-acts">
-          ${tail}
-          <button class="btn icon sm ghost rr-copy" data-url="${esc(pr.url)}" data-key="${esc(pr.key)}" title="Copiar a URL do PR" aria-label="Copiar a URL do PR">⧉</button>
-          <a class="btn icon sm ghost" href="${esc(pr.url)}" target="_blank" rel="noreferrer" title="Abrir no GitHub" aria-label="Abrir no GitHub">↗</a>
-          ${ctx.pronLado || ''}
-        </div>
-      </div>
-    </div>`;
 }

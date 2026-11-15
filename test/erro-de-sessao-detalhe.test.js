@@ -19,7 +19,6 @@ let spawnImpl = null;
 childProcess.spawn = function spawnFalso(...args) { return spawnImpl ? spawnImpl(...args) : realSpawn(...args); };
 
 const { runClaudeStream, parseEnvelope } = await import('../lib/engine/session.js');
-const { fecharCodex } = await import('../lib/codex/stream.js');
 
 after(() => {
   childProcess.spawn = realSpawn;
@@ -38,7 +37,7 @@ function filho() {
 function engineFalso() {
   return {
     config: {}, running: new Map(), killTree() { }, recordUsage() { },
-    ghEnv: () => ({ PATH: '' }), resolveClaudeAuth: () => ({ kind: 'dir', id: '' }),
+    ghEnv: () => ({ PATH: '' }), resolveClaudeAuth: () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' }),
     pushActivity() { }, setSessionModel() { }, toolSummary: () => '',
     parseEnvelope(raw) { return parseEnvelope(this, raw); },
   };
@@ -72,13 +71,4 @@ test('evento result com is_error: mensagem cortada, detalhe inteiro', async () =
     assert.ok(err.detalheCompleto.endsWith('CAUDA'));
     return true;
   });
-});
-
-test('codex com turn.failed e com código != 0: detalhe inteiro', () => {
-  const engine = { recordUsage() { }, parseEnvelope: (raw) => raw };
-  const run = { cancelled: false, model: '' };
-  const falhou = { text: '', sessionId: null, resultEvent: { type: 'result', is_error: true, result: 'q'.repeat(700) + 'CAUDA', usage: {} } };
-  assert.throws(() => fecharCodex(engine, {}, run, falhou, '', '', 1), (err) => err.detalheCompleto.endsWith('CAUDA') && err.message.length <= 'sessão retornou erro: '.length + 300);
-  const semEvento = { text: '', sessionId: null, resultEvent: null };
-  assert.throws(() => fecharCodex(engine, {}, run, semEvento, '', 'w'.repeat(500) + 'CAUDA', 2), (err) => err.detalheCompleto.endsWith('CAUDA') && /^codex saiu com código 2: /.test(err.message));
 });
