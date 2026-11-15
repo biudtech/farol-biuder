@@ -352,7 +352,7 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 .about-origem { font-size: 12.5px; color: var(--muted); line-height: 1.55; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-soft); }
 .origem-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin-right: 6px; }
 
-/* ---------- panorama / linhas ---------- */
+/* ---------- linhas ---------- */
 .rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .rows:empty { display: none; }
 .row {
@@ -448,58 +448,7 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
   .rr-side { grid-column: 1 / -1; grid-row: auto; flex-direction: row; align-items: center; justify-content: space-between; margin-top: 6px; }
 }
 
-/* ---------- Panorama: linha própria (mesmo motivo do .rrow acima: .row só tem o
-   horário na coluna 3, então título/autor/botão empilhavam na coluna do meio e a
-   direita ficava em branco). Sem os expansíveis de relatório/pushback, que aqui
-   não existem; ganha em troca ações que o Panorama nunca teve na própria linha
-   (conversar, copiar URL), hoje só alcançáveis pelo formulário de busca por URL. */
-.prow {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; align-items: start;
-  padding: 11px 13px; background: var(--surface);
-  border-bottom: 1px solid var(--border); font-size: 13px;
-}
-.prow:last-child { border-bottom: 0; }
-.prow:hover { background: var(--surface-2); }
-.prow .status-dot { grid-column: 1; grid-row: 1; align-self: center; width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex: none; }
-.prow.mine .status-dot { background: var(--ac); box-shadow: 0 0 6px var(--ac); }
-.prow.reviewed .status-dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
-.pw-main { grid-column: 2; min-width: 0; }
-.pw-side { grid-column: 3; grid-row: 1 / -1; align-self: start; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
-.pw-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.pw-ref { font-weight: 600; color: var(--text); }
-.prow.mine .pw-ref { color: var(--ac); }
-.pw-head .badge { font-size: 10.5px; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px; flex: none; }
-:root[data-theme="light"] .prow.mine .pw-ref, :root[data-theme="light"] .pr-ref a { color: var(--accent-text); }
-.pw-head .badge.rev-ok { color: var(--ok); background: var(--ok-soft); }
-.pw-head .badge.rev-rc { color: var(--danger); background: var(--danger-soft); }
-.pw-head .badge.rev-cm, .pw-head .badge.rev-pend { color: var(--accent); background: var(--accent-soft); }
-/* quem trunca é o TEXTO do título, nunca a linha inteira: com o autor dentro da
-   caixa que corta, título comprido empurrava a foto e o @login pra fora (mesmo
-   defeito corrigido em Revisões recentes na v2.39.0, reencontrado no Panorama) */
-.pw-title { color: var(--muted); display: flex; align-items: center; gap: 0; min-width: 0; margin-top: 1px; }
-.pw-title-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.pw-author { color: var(--muted); font-size: 12px; margin-left: 6px; }
-/* Panorama: a foto do autor entra na linha do título, com o separador antes */
-.pw-title .person-mention { color: var(--muted); font-size: 12px; margin-left: 4px; flex: none; }
-.pw-sep { color: var(--faint); margin-left: 6px; flex: none; }
-.pw-when { color: var(--faint); font-size: 12px; white-space: nowrap; }
-.pw-acts { display: flex; align-items: center; gap: 4px; }
-.pw-acts .btn { padding: 4px 7px; font-size: 12px; gap: 3px; border-radius: 7px; }
-.pw-acts .btn:hover { color: var(--accent); }
-.pw-acts .settled { color: var(--faint); font-size: 12px; white-space: nowrap; }
-@media (max-width: 720px) {
-  .prow { grid-template-columns: auto minmax(0, 1fr); }
-  .pw-side { grid-column: 1 / -1; grid-row: auto; flex-direction: row; align-items: center; justify-content: space-between; margin-top: 6px; }
-}
-@media (max-width: 420px) {
-  /* título em até duas linhas, autor na linha de baixo e alvos de toque de 40 px */
-  .pw-title { flex-wrap: wrap; }
-  .pw-title-txt { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-  .pw-title .person-mention { flex-basis: 100%; margin-left: 0; }
-  .pw-sep { display: none; }
-  .pw-acts { gap: 8px; }
-  .pw-acts .btn { min-width: 40px; min-height: 40px; justify-content: center; }
-}
+:root[data-theme="light"] .pr-ref a { color: var(--accent-text); }
 
 /* pushback: contestação do autor a um review meu, registrada na linha */
 .pushback { font-size: 11.5px; }
@@ -680,9 +629,6 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 .card.set-row { padding: 14px 16px; }
 label.set-row { cursor: pointer; }
 .set-txt { min-width: 0; max-width: 580px; }
-.review-label-query .set-txt { flex: 1; max-width: none; align-self: stretch; }
-.review-label-query input { box-sizing: border-box; max-width: none; }
-#reviewLabelsList .set-title { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .set-title { display: block; font-size: 13.5px; font-weight: 600; }
 .set-desc { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); font-weight: 400; text-wrap: pretty; }
 .set-ctl { flex: none; display: flex; align-items: flex-start; gap: var(--sp-2); }
@@ -865,14 +811,6 @@ label.set-row { cursor: pointer; }
 
 .logbox { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; font: 12px/1.6 "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; color: var(--muted); max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .about { margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.8; }
-
-/* ---------- silenciadas (resumo recolhido) ---------- */
-.silenced { margin-top: 16px; border: 1px dashed var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 40%, transparent); }
-.sil-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--muted); }
-.sil-head .sil-icon { opacity: .8; }
-.sil-head .sil-toggle { margin-left: auto; background: none; border: 0; color: var(--info); font-size: 12.5px; cursor: pointer; font-weight: 600; }
-.sil-head .sil-toggle:hover { text-decoration: underline; }
-.sil-items { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
 
 /* ---------- analisando agora ---------- */
 .session-card { border-left: 3px solid var(--info); }
@@ -1152,9 +1090,6 @@ label.set-row { cursor: pointer; }
 .eo-title { font-size: 14.5px; font-weight: 650; }
 .eo-sub { margin: 6px auto 0; max-width: 460px; color: var(--muted); font-size: 12.5px; text-wrap: pretty; }
 .eo-acts { display: flex; gap: 7px; justify-content: center; margin-top: 13px; flex-wrap: wrap; }
-/* o ponto apagado na cor da conta já diz que aquilo está dormindo, e casa com o resto
-   do sistema de cor (o emoji 🔕 não casava com nada) */
-.sil-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--info); opacity: .5; flex: none; }
 
 .conn-lost { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--danger) 10%, transparent); font-size: 12.5px; }
 .conn-lost .cl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); flex: none; animation: pulse-soft 1.4s infinite; }
@@ -1630,14 +1565,8 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 }
 .queue-limit .acct-dot { margin-top: 6px; }
 .queue-limit + .queue-limit { margin-top: -4px; }
-.pw-others { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-.set-nota { display: block; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--accent-text); font-weight: 400; text-wrap: pretty; }
-.set-row.sem-efeito .switch { opacity: .5; }
 @media (max-width: 620px) {
   .queue-limit { padding: 10px 12px; }
-}
-@media (max-width: 420px) {
-  .pw-others { white-space: normal; }
 }
 /* Telas estreitas (o Farol aberto no navegador do celular, via Termux): os três campos
    viram um por linha e a lista de aparelhos perde a coluna do sistema. */
@@ -1866,13 +1795,10 @@ body.parear > *:not(.par-raiz) { display: none !important; }
   .pr-coord .md-goto { min-height: 44px; }
 }
 
-/* ---------- Panorama e Meus PRs de outros aparelhos (telas/listas-remotas.js) ---------- */
+/* ---------- Meus PRs de outros aparelhos (telas/listas-remotas.js) ---------- */
 .md-remoto { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
 .md-remoto-topo { font-size: 12px; font-weight: 600; color: var(--muted); text-wrap: pretty; }
 .md-remoto-linhas { margin: 0; }
-.prow.md-remota { background: var(--surface); }
-.md-remota-fim { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
-.md-remota .settled { color: var(--faint); }
 .md-origem { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md-meu-remoto { display: flex; flex-direction: column; gap: 6px; }
 .md-pr { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
@@ -1881,10 +1807,6 @@ body.parear > *:not(.par-raiz) { display: none !important; }
 .md-pr-generico { color: var(--text); }
 @media (max-width: 860px) {
   .md-origem { max-width: 140px; }
-}
-@media (max-width: 720px) {
-  .prow.md-remota { flex-wrap: wrap; }
-  .md-remota-fim { justify-content: flex-start; width: 100%; }
 }
 @media (max-width: 620px) {
   .md-remoto .pr-ref-mention, .md-remoto .person-mention, .md-pend .pr-ref-mention, .md-op .pr-ref-mention { min-height: 44px; display: inline-flex; align-items: center; }
@@ -2164,7 +2086,7 @@ body.parear > *:not(.par-raiz) { display: none !important; }
   .mypr-card .mypr-base, .mypr-card .mypr-superado, .mypr-card .mypr-merge-nota { order: 2; flex: 1 1 100%; }
   .mypr-card .pr-actions { order: 3; flex: 1 1 100%; margin-top: 12px; }
   /* faixas sem ordem própria ficavam ao lado do título, disputando a largura com ele */
-  .mypr-card .pron-bloco, .mypr-card .aa-faixa { order: 3; flex: 1 1 100%; min-width: 0; }
+  .mypr-card .aa-faixa { order: 3; flex: 1 1 100%; min-width: 0; }
   .mypr-card .mypr-analysis { order: 4; flex: 1 1 100%; }
   .mypr-base .mb-link, .ms-arquivos summary { display: inline-flex; align-items: center; min-height: 44px; }
   .ms-fechar { flex: 1 1 100%; justify-content: center; min-height: 44px; }
@@ -2402,9 +2324,8 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
 }
 
 
-/* ---------- Faixa de prontidão e densidades do Radar (07/11/2026) ----------
-   Checks obrigatórios, reviewers e merge de cada PR, e as densidades Compacta (padrão) e
-   Expandida em Pra mim, Meus PRs e Panorama. Desenho do Claude Design em
+/* ---------- Densidades do Radar (07/11/2026) ----------
+   As densidades Compacta (padrão) e Expandida em Pra mim e Meus PRs. Desenho do Claude Design em
    docs/superpowers/specs/2026-11-07-meus-prs-prontidao-anexos/. Cinco tons, nenhuma cor
    nova: t-ok (--settled), t-run (--working), t-wait (--urgent), t-fail (--blocked) e t-none
    (--muted). As classes levam o prefixo pron- porque .pill já é o selo do topo da janela.
@@ -2426,9 +2347,8 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
 .dens:hover { color: var(--text); }
 .dens.on { background: var(--surface-2); color: var(--text); }
 body[data-radar-sub="apar"] .densidade { display: none; }
-/* Compacta: sem os parágrafos de explicação das seções nem o subtítulo do Panorama */
-body[data-densidade="compacta"] #tab-radar .section-desc,
-body[data-densidade="compacta"] #panoOwners { display: none; }
+/* Compacta: sem os parágrafos de explicação das seções */
+body[data-densidade="compacta"] #tab-radar .section-desc { display: none; }
 
 /* os tons, sobre os apelidos que o app já define */
 .t-ok { --pron: var(--settled); --pron-soft: var(--ok-soft); }
@@ -2436,49 +2356,7 @@ body[data-densidade="compacta"] #panoOwners { display: none; }
 .t-wait { --pron: var(--urgent); --pron-soft: var(--accent-soft); }
 .t-fail { --pron: var(--blocked); --pron-soft: var(--danger-soft); }
 .t-none { --pron: var(--muted); --pron-soft: var(--surface-2); }
-.pron-ic { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; background: var(--pron-soft); color: var(--pron); }
-.pron-ic svg { width: 12px; height: 12px; }
-
-/* as três pílulas do card cheio, e o detalhe da pílula aberta */
-.pron-bloco { margin-top: 10px; }
-.pron-faixa { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; }
-.pron-faixa.vazia { display: block; color: var(--faint); font-size: 12.5px; }
-.pron-pill {
-  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; padding: 7px 12px;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text);
-  font: inherit; text-align: left; cursor: pointer;
-}
-.pron-pill:hover { border-color: var(--muted); }
-.pron-pill.aberta { border-color: var(--text); }
-.pp-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.pp-lb { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-.pp-vl { font-size: 13px; font-weight: 600; color: var(--pron); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pp-avs { display: flex; flex: none; }
-.pp-av { margin-left: -4px; border-radius: 50%; box-shadow: 0 0 0 2px var(--pron); display: inline-flex; }
-.pron-detalhe { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
-.pd-titulo { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-.pd-linha { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border-soft); font-size: 13px; }
-.pd-linha:first-of-type { border-top: 0; }
-.pd-nome code { font-size: 12px; }
-.pd-estado { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--pron); white-space: nowrap; }
-.pd-nota { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
-
-/* a forma curta, os pontos do Panorama e a legenda */
-.pron-trio { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.pron-trio.vazia { color: var(--faint); font-size: 12px; }
-.pron-mini { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--pron); white-space: nowrap; }
-.pron-mini .pron-ic { flex-basis: 18px; width: 18px; height: 18px; }
-.pron-mini .pron-ic svg { width: 10px; height: 10px; }
-.pron-pontos { display: inline-flex; align-items: center; gap: 4px; }
-.pp-ponto { width: 8px; height: 8px; border-radius: 99px; background: var(--pron); }
-.pp-ponto.t-none { background: var(--faint); }
-.pron-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
-.pron-legenda .pl-item { display: inline-flex; align-items: center; gap: 6px; }
-.pron-legenda .pp-ponto { width: 7px; height: 7px; }
-
-/* resumo do topo de Meus PRs e de Pra mim */
-.pron-resumo { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
-.pron-chip { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 10px; background: var(--pron-soft); color: var(--pron); }
+/* resumo do topo de Pra mim */
 .pron-resumo-mim { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .pron-resumo-item {
   display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border: 1px solid var(--border);
@@ -2526,27 +2404,18 @@ body[data-densidade="compacta"] #panoOwners { display: none; }
   .pr-linha .pron-seta { position: absolute; top: 7px; right: 10px; }
 }
 .card .pron-seta[aria-expanded="true"] { position: absolute; top: 8px; right: 10px; }
-/* na linha aberta do Panorama os pontos saem, mas o lugar deles fica: é ele que segura a seta */
-.pron-pontos-reserva { display: contents; }
-.pron-pontos-reserva > * { visibility: hidden; }
-.sess-pron-aberta { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px; }
-.sess-pron-aberta > :first-child { flex: 1 1 auto; min-width: 0; }
+.sess-pron-aberta { display: flex; align-items: flex-start; justify-content: flex-end; gap: 8px; margin: 6px 0 2px; }
 .card .sess-pron-aberta .pron-seta[aria-expanded="true"] { position: static; }
 .pron-rodape { align-self: flex-start; }
 
-/* a barra esquerda segue a pílula Merge (sem autoanálise; com ela vale o selo) */
-.card.pron-b-ok, .pr-linha.pron-b-ok, .pr-linha.ok { border-left-color: var(--settled); }
-.card.pron-b-run, .pr-linha.pron-b-run { border-left-color: var(--working); }
-.card.pron-b-wait, .pr-linha.pron-b-wait, .pr-linha.stale { border-left-color: var(--urgent); }
-.card.pron-b-fail, .pr-linha.pron-b-fail, .pr-linha.warn { border-left-color: var(--blocked); }
+/* a barra esquerda segue o selo da autoanálise */
+.pr-linha.ok { border-left-color: var(--settled); }
+.pr-linha.stale { border-left-color: var(--urgent); }
+.pr-linha.warn { border-left-color: var(--blocked); }
 
-/* Panorama: os pontos ficam no lado da linha; aberta, os ramos e as pílulas vão embaixo do título */
-.pw-side .pron-pontos { margin-top: 2px; }
-.pw-ramos { margin-top: 4px; }
-
-/* "Analisando agora" na Compacta: o cartão encolhe para cabeçalho, barra e o trio */
+/* "Analisando agora" na Compacta: o cartão encolhe para cabeçalho e barra, e a seta o abre */
 .sess-pron:empty { display: none; }
-.sess-pron-curta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 2px; }
+.sess-pron-curta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 6px 0 2px; }
 body[data-densidade="compacta"] .session-card:not(.aberta) .activity-feed,
 body[data-densidade="compacta"] .session-card:not(.aberta) .stage-flow,
 body[data-densidade="compacta"] .session-card:not(.aberta) .session-agent-details { display: none; }

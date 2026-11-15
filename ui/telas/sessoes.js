@@ -15,7 +15,7 @@ import { atualizarCancelamento } from './sessao-cancelar.js';
 import { registrarAtividadeVisual, fluxoDaAtividade } from './atividade-visual.js';
 import { telaVisivel } from './pintura.js';
 import { cardCheio } from './densidade.js';
-import { prontidaoDaSessaoHtml } from './prontidao.js';
+import { setaDaSessaoHtml } from './linhas-compactas.js';
 const feedsPintados = new WeakMap();
 const atividadeNova = new Set();
 
@@ -264,13 +264,13 @@ function sair(id) {
   const reduzido = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   setTimeout(() => { esquecer(id); renderActive(); }, reduzido ? 0 : SAIDA_MS);
 }
-// A prontidão do PR da sessão (07/11/2026): o trio curto na Compacta, a faixa no cartão aberto
-// ou na Expandida. Só este pedaço é trocado, e só quando muda, porque o cartão é incremental.
-function atualizarProntidaoDaSessao(box, s) {
+// A seta do cartão da sessão (07/11/2026): na Compacta o cartão encolhe e ela o abre. Só este
+// pedaço é trocado, e só quando muda, porque o cartão é incremental.
+function atualizarSetaDaSessao(box, s) {
   const el = box.querySelector(`.sess-pron[data-id="${CSS.escape(s.id)}"]`);
   if (!el) return;
   const key = el.dataset.key || '';
-  const html = prontidaoDaSessaoHtml(key);
+  const html = setaDaSessaoHtml(key);
   if (el.dataset.pintado !== html) { el.innerHTML = html; el.dataset.pintado = html; }
   const card = el.closest('.session-card');
   if (card) card.classList.toggle('aberta', !!key && cardCheio(key));
@@ -296,8 +296,8 @@ function renderActive() {
   // cartão que está no estado de concluída
   const want = new Set(sessions.map(s => s.id));
   for (const el of box.querySelectorAll('.session-card')) if (!want.has(el.dataset.id)) el.remove();
-  // quem mais está revisando o PR da sessão vem do panorama, que o motor anota a cada ciclo
-  const outrosDe = (s) => ((estado().panorama || []).find((p) => p.key === (s.keys || [])[0]) || {}).outrosRevisando || [];
+  // quem mais está revisando o PR da sessão vem anotado na própria sessão (o motor o lê a cada ciclo)
+  const outrosDe = (s) => s.outrosRevisando || [];
   for (const s of sessions) {
     if (!box.querySelector(`.session-card[data-id="${CSS.escape(s.id)}"]`)) box.insertAdjacentHTML('beforeend', sessionCardHtml(s, '(iniciando…)', outrosDe(s)));
   }
@@ -318,7 +318,7 @@ function renderActive() {
     // subagentes da sessão (fan-out de leitura/verificação): 👥 vivos/total, com a
     // lista de quem faz o quê no title. Some quando a sessão não fatiou nada.
     updateSessionAgents(box.querySelector(`.session-agents[data-id="${CSS.escape(s.id)}"]`), s);
-    atualizarProntidaoDaSessao(box, s);
+    atualizarSetaDaSessao(box, s);
   }
   tickElapsed();
   const ids = new Set(vivas.map(s => s.id));

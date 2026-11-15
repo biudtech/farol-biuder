@@ -4,7 +4,7 @@
    até a Task 8, que o levou pro ui/app.js: com o Radar e Meus PRs virando módulo, ele
    passou a chamar mais telas do que esta camada de identidade pode conhecer sem ciclo. */
 
-import { esc, hexToRgba, ownerFromUrl, validScope, personMention, fmtRel, accountBarVisible, separarPendentes } from '../pure.js';
+import { esc, hexToRgba, ownerFromUrl, validScope, personMention, accountBarVisible, separarPendentes } from '../pure.js';
 import { estado, escopo, abaAtual, definirEscopo } from './estado.js';
 import { $, selo } from './infra.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
@@ -184,42 +184,10 @@ export function renderIdentity() {
   }
 }
 
-/* ---------- render: contas silenciadas (resumo recolhido) ---------- */
-// aberto/fechado do resumo de silenciadas: estado só da tela (não persiste), lido aqui e
-// escrito pelo app.js (troca de escopo fecha; o botão "ver"/"ocultar" alterna).
-let silencedOpen = false;
-export function fecharSilenciadas() { silencedOpen = false; }
-export function alternarSilenciadas() { silencedOpen = !silencedOpen; }
-export function renderSilenced() {
-  const box = $('#silenced');
-  const accounts = (estado().accounts || []);
-  const mutedAccts = accounts.filter(a => a.muted);
-  const items = (estado().panorama || []).filter(pr => isMutedPr(pr));
-  const show = escopo() === 'all' && TWEAK.muted === 'Recolher' && mutedAccts.length > 0 && items.length > 0;
-  if (!show) { box.hidden = true; box.innerHTML = ''; return; }
-  box.hidden = false;
-  const names = mutedAccts.map(a => (ACCT[a.user.toLowerCase()] || {}).label || a.user).join(', ');
-  const head = `<div class="sil-head"><span class="sil-dot" aria-hidden="true"></span>
-      <span>${items.length} ${items.length === 1 ? 'item silenciado' : 'itens silenciados'} · ${esc(names)}</span>
-      <button class="sil-toggle">${silencedOpen ? 'ocultar' : 'ver'}</button></div>`;
-  const body = silencedOpen ? `<div class="sil-items">${items.map(pr => {
-    const meta = acctOf(pr) || {};
-    return `<div class="card pr-card" style="--ac:${meta.color || 'var(--accent)'};--ac-soft:${meta.soft || 'var(--accent-soft)'};border-left:3px solid ${meta.color || 'var(--accent)'};opacity:.85;">
-      <div class="info">
-        <div class="pr-ref"><a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a> <span class="acct-chip">${esc(meta.label || '')}</span></div>
-        <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
-        <div class="pr-sub">${personMention(pr.author, 'xs')} · ${fmtRel(pr.updatedAt)}</div>
-      </div></div>`;
-  }).join('')}</div>` : '';
-  box.innerHTML = head + body;
-}
-
-/* ---------- gatilhos da barra de contas e do resumo de silenciadas ----------
-   Trocam o escopo e reagem ao clique de expandir/recolher. rerenderScope
-   conhece TODAS as telas e por isso fica no bootstrap (ui/app.js): recebido
-   por parâmetro, na mesma injeção de initTweaks(rerenderScope). Chamada pelo
-   bootstrap no mesmo ponto relativo em que os dois listeners moravam. Este
-   módulo continua sem importar nenhuma tela. */
+/* ---------- gatilhos da barra de contas ----------
+   Trocam o escopo. rerenderScope conhece TODAS as telas e por isso fica no bootstrap
+   (ui/app.js): recebido por parâmetro, na mesma injeção de initTweaks(rerenderScope).
+   Este módulo continua sem importar nenhuma tela. */
 export function initContasTriggers(rerenderScope) {
   /* trocar de conta na barra */
   $('#accountBar').addEventListener('click', (e) => {
@@ -227,11 +195,6 @@ export function initContasTriggers(rerenderScope) {
     if (!seg) return;
     definirEscopo(seg.dataset.scope);
     guardarEscopo(escopo());
-    fecharSilenciadas();
     rerenderScope();
-  });
-  /* abrir/fechar o resumo de silenciadas */
-  $('#silenced').addEventListener('click', (e) => {
-    if (e.target.closest('.sil-toggle')) { alternarSilenciadas(); renderSilenced(); }
   });
 }

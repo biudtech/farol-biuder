@@ -17,10 +17,10 @@ test('o título reserva o lugar da seta em qualquer largura', () => {
   assert.match(css, /^\.card\.mypr-card:has\(\.pron-seta\[aria-expanded="true"\]\) \.info \{ padding-right: 38px; \}/m);
 });
 
-test('na janela estreita, as faixas ficam em linha própria, abaixo das ações', () => {
+test('na janela estreita, a faixa da autoanálise fica em linha própria, abaixo das ações', () => {
   const bloco = css.match(/@media \(max-width: 720px\) \{\n  \/\* o aviso sobe[\s\S]*?\n\}/);
   assert.ok(bloco, 'bloco @media 720px não encontrado');
   const estreita = bloco[0];
   assert.match(estreita, /\.mypr-card \.pr-actions \{ order: 3;/);
-  assert.match(estreita, /\.mypr-card \.pron-bloco, \.mypr-card \.aa-faixa \{ order: 3; flex: 1 1 100%; min-width: 0; \}/);
+  assert.match(estreita, /\.mypr-card \.aa-faixa \{ order: 3; flex: 1 1 100%; min-width: 0; \}/);
 });

@@ -31,7 +31,7 @@ function togglesDaTela() {
 
 test('toda preferência que a tela edita existe na tabela e é editável', () => {
   const daTela = togglesDaTela();
-  assert.ok(daTela.length >= 15, `esperava os toggles de Sistema, achei ${daTela.length}`);
+  assert.ok(daTela.length >= 14, `esperava os toggles de Sistema, achei ${daTela.length}`);
   const órfãs = daTela.filter(t => !EDITAVEIS.has(t.key));
   assert.deepEqual(órfãs.map(t => `${t.sel} -> ${t.key}`), [],
     'chave que a tela manda e o servidor não aceita é preferência que some em silêncio');

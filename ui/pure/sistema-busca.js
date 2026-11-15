@@ -8,7 +8,6 @@ import { sysNorm } from './comum.js';
    e empilhava tudo na vertical. Com índice, o resultado é uma lista curta que aponta
    pra UMA linha. 'at' é o seletor do alvo, e todo alvo tem que existir no HTML. */
 export const SYS_INDEX = [
-  { sec: 'overview', at: '#reviewLabels', title: 'Tags de revisão no GitHub', hint: 'tags, labels, marcador, revisando, remover, limpeza' },
   { sec: 'overview', at: '#setupManager', title: 'Configuração e retomada', hint: 'onboarding, começar, roteiro, configurar, retomar' },
   { sec: 'overview', at: '#doctor', title: 'Saúde do ambiente', hint: 'doctor, gh, claude, git bash, diagnóstico' },
   { sec: 'sync', at: '#syncManager', title: 'Sincronização entre aparelhos', hint: 'sync, firebase, aparelho, dispositivo, coordenação, reserva do PR, lease, consolidação, consumo, um farol por pr' },
@@ -17,7 +16,7 @@ export const SYS_INDEX = [
   { sec: 'groups', at: '#groupsManager', title: 'Grupos de consumo', hint: 'grupo, teto, orçamento, vincular perfil, custo somado' },
   { sec: 'accounts', at: '#accountsManager', title: 'Contas do GitHub', hint: 'conta, identidade, cor, silenciar, política, token, usuário, login, gh' },
   // as organizações monitoradas são da conta (a seção Conexões, que as repetia sem efeito, saiu em 03/10/2026)
-  { sec: 'accounts', at: '#accountsManager', title: 'Organizações monitoradas (por conta)', hint: 'org, organização, owners, panorama, repositórios' },
+  { sec: 'accounts', at: '#accountsManager', title: 'Organizações monitoradas (por conta)', hint: 'org, organização, owners, repositórios' },
   // revisar e aprovar sozinho são da conta desde 30/09/2026: a busca leva ao cartão dela
   { sec: 'accounts', at: '#accountsManager', title: 'Revisar e aprovar sozinho (por conta)', hint: 'auto review, revisão na hora, fila, auto approve, ressalva, aprovação, reprovar' },
   { sec: 'automation', at: '#sys-row-pushback', title: 'Reconhecer quando o autor contesta a revisão', hint: 'pushback, contestação, autor, desfecho' },

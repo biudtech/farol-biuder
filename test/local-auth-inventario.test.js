@@ -51,7 +51,7 @@ test('nenhuma rota aparece em duas classes', () => {
 // O corte da Fase 1 (lote 9, só Claude) tirou /api/claude-login, /api/claude/login-web/start, /code e /cancel, /api/claude/profile-adopt e /api/self-review/restricted/codex (75 virou 69).
 test('as classes da spec cobrem os 69 caminhos, e as públicas são só as duas de autenticação', () => {
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 69);
+  assert.equal(naoPublicas.length, 68);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
   assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-baixo-risco', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
 });

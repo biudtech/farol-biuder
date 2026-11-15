@@ -214,12 +214,6 @@ test('a tela mostra a origem certa e não conta dobrado o PR visto aqui e lá', 
   assert.equal(m.remotas[0].aparelho, 'Notebook');
   assert.equal(m.total, 3, 'dois daqui e um de lá, sem o repetido');
   assert.equal(m.outros, 1);
-  const html = pure.panoramaRemotoHtml(m, { agora: T + 20 });
-  assert.match(html, /3 PRs: 2 deste aparelho e 1 de 1 outro/);
-  assert.match(html, /acme\/app#2/);
-  assert.match(html, /Notebook/);
-  assert.doesNotMatch(html, /acme\/app#1"/, 'o PR local não aparece de novo');
-  assert.doesNotMatch(html, /act-review/, 'linha de outro aparelho não oferece ação');
   const meus = pure.meusPrsRemotoHtml(pure.mesclarListaRemota([], proj, 'myPrs', { sync: SYNC_TELA, agora: T + 20 }), { agora: T + 20 });
   assert.match(meus, /do Notebook, só leitura/);
   assert.match(meus, /Merge desabilitado aqui/);
@@ -266,8 +260,8 @@ test('linha que não abre fica de fora e é contada', async () => {
   const pano = escopoDe(b.syncListasRemotas(), 'panorama');
   assert.equal(pano.linhas.length, 1);
   assert.equal(pano.naoAbriram, 1);
-  const html = pure.panoramaRemotoHtml(pure.mesclarListaRemota([], b.syncListasRemotas(), 'panorama', { sync: SYNC_TELA, agora: T + 20 }), { agora: T + 20 });
-  assert.match(html, /1 item de outro aparelho não abriu e ficou de fora/);
+  const m = pure.mesclarListaRemota([], b.syncListasRemotas(), 'panorama', { sync: SYNC_TELA, agora: T + 20 });
+  assert.equal(m.naoAbriram, 1, 'e a tela o conta à parte');
 });
 
 test('leitura que falha vira estado de falha e mantém a visão anterior', async () => {

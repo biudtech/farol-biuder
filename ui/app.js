@@ -17,7 +17,7 @@ import {
 export { toast } from './telas/infra.js';
 import {
   rebuildAccounts,
-  renderAccountBar, renderIdentity, renderSilenced,
+  renderAccountBar, renderIdentity,
   initContasTriggers, escopoGuardado,
 } from './telas/contas.js';
 import { loadTeam } from './telas/time.js';
@@ -26,7 +26,7 @@ import { initTweaks } from './telas/acoes.js';
 import { registrarTelaConsumo } from './telas/consumo.js';
 import { renderStatus, tickCountdown, renderActive, handleActivity } from './telas/sessoes.js';
 import {
-  renderDecisions, renderQueue, renderPanorama, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
+  renderDecisions, renderQueue, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
 } from './telas/radar.js';
 import { renderMyPRs, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
 import { observarCancelamentos } from './telas/autoanalise-andamento.js';
@@ -99,8 +99,8 @@ function rerenderScope() {
 }
 initTweaks(rerenderScope);
 
-/* Gatilhos da barra de contas e do resumo de silenciadas: moram em
-   telas/contas.js, dono de renderAccountBar/renderSilenced.
+/* Gatilhos da barra de contas: moram em
+   telas/contas.js, dono de renderAccountBar.
    initContasTriggers(rerenderScope) recebe o re-render de escopo, que
    conhece todas as telas e por isso fica aqui. Chamada no mesmo ponto
    relativo em que os dois listeners moravam. */
@@ -230,15 +230,13 @@ document.addEventListener('keydown', (e) => {
   goTo(el.dataset.goto);
 });
 
-// Ordem de busca = onde a ação mora (decisão > fila > meus PRs > panorama).
+// Ordem de busca = onde a ação mora (decisão > fila > meus PRs).
 function subabaDoPr(url) {
   const s = estado() || {};
   if ((s.decisions?.pending || []).some(d => d.pr?.url === url)) return 'mim';
   if ((s.queue || []).some(pr => pr.url === url)) return 'mim';
-  const esperando = new Set([...(s.headlessWaiting || []), ...(s.headlessDistributing || [])]);
-  if ((s.panorama || []).some(pr => pr.url === url && esperando.has(pr.key))) return 'mim';
+  if ((s.headlessWaitingPrs || []).some(pr => pr.url === url)) return 'mim';
   if ((s.myPRs || []).some(pr => pr.url === url)) return 'meus';
-  if ((s.panorama || []).some(pr => pr.url === url)) return 'pano';
   return 'mim';
 }
 function focusPr(url, tentativa = 0) {
@@ -246,7 +244,7 @@ function focusPr(url, tentativa = 0) {
   // O painel pode ainda não ter DOM: escolhe pelos dados antes de procurar o card.
   switchRadarSub(subabaDoPr(url));
   switchTab('radar');
-  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#myPRs .mypr-card', '#panorama [data-url]', '#resolved [data-url]']
+  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#myPRs .mypr-card', '#resolved [data-url]']
     .map(s => `${s}[data-url="${CSS.escape(url)}"]`).join(', ');
   const card = document.querySelector(sel);
   if (!card) {
@@ -298,8 +296,8 @@ const pinturas = criarAgendaVisual({
     plataforma: () => aplicaPlataforma(estado().app?.platform),
     contas: () => { rebuildAccounts(); renderAccountBar(); renderIdentity(); },
     status: renderStatus, sessoes: renderActive, decisoes: renderDecisions, fila: renderQueue,
-    meus: renderMyPRs, panorama: renderPanorama,
-    silenciadas: renderSilenced, navegacao: () => renderRadarNav(contagemMeusPrs()),
+    meus: renderMyPRs,
+    navegacao: () => renderRadarNav(contagemMeusPrs()),
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
     relogio: tickCountdown,
     consumo: () => pintarTelaRegistrada('consumo'),
@@ -396,7 +394,7 @@ function connect() {
     const d = safeJsonParse(e.data); if (!d) return;
     aoPendenciasRemotas(d);
   });
-  // Panorama e Meus PRs de outros aparelhos: idem, quem entende é telas/listas-remotas.js
+  // Meus PRs de outros aparelhos: idem, quem entende é telas/listas-remotas.js
   es.addEventListener('sync-lists', (e) => {
     const d = safeJsonParse(e.data); if (!d) return;
     aoListasRemotas(d);
@@ -434,7 +432,7 @@ function connect() {
     $('#statusPill').textContent = 'reconectando…';
     TENTATIVAS_RECONEXAO++;
     // a tela inteira passa a dizer que está velha: sem isto ela continua exibindo o
-    // panorama e a contagem regressiva como se estivessem vivos
+    // lista e a contagem regressiva como se estivessem vivos
     document.body.classList.add('sem-engine');
     const f = $('#connLost');
     if (f) {
@@ -464,9 +462,9 @@ registrarTelaConsumo();
 registrarTelaRadarCompartilhado();
 // Radar > Aparelhos lê o que a visão compartilhada acumula, e por isso registra depois dela
 registrarTelaRadarAparelhos();
-// Panorama e Meus PRs de outros aparelhos: quando chega projeção nova, as duas abas (e as
-// contagens das sub-abas) se redesenham pelas funções que o bootstrap já chama por snapshot
-initListasRemotas(() => { pinturas.invalidar(['myPRs', 'panorama', 'sync']); });
+// Meus PRs de outros aparelhos: quando chega projeção nova, a aba (e as contagens das
+// sub-abas) se redesenha pelas funções que o bootstrap já chama por snapshot
+initListasRemotas(() => { pinturas.invalidar(['myPRs', 'sync']); });
 
 /* O endereço da página reflete a tela (telas/rota.js): por último, para o ouvinte de clique
    e tecla dele rodar depois de todos os handlers acima, e com todas as telas registradas

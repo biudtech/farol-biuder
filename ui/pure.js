@@ -32,8 +32,6 @@ export * from './pure/meus-prs.js';
 export * from './pure/meus-prs-base.js';
 export * from './pure/pessoas.js';
 export * from './pure/pr-compartilhado.js';
-export * from './pure/prontidao.js';
-export * from './pure/prontidao-html.js';
 export * from './pure/densidade.js';
 export * from './pure/autoanalise-faixa.js';
 export * from './pure/radar.js';
