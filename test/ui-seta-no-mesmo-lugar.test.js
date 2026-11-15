@@ -38,3 +38,8 @@ test('no cartão da sessão, a seta aberta fica na mesma linha da fechada', () =
   assert.match(css, /\.sess-pron-curta \{[^}]*margin: 6px 0 2px; \}/, 'as duas com a mesma margem');
   assert.match(css, /\.card \.sess-pron-aberta \.pron-seta\[aria-expanded="true"\] \{ position: static; \}/);
 });
+
+test('o foco volta ao elemento visível, não ao primeiro da página', () => {
+  const densidade = fs.readFileSync(path.join(RAIZ, 'ui/telas/densidade.js'), 'utf8');
+  assert.match(densidade, /querySelectorAll\(seletor\)\]\.find\(x => x\.getClientRects\(\)\.length > 0\)/);
+});
