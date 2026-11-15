@@ -77,14 +77,11 @@ function switchRadarSub(nome) {
   if (subabaAlterada) subabaAlterada();
 }
 
-// Contagem das sub-abas. 'Pra mim' soma a fila visível e o que espera decisão sua;
-// as outras são contexto e usam a contagem neutra.
-function renderRadarNav(meus) {
-  const num = sel => { const e = $(sel); return (!e || e.hidden) ? 0 : (parseInt(e.textContent, 10) || 0); };
+// Contagem das sub-abas. 'Pra mim' soma a fila visível e o que espera decisão sua.
+function renderRadarNav() {
   const poe = (sel, n) => { const e = $(sel); if (!e) return; e.textContent = n || ''; e.hidden = !n; };
   const { precisam } = separarPendentes((estado().decisions?.pending || []).filter(scopeVisible));
   poe('#rcMim', precisam.length + dadosDaFila().total);
-  poe('#rcMeus', meus ?? num('#myPRsCount'));
 }
 // menu ··· do card: abre um por vez, e fecha ao clicar fora
 document.addEventListener('click', (e) => {

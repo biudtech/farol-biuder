@@ -1,20 +1,17 @@
-// Panorama e Meus PRs de outros aparelhos (visão compartilhada, 7.C3), parte PURA.
+// Listas de outros aparelhos (visão compartilhada, 7.C3), parte PURA.
 //
 // Recebe a projeção que o engine entrega (evento `sync-lists` e `POST /api/sync/lists`,
 // lib/engine/sync-listas.js), a lista local da aba e o `STATE.sync`, e devolve o que a aba
 // mostra. Nada aqui toca DOM nem lê estado global.
 //
-// TRÊS AFIRMAÇÕES QUE ESTE MÓDULO NÃO PODE ERRAR, travadas em teste:
+// DUAS AFIRMAÇÕES QUE ESTE MÓDULO NÃO PODE ERRAR, travadas em teste:
 //   1. o PR que este aparelho também vê aparece UMA vez, com a origem "este aparelho", e a
 //      contagem da aba não o soma de novo;
-//   2. linha de outro aparelho é só leitura: nenhum botão, nenhuma ação que escreva no
-//      GitHub, e o Merge de Meus PRs diz por que está desabilitado;
-//   3. dado indisponível (visão desligada, bloqueada, sem outro aparelho, sem chave), leitura
+//   2. dado indisponível (visão desligada, bloqueada, sem outro aparelho, sem chave), leitura
 //      que falhou e leitura velha são estados diferentes, com frases diferentes. A idade limite
 //      vem do engine (`limiteMs`), a tela não define regra de dado. Aparelho que não é o admin
 //      recebe `so-admin` e não mostra nada: nem linha, nem faixa (decisão do dono, 06/11/2026).
-import { esc, fmtClock, plural } from './comum.js';
-import { prRefMention } from './mencoes.js';
+import { fmtClock } from './comum.js';
 import { visaoCompartilhada } from './compartilhado.js';
 
 const INDISPONIVEL = {
@@ -104,55 +101,4 @@ export function mesclarListaRemota(locais, listas, tipo, opcoes = {}) {
   const remotas = [...porChave.values()].sort((a, b) => (Number(b.u) || 0) - (Number(a.u) || 0));
   const outros = new Set(remotas.map((l) => l.dev)).size;
   return { remotas, deste: lista.length, outros, total: lista.length + remotas.length, naoAbriram, avisos, geral };
-}
-
-function resumoDaOrigem(m) {
-  const deste = `${m.deste} deste aparelho`;
-  const outros = `${m.remotas.length} de ${plural(m.outros, 'outro', 'outros')}`;
-  return `${plural(m.total, 'PR', 'PRs')}: ${deste} e ${outros}`;
-}
-
-function avisosHtml(m) {
-  const partes = [];
-  if (m.geral && m.geral.texto && m.geral.estado !== 'ligada' && m.geral.estado !== 'desligada') {
-    partes.push(`<div class="md-faixa md-remoto-estado" data-estado="${esc(m.geral.estado)}"><span class="sync-chip mute">${esc(m.geral.estado)}</span><span>${esc(m.geral.texto)}</span></div>`);
-  }
-  for (const a of m.avisos) {
-    const rotulo = a.estado === 'falhou' ? 'leitura falhou' : 'desatualizada';
-    partes.push(`<div class="md-faixa warn md-remoto-estado" data-estado="${esc(a.estado)}"><span class="sync-chip warn">${rotulo}</span><span>${esc(a.texto)}</span></div>`);
-  }
-  if (m.naoAbriram) {
-    const itens = m.naoAbriram === 1 ? '1 item de outro aparelho não abriu e ficou de fora' : `${m.naoAbriram} itens de outros aparelhos não abriram e ficaram de fora`;
-    partes.push(`<p class="md-nota md-remoto-nao-abriu"><span class="sync-chip mute">não verificável</span> ${esc(itens)}.</p>`);
-  }
-  return partes.join('');
-}
-
-function origemHtml(l) {
-  const hora = l.u ? `<span class="md-fraco">atualizado ${esc(fmtClock(l.u))}</span>` : '';
-  return `<span class="sync-chip mute md-origem" title="lista vinda de outro aparelho">${esc(l.aparelho)}</span>${hora}`;
-}
-
-function ramoHtml(l) {
-  if (!l.headRefName) return '';
-  const base = l.baseRefName ? ` → ${esc(l.baseRefName)}` : '';
-  return `<span class="md-fraco">${esc(l.headRefName)}${base}</span>`;
-}
-
-function cardMeusPrsHtml(l) {
-  const merge = l.mergeable ? `<span class="md-fraco">estado de merge no ${esc(l.aparelho)}: ${esc(l.mergeable)}</span>` : '';
-  return `<div class="card md-remota md-meu-remoto" data-origem="${esc(l.dev)}">
-    <div class="md-linha">${prRefMention(l.key, 'md-pr-ref')}<span class="sync-chip mute">do ${esc(l.aparelho)}, só leitura</span><span class="md-espaco"></span>${origemHtml(l)}</div>
-    <div class="md-titulo">${esc(l.title || '')}</div>
-    <div class="md-sub">${ramoHtml(l)} ${merge}</div>
-    <p class="md-nota">Merge desabilitado aqui: dado vindo de outro aparelho nunca habilita merge.</p>
-  </div>`;
-}
-
-export function meusPrsRemotoHtml(m) {
-  const avisos = avisosHtml(m || {});
-  const linhas = (m && m.remotas) || [];
-  if (!linhas.length && !avisos) return '';
-  const topo = linhas.length ? `<div class="md-remoto-topo">${esc(resumoDaOrigem(m))}</div>` : '';
-  return `${topo}${avisos}${linhas.map(cardMeusPrsHtml).join('')}`;
 }

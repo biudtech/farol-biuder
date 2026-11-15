@@ -87,12 +87,11 @@
     <!-- sub-abas: uma tela, um propósito. Substituem a antiga .radar-nav, que era uma
          faixa de âncoras rolável e escondia metade dos destinos sem avisar. -->
     <!-- densidade Compacta (padrão) e Expandida, ao lado das sub-abas (07/11/2026): vale para
-         Pra mim e Meus PRs, guardada como preferência da tela (telas/densidade.js) -->
+         Pra mim, guardada como preferência da tela (telas/densidade.js) -->
     <div class="radar-topo">
     <div class="radar-subs" id="radarSubs" role="tablist" aria-label="Seções do Radar">
       <button class="rsub active" id="rsub-mim" data-sub="mim" role="tab" aria-selected="true" aria-controls="rpane-mim">Pra mim <span class="count" id="rcMim" hidden></span></button>
       <button class="rsub" id="rsub-apar" data-sub="apar" role="tab" aria-selected="false" aria-controls="rpane-apar" hidden>Aparelhos <span class="count" id="rcApar" hidden></span></button>
-      <button class="rsub" id="rsub-meus" data-sub="meus" role="tab" aria-selected="false" aria-controls="rpane-meus">Meus PRs <span class="count ambient" id="rcMeus" hidden></span></button>
     </div>
     <div class="densidade" id="densidade" role="group" aria-label="Densidade da lista">
       <button type="button" class="dens on" data-densidade="compacta" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Compacta</button>
@@ -182,19 +181,6 @@
 
     <div class="rpane" id="rpane-apar" role="tabpanel" aria-labelledby="rsub-apar" tabindex="0">
       <div id="aparPagina"></div>
-    </div>
-
-    <div class="rpane" id="rpane-meus" role="tabpanel" aria-labelledby="rsub-meus" tabindex="0">
-    <div id="myPRsWrap" hidden>
-      <div class="section-head">
-        <h2>Meus PRs <span id="myPRsCount" class="count ambient" hidden></span></h2>
-      </div>
-      <p class="section-desc">Autoanálise dos seus próprios PRs: veredito e dicas antes de pedir review. Só pra você, nada é postado. O botão Merge é a única ação que escreve no GitHub daqui.</p>
-      <div id="myPRs" class="cards"></div>
-      <!-- Meus PRs de outros aparelhos, só leitura (telas/listas-remotas.js) -->
-      <div id="myPRsRemoto" class="md-remoto" hidden></div>
-      <div id="myPRsHiddenFoot" class="mypr-hidden-foot" hidden></div>
-    </div>
     </div>
 
   </section>
@@ -483,23 +469,6 @@
               <span class="set-ctl"><input id="setSkipPerms" type="checkbox"><span class="switch"></span></span>
             </label>
           </div>
-          <div class="section-head"><h2>Merge em Meus PRs</h2></div>
-          <div class="card set-list" id="sys-mergeblocked">
-            <div class="set-row set-row-block" id="sys-row-mergeblocked">
-              <div class="set-txt">
-                <label class="set-title mb-title" for="mbAdd">Repos bloqueados pra merge<span class="count ambient" id="mbCount" hidden></span></label>
-                <span class="set-desc">Nesses repos o botão Merge de Meus PRs fica desativado, para respeitar a regra de review do time, e o Farol deixa de consultar no GitHub se os PRs deles dão para mergear. Vale para todas as contas e não muda nada no GitHub.</span>
-              </div>
-              <div class="mb-empty" id="mbEmpty">Nenhum repo bloqueado. O Merge aparece em todos os seus PRs quando a autoanálise diz aprovável e o GitHub deixa mergear.</div>
-              <ul class="mb-list" id="mbList" hidden></ul>
-              <div class="mb-add">
-                <input id="mbAdd" class="mb-input" type="text" spellcheck="false" autocomplete="off" placeholder="owner/repo ou URL do repo" aria-describedby="mbErro">
-                <button class="btn sm" id="mbAddBtn" type="button">Bloquear</button>
-              </div>
-              <span class="mb-erro" id="mbErro" role="alert" hidden></span>
-              <div class="mb-sug" id="mbSug" hidden></div>
-            </div>
-          </div>
         </div>
 
         <!-- Jira -->
@@ -508,7 +477,7 @@
           <p class="section-desc">Um site do Jira por organização do GitHub. Antes de abrir a revisão, o Farol descobre o site pela org dona do PR e lê o card, com os critérios de aceite.</p>
           <div class="callout info">
             <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 7.4v3.8M8 5.1v.6" stroke-linecap="round"/></svg>
-            <span><b>Do primeiro site cadastrado em diante, o Farol assume todas as integrações</b> das sessões de revisão e de autoanálise: elas passam a usar só o Jira do Farol e nenhuma outra integração. Vale inclusive em PR de organização que não tenha site aqui, pra nenhuma sessão alcançar o Jira de outra empresa.</span>
+            <span><b>Do primeiro site cadastrado em diante, o Farol assume todas as integrações</b> das sessões de revisão: elas passam a usar só o Jira do Farol e nenhuma outra integração. Vale inclusive em PR de organização que não tenha site aqui, pra nenhuma sessão alcançar o Jira de outra empresa.</span>
           </div>
           <div id="jiraSitesManager" class="cards"></div>
         </div>

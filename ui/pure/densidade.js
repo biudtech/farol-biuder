@@ -113,7 +113,7 @@ function estadoDaLinha(estado) {
 // listener da seção precisa (data-id da decisão, por exemplo).
 export function linhaCompactaHtml(o = {}) {
   const ref = `<a class="pl-ref${o.refClasse ? ` ${o.refClasse}` : ''}" href="${esc(o.url || '#')}" target="_blank" rel="noreferrer" title="${esc(o.key)}">${esc(chaveCurta(o.key))}</a>`;
-  return `<div class="pr-linha ${o.classe || ''} ${o.barra || ''}" data-key="${esc(o.key)}" data-url="${esc(o.url || '')}" ${o.attrs || ''} style="${o.style || ''}">
+  return `<div class="pr-linha ${o.classe || ''}" data-key="${esc(o.key)}" data-url="${esc(o.url || '')}" ${o.attrs || ''} style="${o.style || ''}">
     ${o.inicio || ''}
     <div class="pl-main">${ref}<span class="pl-titulo" title="${esc(o.titulo)}">${esc(o.titulo)}</span></div>
     ${estadoDaLinha(o.estado)}${o.meio || ''}${o.acoes || ''}

@@ -88,7 +88,7 @@ export function acctMark(pr, opts) {
   const multi = multiAccount();
   // A BARRA ESQUERDA NÃO É MAIS A COR DA CONTA. Ela passou a significar URGÊNCIA, e quem
   // a pinta é quem sabe o estado: a fila (âmbar), as decisões (âmbar, ou vermelho quando
-  // tem blocker), as sessões ativas (azul) e Meus PRs (verde/vermelho pelo veredito).
+  // tem blocker) e as sessões ativas (azul).
   // Motivo: âmbar em tudo faz âmbar não querer dizer nada. A conta continua visível no
   // ponto e na etiqueta, que já existiam. Ver o delta 2e do documento de design.
   const showChip = TWEAK.ident === 'Ponto + etiqueta' && all && multi;

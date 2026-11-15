@@ -19,7 +19,7 @@ import { snapshotUsage } from './lib/engine/snapshot-usage.js';
 import {
   instanciaIsolada, executadoDireto, rodandoComoRoot, sinaisDoModoCelular, APP_VERSION, APP_NAME,
   HOME, WORKSPACE, STATE_DIR, CONFIG_FILE, LOG_FILE, SEEN_FILE, IGNORED_FILE, BASELINE_FILE,
-  INFLIGHT_FILE, SELF_FILE, HIDDEN_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
+  INFLIGHT_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
 
 // Helpers puros e utilitários movidos pra lib/ (Onda 1 do refactor, ver docs/QUALITY.md).
@@ -221,10 +221,6 @@ class Engine extends EventEmitter {
     this.pushbackScanned = readJson(path.join(STATE_DIR, 'pushback-scanned.json'), {}, warn); // { key: marcador da última atividade do autor já avaliada }
     this.reReviewLaunched = readJson(path.join(STATE_DIR, 'rereview-launched.json'), {}, warn); // { key: { head, dia, rodadas } da re-revisão automática; string legada = só o head }
     this.headQuietoDesde = {}; // { key: { head, at } } debounce do round automático, só memória
-    // { key: motivo } do cancelamento AUTOMÁTICO de autoanálise (commit novo durante a
-    // sessão). Só memória, consumido uma vez pelo toast do runOneHeadless: sem isso a
-    // pessoa leria "cancelada" sem ter cancelado nada, a mesma frase do botão Cancelar.
-    this.selfCancelMotivo = new Map();
     // Relógio LOCAL das labels `<login>:revisando` de outras pessoas: { key do PR:
     // { login minúsculo: epochMs da primeira vez que ESTE Farol viu } }. Existe
     // porque a label não carrega hora nenhuma e uma sessão que morreu deixa a
@@ -366,7 +362,7 @@ class Engine extends EventEmitter {
         fs.existsSync(path.join(TEMPLATE_DIR, 'prompts'))) {
       copyRecursive(path.join(TEMPLATE_DIR, 'prompts'), path.join(WORKSPACE, 'prompts'));
     }
-    // prompts novos (ex.: autoanalise) chegam por atualizacao em workspace ja semeado:
+    // prompts novos chegam por atualizacao em workspace ja semeado:
     // copie um a um o que faltar, sem sobrescrever o que o usuario possa ter ajustado
     try {
       const tplPrompts = path.join(TEMPLATE_DIR, 'prompts');
@@ -887,7 +883,7 @@ class Engine extends EventEmitter {
 
       // falha só das --review-requested (ex.: rate limit da API de search): preserva
       // fila, "é meu" e marcadores do último ciclo bom, no MESMO padrão de reviewedKeys
-      // e myPRs logo acima. Zerar aqui apagava reReviewedKeys (markReRequests com Set
+      // logo acima. Zerar aqui apagava reReviewedKeys (markReRequests com Set
       // vazio) e ressuscitava PRs que o usuário ignorou, re-notificando tudo na volta.
       const mineFailed = mine === null;
       const mineList = mineFailed ? [...this.queue] : mine;

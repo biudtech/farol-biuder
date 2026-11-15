@@ -1,9 +1,9 @@
 /* Farol · UI: as densidades Compacta (padrão) e Expandida do Radar (07/11/2026).
 
-   Vale para Pra mim e Meus PRs. A escolha é preferência local da tela (localStorage, com
+   Vale para Pra mim. A escolha é preferência local da tela (localStorage, com
    try/catch: sem armazenamento a escolha vale nesta janela). O que está aberto (a linha que
-   virou card cheio na Compacta, Revisões recentes à mostra) é estado só da tela, igual ao
-   meusAbertos de Meus PRs, e trocar de densidade recolhe tudo, como no desenho.
+   virou card cheio na Compacta, Revisões recentes à mostra) é estado só da tela,
+   e trocar de densidade recolhe tudo, como no desenho.
 
    Os cliques são um listener delegado no document; quem redesenha é a função que o
    bootstrap injeta em initDensidade (a mesma repintura do aoMudarRadarSub), para este módulo

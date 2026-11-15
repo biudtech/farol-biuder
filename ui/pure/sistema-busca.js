@@ -26,8 +26,6 @@ export const SYS_INDEX = [
   { sec: 'plans', at: '#sys-row-esforco', title: 'Esforço de raciocínio', hint: 'effort, pensar, raciocínio, alto, baixo, xhigh' },
   { sec: 'automation', at: '#sys-row-intervalo', title: 'Intervalo de checagem', hint: 'polling, minutos, frequência' },
   { sec: 'automation', at: '#sys-row-skipperms', title: 'Sessão no terminal sem pedir permissões', hint: 'dangerously skip permissions, prompts' },
-  // saiu de Sistema > Conexões em 03/10/2026, com a seção (merge-bloqueado.js)
-  { sec: 'automation', at: '#sys-row-mergeblocked', title: 'Repos bloqueados pra merge', hint: 'merge, mergear, bloqueio, bloqueado, bloquear, repo, repos, repositório, self merge, desativa o botão Merge de Meus PRs' },
   { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, chave de API, perfil, proxy, url base, teto, orçamento' },
   { sec: 'prefs', at: '#sys-row-identity', title: 'Identidade nos cards', hint: 'barra, etiqueta, ponto, marcador' },
   { sec: 'prefs', at: '#sys-row-mutedview', title: 'Contas silenciadas', hint: 'recolher, esmaecer, ocultar, exibição' },

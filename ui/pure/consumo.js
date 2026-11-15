@@ -401,7 +401,7 @@ export function usageSessionsHtml(u) {
 
 /* Uma linha que responde a pergunta que a tabela sozinha nao responde: quanto do
    gasto virou resultado. Ela existe porque em 30/08/2026 o dia fechou com US$ 94,39
-   e 87% da autoanalise no lixo, e a aba mostrava sucesso em 100% das sessoes: pra
+   e 87% do gasto de um tipo de sessao no lixo, e a aba mostrava sucesso em 100% das sessoes: pra
    enxergar o desperdicio foi preciso cruzar dois arquivos na mao.
 
    So aparece quando ha o que dizer (algum gasto perdido ou estimado): linha fixa

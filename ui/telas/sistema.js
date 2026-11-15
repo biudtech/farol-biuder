@@ -9,7 +9,6 @@ import { loadLog } from './diagnostico.js';
 import { renderAccountsManager } from './sistema-contas.js';
 import { renderClaudeProfiles } from './sistema-perfis.js';
 import { renderJiraSites } from './sistema-jira.js';
-import { renderReposBloqueados } from './merge-bloqueado.js';
 import { renderSync } from './sistema-sync.js';
 import { renderAparelhos, carregarAparelhos } from './sistema-aparelhos.js';
 import { renderGrupos } from './sistema-grupos.js';
@@ -111,7 +110,6 @@ function renderSettings() {
   const c = estado().config;
   syncTheme(c);
   if (!document.activeElement || !$('#setupSteps').contains(document.activeElement)) renderSetup();
-  renderReposBloqueados();
   renderClaudeProfiles();
   renderJiraSites();
   renderSync();

@@ -21,15 +21,13 @@ import {
   initContasTriggers, escopoGuardado,
 } from './telas/contas.js';
 import { loadTeam } from './telas/time.js';
-import { ping, notifyNewPRs, avisoDaBase } from './telas/avisos.js';
+import { ping, notifyNewPRs } from './telas/avisos.js';
 import { initTweaks } from './telas/acoes.js';
 import { registrarTelaConsumo } from './telas/consumo.js';
 import { renderStatus, tickCountdown, renderActive, handleActivity } from './telas/sessoes.js';
 import {
   renderDecisions, renderQueue, renderRadarNav, initResolvedTriggers, aoMudarRadarSub, switchRadarSub,
 } from './telas/radar.js';
-import { renderMyPRs, updateAnalysisProgress, contagemMeusPrs } from './telas/meus-prs.js';
-import { observarCancelamentos } from './telas/autoanalise-andamento.js';
 import { initDensidade } from './telas/densidade.js';
 import { sysGoTo, renderSettings, renderPlatformSettings } from './telas/sistema.js';
 import { initCaixaRevisao } from './telas/caixa-revisao.js';
@@ -230,21 +228,12 @@ document.addEventListener('keydown', (e) => {
   goTo(el.dataset.goto);
 });
 
-// Ordem de busca = onde a ação mora (decisão > fila > meus PRs).
-function subabaDoPr(url) {
-  const s = estado() || {};
-  if ((s.decisions?.pending || []).some(d => d.pr?.url === url)) return 'mim';
-  if ((s.queue || []).some(pr => pr.url === url)) return 'mim';
-  if ((s.headlessWaitingPrs || []).some(pr => pr.url === url)) return 'mim';
-  if ((s.myPRs || []).some(pr => pr.url === url)) return 'meus';
-  return 'mim';
-}
 function focusPr(url, tentativa = 0) {
   if (!url) return;
-  // O painel pode ainda não ter DOM: escolhe pelos dados antes de procurar o card.
-  switchRadarSub(subabaDoPr(url));
+  // O painel pode ainda não ter DOM: a ação sobre um PR mora sempre em Pra mim.
+  switchRadarSub('mim');
   switchTab('radar');
-  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#myPRs .mypr-card', '#resolved [data-url]']
+  const sel = ['#decisions .decision', '#esperaCi .decision', '#queue .pr-card', '#resolved [data-url]']
     .map(s => `${s}[data-url="${CSS.escape(url)}"]`).join(', ');
   const card = document.querySelector(sel);
   if (!card) {
@@ -252,7 +241,7 @@ function focusPr(url, tentativa = 0) {
     if (tentativa < 2) setTimeout(() => focusPr(url, tentativa + 1), 700);
     return;
   }
-  // card numa sub-aba do Radar que não está à mostra (Meus PRs): troca antes de rolar,
+  // card numa sub-aba do Radar que não está à mostra: troca antes de rolar,
   // senão o scroll num painel escondido não faz nada e o clique morre calado
   const painel = card.closest('.rpane');
   if (painel && !painel.classList.contains('active')) {
@@ -296,8 +285,7 @@ const pinturas = criarAgendaVisual({
     plataforma: () => aplicaPlataforma(estado().app?.platform),
     contas: () => { rebuildAccounts(); renderAccountBar(); renderIdentity(); },
     status: renderStatus, sessoes: renderActive, decisoes: renderDecisions, fila: renderQueue,
-    meus: renderMyPRs,
-    navegacao: () => renderRadarNav(contagemMeusPrs()),
+    navegacao: renderRadarNav,
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
     relogio: tickCountdown,
     consumo: () => pintarTelaRegistrada('consumo'),
@@ -357,7 +345,6 @@ function connect() {
     const d = safeJsonParse(e.data); if (!d) return;
     const primeiro = !estado();
     definirEstado({ ...d, activity: limitarAtividadeVisual(d.activity, d.activeSessions) });
-    observarCancelamentos();
     repintarPorEstado(null, primeiro);
   });
   // Estado por DIFERENÇA (lib/estado-delta.js): o engine manda só os campos de topo
@@ -372,17 +359,15 @@ function connect() {
     const novo = { ...atual, ...d.campos };
     for (const chave of d.removidos || []) delete novo[chave];
     if (Object.hasOwn(d.campos, 'activity')) novo.activity = limitarAtividadeVisual(novo.activity, novo.activeSessions);
-    definirEstado(novo); observarCancelamentos();
+    definirEstado(novo);
     repintarPorEstado([...Object.keys(d.campos), ...(d.removidos || [])]);
   });
   // o app.js só entrega o evento: quem calcula o que ele significa é quem é
-  // dono do assunto (telas/sessoes.js, o feed e a barra de progresso da sessão;
-  // telas/autoanalise-andamento.js, a faixa da autoanálise em Meus PRs).
+  // dono do assunto (telas/sessoes.js, o feed e a barra de progresso da sessão).
   es.addEventListener('activity', (e) => {
     const d = safeJsonParse(e.data); if (!d) return; const { id, item, lidos } = d;
     handleActivity(id, item, lidos);
     pinturas.invalidar(['activity']);
-    updateAnalysisProgress(id, item);
   });
   // visão compartilhada (andamento e pendências de outros aparelhos): delta próprio, nunca o
   // estado inteiro. O bootstrap só entrega; quem entende é telas/radar-compartilhado.js.
@@ -394,7 +379,7 @@ function connect() {
     const d = safeJsonParse(e.data); if (!d) return;
     aoPendenciasRemotas(d);
   });
-  // Meus PRs de outros aparelhos: idem, quem entende é telas/listas-remotas.js
+  // listas de outros aparelhos: idem, quem entende é telas/listas-remotas.js
   es.addEventListener('sync-lists', (e) => {
     const d = safeJsonParse(e.data); if (!d) return;
     aoListasRemotas(d);
@@ -412,8 +397,6 @@ function connect() {
     toast(t.kind || 'info', t.text);
   });
   es.addEventListener('new-prs', (e) => { const d = safeJsonParse(e.data); if (d) notifyNewPRs(d); });
-  // PR meu em conflito ou superado pela base: o toast é de telas/avisos.js, a navegação é daqui
-  es.addEventListener('meu-pr-base', (e) => { const d = safeJsonParse(e.data); if (d) avisoDaBase(d, (url) => focusPr(url)); });
   es.addEventListener('auto-approved', () => ping());
   es.addEventListener('auto-rejected', () => ping());
   es.addEventListener('auto-commented', () => ping());
@@ -462,9 +445,9 @@ registrarTelaConsumo();
 registrarTelaRadarCompartilhado();
 // Radar > Aparelhos lê o que a visão compartilhada acumula, e por isso registra depois dela
 registrarTelaRadarAparelhos();
-// Meus PRs de outros aparelhos: quando chega projeção nova, a aba (e as contagens das
-// sub-abas) se redesenha pelas funções que o bootstrap já chama por snapshot
-initListasRemotas(() => { pinturas.invalidar(['myPRs', 'sync']); });
+// listas de outros aparelhos: quando chega projeção nova, quem as lê se redesenha pelas
+// funções que o bootstrap já chama por snapshot
+initListasRemotas(() => { pinturas.invalidar(['sync']); });
 
 /* O endereço da página reflete a tela (telas/rota.js): por último, para o ouvinte de clique
    e tecla dele rodar depois de todos os handlers acima, e com todas as telas registradas

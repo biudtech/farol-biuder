@@ -297,50 +297,14 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 .check.is-goto { text-decoration: none; }
 .check.is-goto:hover { border-color: var(--accent); }
 
-/* ---------- meus PRs ---------- */
-.mypr-card { display: block; border-left: 3px solid var(--ambient); }
-.mypr-card.ok { border-left-color: var(--ok); }
-.mypr-card.warn { border-left-color: var(--danger); }
-/* vencida: nem verde nem vermelha. O veredito nao vale mais, entao a barra para de
-   afirmar aprovacao ou reprovacao e passa a pedir atencao. */
-.mypr-card.stale { border-left-color: var(--accent); }
-.mypr-top { display: flex; align-items: center; gap: 14px; }
-/* a base define quando as ações descem: com base zero o título "cabia" em qualquer largura e
-   ficava espremido ao lado dos botões, que nunca quebravam de linha */
-.mypr-top .info { flex: 1 1 320px; min-width: 0; }
-.mypr-top .pr-actions { flex: 0 1 auto; max-width: 100%; }
-.mypr-card .badge { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px; }
 .pr-card .badge { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px; margin-left: 6px; }
 /* revisão automática parada (estacionamento): é a diferença entre "nunca revisou" e
    "revisou, caiu e espera clique", que até a v2.57.4 a tela não mostrava */
 .pr-card .pr-parked { margin-top: 4px; font-size: 11.5px; line-height: 1.35; color: var(--danger); overflow-wrap: anywhere; }
 .pr-card .pr-parked span { text-decoration: underline dotted; }
-.mypr-analysis { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.mypr-summary { font-size: 13.5px; margin-bottom: 8px; }
-/* analise DESATUALIZADA: o PR andou depois dela. O painel continua legivel (o texto
-   segue valendo pro codigo que foi lido), so perde o destaque, porque o veredito nao
-   fala mais do codigo atual. Esmaecer o proprio texto esconderia o que ainda serve. */
-.mypr-analysis.desatualizada { border-top-color: var(--accent-soft); }
-.mypr-stale {
-  font-size: 12.5px; line-height: 1.45; margin-bottom: 10px; padding: 8px 10px;
-  border-radius: 8px; border-left: 3px solid var(--accent);
-  background: var(--accent-soft); color: var(--text);
-}
-.mypr-block, .mypr-tips { margin-top: 8px; font-size: 13px; }
-.mypr-block > b, .mypr-tips > b { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-.mypr-block .dec-reasons li::marker, .mypr-tips .dec-reasons li::marker { color: transparent; }
-.mypr-block .mypr-hint { font-size: 12px; color: var(--muted); }
 .pr-branches { font-size: 11.5px; margin: 3px 0 1px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pr-branches code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; color: var(--muted); font-size: 11px; }
 .pr-branches .arrow { color: var(--ac); font-weight: 700; }
-.mypr-fixrow { margin-top: 12px; }
-.mypr-when { color: var(--muted); font-size: 12px; margin-top: 10px; }
-/* PR oculto à mostra: esmaecido, pra ler como "está fora da lista" sem sumir de vez.
-   Classe NOVA no card em vez de mexer na .mypr-card, que já carrega a barra de estado. */
-.mypr-card.oculto { opacity: .55; }
-.mypr-card.oculto:hover, .mypr-card.oculto:focus-within { opacity: .9; }
-/* rodapé discreto da seção: a linha inteira é o botão que alterna os ocultos */
-.mypr-hidden-foot { margin-top: 10px; }
 .mypr-hidden-toggle { background: none; border: 0; padding: 4px 2px; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .mypr-hidden-toggle:hover { color: var(--info); text-decoration: underline; }
 
@@ -995,7 +959,7 @@ label.set-row { cursor: pointer; }
 .brand { flex-shrink: 1; }
 /* linhas de lista e barras de acao quebram em vez de cortar botao/meta (so quebram quando nao cabem) */
 .row { flex-wrap: wrap; row-gap: 4px; }
-.section-head, .row-actions, .mypr-top, .decision-head, .dec-actions, .pr-card, .pr-actions { flex-wrap: wrap; }
+.section-head, .row-actions, .decision-head, .dec-actions, .pr-card, .pr-actions { flex-wrap: wrap; }
 
 @media (max-width: 720px) {
   /* marca + ações em cima, abas em linha própria de largura total */
@@ -1034,7 +998,7 @@ label.set-row { cursor: pointer; }
 
   /* RADAR: card de PR com 4 botões numa linha só. O texto fica em cima, as ações
      embaixo, ocupando a largura. */
-  .pr-card > .info, .mypr-top > .info { flex: 1 1 100%; min-width: 0; }
+  .pr-card > .info { flex: 1 1 100%; min-width: 0; }
   .pr-actions { width: 100%; }
   .pr-actions .btn { flex: 1; justify-content: center; }
   .pr-actions .btn.icon { flex: 0 0 auto; }
@@ -1060,7 +1024,7 @@ label.set-row { cursor: pointer; }
      e a ação primária ocupa a linha inteira (as secundárias descem). */
   .avatar { width: 28px; height: 28px; font-size: 11.5px; }
   .pr-title { font-size: 13.5px; }
-  .pr-card, .mypr-card, .decision { padding: 11px 12px; }
+  .pr-card, .decision { padding: 11px 12px; }
   .pr-actions { width: 100%; flex-wrap: wrap; }
   .pr-actions .btn.primary { flex: 1 0 100%; justify-content: center; }
   .section-head h2 { font-size: 15px; }
@@ -1795,12 +1759,7 @@ body.parear > *:not(.par-raiz) { display: none !important; }
   .pr-coord .md-goto { min-height: 44px; }
 }
 
-/* ---------- Meus PRs de outros aparelhos (telas/listas-remotas.js) ---------- */
-.md-remoto { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
-.md-remoto-topo { font-size: 12px; font-weight: 600; color: var(--muted); text-wrap: pretty; }
-.md-remoto-linhas { margin: 0; }
 .md-origem { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.md-meu-remoto { display: flex; flex-direction: column; gap: 6px; }
 .md-pr { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .md-pr-titulo { overflow-wrap: anywhere; }
 .md-pr-autor { font-size: 12px; color: var(--muted); }
@@ -1809,7 +1768,7 @@ body.parear > *:not(.par-raiz) { display: none !important; }
   .md-origem { max-width: 140px; }
 }
 @media (max-width: 620px) {
-  .md-remoto .pr-ref-mention, .md-remoto .person-mention, .md-pend .pr-ref-mention, .md-op .pr-ref-mention { min-height: 44px; display: inline-flex; align-items: center; }
+  .md-pend .pr-ref-mention, .md-op .pr-ref-mention { min-height: 44px; display: inline-flex; align-items: center; }
   .md-origem { max-width: none; white-space: normal; }
 }
 /* ---------- repetir, iniciar e designar admin pela tela (B2, itens 2.5 e 2.9) ----------
@@ -1972,132 +1931,11 @@ body.parear > *:not(.par-raiz) { display: none !important; }
   .session-card .act-cancel { min-height: 44px; }
 }
 
-/* ---------- sistema > automação: repos bloqueados pra merge (Claude Design, 03/10/2026) ----------
-   Handoff em docs/superpowers/specs/2026-10-03-tela-conexoes-anexos/HANDOFF.md. Só tokens. */
-.set-row-block#sys-row-mergeblocked { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
-.mb-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mb-title .count { font-weight: 700; }
-.mb-empty {
-  border: 1px dashed var(--border); border-radius: 10px;
-  padding: 12px 14px; font-size: 13px; color: var(--muted); text-wrap: pretty;
-}
-/* o gap de 1px sobre o fundo --border-soft desenha as divisórias: linha removida não deixa
-   borda órfã */
-.mb-list {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 1px;
-  background: var(--border-soft); border: 1px solid var(--border-soft);
-  border-radius: 10px; overflow: hidden;
-}
-.mb-item { display: flex; align-items: center; gap: 12px; padding: 7px 7px 7px 12px; background: var(--surface); }
-.mb-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mb-repo { background: none; padding: 0; font-size: 12.5px; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
-/* --muted e não --faint: no claro o --faint fica abaixo de 4,5:1 sobre --surface */
-.mb-meta { font-size: 12px; color: var(--muted); }
-.mb-x { flex: none; }
-.mb-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.mb-input {
-  flex: 1 1 220px; max-width: 340px; min-width: 0;
-  padding: 6px 10px; background: var(--surface-2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 12.5px;
-}
-.mb-input::placeholder { color: var(--faint); }
-.mb-input:focus { outline: none; border-color: var(--accent); }
-.mb-input[aria-invalid="true"] { border-color: var(--danger); }
-.mb-erro { margin-top: -6px; font-size: 12px; color: var(--danger); }
-.mb-sug { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
-.mb-sug-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  font: inherit; font-size: 11.5px; color: var(--muted);
-  background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 7px;
-  padding: 2px 8px; cursor: pointer;
-}
-.mb-sug-btn:hover { color: var(--text); border-color: var(--border); }
-.mypr-merge-nota { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
-@media (max-width: 620px) {
-  .mb-input { max-width: none; }
-  .mb-input, .mb-add .btn, .mb-x, .mb-sug-btn { min-height: 44px; }
-  .mb-x { min-width: 64px; justify-content: center; }
-  .mypr-merge-nota .is-goto { display: inline-flex; align-items: center; min-height: 44px; }
-}
-
-/* ---------- meus PRs: aviso da base (Claude Design, 10/10/2026) ---------- */
-/* âmbar cheio no claro: #e08700 com texto branco dá 2,6:1. Com #201302 dá 7:1. Só o selo
-   superado e o botão Fechar usam; o .btn.primary do resto do app não muda. */
+/* âmbar cheio no claro: #e08700 com texto branco dá 2,6:1. Com #201302 dá 7:1. Só os botões
+   da caixa de revisão usam; o .btn.primary do resto do app não muda. */
 :root { --accent-fill-ink: var(--accent-ink); }
 :root[data-theme="light"] { --accent-fill-ink: #201302; }
 
-.mypr-card.base-alerta { border-left-color: var(--urgent); }
-
-.verdict.base-conflito { color: var(--accent-text); background: var(--accent-soft); }
-.verdict.base-superado { color: var(--accent-fill-ink); background: var(--accent); }
-
-.mypr-base {
-  margin-top: 10px; display: flex; gap: 9px; align-items: baseline;
-  font-size: 12.5px; line-height: 1.45; color: var(--text);
-}
-.mypr-base .mb-marca {
-  width: 7px; height: 7px; flex: none; background: var(--accent);
-  transform: rotate(45deg); position: relative; top: -1px;
-}
-.mypr-base .mb-corpo { min-width: 0; text-wrap: pretty; overflow-wrap: anywhere; }
-.mypr-base b { font-weight: 650; }
-.mypr-base code { font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-weight: 500; }
-.mypr-base .mb-link { color: var(--info); font-weight: 600; }
-.mypr-base .mb-extra { margin-top: 2px; font-size: 12px; color: var(--muted); }
-.mypr-base .mb-extra code { background: none; border: 0; padding: 0; font-size: 11px; }
-/* nota de merge logo depois do aviso: alinha com o texto, não com o marcador */
-.mypr-base + .mypr-merge-nota { margin-top: 6px; padding-left: 16px; }
-
-.mypr-superado {
-  margin-top: 12px; padding: 12px 14px; border-radius: 10px;
-  background: var(--surface-2); border: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.mypr-superado code { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; }
-.ms-titulo { font-size: 13.5px; font-weight: 650; line-height: 1.4; text-wrap: pretty; }
-.ms-titulo code { font-size: 12px; font-weight: 500; }
-.ms-prova { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
-.ms-prova code { background: none; border: 0; padding: 0; font-size: 11.5px; }
-.ms-arquivos { font-size: 12.5px; }
-.ms-arquivos summary {
-  width: fit-content; cursor: pointer; font-weight: 600; color: var(--text);
-  text-decoration: underline dotted var(--faint); text-underline-offset: 3px;
-}
-.ms-grupos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 24px; margin-top: 8px; }
-.ms-grupos b { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-.ms-grupos ul { list-style: none; margin: 4px 0 0; padding: 0; font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
-.ms-saida { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--border); }
-.ms-saida > span { font-size: 12px; color: var(--muted); text-wrap: pretty; }
-/* .btn.primary.ms-fechar, e não só .ms-fechar: o .btn.primary pinta o texto com --accent-ink
-   (branco no claro) e venceria pela especificidade, voltando aos 2,6:1 */
-.btn.primary.ms-fechar { color: var(--accent-fill-ink); text-decoration: none; }
-
-.toast.base { border-left: 3px solid var(--accent); }
-.toast.base .t-titulo { font-weight: 650; }
-.toast.base .t-pr { color: var(--text); font-weight: 600; text-decoration: underline dotted var(--faint); text-underline-offset: 2px; }
-.toast.base .t-acao { color: var(--accent-text); font-weight: 650; background: none; border: 0; padding: 0; cursor: pointer; }
-
-@media (max-width: 720px) {
-  /* o aviso sobe para antes das ações: selo, título e aviso juntos no alto do card */
-  .mypr-card .mypr-top { display: contents; }
-  .mypr-card { display: flex; flex-wrap: wrap; column-gap: 14px; }
-  .mypr-card .info { flex: 1 1 0; }
-  .mypr-card .mypr-base, .mypr-card .mypr-superado, .mypr-card .mypr-merge-nota { order: 2; flex: 1 1 100%; }
-  .mypr-card .pr-actions { order: 3; flex: 1 1 100%; margin-top: 12px; }
-  /* faixas sem ordem própria ficavam ao lado do título, disputando a largura com ele */
-  .mypr-card .aa-faixa { order: 3; flex: 1 1 100%; min-width: 0; }
-  .mypr-card .mypr-analysis { order: 4; flex: 1 1 100%; }
-  .mypr-base .mb-link, .ms-arquivos summary { display: inline-flex; align-items: center; min-height: 44px; }
-  .ms-fechar { flex: 1 1 100%; justify-content: center; min-height: 44px; }
-  .toast.base .t-acao, .toast.base .t-fechar { min-height: 44px; min-width: 44px; }
-}
-/* complementos da implementação (11/10/2026): a linha "Visto há" também cabe no bloco do
-   superado, e o toast da base empilha título, linhas e ação */
-.mypr-superado .mb-extra { font-size: 12px; color: var(--muted); }
-.toast.base { align-items: flex-start; }
-.toast.base .t-corpo { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; min-width: 0; }
-.toast.base .t-fechar { font-size: 16px; line-height: 1; }
 
 #sys-plans-modelo { margin-bottom: var(--sp-3); }
 
@@ -2325,7 +2163,7 @@ label.set-row:has(input:disabled).review-tools, .review-tools label.set-row:has(
 
 
 /* ---------- Densidades do Radar (07/11/2026) ----------
-   As densidades Compacta (padrão) e Expandida em Pra mim e Meus PRs. Desenho do Claude Design em
+   As densidades Compacta (padrão) e Expandida em Pra mim. Desenho do Claude Design em
    docs/superpowers/specs/2026-11-07-meus-prs-prontidao-anexos/. Cinco tons, nenhuma cor
    nova: t-ok (--settled), t-run (--working), t-wait (--urgent), t-fail (--blocked) e t-none
    (--muted). As classes levam o prefixo pron- porque .pill já é o selo do topo da janela.
@@ -2377,7 +2215,6 @@ body[data-densidade="compacta"] #tab-radar .section-desc { display: none; }
 .pl-estado { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--pron); white-space: nowrap; }
 .pl-pt { width: 8px; height: 8px; border-radius: 99px; background: var(--pron); flex: none; }
 .pr-linha .avatar { width: 22px; height: 22px; font-size: 10px; flex: none; }
-.pr-linha.oculto { opacity: .55; }
 .pron-seta {
   flex: 0 0 32px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
@@ -2387,18 +2224,13 @@ body[data-densidade="compacta"] #tab-radar .section-desc { display: none; }
 /* Quem abre é quem fecha, no mesmo lugar (08/11/2026): no card aberto a seta fica no canto em que
    estava na linha compacta (.pr-linha: altura 48, seta 32, padding direito 10). */
 .card:has(.pron-seta[aria-expanded="true"]) { position: relative; }
-.card.decision:has(.pron-seta[aria-expanded="true"]) .decision-head,
-.card.mypr-card:has(.pron-seta[aria-expanded="true"]) .pr-actions,
-.card.pr-card:has(.pron-seta[aria-expanded="true"]) .pr-actions { padding-right: 38px; }
+.card.decision:has(.pron-seta[aria-expanded="true"]) .decision-head, .card.pr-card:has(.pron-seta[aria-expanded="true"]) .pr-actions { padding-right: 38px; }
 /* quando as ações descem para a própria linha, quem fica sob a seta é o título do card */
 @media (max-width: 820px) {
   .card.pr-card:has(.pron-seta[aria-expanded="true"]) .pr-actions { padding-right: 0; }
   .card.pr-card:has(.pron-seta[aria-expanded="true"]) .info { padding-right: 38px; }
 }
-/* em Meus PRs as ações descem conforme a quantidade de botões, então o título reserva a seta sempre */
-.card.mypr-card:has(.pron-seta[aria-expanded="true"]) .info { padding-right: 38px; }
 @media (max-width: 720px) {
-  .card.mypr-card:has(.pron-seta[aria-expanded="true"]) .pr-actions { padding-right: 0; }
   /* na tela estreita a linha quebra: a seta fechada fica no canto também, como a aberta */
   .pr-linha { position: relative; padding-right: 48px; }
   .pr-linha .pron-seta { position: absolute; top: 7px; right: 10px; }
@@ -2408,11 +2240,6 @@ body[data-densidade="compacta"] #tab-radar .section-desc { display: none; }
 .card .sess-pron-aberta .pron-seta[aria-expanded="true"] { position: static; }
 .pron-rodape { align-self: flex-start; }
 
-/* a barra esquerda segue o selo da autoanálise */
-.pr-linha.ok { border-left-color: var(--settled); }
-.pr-linha.stale { border-left-color: var(--urgent); }
-.pr-linha.warn { border-left-color: var(--blocked); }
-
 /* "Analisando agora" na Compacta: o cartão encolhe para cabeçalho e barra, e a seta o abre */
 .sess-pron:empty { display: none; }
 .sess-pron-curta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 6px 0 2px; }
@@ -2420,49 +2247,3 @@ body[data-densidade="compacta"] .session-card:not(.aberta) .activity-feed,
 body[data-densidade="compacta"] .session-card:not(.aberta) .stage-flow,
 body[data-densidade="compacta"] .session-card:not(.aberta) .session-agent-details { display: none; }
 
-/* A autoanálise em andamento, na largura do card (08/11/2026, desenho no Claude Design). */
-.aa-faixa { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.aa-topo { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.aa-etapas { display: flex; align-items: center; flex-wrap: wrap; row-gap: 6px; min-width: 0; }
-.aa-et { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
-.aa-pt { width: 16px; height: 16px; border-radius: 99px; border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; box-sizing: border-box; flex: none; }
-.aa-et.feita { color: var(--muted); }
-.aa-et.feita .aa-pt { border-color: transparent; background: color-mix(in srgb, var(--settled) 16%, transparent); color: var(--settled); }
-.aa-et.agora { color: var(--text); }
-.aa-et.agora .aa-pt { border: 2px solid var(--working); border-right-color: transparent; animation: aa-gira .8s linear infinite; }
-.aa-liga { width: 26px; height: 1.5px; background: var(--border); margin: 0 8px; flex: none; }
-.aa-liga.feita { background: var(--settled); }
-.aa-lado { display: flex; align-items: center; gap: 12px; flex: none; margin-left: auto; }
-.aa-tempo { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.aa-trilho { position: relative; height: 4px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin: 11px 0 9px; }
-.aa-cheio { height: 100%; border-radius: 99px; background: var(--working); transition: width .4s; }
-.aa-corre { position: absolute; top: 0; bottom: 0; width: 32%; border-radius: 99px; background: var(--working); animation: aa-corre 1.5s ease-in-out infinite; }
-.aa-rodape { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.aa-rodape.sem-barra { margin-top: 10px; }
-.aa-texto { font-size: 13px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aa-apoio { font-size: 12px; color: var(--muted); white-space: nowrap; flex: none; }
-.aa-faixa.t-wait .aa-texto { color: var(--urgent); }
-.aa-faixa.t-fail .aa-texto { color: var(--blocked); white-space: normal; }
-.aa-falha-titulo { font-size: 13px; font-weight: 700; color: var(--blocked); }
-.aa-spin { width: 12px; height: 12px; border-radius: 99px; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; box-sizing: border-box; margin-right: 7px; vertical-align: -2px; animation: aa-gira .8s linear infinite; }
-.btn.aa-botao, .btn.aa-botao[disabled] { background: color-mix(in srgb, var(--ac) 16%, transparent); border-color: transparent; color: var(--ac); opacity: 1; cursor: default; }
-:root[data-theme="light"] .btn.aa-botao, :root[data-theme="light"] .btn.aa-botao[disabled] { color: var(--accent-text); }
-.pr-linha.em-analise { position: relative; overflow: hidden; }
-.pr-linha.em-analise .pl-pt { width: 12px; height: 12px; background: none; border: 2px solid var(--pron); border-right-color: transparent; box-sizing: border-box; animation: aa-gira .8s linear infinite; }
-.aa-fio { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--surface-2); overflow: hidden; }
-.aa-fio i { display: block; height: 100%; background: var(--working); transition: width .4s; }
-.aa-fio i.corre { position: absolute; top: 0; width: 32%; animation: aa-corre 1.5s ease-in-out infinite; }
-@keyframes aa-gira { to { transform: rotate(360deg); } }
-@keyframes aa-corre { 0% { left: -32%; } 100% { left: 100%; } }
-@media (prefers-reduced-motion: reduce) {
-  .aa-et.agora .aa-pt, .aa-spin, .pr-linha.em-analise .pl-pt, .aa-corre, .aa-fio i.corre { animation: none; }
-  .aa-corre, .aa-fio i.corre { left: 0; width: 100%; opacity: .45; }
-}
-@media (max-width: 720px) {
-  .aa-etapas { flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
-  .aa-liga { display: none; }
-  .aa-lado { width: 100%; justify-content: space-between; margin-left: 0; }
-  .aa-lado .btn { min-height: 44px; }
-  .aa-rodape { flex-direction: column; gap: 2px; }
-  .aa-texto { white-space: normal; }
-}

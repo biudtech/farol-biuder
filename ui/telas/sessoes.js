@@ -277,7 +277,7 @@ function atualizarSetaDaSessao(box, s) {
   if (card) card.classList.toggle('aberta', !!key && cardCheio(key));
 }
 function renderActive() {
-  const vivas = (estado().activeSessions || []).filter(s => (s.mode === 'auto' || s.mode === 'self') && sessionVisible(s));
+  const vivas = (estado().activeSessions || []).filter(s => s.mode === 'auto' && sessionVisible(s));
   const box = $('#activeSessions');
   marcarConcluidas(box, vivas);
   const concluidas = [...SAINDO.values()].map(x => x.sess).filter(s => !vivas.some(v => v.id === s.id));

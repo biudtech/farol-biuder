@@ -26,8 +26,8 @@ comum.js  <-  mencoes.js  <-  módulos de domínio
   (`safeJsonParse`), e por isso é santuário em `tools/quality/rules.js`.
 - **`mencoes.js`** transforma pessoa, repo, PR e sessão em menção navegável. Só importa de
   `comum.js`.
-- **Os de domínio** (`chat`, `consumo`, `radar`, `review`, `pessoas`, `autoanalise`,
-  `meus-prs`, `contas`, `contas-gh`, `jira`, `sistema`, `sobre`, `sessao`, `sync`, `fila-justa`, `diagnostico`, `capacidades`, `revisando`, `merge-bloqueado`, `rota`, `densidade`) importam das duas camadas
+- **Os de domínio** (`chat`, `consumo`, `radar`, `review`, `pessoas`,
+  `contas`, `contas-gh`, `jira`, `sistema`, `sobre`, `sessao`, `sync`, `fila-justa`, `diagnostico`, `capacidades`, `revisando`, `rota`, `densidade`) importam das duas camadas
   de baixo e, quando precisam, uns dos outros, sempre sem ciclo.
 
 ## Regras de quem mexe aqui

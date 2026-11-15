@@ -45,8 +45,7 @@ export function baixarArquivo(nome, conteudo, tipo) {
 // Copia texto com fallback: a Clipboard API exige contexto seguro e foco; quando
 // falha (ex.: janela sem foco), recai pro textarea + execCommand, que não depende
 // de permissão. Devolve true se algum caminho copiou. Não é sobre nenhuma tela em
-// particular (o app.js usa em Revisões recentes e Diagnóstico; Meus PRs
-// usa no prompt de correção): mora aqui, ao lado de $/toast/api, por só tocar
+// particular (o app.js usa em Revisões recentes e Diagnóstico): mora aqui, ao lado de $/toast/api, por só tocar
 // document/navigator.
 export async function copyToClipboard(text) {
   try {
@@ -261,13 +260,6 @@ export function textoDaListaVazia(vs) {
   return `Nenhum PR aberto ${escopo() === 'all' ? 'nas organizações monitoradas' : 'nesta conta'}.`;
 }
 
-// a ordem é de precedência: rodando agora vence a fila, que vence "já analisei antes"
-export function rotuloDoBotaoDeAnalise({ running, queued, qpos, analisado }) {
-  if (running) return 'Analisando…';
-  if (queued) return `Na fila (${qpos})`;
-  return analisado ? 'Reanalisar' : 'Analisar';
-}
-
 // a dimensão escolhe de qual mapa do envelope sair e onde estão os nomes das camadas
 export const DIMENSAO_DO_CONSUMO = {
   model: { key: 'byModel', campoDeNomes: 'modelNames' },
@@ -355,11 +347,7 @@ document.addEventListener('click', async (e) => {
     else {
       // NUNCA afirmar "cancelado" sem o servidor confirmar (a mentira do achado M18)
       closeOp(opId, 'error', (r && r.error) || 'não consegui cancelar');
-      toast('error', (r && r.error) || 'não consegui cancelar a autoanálise');
+      toast('error', (r && r.error) || 'não consegui cancelar');
     }
   }
 });
-
-/* ciclo de vida dos widgets de autoanálise: o FIM vem do snapshot (SSE), não de um
-   response. Reanexa o elemento (o innerHTML de #myPRs destrói os filhos a cada
-   re-render) e fecha quando a análise some do estado (analysisOpsPlan, pura, testada). */

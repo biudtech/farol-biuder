@@ -12,14 +12,6 @@
 // etapa do item que o encerra; item sem estampa (linha informativa do app) herda
 // a etapa corrente. A etapa do último item é a ATIVA e acumula até `agora`.
 //
-// Ops de autoanálise: decisão de fechamento.
-// A UI cria um widget por análise lançada (opId 'analysis-<key>'), mas quem sabe o FIM
-// é o snapshot do SSE: a análise some de activeSessions (mode self) e de
-// headlessWaiting quando termina. Protocolo seen/close por causa da corrida: um state
-// emitido antes do servidor enfileirar pode chegar depois do clique, e sem o `seen` o
-// widget recém-nascido fecharia como "concluído". headlessWaiting também carrega keys
-// de revisão normal, sem colisão na prática (o GitHub não pede review pro autor).
-//
 // Etapas e sinais de atividade são observações. Sem denominador conhecido,
 // widgets não apresentam porcentagem de conclusão.
 //
@@ -182,11 +174,6 @@ export function feedLine(it) {
   // a linha ganha a etiqueta 👤 pra distinguir do trabalho da sessão principal
   const ag = it.a ? `<span class="feed-agent" title="linha de um subagente">👤 ${esc(it.a)}</span>` : '';
   return `<div class="feed-line k-${esc(it.k)}${it.a ? ' from-agent' : ''}"><span class="feed-t">${fmtClock(it.t)}</span><span class="feed-i">${icon}</span>${ag}<span class="feed-x">${esc(it.text)}</span></div>`;
-}
-
-export function selfSessionKey(sessions, id) {
-  const s = (sessions || []).find(x => x && x.id === id && x.mode === 'self');
-  return (s && s.keys && s.keys[0]) || null;
 }
 
 // Compatibilidade dos widgets: quantidade de eventos não mede conclusão.
