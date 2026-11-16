@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App, EstadoDoApp } from '@/estado/app';
@@ -16,8 +16,8 @@ afterEach(cleanup);
 
 function appFalso(entrouAgora: boolean) {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', entrouAgora });
-  const sair = vi.fn();
-  return { app: { store, sair } as unknown as App, sair };
+  const sair = vi.fn(async () => null);
+  return { app: { store, sair } as unknown as App, sair, store };
 }
 
 describe('casca', () => {
@@ -42,5 +42,17 @@ describe('casca', () => {
     expect(screen.getByRole('link', { name: 'Radar' }).getAttribute('aria-current')).toBe('page');
     fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
     expect(sair).toHaveBeenCalledTimes(1);
+  });
+
+  it('enquanto o motor revoga a sessão o botão diz Saindo, fica desabilitado e a região viva avisa', () => {
+    const { app, sair, store } = appFalso(false);
+    render(<Casca app={app}><h1>Radar</h1></Casca>);
+    expect(screen.queryByText(/^Saindo:/)).toBeNull();
+    act(() => { store.trocar({ saindo: true }); });
+    const botao = screen.getByRole('button', { name: 'Saindo…' }) as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    expect(screen.getByText('Saindo: pedindo ao motor que revogue a sessão deste navegador.').getAttribute('role')).toBe('status');
+    fireEvent.click(botao);
+    expect(sair).not.toHaveBeenCalled();
   });
 });

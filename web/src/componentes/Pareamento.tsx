@@ -8,11 +8,13 @@
 // tela mostra uma mensagem só.
 //
 // Quando a tela aparece porque a sessão caiu (401, ou o token saiu por outra aba), ela diz
-// por quê numa linha e leva o foco ao campo do código.
+// por quê numa linha e leva o foco ao campo do código. Depois do Sair, ela diz o que aconteceu
+// com a sessão no motor: revogada, ou só esquecida neste navegador (textoDaSaida).
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { TAMANHO_DO_CODIGO, codigoBemFormado, normalizarCodigo } from '@/contratos/auth';
 import type { App, MotivoDoPareamento } from '@/estado/app';
 import { BASE_DO_MOTOR, app as appDoNavegador, useApp } from '@/estado/instancia';
+import { textoDaSaida } from '@/sistema/sessoes';
 import { Logo } from './Logo';
 import estilos from './Pareamento.module.css';
 
@@ -42,7 +44,8 @@ export function Pareamento({ app = appDoNavegador, base = BASE_DO_MOTOR }: Props
   const idDoErro = useId();
   const idDoAviso = useId();
   const campoDoCodigo = useRef<HTMLInputElement>(null);
-  const aviso = AVISOS[motivo];
+  const saida = useApp((e) => e.saida, app);
+  const aviso = saida ? textoDaSaida(saida) : AVISOS[motivo];
 
   // Quem caiu aqui vindo da casca (401, outra aba, o próprio Sair) perdeu o elemento que
   // tinha o foco. Na carga da página, sem token, o foco fica onde o navegador pôs.

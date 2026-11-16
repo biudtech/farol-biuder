@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { App, DesfechoDoPareamento, EstadoDoApp, MotivoDoPareamento, Motor } from '@/estado/app';
+import type { App, DesfechoDoPareamento, EstadoDoApp, MotivoDoPareamento, Motor, Saida } from '@/estado/app';
 import { ESTADO_INICIAL } from '@/estado/app';
 import { criarStore } from '@/estado/store';
 import { Pareamento } from './Pareamento';
 
 afterEach(cleanup);
 
-function appFalso(motor: Motor, desfecho: DesfechoDoPareamento = 'recusado', motivo: MotivoDoPareamento = 'nenhum') {
-  const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareamento', motor, motivo });
+function appFalso(motor: Motor, desfecho: DesfechoDoPareamento = 'recusado', motivo: MotivoDoPareamento = 'nenhum', saida: Saida | null = null) {
+  const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareamento', motor, motivo, saida });
   const parear = vi.fn(async (): Promise<DesfechoDoPareamento> => {
     store.trocar({ motor: desfecho === 'inalcancavel' ? 'inalcancavel' : 'alcancavel' });
     return desfecho;
@@ -101,7 +101,22 @@ describe('tela de pareamento', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('quem saiu por conta própria não recebe aviso, mas o foco vai ao campo do código', () => {
+  it.each([
+    ['revogada', /o motor revogou a sessão deste navegador/],
+    ['sem-resposta', /não deu para falar com o motor.*continua valendo no motor até expirar/],
+    ['recusada', /o motor não revogou a sessão.*continua valendo no motor até expirar/],
+    ['nao-encontrada', /não listou a sessão.*continua valendo no motor até expirar/],
+  ] as const)('depois do Sair (%s) diz se a sessão foi revogada no motor ou só esquecida aqui', (saida, texto) => {
+    const { app } = appFalso('alcancavel', 'recusado', 'saiu', saida);
+    render(<Pareamento app={app} base="http://127.0.0.1:47170" />);
+    const aviso = screen.getByRole('status');
+    expect(aviso.textContent).toMatch(texto);
+    const campo = screen.getByLabelText('Código');
+    expect(document.activeElement).toBe(campo);
+    expect(campo.getAttribute('aria-describedby')).toBe(aviso.id);
+  });
+
+  it('saída sem desfecho registrado não mostra aviso, mas o foco vai ao campo do código', () => {
     const { app } = appFalso('alcancavel', 'recusado', 'saiu');
     render(<Pareamento app={app} base="http://127.0.0.1:47170" />);
     expect(screen.queryByRole('status')).toBeNull();
