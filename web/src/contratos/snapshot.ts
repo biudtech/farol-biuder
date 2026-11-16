@@ -6,7 +6,8 @@
 //
 // Cada lote de tela tipa as chaves que usa: troca o `unknown` da chave em FormasDoSnapshot
 // pelo tipo lido do que o motor emite, e o `qualquer` dela em LEITORES pelo leitor. As do
-// Radar estão em ./radar, e a do Histórico (`pushbacks`) em ./historico.
+// Radar estão em ./radar, a do Histórico (`pushbacks`) em ./historico e a do Time (`config`,
+// só com os perfis) em ./time.
 import { deGuarda, ehObjeto, ehTexto, type Leitor } from './formas';
 import { lerContestacoes, type Contestacao } from './historico';
 import {
@@ -17,6 +18,7 @@ import {
   type Estacionado, type InicioAutomatico, type ItemDaFila, type LinhaDoFeed, type PrEmEspera,
   type SessaoAtiva, type StatusDoMotor,
 } from './radar';
+import { lerConfig, type ConfigDoMotor } from './time';
 
 export const CHAVES_DO_SNAPSHOT = [
   'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',
@@ -45,7 +47,7 @@ export interface FormasDoSnapshot {
   account: ContaDoMotor;
   accounts: unknown;
   pushbacks: Record<string, Contestacao>;
-  config: unknown;
+  config: ConfigDoMotor;
   jiraSites: unknown;
   lastCheckAt: number | null;
   nextCheckAt: number | null;
@@ -92,7 +94,7 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   account: lerConta,
   accounts: qualquer,
   pushbacks: lerContestacoes,
-  config: qualquer,
+  config: lerConfig,
   jiraSites: qualquer,
   lastCheckAt: lerInstante,
   nextCheckAt: lerInstante,

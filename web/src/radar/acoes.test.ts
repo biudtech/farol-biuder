@@ -252,3 +252,147 @@ describe('executar', () => {
     expect(await executar(cliente, aprovar)).toEqual({ tipo: 'cancelado' });
   });
 });
+
+describe('ações do Time: papel e competência, e remover do Time', () => {
+  const pessoa = { alvo: 'time:ana', nome: '@ana' };
+  const pessoas = { bruno: { papel: 'junior' }, ana: { papel: 'senior', dominios: { backend: 'avancado' } } };
+  const salvar: Acao = { ...pessoa, tipo: 'perfil', login: 'Ana', pessoas };
+  const remover: Acao = { ...pessoa, tipo: 'removerAutor', login: 'Ana', entradas: 3, temPerfil: true, contestacoes: 2 };
+
+  it('salvar manda a lista inteira de perfis em people, como POST /api/settings a lê', () => {
+    expect(pedidoDa(salvar)).toEqual({ rota: '/api/settings', corpo: { people: pessoas } });
+    expect(rotuloDa(salvar)).toBe('Salvar papel e competência');
+    expect(nomeDa(salvar)).toBe('Salvar papel e competência de @ana');
+    expect(idDa(salvar)).toBe('perfil');
+    expect(confirmacaoDa(salvar)).toBeNull();
+  });
+
+  it('o corpo é o mapa que a ação recebeu, sem filtro: forma errada e campo desconhecido vão como vieram', () => {
+    const cru = { ana: { papel: 4 }, bruno: 'x', dora: { papel: 'senior', squad: 'plataforma' } };
+    expect(pedidoDa({ ...salvar, pessoas: cru }).corpo).toEqual({ people: { ana: { papel: 4 }, bruno: 'x', dora: { papel: 'senior', squad: 'plataforma' } } });
+    expect((pedidoDa({ ...salvar, pessoas: cru }).corpo as { people: unknown }).people).toBe(cru);
+  });
+
+  it('remover manda só o login, como o motor o listou', () => {
+    expect(pedidoDa(remover)).toEqual({ rota: '/api/team/remove', corpo: { login: 'Ana' } });
+    expect(rotuloDa(remover)).toBe('Remover do Time');
+    expect(nomeDa(remover)).toBe('Remover @ana do Time');
+    expect(textoDoEnvio(remover)).toBe('Enviando: Remover @ana do Time.');
+  });
+
+  it('remover pergunta antes, dizendo as três coisas apagadas, o que continua, que não desfaz e o efeito nas revisões', () => {
+    const c = confirmacaoDa(remover);
+    expect(c?.titulo).toBe('Remover @ana do Time?');
+    expect(c?.confirmar).toBe('Apagar o dossiê, o perfil e as contestações');
+    expect(c?.texto).toContain('O motor apaga três coisas de @ana: o dossiê (3 entradas de memória nesta tela), o papel e a competência configurados e todos os registros de contestação dos PRs dela (2 nesta tela).');
+    expect(c?.texto).toContain('o motor não apaga uma entrada só');
+    expect(c?.texto).toContain('Não dá para desfazer');
+    expect(c?.texto).toContain('as revisões dos PRs dela continuam no Histórico, com ela como autora, e no log do motor');
+    expect(c?.texto).toContain('Nada muda no GitHub');
+    expect(c?.texto).toContain('outros autores do mesmo repositório');
+    // a pergunta não promete apagar tudo
+    expect(`${c?.texto} ${c?.confirmar}`).not.toMatch(/apaga tudo|apagar tudo/i);
+  });
+
+  it('a pergunta não afirma que existe o que a tela não viu', () => {
+    const c = confirmacaoDa({ ...remover, entradas: 0, temPerfil: false, contestacoes: 0 });
+    expect(c?.texto).toContain('o dossiê, se houver, o papel e a competência, se houver e os registros de contestação dos PRs dela, se houver');
+    expect(confirmacaoDa({ ...remover, entradas: 1 })?.texto).toContain('(1 entrada de memória nesta tela)');
+  });
+
+  it('a resposta do salvar traz o mapa de perfis que ficou gravado, como veio', () => {
+    expect(lerRespostaDeAcao({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: pessoas } })).toEqual({ ok: true, pessoas });
+    expect(lerRespostaDeAcao({ ok: true, ignoradas: ['people', 7], config: {} })).toEqual({ ok: true, ignoradas: ['people'] });
+    // pessoa de forma errada na resposta não some: a conferência é que diz
+    expect(lerRespostaDeAcao({ ok: true, config: { people: { ana: 3, dora: { squad: 'x' } } } })).toEqual({ ok: true, pessoas: { ana: 3, dora: { squad: 'x' } } });
+    expect(lerRespostaDeAcao({ ok: true, config: { people: [] } })).toEqual({ ok: true });
+    expect(lerRespostaDeAcao({ ok: true, removed: false })).toEqual({ ok: true, removed: false });
+  });
+
+  it('a recusa de POST /api/settings vem em code e erro', () => {
+    expect(lerRespostaDeAcao({ ok: false, code: 'chave_exigida', perfis: ['p1'], erro: 'Para mudar o endereço deste perfil, digite a chave de novo.' }))
+      .toEqual({ ok: false, blocked: 'chave_exigida', error: 'Para mudar o endereço deste perfil, digite a chave de novo.' });
+  });
+
+  it('o salvar aceito diz o que o motor gravou, lido da resposta', async () => {
+    const { cliente, post } = clienteQueResponde({ ok: true, dados: { ok: true, pessoas } });
+    expect(await executar(cliente, salvar)).toEqual({ tipo: 'ok', texto: 'O motor gravou o perfil de @ana: papel Sênior; Backend: Avançado.' });
+    expect(post).toHaveBeenCalledWith('/api/settings', { people: pessoas }, lerRespostaDeAcao);
+  });
+
+  it('se o motor gravou a pessoa diferente do pedido, a tela diz o que ficou', async () => {
+    const descartou = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { bruno: { papel: 'junior' }, ana: { papel: 'senior' } } } });
+    expect(await executar(descartou.cliente, salvar)).toEqual({
+      tipo: 'erro',
+      texto: 'O motor gravou o perfil de @ana diferente do pedido: ficou papel Sênior. O que ele não reconhece, ele descarta.',
+    });
+  });
+
+  it('confere o mapa inteiro: outra pessoa que mudou ou saiu aparece no resultado', async () => {
+    const sumiu = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { ana: pessoas.ana } } });
+    expect(await executar(sumiu.cliente, salvar)).toEqual({
+      tipo: 'erro',
+      texto: 'O motor gravou o perfil de @ana: papel Sênior; Backend: Avançado. Atenção: o perfil de outra pessoa ficou diferente do que esta tela enviou, mudou ou saiu da lista (@bruno). Confira na tela.',
+    });
+    // o motor descartou o que não reconhece nas outras: a tela diz quem
+    const enviado = { ana: pessoas.ana, bruno: { papel: 4 }, caio: 'x', dora: { papel: 'pleno', squad: 'plataforma' }, eva: { papel: 'pleno' } };
+    const saneou = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { ana: pessoas.ana, dora: { papel: 'pleno' }, eva: { papel: 'pleno' } } } });
+    const r = await executar(saneou.cliente, { ...salvar, pessoas: enviado });
+    expect(r).toEqual({
+      tipo: 'erro',
+      texto: 'O motor gravou o perfil de @ana: papel Sênior; Backend: Avançado. Atenção: o perfil de outras 3 pessoas ficou diferente do que esta tela enviou, mudou ou saiu da lista (@bruno, @caio, @dora). Confira na tela.',
+    });
+  });
+
+  it('a lista de nomes do aviso tem teto', async () => {
+    const muitos = Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((l) => [l, { papel: 'pleno' }]));
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { ana: pessoas.ana } } });
+    const r = await executar(cliente, { ...salvar, pessoas: { ...muitos, ana: pessoas.ana } });
+    expect(r.tipo === 'erro' ? r.texto : '').toContain('outras 7 pessoas ficou diferente do que esta tela enviou, mudou ou saiu da lista (@a, @b, @c, @d, @e e mais 2)');
+  });
+
+  it('perfil apagado e confirmado pela resposta diz que ficou sem perfil', async () => {
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { bruno: { papel: 'junior' } } } });
+    expect(await executar(cliente, { ...salvar, pessoas: { bruno: { papel: 'junior' } } })).toEqual({ tipo: 'ok', texto: 'O motor gravou o perfil de @ana: sem papel nem competência.' });
+  });
+
+  it('sem os perfis na resposta, ou com o campo ignorado, a tela não afirma que gravou', async () => {
+    const semPerfis = clienteQueResponde({ ok: true, dados: { ok: true } });
+    expect(await executar(semPerfis.cliente, salvar)).toEqual({
+      tipo: 'ok',
+      texto: 'O motor aceitou o pedido de salvar o perfil de @ana, mas a resposta não trouxe os perfis gravados: confira o perfil na tela.',
+    });
+    const ignorado = clienteQueResponde({ ok: true, dados: { ok: true, pessoas, ignoradas: ['people'] } });
+    expect(await executar(ignorado.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor ignorou o campo de perfis: o perfil de @ana não foi gravado.' });
+  });
+
+  it('a remoção diz o que o motor respondeu, sem afirmar que as três coisas existiam, e o que continua', async () => {
+    const apagou = clienteQueResponde({ ok: true, dados: { ok: true, removed: true } });
+    expect(await executar(apagou.cliente, remover)).toEqual({
+      tipo: 'ok',
+      texto: 'O motor respondeu que apagou o que tinha de @ana entre o dossiê, o perfil e as contestações (ele não diz quais existiam). Não há como desfazer. As revisões dos PRs dela continuam no Histórico e no log do motor.',
+    });
+    const nada = clienteQueResponde({ ok: true, dados: { ok: true, removed: false } });
+    expect(await executar(nada.cliente, remover)).toEqual({
+      tipo: 'ok',
+      texto: 'O motor respondeu que não tinha dossiê, perfil nem contestação de @ana: nada foi apagado. As revisões dos PRs dela continuam no Histórico e no log do motor.',
+    });
+    const mudo = clienteQueResponde({ ok: true, dados: { ok: true } });
+    expect(await executar(mudo.cliente, remover)).toEqual({
+      tipo: 'ok',
+      texto: 'O motor aceitou o pedido de remover @ana do Time e não disse se havia algo para apagar. As revisões dos PRs dela continuam no Histórico e no log do motor.',
+    });
+  });
+
+  it('login que o motor recusa aparece com a frase dele', async () => {
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: false, error: 'login inválido' } });
+    expect(await executar(cliente, remover)).toEqual({ tipo: 'erro', texto: 'O motor recusou: login inválido' });
+  });
+
+  it('recusa fora de 2xx leva o código do corpo, quando há', async () => {
+    const comCodigo = clienteQueResponde({ ok: false, falha: 'recusado', status: 403, detalhe: { codigo: 'origem_recusada' } });
+    expect(await executar(comCodigo.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor recusou o pedido (HTTP 403, origem_recusada).' });
+    const semCodigo = clienteQueResponde({ ok: false, falha: 'recusado', status: 500 });
+    expect(await executar(semCodigo.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor recusou o pedido (HTTP 500).' });
+  });
+});

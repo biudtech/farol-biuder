@@ -8,7 +8,7 @@ Este pacote é independente do motor: tem `package.json`, `package-lock.json` e 
 Na Vercel, o diretório raiz do projeto é `web/`.
 
 Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e as
-telas Radar e Histórico. Time, Consumo e Sistema ainda estão em construção.
+telas Radar, Histórico e Time. Consumo e Sistema ainda estão em construção.
 
 ## Rodar contra um motor local
 
@@ -83,10 +83,11 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks` |
-| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das duas telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people` |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das três telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
+| `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
@@ -340,6 +341,141 @@ Regras que valem para quem mexer nela:
   contestação, o aviso dele (evento `toast`, texto de `lib/engine/pushback.js`) manda
   confirmar o desfecho em "Revisões recentes", que é da tela antiga. A tela nova mostra o
   aviso como o motor escreveu; o desfecho se confirma no detalhe da revisão, no Histórico.
+
+## A tela Time
+
+A aba `/time` é `src/componentes/time/Time.tsx`. Ela mostra o que o motor guarda sobre cada
+pessoa que teve PR revisado. É dado sobre colegas: fica no motor. Nada dele vai a
+`localStorage` nem ao console (o registro da borda leva só contagem), e do endereço só consta
+o login de quem está com o dossiê aberto (`?autor=`), que é o identificador que o motor já usa.
+
+| Parte | Componente | De onde vem |
+|---|---|---|
+| Lista e busca | `Time.tsx`, `ListaDoTime.tsx` | `GET /api/team` (a lista inteira) e `config.people` do snapshot |
+| Dossiê | `Dossie.tsx` | o item da lista, `config.people` e `pushbacks` do snapshot, pelo autor |
+| Papel e competência | `EditorDoPerfil.tsx` | `config.people`; grava com `POST /api/settings` |
+
+O contrato, lido do motor:
+
+- **`GET /api/team`** (`parseTeam`, `lib/workspace.js`) responde a lista crua, sem envelope,
+  página nem filtro: `[{ login, name, entries: [{ date, ref, verdict, bullets }] }]`. `login` é
+  o nome do arquivo do dossiê (`state/authors/<login>.md`); `name` repete o login quando o
+  dossiê não traz nome; `date` é o dia em UTC (`AAAA-MM-DD`), `ref` é `dono/repo#n`, `verdict`
+  é o que foi publicado (`APPROVE`, `REQUEST CHANGES` ou `REQUEST_CHANGES`, `COMMENT`) e
+  `bullets` são os pontos que a sessão anotou sobre o trabalho (quantos, quem pede é o prompt da
+  revisão; `writeMemory` grava os que vierem). A ordem é a do motor: quem tem a entrada mais recente
+  primeiro. O motor guarda dez entradas por pessoa
+  (`writeMemory`, `lib/engine/decision.js`).
+- **`config.people`** (`parsePeople`, `lib/parse.js`): `{ login em minúsculas: { papel?,
+  dominios?: { dominio: nivel } } }`. Os valores aceitos são os de `lib/taxonomy.js`.
+- **`POST /api/settings` com `{ people }`** troca o mapa inteiro pelo que chega
+  (`updateSettings`, `server.js`). Valor fora da taxonomia é descartado sem recusa, e pessoa
+  sem papel nem competência sai do mapa. Responde `{ ok, ignoradas, config }`.
+- **`POST /api/team/remove` com `{ login }`** (`removeTeamMember`, `lib/engine/decision.js`)
+  apaga três coisas, e só elas: o arquivo do dossiê, a entrada da pessoa em `config.people` e
+  todo registro de `pushbacks` em que ela é a autora. Não há cópia: não se desfaz. As
+  revisões dos PRs dela continuam no histórico (`GET /api/decisions` busca por autor) e no
+  log do motor. Responde `{ ok: true, removed }` (`removed: true` quando havia ao menos uma
+  das três, sem dizer quais; `false` quando não havia nenhuma) ou
+  `{ ok: false, error: "login inválido" }` para login fora do formato do GitHub.
+
+Regras que valem para quem mexer nela:
+
+- **A tela fatia e formata.** A ordem é a do motor. A contagem é o tamanho da lista de
+  entradas, e a "última entrada" é a primeira que o motor listou. Papel, competência e
+  desfecho aparecem com rótulo; valor que a tela não conhece aparece cru.
+- **A busca é daqui, e só porque a lista vem inteira.** `filtrarPorNome` (`src/time/time.ts`)
+  procura no login e no nome, sem caixa e sem acento. O que se digita fica na memória da aba:
+  não vai ao motor nem ao endereço (seria um nome de colega no histórico do navegador).
+- **Quem só tem perfil também aparece.** `GET /api/team` só lista quem tem dossiê. Quem tem
+  papel ou competência gravados e não tem dossiê vem de `config.people` (`soComPerfil`), depois
+  dos dossiês, porque o perfil dele entra no prompt do mesmo jeito.
+- **A taxonomia é cópia conferida.** `src/time/taxonomia.ts` repete os papéis, os domínios e
+  os níveis de `lib/taxonomy.js`, com os rótulos; `taxonomia.test.ts` lê aquele arquivo e
+  reprova se uma chave ou um rótulo divergir.
+- **Dossiê.** Abre na própria página, com o foco no título; Escape ou "Voltar à lista" fecham,
+  e o foco volta ao botão que abriu. As entradas aparecem uma a uma, com o dia, o PR e o que
+  foi publicado quando o motor diz; os pontos são desenhados de markdown, que é como o motor
+  os grava. As contestações dos PRs da pessoa aparecem só para leitura: o desfecho se
+  confirma no Histórico.
+- **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
+  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). O corpo do salvar
+  sai do cru que a aba tem no momento do clique, e só a pessoa editada muda (`comPerfil`):
+  as outras voltam como vieram, inclusive com campo que a tela não conhece ou valor que ela
+  não lê. Na pessoa editada trocam-se o papel e os domínios; outro campo dela fica. A chave
+  é o login em minúsculas, como o motor guarda.
+- **Ilegível avisa, não fecha.** Pessoa que a tela não leu inteira (o JSON lido difere do
+  cru) é contada em `peopleIlegiveis` e vira aviso no editor. O salvar segue aberto, porque
+  o corpo não tira ninguém.
+- **Quando o salvar fica fechado** (`motivoQueImpedeSalvar`): sem a lista de perfis no
+  snapshot; com o fluxo de eventos fora de "conectado"; e, depois de uma reconexão, enquanto
+  o primeiro `state` da conexão nova não chega. Para isso o store tem `estadoEmDia`
+  (`src/estado/app.ts`): "conectado" vem no HTTP 200, ainda com o snapshot de antes da queda,
+  e o sinal só vira verdadeiro com o estado inteiro daquela conexão. O indicador de conexão
+  das outras telas não mudou.
+- **Perfil que muda no motor com a edição aberta** vira aviso, e dá para descartar a edição.
+  O que não dá para evitar está dito na tela: alteração de outra aba que ainda não chegou
+  aqui é sobrescrita.
+- **Edição por salvar não se perde calada.** Escape e "Voltar à lista" com papel ou
+  competência alterados perguntam antes de descartar. Trocar de pessoa só acontece pelo
+  endereço (o voltar e o avançar do navegador, um link colado), e isso a página não segura:
+  o dossiê troca e a edição vai embora sem pergunta.
+- **O `ok` do salvar não é o desfecho.** O motor descarta o que não reconhece sem recusar.
+  A frase do resultado sai do `config.people` da resposta, conferido inteiro contra o
+  enviado: "gravou", "gravou diferente do pedido" e, se o perfil de outra pessoa mudou ou
+  saiu da lista, quem (`outrasQueDiferem`).
+- **Salvar e remover da mesma pessoa se excluem.** As duas ações têm o mesmo alvo
+  (`alvoDaPessoa`): com uma no ar, o botão da outra fica desabilitado.
+- **Remover pergunta antes, e não promete mais do que o motor faz.** A pergunta
+  (`confirmacaoDa`, `src/radar/acoes.ts`) diz as três coisas apagadas, com o que a tela vê
+  (quantas entradas, se há perfil, quantas contestações), que não se desfaz, que as revisões
+  dos PRs da pessoa continuam no Histórico e no log, e o efeito: a sessão não encontra o
+  dossiê, o prompt sai sem perfil e sem contestações, e as contestações apagadas deixam de
+  entrar como lição nas revisões de outros autores do repositório. O resultado repete o que
+  o motor respondeu em `removed`, sem afirmar que as três existiam.
+- **Depois de uma remoção aceita** o dossiê fecha (trocando a entrada do endereço), a tela
+  pede a lista de novo e, enquanto a carga nova não chega ou se ela falhar, quem foi removido
+  não aparece na lista nem abre com Salvar e Remover. O erro da carga, com o Tentar de novo,
+  e o aviso de Atualizar aparecem também com o dossiê aberto.
+- **Contestações no dossiê.** Só leitura. A tela diz que entram no prompt as 5 confirmadas
+  mais recentes da pessoa (`personProfileBlock`; o teste confere o número contra o motor).
+- **O efeito do papel e da competência, como a tela o diz.** Entram no prompt das revisões
+  dos PRs da pessoa, no bloco "Perfil do autor" (`personProfileBlock`,
+  `lib/engine/review-prompt.js`): o papel dá o tom e a competência por domínio calibra a
+  postura. Nenhum gate e nenhuma regra da política da conta lê esses campos.
+- **A lista não se refaz sozinha.** Ela não está no snapshot. Quando o snapshot passa a ter
+  revisão resolvida mais nova que a da última carga, aparece o aviso com o botão Atualizar.
+
+### Lacunas do contrato
+
+- **Remover uma entrada só.** O motor só remove a pessoa inteira. Não há rota para apagar
+  uma entrada do dossiê, nem cópia que permita desfazer.
+- **Os valores permitidos não vêm do motor.** Papéis, domínios e níveis não saem em rota
+  nem no snapshot: a tela tem a cópia conferida por teste.
+- **O salvar de perfil não é por pessoa.** `people` vai e volta inteiro, sem versão: o motor
+  não tem como recusar uma lista velha, e duas abas salvando ao mesmo tempo se sobrescrevem
+  sem que nenhuma fique sabendo. O que a tela faz (corpo do dado cru, salvar fechado sem o
+  estado da conexão, conferência da resposta) reduz a janela, não a fecha. A correção de
+  fundo é no motor: uma operação por pessoa sobre a config atual, como a conta já tem em
+  `accounts/edit`.
+- **Remover não apaga o histórico nem o log.** `removeTeamMember` não toca em
+  `decisions.json` nem no `farol.log`: o login da pessoa continua nas revisões dos PRs dela
+  e nas linhas de log. Quem precisa tirar a pessoa de tudo não consegue por esta rota.
+- **O voltar do navegador descarta a edição sem perguntar.** A página não tem como segurar
+  a troca de endereço feita pelo navegador.
+- **A lista não avisa que mudou.** Não há chave no snapshot nem evento para o Time. O aviso
+  de Atualizar olha as revisões resolvidas, que não dizem se a memória de alguém mudou, e uma
+  remoção feita em outra aba só aparece na próxima carga.
+- **Não há números por pessoa.** O motor não manda quantas revisões a pessoa teve nem os
+  desfechos somados: só as dez entradas mais recentes. A contagem da tela é a de entradas.
+- **A entrada não liga à revisão.** Vem o dia e a chave do PR, sem hora, sem endereço e sem
+  o id da revisão: não dá para abrir a revisão no Histórico a partir dela. Entrada antiga traz
+  só o nome curto do repositório, e aparece como veio.
+- **Login que o motor não remove.** A remoção só aceita login no formato do GitHub (letras,
+  dígitos e hífen, até 39). Dossiê de outro nome (`dependabot[bot]`, por exemplo) é listado,
+  e a remoção dele é recusada com "login inválido".
+- **A recusa de `POST /api/settings` tem outra forma.** Vem em `code` e `erro`, e a das
+  outras ações em `blocked` e `error`; `lerRespostaDeAcao` lê as duas.
 
 ## O renderizador de markdown
 

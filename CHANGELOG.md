@@ -174,6 +174,27 @@ Ainda sem versão publicada.
   entrega uma revisão pela chave do PR, e a mais recente: o link para uma revisão antiga de
   um PR com várias só abre quando ela está na página carregada. A tela antiga continua
   servida pelo motor, sem mudança.
+- **Tela Time no front novo (fase 3, lote 4):** a aba Time de `web/` deixa de ser "Em
+  construção". Ela lista quem o motor conhece, lido de `GET /api/team` (a lista inteira, na
+  ordem do motor), com as entradas de memória, a última entrada, o papel e a competência de
+  cada pessoa; quem só tem papel ou competência gravados, sem dossiê, aparece também. A busca
+  por nome ou login é feita na página e não vai ao endereço. O dossiê abre na própria página,
+  com o login no endereço, e mostra as entradas de memória uma a uma (o dia, o PR, o que foi
+  publicado e os pontos anotados) e as contestações que o motor guarda dos PRs da pessoa.
+  Dele saem duas ações. Salvar papel e competência manda a lista inteira de perfis, que é
+  como o motor a recebe, montada do que o motor mandou e só com a pessoa alterada, e diz o
+  que ficou gravado de fato, inclusive se o perfil de outra pessoa mudou; fica fechado
+  quando a aba não tem a lista ou, depois de uma queda, enquanto o estado da conexão nova não
+  chega, e avisa quando o perfil mudou no motor com a edição aberta. Sair do dossiê com
+  edição por salvar pergunta antes. A tela diz o efeito: o perfil entra no prompt das
+  revisões dos PRs da pessoa e molda o tom, sem mudar a decisão. Remover do Time apaga o
+  dossiê, o perfil e as contestações da pessoa, de uma vez e sem volta, e por isso pergunta
+  antes dizendo o que será apagado, o que continua (as revisões dos PRs dela ficam no
+  Histórico e no log do motor) e o efeito nas próximas revisões. O motor não apaga uma
+  entrada só, não manda os valores permitidos do
+  perfil (a tela tem uma cópia conferida por teste) e não avisa quando a lista muda: a tela
+  mostra o botão Atualizar quando há revisão resolvida nova. Nada do Time fica no navegador.
+  A tela antiga continua servida pelo motor, sem mudança.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do

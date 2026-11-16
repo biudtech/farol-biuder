@@ -36,6 +36,10 @@ export interface EstadoDoApp {
   sessao: Sessao;
   motor: Motor;
   conexao: Conexao;
+  // O primeiro `state` da conexão atual do fluxo já chegou: o snapshot é o do motor de agora.
+  // `conexao` vira "conectado" no HTTP 200, antes disso, ainda com o snapshot da conexão
+  // anterior; quem vai mandar ao motor algo montado do snapshot olha este sinal.
+  estadoEmDia: boolean;
   snapshot: Snapshot | null;
   motivo: MotivoDoPareamento;
   // true quando a casca apareceu no lugar do pareamento (pareou aqui ou em outra aba): a
@@ -49,6 +53,7 @@ export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
   sessao: 'carregando',
   motor: 'verificando',
   conexao: 'conectando',
+  estadoEmDia: false,
   snapshot: null,
   motivo: 'nenhum',
   entrouAgora: false,
@@ -124,12 +129,13 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     }
     const anterior = store.ler().snapshot;
     const aplicar = { state: aplicarEstadoInteiro, 'state-patch': aplicarPatch, activity: aplicarAtividade }[tipo];
-    store.trocar({ snapshot: aplicar(anterior, bruto, registrar) });
+    // o estado inteiro é o primeiro evento de toda conexão (lib/http-server.js, na raiz)
+    store.trocar(tipo === 'state' ? { snapshot: aplicar(anterior, bruto, registrar), estadoEmDia: true } : { snapshot: aplicar(anterior, bruto, registrar) });
   }
 
   function abrirFluxo(): void {
     fechar();
-    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao: (conexao) => store.trocar({ conexao }) });
+    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao: (conexao) => store.trocar({ conexao, estadoEmDia: false }) });
   }
 
   async function verificarMotor(): Promise<void> {
@@ -148,7 +154,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     fechar();
     cliente.cancelarChamadas();
     tokenDaSessao = '';
-    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', motivo, entrouAgora: false, recados: SEM_RECADOS });
+    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', estadoEmDia: false, motivo, entrouAgora: false, recados: SEM_RECADOS });
     void verificarMotor();
   }
 

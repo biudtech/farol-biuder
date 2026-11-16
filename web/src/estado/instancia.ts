@@ -7,14 +7,19 @@ import { ESTADO_INICIAL, criarApp, type App, type EstadoDoApp } from './app';
 
 export const BASE_DO_MOTOR = enderecoDoMotor();
 
+// O registro da borda: fica no console do navegador. Quem o chama passa só o nome da chave e
+// contagens, nunca dado do snapshot.
+export function registrarNoConsole(aviso: string): void {
+  console.warn(`[farol] ${aviso}`);
+}
+
 export const app: App = criarApp({
   base: BASE_DO_MOTOR,
   cofre: criarCofreDoToken(),
   // no servidor não há janela; no navegador é por ela que chega o que as outras abas fazem
   // com o token (só é ouvida a partir de app.iniciar())
   janela: typeof window === 'undefined' ? undefined : window,
-  // o registro da borda: fica no console do navegador, sem dado do snapshot
-  registrar: (aviso) => { console.warn(`[farol] ${aviso}`); },
+  registrar: registrarNoConsole,
 });
 
 // O seletor devolve um primitivo ou uma referência que já está no store (nunca um objeto
