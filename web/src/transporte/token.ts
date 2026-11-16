@@ -1,8 +1,13 @@
 // O token da sessão pareada. Mora no localStorage da origem do front, sem cookie. O
 // localStorage pode lançar (janela privada, dados do site bloqueados): nesse caso o token
 // vale só na memória, até a aba fechar.
+//
+// O localStorage é um só para todas as abas da origem, e a memória é de cada aba. Por isso
+// quem esquece diz qual token está esquecendo: a aba que ainda tem o token antigo na memória
+// não apaga o novo que outra aba acabou de guardar.
 
-const CHAVE = 'farol-auth-token';
+// a chave do localStorage; o evento `storage` de outra aba chega com ela
+export const CHAVE_DO_TOKEN = 'farol-auth-token';
 // a forma que o motor emite e exige no Bearer (lib/local-auth/acesso.js)
 const FORMATO = /^[A-Za-z0-9_-]{43}$/;
 
@@ -15,7 +20,11 @@ export interface Armazenamento {
 export interface CofreDoToken {
   ler(): string;
   salvar(token: unknown): boolean;
-  esquecer(): void;
+  // Limpa a memória desta aba sempre. Do armazenamento só sai o valor que for igual a `token`.
+  esquecer(token: string): void;
+  // Troca a memória desta aba pelo que está guardado e devolve o resultado. É o que se chama
+  // quando outra aba mexeu no armazenamento.
+  sincronizar(): string;
 }
 
 export function tokenValido(valor: unknown): valor is string {
@@ -27,7 +36,7 @@ export function criarCofreDoToken(obterArmazenamento: () => Armazenamento = () =
 
   function doArmazenamento(): string {
     try {
-      const guardado = obterArmazenamento().getItem(CHAVE);
+      const guardado = obterArmazenamento().getItem(CHAVE_DO_TOKEN);
       return tokenValido(guardado) ? guardado : '';
     } catch {
       return '';
@@ -41,12 +50,23 @@ export function criarCofreDoToken(obterArmazenamento: () => Armazenamento = () =
     salvar(token) {
       if (!tokenValido(token)) return false;
       naMemoria = token;
-      try { obterArmazenamento().setItem(CHAVE, token); } catch { /* fica só na memória */ }
+      try { obterArmazenamento().setItem(CHAVE_DO_TOKEN, token); } catch { /* fica só na memória */ }
       return true;
     },
-    esquecer() {
+    esquecer(token) {
       naMemoria = '';
-      try { obterArmazenamento().removeItem(CHAVE); } catch { /* não havia onde guardar */ }
+      if (!token) return;
+      try {
+        const armazenamento = obterArmazenamento();
+        if (armazenamento.getItem(CHAVE_DO_TOKEN) === token) armazenamento.removeItem(CHAVE_DO_TOKEN);
+      } catch { /* não havia onde guardar */ }
+    },
+    sincronizar() {
+      try {
+        const guardado = obterArmazenamento().getItem(CHAVE_DO_TOKEN);
+        naMemoria = tokenValido(guardado) ? guardado : '';
+      } catch { /* sem armazenamento, vale o que está na memória */ }
+      return naMemoria;
     },
   };
 }

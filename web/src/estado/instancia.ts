@@ -10,6 +10,9 @@ export const BASE_DO_MOTOR = enderecoDoMotor();
 export const app: App = criarApp({
   base: BASE_DO_MOTOR,
   cofre: criarCofreDoToken(),
+  // no servidor não há janela; no navegador é por ela que chega o que as outras abas fazem
+  // com o token (só é ouvida a partir de app.iniciar())
+  janela: typeof window === 'undefined' ? undefined : window,
   // o registro da borda: fica no console do navegador, sem dado do snapshot
   registrar: (aviso) => { console.warn(`[farol] ${aviso}`); },
 });
