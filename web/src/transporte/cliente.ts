@@ -13,8 +13,8 @@ import type { CofreDoToken } from './token';
 export type Falha = 'rede' | 'nao_autenticado' | 'recusado' | 'resposta_invalida' | 'cancelado';
 
 // O que o motor diz no corpo de uma recusa (o 400 de GET /api/decisions, por exemplo): o
-// código (`code`) e, quando ele manda, o campo recusado (`campo`). Só esses dois textos saem
-// do corpo, e curtos: o resto da recusa não chega a quem chamou.
+// código (`code`) e, quando ele manda, o campo recusado (`campo`). Só esses dois saem do
+// corpo, e só com forma de identificador: o resto da recusa não chega a quem chamou.
 export interface DetalheDaRecusa {
   codigo: string;
   campo?: string;
@@ -65,26 +65,67 @@ export interface DependenciasDoCliente {
 
 type Desfecho = 'caiu' | 'falhou' | 'nao_autenticado' | 'outro_token';
 
-const TETO_DO_DETALHE = 80;
+// O código e o campo de uma recusa são identificadores do motor: letra, depois letras,
+// dígitos, sublinhado ou hífen, até 80 (`parametro_invalido`, `pageSize`, `codigo-invalido`).
+// Texto de outra forma não vira detalhe.
+const IDENTIFICADOR = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/;
 
-function textoCurto(valor: unknown): string | undefined {
-  return typeof valor === 'string' && valor.length > 0 && valor.length <= TETO_DO_DETALHE ? valor : undefined;
+function identificador(valor: unknown): string | undefined {
+  return typeof valor === 'string' && IDENTIFICADOR.test(valor) ? valor : undefined;
 }
 
-// Lê o código e o campo do corpo de uma recusa. Corpo que não é JSON, que não é objeto ou que
-// não traz código não vira detalhe: a recusa segue só com o status.
+// O corpo de uma resposta fora de 2xx vem de quem recusou, que pode não ser o motor (um proxy
+// no caminho). Só é lido quando se declara JSON, até este tamanho e dentro deste prazo:
+// corpo maior, sem fim ou parado é largado, e a recusa segue só com o status.
+export const TETO_DO_CORPO_DA_RECUSA = 16 * 1024;
+export const PRAZO_DO_CORPO_DA_RECUSA_MS = 2000;
+const TIPO_JSON = /^application\/(?:[\w.+-]+\+)?json(?:\s*;|\s*$)/i;
+
+async function corpoDaRecusa(resposta: Response): Promise<unknown> {
+  if (!TIPO_JSON.test(resposta.headers.get('content-type') ?? '') || !resposta.body) return undefined;
+  const leitor = resposta.body.getReader();
+  const pedacos: Uint8Array[] = [];
+  let total = 0;
+  let relogio: ReturnType<typeof setTimeout> | undefined;
+  const prazo = new Promise<null>((resolver) => { relogio = setTimeout(() => resolver(null), PRAZO_DO_CORPO_DA_RECUSA_MS); });
+  try {
+    for (;;) {
+      const lido = await Promise.race([leitor.read(), prazo]);
+      if (lido === null) return undefined;
+      if (lido.done) break;
+      total += lido.value.byteLength;
+      if (total > TETO_DO_CORPO_DA_RECUSA) return undefined;
+      pedacos.push(lido.value);
+    }
+    const bytes = new Uint8Array(total);
+    let onde = 0;
+    for (const pedaco of pedacos) {
+      bytes.set(pedaco, onde);
+      onde += pedaco.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(relogio);
+    // solta o que sobrou do corpo; o cancelamento que falha não muda nada
+    void leitor.cancel().catch(() => {});
+  }
+}
+
+// Lê o código e o campo do corpo de uma recusa. Corpo que não foi lido, que não é objeto ou
+// que não traz código não vira detalhe: a recusa segue só com o status.
 async function detalheDaRecusa(resposta: Response): Promise<DetalheDaRecusa | undefined> {
-  let bruto: unknown;
-  try { bruto = await resposta.json(); } catch { return undefined; }
+  const bruto = await corpoDaRecusa(resposta);
   if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto)) return undefined;
   const { code, campo } = bruto as Record<string, unknown>;
-  const codigo = textoCurto(code);
+  const codigo = identificador(code);
   if (!codigo) return undefined;
-  const lido = textoCurto(campo);
+  const lido = identificador(campo);
   return lido ? { codigo, campo: lido } : { codigo };
 }
 
-const CANCELADO =Object.freeze({ ok: false, falha: 'cancelado', status: 0 }) satisfies Resultado<never>;
+const CANCELADO = Object.freeze({ ok: false, falha: 'cancelado', status: 0 }) satisfies Resultado<never>;
 
 export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => {}, buscar = (u, i) => globalThis.fetch(u, i) }: DependenciasDoCliente): Cliente {
   // o sinal comum a todo get e post em curso; cancelarChamadas aborta este e abre outro
