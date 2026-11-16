@@ -44,7 +44,6 @@ function engineBase() {
     enq: [],
     toasts: [],
     accountForPr: () => 'eu',
-    isMuted: () => false,
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
     budgetBlockedFor: () => null,
@@ -132,7 +131,6 @@ test('reReviewTargets: pendência VIVA na sua mesa segura o relançamento (um ca
 
 test('reReviewTargets: respeita as mesmas travas de conta do toReview', () => {
   for (const quebra of [
-    e => { e.isMuted = () => true; },
     e => { e.autoReviewFor = () => false; },
     e => { e.tokenFor = () => null; },
     e => { e.autoReviewParked.add(KEY); },

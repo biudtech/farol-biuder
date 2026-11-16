@@ -14,7 +14,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const padroes = (await import('../lib/engine/padroes-do-time.js')).default;
-const { parseAccounts, TETO_PADROES_GRAVADO } = await import('../lib/parse.js');
+const { TETO_PADROES_GRAVADO } = await import('../lib/parse.js');
 const contasConfig = (await import('../lib/engine/contas-config.js')).default;
 const { TEMPLATE_DIR } = await import('../lib/paths.js');
 
@@ -57,43 +57,43 @@ test('texto acima do teto do prompt é cortado com aviso, não descartado', () =
 });
 
 test('a conta guarda os padrões pela normalização de sempre, no teto de gravação', () => {
-  const [a] = parseAccounts([{ user: 'alex', owners: ['o'], padroesRevisao: `  ${TEXTO}  ` }]);
-  assert.equal(a.padroesRevisao, TEXTO, 'sem espaços nas pontas');
-  const [vazio] = parseAccounts([{ user: 'alex', owners: ['o'], padroesRevisao: '   ' }]);
-  assert.equal('padroesRevisao' in vazio, false, 'vazio não vira campo');
-  const [grande] = parseAccounts([{ user: 'alex', owners: ['o'], padroesRevisao: 'x'.repeat(TETO_PADROES_GRAVADO + 10) }]);
-  assert.equal(grande.padroesRevisao.length, TETO_PADROES_GRAVADO);
+  const gravar = (padroesRevisao) => contasConfig.contaParaGravar({ user: 'alex', owners: ['o'], padroesRevisao });
+  assert.equal(gravar(`  ${TEXTO}  `).padroesRevisao, TEXTO, 'sem espaços nas pontas');
+  assert.equal('padroesRevisao' in gravar('   '), false, 'vazio não vira campo');
+  assert.equal(gravar('x'.repeat(TETO_PADROES_GRAVADO + 10)).padroesRevisao.length, TETO_PADROES_GRAVADO);
 });
 
 test('a tela edita os padrões pela operação da conta, e vazio tira o campo', () => {
-  const contas = [{ user: 'alex', owners: ['o'] }];
-  const r = contasConfig.aplicarEdicao(contas, { tipo: 'editar', user: 'alex', campos: { padroesRevisao: TEXTO } });
+  const conta = { user: 'alex', owners: ['o'] };
+  const r = contasConfig.aplicarEdicao(conta, { tipo: 'editar', user: 'alex', campos: { padroesRevisao: TEXTO } });
   assert.equal(r.ok, true);
   assert.deepEqual(r.ignorados, []);
-  assert.equal(r.contas[0].padroesRevisao, TEXTO);
-  const tirar = contasConfig.aplicarEdicao(r.contas, { tipo: 'editar', user: 'alex', campos: { padroesRevisao: null } });
-  assert.equal('padroesRevisao' in tirar.contas[0], false);
+  assert.equal(r.conta.padroesRevisao, TEXTO);
+  const tirar = contasConfig.aplicarEdicao(r.conta, { tipo: 'editar', user: 'alex', campos: { padroesRevisao: null } });
+  assert.equal('padroesRevisao' in tirar.conta, false);
 });
 
-test('o prompt da revisão leva os padrões da conta que revisa, e só dela', () => {
+test('o prompt da revisão leva os padrões da conta que revisa; sem padrões, o bloco não existe', () => {
   const e = new Engine();
-  e.updateSettings({ accounts: [{ user: 'alex', owners: ['o'], padroesRevisao: TEXTO }, { user: 'bia', owners: ['p'] }] });
+  e.config.conta = { user: 'alex', owners: ['o'], padroesRevisao: TEXTO };
   e.personProfileBlock = () => '';
   e.reviewFormatBlock = () => '';
-  e.accountForPr = () => 'alex';
   assert.match(e.headlessPromptFor('https://github.com/o/r/pull/1', 'outro'), /<<<PADROES-DO-TIME\nPreferimos Strategy/);
-  e.accountForPr = () => 'bia';
+  e.config.conta = { user: 'alex', owners: ['o'] };
   assert.equal(e.headlessPromptFor('https://github.com/p/r/pull/2', 'outro').includes('PADROES-DO-TIME'), false);
 });
 
 test('os padrões sobrevivem ao reinício: moram na conta, que o boot não regrava', () => {
   const a = new Engine();
-  a.updateSettings({ accounts: [{ user: 'alex', owners: ['o'], padroesRevisao: TEXTO }] });
+  a.pushState = () => { };
+  a.checkNow = () => { };
+  a.config.conta = { user: 'alex', owners: ['o'] };
+  assert.equal(a.editarConta({ tipo: 'editar', user: 'alex', campos: { padroesRevisao: TEXTO } }).ok, true);
   const b = new Engine();
   b.prepareHome();
   const conta = b.accountList().find((x) => x.user === 'alex');
   assert.equal(conta && conta.padroesRevisao, TEXTO);
-  // e o que a tela recebe: a projeção das contas no snapshot leva o texto (antes o campo ficava de fora)
+  // e o que a tela recebe: a projeção da conta no snapshot leva o texto (antes o campo ficava de fora)
   const naTela = b.snapshot().accounts.find((x) => x.user === 'alex');
   assert.equal(naTela && naTela.padroesRevisao, TEXTO);
 });

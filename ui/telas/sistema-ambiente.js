@@ -15,9 +15,9 @@ function renderDoctor() {
   const checks = [
     { ok: !!d.gh, label: 'GitHub CLI', detail: d.gh || 'gh não encontrado no PATH' },
     {
-      ok: d.ghAuth, label: estado().config.ghUser ? `Conta @${estado().config.ghUser}` : 'Conta do GitHub',
+      ok: d.ghAuth, label: estado().account.user ? `Conta @${estado().account.user}` : 'Conta do GitHub',
       detail: d.ghAuth ? 'autenticada no gh' : 'sem token: rode gh auth login (conta de trabalho)',
-      goto: estado().config.ghUser ? `sys:accounts:.acct-label[data-user="${escAttrSelector(estado().config.ghUser)}"]` : 'sys:accounts:#accountsManager'
+      goto: estado().account.user ? `sys:accounts:.acct-owners[data-user="${escAttrSelector(estado().account.user)}"]` : 'sys:accounts:#accountsManager'
     },
     // o CLI existe E o perfil que o motor vai usar tem credencial: sem um dos dois a sessão não abre
     { ok: !!d.claude && d.claudePerfilPronto === true, label: 'Claude Code', detail: detalheDoClaudeCode(d), goto: 'sys:plans:#claudeProfilesManager' },
@@ -28,7 +28,7 @@ function renderDoctor() {
     ...(ehWin() ? [{ ok: !!d.gitBash, label: 'Git Bash', detail: d.gitBash || 'não encontrado: sessões do Claude podem travar' }] : []),
     { ok: true, label: 'Pasta de trabalho', detail: d.workspace },
     // ambiente ok não quer dizer que vai achar PR: os checks de operação (conta
-    // sem organização, conta sem token, tudo silenciado) moram no pure.js
+    // sem organização, conta sem token) moram no pure.js
     ...operationChecks(estado().accounts),
     // nem que vai conseguir ABRIR a sessão: rodar como root faz toda revisão
     // autônoma morrer no spawn, com o resto da tela verde

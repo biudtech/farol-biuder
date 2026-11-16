@@ -32,8 +32,7 @@ function engineBase() {
   try { fs.rmSync(LIMITE_PLANO_FILE, { force: true }); } catch { }
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
-  e.isMuted = () => false;
-  e.tokens = { eu: 't1', colega: 't2', outra: 't3' };
+  e.token = 't1';
   e.log = () => { };
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });
   e.resolveClaudeAuth = (u) => ({ kind: 'apikey', id: u === 'outra' ? 'kb' : 'ka', apiKey: 'sk-fixture', baseUrl: '' });

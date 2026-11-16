@@ -81,7 +81,7 @@ function motor() {
   e.log = () => { };
   e.accountForPr = () => 'trabalho';
   // política da conta gravada por extenso e lida pelos métodos reais do motor (contas-config.js)
-  e.config.accounts = [{ user: 'trabalho', owners: [], onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }];
+  e.config.conta = { user: 'trabalho', owners: [], onClean: 'wait', onCaveats: 'wait', onReject: 'wait' };
   e.scopeLabel = () => 'Conta Trabalho';
   e.writeMemory = () => { };
   e.headSha = async () => HEAD;
@@ -172,8 +172,7 @@ test('boot com linha pendente não repete o aviso de revisão em andamento', () 
 test('PR fechado enquanto aguardava o retry: a referência sai junto', async () => {
   const e = motor();
   semear(e);
-  e.isMuted = () => false;
-  e.tokens = { trabalho: 'tok' };
+  e.token = 'tok';
   e.budgetBlockedFor = () => false;
   e.prState = async () => 'CLOSED';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR }, notBefore: null });

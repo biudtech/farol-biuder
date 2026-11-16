@@ -64,15 +64,14 @@ beforeEach(() => { envios = []; leiturasDoPr = 0; gh = { autor: 'dev' }; });
 // A política é a da conta, gravada por extenso como a tela de Contas grava, e lida pelos métodos
 // reais do motor (contas-config.js), sem substituí-los.
 function conta(e, politica) {
-  Object.assign(e.config.accounts[0], politica);
+  Object.assign(e.config.conta, politica);
   return e;
 }
 
 function motor() {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' }];
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
   e.decisions = { pending: [], resolved: [] };
   e.salvas = 0;
   e.saveDecisions = () => { e.salvas++; };

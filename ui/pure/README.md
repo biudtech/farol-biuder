@@ -2,7 +2,7 @@
 
 Tudo aqui depende só dos argumentos: não toca DOM, não lê `STATE` nem nenhuma global
 mutável. É por isso que é o único código de front que o `node --test` consegue exercitar
-direto, e é a regra de entrada do diretório. Função que precise de `STATE`, `SCOPE` ou
+direto, e é a regra de entrada do diretório. Função que precise de `STATE` ou
 `document` fica no `ui/app.js`; para trazer uma, passe primeiro o que ela lê como
 parâmetro.
 
@@ -27,7 +27,7 @@ comum.js  <-  mencoes.js  <-  módulos de domínio
 - **`mencoes.js`** transforma pessoa, repo, PR e sessão em menção navegável. Só importa de
   `comum.js`.
 - **Os de domínio** (`chat`, `consumo`, `radar`, `review`, `pessoas`,
-  `contas`, `contas-gh`, `jira`, `sistema`, `sobre`, `sessao`, `fila-justa`, `diagnostico`, `revisando`, `rota`, `densidade`) importam das duas camadas
+  `contas`, `jira`, `sistema`, `sobre`, `sessao`, `fila-justa`, `diagnostico`, `revisando`, `rota`, `densidade`) importam das duas camadas
   de baixo e, quando precisam, uns dos outros, sempre sem ciclo.
 
 ## Regras de quem mexe aqui

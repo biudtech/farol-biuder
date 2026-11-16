@@ -29,7 +29,6 @@ const conta = (user, { weight = 1, waiting = false } = {}) => ({ user, weight, w
 // Os `await` de topo vêm ANTES do primeiro caso: com `--test-force-exit`, o processo
 // encerra quando os casos já registrados terminam, e um `await` que só volta depois
 // disso deixa os casos seguintes CANCELADOS, numa rodada que ainda diz "0 falhas".
-const { parseAccounts } = await import('../lib/parse.js');
 const { Engine } = await import('../server.js');
 
 test('accountSpendInProfile soma só o gasto DAQUELA conta, naquele perfil, naquele dia', () => {
@@ -137,15 +136,6 @@ test('três contas: a estourada cede pras duas que ainda cabem, e diz o nome das
 // --- fiação no engine: peso persistido e disputa lida da fila VIVA ---
 
 
-test('parseAccounts guarda o peso e recusa peso que zeraria a cota', () => {
-  const [a] = parseAccounts([{ user: 'biuder', owners: ['biudtech'], budgetWeight: 3 }]);
-  assert.equal(a.budgetWeight, 3);
-  for (const torto of [0, -2, 'banana', null]) {
-    const [b] = parseAccounts([{ user: 'x', owners: [], budgetWeight: torto }]);
-    assert.equal(b.budgetWeight, undefined, `peso ${JSON.stringify(torto)} não pode ser persistido`);
-  }
-});
-
 // contasDoPerfil é quem transforma a fila VIVA em "quem está esperando", e é essa
 // leitura que faz a cota morder só quando há disputa de verdade. Chamado no protótipo
 // pra não subir um Engine inteiro (o método não usa nada além do que o stub fornece).
@@ -155,7 +145,6 @@ function engineContas({ queue = [], contas = [], perfilDe = {} } = {}) {
     queue,
     accountList: () => contas,
     accountForPr: (pr) => pr.acct,
-    isMuted: (u) => contas.some(c => c.user === u && c.muted),
     autoReviewFor: (u) => contas.some(c => c.user === u && c.autoReview !== false),
     tokenFor: () => 'tok',
     autoReviewParked: new Set(),
@@ -186,11 +175,11 @@ test('contasDoPerfil não conta como espera o PR estacionado nem o que saiu de c
   assert.equal(r.find(c => c.user === 'pessoal').waiting, false, 'fila que não vai rodar não é disputa');
 });
 
-test('contasDoPerfil só junta quem divide o MESMO perfil, e ignora silenciada e sem auto-review', () => {
+test('contasDoPerfil só junta quem divide o MESMO perfil, e ignora quem não revisa sozinho', () => {
   const e = engineContas({
     queue: [],
-    contas: [{ user: 'biuder' }, { user: 'pessoal' }, { user: 'outra' }, { user: 'quieta', muted: true }, { user: 'manual', autoReview: false }],
-    perfilDe: { biuder: { id: 'p1' }, pessoal: { id: 'p1' }, outra: { id: 'p2' }, quieta: { id: 'p1' }, manual: { id: 'p1' } },
+    contas: [{ user: 'biuder' }, { user: 'pessoal' }, { user: 'outra' }, { user: 'manual', autoReview: false }],
+    perfilDe: { biuder: { id: 'p1' }, pessoal: { id: 'p1' }, outra: { id: 'p2' }, manual: { id: 'p1' } },
   });
   const r = Engine.prototype.contasDoPerfil.call(e, 'p1');
   assert.deepEqual(r.map(c => c.user), ['biuder', 'pessoal'], 'quem não revisa sozinho não encolhe a fatia de quem revisa');

@@ -26,7 +26,7 @@ function engineBase() {
     staleInfo: {}, headQuietoDesde: {}, reReviewLaunched: {}, decisions: { pending: [], resolved: [] },
     autoReviewParked: new Set(), parkedMotivos: {}, retryAfterNet: new Map(), skipComentado: {},
     headlessQueue: [], activeReviews: new Map(), queue: [], config: {}, seen: new Set(),
-    accountForPr: () => 'revisora', isMuted: () => false, autoReviewFor: () => true, tokenFor: () => 'tok',
+    accountForPr: () => 'revisora', autoReviewFor: () => true, tokenFor: () => 'tok',
     budgetBlockedFor: () => false, outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
     emit: () => {}, pushState: () => {}, refreshTokens: async () => {},
   });
@@ -46,8 +46,7 @@ test('recuperação não relança a revisão parada porque tiraram a label', asy
 test('PR em conflito memorizado na fila não chega aos gates que gastam gh', async () => {
   const e = new Engine();
   e.token = 'tok';
-  e.tokens = { revisora: 'tok' };
-  e.config.accounts = [{ user: 'revisora', owners: ['acme'] }];
+  e.config.conta = { user: 'revisora', owners: ['acme'] };
   e.autoReviewFor = () => true;
   e.saveDecisions = () => {};
   e.pushState = () => {};

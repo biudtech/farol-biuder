@@ -34,10 +34,10 @@ after(() => {
 
 beforeEach(() => { chamadas.length = 0; });
 
-function engineComContas() {
+function engineComConta() {
   const e = new Engine();
-  e.config.accounts = [{ user: 'ana', owners: ['acme'] }, { user: 'bia', owners: ['outra'] }];
-  e.tokens = { ana: 'tok-ana', bia: 'tok-bia' };
+  e.config.conta = { user: 'ana', owners: ['acme'] };
+  e.token = 'tok-ana';
   return e;
 }
 
@@ -58,7 +58,7 @@ function comRelogioFalso(t0 = 1_700_000_000_000) {
 }
 
 test('as buscas da mesma conta saem espaçadas, não em rajada', async () => {
-  const e = engineComContas();
+  const e = engineComConta();
   const relogio = comRelogioFalso();
   try {
     // o que o ciclo faz hoje pela conta: owner, review-requested, reviewed-by
@@ -71,22 +71,11 @@ test('as buscas da mesma conta saem espaçadas, não em rajada', async () => {
     'a primeira sai na hora; da segunda em diante, cada uma espera o espaçamento');
 });
 
-test('a espera é por conta: a fila de uma não atrasa a da outra', async () => {
-  const e = engineComContas();
-  const relogio = comRelogioFalso();
-  try {
-    await e.searchPRs(['--owner', 'acme'], 'ana');
-    await e.searchPRs(['--owner', 'outra'], 'bia');
-  } finally { relogio.restaurar(); }
-  assert.equal(chamadas.length, 2);
-  assert.deepEqual(relogio.dormidas, [], 'contas diferentes, cotas diferentes: ninguém espera');
-});
-
 // A propriedade que interessa, e que o espaçamento produz sozinho: por mais buscas que o
 // ciclo peça, NENHUMA janela de um minuto passa do teto. O limite do GitHub é 30 por
 // minuto; o teste afirma o nosso, que é menor de propósito.
 test('nenhuma janela de um minuto passa do teto, por mais que o ciclo peça', async () => {
-  const e = engineComContas();
+  const e = engineComConta();
   const relogio = comRelogioFalso();
   const instantes = [];
   try {
@@ -106,7 +95,7 @@ test('nenhuma janela de um minuto passa do teto, por mais que o ciclo peça', as
 // Conta que JÁ está bloqueada nem chega no orçamento: ela não gasta espera nenhuma,
 // porque nem roda o gh (insistir prolonga o bloqueio).
 test('conta em espera por limite não dorme nem chama o gh', async () => {
-  const e = engineComContas();
+  const e = engineComConta();
   e.limitesDeBuscaGh = new Map([['ana', Date.now() + 120_000]]);
   const relogio = comRelogioFalso();
   let r;

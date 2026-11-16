@@ -14,7 +14,6 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => null, text: async () => '' };
 };
 await import('../ui/app.js');
-const { attentionCount } = await import('../ui/telas/contas.js');
 for (let i = 0; i < 50 && !listeners.has('state'); i++) await new Promise(resolve => setTimeout(resolve, 1));
 const $ = selector => doc.querySelector(selector);
 const pr = { key: 'acme/app#427', repo: 'acme/app', url: 'https://github.com/acme/app/pull/427',
@@ -23,8 +22,8 @@ const outro = { ...pr, key: 'acme/app#428', url: 'https://github.com/acme/app/pu
 function snapshot() {
   return { app: { platform: 'win32', version: 'fixture' }, status: 'idle',
     account: { user: 'alice', tokenOk: true },
-    accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: [] }],
-    config: { accounts: [], intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [],
+    accounts: [{ user: 'alice', owners: ['acme'] }],
+    config: { intervalSeconds: 300, parallelReviews: 1, people: {}, claudeProfiles: [],
       theme: 'dark' },
     lastCheckAt: Date.now(), queue: [pr, outro],
     decisions: { pending: [], resolved: [] }, activeSessions: [], activity: {},
@@ -49,7 +48,6 @@ test('PR em revisão sai do card acionável, dos contadores e do Revisar tudo, s
   assert.equal($('#queueCount').textContent, '1');
   assert.equal($('#rcMim').textContent, '1');
   assert.equal($('#btnReviewAll').hidden, true);
-  assert.equal(attentionCount('alice'), 1);
   assert.deepEqual(snap.queue, [pr, outro]);
 
   snap.activeSessions = [];
@@ -58,17 +56,16 @@ test('PR em revisão sai do card acionável, dos contadores e do Revisar tudo, s
   assert.equal($('#queueCount').textContent, '2', 'sem sessão e sem decisão, o pedido volta à fila');
 });
 
-test('revisão da mesma chave por outra conta não oculta o pedido legítimo dessa conta', () => {
+test('a revisão ativa é identificada pela chave do PR, sem olhar a marca de conta do item', () => {
   const snap = snapshot();
-  snap.queue = [pr, { ...pr, account: 'bob' }];
+  snap.queue = [pr, { ...outro, account: 'bob' }];
   snap.activeSessions = [sessao({ ...pr, account: 'ALICE' })];
   receber(snap);
   assert.equal($('#queueCount').textContent, '1');
   assert.equal($('#rcMim').textContent, '1');
-  assert.equal(attentionCount('alice'), 0);
-  assert.equal(attentionCount('bob'), 1);
-  assert.match($('#queue').innerHTML, /bob/);
-  assert.doesNotMatch($('#queue').innerHTML, /acct-chip">alice/);
+  assert.doesNotMatch($('#queue').innerHTML, /acme\/app#427/);
+  assert.match($('#queue').innerHTML, /acme\/app#428/);
+  assert.doesNotMatch($('#queue').innerHTML, /acct-chip|acct-dot/, 'sem marcador de conta: uma instância, uma conta');
 });
 
 test('sessão com chave e identidade herdada do repositório também retira apenas sua revisão da fila', () => {
@@ -96,7 +93,6 @@ test('somente pedidos em espera não abrem a seção Analisando agora', () => {
   const snap = snapshot();
   snap.queue = [];
   snap.headlessWaiting = [pr.key, outro.key];
-  snap.headlessWaitingContas = { [pr.key]: 'alice', [outro.key]: 'alice' };
   snap.headlessWaitingPrs = [pr, outro];
   receber(snap);
   assert.equal($('#queueCount').textContent, '2');
@@ -105,7 +101,7 @@ test('somente pedidos em espera não abrem a seção Analisando agora', () => {
   assert.doesNotMatch($('#queue').innerHTML, /act-review/);
 });
 
-test('decisões e histórico deixam de oferecer nova revisão do mesmo PR e conta enquanto ativo', () => {
+test('decisões e histórico deixam de oferecer nova revisão do mesmo PR enquanto ativo', () => {
   const snap = snapshot();
   const d = { id: 'd1', key: pr.key, pr, verdict: 'approve', blockedKind: 'stale_head', reasons: [], reportMarkdown: 'Relatório preservado', status: 'posted', action: 'approve' };
   snap.decisions = { pending: [d], resolved: [d] };
@@ -116,9 +112,9 @@ test('decisões e histórico deixam de oferecer nova revisão do mesmo PR e cont
   assert.doesNotMatch($('#decisions').innerHTML, /Revisar agora/);
   assert.match($('#resolved').innerHTML, /disabled title="Revisão em andamento"/);
   assert.match($('#resolved').innerHTML, /Relatório preservado/);
-  snap.activeSessions = [sessao({ ...pr, account: 'bob' })];
+  snap.activeSessions = [sessao(outro)];
   receber(snap);
-  assert.match($('#decisions').innerHTML, /Revisar agora/);
+  assert.match($('#decisions').innerHTML, /Revisar agora/, 'sessão de outro PR não segura este');
   assert.doesNotMatch($('#resolved').innerHTML, /disabled title="Revisão em andamento"/);
 });
 
@@ -128,11 +124,10 @@ test('recuperação mostra agenda, executor e execução conforme o snapshot rea
   receber(snap);
   assert.match($('#esperaCi').innerHTML, /Recuperação agendada/);
   assert.doesNotMatch($('#esperaCi').innerHTML, /Concluindo a análise/);
-  snap.headlessWaiting = [pr.key];
-  snap.headlessWaitingContas = { [pr.key]: 'bob' };
+  snap.headlessWaiting = [outro.key];
   receber(snap);
-  assert.match($('#esperaCi').innerHTML, /Recuperação agendada/, 'a espera de outra conta não muda o card');
-  snap.headlessWaitingContas = { [pr.key]: 'alice' };
+  assert.match($('#esperaCi').innerHTML, /Recuperação agendada/, 'a espera de outro PR não muda o card');
+  snap.headlessWaiting = [pr.key];
   receber(snap);
   assert.match($('#esperaCi').innerHTML, /Aguardando executor/);
   snap.activeSessions = [sessao()];
@@ -140,9 +135,9 @@ test('recuperação mostra agenda, executor e execução conforme o snapshot rea
   assert.match($('#esperaCi').innerHTML, /Concluindo a análise/);
 });
 
-// Review do PR #349: a contagem por conta era provada só pelo texto do código (ui-rerodada.test.js);
-// tirar `+ d` do retorno de attentionCount passava. Aqui o resultado é observado.
-test('attentionCount soma as pendências que precisam de você, inclusive a recuperação pausada', () => {
+// Review do PR #349: a contagem era provada só pelo texto do código (ui-rerodada.test.js). Aqui o
+// resultado é observado, no contador de Pra mim (a contagem por conta saiu com a barra de contas).
+test('o contador de Pra mim soma as pendências que precisam de você, inclusive a recuperação pausada', () => {
   const snap = snapshot();
   snap.queue = [];
   const pendencia = (id, extra) => ({ id, key: `acme/app#${id}`, pr: { ...pr, key: `acme/app#${id}` }, verdict: 'approve', reasons: [], ...extra });
@@ -151,12 +146,10 @@ test('attentionCount soma as pendências que precisam de você, inclusive a recu
     pendencia(2, { esperaProva: { tentativas: 0, impedimento: 'Revisão automática desativada nesta conta.', pedeVoce: true } }),
     pendencia(3, { esperaProva: { tentativas: 0 } }),
     pendencia(4, { esperaCi: { checks: [] } }),
-    pendencia(5, { account: 'bob', pr: { ...pr, key: 'acme/app#5', account: 'bob' } }),
   ], resolved: [] };
   receber(snap);
-  assert.equal(attentionCount('alice'), 2, 'a comum e a pausada; a recuperação automática e a espera do CI ficam fora');
-  assert.equal(attentionCount('bob'), 1);
+  assert.equal($('#rcMim').textContent, '2', 'a comum e a pausada; a recuperação automática e a espera do CI ficam fora');
   snap.queue = [pr];
   receber(snap);
-  assert.equal(attentionCount('alice'), 3, 'fila e pendências somam');
+  assert.equal($('#rcMim').textContent, '3', 'fila e pendências somam');
 });

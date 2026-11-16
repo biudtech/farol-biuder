@@ -49,8 +49,7 @@ function prDaFila(n, extra) {
 function novoEngine() {
   const engine = new Engine();
   engine.token = 'token-falso';
-  engine.tokens = { eu: 'token-falso' };
-  engine.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  engine.config.conta = { user: 'eu', owners: ['acme'] };
   engine.saveDecisions = () => { };
   engine.pushState = () => { };
   engine.refreshTokens = async () => { };
@@ -185,7 +184,7 @@ test('caminho automático: auto-approve grava decisão e memória com a identida
 test('caminho automático: auto-reject também atribui a memória pela fila', async () => {
   runImpl = roteadorPost();
   const engine = novoEngine();
-  engine.config.accounts = [{ user: 'eu', owners: ['acme'], onReject: 'request_changes' }];
+  engine.config.conta = { user: 'eu', owners: ['acme'], onReject: 'request_changes' };
   const meuPR = prDaFila(44, { requested: true });
   engine.runClaudeStream = async () => ({
     text: JSON.stringify({

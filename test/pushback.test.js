@@ -82,11 +82,10 @@ test('pendente (ainda na sua mesa, nada postado) não é alvo', () => {
    nenhum: só o predicado de elegibilidade era coberto, e por cópia. */
 
 // engine com um panorama e os marcadores de scan, sem tocar em rede
-function engineComPanorama(resolved, panorama, scanned = {}, muted = []) {
+function engineComPanorama(resolved, panorama, scanned = {}) {
   const e = engineWith(resolved);
   e.panorama = panorama;
   e.pushbackScanned = scanned;
-  e.isMuted = (user) => muted.includes(user);
   e.accountForPr = (pr) => pr.account || 'eu';
   return e;
 }
@@ -106,14 +105,6 @@ test('pushbackTargets: só entram ressalva e bloqueio, aprovação limpa fica de
   ]);
   const alvos = pushbackTargets(e, e.reviewActions()).map(p => p.key);
   assert.deepEqual(alvos, ['o/r#2', 'o/r#3']);
-});
-
-test('pushbackTargets: conta silenciada nunca entra', () => {
-  const e = engineComPanorama(RESOLVIDOS,
-    [{ key: 'o/r#2', account: 'silenciada', updatedAt: '2026-08-01T10:00:00Z' },
-    { key: 'o/r#3', account: 'eu', updatedAt: '2026-08-01T10:00:00Z' }],
-    {}, ['silenciada']);
-  assert.deepEqual(pushbackTargets(e, e.reviewActions()).map(p => p.key), ['o/r#3']);
 });
 
 test('pushbackTargets: PR já escaneado e sem novidade não reentra', () => {
@@ -168,7 +159,7 @@ test('pushbackTargets: registro automático NÃO tira do scan (auto pode ser rev
 test('pushbackTargets: conta com perfil de orçamento estourado fica de fora do scan', () => {
   const e = engineComPanorama(RESOLVIDOS,
     [{ key: 'o/r#2', account: 'bob', updatedAt: '2026-08-01T10:00:00Z' }]);
-  e.config.accounts = [{ user: 'bob', owners: ['x'] }];
+  e.config.conta = { user: 'bob', owners: ['x'] };
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 }];
   e.config.claudeProfileId = 'p1';
   e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
@@ -178,7 +169,7 @@ test('pushbackTargets: conta com perfil de orçamento estourado fica de fora do 
 test('pushbackTargets: conta com perfil dentro do orçamento segue elegível pro scan', () => {
   const e = engineComPanorama(RESOLVIDOS,
     [{ key: 'o/r#2', account: 'bob', updatedAt: '2026-08-01T10:00:00Z' }]);
-  e.config.accounts = [{ user: 'bob', owners: ['x'] }];
+  e.config.conta = { user: 'bob', owners: ['x'] };
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
   e.config.claudeProfileId = 'p1';
   assert.deepEqual(pushbackTargets(e, e.reviewActions()).map(p => p.key), ['o/r#2']);
@@ -305,7 +296,6 @@ function stubGhPushback(pr, myAt, comentariosDoAutor) {
 function engineParaG4(pr, marcadorAnterior) {
   const resolved = [{ key: pr.key, status: 'auto_rejected', action: 'request_changes', reasons: ['x'], resolvedAt: 1 }];
   const e = engineComPanorama(resolved, [pr], { [pr.key]: marcadorAnterior });
-  e.tokens = { [pr.account]: 'tok' };
   e.token = 'tok';
   e.config.autoPushback = true;
   e.savePushbackScanned = () => { };

@@ -345,7 +345,6 @@ function engineFiacao(extra = {}) {
     bloqueadoPorChecks: async () => ({ bloqueado: false, faltando: [] }),
     prFromUrl: (u) => ({ key: 'o/r#1', url: u, repo: 'o/r', number: 1 }),
     accountForPr: () => 'eu',
-    isMuted: () => false,
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
     budgetBlockedFor: () => null,

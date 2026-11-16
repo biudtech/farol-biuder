@@ -13,8 +13,7 @@
    (empilha ou substitui no histórico). Quem lê a tela e aplica a rota é ui/telas/rota.js.
 
    Nada que identifique credencial entra no endereço: cada campo é validado por formato
-   fechado (aba e seção de lista conhecida, conta e org no formato de login do GitHub, PR
-   no formato owner/repo#N), e o que não casa some calado. */
+   fechado (aba e seção de lista conhecida, PR no formato owner/repo#N), e o que não casa some calado. */
 
 import { ghPrUrl } from './mencoes.js';
 
@@ -26,12 +25,9 @@ const SECOES_DO_SISTEMA = {
   plano: 'plans',
   preferencias: 'prefs', diagnostico: 'diag', sobre: 'about',
 };
-// só nessas abas a barra de contas aparece (accountBarVisible, ui/pure/contas.js)
-const ABAS_COM_CONTA = new Set(['radar', 'time']);
 const JANELAS_DO_CONSUMO = [1, 7, 30, 90];
 export const JANELA_PADRAO_DO_CONSUMO = 30;
 
-const LOGIN_GH = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const PR_MAX = 250;
 
 function chaveDoValor(mapa, valor) {
@@ -44,7 +40,7 @@ function decodificar(pedaco) {
 
 // Só os nomes que a rota conhece saem da consulta: o nome vem do endereço, e escrever
 // propriedade com nome livre deixaria `__proto__` e parentes mexerem no objeto.
-const NOMES_DA_CONSULTA = ['conta', 'pr', 'janela'];
+const NOMES_DA_CONSULTA = ['pr', 'janela'];
 
 function lerConsulta(texto) {
   const lidos = new Map();
@@ -66,7 +62,7 @@ const SECAO_PADRAO = { sistema: 'overview' };
 function rotaPadrao(aba = 'radar') {
   return {
     aba, sub: SUB_PADRAO[aba] || '', secao: SECAO_PADRAO[aba] || '',
-    conta: '', pr: '', janela: null,
+    pr: '', janela: null,
   };
 }
 
@@ -75,7 +71,6 @@ function chaveDePr(v) {
   return k.length <= PR_MAX && ghPrUrl(k) ? k : '';
 }
 
-function valido(re, v) { return typeof v === 'string' && re.test(v) ? v : ''; }
 
 // período do Consumo: só os quatro botões da tela (Hoje, 7, 30 e 90 dias), o resto é null
 function janelaValida(v) {
@@ -123,7 +118,6 @@ export function lerRota(endereco) {
   const aba = ABAS_DA_ROTA.includes(partes[0]) ? partes[0] : 'radar';
   const rota = rotaPadrao(aba);
   lerCaminho(rota, aba === partes[0] ? partes : []);
-  if (ABAS_COM_CONTA.has(aba)) rota.conta = valido(LOGIN_GH, consulta.conta);
   if (aba === 'consumo') rota.janela = janelaValida(consulta.janela);
   rota.pr = chaveDePr(consulta.pr);
   return rota;
@@ -143,7 +137,6 @@ export function escreverRota(r) {
   if (rota.aba === 'sistema') caminho.push(chaveDoValor(SECOES_DO_SISTEMA, rota.secao));
   const consulta = [];
   if (rota.aba === 'consumo' && rota.janela !== null && rota.janela !== JANELA_PADRAO_DO_CONSUMO) consulta.push(pedacoDeConsulta('janela', rota.janela));
-  if (rota.conta) consulta.push(pedacoDeConsulta('conta', rota.conta));
   if (rota.pr) consulta.push(pedacoDeConsulta('pr', rota.pr));
   const sufixo = consulta.length ? `?${consulta.join('&')}` : '';
   return `/${caminho.map(encodeURIComponent).join('/')}${sufixo}`;
@@ -158,7 +151,6 @@ function lerRotaDeObjeto(r) {
   const segundo = aba === 'sistema' ? chaveDoValor(SECOES_DO_SISTEMA, o.secao) : chaveDoValor(SUBS_DO_RADAR, o.sub);
   const partes = [aba, segundo];
   lerCaminho(rota, partes);
-  if (ABAS_COM_CONTA.has(aba)) rota.conta = valido(LOGIN_GH, o.conta);
   if (aba === 'consumo') rota.janela = janelaValida(o.janela);
   rota.pr = chaveDePr(o.pr);
   return rota;
@@ -170,7 +162,7 @@ function lerRotaDeObjeto(r) {
                     revisão: o Voltar do navegador desfaz
    - 'fechou-caixa' a única diferença é a caixa de revisão ter fechado: quem chama volta a
                     entrada que a abertura empilhou, em vez de empilhar outra igual
-   - 'replace'      filtro, conta, busca: troca a entrada atual, sem encher o histórico */
+   - 'replace'      filtro, busca: troca a entrada atual, sem encher o histórico */
 export function mudancaDeRota(antes, depois) {
   const b = lerRotaDeObjeto(depois);
   if (!antes) return 'replace';

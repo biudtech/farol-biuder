@@ -45,7 +45,6 @@ function engineFalso(extra = {}) {
     bloqueiaAutomatico: async () => false,
     prFromUrl: (u) => ({ key: 'o/r#1', url: u, repo: 'o/r', number: 1 }),
     accountForPr: () => 'eu',
-    isMuted: () => false,
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
     budgetBlockedFor: () => null,

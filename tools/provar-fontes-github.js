@@ -60,9 +60,8 @@ try {
   const engine = new Engine();
   engine.log = () => {};
   engine.config = { ...engine.config, jiraSites: [], reReviewResume: false, reviewContextMode: 'off',
-    accounts: [{ user: account, owners: [repo.split('/')[0]], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }],
+    conta: { user: account, owners: [repo.split('/')[0]], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' },
     sourceCacheLimits: { maxBytes: 128 * 1024 ** 2, globalMaxBytes: 256 * 1024 ** 2 } };
-  engine.config.ghUser = account;
   engine.accountForPr = () => account;
   engine.resolveClaudeAuth = () => ({ kind: 'apikey', id: 'prova', apiKey: '', baseUrl: '' });
   await engine.refreshTokens();

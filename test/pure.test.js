@@ -10,7 +10,7 @@ process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-pure-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const farol = (await import('../server.js')).default;
-const { modelLabel, isPermanentBranch, parseAccounts,
+const { modelLabel, isPermanentBranch,
   normalizeClaudeProfiles, applyClaudeAuthEnv } = farol;
 const {
   sanitizeModel, sanitizeClaudeModel, sanitizeClaudeDir,
@@ -58,40 +58,6 @@ test('isPermanentBranch: branches descartáveis', () => {
   for (const b of ['feat/x', 'fix/y', 'task-123', 'hotfix/z', 'bugfix/w', 'chore/deps']) {
     assert.equal(isPermanentBranch(b), false, b);
   }
-});
-
-test('parseAccounts: texto "login: org1, org2" e a ordem preservada', () => {
-  const out = parseAccounts('alice: biudtech, foo\nbob');
-  assert.deepEqual(out, [
-    { user: 'alice', owners: ['biudtech', 'foo'] },
-    { user: 'bob', owners: [] },
-  ]);
-});
-
-test('parseAccounts: array normalizado, metadados e políticas válidas', () => {
-  const out = parseAccounts([
-    { user: 'a', owners: ['x', 'y'], muted: true, onClean: 'approve', onReject: 'request_changes', label: 'Trabalho' },
-    { user: '', owners: ['z'] }, // sem user: descartado
-  ]);
-  assert.equal(out.length, 1);
-  assert.deepEqual(out[0], { user: 'a', owners: ['x', 'y'], label: 'Trabalho', muted: true, onClean: 'approve', onReject: 'request_changes' });
-});
-
-test('parseAccounts: valores de política inválidos são ignorados', () => {
-  const [acct] = parseAccounts([{ user: 'a', owners: [], onClean: 'lol', onReject: 'nope' }]);
-  assert.equal('onClean' in acct, false);
-  assert.equal('onReject' in acct, false);
-});
-
-test('parseAccounts: claudeProfileId é preservado quando presente e string não-vazia', () => {
-  const out = parseAccounts([
-    { user: 'a', owners: [], claudeProfileId: 'trabalho' },
-    { user: 'b', owners: [], claudeProfileId: '' },
-    { user: 'c', owners: [] }
-  ]);
-  assert.equal(out[0].claudeProfileId, 'trabalho');
-  assert.equal('claudeProfileId' in out[1], false);
-  assert.equal('claudeProfileId' in out[2], false);
 });
 
 test('normalizeClaudeProfiles: não-array vira [] (string, número, objeto, null)', () => {

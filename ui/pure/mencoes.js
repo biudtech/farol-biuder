@@ -19,9 +19,6 @@
 // A doutrina completa está no CLAUDE.md, seção "Menções navegáveis".
 import { esc } from './comum.js';
 
-/* ---- atribuição de conta pra memória (Time) ---- */
-export function ownerFromUrl(url) { const m = String(url || '').match(/github\.com\/([^\/]+)\//i); return m ? m[1] : ''; }
-
 // Fronteira única dos links de PR que a UI torna clicáveis. Aceita query/fragmento
 // copiados do navegador, mas devolve sempre a URL canônica, sem carregar esses dados.
 export function canonicalGithubPrUrl(value) {

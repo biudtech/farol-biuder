@@ -23,9 +23,7 @@ function engineBase() {
   try { fs.rmSync(LIMITE_PLANO_FILE_RN, { force: true }); } catch { }
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
-  e.isMuted = (u) => u === 'silenciada';
-  // tokens por conta (tokenFor consulta este mapa): 'semtoken' fica de fora de propósito
-  e.tokens = { eu: 'tok-eu', silenciada: 'tok-sil' };
+  e.token = 'tok-eu';
   e.log = () => { };
   // gate de consciência sempre livre (é rede; a suíte dele é
   // test/consciencia-historico.test.js)
@@ -99,9 +97,8 @@ test('retryTargets relança PR de clique no panorama (fora da fila) e ignora aut
   assert.deepEqual(e.retryTargets(new Set(), new Set()).map(p => p.key), ['o/r#1']);
 });
 
-test('retryTargets pula silenciado, recém-chegado e o que já está rodando', () => {
+test('retryTargets pula o recém-chegado e o que já está rodando', () => {
   const e = engineBase();
-  e.retryAfterNet.set('o/r#1', { tries: 1, pr: prDe('o/r#1', { account: 'silenciada' }) });
   e.retryAfterNet.set('o/r#2', { tries: 1, pr: prDe('o/r#2') });
   e.retryAfterNet.set('o/r#3', { tries: 1, pr: prDe('o/r#3') });
   e.retryAfterNet.set('o/r#4', { tries: 1, pr: prDe('o/r#4') });
@@ -111,9 +108,10 @@ test('retryTargets pula silenciado, recém-chegado e o que já está rodando', (
 
 test('retryTargets: conta sem token não relança (o filtro da Onda 1 permanece, R2)', () => {
   const e = engineBase();
-  e.retryAfterNet.set('o/r#1', { tries: 1, pr: prDe('o/r#1', { account: 'semtoken' }) });
   e.retryAfterNet.set('o/r#2', { tries: 1, pr: prDe('o/r#2') });
-  assert.deepEqual(e.retryTargets(new Set(), new Set()).map(p => p.key), ['o/r#2'],
+  assert.deepEqual(e.retryTargets(new Set(), new Set()).map(p => p.key), ['o/r#2']);
+  e.token = null;
+  assert.deepEqual(e.retryTargets(new Set(), new Set()).map(p => p.key), [],
     'sem token não abre sessão: o PR espera o token voltar em vez de falhar de novo');
 });
 
@@ -262,8 +260,7 @@ test('runOneHeadless: falha transitória comum (rede) não ganha notBefore', asy
 function engineForPrune() {
   const e = new EngineForPrune();
   e.accountForPr = (pr) => pr.account || 'eu';
-  e.isMuted = () => false;
-  e.tokens = { eu: 'tok-eu' };
+  e.token = 'tok-eu';
   e.log = () => {};
   return e;
 }
@@ -492,7 +489,7 @@ test('autoReviewParked sobrevive a reinício da Engine (G15)', () => {
 function checkEngineG15() {
   const e = new Engine();
   // a revisão automática é da conta (30/09/2026): nenhuma conta desta suíte revisa sozinha
-  e.config.accounts = [{ user: 'me', owners: ['acme', 'globex'], autoReview: false }];
+  e.config.conta = { user: 'me', owners: ['acme', 'globex'], autoReview: false };
   e.seen = new Set();
   e.reReviewedKeys = new Set();
   e.decisions = { pending: [], resolved: [] };

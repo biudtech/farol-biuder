@@ -109,16 +109,17 @@ test('os estados do painel são distintos: carregando, vazio, falha de leitura',
 });
 
 test('a configuração entra em número e em sim ou não, sem login de conta nem caminho', () => {
-  engine.config.accounts = [{ user: 'ana-exemplo', owners: ['acme-exemplo'] }, { user: 'bruno-teste', owners: [] }];
+  engine.config.conta = { user: 'ana-exemplo', owners: ['acme-exemplo'], autoReview: false };
   engine.config.intervalSeconds = 300;
   const md = engine.diagnosticoMarkdown();
-  assert.match(md, /Contas monitoradas: 2 \(1 com organização\)/);
+  assert.match(md, /Conta revisora: configurada \(1 organizações\)/);
+  assert.match(md, /Revisão automática: a conta só põe na fila/);
   assert.match(md, /Intervalo de checagem: 300 s/);
   // a referência do PR continua aparecendo na falha, que é onde ela serve; o que não
-  // aparece é a lista de contas e organizações da configuração
+  // aparece é o login e as organizações da configuração
   const secao = md.slice(md.indexOf('## Configuração'), md.indexOf('## Falhas registradas'));
-  assert.doesNotMatch(secao, /ana-exemplo|bruno-teste|acme-exemplo/, 'login e organização ficam de fora da configuração');
-  engine.config.accounts = [];
+  assert.doesNotMatch(secao, /ana-exemplo|acme-exemplo/, 'login e organização ficam de fora da configuração');
+  engine.config.conta = null;
 });
 
 test('a tela usa o Markdown único na cópia, e o export antigo saiu da tela', () => {

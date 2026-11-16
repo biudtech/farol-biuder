@@ -46,7 +46,8 @@ beforeEach(() => {
 
 function engine() {
   const e = new Engine();
-  e.tokens = { eu: 'tok', outra: 'tok2' };
+  e.config.conta = { user: 'eu', owners: ['acme'] };
+  e.token = 'tok';
   e.logs = [];
   e.log = (level, msg) => e.logs.push({ level, msg });
   return e;
@@ -87,17 +88,6 @@ test('em espera, a busca seguinte nem chama o gh', async () => {
   assert.equal(r, null);
   assert.deepEqual(chamadas, [], 'nenhuma requisicao: tentar de novo so prolonga o bloqueio');
   assert.deepEqual(e.logs, [], 'e nenhum ruido novo no log');
-});
-
-test('a espera e POR CONTA: a outra continua buscando', async () => {
-  const e = engine();
-  respostaBusca = { ok: false, code: 1, stdout: '', stderr: LIMITE };
-  await e.searchPRs(['--owner', 'acme'], 'eu');
-  respostaBusca = { ok: true, code: 0, stdout: '[]', stderr: '' };
-  chamadas = [];
-  const r = await e.searchPRs(['--owner', 'acme'], 'outra');
-  assert.deepEqual(r, [], 'a conta sem limite busca normalmente');
-  assert.equal(chamadas.length, 1);
 });
 
 test('vencido o prazo a conta volta a buscar, e o registro sai sozinho', async () => {

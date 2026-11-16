@@ -9,7 +9,6 @@ export * from './pure/consumo.js';
 export * from './pure/contas.js';
 export * from './pure/login-web.js';
 export * from './pure/uso-do-plano.js';
-export * from './pure/contas-gh.js';
 export * from './pure/diagnostico.js';
 export * from './pure/fila-justa.js';
 export * from './pure/jira.js';

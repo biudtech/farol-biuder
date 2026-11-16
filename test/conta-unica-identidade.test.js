@@ -35,6 +35,17 @@ function comEnvDaMaquina(vars, fn) {
   }
 }
 
+// a versão que espera: o ambiente fica sujo durante toda a chamada assíncrona
+async function comEnvDaMaquinaAte(vars, fn) {
+  const antes = {};
+  for (const [k, v] of Object.entries(vars)) { antes[k] = process.env[k]; process.env[k] = v; }
+  try { return await fn(); } finally {
+    for (const [k, v] of Object.entries(antes)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
 const REVISORA = { user: 'revisora', owners: ['biudtech'] };
 
 test('accountList devolve lista de um, vinda de config.conta', () => {
@@ -122,4 +133,103 @@ test('refreshTokens pede o token só da conta revisora', async () => {
     assert.equal(e.tokenFor(), 'tok-novo');
     assert.equal(e.tokenOk, true);
   } finally { io.run = real; }
+});
+
+/* ---------- o que sobrou dos módulos de várias contas, com uma conta só ---------- */
+
+test('sem token é estado: uma linha quando começa, e só volta a avisar depois de o token voltar', async () => {
+  const gh = (await import('../lib/engine/gh-queries.js')).default;
+  const linhas = [];
+  const e = { log: (nivel, msg) => linhas.push(msg) };
+  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), true);
+  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), false);
+  assert.equal(gh.avisarSemToken(e, 'Alex', 'alex sem token no gh'), false, 'login do GitHub não distingue caixa');
+  gh.tokenVoltou(e, 'alex');
+  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), true);
+  assert.equal(linhas.length, 2);
+});
+
+test('a sessão ativa leva a conta revisora, mesmo quando o item veio marcado com outra', async () => {
+  const io = (await import('../lib/io.js')).default;
+  const real = io.run;
+  io.run = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
+  try {
+    const e = engineDe(REVISORA, 'tok-revisora');
+    e.refreshTokens = async () => { };
+    e.pushState = () => { };
+    // captura o registro no instante em que a sessão nasce e interrompe ali
+    const parou = new Error('registro capturado');
+    const vistos = [];
+    e.activity = new Map();
+    e.activity.set = function set(id) {
+      if (e.activeReviews.has(id)) vistos.push(e.snapshot().activeSessions.find((x) => x.id === id));
+      throw parou;
+    };
+    const pr = { key: 'acme/app#7', url: 'https://github.com/acme/app/pull/7', repo: 'acme/app', number: 7, author: 'bob', title: 'Ajuste', account: 'outra' };
+    await assert.rejects(e.runHeadlessReview(pr), parou);
+    assert.equal(vistos.length, 1);
+    assert.equal(vistos[0].pr.account, 'revisora');
+  } finally { io.run = real; }
+});
+
+test('a fila de espera vai à tela com a posição e o motivo, sem o mapa de conta por PR', () => {
+  const e = engineDe(REVISORA, 'tok-revisora');
+  e.pushState = () => { };
+  e.config.parallelReviews = 1;
+  e.config.globalParallelReviews = 2;
+  const pr = { key: 'acme/app#7', url: 'https://github.com/acme/app/pull/7', repo: 'acme/app', number: 7, author: 'bob', title: 'Ajuste', requested: true };
+  e.headlessQueue = [pr];
+  e.headlessBusyAccounts.set('revisora', 1);
+  e.processHeadless();
+  const snap = e.snapshot();
+  assert.deepEqual(snap.headlessWaiting, ['acme/app#7']);
+  assert.deepEqual(snap.headlessWaitingDetails[pr.key], { posicao: 1, total: 1, motivo: 'limite-conta', ocupadas: 1, limite: 1 });
+  assert.equal(snap.headlessWaitingPrs[0].account, 'revisora');
+  assert.equal('headlessWaitingContas' in snap, false);
+  assert.equal(e.activeReviews.size, 0, 'a leitura não abre uma sessão');
+});
+
+test('postar num PR de org que a conta não lista sai com o token da conta revisora, nunca com outro', async () => {
+  const io = (await import('../lib/io.js')).default;
+  const real = io.run;
+  const envios = [];
+  io.run = async (cmd, args, opts) => {
+    if ((args || []).includes('--input')) envios.push({ rota: args[1], token: opts.env.GH_TOKEN, github: opts.env.GITHUB_TOKEN });
+    return { ok: true, code: 0, stdout: '{}', stderr: '' };
+  };
+  try {
+    const e = engineDe(REVISORA, 'tok-revisora');
+    e.refreshTokens = async () => { };
+    e.pushState = () => { };
+    const pr = { key: 'Desconhecida/app#9', repo: 'Desconhecida/app', number: 9, author: 'alguem', account: 'outra' };
+    const r = await comEnvDaMaquinaAte({ GH_TOKEN: 'tok-da-maquina', GITHUB_TOKEN: 'tok-da-maquina' },
+      () => e.postReview(pr, { event: 'COMMENT', body: 'Ok por aqui.' }));
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(envios, [{ rota: 'repos/Desconhecida/app/pulls/9/reviews', token: 'tok-revisora', github: undefined }]);
+  } finally { io.run = real; }
+});
+
+test('sem o token da conta revisora, a postagem não sai nem com token no ambiente', async () => {
+  const io = (await import('../lib/io.js')).default;
+  const real = io.run;
+  const chamadas = [];
+  io.run = async (cmd, args) => { chamadas.push(args || []); return { ok: true, code: 0, stdout: '', stderr: '' }; };
+  try {
+    const e = engineDe(REVISORA, null);
+    e.refreshTokens = async () => { };
+    e.pushState = () => { };
+    const pr = { key: 'biudtech/app#3', repo: 'biudtech/app', number: 3, author: 'alguem', account: 'outra' };
+    const r = await comEnvDaMaquinaAte({ GH_TOKEN: 'tok-da-maquina' }, () => e.postReview(pr, { event: 'COMMENT', body: 'Ok por aqui.' }));
+    assert.equal(r.ok, false);
+    assert.match(r.error, /conta revisora sem token/);
+    assert.equal(chamadas.filter((a) => a.some((x) => /pulls|reviews/.test(String(x)))).length, 0, 'nenhuma chamada tocou o PR');
+  } finally { io.run = real; }
+});
+
+test('sem conta revisora configurada a sessão de revisão não abre (não há identidade para o gh)', async () => {
+  const e = engineDe(undefined, null);
+  e.pushState = () => { };
+  const r = await e.runHeadlessReview({ key: 'acme/app#8', url: 'https://github.com/acme/app/pull/8', repo: 'acme/app', number: 8, author: 'bob' });
+  assert.deepEqual(r, { ok: false, code: 'sem_conta' });
+  assert.equal(e.activeReviews.size, 0);
 });

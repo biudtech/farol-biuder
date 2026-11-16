@@ -235,12 +235,6 @@ test('taxonomy: nenhum mapa tem chave sobrando fora da lista', () => {
   sobra(tax.PUSHBACK_LABEL, tax.PUSHBACK_OUTCOMES, 'PUSHBACK_LABEL');
 });
 
-test('taxonomy: a paleta de contas tem cores distintas em hex', () => {
-  assert.ok(tax.ACCOUNT_PALETTE.length >= 4, 'paleta pequena demais pra multi-conta');
-  for (const c of tax.ACCOUNT_PALETTE) assert.match(c, /^#[0-9a-f]{6}$/i, `cor inválida: ${c}`);
-  assert.equal(new Set(tax.ACCOUNT_PALETTE).size, tax.ACCOUNT_PALETTE.length, 'cor repetida na paleta');
-});
-
 test('taxonomy: papel e nível de domínio não se confundem', () => {
   // parsePeople valida os dois eixos contra estas listas; nome em comum faria um valor
   // de um eixo passar como válido no outro

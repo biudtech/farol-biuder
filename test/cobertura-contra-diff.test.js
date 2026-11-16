@@ -40,8 +40,7 @@ const PR = { key: 'acme/app#7', repo: 'acme/app', number: 7, url: 'https://githu
 function motor(diffMedido, coverage, ressalvas = 'wait') {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.autoApproveAll = true;
   e.approvePolicyFor = (_conta, limpo) => (limpo ? 'approve' : ressalvas);
   e.saveDecisions = () => { };

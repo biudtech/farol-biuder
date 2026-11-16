@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { lerRota, escreverRota, mudancaDeRota } from '../ui/pure.js';
 
 const PADRAO = {
-  aba: 'radar', sub: 'mim', secao: '', conta: '', pr: '',
+  aba: 'radar', sub: 'mim', secao: '', pr: '',
   janela: null,
 };
 
@@ -83,13 +83,12 @@ test('as abas que saíram (Entregas e Destaques) caem no Radar, sem filtro nenhu
   assert.equal(escreverRota({ aba: 'entregas', dias: 7, busca: 'x' }), '/radar/pra-mim');
 });
 
-test('conta só nas abas que mostram a barra de contas', () => {
-  assert.equal(lerRota('/radar/pra-mim?conta=alice').conta, 'alice');
-  assert.equal(lerRota('/time?conta=alice').conta, 'alice');
-  assert.equal(lerRota('/sistema/contas?conta=alice').conta, '');
-  assert.equal(lerRota('/radar?conta=all').conta, 'all', 'formato válido; quem aplica trata all como Todas');
-  assert.equal(lerRota('/radar?conta=a%20b').conta, '');
-  assert.equal(escreverRota({ aba: 'time', conta: 'alice' }), '/time?conta=alice');
+test('a conta saiu do endereço: uma instância, uma conta, e o link antigo com ?conta= abre sem ela', () => {
+  for (const antigo of ['/radar/pra-mim?conta=alice', '/time?conta=alice', '/sistema/contas?conta=alice', '/radar?conta=all']) {
+    assert.equal('conta' in lerRota(antigo), false, antigo);
+  }
+  assert.equal(escreverRota(lerRota('/radar/pra-mim?conta=alice&pr=a%2Fb%231')), '/radar/pra-mim?pr=a%2Fb%231');
+  assert.equal(escreverRota({ aba: 'time', conta: 'alice' }), '/time');
   assert.equal(escreverRota({ aba: 'consumo', conta: 'alice' }), '/consumo');
 });
 
@@ -125,10 +124,10 @@ test('caixa de revisão aberta: só chave de PR no formato owner/repo#N', () => 
 
 test('escrever e ler de volta dá a mesma rota (ida e volta)', () => {
   const casos = [
-    { aba: 'radar', sub: 'mim', conta: 'alice', pr: 'a/b#1' },
+    { aba: 'radar', sub: 'mim', pr: 'a/b#1' },
     { aba: 'radar', sub: 'mim' },
     { aba: 'sistema', secao: 'diag', pr: 'x/y#9' },
-    { aba: 'consumo' }, { aba: 'time', conta: 'bob' },
+    { aba: 'consumo' }, { aba: 'time' },
   ];
   for (const c of casos) {
     const hash = escreverRota(c);
@@ -138,9 +137,9 @@ test('escrever e ler de volta dá a mesma rota (ida e volta)', () => {
 
 test('a tela manda tudo o que lembra; vale só o da aba à mostra', () => {
   // cada tela lembra a sua sub-aba e seção mesmo quando não está à mostra
-  const tela = { aba: 'sistema', sub: 'mim', secao: 'accounts', conta: 'bob', janela: 7 };
+  const tela = { aba: 'sistema', sub: 'mim', secao: 'accounts', janela: 7 };
   assert.equal(escreverRota(tela), '/sistema/contas');
-  assert.equal(escreverRota({ ...tela, aba: 'radar' }), '/radar/pra-mim?conta=bob');
+  assert.equal(escreverRota({ ...tela, aba: 'radar' }), '/radar/pra-mim');
   assert.equal(escreverRota({ ...tela, aba: 'consumo' }), '/consumo?janela=7');
 });
 
@@ -157,12 +156,12 @@ test('empilhar x substituir no histórico', () => {
   assert.equal(mudancaDeRota(r('/radar'), r('/radar/pra-mim')), '', 'mesma tela, nada a fazer');
   assert.equal(mudancaDeRota(r('/radar'), r('/sistema')), 'push', 'troca de aba empilha');
   assert.equal(mudancaDeRota(r('/sistema/contas'), r('/sistema/jira')), 'push', 'troca de seção empilha');
-  assert.equal(mudancaDeRota(r('/radar'), r('/radar?conta=alice')), 'replace', 'conta substitui');
+  assert.equal(mudancaDeRota(r('/consumo'), r('/consumo?janela=7')), 'replace', 'filtro substitui');
   assert.equal(mudancaDeRota(r('/consumo'), r('/consumo?pr=a%2Fb%231')), 'push', 'abrir a caixa empilha');
   assert.equal(mudancaDeRota(r('/consumo?pr=a%2Fb%231'), r('/consumo?pr=a%2Fb%232')), 'push', 'outra caixa empilha');
   assert.equal(mudancaDeRota(r('/consumo?pr=a%2Fb%231'), r('/consumo')), 'fechou-caixa', 'fechar volta a entrada');
   assert.equal(mudancaDeRota(r('/consumo?pr=a%2Fb%231'), r('/sistema')), 'push', 'fechar e trocar de aba empilha');
-  assert.equal(mudancaDeRota(r('/radar?conta=x&pr=a%2Fb%231'), r('/radar')), 'replace', 'fechar e mudar filtro substitui');
+  assert.equal(mudancaDeRota(r('/consumo?janela=7&pr=a%2Fb%231'), r('/consumo')), 'replace', 'fechar e mudar filtro substitui');
 });
 
 test('nome de consulta fora da lista não chega ao objeto, nem __proto__', async () => {
@@ -204,7 +203,7 @@ test('enderecoDaPagina: link antigo com a rota no hash é reconhecido, e só na 
 });
 
 test('o caminho que escreverRota gera nunca leva hash', () => {
-  for (const c of [{ aba: 'radar', pr: 'acme/api#42' }, { aba: 'sistema', secao: 'diag' }, { aba: 'time', conta: 'bob' }]) {
+  for (const c of [{ aba: 'radar', pr: 'acme/api#42' }, { aba: 'sistema', secao: 'diag' }, { aba: 'time' }]) {
     const e = escreverRota(c);
     assert.ok(e.startsWith('/'), e);
     assert.ok(!e.includes('#'), e);

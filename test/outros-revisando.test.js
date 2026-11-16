@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 
 const skip = await import('../lib/engine/skip-review.js');
 const { Engine } = await import('../server.js');
-const contasGh = (await import('../lib/engine/contas-gh.js')).default;
+const contasConfig = (await import('../lib/engine/contas-config.js')).default;
 
 after(() => {
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ }
@@ -60,11 +60,11 @@ test('cada PR leva a lista de quem mais está revisando', () => {
   assert.deepEqual(dois.foraDeCena, { quem: ['carla'], desde: 5 }, 'só o que a tela usa: nem o head');
 });
 
-test('cada conta que a tela recebe diz até quando a assinatura dela está no limite do plano', () => {
+test('a conta que a tela recebe diz até quando a assinatura dela está no limite do plano', () => {
   const e = motor();
-  e.accountList = () => [{ user: 'eu', owners: [] }, { user: 'outra', owners: [] }];
+  e.accountList = () => [{ user: 'eu', owners: [] }];
   e.limiteDoPlanoAte = (conta) => (conta === 'eu' ? 1790985600000 : 0);
-  const contas = contasGh.projecaoDasContas(e);
-  assert.deepEqual(contas.map((a) => [a.user, a.limitePlanoAte]), [['eu', 1790985600000], ['outra', 0]]);
-  assert.deepEqual(e.snapshot().accounts.map((a) => a.limitePlanoAte), [1790985600000, 0], 'e é isso que o snapshot leva');
+  const contas = contasConfig.contasParaTela(e);
+  assert.deepEqual(contas.map((a) => [a.user, a.limitePlanoAte]), [['eu', 1790985600000]]);
+  assert.deepEqual(e.snapshot().accounts.map((a) => a.limitePlanoAte), [1790985600000], 'e é isso que o snapshot leva');
 });

@@ -19,14 +19,14 @@ function linhaDaDecisao(d, meta, o) {
   const acao = o.espera ? '' : acaoDaDecisaoHtml(d, meta, o.ciObrigatorio);
   return linhaCompactaHtml({
     key: d.key, url: d.pr?.url, titulo: d.pr?.title || '', inicio: avatar(d.pr?.author || d.author || ''),
-    style: o.mark.style, classe: 'decision', refClasse: 'dec-ref', attrs: `data-id="${esc(d.id)}"`,
+    classe: 'decision', refClasse: 'dec-ref', attrs: `data-id="${esc(d.id)}"`,
     estado: frase, acoes: acao,
   });
 }
 
 function linhaDaFila(pr, o) {
   return linhaCompactaHtml({
-    key: pr.key, url: pr.url, titulo: pr.title, inicio: avatar(pr.author), style: o.mark.style, classe: 'fila-linha',
+    key: pr.key, url: pr.url, titulo: pr.title, inicio: avatar(pr.author), classe: 'fila-linha',
     estado: fraseDaFila(pr, { posicao: o.posicao, parado: o.parado, manual: o.manual }),
     acoes: `<button class="btn primary sm act-review" data-url="${esc(pr.url)}">${esc(o.rotulo || 'Revisar')}</button>`,
   });
@@ -34,7 +34,7 @@ function linhaDaFila(pr, o) {
 
 function linhaDaFilaDeExecucao(pr, o) {
   return linhaCompactaHtml({
-    key: pr.key, url: pr.url, titulo: pr.title, inicio: avatar(pr.author), style: o.mark.style, classe: 'fila-linha',
+    key: pr.key, url: pr.url, titulo: pr.title, inicio: avatar(pr.author), classe: 'fila-linha',
     estado: fraseDaFilaDeExecucao(),
   });
 }
@@ -46,14 +46,14 @@ function rodapeDasRecentesHtml(resolved, aberto) {
 }
 
 // A linha do topo de Pra mim, que leva a cada seção. Conta o que as seções mostram.
-function renderResumoPraMim(filtro, totalDaFila) {
+function renderResumoPraMim(totalDaFila) {
   const el = $('#praMimResumo');
   if (!el) return;
-  const { precisam, esperandoCi } = separarPendentes((estado().decisions?.pending || []).filter(filtro));
+  const { precisam, esperandoCi } = separarPendentes(estado().decisions?.pending || []);
   const analisando = (estado().activeSessions || []).filter(s => s.mode === 'auto').length;
   const html = resumoPraMimHtml({
     analisando, precisam: precisam.length, sozinhos: esperandoCi.length, fila: totalDaFila,
-    resolvidas: resolvidasHoje((estado().decisions?.resolved || []).filter(filtro)),
+    resolvidas: resolvidasHoje(estado().decisions?.resolved || []),
   });
   el.innerHTML = html;
   el.hidden = !html;

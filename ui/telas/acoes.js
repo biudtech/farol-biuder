@@ -1,4 +1,4 @@
-/* Farol · UI: ações de topo (checar agora, revisar tudo, tweaks de exibição,
+/* Farol · UI: ações de topo (checar agora, revisar tudo,
    doctor), os cliques de Sessões ativas/Fila/
    Decisões pendentes, e o laço que liga settingsMap aos toggles de Sistema. */
 
@@ -7,7 +7,6 @@ import { estado } from './estado.js';
 import {
   $, api, get, toast, toastRich, confirmModal,
 } from './infra.js';
-import { TWEAK, scopeVisible, prUser, guardarMutedHandling, guardarIdentityStyle } from './contas.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
 import { revisarUrls } from './consumo.js';
 import { loadLog } from './diagnostico.js';
@@ -59,23 +58,13 @@ async function decideComConfirmacao(id, action, ref, { sempre = false } = {}) {
 /* ---------- ações ---------- */
 $('#btnCheck').onclick = () => api('/api/check');
 $('#btnReviewAll').onclick = () => {
-  // revisa só o que está visível no escopo atual; a lista vai SEMPRE explícita
-  // (mandar {} fazia o servidor revisar a fila INTEIRA, achado B22)
-  const urls = filaSemRevisoesAtivas(estado().queue || [], estado().activeSessions || [], prUser)
-    .filter(scopeVisible).map(p => p.url);
+  // a lista vai SEMPRE explícita (mandar {} fazia o servidor revisar a fila INTEIRA, achado B22)
+  const urls = filaSemRevisoesAtivas(estado().queue || [], estado().activeSessions || []).map(p => p.url);
   if (!urls.length) { toast('info', 'Nada visível pra revisar agora (a fila mudou embaixo do botão).'); return; }
   // lote: o head já decidido e o pedido removido seguram, como no automático (05/11/2026)
   revisarUrls(urls, { lote: true });
 };
 
-/* tweaks de exibição (guardados no navegador, não vão pro engine). `rerenderScope`
-   fica no bootstrap (ui/app.js): ela conhece TODAS as telas, e este módulo não pode
-   sem criar ciclo de volta pro app.js. */
-function initTweaks(rerenderScope) {
-  const mh = $('#setMutedHandling'), is = $('#setIdentityStyle');
-  if (mh) { mh.value = TWEAK.muted; mh.onchange = () => { TWEAK.muted = mh.value; guardarMutedHandling(mh.value); rerenderScope(); }; }
-  if (is) { is.value = TWEAK.ident; is.onchange = () => { TWEAK.ident = is.value; guardarIdentityStyle(is.value); rerenderScope(); }; }
-}
 $('#btnDoctor').onclick = async () => { await get('/api/doctor'); };
 $('#btnLogRefresh').onclick = loadLog;
 
@@ -156,4 +145,4 @@ for (const [sel, key, read] of settingsMap) {
   });
 }
 
-export { decide, decideComConfirmacao, initTweaks };
+export { decide, decideComConfirmacao };

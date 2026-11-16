@@ -35,8 +35,7 @@ const MSG_OAUTH_EXPIRADO = 'sessão retornou erro: Failed to authenticate. API E
 function engineBase() {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
-  e.isMuted = () => false;
-  e.tokens = { eu: 'tok-eu' };
+  e.token = 'tok-eu';
   e.log = () => { };
   e.prState = async () => 'OPEN';
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });

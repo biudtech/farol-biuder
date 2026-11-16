@@ -83,7 +83,6 @@ const CONGELADA = [
   "USAGE_KIND_LABEL",
   "USAGE_PALETTE",
   "USAGE_ST_LABEL",
-  "accountBarVisible",
   "camposDaEdicao",
   "accountsManagerHtml",
   "agentsTitle",
@@ -120,7 +119,6 @@ const CONGELADA = [
   "fmtWhenDay",
   "genId",
   "ghPrUrl",
-  "hexToRgba",
   "jiraBaseUrlProblema",
   "jiraPrefixosProblema",
   "listViewState",
@@ -140,7 +138,6 @@ const CONGELADA = [
   "operationChecks",
   "ordemDoEscalonador",
   "orgsMonitoradas",
-  "ownerFromUrl",
   "papelOf",
   "papelPicker",
   "parkedNoteHtml",
@@ -206,10 +203,7 @@ const CONGELADA = [
   "usageSessionsHtml",
   "usageStackLayers",
   "usageTooltipHtml",
-  "validScope",
   "versaoClaudeCheck",
-  "contasGhHtml",
-  "contasGhVazio",
   "SYS_INDEX", // o índice da busca do Sistema
   "buscarNoSistema", // itens do índice que casam com a consulta
 ];

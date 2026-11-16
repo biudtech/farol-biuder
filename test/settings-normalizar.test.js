@@ -86,6 +86,15 @@ test('as chaves gerais antigas de política valem para a conta que não escolheu
   assert.deepEqual(semLogin.conta, { user: '', owners: [], autoReview: false });
 });
 
+test('conta gravada ainda sem login guarda a política até o gh ser detectado; sem política, não é conta', () => {
+  const guardada = { user: '', owners: [], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
+  assert.deepEqual(normalizarConfig({ port: 47180, conta: guardada }).conta, guardada, 'o segundo boot antes do login não perde a escolha');
+  assert.equal('conta' in normalizarConfig({ conta: { user: '', owners: [] } }), false);
+  const comLogin = normalizarConfig({ conta: guardada, ghUser: 'eu' }).conta;
+  assert.equal(comLogin.user, 'eu', 'o login do modo simples vence a conta sem login');
+  assert.equal(comLogin.autoReview, false, 'e a política guardada continua valendo para ele');
+});
+
 test('a escolha da própria conta vence a chave geral antiga', () => {
   const saida = normalizarConfig({ accounts: [{ user: 'eu', autoReview: true }], autoReview: false });
   assert.equal(saida.conta.autoReview, true);

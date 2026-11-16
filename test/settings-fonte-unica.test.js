@@ -17,7 +17,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SETTINGS, EDITAVEIS, defaults, sanear } from '../lib/settings.js';
+import { SETTINGS, EDITAVEIS, defaults, sanear, contaLimpa } from '../lib/settings.js';
 import { fonteDasTelas } from './helpers/fontes-ui.js';
 
 const APPJS = fonteDasTelas();
@@ -82,7 +82,7 @@ test('saneamento: intervalo fica no intervalo permitido', () => {
   assert.equal(sanear('intervalSeconds', 'nada', {}, {}), 300, 'lixo cai no padrão');
 });
 
-test('saneamento: lista aceita texto separado ou array', () => {
-  assert.deepEqual(sanear('owners', 'a, b;c', {}, {}), ['a', 'b', 'c']);
-  assert.deepEqual(sanear('owners', [' a ', '', 'b'], {}, {}), ['a', 'b']);
+test('saneamento: as orgs da conta aceitam texto separado ou array', () => {
+  assert.deepEqual(contaLimpa({ user: 'x', owners: 'a, b;c' }).owners, ['a', 'b', 'c']);
+  assert.deepEqual(contaLimpa({ user: 'x', owners: [' a ', '', 'b'] }).owners, ['a', 'b']);
 });

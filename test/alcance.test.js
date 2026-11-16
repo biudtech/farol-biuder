@@ -149,8 +149,7 @@ test('verificarAlcance: acima do teto, o que não foi lido conta como não confe
 function motor(alcance) {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.autoApproveAll = true;
   e.approvePolicyFor = (_conta, limpo) => (limpo ? 'approve' : 'wait');
   e.saveDecisions = () => { };

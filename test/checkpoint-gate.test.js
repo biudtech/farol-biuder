@@ -28,7 +28,6 @@ function approvableResult(extra) {
 function engineWithPolicy(policy) {
   const e = new Engine();
   e.config.autoApproveAll = true;
-  e.config.accounts = [];
   e.approvePolicyFor = () => policy;
   e.rejectPolicyFor = () => 'request_changes';
   e.accountForPr = () => 'alguem';

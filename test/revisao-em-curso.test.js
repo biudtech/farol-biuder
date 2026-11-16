@@ -20,8 +20,7 @@ const pr = numero => ({ key: `org/repo#${numero}`, url: `https://github.com/org/
 function motor() {
   const engine = new Engine();
   engine.token = 'token-de-teste';
-  engine.tokens = { eu: 'token-de-teste' };
-  engine.config.accounts = [{ user: 'eu', owners: ['org'] }];
+  engine.config.conta = { user: 'eu', owners: ['org'] };
   engine.seen = new Set();
   engine.headlessIniciando = new Set();
   engine.pushState = () => {};
@@ -91,13 +90,9 @@ test('sessão que termina libera o PR para outra revisão', async () => {
   assert.deepEqual(naFila(e), [pr(1).key]);
 });
 
-test('conta silenciada e regra manual mantêm suas recusas', async () => {
+test('regra manual mantém a recusa', async () => {
   const e = motor();
-  e.config.accounts[0].muted = true;
-  assert.equal((await e.launchReview([pr(1).url], 'auto', 'clique')).ok, false);
-  assert.deepEqual(naFila(e), []);
-  e.config.accounts[0].muted = false;
-  e.config.accounts[0].reviewRules = { org: { mode: 'manual' } };
+  e.config.conta.reviewRules = { org: { mode: 'manual' } };
   assert.equal((await e.launchReview([pr(1).url], 'auto', 'auto')).ok, false);
   assert.equal((await e.launchReview([pr(1).url], 'auto', 'clique')).ok, true);
 });

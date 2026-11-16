@@ -36,7 +36,7 @@ function pendencia(key, at = CRIADA, headSha = '') {
 
 // engine sem rede: o único ponto de I/O (myReviewsWithTime) é stubado por PR.
 // prState fica com a implementação real: accountForPr aponta pra 'trabalho' sem
-// token nenhum em e.tokens, então tokenFor devolve falso e prState resolve pra
+// token nenhum no engine, então tokenFor devolve falso e prState resolve pra
 // null sem nenhuma chamada de rede (mesmo padrão dos outros testes deste arquivo).
 function engineCom(pendentes, reviewsPorKey) {
   const e = new Engine();

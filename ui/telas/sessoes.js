@@ -9,7 +9,6 @@ import {
 } from '../pure.js';
 import { estado } from './estado.js';
 import { $, ACTIVE_OPS, showOp, closeOp } from './infra.js';
-import { prUser, scopeVisible } from './contas.js';
 import { filaSemRevisoesAtivas } from '../pure/fila.js';
 import { atualizarCancelamento } from './sessao-cancelar.js';
 import { registrarAtividadeVisual, fluxoDaAtividade } from './atividade-visual.js';
@@ -170,12 +169,6 @@ function fillFeed(feed, items) {
   feedsPintados.set(feed, html);
   if (stick) feed.scrollTop = feed.scrollHeight;
 }
-// a sessão pertence à conta do PR que ela revisa (pelo owner do repo); sem conta
-// atribuível, não esconde. Assim trocar de conta não mistura o "Analisando agora".
-function sessionVisible(s) {
-  const u = s && s.pr ? prUser(s.pr) : '';
-  return !u || scopeVisible({ account: u });
-}
 // O andamento descreve os dados observados, sem converter tempo em conclusão.
 const ARIA_MOSTRADO = new Map();
 const ULTIMA_PISCADA = new Map();
@@ -272,16 +265,14 @@ function atualizarSetaDaSessao(box, s) {
   if (card) card.classList.toggle('aberta', !!key && cardCheio(key));
 }
 function renderActive() {
-  const vivas = (estado().activeSessions || []).filter(s => s.mode === 'auto' && sessionVisible(s));
+  const vivas = (estado().activeSessions || []).filter(s => s.mode === 'auto');
   const box = $('#activeSessions');
   marcarConcluidas(box, vivas);
   const concluidas = [...SAINDO.values()].map(x => x.sess).filter(s => !vivas.some(v => v.id === s.id));
   const sessions = [...vivas, ...concluidas];
-  const contas = estado().headlessWaitingContas || {};
   const waiting = filaSemRevisoesAtivas(
-    (estado().headlessWaiting || []).map(key => ({ key, account: contas[key] })),
-    estado().activeSessions || [], prUser,
-  ).filter(scopeVisible).map(pr => pr.key);
+    (estado().headlessWaiting || []).map(key => ({ key })), estado().activeSessions || [],
+  ).map(pr => pr.key);
   const wrap = $('#activeWrap');
   wrap.hidden = sessions.length === 0;
   $('#activeCount').textContent = vivas.length || '';

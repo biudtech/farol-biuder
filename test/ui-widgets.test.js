@@ -96,41 +96,7 @@ test('o rotulo de estagio tem ticker proprio e nao congela no primeiro paint (B1
 
 /* ---------- escopo persistido orfao (B15) ---------- */
 
-test('validScope: orfao volta pra all, valido permanece', () => {
-  assert.equal(P.validScope('all', ['alice']), 'all');
-  assert.equal(P.validScope('', ['alice']), 'all');
-  assert.equal(P.validScope(null, []), 'all');
-  assert.equal(P.validScope('alice', ['alice', 'bob']), 'alice');
-  assert.equal(P.validScope('ALICE', ['alice']), 'ALICE', 'compara sem caixa e preserva o valor salvo');
-  assert.equal(P.validScope('carol', ['alice', 'bob']), 'all', 'conta removida nao pode esvaziar o Radar');
-});
-
-test('rebuildAccounts saneia o SCOPE persistido a cada snapshot (B15)', () => {
-  const fn = APPJS.match(/function rebuildAccounts\([\s\S]*?\n\}/);
-  assert.ok(fn, 'rebuildAccounts existe');
-  assert.match(fn[0], /validScope\(/, 'a validacao roda onde as contas sao reconstruidas');
-  assert.match(fn[0], /list\.length/, 'snapshot de boot sem contas nao pode resetar escopo valido');
-});
-
 /* ---------- visibilidade da barra de contas (B14) ---------- */
-
-test('accountBarVisible: so nas abas onde o filtro por conta age', () => {
-  assert.equal(P.accountBarVisible(2, 'radar'), true);
-  assert.equal(P.accountBarVisible(2, 'destaques'), false, 'a aba saiu: allowlist, sem a barra');
-  assert.equal(P.accountBarVisible(2, 'time'), true);
-  assert.equal(P.accountBarVisible(2, 'entregas'), false, 'a aba saiu: allowlist, sem a barra');
-  assert.equal(P.accountBarVisible(2, 'sistema'), false);
-  assert.equal(P.accountBarVisible(2, 'consumo'), false);
-  assert.equal(P.accountBarVisible(1, 'radar'), false, 'conta unica nao tem o que filtrar');
-  assert.equal(P.accountBarVisible(2, 'abaquenaoexiste'), false, 'allowlist: aba nova nasce sem a barra');
-});
-
-test('renderAccountBar consome a allowlist pura (B14)', () => {
-  const fn = APPJS.match(/function renderAccountBar\([\s\S]*?\n\}/);
-  assert.ok(fn, 'renderAccountBar existe');
-  assert.match(fn[0], /accountBarVisible\(/);
-  assert.doesNotMatch(fn[0], /abaAtual\(\) === 'sistema'/, 'a denylist antiga saiu');
-});
 
 /* ---------- estado de carregamento das listas (a lista vinha assumindo vazio) ---------- */
 
@@ -289,10 +255,10 @@ test('o vazio da fila recebe as orgs da régua, não o campo legado config.owner
     'config.owners é o campo legado que o engine descarta quando há contas cadastradas');
 });
 
-test('a régua do vazio recebe o escopo, senão volta a citar org de outra conta', () => {
+test('a régua do vazio sai das contas do estado (o que é de fato buscado), nunca do config', () => {
   const chamada = APPJS.match(/owners:\s*orgsMonitoradas\((?:[^()]|\([^()]*\))*\)/);
   assert.ok(chamada, 'orgsMonitoradas não é chamada no app.js');
-  assert.match(chamada[0], /escopo\(\)/, 'sem o escopo, escolher uma conta segue citando as orgs das outras');
+  assert.match(chamada[0], /estado\(\)\.accounts/);
 });
 
 /* ---------- anatomia do card da fila (Claude Design, B2-design/comum.css) ---------- */
@@ -318,15 +284,15 @@ function filhosDiretos(html) {
 // quarto filho de uma grade de três colunas. O avatar caía na coluna elástica, o texto ia
 // para a direita e as ações quebravam para baixo. No desenho, o card tem avatar, conteúdo
 // e ações; a conta mora na linha do PR, junto da etiqueta.
-test('card da fila: o ponto da conta fica na linha do PR, e a grade tem só avatar, conteúdo e ações', () => {
-  const mark = { style: '', varStyle: '', dim: '', chip: '<span class="acct-chip">trabalho</span>', dot: '<span class="acct-dot"></span>', acct: { label: 'trabalho' } };
+test('card da fila: a linha do PR abre no link, sem marcador de conta, e a grade tem só avatar, conteúdo e ações', () => {
   const pr = { key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7', title: 'Corrige o gate', author: 'alice', updatedAt: '2026-09-03T16:00:00Z' };
-  const html = P.queueCardHtml(pr, { people: {}, mark }).trim();
+  const html = P.queueCardHtml(pr, { people: {} }).trim();
   const filhos = filhosDiretos(html).filter((f) => f !== 'div.pr-menu');
   assert.deepEqual(filhos, ['span.avatar', 'div.info', 'div.pr-actions']);
   const colunasLargas = CSS.match(/@media \(min-width: 820px\) \{\s*\.pr-card \{ grid-template-columns: ([^;]+);/)[1].trim().split(/\s+(?![^(]*\))/);
   assert.equal(colunasLargas.length, filhos.length, 'cada filho do card precisa da própria coluna na janela larga');
-  assert.match(html, /<div class="pr-ref"><span class="acct-dot"><\/span><a /, 'o ponto abre a linha do PR');
+  assert.match(html, /<div class="pr-ref"><a /, 'o link abre a linha do PR');
+  assert.doesNotMatch(html, /acct-dot|acct-chip/, 'uma instância, uma conta: sem marcador de conta no card');
 });
 
 test('Visão geral abre pelos checks de saúde e o aplicar só realça com diferença selecionada', () => {

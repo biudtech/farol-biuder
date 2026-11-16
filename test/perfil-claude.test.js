@@ -60,11 +60,6 @@ test('perfil padrão apontando para id que não existe é problema, não "usa o 
   assert.deepEqual(p, [{ escopo: 'padrao', user: '', profileId: 'sumiu', code: 'perfil-inexistente' }]);
 });
 
-test('override de conta para id inexistente é problema da conta', () => {
-  const p = problemasDePerfil({ claudeProfiles: [CHAVE_A], claudeProfileId: 'p1', accounts: [{ user: 'conta-x', claudeProfileId: 'apagado' }] });
-  assert.deepEqual(p, [{ escopo: 'conta', user: 'conta-x', profileId: 'apagado', code: 'perfil-inexistente' }]);
-});
-
 test('id preenchido com a lista de perfis vazia também é problema (a resolução ignora o id)', () => {
   const p = problemasDePerfil({ claudeProfiles: [], claudeProfileId: 'p9', accounts: [] });
   assert.equal(p[0].code, 'perfil-inexistente');

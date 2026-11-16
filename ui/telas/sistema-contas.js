@@ -1,49 +1,29 @@
-/* Farol · UI: gerenciador de contas do GitHub (Sistema). */
+/* Farol · UI: a conta revisora do GitHub (Sistema). */
 import { configurarRegrasDeReview } from './review-scope.js';
 
-import { esc, textoDaMudancaDePolitica, politicaDaContaNaTela, politicaParaDesfazer, accountsManagerHtml, contasGhHtml, camposDaEdicao } from '../pure.js';
-import { estado, escopo, definirEscopo } from './estado.js';
-import { $, api, toast, toastRich, confirmModal } from './infra.js';
-import { ACCT, rebuildAccounts, renderAccountBar, renderIdentity, guardarEscopo } from './contas.js';
+import { textoDaMudancaDePolitica, politicaDaContaNaTela, politicaParaDesfazer, accountsManagerHtml, camposDaEdicao } from '../pure.js';
+import { estado } from './estado.js';
+import { $, api, toast, toastRich } from './infra.js';
 
-/* ---------- gerenciador/editor de contas (Sistema) ----------
-   A tela manda a OPERAÇÃO (este campo desta conta), e o servidor aplica sobre a config
-   atual (lib/engine/contas-config.js). Mandar a lista inteira, como antes, gravava por cima
-   tudo o que esta tela tinha velho ou não conhecia, em todas as contas (25/09/2026). */
+/* ---------- editor da conta (Sistema) ----------
+   A tela manda a OPERAÇÃO (este campo da conta), e o servidor aplica sobre a config
+   atual (lib/engine/contas-config.js). Mandar o objeto inteiro, como antes, gravava por cima
+   tudo o que esta tela tinha velho ou não conhecia (25/09/2026). */
 function salvarConta(op) {
   api('/api/accounts/edit', op).then((r) => { if (r && r.ok === false) toast('error', r.erro || 'A conta não foi salva.'); });
 }
 function editAccount(user, patch) {
-  const list = (estado().accounts || []).map(a => a.user === user ? { ...a, ...patch } : a);
-  estado().accounts = list; rebuildAccounts();
-  renderAccountsManager(); renderAccountBar(); renderIdentity();
+  estado().accounts = (estado().accounts || []).map(a => a.user === user ? { ...a, ...patch } : a);
+  renderAccountsManager();
   salvarConta({ tipo: 'editar', user, campos: camposDaEdicao(patch) });
-}
-function removeAccount(user) {
-  const list = (estado().accounts || []).filter(a => a.user !== user);
-  estado().accounts = list; rebuildAccounts();
-  renderAccountsManager(); renderAccountBar(); renderIdentity();
-  salvarConta({ tipo: 'remover', user });
-}
-function addAccount(user, owners, label) {
-  const list = [...(estado().accounts || []), { user, owners, label: label || user, color: '', kind: '', muted: false, tokenOk: false, primary: false }];
-  estado().accounts = list; rebuildAccounts();
-  renderAccountsManager(); renderAccountBar();
-  salvarConta({ tipo: 'adicionar', user, owners, label: label || user });
-}
-// divergência entre o gh desta máquina e as contas do Farol (lib/engine/contas-gh.js)
-function renderContasGh() {
-  const box = $('#contasGh'); if (!box) return;
-  box.innerHTML = contasGhHtml(estado().contasGh);
 }
 
 export function renderAccountsManager() {
-  renderContasGh();
   const box = $('#accountsManager'); if (!box) return;
   if (box.querySelector('.review-scope[data-saving="true"]')) return;
   if (document.activeElement && box.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
   const abertos = new Set([...box.querySelectorAll('.review-scope[open]')].map(b => b.dataset.user));
-  box.innerHTML = accountsManagerHtml({ accounts: estado().accounts, config: estado().config, acct: ACCT, doctor: estado().doctor, usage: estado().usage });
+  box.innerHTML = accountsManagerHtml({ accounts: estado().accounts, config: estado().config });
   for (const bloco of box.querySelectorAll('.review-scope')) bloco.open = abertos.has(bloco.dataset.user);
 }
 
@@ -69,110 +49,20 @@ function mudarPolitica(user, campo, para) {
   desfazer.onclick = () => { editAccount(user, politicaParaDesfazer(antes, campo)); aviso.remove(); };
 }
 
-/* editor de contas: mudar cor / rótulo / tipo / orgs */
+/* editor da conta: orgs, política e padrões do time */
 $('#accountsManager').addEventListener('change', (e) => {
   const t = e.target, user = t.dataset && t.dataset.user;
   if (!user) return;
-  if (t.classList.contains('acct-color')) return editAccount(user, { color: t.value });
-  if (t.classList.contains('acct-label')) return editAccount(user, { label: (t.value || '').trim() || user });
-  if (t.classList.contains('acct-kind')) return editAccount(user, { kind: (t.value || '').trim() });
   if (t.classList.contains('acct-owners')) return editAccount(user, { owners: (t.value || '').split(/[,;\s]+/).map(s => s.trim()).filter(Boolean) });
   // política de automação da conta: cada seletor grava o valor por extenso, sem herança
   if (t.classList.contains('acct-autoreview')) return mudarPolitica(user, 'autoReview', t.value === 'true');
   if (t.classList.contains('acct-onclean')) return mudarPolitica(user, 'onClean', t.value === 'wait' ? 'wait' : 'approve');
   if (t.classList.contains('acct-oncaveats')) return mudarPolitica(user, 'onCaveats', t.value === 'approve' ? 'approve' : 'wait');
   if (t.classList.contains('acct-onreject')) return mudarPolitica(user, 'onReject', t.value === 'request_changes' ? 'request_changes' : 'wait');
-  if (t.classList.contains('acct-claudeprofile')) return editAccount(user, { claudeProfileId: t.value || undefined });
-  // peso na cota do perfil (Politica 2): vazio = igual as outras, que e o padrao e
-  // nao guarda campo nenhum (o parseAccounts do servidor so persiste peso positivo).
-  if (t.classList.contains('acct-budgetweight')) return editAccount(user, { budgetWeight: Number(t.value) || undefined });
-  // padrões do time que a revisão desta conta considera; vazio tira o campo
+  // padrões do time que a revisão considera; vazio tira o campo
   if (t.classList.contains('acct-padroes')) {
     editAccount(user, { padroesRevisao: (t.value || '').trim() || undefined });
     toast('ok', `Padrões do time de @${user} salvos.`, 2500);
-    return;
-  }
-});
-/* remover conta, com a confirmação que diz o que muda (gerenciador e bloco do gh) */
-function pedirRemocao(user) {
-  if ((estado().accounts || []).length <= 1) { toast('error', 'Precisa de ao menos uma conta configurada.'); return; }
-  const a = (estado().accounts || []).find(x => x.user === user) || {};
-  const orgs = (a.owners || []).length ? ` (orgs: ${esc(a.owners.join(', '))})` : '';
-  confirmModal({
-    title: `Remover a conta @${user} do Farol?`,
-    danger: true, confirmLabel: 'Remover conta', cancelLabel: 'Manter',
-    body: `<p>Isso mexe <b>só aqui no Farol</b>, não toca no seu GitHub nem apaga nada lá.</p>
-      <p><b>O que muda:</b></p>
-      <ul>
-        <li>O Farol <b>para de monitorar</b> os PRs, a fila e os avisos dessa conta${orgs}.</li>
-        <li>Some a <b>identidade</b> dela do painel: rótulo, cor e tipo que você configurou.</li>
-        ${a.primary ? '<li>Ela é a conta <b>primária</b> hoje; a próxima da lista assume como primária.</li>' : ''}
-        <li>A <b>memória de reviews</b> (Destaques e Time) e o histórico <b>não são apagados</b>.</li>
-      </ul>
-      <p>Dá pra <b>adicionar de volta</b> a qualquer momento (o rótulo, a cor e o tipo você reconfigura).</p>`
-  }).then(ok => {
-    if (!ok) return;
-    if (String(escopo()).toLowerCase() === user.toLowerCase()) { definirEscopo('all'); guardarEscopo('all'); }
-    removeAccount(user);
-    toast('info', `Conta @${user} removida do Farol.`, 3000);
-  });
-}
-
-/* bloco de divergência com o gh: monitorar login, tirar org repetida, adicionar org sugerida.
-   "Remover do Farol" reusa o .acct-remove do gerenciador, com a mesma confirmação. */
-function donosDe(user) {
-  return ((estado().accounts || []).find((a) => a.user === user) || {}).owners || [];
-}
-$('#contasGh').addEventListener('click', (e) => {
-  const mon = e.target.closest('[data-gh-monitorar]');
-  if (mon) {
-    const login = mon.dataset.ghMonitorar;
-    if ((estado().accounts || []).some((a) => a.user.toLowerCase() === login.toLowerCase())) return;
-    addAccount(login, [], login);
-    toast('ok', `Conta @${login} monitorada. As orgs que ela revisa vão aparecer aqui como sugestão no próximo ciclo.`, 5000);
-    return;
-  }
-  const tirar = e.target.closest('[data-gh-tirar-org]');
-  if (tirar) {
-    const { ghTirarOrg: owner, user } = tirar.dataset;
-    editAccount(user, { owners: donosDe(user).filter((o) => o.toLowerCase() !== owner.toLowerCase()) });
-    toast('info', `${owner} saiu de @${user}.`, 3000);
-    return;
-  }
-  const add = e.target.closest('[data-gh-add-org]');
-  if (add) {
-    const { ghAddOrg: owner, user } = add.dataset;
-    const atuais = donosDe(user);
-    if (atuais.some((o) => o.toLowerCase() === owner.toLowerCase())) return;
-    editAccount(user, { owners: [...atuais, owner] });
-    toast('ok', `${owner} agora está em @${user}.`, 3000);
-    return;
-  }
-  const rem = e.target.closest('.acct-remove');
-  if (rem) pedirRemocao(rem.dataset.user);
-});
-
-/* editor de contas: silenciar/reativar, remover, adicionar */
-$('#accountsManager').addEventListener('click', (e) => {
-  const mute = e.target.closest('.act-mute');
-  if (mute) {
-    const user = mute.dataset.user;
-    const a = (estado().accounts || []).find(x => x.user === user);
-    const willMute = !(a && a.muted);
-    if (willMute && String(escopo()).toLowerCase() === user.toLowerCase()) { definirEscopo('all'); guardarEscopo('all'); }
-    editAccount(user, { muted: willMute });
-    return;
-  }
-  const rem = e.target.closest('.acct-remove');
-  if (rem) { pedirRemocao(rem.dataset.user); return; }
-  if (e.target.closest('#btnAcctAdd')) {
-    const u = ($('#acctAddUser').value || '').trim().replace(/^@/, '');
-    const owners = ($('#acctAddOwners').value || '').split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
-    const label = ($('#acctAddLabel').value || '').trim();
-    if (!u) { toast('error', 'Informe o login da conta.'); return; }
-    if ((estado().accounts || []).some(a => a.user.toLowerCase() === u.toLowerCase())) { toast('error', 'Essa conta já está na lista.'); return; }
-    addAccount(u, owners, label);
-    toast('ok', `Conta @${u} adicionada. Se ainda não estiver logada, rode gh auth login.`, 5000);
     return;
   }
 });

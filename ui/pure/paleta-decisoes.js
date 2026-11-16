@@ -7,7 +7,7 @@ function podeAprovarCom(d, ciObrigatorio) {
 }
 
 // `ciObrigatorio`: a chave "CI obrigatório antes da aprovação" (06/11/2026), a mesma do card.
-export function comandosDasPendencias(pendentes, { scopeVisible, decide, decideComConfirmacao, ciObrigatorio = true }) {
+export function comandosDasPendencias(pendentes, { decide, decideComConfirmacao, ciObrigatorio = true }) {
   const podeAprovar = (d) => podeAprovarCom(d, ciObrigatorio);
   const lista = Array.isArray(pendentes) ? pendentes.filter(Boolean) : [];
   const comandos = lista.flatMap(d => {
@@ -21,7 +21,7 @@ export function comandosDasPendencias(pendentes, { scopeVisible, decide, decideC
     if (podeAprovar(d)) itens.unshift(acao('Aprovar', 'approve'));
     return itens;
   });
-  const visiveis = lista.filter(podeAprovar).filter(scopeVisible);
+  const visiveis = lista.filter(podeAprovar);
   if (visiveis.length > 1) comandos.push({
     kind: 'lote', label: `Aprovar as ${visiveis.length} pendentes`, hint: 'lote',
     run: async () => { for (const d of visiveis) await decide(d.id, 'approve'); },

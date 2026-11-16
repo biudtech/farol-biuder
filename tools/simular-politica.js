@@ -29,6 +29,7 @@ import { shouldAutoApprove, shouldAutoReject } from '../lib/engine/approval-poli
 import { acaoAoAprovar, acaoAoReprovar } from '../lib/engine/contas-config.js';
 import { avisoDoCi } from '../lib/engine/gate-espera.js';
 import { CONFIG_FILE, STATE_DIR, executadoDireto } from '../lib/paths.js';
+import { normalizarConfig } from '../lib/settings.js';
 import { readRegularFile } from '../lib/bounded-file.js';
 import { parseJson, safeStringify } from '../lib/io.js';
 
@@ -152,7 +153,8 @@ function somar(lado, atual, alternativa) {
 // PURA: nem disco, nem rede, nem relógio. `decisoes` é o conteúdo do decisions.json.
 function simular(decisoes, config, alternativa = { todas: {}, porConta: {} }) {
   const lista = [...(decisoes?.pending || []), ...(decisoes?.resolved || [])];
-  const contas = (Array.isArray(config?.accounts) ? config.accounts : []).filter(c => c && c.user);
+  const conta = normalizarConfig(config).conta;
+  const contas = conta && conta.user ? [conta] : [];
   const fora = {}, linhas = new Map();
   const anotarFora = (motivo) => { fora[motivo] = (fora[motivo] || 0) + 1; };
   const entram = lista.filter((d) => {

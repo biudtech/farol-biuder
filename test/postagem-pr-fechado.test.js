@@ -45,8 +45,7 @@ function motor() {
   const e = new Engine();
   e.log = () => { };
   e.pushState = () => { };
-  e.updateSettings({ accounts: [{ user: 'eu', owners: ['acme'] }] });
-  e.tokens = { eu: 'tok' };
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.token = 'tok';
   return e;
 }

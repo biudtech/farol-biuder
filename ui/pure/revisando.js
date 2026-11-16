@@ -7,7 +7,7 @@
 //
 // Dados: `pr.outrosRevisando` (logins, já sem a minha conta e sem ferramenta),
 // `pr.foraDeCena` ({ quem, desde }) e o `limitePlanoAte` da conta do PR. Tudo vem do motor
-// (lib/engine/skip-review.js e lib/engine/contas-gh.js); aqui só se escolhe o texto.
+// (lib/engine/skip-review.js); aqui só se escolhe o texto.
 import { esc, fmtStamp, localDayKey } from './comum.js';
 import { personMention } from './mencoes.js';
 
@@ -64,12 +64,8 @@ export function limitNoteHtml(ate, forma, rotulo, agora = Date.now()) {
 }
 
 // O aviso único no topo de Pra mim quando 2 ou mais cards da mesma conta esperam o limite.
-export function queueLimitHtml(conta, ate, n, variasContas, agora = Date.now()) {
-  const c = conta || {};
-  const daConta = variasContas ? ` da conta <b>${esc(c.label || c.user || '')}</b>` : '';
-  const ponto = variasContas ? '<span class="acct-dot" aria-hidden="true"></span>' : '';
-  const estilo = variasContas && c.color ? ` style="--ac:${esc(c.color)}"` : '';
-  return `<div class="queue-limit" role="status"${estilo}>${ponto}<span>Revisão automática${daConta} esperando o limite do plano do Claude: recomeço sozinho ${quando(ate, 'as', agora)}. Vale para ${Number(n) || 0} PRs desta fila. O botão Revisar de cada um tenta agora, mas pode bater no mesmo limite.</span></div>`;
+export function queueLimitHtml(ate, n, agora = Date.now()) {
+  return `<div class="queue-limit" role="status"><span>Revisão automática esperando o limite do plano do Claude: recomeço sozinho ${quando(ate, 'as', agora)}. Vale para ${Number(n) || 0} PRs desta fila. O botão Revisar de cada um tenta agora, mas pode bater no mesmo limite.</span></div>`;
 }
 
 // A precedência do handoff (seção 2), sem HTML: o que o card mostra. Entradas:

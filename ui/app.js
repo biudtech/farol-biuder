@@ -7,7 +7,7 @@ import { telasRegistradas, telaPorId } from './telas/registro.js';
 import { tokenLocal, FonteDeEventosAutenticada, OCIOSO_MS, recusaDeLoginExterno } from './transporte.js';
 import { montarPareamento, precisaParear, voltarDoPareamento } from './telas/pareamento.js';
 import {
-  estado, abaAtual, definirEstado, definirEscopo, definirAba,
+  estado, abaAtual, definirEstado, definirAba,
   ehMac, ehElectron, definirPlataforma,
 } from './telas/estado.js';
 import {
@@ -15,14 +15,9 @@ import {
   sysFlash,
 } from './telas/infra.js';
 export { toast } from './telas/infra.js';
-import {
-  rebuildAccounts,
-  renderAccountBar, renderIdentity,
-  initContasTriggers, escopoGuardado,
-} from './telas/contas.js';
-import { loadTeam } from './telas/time.js';
+import './telas/time.js';
 import { ping, notifyNewPRs } from './telas/avisos.js';
-import { initTweaks } from './telas/acoes.js';
+import './telas/acoes.js';
 import { registrarTelaConsumo } from './telas/consumo.js';
 import { renderStatus, tickCountdown, renderActive, handleActivity } from './telas/sessoes.js';
 import {
@@ -63,44 +58,9 @@ function aplicaPlataforma(p) {
 }
 aplicaPlataforma();
 
-/* ---------- camada de contas (separação por identidade) ---------- */
-definirEscopo(escopoGuardado());   // 'all' ou o login de uma conta; chave e default em telas/contas.js
 // espelha a aba no <body> pro CSS ajustar a largura útil (a aba Sistema tem sidebar e
 // precisa de mais). switchTab não roda no boot, então a aba inicial é marcada aqui.
 document.body.dataset.tab = abaAtual();
-// fan-out de render das seções sensíveis a CONTA (escopo/identidade/fila/decisões):
-// o handler de 'state' do SSE e o rerenderScope (troca de escopo, sem esperar
-// estado novo) desenhavam essas nove chamadas, na MESMA ordem, em dois lugares.
-// Uma função só, usada pelos dois; o que cada um faz ANTES e DEPOIS continua
-// distinto (o handler de 'state' também troca o snapshot inteiro e cobre as
-// telas sem conta própria; rerenderScope só isso, mais time se
-// estiverem na aba ativa).
-function renderScopedSections() {
-  pinturas.invalidar();
-  pinturas.pintar();
-}
-
-// re-render das seções sensíveis ao escopo (sem esperar novo state do engine). Morava em
-// telas/contas.js recebendo nove funções por parâmetro (a costura da Task 6, criada
-// enquanto elas ainda viviam no app.js). Com o Radar e Meus PRs virando módulo na Task
-// 8, quase todas essas nove viraram import de mão única, e deixar rerenderScope na
-// camada de identidade faria contas.js importar as telas que a importam de volta: o
-// ciclo que a Fase 1b existe para evitar. Por isso ela veio pra cá: o bootstrap pode
-// conhecer todas as telas, a camada de identidade não pode.
-function rerenderScope() {
-  if (!estado()) return;
-  renderScopedSections();
-  if ($('#tab-time').classList.contains('active')) loadTeam();
-}
-initTweaks(rerenderScope);
-
-/* Gatilhos da barra de contas: moram em
-   telas/contas.js, dono de renderAccountBar.
-   initContasTriggers(rerenderScope) recebe o re-render de escopo, que
-   conhece todas as telas e por isso fica aqui. Chamada no mesmo ponto
-   relativo em que os dois listeners moravam. */
-initContasTriggers(rerenderScope);
-
 /* Editar o perfil de review de uma pessoa (papel e domínios): mora em
    telas/perfil-pessoa.js, que é a tela dona do ASSUNTO (o picker aparece na
    aba Time e nos cards do Radar, então não pertence a nenhum dos dois).
@@ -119,8 +79,7 @@ initTema();
 /* ---------- navegação ---------- */
 /* Altura REAL da topbar num custom property. Os dois elementos sticky do app (a
    navegação do Radar e a sidebar do Sistema) tinham o deslocamento cravado em 54px e
-   66px, mas a topbar muda de altura: encolhe abaixo de 620px e cresce quando a barra de
-   contas aparece e quebra em duas linhas. O resultado era uma faixa vazada por baixo, ou
+   66px, mas a topbar muda de altura: encolhe abaixo de 620px. O resultado era uma faixa vazada por baixo, ou
    a navegação passando por trás da topbar. Aqui a medida é observada. */
 function medirTopbar() {
   const tb = document.querySelector('.topbar');
@@ -153,7 +112,6 @@ function switchTab(name) {
     t.setAttribute('aria-selected', ativo ? 'true' : 'false');
   });
   document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
-  if (estado()) renderAccountBar();   // mostra/esconde a barra de contas conforme a aba
   const tela = telaPorId(name);
   if (estado()) { pinturas.invalidar(); pinturas.pintar(); }
   if (tela && tela.aoEntrar) tela.aoEntrar();
@@ -280,7 +238,6 @@ const preservarConfiguracao = criarPreservacaoDeFormulario();
 const pinturas = criarAgendaVisual({
   grupos: gruposDaPintura({
     plataforma: () => aplicaPlataforma(estado().app?.platform),
-    contas: () => { rebuildAccounts(); renderAccountBar(); renderIdentity(); },
     status: renderStatus, sessoes: renderActive, decisoes: renderDecisions, fila: renderQueue,
     navegacao: renderRadarNav,
     configuracoes: () => preservarConfiguracao($('#tab-sistema'), () => { renderSettings(); pintarTelaRegistrada('sistema'); }),
@@ -424,7 +381,7 @@ registrarTelaConsumo();
 /* O endereço da página reflete a tela (telas/rota.js): por último, para o ouvinte de clique
    e tecla dele rodar depois de todos os handlers acima, e com todas as telas registradas
    (o switchTab que ele recebe chama o aoEntrar de cada uma). */
-initRota({ switchTab, rerenderScope });
+initRota({ switchTab });
 
 /* A4: antes de qualquer coisa, a página pergunta se este navegador pode entrar. Com a
    exigência ligada e sem credencial, a interface inteira vira o pareamento: nada do estado,

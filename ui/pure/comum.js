@@ -54,13 +54,6 @@ export function listViewState({ lastCheckAt, status, length }) {
 // tira acento pra "revisao" achar "Revisão"
 export function sysNorm(s) { return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase(); }
 
-export function hexToRgba(hex, a) {
-  const m = String(hex || '').replace('#', '');
-  if (m.length !== 6) return `rgba(255,180,84,${a})`;
-  const r = parseInt(m.slice(0, 2), 16), g = parseInt(m.slice(2, 4), 16), b = parseInt(m.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
 export function sameSet(a, b) {
   const A = new Set((a || []).map(s => String(s).toLowerCase())), B = new Set((b || []).map(s => String(s).toLowerCase()));
   if (A.size !== B.size) return false;

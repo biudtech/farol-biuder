@@ -489,8 +489,7 @@ test('normalizeReviewPayload falha fechado para shapes, limites e âncoras invá
 function engineForPost() {
   const e = new Engine();
   e.token = 'token';
-  e.tokens = { eu: 'token' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.refreshTokens = async () => { };
   e.log = () => { };
   e.pushState = () => { };
@@ -670,7 +669,7 @@ test('payload contaminado no auto-approve e auto-reject nunca resolve a decisão
   for (const scenario of cases) {
     calls.length = 0;
     const e = headlessEngine(scenario.result);
-    if (scenario.onReject) e.config.accounts[0].onReject = scenario.onReject;
+    if (scenario.onReject) e.config.conta.onReject = scenario.onReject;
     let event = null;
     e.once('needs-decision', value => { event = value; });
 
@@ -712,7 +711,7 @@ test('eventos de auto-approve e auto-reject carregam somente a projeção públi
 
   for (const scenario of scenarios) {
     const e = headlessEngine(scenario.result);
-    if (scenario.onReject) e.config.accounts[0].onReject = scenario.onReject;
+    if (scenario.onReject) e.config.conta.onReject = scenario.onReject;
     let event = null;
     e.once(scenario.eventName, value => { event = value; });
 
@@ -735,7 +734,7 @@ test('analysisStatus incomplete bloqueia os dois gates e cai como pendência sem
     reviewMarkdown: 'A análise técnica não foi concluída.',
     payloads: { approve: payload('O código está consistente.') },
   });
-  e.config.accounts[0].onReject = 'request_changes';
+  e.config.conta.onReject = 'request_changes';
 
   for (const status of ['incomplete', undefined, null, 'partial']) {
     assert.deepEqual(e.shouldAutoApprove(headlessPr(83), {

@@ -2,9 +2,9 @@
 import { esc } from './comum.js';
 function setupSteps(state = {}) {
   const accounts = state.accounts || [], profiles = state.doctor?.claudeAuth || [];
-  const authenticated = accounts.some(a => a.tokenOk && !a.muted && a.owners?.length);
+  const authenticated = accounts.some(a => a.tokenOk && a.owners?.length);
   const profileReady = profiles.some(p => p.ready === true);
-  const accountDetail = authenticated ? 'Conta ativa autenticada com organização configurada.' : 'Confira login, organizações e silenciamento em Contas.';
+  const accountDetail = authenticated ? 'Conta ativa autenticada com organização configurada.' : 'Confira login e organizações em Contas.';
   const profileDetail = profileReady ? 'Há perfil pronto no último diagnóstico. Reverifique se o ambiente mudou.' : 'Configure o perfil e use Reverificar saúde. Configurado não significa autenticado.';
   return [
     { id: 'accounts', label: 'Conta e organizações', detail: accountDetail, checked: authenticated, goto: 'sys:accounts:#accountsManager' },

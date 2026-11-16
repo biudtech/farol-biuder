@@ -42,7 +42,6 @@ function motor(post, tipo) {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
-  e.isMuted = () => false;
   e.logs = [];
   e.log = (nivel, msg) => { e.logs.push(`${nivel} ${msg}`); };
   e.prState = async () => 'OPEN';
@@ -67,22 +66,17 @@ function motor(post, tipo) {
 const FALHA_NO_ENVIO = { ok: false, attempted: true, error: 'gh: HTTP 502: Bad Gateway' };
 
 for (const tipo of ['approve', 'request_changes']) {
-  test(`${tipo}: silenciar com modelo em andamento conclui e posta pelo funil real`, async () => {
+  test(`${tipo}: a revisão conclui e posta pelo funil real, com o token da conta revisora`, async () => {
     const e = motor({ ok: true }, tipo);
-    e.config.accounts = [{ user: 'eu', owners: ['o'], muted: false }];
+    e.config.conta = { user: 'eu', owners: ['o'] };
     e.token = 'tok-eu';
-    e.tokens = { eu: 'tok-eu' };
-    e.isMuted = (account) => e.config.accounts.some(a => a.user === account && a.muted);
     delete e.postReview;
     const posts = [];
     io.run = async (cmd, args, opts) => {
       if (args.includes('--input')) posts.push({ payload: JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8')), token: opts.env.GH_TOKEN });
       return { ok: true, code: 0, stdout: '', stderr: '' };
     };
-    e.runClaudeStream = async () => {
-      e.config.accounts[0].muted = true;
-      return { text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1' };
-    };
+    e.runClaudeStream = async () => ({ text: JSON.stringify({ result: JSON.stringify(envelope(tipo)) }), sessionId: 's1' });
     try {
       await e.runHeadlessReview(prDe('o/r#120'));
       assert.equal(posts.length, 1, JSON.stringify({ pending: e.decisions.pending, logs: e.logs }));
@@ -91,7 +85,6 @@ for (const tipo of ['approve', 'request_changes']) {
       assert.equal(posts[0].token, 'tok-eu');
       assert.equal(e.activeReviews.size, 0);
       assert.equal(e.decisions.pending.length, 0);
-      assert.equal((await e.enqueueHeadless(prDe('o/r#121'))).code, 'conta_silenciada');
     } finally {
       io.run = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
     }

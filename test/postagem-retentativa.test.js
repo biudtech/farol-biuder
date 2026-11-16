@@ -53,7 +53,6 @@ function motor(post, tipo) {
   const e = new Engine();
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
-  e.isMuted = () => false;
   e.logs = [];
   e.log = (nivel, msg) => { e.logs.push(`${nivel} ${msg}`); };
   e.prState = async () => 'OPEN';

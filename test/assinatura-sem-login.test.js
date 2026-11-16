@@ -49,11 +49,11 @@ function logar(id) {
   fs.writeFileSync(path.join(pasta(id), '.credentials.json'), '{}');
 }
 
-function engineCom(perfis, padrao, accounts = []) {
+function engineCom(perfis, padrao) {
   const e = new Engine();
   e.log = () => { };
   e.pushState = () => { };
-  Object.assign(e.config, { claudeProfiles: perfis, claudeProfileId: padrao, accounts });
+  Object.assign(e.config, { claudeProfiles: perfis, claudeProfileId: padrao });
   return e;
 }
 
@@ -82,10 +82,9 @@ test('prontidão do perfil que o motor vai usar: assinatura só conta com a cred
   assert.equal(perfilMod.infoDosPerfis({ claudeProfiles: [PLANO('com')] })[0].ready, true);
   assert.deepEqual(perfilMod.prontidaoDoPerfil({ claudeProfiles: [CHAVE], claudeProfileId: 'k' }, ''), { pronto: true, tipo: 'chave', falta: '' });
   assert.deepEqual(perfilMod.prontidaoDoPerfil({ claudeProfiles: [], claudeProfileId: '' }, ''), { pronto: false, tipo: '', falta: 'perfil' });
-  // é o perfil que a conta USA: outro perfil pronto na lista não deixa o check verde
-  const cfg = { claudeProfiles: [PLANO('sem'), CHAVE], claudeProfileId: 'sem', accounts: [{ user: 'eu', claudeProfileId: 'k' }] };
-  assert.equal(perfilMod.prontidaoDoPerfil(cfg, '').pronto, false);
-  assert.equal(perfilMod.prontidaoDoPerfil(cfg, 'eu').pronto, true);
+  // é o perfil que o motor USA: outro perfil pronto na lista não deixa o check verde
+  const cfg = { claudeProfiles: [PLANO('sem'), CHAVE], claudeProfileId: 'sem' };
+  assert.equal(perfilMod.prontidaoDoPerfil(cfg).pronto, false);
 });
 
 test('o doctor não fica verde com o perfil de assinatura sem login, e fica depois do login', async () => {

@@ -48,7 +48,6 @@ function engineBase() {
   e.mineKeys = new Set([KEY]);
   e.destravados = {};
   e.accountForPr = () => 'revisora';
-  e.isMuted = () => false;
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
   e.budgetBlockedFor = () => false;
@@ -99,7 +98,6 @@ test('revisão em andamento aparece como revisando, antes de qualquer outro moti
 test('cada trava que segura o round vira um motivo nomeado, nunca silêncio', () => {
   const casos = [
     ['auto_desligado', (e) => { e.autoReviewFor = () => false; }],
-    ['conta_silenciada', (e) => { e.isMuted = () => true; }],
     ['sem_token', (e) => { e.tokenFor = () => ''; }],
     ['orcamento', (e) => { e.budgetBlockedFor = () => ({ id: 'p', label: 'P' }); }],
     ['rascunho', (e) => { e.panorama[0].isDraft = true; }],

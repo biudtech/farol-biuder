@@ -41,7 +41,7 @@ const ESTADO = {
   account: { user: 'alice', tokenOk: true },
   accounts: [{ user: 'alice', owners: ['acme'], label: 'Pessoal', color: '#f80' }],
   config: {
-    ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }],
+    conta: { user: 'alice', owners: ['acme'] },
     intervalSeconds: 300, autoReview: true, autoApproveAll: false,
     parallelReviews: 1, theme: 'dark', autoPushback: true,
     reviewModel: '', reviewEffort: '',
@@ -125,7 +125,7 @@ test('as abas Destaques e Entregas saíram da página (corte do lote 7), inclusi
 });
 
 test('estado vazio (primeiro boot, antes de qualquer checagem) não explode', () => {
-  const vazio = { ...ESTADO, queue: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, accounts: [] } };
+  const vazio = { ...ESTADO, queue: [], accounts: [], account: { user: '', tokenOk: false }, config: { ...ESTADO.config, conta: null } };
   assert.equal(emitir('state', vazio), 1);
 });
 

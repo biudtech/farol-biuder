@@ -401,22 +401,6 @@ test('operationChecks: conta completa fica verde e declara o que está vigiando'
   assert.match(c.detail, /globex/, 'listar as orgs deixa o erro de digitação visível');
 });
 
-test('operationChecks: conta silenciada não é erro, mas TODAS silenciadas é', () => {
-  const uma = P.operationChecks([
-    { user: 'bob', owners: ['acme'], tokenOk: true, muted: true },
-    { user: 'ana', owners: ['globex'], tokenOk: true, muted: false },
-  ]);
-  assert.ok(uma.every(c => c.ok), 'silenciar uma conta é escolha, não defeito');
-
-  const todas = P.operationChecks([
-    { user: 'bob', owners: ['acme'], tokenOk: true, muted: true },
-    { user: 'ana', owners: ['globex'], tokenOk: true, muted: true },
-  ]);
-  const alerta = todas.find(c => !c.ok);
-  assert.ok(alerta, 'com tudo silenciado o painel fica vazio sem explicação');
-  assert.match(alerta.detail, /silenciad/i);
-});
-
 test('operationChecks: sem conta nenhuma devolve vazio (o banner de boas-vindas já cobre)', () => {
   assert.deepEqual(P.operationChecks([]), []);
   assert.deepEqual(P.operationChecks([{ user: '', owners: [], tokenOk: false }]), []);
@@ -538,20 +522,6 @@ test('INVARIANTE: toda menção de autor da UI passa pelo personMention (foto + 
 });
 
 /* ---------- helpers menores ---------- */
-
-test('ownerFromUrl extrai a org da URL de PR', () => {
-  assert.equal(P.ownerFromUrl('https://github.com/acme/app/pull/1'), 'acme');
-  assert.equal(P.ownerFromUrl(''), '');
-  assert.equal(P.ownerFromUrl(null), '');
-  assert.equal(P.ownerFromUrl('não é url'), '');
-});
-
-test('hexToRgba converte e cai num laranja quando não dá', () => {
-  assert.equal(P.hexToRgba('#ffb454', .5), 'rgba(255,180,84,0.5)');
-  assert.equal(P.hexToRgba('ffb454', 1), 'rgba(255,180,84,1)');
-  assert.equal(P.hexToRgba('#abc', .2), 'rgba(255,180,84,0.2)', 'hex de 3 dígitos não é suportado');
-  assert.equal(P.hexToRgba(null, .3), 'rgba(255,180,84,0.3)');
-});
 
 test('avatar escapa a inicial e codifica o login na URL', () => {
   const a = P.avatar('alice');
@@ -906,11 +876,6 @@ test('resolvedRow: título e card vindos de fora saem escapados', () => {
 test('resolvedRow: sem autor não há controle de pushback (contrato do pushbackControl)', () => {
   const html = P.resolvedRow(linhaResolvida({ pr: { url: 'https://x/y/pull/1', title: 't' } }), CTX);
   assert.doesNotMatch(html, /pushback/);
-});
-
-test('resolvedRow: o chip da conta entra como veio do ctx', () => {
-  const html = P.resolvedRow(linhaResolvida(), { ...CTX, chip: '<span class="acct-chip">BIUD</span>' });
-  assert.match(html, /acct-chip">BIUD/);
 });
 
 test('resolvedRow: sem verificationCheckpoint, não mostra nenhuma linha de resumo', () => {
@@ -1615,15 +1580,13 @@ test('painel Sistema: os três construtores desenham com ctx cheio e com ctx vaz
   }
 });
 
-test('accountsManagerHtml: sem contas mostra o vazio, com conta mostra a linha', () => {
+test('accountsManagerHtml: sem conta mostra o vazio, com conta mostra o cartão dela', () => {
   assert.match(P.accountsManagerHtml({ ...CTX_SIS, accounts: [] }), /Nenhuma conta configurada/);
-  assert.match(P.accountsManagerHtml(CTX_SIS), /acct-color/);
-});
-
-test('accountsManagerHtml: conta silenciada muda rótulo e classe do botão', () => {
-  const mudo = { ...CTX_SIS, accounts: [{ user: 'alice', owners: ['acme'], muted: true }] };
-  const html = P.accountsManagerHtml(mudo);
-  assert.match(html, /silenciada/, 'o estado aparece no texto de autenticação');
+  assert.match(P.accountsManagerHtml({ ...CTX_SIS, accounts: [{ user: '', owners: [] }] }), /Nenhuma conta configurada/, 'conta sem login ainda não é conta');
+  const html = P.accountsManagerHtml(CTX_SIS);
+  assert.match(html, /class="acct-owners" data-user="alice" value="acme"/);
+  assert.match(html, /autenticada no gh/);
+  assert.doesNotMatch(html, /acct-color|acct-label|acct-kind|act-mute|acct-remove|btnAcctAdd/);
 });
 
 test('claudeProfilesHtml: perfil de chave de API mostra os campos de teto', () => {
@@ -1720,32 +1683,18 @@ test('vazio da fila: sem intervalo cai no padrão de 5 minutos', () => {
    Até 12/09/2026 a frase saía de `config.owners`, o campo LEGADO do modo simples, que o
    `accountList()` do server só usa quando NÃO existe conta cadastrada. Com contas, o motor
    ignorava aquele campo e a tela seguia mostrando ele: uma máquina com 5 orgs monitoradas
-   anunciava só a primeira. E o escopo era ignorado, então escolher uma conta no seletor
-   continuava citando org que aquela conta nem cobre.
+   anunciava só a primeira.
 
    A régua é "o que de fato é buscado": `searchPRs` pula conta sem token
-   (lib/engine/gh-queries.js) e conta silenciada está fora da automação por escolha. */
+   (lib/engine/gh-queries.js). */
 
 const CONTAS = [
   { user: 'ana', owners: ['acme', 'globex'], muted: false, tokenOk: true },
   { user: 'bia', owners: ['initech'], muted: false, tokenOk: true },
 ];
 
-test('orgs monitoradas: em Todas, junta as orgs de todas as contas', () => {
-  assert.deepEqual(P.orgsMonitoradas(CONTAS, 'all'), ['acme', 'globex', 'initech']);
-});
-
-test('orgs monitoradas: com escopo numa conta, só as orgs dela', () => {
-  assert.deepEqual(P.orgsMonitoradas(CONTAS, 'bia'), ['initech']);
-});
-
-test('orgs monitoradas: o escopo casa sem olhar caixa do login', () => {
-  assert.deepEqual(P.orgsMonitoradas(CONTAS, 'ANA'), ['acme', 'globex']);
-});
-
-test('orgs monitoradas: conta silenciada não entra (está fora da automação)', () => {
-  const contas = [{ user: 'ana', owners: ['acme'], muted: true, tokenOk: true }, CONTAS[1]];
-  assert.deepEqual(P.orgsMonitoradas(contas, 'all'), ['initech']);
+test('orgs monitoradas: as orgs da conta, na ordem em que foram cadastradas', () => {
+  assert.deepEqual(P.orgsMonitoradas(CONTAS), ['acme', 'globex', 'initech']);
 });
 
 test('orgs monitoradas: conta sem token não entra (a busca dela é pulada)', () => {
@@ -1914,16 +1863,11 @@ test('automacaoPausadaPor acha o perfil bloqueado que a conta usa de fato', () =
   assert.equal(P.automacaoPausadaPor(contas, { claudeProfileId: 'p2' }, usage), null);
 });
 
-test('automacaoPausadaPor respeita o override de perfil da conta', () => {
+test('automacaoPausadaPor olha o perfil padrão, que é o que a conta revisora usa', () => {
   const usage = { budgets: [BLOQUEADO, LIVRE] };
-  const contas = [{ user: 'a', claudeProfileId: 'p2' }];
-  assert.equal(P.automacaoPausadaPor(contas, { claudeProfileId: 'p1' }, usage), null, 'a conta não usa o perfil bloqueado');
-  assert.equal(P.automacaoPausadaPor([{ user: 'b', claudeProfileId: 'p1' }], { claudeProfileId: 'p2' }, usage), BLOQUEADO);
-});
-
-test('conta silenciada não conta: ela já está fora da automação por escolha', () => {
-  const usage = { budgets: [BLOQUEADO] };
-  assert.equal(P.automacaoPausadaPor([{ user: 'a', muted: true }], { claudeProfileId: 'p1' }, usage), null);
+  assert.equal(P.automacaoPausadaPor([{ user: 'a' }], { claudeProfileId: 'p2' }, usage), null, 'o padrão não é o perfil bloqueado');
+  assert.equal(P.automacaoPausadaPor([{ user: 'b' }], { claudeProfileId: 'p1' }, usage), BLOQUEADO);
+  assert.equal(P.automacaoPausadaPor([], { claudeProfileId: 'p1' }, usage), null, 'sem conta não há automação para pausar');
 });
 
 test('automacaoPausadaPor sem dado nenhum devolve null, não quebra', () => {

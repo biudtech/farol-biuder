@@ -81,7 +81,7 @@ test('configuração da instalação nunca vira pedido de mudanças no PR', () =
 });
 
 test('a recuperação fica parada até a declaração mudar, sem novas tentativas', async () => {
-  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, isMuted: () => false, tokenFor: () => 't', autoReviewParked: new Set() };
+  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 't', autoReviewParked: new Set() };
   const antes = declarar({ scopes: ['core'], testDirs: ['src', 'src/sumiu'] });
   const item = { key: `${REPO}#1`, pr: { repo: REPO }, technicalReview: relatorio(antes) };
   assert.match(await pausaDaRecuperacao(engine, item), /cita pasta que não existe mais/);
@@ -106,7 +106,7 @@ test('o texto do card sai das pastas conferidas, nunca do erro gravado', () => {
 });
 
 test('registro sem a impressão da declaração não prende a recuperação', async () => {
-  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, isMuted: () => false, tokenFor: () => 't', autoReviewParked: new Set() };
+  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 't', autoReviewParked: new Set() };
   const item = { key: 'org/fora#1', pr: { repo: 'org/fora' }, technicalReview: { ...relatorio(undefined), declarationProfile: undefined } };
   assert.equal(await pausaDaRecuperacao(engine, item), '');
 });
@@ -128,7 +128,7 @@ test('o card diz o motivo quando a pasta não está simplesmente ausente', () =>
 });
 
 test('falha gravada pela conferência anterior não segura a recuperação: volta a ser conferida', async () => {
-  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, isMuted: () => false, tokenFor: () => 't', autoReviewParked: new Set() };
+  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 't', autoReviewParked: new Set() };
   const fp = declarar({ scopes: ['core'], testDirs: ['src'], e2eDirs: null });
   const antiga = { ...relatorio(fp), declarationCheck: undefined };
   assert.equal(await pausaDaRecuperacao(engine, { key: `${REPO}#9`, pr: { repo: REPO }, technicalReview: antiga }), '');
