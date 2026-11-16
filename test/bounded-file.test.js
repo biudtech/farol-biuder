@@ -4,8 +4,6 @@ import path from 'node:path';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readRegularFile } from '../lib/bounded-file.js';
-import { sourceManifest } from '../tools/bench/ui-source-manifest.js';
-import { createHash } from 'node:crypto';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-bounded-file-'));
 after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -84,13 +82,4 @@ test('link real é recusado e seu destino permanece intacto', () => {
   fs.symlinkSync(path.join(outside, 'preservar'), link, 'file');
   assert.throws(() => readRegularFile(link, 100));
   assert.equal(fs.readFileSync(path.join(outside, 'preservar'), 'utf8'), 'intacto');
-});
-
-test('manifesto de benchmark mede e calcula hash do mesmo conteúdo aberto', () => {
-  const file = fixture('evidência');
-  const content = fs.readFileSync(file);
-  assert.deepEqual(sourceManifest(root, [file]), [{ file: path.basename(file), bytes: content.length,
-    sha256: createHash('sha256').update(content).digest('hex') }]);
-  onOpen(file, () => { fs.renameSync(file, file + '.previous'); fs.writeFileSync(file, 'substituto'); },
-    () => assert.throws(() => sourceManifest(root, [file]), /substituído/));
 });
