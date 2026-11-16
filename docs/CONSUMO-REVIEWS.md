@@ -57,13 +57,14 @@ Lê o diário inteiro, sob demanda: o snapshot leva só um resumo e as 100 sess�
 | Parâmetro | Valor |
 |---|---|
 | `start`, `end` | Dias inclusivos, `AAAA-MM-DD`, no dia de Brasília. Padrão: os últimos 30 dias. Data futura ou intervalo invertido responde `{ ok: false, motivo }` |
-| `account`, `provider`, `model`, `kind`, `repo` | Filtro por igualdade; ausente ou `all` não filtra. `kind` é `review`, `pushback`, `chat`, `tool` ou `outro` (`chat` e `tool` só aparecem em registro antigo: o motor não abre mais essas sessões) |
+| `account`, `provider`, `model`, `kind`, `repo`, `device` | Filtro por igualdade; ausente ou `all` não filtra. `kind` é `review`, `pushback`, `chat`, `tool` ou `outro` (`chat` e `tool` só aparecem em registro antigo: o motor não abre mais essas sessões). `device` só tem o valor `local` |
 | `search` | Até 200 caracteres, sem caixa, sobre a referência, o tipo e o modelo. Restringe só o histórico |
 | `focus` | `review` (operações de revisão concluídas no período) ou `pr` (um por PR). Restringe só o histórico |
 | `page` | Página do histórico, base zero, oito operações por página |
 
 A resposta traz `range`, `options` (os valores de cada filtro), `totals`, `byKind`,
-`completed` (`reviews` e `prs`), `retries`, `unidentified`, `since`, `series` (por dia),
+`completed` (`reviews` e `prs`), `retries`, `unidentified`, `since` e `sinceDay` (o instante e o dia da linha mais antiga do diário),
+`series` (por dia),
 `models`, `history` e `incomplete` (o diário tem menos linhas que o agregado espera).
 
 Como ler:

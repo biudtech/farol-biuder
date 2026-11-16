@@ -23,6 +23,12 @@ valor tem de ser inteiro positivo; o que não for fica no padrão (`limitsFor`,
 | `timeoutMs` | 120 s | Teto dos comandos Git |
 | `fetchTimeoutMs` | 10 min | Teto do fetch e do repack |
 
+A tabela traz os oito campos de quota e de tempo. `DEFAULTS` tem quinze, e os outros sete
+aceitam valor do mesmo jeito: `maxFileBytes` (1 MiB), `maxFiles` (20.000), `concurrency` (1; o
+valor informado vai no máximo a 2), `maxQueued` (8), `lockWaitMs` (5.000), `maxTreeDepth` (64)
+e `maxReleasedLeases` (64). O que cada um limita está em `lib/review-source/contract.js` e em
+quem o lê.
+
 ## O que entra na conta
 
 O inventário (`lib/review-source/storage-inventory.js`) soma tamanho lógico de arquivo, com
