@@ -14,6 +14,8 @@
 // ferramenta (worktree, plano de execução, scratch). Recorte que é preferência de
 // UMA ferramenta, como a higiene pular `docs/` ou o gate pular `test/`, continua
 // na ferramenta: ali a diferença é o ponto, não o acidente.
+import path from 'node:path';
+
 export const NAO_E_FONTE = Object.freeze([
   'node_modules',
   'dist',
@@ -24,9 +26,21 @@ export const NAO_E_FONTE = Object.freeze([
   'scratchpad_test',
 ]);
 
+// O front (`web/`) é fonte do repositório, mas não do motor: tem `package.json`, dependências
+// e gate próprios (typecheck, ESLint, Vitest e build, no job `web` do CI). As ferramentas do
+// motor não o abrem. Fica fora da lista acima de propósito: ela casa por NOME em qualquer
+// nível, e uma pasta `web` mais fundo (em `lib/`, por exemplo) seria pulada calada. Aqui a
+// comparação é de posição: só a `web` que é filha direta da raiz da varredura.
+export const FRONT = 'web';
+
+/** true só para a pasta do front: `web`, filha direta da raiz da varredura. */
+export function ehOFront(dir, nome, raiz) {
+  return nome === FRONT && path.resolve(dir) === path.resolve(raiz);
+}
+
 /** A lista comum mais o que aquela ferramenta pula por conta própria. */
 export function ignorar(...extras) {
   return new Set([...NAO_E_FONTE, ...extras]);
 }
 
-export default { NAO_E_FONTE, ignorar };
+export default { NAO_E_FONTE, FRONT, ehOFront, ignorar };

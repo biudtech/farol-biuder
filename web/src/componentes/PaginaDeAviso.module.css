@@ -1,0 +1,32 @@
+.pagina {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 48px 20px 60px;
+}
+
+.aviso {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.titulo { font-size: 20px; font-weight: 700; }
+.texto { color: var(--muted); text-wrap: pretty; }
+.saida { margin-top: 6px; }
+
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--borda-campo);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 550;
+  text-decoration: none;
+  cursor: pointer;
+}
+.botao:hover { background: var(--surface-2); }

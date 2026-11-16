@@ -48,19 +48,69 @@ jobs:
       - name: Testes
         run: npm test
 
+  # O gate do front (web/): pacote próprio, com dependências próprias. O motor continua sem
+  # npm install; aqui o `npm ci` instala só o que o package-lock de web/ fixa.
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Dependências
+        run: npm ci
+
+      # Inclui as de desenvolvimento: nada sobe com vulnerabilidade conhecida.
+      - name: Auditoria
+        run: npm audit
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm test
+
+      # O endereço do motor é lido no build. Este é o de desenvolvimento, só para o build
+      # do CI ter um valor: nada é publicado daqui.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_FAROL_API: http://127.0.0.1:47170
+
   # Job agregador: é ESTE nome que a proteção da branch exige. Assim dá pra
-  # mexer nos jobs de cima sem reconfigurar a regra.
+  # mexer nos jobs de cima sem reconfigurar a regra. Ele exige o gate do motor
+  # e o do front.
   ci:
     name: ci
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [gate]
+    needs: [gate, web]
     if: always()
     steps:
-      - name: Conferir resultado do gate
+      - name: Conferir resultado do gate e do front
         run: |
+          falhou=0
           if [ "${{ needs.gate.result }}" != "success" ]; then
             echo "gate falhou: ${{ needs.gate.result }}"
-            exit 1
+            falhou=1
           fi
-          echo "gate verde"
+          if [ "${{ needs.web.result }}" != "success" ]; then
+            echo "web falhou: ${{ needs.web.result }}"
+            falhou=1
+          fi
+          if [ "$falhou" != "0" ]; then exit 1; fi
+          echo "gate e web verdes"

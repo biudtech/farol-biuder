@@ -43,3 +43,12 @@ Microsoft/
 # anexos temporarios de sessao (Claude Design); nunca versionar
 .claude-anexos/
 
+
+# front (web/): saida do build do Next, tipos gerados e variaveis locais. O node_modules de
+# la ja cai na regra do topo.
+web/.next/
+web/next-env.d.ts
+web/*.tsbuildinfo
+web/.env*
+!web/.env.example
+web/.vercel/

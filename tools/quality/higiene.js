@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { executadoDireto } from '../../lib/paths.js';
-import { ignorar } from '../nao-e-fonte.js';
+import { ehOFront, ignorar } from '../nao-e-fonte.js';
 
 const RAIZ = path.join(import.meta.dirname, '..', '..');
 // Os extras sao desta higiene: mapear release a card e o papel do CHANGELOG e
@@ -23,11 +23,12 @@ function refsForaDeTodo(texto) {
   return (semTodo.match(PREFIXOS) || []).length;
 }
 
-function listar(dir, achados = []) {
+// A raiz viaja na recursão porque o front só sai na posição dele: a `web` filha da raiz.
+function listar(dir, achados = [], raiz = dir) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (IGNORAR.has(item.name)) continue;
+    if (IGNORAR.has(item.name) || ehOFront(dir, item.name, raiz)) continue;
     const p = path.join(dir, item.name);
-    if (item.isDirectory()) listar(p, achados);
+    if (item.isDirectory()) listar(p, achados, raiz);
     else if (/\.(js|md|json|ps1|sh|cmd|command|html|css)$/.test(item.name) && !/^CHANGELOG/i.test(item.name)) achados.push(p);
   }
   return achados;
@@ -52,5 +53,5 @@ function main() {
 }
 
 if (executadoDireto(import.meta.url)) process.exit(main());
-export default { refsForaDeTodo };
-export { refsForaDeTodo };
+export default { refsForaDeTodo, listar };
+export { refsForaDeTodo, listar };

@@ -110,6 +110,28 @@ Ainda sem versão publicada.
   continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
   Quando os erros bloqueiam um código pendente, o motor grava uma linha de aviso no `farol.log`,
   sem o código e sem o valor tentado.
+- **Fundação do front novo (fase 3, lote 1):** nasce `web/`, em Next.js e TypeScript, que vai
+  substituir a tela antiga aba por aba. O navegador fala direto com a API do motor, com o endereço
+  em `NEXT_PUBLIC_FAROL_API`; não há rota de API, cookie nem segredo no front. Este lote traz a
+  entrada por pareamento (o código de `node tools/farol-parear.js` vira um token guardado no
+  navegador; a tela confere a forma do código antes de enviar, para não gastar tentativa à toa),
+  a casca das cinco abas (Radar, Histórico, Time, Consumo e Sistema, ainda em construção), o
+  indicador de conexão (conectado, reconectando, sem motor) e os temas escuro e claro. Um 401
+  apaga o token que foi recusado e devolve a aba ao pareamento, que diz por que apareceu; se
+  outra aba já tiver pareado de novo, a aba segue com o token novo. As abas do mesmo navegador
+  andam juntas: sair numa leva as outras ao pareamento, e parear numa conecta as outras. "Sair"
+  apaga o token do navegador e aborta as chamadas em curso; não revoga a sessão no motor. O que
+  chega do motor é conferido antes de entrar na tela: chave desconhecida é ignorada, e chave
+  conhecida com forma errada mantém o valor anterior. Toda resposta em HTML, inclusive a página
+  não encontrada e a de erro (que são do front, em português), sai com Content-Security-Policy
+  restrita à própria origem e ao endereço do motor, e endereço do motor que não é uma origem
+  limpa (com curinga, por exemplo) é recusado. A tela antiga continua servida pelo motor, sem
+  mudança.
+- **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
+  também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
+  do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
+  `npm test` deixam a pasta de fora, também quando o `npm test` recebe uma flag com o valor
+  separado por espaço (`--test-name-pattern x`).
 
 ### Correções
 

@@ -1,0 +1,29 @@
+.indicador {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--info-soft);
+  color: var(--info-texto);
+}
+
+.ponto {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulsar 1.6s infinite;
+}
+
+.indicador[data-conexao="conectado"] { background: var(--ok-soft); color: var(--ok-texto); }
+.indicador[data-conexao="conectado"] .ponto { animation: none; }
+.indicador[data-conexao="sem-motor"] { background: var(--danger-soft); color: var(--danger-texto); }
+
+@keyframes pulsar {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}

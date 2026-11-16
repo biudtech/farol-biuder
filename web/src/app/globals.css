@@ -1,0 +1,102 @@
+/* Identidade do Farol: tema escuro por padrão, claro como alternativa. As cores vêm da tela
+   antiga (ui/app.css, na raiz). As variáveis terminadas em -texto, --foco, --borda-campo e
+   --borda-botao são daqui: existem para o contraste AA nos dois temas, e
+   src/tema/contraste.test.ts confere. No claro o --accent é mais escuro que o da tela antiga
+   (#e08700 dava 2,75:1 sobre o cartão branco): o botão primário pede 3:1 contra o fundo. */
+:root {
+  --bg: #0b0e14;
+  --surface: #121722;
+  --surface-2: #1a2130;
+  --border: #232c3d;
+  --text: #e7ecf5;
+  --muted: #8b97ab;
+  --accent: #ffb454;
+  --accent-soft: rgba(255, 180, 84, .14);
+  --accent-ink: #201302;
+  --ok: #4cc38a;
+  --ok-soft: rgba(76, 195, 138, .14);
+  --danger: #f2707a;
+  --danger-soft: rgba(242, 112, 122, .12);
+  --info: #6ca8f2;
+  --info-soft: rgba(108, 168, 242, .12);
+  --logo-tower: #e7ecf5;
+  --shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  --radius: 12px;
+  /* cor de estado usada como TEXTO sobre o fundo suave dela */
+  --ok-texto: #4cc38a;
+  --danger-texto: #f2707a;
+  --info-texto: #6ca8f2;
+  /* anel de foco e marca da aba ativa: 3:1 contra o fundo */
+  --foco: #ffb454;
+  /* contorno de campo de formulário: 3:1 contra a superfície */
+  --borda-campo: #6b7a94;
+  /* contorno de botão sem preenchimento (Sair, troca de tema); no escuro é o tom de --border */
+  --borda-botao: #232c3d;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --border: #dfe5ee;
+  --text: #1c2536;
+  --muted: #56637a;
+  --accent: #c47500;
+  --accent-soft: rgba(196, 117, 0, .12);
+  --accent-ink: #201302;
+  --ok: #1f9d63;
+  --ok-soft: rgba(31, 157, 99, .12);
+  --danger: #d64550;
+  --danger-soft: rgba(214, 69, 80, .1);
+  --info: #2f6fd6;
+  --info-soft: rgba(47, 111, 214, .1);
+  --logo-tower: #33415c;
+  --shadow: 0 8px 24px rgba(23, 34, 56, .1);
+  --ok-texto: #126b41;
+  --danger-texto: #b12c39;
+  --info-texto: #2459b3;
+  --foco: #a35f00;
+  --borda-campo: #77849a;
+  --borda-botao: #77849a;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code {
+  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: .92em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+}
+
+a { color: var(--info-texto); }
+button, input { font: inherit; }
+h1, h2, p { margin: 0; }
+
+:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection { background: var(--accent-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

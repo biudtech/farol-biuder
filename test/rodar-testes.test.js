@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { escolheuArquivo, padroesDeDescoberta } from '../tools/descoberta-de-testes.js';
 
 const executor = path.resolve(import.meta.dirname, '../tools/rodar-testes.js');
 
@@ -38,4 +39,59 @@ test('o executor encaminha os argumentos usados pela matriz e pela seleção de 
 test('o executor não força o encerramento, que truncava o relatório dos arquivos de teste', () => {
   const fonte = fs.readFileSync(executor, 'utf8');
   assert.doesNotMatch(fonte, /'--test-force-exit'/);
+});
+
+// Sem arquivo na linha de comando, o `node --test` procura teste na árvore inteira, e desde
+// que o Node lê TypeScript isso inclui `.test.ts`: os testes do front (web/, que rodam com o
+// Vitest e têm gate próprio) seriam executados pelo runner do motor e reprovariam por não
+// acharem o Vitest. O executor passa os padrões pasta a pasta, sem a `web` da raiz.
+test('os padrões de descoberta cobrem a raiz e cada pasta, menos o front e o node_modules', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-padroes-'));
+  t.after(() => fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  for (const pasta of ['test', 'lib', 'web', 'node_modules', '.github']) fs.mkdirSync(path.join(dir, pasta));
+  fs.writeFileSync(path.join(dir, 'server.js'), '');
+  const padroes = padroesDeDescoberta(dir);
+  const NOMES = '{test,test/**/*,test-*,*[._-]test}.{js,mjs,cjs}';
+  assert.deepEqual(padroes, [NOMES, `.github/**/${NOMES}`, `lib/**/${NOMES}`, `test/**/${NOMES}`]);
+});
+
+test('os padrões acham o que a descoberta padrão do Node acha em JavaScript, e nada do front', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-padroes-glob-'));
+  t.after(() => fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+  const escrever = (rel) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), '');
+  };
+  const doMotor = ['a.test.js', 'test/b.test.js', 'test/helpers/c.js', 'test/fixtures/d.mjs', 'lib/e.test.js', 'lib/fundo/test/f.cjs', 'tools/test-g.js', 'lib/h_test.js', 'lib/web/i.test.js'];
+  const foraDaDescoberta = ['server.js', 'lib/real.js', 'web/src/x.test.ts', 'web/src/y.test.js', 'web/test/z.js', 'test/w.test.ts'];
+  [...doMotor, ...foraDaDescoberta].forEach(escrever);
+  const achados = fs.globSync(padroesDeDescoberta(dir), { cwd: dir })
+    .filter((p) => fs.statSync(path.join(dir, p)).isFile())
+    .map((p) => p.split(path.sep).join('/')).sort();
+  assert.deepEqual(achados, doMotor.slice().sort());
+});
+
+test('o executor só passa os padrões quando ninguém escolheu arquivo', () => {
+  assert.equal(escolheuArquivo(['--test-name-pattern=x', '--no-test-force-exit']), false);
+  assert.equal(escolheuArquivo([]), false);
+  assert.equal(escolheuArquivo(['--test-name-pattern=x', 'test/http.test.js']), true);
+});
+
+// O valor de uma flag pode vir separado por espaço (`--test-name-pattern x`): ele não é
+// arquivo. Tratado como arquivo, a descoberta saía de cena e o Node varria a árvore inteira,
+// com o front junto.
+test('valor de flag separado por espaço não conta como arquivo escolhido', () => {
+  assert.equal(escolheuArquivo(['--test-name-pattern', 'x']), false);
+  assert.equal(escolheuArquivo(['--test-reporter', 'spec', '--test-reporter-destination', 'stdout']), false);
+  assert.equal(escolheuArquivo(['--import', './preparo.mjs', '-r', './outro.cjs']), false);
+  assert.equal(escolheuArquivo(['--test-name-pattern', 'x', 'test/http.test.js']), true);
+  // flag booleana não engole o que vem depois
+  assert.equal(escolheuArquivo(['--no-test-force-exit', 'test/http.test.js']), true);
+  assert.equal(escolheuArquivo(['--test-only', 'test/http.test.js']), true);
+  // com `=`, o valor já veio junto e o próximo argumento é arquivo
+  assert.equal(escolheuArquivo(['--test-name-pattern=x', 'test/http.test.js']), true);
+  // flag de valor no fim da linha, sem valor: nada foi escolhido
+  assert.equal(escolheuArquivo(['--test-name-pattern']), false);
+  // depois de `--`, tudo é arquivo, mesmo começando com hífen
+  assert.equal(escolheuArquivo(['--', '-estranho.test.js']), true);
 });
