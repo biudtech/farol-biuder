@@ -232,7 +232,8 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
       // chave e endereço viajam no mesmo salvar quando os dois estão digitados: o motor só aceita
       // endereço novo com a chave junto
       const digitado = (seletor) => ((document.querySelector(seletor) || {}).value || '').trim();
-      if (chave) { next.apiKey = chave; next.baseUrl = digitado(`.cp-baseurl[data-id="${CSS.escape(id)}"]`); }
+      if (chave) next.apiKey = chave;
+      if (chave) next.baseUrl = digitado(`.cp-baseurl[data-id="${CSS.escape(id)}"]`);
       if (t.classList.contains('cp-baseurl')) {
         next.baseUrl = t.value.trim();
         const chaveDigitada = digitado(`.cp-apikey[data-id="${CSS.escape(id)}"]`);
