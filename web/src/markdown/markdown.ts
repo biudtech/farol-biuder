@@ -45,12 +45,19 @@ export interface Documento {
 
 // https, duas barras e o host logo depois
 const COMECO_DE_URL = /^https:\/\/[^/?#]/;
-const PROIBIDO_NA_URL = /[\s\u0000-\u001f\u007f<>"'`\\]/;
+// espaço, controle, aspas, e os controles de direção do texto (U+202A a U+202E e U+2066 a
+// U+2069), que fazem o endereço parecer outro na tela
+const PROIBIDO_NA_URL = /[\s\u0000-\u001f\u007f<>"'`\\‪-‮⁦-⁩]/;
+// a autoridade: do fim de `https://` até a primeira barra, interrogação ou cerquilha
+const AUTORIDADE = /^https:\/\/([^/?#]*)/;
 
-// O único endereço que vira link: https, com host, sem usuário nem senha, sem espaço nem
-// caractere de controle. Devolve o endereço normalizado, ou null.
+// O único endereço que vira link: https, com host, sem arroba na autoridade (nem usuário e
+// senha vazios, como em `https://@host`), sem espaço, controle nem controle de direção.
+// Devolve o endereço normalizado, ou null. Destino local (`https://localhost`, endereço de
+// rede interna) passa: é https, e quem abre é a pessoa, com o endereço à vista.
 export function linkSeguro(url: string): string | null {
   if (url.length > TETO_DA_URL || !COMECO_DE_URL.test(url) || PROIBIDO_NA_URL.test(url)) return null;
+  if (AUTORIDADE.exec(url)?.[1]?.includes('@') !== false) return null;
   let lido: URL;
   try { lido = new URL(url); } catch { return null; }
   if (lido.protocol !== 'https:' || !lido.hostname || lido.username || lido.password) return null;
@@ -132,7 +139,7 @@ function lerTrechos(texto: string, prof: number, dentroDeLink: boolean): Trecho[
 
   // `[texto](destino)`: o `]` é o primeiro colchete depois do `[` (texto de link não tem
   // colchete dentro), e o destino vai até o `)`, na mesma linha.
-  function lerLink(inicio: number): { no: Trecho; fim: number } | null {
+  function formaDoLink(inicio: number): { fecha: number; fim: number } | null {
     let fecha = inicio + 1;
     while (fecha < n && texto[fecha] !== ']' && texto[fecha] !== '[' && texto[fecha] !== '\n') fecha += texto[fecha] === '\\' ? 2 : 1;
     if (texto[fecha] !== ']' || texto[fecha + 1] !== '(') return null;
@@ -148,7 +155,13 @@ function lerTrechos(texto: string, prof: number, dentroDeLink: boolean): Trecho[
         abertos -= 1;
       }
     }
-    if (texto[fim] !== ')') return null;
+    return texto[fim] === ')' ? { fecha, fim } : null;
+  }
+
+  function lerLink(inicio: number): { no: Trecho; fim: number } | null {
+    const forma = formaDoLink(inicio);
+    if (!forma) return null;
+    const { fecha, fim } = forma;
     // o título opcional (`"..."` depois do endereço) é ignorado
     const destino = texto.slice(fecha + 2, fim).trim().split(' ')[0] ?? '';
     const href = linkSeguro(destino);
@@ -213,6 +226,17 @@ function lerTrechos(texto: string, prof: number, dentroDeLink: boolean): Trecho[
       continue;
     }
 
+    // Imagem (`![texto](endereço)`) não é desenhada nem vira link: aparece inteira, como o
+    // texto que é, e o endereço dela não é lido como endereço solto.
+    if (c === '!' && texto[i + 1] === '[') {
+      const forma = formaDoLink(i + 1);
+      if (forma) {
+        pendente += texto.slice(i, forma.fim + 1);
+        i = forma.fim + 1;
+        continue;
+      }
+    }
+
     if (c === '[' && !dentroDeLink && prof < TETO_DE_ENFASE) {
       const link = lerLink(i);
       if (link) {
@@ -224,15 +248,24 @@ function lerTrechos(texto: string, prof: number, dentroDeLink: boolean): Trecho[
     }
 
     if (c === 'h' && !dentroDeLink && texto.startsWith('https://', i) && !ehAlfanumerico(texto[i - 1])) {
-      const limite = Math.min(n, i + TETO_DA_URL);
-      let fim = i + 8;
-      while (fim < limite && !FIM_DE_URL.includes(texto[fim] as string)) fim += 1;
+      // O endereço vai até o primeiro espaço, aspas ou sinal de menor ou maior. Se ele passa
+      // do teto, ou encosta no fim de um texto que foi cortado, não se sabe onde ele acaba:
+      // fica texto inteiro, em vez de virar link para um pedaço (que pode ser outro host).
+      let acaba = i + 8;
+      while (acaba < n && !FIM_DE_URL.includes(texto[acaba] as string)) acaba += 1;
+      const semFim = acaba === n && caudaCortada !== null && texto.endsWith(caudaCortada);
+      if (acaba - i > TETO_DA_URL || semFim) {
+        pendente += texto.slice(i, acaba);
+        i = acaba;
+        continue;
+      }
+      let fim = acaba;
       while (fim > i + 8 && SOBRA_DE_URL.includes(texto[fim - 1] as string)) fim -= 1;
-      const escrito = texto.slice(i, fim);
-      const href = linkSeguro(escrito);
+      const href = linkSeguro(texto.slice(i, fim));
       if (href) {
         despejar();
-        saida.push({ t: 'link', href, f: [{ t: 'texto', v: escrito }] });
+        // o texto visível é o endereço normalizado: é para lá que o link vai
+        saida.push({ t: 'link', href, f: [{ t: 'texto', v: href }] });
         i = fim;
         continue;
       }
@@ -407,8 +440,30 @@ function lerBlocos(linhas: readonly string[], prof: number): Bloco[] {
   return blocos;
 }
 
+// Corta no teto sem partir um par substituto (um emoji, por exemplo, são duas unidades).
+function cortarNoTeto(texto: string): string {
+  if (texto.length <= TETO_DE_TEXTO) return texto;
+  const ultimo = texto.charCodeAt(TETO_DE_TEXTO - 1);
+  return texto.slice(0, ultimo >= 0xd800 && ultimo <= 0xdbff ? TETO_DE_TEXTO - 1 : TETO_DE_TEXTO);
+}
+
+// O último pedaço sem espaço de um texto que foi cortado: o que estiver nele pode estar pela
+// metade. Só vale durante uma leitura (lerMarkdown é síncrona e o repõe ao sair).
+let caudaCortada: string | null = null;
+
 export function lerMarkdown(texto: string): Documento {
-  const cortado = texto.length > TETO_DE_TEXTO;
-  const base = (cortado ? texto.slice(0, TETO_DE_TEXTO) : texto).replace(/\r\n?/g, '\n').replace(/\t/g, '    ');
-  return { blocos: lerBlocos(base.split('\n'), 0), cortado };
+  // O teto vale para o texto já normalizado: a tabulação vira quatro espaços, e o que ela
+  // faz crescer conta. O primeiro corte só limita o trabalho da normalização.
+  const normalizado = cortarNoTeto(texto).replace(/\r\n?/g, '\n').replace(/\t/g, '    ');
+  const base = cortarNoTeto(normalizado);
+  const cortado = texto.length > TETO_DE_TEXTO || normalizado.length > TETO_DE_TEXTO;
+  let ultimoEspaco = base.length - 1;
+  while (ultimoEspaco >= 0 && base[ultimoEspaco] !== ' ' && base[ultimoEspaco] !== '\n') ultimoEspaco -= 1;
+  const cauda = base.slice(ultimoEspaco + 1);
+  caudaCortada = cortado && cauda ? cauda : null;
+  try {
+    return { blocos: lerBlocos(base.split('\n'), 0), cortado };
+  } finally {
+    caudaCortada = null;
+  }
 }

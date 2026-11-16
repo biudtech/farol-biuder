@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TETO_DE_ENFASE, TETO_DE_PROFUNDIDADE, TETO_DE_TEXTO, lerMarkdown, linkSeguro, type Bloco, type Trecho,
+  TETO_DA_URL, TETO_DE_ENFASE, TETO_DE_PROFUNDIDADE, TETO_DE_TEXTO, lerMarkdown, linkSeguro, type Bloco, type Trecho,
 } from './markdown';
 
 const blocos = (texto: string): Bloco[] => lerMarkdown(texto).blocos;
@@ -158,7 +158,6 @@ describe('markdown: entrada hostil', () => {
     '![x](data:image/svg+xml,<svg onload=alert(1)>)',
   ])('%s não vira link, e o texto aparece como foi escrito', (entrada) => {
     const arvore = blocos(entrada);
-    const temLink = (nos: readonly (Bloco | Trecho)[]): boolean => nos.some((no) => no.t === 'link' || ('f' in no && temLink(no.f)));
     expect(temLink(arvore)).toBe(false);
     expect(plano(arvore).trim()).toBe(entrada.trim());
   });
@@ -176,6 +175,89 @@ describe('markdown: entrada hostil', () => {
       'https://a@exemplo.com', 'https://exemplo.com/\u0000', 'https://exemplo.com/ a', ' https://exemplo.com',
       `https://exemplo.com/${'a'.repeat(3000)}`,
     ]) expect(linkSeguro(ruim), ruim).toBeNull();
+  });
+
+  const temLink = (nos: readonly (Bloco | Trecho)[]): boolean => nos.some((no) => no.t === 'link' || (no.t === 'lista' ? no.itens.some(temLink) : 'f' in no && temLink(no.f)));
+
+  it('endereço solto acima do teto não vira link para um pedaço dele: fica texto inteiro', () => {
+    const longo = `https://exemplo.com/${'a'.repeat(TETO_DA_URL)}/https://outro.com/fim`;
+    const arvore = blocos(`veja ${longo} aqui`);
+    expect(temLink(arvore)).toBe(false);
+    expect(arvore).toEqual([paragrafo(txt(`veja ${longo} aqui`))]);
+    // no limite exato ainda é link
+    const justo = `https://exemplo.com/${'a'.repeat(TETO_DA_URL - 20)}`;
+    expect(justo.length).toBe(TETO_DA_URL);
+    expect(temLink(blocos(justo))).toBe(true);
+  });
+
+  it('link com colchete cujo endereço passa do teto fica texto, sem link para um pedaço', () => {
+    const entrada = `[t](https://exemplo.com/${'a'.repeat(2600)})`;
+    const arvore = blocos(entrada);
+    expect(temLink(arvore)).toBe(false);
+    expect(plano(arvore).trim()).toBe(entrada);
+  });
+
+  it('endereço que encosta no fim de um texto cortado não vira link', () => {
+    // o corte cai dentro do host: sem a regra, sairia um link para "https://banco.exe"
+    const antes = 'x'.repeat(TETO_DE_TEXTO - 18);
+    const lido = lerMarkdown(`${antes} https://banco.exemplo.com/entrar depois`);
+    expect(lido.cortado).toBe(true);
+    expect(temLink(lido.blocos)).toBe(false);
+    expect(plano(lido.blocos).trimEnd().endsWith(' https://banco.exe')).toBe(true);
+    // dentro de colchete também
+    const comColchete = lerMarkdown(`${'x'.repeat(TETO_DE_TEXTO - 22)} [t](https://banco.exemplo.com/entrar) depois`);
+    expect(comColchete.cortado).toBe(true);
+    expect(temLink(comColchete.blocos)).toBe(false);
+    // o endereço que terminou antes do corte continua link
+    const inteiro = lerMarkdown(`https://exemplo.com/a ${'x'.repeat(TETO_DE_TEXTO)}`);
+    expect(inteiro.cortado).toBe(true);
+    expect(temLink(inteiro.blocos)).toBe(true);
+  });
+
+  it('o corte não parte um par substituto', () => {
+    const lido = lerMarkdown(`${'a'.repeat(TETO_DE_TEXTO - 1)}😀resto`);
+    expect(lido.cortado).toBe(true);
+    const visivel = plano(lido.blocos).trimEnd();
+    expect(visivel.length).toBe(TETO_DE_TEXTO - 1);
+    expect(/[\uD800-\uDBFF]$/.test(visivel)).toBe(false);
+  });
+
+  it('o teto vale depois da expansão das tabulações', () => {
+    const lido = lerMarkdown('\t'.repeat(TETO_DE_TEXTO / 2));
+    expect(lido.cortado).toBe(true);
+    const comTexto = lerMarkdown(`${'\ta'.repeat(TETO_DE_TEXTO / 2)}`);
+    expect(comTexto.cortado).toBe(true);
+    expect(plano(comTexto.blocos).length).toBeLessThanOrEqual(TETO_DE_TEXTO + 1);
+    // quatro espaços por tabulação: 20.000 tabulações e 20.000 letras cabem
+    expect(lerMarkdown('\ta'.repeat(20_000)).cortado).toBe(false);
+  });
+
+  it('imagem aparece como o texto que é, sem link nem para o endereço dela', () => {
+    for (const entrada of ['![i](https://exemplo.com/a.png)', 'antes ![](https://exemplo.com/a.png "t") depois', '![a **b**](https://exemplo.com/x)']) {
+      const arvore = blocos(entrada);
+      expect(temLink(arvore), entrada).toBe(false);
+      expect(arvore).toEqual([paragrafo(txt(entrada))]);
+    }
+  });
+
+  it('arroba na autoridade, controle de direção e host disfarçado não passam', () => {
+    for (const ruim of [
+      'https://@evil.com', 'https://:@evil.com', 'https://good.com@evil.com/x', 'https://good.com:443@evil.com',
+      'https://exemplo.com/‮gpj.exe', 'https://exemplo.com/⁦a⁩', 'https://‭exemplo.com',
+    ]) {
+      expect(linkSeguro(ruim), JSON.stringify(ruim)).toBeNull();
+      expect(temLink(blocos(`veja ${ruim} e [x](${ruim})`)), JSON.stringify(ruim)).toBe(false);
+    }
+    // arroba depois da autoridade é caminho, e passa
+    expect(linkSeguro('https://exemplo.com/@dono/repo')).toBe('https://exemplo.com/@dono/repo');
+  });
+
+  it('no endereço solto o texto visível é o endereço normalizado, que é para onde o link vai', () => {
+    // o ponto ideográfico vira ponto comum no host: quem lê vê o host de verdade
+    const arvore = blocos('abra https://good.com。evil.com/x agora');
+    expect(arvore).toEqual([paragrafo(
+      txt('abra '), { t: 'link', href: 'https://good.com.evil.com/x', f: [txt('https://good.com.evil.com/x')] }, txt(' agora'),
+    )]);
   });
 
   it('link dentro do texto de um link não aninha', () => {
@@ -212,23 +294,41 @@ describe('markdown: entrada hostil', () => {
     expect(lerMarkdown('a'.repeat(TETO_DE_TEXTO)).cortado).toBe(false);
   });
 
-  // Cada entrada abaixo custaria tempo quadrático num leitor ingênuo: o teste só termina
-  // dentro do prazo do Vitest se a leitura for linear.
+  // Cada entrada abaixo custaria tempo quadrático num leitor ingênuo. O teste mede a leitura
+  // e exige um teto folgado: a leitura de 100 kB leva milissegundos, e um leitor quadrático
+  // leva dezenas de segundos. As entradas de 100 kB cabem inteiras no teto; as de 200 kB
+  // conferem que o corte vem antes do trabalho.
+  const PRAZO_MS = 1500;
+  const cheio = (pedaco: string): string => pedaco.repeat(Math.floor(TETO_DE_TEXTO / pedaco.length));
   it.each([
-    ['marcas de negrito sem fecho válido', '**a '.repeat(50_000)],
-    ['asteriscos soltos', '*a '.repeat(66_000)],
-    ['sublinhados', '_a_ '.repeat(50_000)],
-    ['crases de tamanhos diferentes', Array.from({ length: 600 }, (_, i) => '`'.repeat(i + 1)).join(' a ')],
-    ['colchetes abertos', '['.repeat(200_000)],
-    ['colchetes com parêntese sem fim', '[a]('.repeat(50_000)],
-    ['título com cerquilhas no fim', `# a${' #'.repeat(100_000)}`],
-    ['linhas em branco dentro de lista', `- a${'\n'.repeat(200_000)}`],
-    ['uma linha só de 200 kB', 'x'.repeat(200_000)],
-    ['marcadores de citação e de lista misturados', '> - '.repeat(50_000)],
-    ['endereços soltos', 'https://a.b/ '.repeat(16_000)],
-    ['barras invertidas', '\\'.repeat(200_000)],
+    ['marcas de negrito sem fecho válido', cheio('**a ')],
+    ['asteriscos soltos', cheio('*a ')],
+    ['sublinhados', cheio('_a_ ')],
+    ['ênfase que abre e nunca fecha colada', cheio('*a* *')],
+    ['crases de tamanhos diferentes', Array.from({ length: 400 }, (_, i) => '`'.repeat(i + 1)).join(' a ')],
+    ['crases simples sem par', cheio('` a')],
+    ['colchetes abertos', cheio('[')],
+    ['colchetes com parêntese sem fim', cheio('[a](')],
+    ['imagens sem fim', cheio('![a](')],
+    ['título com cerquilhas no fim', `# a${cheio(' #').slice(0, TETO_DE_TEXTO - 3)}`],
+    ['linhas em branco dentro de lista', `- a${'\n'.repeat(TETO_DE_TEXTO - 3)}`],
+    ['itens de lista de uma letra', cheio('- a\n')],
+    ['citações de uma linha', cheio('> a\n')],
+    ['uma linha só', cheio('x')],
+    ['marcadores de citação e de lista misturados', cheio('> - ')],
+    ['endereços soltos', cheio('https://a.b/ ')],
+    ['um endereço solto sem fim', `https://a.b/${cheio('a').slice(12)}`],
+    ['endereços colados acima do teto', cheio('https://a.b/')],
+    ['barras invertidas', cheio('\\')],
+    ['cercas de código abertas e fechadas', cheio('```\na\n```\n')],
+    ['200 kB de colchetes, que o corte reduz', '['.repeat(200_000)],
+    ['200 kB numa linha só, que o corte reduz', 'x'.repeat(200_000)],
   ])('não trava com %s', (_nome, entrada) => {
+    const inicio = performance.now();
     const lido = lerMarkdown(entrada);
+    const gasto = performance.now() - inicio;
     expect(Array.isArray(lido.blocos)).toBe(true);
+    expect(lido.cortado).toBe(entrada.length > TETO_DE_TEXTO);
+    expect(gasto, `levou ${Math.round(gasto)} ms`).toBeLessThan(PRAZO_MS);
   });
 });
