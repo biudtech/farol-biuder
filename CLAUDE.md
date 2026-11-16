@@ -62,6 +62,7 @@ Para a lista inteira, `git ls-files lib`.
 | `package.json` | Scripts e o contrato de Node (`engines.node`). Sem `dependencies` |
 | `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos (`CLAUDE.md`, `prompts/pr-review-auto.md`, que é o contrato da revisão headless, os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`) e copia o que faltar em `prompts/` (a pasta inteira se faltar o `pr-review-auto.md`, e cada prompt do template que o workspace não tiver, sem sobrescrever). O resto vem só da primeira cópia e nunca é atualizado, inclusive o `.claude/settings.json`. O `.claude/guardas.json` (o que a sessão não pode rodar) também vai na primeira cópia, mas essa cópia não é usada: a sessão lê o do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
 | `ui/` | A tela antiga, sem framework: `index.html`, `app.js`, `transporte.js`, `pure/` (funções puras, com teste) e `telas/` |
+| `web/` | O front novo (Next.js e TypeScript), que vai substituir a `ui/`: fala direto com a API do motor e hoje tem o pareamento e a casca das cinco abas. Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Guia em [`web/README.md`](web/README.md) |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
 | `tools/` | Gate e utilitários (tabela abaixo) |
@@ -120,7 +121,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 |---|---|
 | `tools/check-syntax.js` | `npm run check`: `node --check` em todo `.js` descoberto |
 | `tools/quality/` | `npm run lint`: `gate.js` (ratchet contra `baseline.json`, só para baixo), `rules.js`, `higiene.js` |
-| `tools/rodar-testes.js` | `npm test`: `node --test` com teto de 4 de concorrência |
+| `tools/rodar-testes.js` | `npm test`: `node --test` com teto de 4 de concorrência, sobre os testes do motor (`tools/descoberta-de-testes.js` monta os padrões, sem o front) |
 | `tools/hooks/pre-push` | Recusa push direto na `main` e roda o gate. Instala com `npm run hooks:install` |
 | `tools/farol-parear.js` | Imprime um código de pareamento da API no stdout; `--revogar-todas` |
 | `tools/jira-mcp.js` | O servidor MCP local do Jira que a sessão usa. Recebe só o id do site e lê a credencial do disco |

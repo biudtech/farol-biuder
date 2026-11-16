@@ -110,6 +110,20 @@ Ainda sem versão publicada.
   continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
   Quando os erros bloqueiam um código pendente, o motor grava uma linha de aviso no `farol.log`,
   sem o código e sem o valor tentado.
+- **Fundação do front novo (fase 3, lote 1):** nasce `web/`, em Next.js e TypeScript, que vai
+  substituir a tela antiga aba por aba. O navegador fala direto com a API do motor, com o endereço
+  em `NEXT_PUBLIC_FAROL_API`; não há rota de API, cookie nem segredo no front. Este lote traz a
+  entrada por pareamento (o código de `node tools/farol-parear.js` vira um token guardado no
+  navegador, e um 401 em qualquer chamada apaga o token e volta ao pareamento), a casca das cinco
+  abas (Radar, Histórico, Time, Consumo e Sistema, ainda em construção), o indicador de conexão
+  (conectado, reconectando, sem motor) e os temas escuro e claro. O que chega do motor é
+  conferido antes de entrar na tela: chave desconhecida é ignorada, e chave conhecida com forma
+  errada mantém o valor anterior. A página sai com Content-Security-Policy restrita à própria
+  origem e ao endereço do motor. A tela antiga continua servida pelo motor, sem mudança.
+- **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
+  também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
+  do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
+  `npm test` deixam a pasta de fora.
 
 ### Correções
 
