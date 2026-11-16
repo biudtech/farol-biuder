@@ -35,6 +35,23 @@ function arvore() {
   return { raiz, escrever };
 }
 
+// O front (`web/`) tem gate próprio (typecheck, ESLint, Vitest e build) e não é código do
+// motor. Só a pasta `web` da RAIZ sai: uma `web` mais fundo continua sendo fonte do motor.
+test('a varredura nao entra no front da raiz, e entra numa pasta web que nao e a da raiz', () => {
+  const { raiz, escrever } = arvore();
+  try {
+    escrever('web/eslint.config.js');
+    escrever('web/.next/server/chunk.js');
+    escrever('lib/web/real.js');
+    const achados = varrer(raiz)
+      .map((p) => p.slice(raiz.length + 1).split(sep).join('/'))
+      .sort();
+    assert.deepEqual(achados, ['lib/real.js', 'lib/web/real.js', 'workspace-template/.claude/hooks/gancho.js']);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
 test('a varredura entra no .claude do template distribuido e nao nos outros', () => {
   const { raiz } = arvore();
   try {

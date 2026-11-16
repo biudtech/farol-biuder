@@ -50,3 +50,19 @@ test('scanRepo nao entra em diretorio de ferramenta, mesmo com codigo violador d
     rmSync(raiz, { recursive: true, force: true });
   }
 });
+
+// O front (`web/`) tem gate próprio e não entra na dívida do motor. Só a `web` da raiz sai.
+test('scanRepo nao entra no front da raiz, e entra numa pasta web que nao e a da raiz', () => {
+  const raiz = mkdtempSync(join(tmpdir(), 'farol-scan-web-'));
+  try {
+    const sujo = 'export function f() { try { f(); } catch {} }\nvar x = 1;\n';
+    for (const dir of ['lib', 'lib/web', 'web', 'web/src']) {
+      mkdirSync(join(raiz, ...dir.split('/')), { recursive: true });
+      writeFileSync(join(raiz, ...dir.split('/'), 'sujo.js'), sujo, 'utf8');
+    }
+    const achados = Object.keys(scanRepo(raiz)).map((p) => p.split(sep).join('/')).sort();
+    assert.deepEqual(achados, ['lib/sujo.js', 'lib/web/sujo.js']);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
