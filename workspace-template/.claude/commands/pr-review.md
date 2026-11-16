@@ -8,9 +8,6 @@ Revise os PRs abaixo seguindo **à risca** o protocolo do `CLAUDE.md` desta past
 
 URLs: $ARGUMENTS
 
-Quando uma URL vier seguida de `escopo=<raiz>`, essa é a RAIZ DE ESCOPO daquele PR: o Farol
-já gravou nela o patch de cada arquivo (caminho protegido só como projeção redigida, em
-`_farol_redigido_/`). Repasse a raiz ao `pr-reviewer`, que lê o diff de lá.
 Não use `gh pr diff` nem `gh api .../pulls/N/files`: os dois são recusados nesta sessão.
 
 Pontos-chave (o detalhe está no `CLAUDE.md`):
@@ -19,7 +16,5 @@ Pontos-chave (o detalhe está no `CLAUDE.md`):
 - **Auto-APPROVE** quando não houver blocker **E** o card (BT-XXX) tiver sido lido e atendido; inclua as melhorias como comentários não-bloqueantes.
 - Card **não-verificável** → me pergunte antes de aprovar.
 - **REQUEST CHANGES / COMMENT** só com minha confirmação explícita.
-- Toda postagem usa exclusivamente o writer local descrito no `CLAUDE.md`, com
-  `$FAROL_REVIEW_CAP` e `$FAROL_PORT`. Nunca escreva o review direto no GitHub;
-  se o writer bloquear a redação, reescreva sem contornar a trava.
+- Toda postagem é feita pelo app. Nunca escreva o review direto no GitHub.
 - A detecção e o "já visto" são do app Farol — você **não** gerencia estado.
