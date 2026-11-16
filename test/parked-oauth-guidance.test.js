@@ -15,6 +15,12 @@ test('OAuth expirado vira estacionamento por autenticação, inclusive no antigo
   }
 });
 
+test('label retirada: a projeção leva o tipo e o motivo, que é o que o card diz', () => {
+  const info = project('a label de revisão foi retirada do PR', 'label-retirada');
+  assert.equal(info.tipo, 'label-retirada');
+  assert.match(info.motivo, /label de revisão foi retirada/);
+});
+
 test('orientação de login não substitui cancelamento nem atribui 401 genérico a OAuth', () => {
   assert.equal(project(OAUTH, 'cancelado').tipo, 'cancelado');
   assert.equal(project('API Error: 401 Unauthorized', 'falha').tipo, 'falha');

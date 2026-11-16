@@ -179,6 +179,10 @@ test('aprovável com análise incompleta: nada é postado, e a pendência RECUPE
   assert.equal(e.toasts.some((t) => /precisa da sua atenção/.test(t)), false);
   const tela = e.decisionForUi(d);
   assert.equal(tela.esperaProva.tentativas, 0, 'a tela sabe que é espera');
+  assert.notEqual(tela.esperaProva.pedeVoce, true, 'fora de Precisa de você: a recuperação é automática');
+  assert.ok(!tela.esperaProva.impedimento, 'recuperação agendada, sem impedimento');
+  assert.ok(!tela.esperaProva.aguardandoCi);
+  assert.equal(tela.esperaCi, undefined);
   assert.equal(e.reviewActions()[PR.key].esperaProva, true, 'o Panorama também');
 });
 
@@ -286,6 +290,8 @@ test('head não confirmado entra na recuperação e só publica após uma nova a
   assert.equal(d.blockedHead, HEAD);
   assert.equal(d.headSha || '', '', 'o alvo novo não altera o commit da análise anterior');
   assert.equal(e.reReviewTargets(new Set()).length, 1);
+  assert.ok(e.decisionForUi(d).esperaProva, 'a projeção segue em recuperação da análise');
+  assert.notEqual(e.decisionForUi(d).esperaProva.pedeVoce, true);
   await revisado(e, {});
   assert.equal(pendente(e), undefined);
   assert.deepEqual(envios.map(x => [x.event, x.commit_id]), [['APPROVE', HEAD]]);
@@ -429,6 +435,9 @@ test('execução estacionada por falha transitória é reagendada sem decisão m
   assert.equal(d.blockedKind, undefined);
   assert.deepEqual(e.eventos, []);
   const tela = e.decisionForUi(d);
+  assert.equal(tela.esperaProva.proximaEm, d.esperaProva.proximaEm, 'a projeção leva a hora da próxima tentativa');
+  assert.ok(tela.esperaProva.proximaEm > Date.now());
+  assert.notEqual(tela.esperaProva.pedeVoce, true, 'reagendada sem decisão manual');
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0, 'não relança antes da hora');
   d.esperaProva.proximaEm = Date.now() - 1;
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
@@ -584,6 +593,7 @@ for (const retry of [null, { event: 'approve', attempts: 3, exhausted: true }]) 
     e.eventos = [];
     const tela = e.decisionForUi(pendente(e));
     assert.equal(tela.technical.state, 'pending', 'a prova anterior não continua verde');
+    assert.equal(tela.blockedKind, 'technical_recheck', 'a projeção diz que é reconferência: clicar de novo não publica a análise antiga');
     assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
     assert.ok(pendente(e).esperaProva, 'o motivo durável recupera a marca já consumida pela fila');
     assert.equal(pendente(e).postRetry, null, 'a reconferência substitui o reenvio do texto antigo');
@@ -615,6 +625,7 @@ test('cancelamento explícito não é desfeito pela recuperação e aparece como
   for (let i = 0; i < 3; i++) assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
   assert.equal(e.autoReviewParked.has(PR.key), true);
   assert.match(d.esperaProva.impedimento, /cancelada por você/);
+  assert.match(e.decisionForUi(d).esperaProva.impedimento, /cancelada por você/, 'o impedimento chega à projeção');
   // a pausa que só você desfaz é "precisa de você", avisada uma vez (06/11/2026)
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });

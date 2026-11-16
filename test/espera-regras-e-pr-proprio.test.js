@@ -208,6 +208,9 @@ test('PR da própria conta com a conta esperando você: nenhuma espera, mesa com
   assert.ok(textos(d).includes(TEXTO_PROPRIO), textos(d).join(' | '));
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
   assert.deepEqual(envios, []);
+  // em Precisa de você, nunca em Aprova sozinho: a projeção não leva espera nenhuma
+  const tela = e.decisionForUi(d);
+  assert.deepEqual([tela.esperaProva, tela.esperaCi, tela.prProprio], [undefined, undefined, true]);
 });
 
 test('PR da própria conta aprovável, conta aprovando sozinha: sai como COMMENT e resolve, sem mesa', async () => {
@@ -285,6 +288,9 @@ test('espera da prova que já existia em PR da própria conta, conta esperando v
   assert.equal(leiturasDoPr, 0, 'autor gravado basta, sem leitura gh');
   for (let ciclo = 0; ciclo < 2; ciclo++) assert.equal(await esperaProva.varrerEsperas(e), 0);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'needs-decision uma vez só');
+  const tela = e.decisionForUi(d);
+  assert.ok(!tela.esperaProva && !tela.esperaCi, 'a projeção não leva espera: é Precisa de você');
+  assert.equal(tela.prProprio, true);
 });
 
 test('espera sem autor gravado: o autor lido do GitHub na varredura também conta, e o comentário sai', async () => {
@@ -351,6 +357,10 @@ test('PR #248, achado 3: a pendência de PR próprio vai marcada na projeção, 
   envios = [];
   await e.decide(d.id, 'approve').catch(() => { });
   assert.deepEqual(envios, []);
+  // PR de outra pessoa segue com os botões: a marca não vai na projeção
+  const alheio = e.decisionForUi(await revisado(motor(), PR, INCOMPLETA));
+  assert.notEqual(alheio.prProprio, true);
+  assert.equal(Object.hasOwn(alheio, 'prProprio'), false, 'ausente, não falso');
 });
 
 test('PR #248, achado 4: largar a espera de PR próprio durante a rodada complementar limpa o estado de commit novo', async () => {
@@ -366,5 +376,8 @@ test('PR #248, achado 4: largar a espera de PR próprio durante a rodada complem
   assert.equal(d.blockedKind, undefined, 'sem stale_head');
   assert.equal(d.blockedHead, undefined);
   assert.equal(reviewMod.explicaReRound(e, { ...PR }, new Set(), Date.now()).estado, 'sem_gatilho', 'o round automático não mira mais o PR');
+  const tela = e.decisionForUi(d);
+  assert.notEqual(tela.blockedKind, 'stale_head', 'sem card de commit novo na projeção');
+  assert.equal(tela.prProprio, true);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });

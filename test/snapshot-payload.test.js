@@ -15,27 +15,37 @@ after(() => fs.rmSync(home, { recursive: true, force: true }));
 function consumoSintetico() {
   const e = { usage: usage.defaultUsage(), usageSessions: { sessions: [] }, config: { claudeProfiles: [] } };
   const now = new Date();
-  const measured = usage.extractUsage({ usage: { input_tokens: 100, output_tokens: 20 }, total_cost_usd: .5 }, 'modelo-0');
+  const measured = usage.extractUsage({ usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 7, cache_creation_input_tokens: 3 }, total_cost_usd: .5 }, 'modelo-0');
   for (let i = 119; i >= 0; i--) {
     const day = usage.localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
     usage.applyUsage(e.usage, day, 'review', 'fixture', `modelo-${i % 12}`, measured, 'perfil');
     e.usageSessions.sessions.push({ id: `a-${i}`, at: now.getTime() - i * 86400000,
-      day, kind: 'review', ref: `fixture/app#${i}`, model: `modelo-${i % 12}`, farol: 'fixture',
-      inputTokens: 100, outputTokens: 20, costUsd: .5, costSource: 'medido', status: 'ok',
+      day, kind: 'review', ref: `fixture/app#${i}`, account: 'fixture', profileId: 'perfil', model: `modelo-${i % 12}`, farol: 'fixture',
+      inputTokens: 100, outputTokens: 20, cacheReadTokens: 7, cacheCreationTokens: 3,
+      costUsd: .5, costSource: 'medido', status: 'ok', provider: 'claude', billingKind: 'apikey',
       modelUsage: { principal: { inputTokens: 100, outputTokens: 20, cacheReadInputTokens: 0 } },
       accounting: { source: 'fixture', sessionId: `a-${i}`, internal: 'metadado interno da contabilidade' } });
   }
   return e;
 }
 
-// o valor de uma métrica num item da série, como o front o lê
-function usageMetricVal(b, m) {
-  if (m === 'custo') return b.costUsd || 0;
-  if (m === 'input') return b.inputTokens || 0;
-  if (m === 'output') return b.outputTokens || 0;
-  if (m === 'cache') return (b.cacheReadTokens || 0) + (b.cacheCreationTokens || 0);
-  return (b.inputTokens || 0) + (b.outputTokens || 0);
+// O que a projeção compacta pode tirar de um balde: só campo numérico que vale zero (o front lê
+// o ausente como zero). Todo o resto tem de chegar igual, campo a campo, e nada pode sobrar.
+function assertMesmoBalde(compacto, completo, onde) {
+  for (const [campo, valor] of Object.entries(completo)) {
+    if (valor === 0) assert.ok(compacto[campo] === undefined || compacto[campo] === 0, `${onde}: ${campo} zerado`);
+    else assert.deepEqual(compacto[campo], valor, `${onde}: ${campo}`);
+  }
+  for (const campo of Object.keys(compacto)) assert.ok(Object.hasOwn(completo, campo), `${onde}: ${campo} não existe no completo`);
 }
+
+// Os campos de uma sessão recente que vão ao front. A lista é escrita aqui de propósito: é a
+// cópia de CAMPOS_DA_SESSAO (lib/engine/snapshot-usage.js), e tirar um campo de lá reprova.
+const CAMPOS_DA_SESSAO_NO_FRONT = [
+  'id', 'at', 'day', 'kind', 'ref', 'account', 'profileId', 'model', 'farol',
+  'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens',
+  'costUsd', 'costSource', 'status', 'provider', 'billingKind',
+];
 
 test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diário', t => {
   const e = consumoSintetico();
@@ -49,14 +59,47 @@ test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diá
   assert.equal(compacto.series.length, 120);
   assert.equal('modelUsage' in compacto.recentSessions[0], false);
   assert.equal('accounting' in compacto.recentSessions[0], false);
+  // a série diária: os mesmos dias, na mesma ordem, e cada campo de cada dia
+  assert.deepEqual(compacto.series.map(d => d.day), completo.series.map(d => d.day));
+  completo.series.forEach((dia, i) => assertMesmoBalde(compacto.series[i], dia, `series[${dia.day}]`));
+  assert.ok(completo.series.some(d => d.inputTokens > 0 && d.outputTokens > 0 && d.costUsd > 0 && d.cacheReadTokens > 0 && d.cacheCreationTokens > 0 && d.sessions > 0),
+    'a fixture tem dia com todos os campos numéricos acima de zero: tirar um deles da projeção reprova');
+  // as séries empilhadas: os mesmos itens na mesma ordem (cores e índices seguem associados)
+  assert.deepEqual(Object.keys(compacto.stackedSeries), Object.keys(completo.stackedSeries));
   for (const [dimension, series] of Object.entries(completo.stackedSeries)) {
-    assert.deepEqual(compacto.stackedSeries[dimension].map(d => d.items.map(i => [i.name, i.label])),
-      series.map(d => d.items.map(i => [i.name, i.label])), 'cores e índices continuam associados');
-    for (const metric of ['input', 'output', 'total', 'cache', 'custo']) {
-      assert.deepEqual(compacto.stackedSeries[dimension].map(d => d.items.map(i => usageMetricVal(i, metric))),
-        series.map(d => d.items.map(i => usageMetricVal(i, metric))));
-    }
+    assert.equal(compacto.stackedSeries[dimension].length, series.length, dimension);
+    series.forEach((dia, i) => {
+      const projetado = compacto.stackedSeries[dimension][i];
+      assert.equal(projetado.day, dia.day, dimension);
+      assert.equal(projetado.items.length, dia.items.length, `${dimension}[${dia.day}]`);
+      dia.items.forEach((item, j) => assertMesmoBalde(projetado.items[j], item, `stackedSeries.${dimension}[${dia.day}][${j}]`));
+    });
   }
+  // a matriz tipo por modelo: cada célula de cada dia
+  assert.equal(compacto.matrixSeries.length, completo.matrixSeries.length);
+  assert.ok(completo.matrixSeries.length > 0, 'a fixture tem matriz');
+  let celulas = 0;
+  completo.matrixSeries.forEach((dia, i) => {
+    const projetado = compacto.matrixSeries[i];
+    assert.equal(projetado.day, dia.day);
+    assert.deepEqual(Object.keys(projetado.cells), Object.keys(dia.cells), `matrixSeries[${dia.day}]`);
+    for (const [kind, linha] of Object.entries(dia.cells)) {
+      assert.deepEqual(Object.keys(projetado.cells[kind]), Object.keys(linha), `matrixSeries[${dia.day}].${kind}`);
+      for (const [model, balde] of Object.entries(linha)) {
+        assertMesmoBalde(projetado.cells[kind][model], balde, `matrixSeries[${dia.day}].${kind}.${model}`);
+        if (balde.costUsd > 0) celulas++;
+      }
+    }
+  });
+  assert.ok(celulas > 0, 'há célula com custo para comparar');
+  // as sessões recentes: as mesmas, na mesma ordem, com todos os campos que vão ao front
+  completo.recentSessions.forEach((sessao, i) => {
+    const projetada = compacto.recentSessions[i];
+    assert.deepEqual(Object.keys(projetada).sort(), [...CAMPOS_DA_SESSAO_NO_FRONT].sort(), `sessão ${sessao.id}: os campos que saem`);
+    for (const campo of CAMPOS_DA_SESSAO_NO_FRONT) assert.deepEqual(projetada[campo], sessao[campo], `sessão ${sessao.id}: ${campo}`);
+  });
+  assert.equal(compacto.recentSessions[0].costUsd, .5);
+  assert.equal(compacto.recentSessions[0].cacheReadTokens, 7);
   assert.deepEqual({ usage: e.usage, sessions: e.usageSessions }, antes);
   const bytesAntes = Buffer.byteLength(JSON.stringify(completo));
   const bytesDepois = Buffer.byteLength(JSON.stringify(compacto));

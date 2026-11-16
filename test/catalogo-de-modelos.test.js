@@ -86,6 +86,7 @@ test('o catálogo da tela é só dado, sem regex, e traz o esforço de cada sele
   assert.deepEqual(JSON.parse(JSON.stringify(c)), c, 'atravessa o snapshot sem perder nada');
   assert.deepEqual(c.claude.map((s) => s.valor), M.SELECOES_CLAUDE.map((s) => s.valor));
   assert.equal(c.claude.find((s) => s.valor === 'auto').aceitaEsforco, false);
+  assert.equal(c.claude.find((s) => s.valor === 'opus').aceitaEsforco, true);
   assert.equal(c.claude.find((s) => s.valor === 'auto').rotulo, M.rotuloDoAuto());
 });
 

@@ -38,6 +38,7 @@ test('decisão antiga com evidência filtrada recusa e agenda nova revisão, inc
     assert.equal(saves, 1);
     const ui = decisionForUi(item);
     assert.equal(ui.technical.state, 'pending');
+    assert.equal(ui.blockedKind, 'technical_recheck', 'a projeção pede a revisão nova');
   }
 });
 

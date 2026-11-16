@@ -52,6 +52,7 @@ const finishOriginal = technicalRuntime.finishTechnicalReview;
 const targetOriginal = technicalRuntime.targetFor;
 const snapshotOriginal = technicalRuntime.reviewSnapshot;
 const { decisionForUi } = await import('../lib/engine/public-review.js');
+const { camposDoAprovar } = await import('./helpers/projecao-do-aprovar.js');
 after(() => {
   io.run = runReal;
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ }
@@ -171,6 +172,8 @@ test('lacuna que não é dura na rodada 1 com a conta esperando você nas ressal
   assert.deepEqual(d.approvalEvidence, [], 'nada segue exigido: o Aprovar da mesa fica com você');
   assert.ok(textos(d).some((t) => /^faltou prova nesta revisão, então segue como ressalva: protocolo de revisão não comprovado/.test(t)), textos(d).join(' | '));
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+  // o Aprovar da mesa fica ligado: nada na projeção o segura
+  assert.deepEqual(camposDoAprovar(decisionForUi(d)), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'pass', recheck: false });
 });
 
 test('falta de prova que segue exigida não é ressalva que transfere uma decisão ainda bloqueada', async () => {
@@ -179,6 +182,7 @@ test('falta de prova que segue exigida não é ressalva que transfere uma decis�
   assert.ok(d.esperaProva);
   assert.deepEqual(envios, []);
   assert.deepEqual(e.eventos, []);
+  assert.equal(camposDoAprovar(decisionForUi(d)).esperaProva, true, 'análise incompleta não libera o Aprovar: a espera da prova vai na projeção');
   await esperaProva.reverQuandoAProvaMudar(e);
   await revisado(e, {});
   assert.equal(envios.length, 1);
@@ -409,6 +413,7 @@ test('PR #248, achado 2: com a prova esgotada, a projeção diz ressalva; sem es
   const esgotada = decisionForUi({ ...base, provaEsgotada: true });
   assert.equal(esgotada.provaEsgotada, true, 'a marca chega à tela');
   assert.equal(esgotada.technical.state, 'ressalva');
+  assert.deepEqual(camposDoAprovar(esgotada), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'ressalva', recheck: false });
   assert.match(esgotada.technical.message, /avaliação técnica inconclusiva; segue como ressalva desta revisão/);
   const exigida = decisionForUi(base);
   assert.equal(exigida.technical.state, 'pending', 'sem esgotar, segue exigida');
