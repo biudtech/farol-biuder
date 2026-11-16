@@ -76,11 +76,11 @@ Ainda sem versão publicada.
 ### Fechamento (fase 4, lote 15)
 
 - **`soundEnabled`, `theme` e `autostart` saem da tabela de preferências.** Eram da tela antiga
-  e nada no motor lia. Num `config.json` antigo são descartadas na carga, sem erro e sem
-  regravar o arquivo, e somem na próxima gravação; `POST /api/settings` as devolve em
-  `ignoradas`.
+  e nada no motor lia. Num `config.json` antigo são descartadas na carga, sem erro, e somem na
+  próxima gravação (a carga só regrava o arquivo quando a leitura da conta mudou alguma coisa);
+  `POST /api/settings` as devolve em `ignoradas`.
 - **Restos sem leitor:** os ícones do app e da bandeja (`assets/farol.ico`, `assets/farol.icns`,
-  `assets/png/`, `assets/tray.png`), as capturas da tela antiga em `docs/evidencias/v1.5.0/`,
+  `assets/png/`, `assets/tray.png`), as pastas `docs/evidencias/` e `docs/design/`,
   cinco helpers de teste sem importador, o provedor sintético da auditoria de revisão
   (`tools/smoke-fixtures/`, com o helper e o teste dele), `ATUALIZACAO_CHECAGEM_MS`, `IS_LINUX`,
   `readProcesses`, `estadoNoGithub` e o `productName` do `package.json`. Nenhuma rota, regra de
@@ -89,7 +89,8 @@ Ainda sem versão publicada.
   diz "Sistema > Conta revisora e política" (era "Sistema > Contas") e cita o campo e a opção
   pelo nome de lá; os avisos do CI fora da decisão usam o nome do controle, "CI obrigatório
   antes de aprovar"; o aviso de conta detectada aponta o `config.json`, porque a tela não troca
-  o login; o diário indisponível de `GET /api/usage` deixa de citar a "seção avançada". A origem
+  o login; o diário indisponível de `GET /api/usage` aponta a Auditoria do registro; a falha de
+  ferramenta manda conferir em "Sistema > Saúde"; os avisos de espera dizem "Revisar agora". A origem
   de uma mudança de política passa a ser sempre `navegador` (a janela do app saiu com o
   Electron); registro antigo com `janela do Farol` continua legível.
 - **A baseline do gate de qualidade trava a dívida de hoje:** `server.js` desce de 471 para 379
@@ -104,6 +105,9 @@ Ainda sem versão publicada.
   continuam no cabeçalho dos arquivos de `lib/`). Saem três documentos que descreviam entregas
   do aplicativo de mesa: `docs/QUALIDADE-CONTEXTO-DESEMPENHO.md`,
   `docs/COMPARACAO-CONTEXTO-ENGINE.md` e `docs/reviews-retro-2026-07.md`.
+- **Os exemplos de `curl` do guia de configuração não põem segredo na linha de comando:** o
+  corpo com segredo vai pela entrada padrão e o cabeçalho de autorização é lido de um arquivo
+  com modo 600. O guia diz o que cada forma protege.
 
 ### O que voltou ou entrou
 
