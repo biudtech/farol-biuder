@@ -1,14 +1,7 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
 import { ABA_INICIAL } from './src/navegacao/abas';
-
-// Cabeçalhos fixos, em toda resposta. A CSP não está aqui: ela leva um nonce por pedido e
-// por isso nasce em src/proxy.ts (a regra está em src/seguranca/csp.ts).
-const CABECALHOS_FIXOS = [
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'no-referrer' },
-  { key: 'X-Frame-Options', value: 'DENY' },
-];
+import { CABECALHOS_FIXOS } from './src/seguranca/cabecalhos';
 
 const config: NextConfig = {
   reactStrictMode: true,
@@ -23,6 +16,8 @@ const config: NextConfig = {
   async redirects() {
     return [{ source: '/', destination: ABA_INICIAL, permanent: false }];
   },
+  // Cabeçalhos fixos, em toda resposta (src/seguranca/cabecalhos.ts). A CSP não está aqui:
+  // ela leva um nonce por pedido e por isso nasce em src/proxy.ts.
   async headers() {
     return [{ source: '/:path*', headers: CABECALHOS_FIXOS }];
   },

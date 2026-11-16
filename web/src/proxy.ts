@@ -21,13 +21,16 @@ export function proxy(pedido: NextRequest): NextResponse {
 export const config = {
   matcher: [
     {
-      // tudo menos os arquivos estáticos do build, que não são página
-      source: '/((?!_next/static|_next/image|icon.svg).*)',
-      // a busca antecipada do next/link não desenha página com script
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
-      ],
+      // Tudo passa por aqui, menos o que nunca é página: os arquivos de /_next/static/ (com a
+      // barra: fora dela o servidor responde texto puro, não HTML), o otimizador de imagem e
+      // o ícone, cada um no caminho exato. O que só parece um deles (/icon.svgqualquer,
+      // /_next/staticX) é um 404 em HTML e sai com CSP como qualquer página.
+      //
+      // Não há condição por cabeçalho. O matcher sugerido na documentação do Next deixa de
+      // fora o pedido com `purpose: prefetch` e com `next-router-prefetch`, mas a página
+      // pedida assim sai em HTML do mesmo jeito, e uma página pré-carregada vira a página de
+      // verdade quando o navegador a ativa: ela não pode sair sem CSP.
+      source: '/((?!_next/static/|_next/image$|icon\\.svg$).*)',
     },
   ],
 };
