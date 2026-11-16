@@ -1,0 +1,282 @@
+/* A tela Radar. Só as variáveis de globals.css: texto sobre os três fundos, texto de estado
+   sobre o fundo suave dele, botão primário e contornos são os pares que
+   src/tema/contraste.test.ts confere nos dois temas. */
+.radar {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.titulo { font-size: 20px; font-weight: 700; }
+
+.avisos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aviso {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--info-soft);
+  color: var(--info-texto);
+  font-size: 13px;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.aviso[data-tom="erro"] {
+  background: var(--danger-soft);
+  color: var(--danger-texto);
+}
+
+.gerais {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 28px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.checagem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.sobDemanda {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.rotulo { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.campoComBotao { display: flex; flex-wrap: wrap; gap: 8px; }
+.entrada {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--borda-campo);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.entrada::placeholder { color: var(--muted); opacity: 1; }
+.entrada[aria-invalid="true"] { border-color: var(--danger-texto); }
+.erroDoCampo {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger-texto);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.tituloDoBloco { font-size: 15px; font-weight: 650; }
+.contagem { color: var(--muted); font-weight: 550; }
+.vazio { color: var(--muted); font-size: 13.5px; text-wrap: pretty; }
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.linha {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tituloDoCartao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.referencia { overflow-wrap: anywhere; }
+.tituloDoPr { font-size: 14px; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; text-wrap: pretty; }
+
+.selo {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.nota {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--info-soft);
+  color: var(--info-texto);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.bloqueio {
+  background: var(--danger-soft);
+  color: var(--danger-texto);
+}
+
+.motivos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.tipoDoMotivo { color: var(--muted); font-weight: 600; }
+
+.review summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.textoDoReview {
+  margin: 8px 0 0;
+  padding: 12px;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+.linhaDoFeed { display: flex; gap: 10px; overflow-wrap: anywhere; min-width: 0; }
+.linhaDoFeed[data-tipo="aviso"] { font-weight: 650; }
+.linhaDoFeed span { min-width: 0; }
+.horaDoFeed { flex: none; color: var(--muted); }
+
+.botoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 13px;
+  border: 1px solid var(--borda-campo);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.botao:hover { background: var(--surface-2); }
+.botao:disabled { opacity: .6; cursor: default; }
+.primario {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+.primario:hover { background: var(--accent); filter: brightness(1.08); }
+.primario:disabled:hover { filter: none; }
+
+.confirmacao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--borda-campo);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.confirmacaoTitulo { font-weight: 650; }
+
+/* O resultado da última ação fica preso ao pé da janela: quem clicou num cartão lá embaixo
+   vê a resposta sem rolar. O fundo é opaco (a cor suave pintada sobre a superfície). */
+.resultado {
+  position: sticky;
+  bottom: 12px;
+  z-index: 10;
+}
+.recado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--borda-campo);
+  border-radius: 10px;
+  background: linear-gradient(var(--ok-soft), var(--ok-soft)), var(--surface);
+  color: var(--ok-texto);
+  box-shadow: var(--shadow);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.recado[data-tom="erro"] {
+  background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--surface);
+  color: var(--danger-texto);
+}
+.recado p { flex: 1 1 220px; min-width: 0; }
+
+.soLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Janela estreita: alvo de toque maior, e o cartão com menos margem. */
+@media (max-width: 760px) {
+  .botao, .entrada { min-height: 44px; }
+  .cartao, .gerais { padding: 12px; }
+  .campoComBotao .botao { flex: 1 1 auto; }
+}
