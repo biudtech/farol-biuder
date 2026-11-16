@@ -76,3 +76,22 @@ test('o executor só passa os padrões quando ninguém escolheu arquivo', () => 
   assert.equal(escolheuArquivo([]), false);
   assert.equal(escolheuArquivo(['--test-name-pattern=x', 'test/http.test.js']), true);
 });
+
+// O valor de uma flag pode vir separado por espaço (`--test-name-pattern x`): ele não é
+// arquivo. Tratado como arquivo, a descoberta saía de cena e o Node varria a árvore inteira,
+// com o front junto.
+test('valor de flag separado por espaço não conta como arquivo escolhido', () => {
+  assert.equal(escolheuArquivo(['--test-name-pattern', 'x']), false);
+  assert.equal(escolheuArquivo(['--test-reporter', 'spec', '--test-reporter-destination', 'stdout']), false);
+  assert.equal(escolheuArquivo(['--import', './preparo.mjs', '-r', './outro.cjs']), false);
+  assert.equal(escolheuArquivo(['--test-name-pattern', 'x', 'test/http.test.js']), true);
+  // flag booleana não engole o que vem depois
+  assert.equal(escolheuArquivo(['--no-test-force-exit', 'test/http.test.js']), true);
+  assert.equal(escolheuArquivo(['--test-only', 'test/http.test.js']), true);
+  // com `=`, o valor já veio junto e o próximo argumento é arquivo
+  assert.equal(escolheuArquivo(['--test-name-pattern=x', 'test/http.test.js']), true);
+  // flag de valor no fim da linha, sem valor: nada foi escolhido
+  assert.equal(escolheuArquivo(['--test-name-pattern']), false);
+  // depois de `--`, tudo é arquivo, mesmo começando com hífen
+  assert.equal(escolheuArquivo(['--', '-estranho.test.js']), true);
+});

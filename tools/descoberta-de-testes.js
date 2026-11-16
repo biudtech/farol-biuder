@@ -23,9 +23,28 @@ function padroesDeDescoberta(raiz) {
   return [NOMES, ...pastas.map((pasta) => `${pasta}/**/${NOMES}`)];
 }
 
+// As flags do Node que pedem valor e o aceitam separado por espaço (`--test-name-pattern x`).
+// O argumento seguinte a uma delas é o valor, não um arquivo. Com `=` o valor já vem junto.
+const FLAGS_COM_VALOR = new Set([
+  '--test-name-pattern', '--test-skip-pattern', '--test-reporter', '--test-reporter-destination',
+  '--test-concurrency', '--test-timeout', '--test-shard', '--test-isolation', '--test-global-setup',
+  '--test-rerun-failures', '--test-coverage-include', '--test-coverage-exclude',
+  '--test-coverage-branches', '--test-coverage-functions', '--test-coverage-lines',
+  '--import', '--require', '-r', '--loader', '--experimental-loader', '--conditions', '-C',
+  '--env-file', '--env-file-if-exists', '--watch-path', '--input-type', '--disable-warning',
+  '--redirect-warnings', '--stack-trace-limit', '--title',
+]);
+
 /** true quando a linha de comando já traz arquivo ou padrão, e a descoberta não se aplica. */
 function escolheuArquivo(args) {
-  return args.some((arg) => !arg.startsWith('-'));
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    // depois de `--` tudo é arquivo
+    if (arg === '--') return i + 1 < args.length;
+    if (FLAGS_COM_VALOR.has(arg)) { i++; continue; }
+    if (!arg.startsWith('-')) return true;
+  }
+  return false;
 }
 
 export default { padroesDeDescoberta, escolheuArquivo };
