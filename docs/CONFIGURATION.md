@@ -98,22 +98,46 @@ Uma regra de review por organização ou autor marcada Automático revisa sozinh
 
 ### A conta se edita por operação
 
-`POST /api/accounts/edit` diz qual campo mudou (`tipo: "editar"`, com `campos`) ou qual regra
-de review mudou (`tipo: "regra-review"`), e o motor aplica sobre a config atual
-(`aplicarEdicao` e `editarConta` em `lib/engine/contas-config.js`). Campos editáveis:
-`owners`, os quatro da política e `padroesRevisao` (`CAMPOS_EDITAVEIS`). Campo desconhecido ou
-valor fora do domínio volta em `ignorados`, sem virar o padrão. Mudar as organizações dispara
-uma checagem na hora.
+`POST /api/accounts/edit` aplica uma operação sobre a conta que o motor tem (`aplicarEdicao` e
+`editarConta` em `lib/engine/contas-config.js`). O corpo tem sempre `user`, o login da conta
+revisora: sem ele a resposta é `{ "ok": false, "erro": "conta sem login" }`, e com outro login,
+`a conta @x não é a conta deste Farol`. Há dois tipos; outro valor de `tipo` responde
+`operação de conta desconhecida`.
+
+| `tipo` | Campos | O que faz |
+|---|---|---|
+| `"editar"` | `campos`: um objeto com `owners`, `autoReview`, `onClean`, `onCaveats`, `onReject` ou `padroesRevisao` (`CAMPOS_EDITAVEIS`) | Troca só os campos que vieram; `owners` troca a lista inteira. Campo vazio apaga o valor, e a gravação repõe o padrão nos quatro da política. Campo desconhecido ou valor fora do domínio volta em `ignorados`, sem virar o padrão |
+| `"regra-review"` | `organization` (obrigatório), `author` (opcional) e `mode`: `auto`, `manual` ou `inherit` | Grava a regra da organização, ou a do autor dentro dela (`editarRegra`, `lib/engine/review-scope.js`); `inherit` remove só a regra escolhida. Organização ou autor fora do formato, ou `mode` desconhecido, é recusa com `erro` |
+
+A resposta de sucesso é `{ "ok": true, "ignoradas": [], "ignorados": [...] }`, sem a conta
+gravada: confira no estado. Mudar as organizações dispara uma checagem na hora. Com as
+variáveis de [Chamar a API sem tela](#chamar-a-api-sem-tela):
+
+```sh
+# a política: com ressalvas passa a esperar você
+curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+  --data '{"tipo":"editar","user":"login-da-conta","campos":{"onCaveats":"wait"}}'
+
+# uma regra de review: o autor joao, da organização acme, é revisado sozinho
+curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+  --data '{"tipo":"regra-review","user":"login-da-conta","organization":"acme","author":"joao","mode":"auto"}'
+
+# os padrões do time, lidos de um arquivo de texto
+jq -Rs '{tipo: "editar", user: "login-da-conta", campos: {padroesRevisao: .}}' < padroes.txt \
+  | curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data @-
+```
 
 No front, a seção Conta revisora e política da tela Sistema edita as organizações e os quatro
-campos da política. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API
-([como chamar](#chamar-a-api-sem-tela)) ou pelo arquivo.
+campos da política. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API,
+como acima, ou pelo arquivo.
 
 Toda mudança de política vai a `state/politica-historico.json` (dentro do workspace), com
-data e origem (`navegador`, `migração` ou `detecção do gh`; registro antigo pode trazer
-`janela do Farol`), até 200 entradas. O motivo "a política manda aguardar" no card diz quando
-e de onde veio a configuração que segurou (`motivoDaPolitica`), e o diagnóstico
-(`GET /api/diagnostics`) lista as mudanças recentes.
+data e origem, até 200 entradas. A origem de um pedido pela API é `navegador` sempre que ele
+traz `User-Agent`, inclusive o de um `curl` (o motor não distingue os dois), e `desconhecida`
+quando não traz (`origemDaRequisicao`). As outras são `migração` (a carga de uma config
+antiga) e `detecção do gh`; registro antigo pode trazer `janela do Farol`. O motivo "a
+política manda aguardar" no card diz quando e de onde veio a configuração que segurou
+(`motivoDaPolitica`), e o diagnóstico (`GET /api/diagnostics`) lista as mudanças recentes.
 
 ### `config.json` antigo
 
@@ -198,14 +222,18 @@ pelo arquivo: `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `rev
 `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`. Um exemplo:
 
 ```sh
-curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
-  -d '{"intervalSeconds":600,"aguardarCiParaRevisar":true}'
+# FAROL e CAB: veja "Chamar a API sem tela"
+curl -sS -X POST "$FAROL/api/settings" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+  --data '{"intervalSeconds":600,"aguardarCiParaRevisar":true}'
 ```
 
 `soundEnabled`, `theme` e `autostart` eram da tela antiga (som, tema e abrir com o sistema) e
 saíram da tabela em 16/11/2026, porque nada no motor as lia. Num `config.json` antigo elas são
-descartadas na carga, sem erro e sem regravar o arquivo, e somem na próxima gravação;
-`POST /api/settings` as devolve em `ignoradas` (`test/preferencias-sem-leitor.test.js`). O tema
+descartadas na carga, sem erro, e somem na próxima gravação; `POST /api/settings` as devolve em
+`ignoradas` (`test/preferencias-sem-leitor.test.js`). A carga não regrava o arquivo por causa
+delas: ele só é regravado no boot quando a leitura da conta mudou alguma coisa (formato antigo,
+chave geral antiga, ou política que não estava com os quatro campos por extenso), e aí elas já
+saem nessa gravação (`aoCarregar`, `lib/engine/contas-config.js`). O tema
 do front fica no navegador.
 
 Lidas só do arquivo e fora da tabela (`CHAVES_SO_DE_ARQUIVO`): `instanciaIsoladaPosta` e
@@ -272,8 +300,11 @@ quebra de linha no meio rejeita o perfil inteiro, porque vira valor de variável
 
 Nos dois tipos o ambiente do processo filho é limpo antes: `ANTHROPIC_API_KEY`,
 `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_OAUTH_TOKEN` e `CLAUDE_CONFIG_DIR`
-herdados do motor nunca chegam à sessão (`applyClaudeAuthEnv`), e a linha do shell repete a
-limpeza depois do profile do usuário (`claudeAuthPosixPrefix`). Travado em
+herdados do motor nunca chegam à sessão (`applyClaudeAuthEnv`). A linha do shell limpa de novo,
+depois do profile do usuário (`claudeAuthPosixPrefix`, `lib/parse.js`): no perfil de assinatura
+faz `unset` das cinco e reexporta a pasta do perfil; no perfil de chave de API faz só
+`unset CLAUDE_CODE_OAUTH_TOKEN`, porque a chave viaja pelo ambiente e repeti-la ali a poria na
+linha de comando. Travado em
 `test/assinatura-ambiente-do-filho.test.js`.
 
 ### Qual perfil a sessão usa
@@ -301,33 +332,56 @@ a que já está no arquivo (`semPastaDaTela`). O login cria a pasta com modo 070
 
 ### Chamar a API sem tela
 
-O que não tem tela se faz por `curl` (ou qualquer cliente HTTP), de uma máquina que alcance o
-motor. Os exemplos deste guia usam duas variáveis e o `jq`:
+O que não tem tela se faz por `curl`, de uma máquina que alcance o motor. Os exemplos deste
+guia usam `bash`, `curl` 7.55 ou mais novo, `jq` e duas variáveis:
 
 ```sh
-FAROL=http://127.0.0.1:47170   # hospedado: https:// e o hostPublico
+FAROL=http://127.0.0.1:47170       # hospedado: https:// e o hostPublico
+CAB="$HOME/.farol-cabecalho"       # o cabeçalho de autorização, num arquivo só seu
 
-# 1. no servidor do motor, gere um código (vale alguns minutos e uma vez só)
+# 1. no servidor do motor, com o FAROL_HOME dele: gera um código (dez minutos, uma vez só)
 node tools/farol-parear.js
 
-# 2. troque o código pelo token, sem deixar nenhum dos dois no histórico do shell
+# 2. troca o código pelo token e guarda o cabeçalho pronto no arquivo, com modo 600
 read -rs -p 'Código de pareamento: ' CODIGO; echo
-TOKEN=$(jq -n --arg c "$CODIGO" '{codigo:$c, rotulo:"terminal"}' \
-  | curl -sS -X POST "$FAROL/api/auth/pair" -H "x-farol: 1" -H "Content-Type: application/json" -d @- \
-  | jq -r .token)
+( umask 077
+  printf '%s' "$CODIGO" | jq -Rs '{codigo: ., rotulo: "terminal"}' \
+    | curl -sS -X POST "$FAROL/api/auth/pair" -H "x-farol: 1" -H "Content-Type: application/json" --data @- \
+    | jq -r 'if .ok then "Authorization: Bearer \(.token)" else empty end' > "$CAB" )
 unset CODIGO
+[ -s "$CAB" ] || echo 'pareamento recusado: gere outro código'
+
+# 3. uma chamada autenticada
+curl -sS "$FAROL/api/state" -H @"$CAB" | jq '{status, conta: .account.user}'
 ```
 
 `POST /api/auth/pair` recebe `{ "codigo": "...", "rotulo": "..." }` e responde
 `{ "ok": true, "token": "..." }`; a recusa é uma só, `{ "ok": false, "code": "codigo_invalido" }`,
-e nesse caso o `TOKEN` acima fica `null`. O token é uma sessão como a do navegador: aparece
-em Sistema, na lista de sessões, com o rótulo dado, e se revoga por lá. Todo `POST` leva
+e nesse caso o arquivo fica vazio. O token é uma sessão como a do navegador: aparece em
+Sistema, em Sessões pareadas, com o rótulo dado, e se revoga por lá. Todo `POST` leva
 `x-farol: 1`. Com a autenticação desligada (motor só em loopback, sem `localAuth`), o
-`Authorization` é dispensável.
+`-H @"$CAB"` é dispensável.
 
-**Segredo não vai na linha de comando.** Chave de API, token do Jira, código de pareamento e
-código do login ficariam no histórico do shell e na lista de processos. Os exemplos leem o
-segredo de um arquivo ou de `read -s` e montam o corpo com o `jq`.
+**Segredo não vai na linha de comando.** O argumento de um comando fica visível para os outros
+usuários da máquina na lista de processos (`ps`) enquanto o comando roda, e o comando digitado
+fica no histórico do shell. O que cada parte dos exemplos faz, e o que não faz:
+
+- `read -rs` lê o segredo do teclado sem eco. Ele não é digitado como comando, então não vai ao
+  histórico. Fica numa variável do shell, que não é exportada (processo filho não a herda) e
+  é apagada com `unset` logo depois.
+- `printf` é comando interno do `bash`: não abre processo, então o segredo não aparece no
+  `ps`. Ele sai pelo pipe para a entrada padrão do `jq`.
+- `jq -Rs` lê o texto cru da entrada padrão e monta o JSON. Na linha de comando dele só há o
+  filtro. Não passe segredo por `--arg`: iria para o `ps`.
+- `curl --data @-` lê o corpo da entrada padrão, e `-H @"$CAB"` lê o cabeçalho do arquivo. O
+  token nunca é argumento do `curl`. `-H "Authorization: Bearer $TOKEN"` o poria no `ps` a cada
+  chamada.
+- O arquivo `$CAB` nasce com modo 600 (`umask 077` dentro do subshell): os outros usuários não
+  o leem. O seu usuário e o root leem: é o token da sessão em disco, válido até a sessão vencer
+  (30 dias sem uso, 90 no total) ou ser revogada. Ao terminar, revogue a sessão em Sistema e
+  apague o arquivo.
+- Corpo sem segredo (`--data '{"intervalSeconds":600}'`) pode ir na linha de comando.
+- Nada disso protege o caminho de rede: fora do loopback, use o endereço `https://` do proxy.
 
 ### Criar, trocar e remover perfil
 
@@ -337,18 +391,18 @@ parado. `claudeProfiles` é sempre a **lista inteira**: o perfil que não vier n
 
 ```sh
 # um perfil de assinatura (a pasta é do motor; o login vem depois, veja abaixo)
-curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
-  -d '{"claudeProfiles":[{"id":"plano","label":"Plano","kind":"dir"}],"claudeProfileId":"plano"}'
+curl -sS -X POST "$FAROL/api/settings" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+  --data '{"claudeProfiles":[{"id":"plano","label":"Plano","kind":"dir"}],"claudeProfileId":"plano"}'
 
 # acrescentar um perfil de chave de API: a lista vai com os DOIS, senão o primeiro some.
-# A chave vem de um arquivo (chave.txt, modo 600), que se apaga depois.
-jq -n --rawfile chave chave.txt '{
+# A chave vem de um arquivo (chave.txt, modo 600), lido pela entrada padrão do jq; apague-o depois.
+jq -Rs '{
     claudeProfiles: [
       { id: "plano", label: "Plano", kind: "dir" },
-      { id: "chave", label: "Chave", kind: "apikey", apiKey: ($chave | rtrimstr("\n")) }
+      { id: "chave", label: "Chave", kind: "apikey", apiKey: rtrimstr("\n") }
     ],
     claudeProfileId: "plano"
-  }' | curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
+  }' < chave.txt | curl -sS -X POST "$FAROL/api/settings" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data @-
 ```
 
 A resposta traz `ok`, as `ignoradas` e a `config` como sai do motor (o perfil de chave só com
@@ -389,13 +443,17 @@ com o Bearer do pareamento e `x-farol: 1`:
 Com as variáveis de [Chamar a API sem tela](#chamar-a-api-sem-tela):
 
 ```sh
-LOGIN=$(curl -sS -X POST "$FAROL/api/claude/login-web/start" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d '{"profileId":"plano"}')
-echo "$LOGIN" | jq -r .url          # abra este endereço no navegador
+# o início: a resposta (loginId e url) fica num arquivo só seu
+( umask 077
+  curl -sS -X POST "$FAROL/api/claude/login-web/start" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+    --data '{"profileId":"plano"}' > "$HOME/.farol-login" )
+jq -r '.url // .motivo' "$HOME/.farol-login"      # abra este endereço no navegador
 
+# o código que a página mostra: do teclado para o corpo, sem passar por argumento
 read -rs -p 'Código da página: ' CODE; echo
-jq -n --arg id "$(echo "$LOGIN" | jq -r .loginId)" --arg c "$CODE" '{loginId:$id, code:$c}' \
-  | curl -sS -X POST "$FAROL/api/claude/login-web/code" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
-unset CODE
+printf '%s' "$CODE" | jq -Rs --slurpfile l "$HOME/.farol-login" '{loginId: $l[0].loginId, code: .}' \
+  | curl -sS -X POST "$FAROL/api/claude/login-web/code" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data @-
+unset CODE; rm -f "$HOME/.farol-login"
 ```
 
 O código é credencial de uso único: não o cole na linha de comando.
@@ -552,17 +610,17 @@ até ser tirada).
 
 ```sh
 # os sites
-curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
-  -d '{"jiraSites":[{"id":"biud","label":"Jira BIUD","baseUrl":"https://exemplo.atlassian.net","owners":["biudtech"],"projectKeys":["BT"]}]}'
+curl -sS -X POST "$FAROL/api/settings" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
+  --data '{"jiraSites":[{"id":"biud","label":"Jira BIUD","baseUrl":"https://exemplo.atlassian.net","owners":["biudtech"],"projectKeys":["BT"]}]}'
 
-# a credencial do site: o token do Atlassian vem do teclado, sem eco
+# a credencial do site: o token do Atlassian vem do teclado, sem eco, e vai no corpo pela entrada padrão
 read -rs -p 'Token do Jira: ' JIRA; echo
-jq -n --arg t "$JIRA" '{siteId:"biud", email:"pessoa@exemplo.com", token:$t}' \
-  | curl -sS -X POST "$FAROL/api/jira/credential" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
+printf '%s' "$JIRA" | jq -Rs '{siteId: "biud", email: "pessoa@exemplo.com", token: .}' \
+  | curl -sS -X POST "$FAROL/api/jira/credential" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data @-
 unset JIRA
 
 # tirar a credencial
-curl -sS -X POST "$FAROL/api/jira/credential/remove" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d '{"siteId":"biud"}'
+curl -sS -X POST "$FAROL/api/jira/credential/remove" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data '{"siteId":"biud"}'
 ```
 
 `POST /api/jira/credential` responde `{ "ok": true }`, ou
