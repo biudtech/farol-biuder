@@ -10,45 +10,11 @@
 // quanto tempo). `aprovadosHoje` mora em comum.js e é chamada pelo app.js: ela lê
 // `decisions.resolved`, que é estado, e o construtor recebe só o número pronto. Ficar em
 // comum.js é também o que impede o ciclo radar -> review -> sessao -> radar.
-import { esc, fmtMoney, fmtRel, fmtStamp, fmtWhenDay, plural } from './comum.js';
+import { esc, fmtRel, fmtStamp, fmtWhenDay, plural } from './comum.js';
 import { avatar, personMention } from './mencoes.js';
 import { papelPicker } from './pessoas.js';
 import { filaEsperaHtml } from './fila-espera.js';
 import { avisosDoCard, limitNoteHtml, othersLineHtml } from './revisando.js';
-
-/* A automação está pausada por teto de gasto? PURA.
-
-   Devolve o perfil padrão do Farol quando ele está BLOQUEADO (é o que a conta revisora usa),
-   ou null.
-
-   POR QUE ISTO EXISTE (medido em 30/08/2026): o teto diário do perfil padrão estourou
-   às 19:52, num dia em que a autoanálise (que passa por fora do gate, por decisão)
-   levou US$ 74,48 dos US$ 94,39 gastos. Das 19:52 em diante a revisão automática ficou
-   pausada nas DUAS contas, e esta tela seguia dizendo "o Farol monitora biudtech a cada
-   3 minutos", que é a frase de quem está trabalhando. O selo do bloqueio existia, mas só
-   em Sistema e no Consumo, ou seja, longe da tela onde se pergunta "ele está agindo?".
-   Vazio que tranquiliza enquanto a automação está parada é pior que vazio nenhum. */
-export function automacaoPausadaPor(accounts, config, usage) {
-  const budgets = (usage && usage.budgets) || [];
-  if (!budgets.length) return null;
-  const padrao = (config && config.claudeProfileId) || '';
-  if (!(accounts || []).some(a => a)) return null;
-  const b = budgets.find(x => x.id === padrao);
-  return b && b.blocked ? b : null;
-}
-
-// Frase do bloqueio, no eixo certo. Os motivos `-previsto` dizem que o gasto ainda NÃO
-// passou do teto, mas a próxima revisão passaria: quem lê age diferente em cada caso.
-function textoPausa(b) {
-  const motivo = String(b.reason || '');
-  const eixo = motivo.startsWith('total') ? 'teto total' : 'teto de hoje';
-  const gasto = motivo.startsWith('total') ? b.sinceCutoff : b.today;
-  const cap = motivo.startsWith('total') ? b.budgetTotal : b.capHoje;
-  const valores = `${fmtMoney(gasto)} de ${fmtMoney(cap)}`;
-  return motivo.endsWith('-previsto')
-    ? `a próxima revisão (${fmtMoney(b.tipicoReview)} em média) passaria do ${eixo} do perfil <b>${esc(b.label || 'padrão')}</b> (${valores})`
-    : `o perfil <b>${esc(b.label || 'padrão')}</b> passou do ${eixo} (${valores})`;
-}
 
 /* As orgs que o vazio da fila pode NOMEAR. PURA.
 
@@ -83,20 +49,6 @@ export function queueEmptyOkHtml(ctx = {}) {
     : 'O Farol monitora ';
   const quem = orgs || 'as organizações configuradas';
   const cadencia = min === 1 ? 'minuto' : 'minutos';
-  // pausado por orçamento: a fila vazia não significa "está tudo em dia", significa que
-  // nada vai ser revisado sozinho até o teto liberar. É a informação que muda o que
-  // você faz agora, então ela vem primeiro e o resto do texto muda de tempo verbal.
-  if (ctx.pausado) {
-    return `<div class="empty-ok pausado">
-      <div class="eo-check" aria-hidden="true">⏸</div>
-      <div class="eo-title">Revisão automática pausada</div>
-      <p class="eo-sub">Nada está esperando a sua decisão, mas ${textoPausa(ctx.pausado)}, então nenhum PR novo vai ser revisado sozinho até isso liberar. O clique em Revisar continua valendo.</p>
-      <div class="eo-acts">
-        <button class="btn sm" data-goto="aba:consumo">Ver o consumo</button>
-        <button class="btn sm ghost eo-check-now">Verificar agora</button>
-      </div>
-    </div>`;
-  }
   const botaoAprovados = aprovados ? '<button class="btn sm ghost eo-resolved">Ver o que foi aprovado</button>' : '';
   return `<div class="empty-ok">
       <div class="eo-check" aria-hidden="true">✓</div>
@@ -110,8 +62,8 @@ export function queueEmptyOkHtml(ctx = {}) {
 }
 
 // Frase do estacionamento por tipo (ver `estacionar` em lib/engine/review.js). O
-// motivo só entra onde ele diz algo que o tipo não diz: cancelamento e orçamento já
-// são a explicação inteira.
+// motivo só entra onde ele diz algo que o tipo não diz: o cancelamento já é a
+// explicação inteira.
 function comMotivo(base, motivo, rotulo = '') {
   if (!motivo) return base;
   return `${base} (${rotulo}${motivo})`;
@@ -121,7 +73,6 @@ const PARKED_FRASE = {
   cancelado: () => 'cancelada por você',
   autenticacao: () => 'a credencial usada na revisão expirou; renove o login do perfil em Sistema > Plano e chaves antes de clicar em Revisar',
   'label-retirada': () => 'a label de revisão foi retirada do PR; a revisão volta por clique, commit novo ou pedido novo',
-  orcamento: (motivo) => comMotivo('o orçamento estourou', motivo),
   esgotado: (motivo) => comMotivo('falhou várias vezes seguidas', motivo, 'último erro: '),
   falha: (motivo) => comMotivo('falhou', motivo),
   // estacionada antes da v2.57.4: o arquivo antigo não guardava motivo nem hora

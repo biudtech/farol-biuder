@@ -847,20 +847,6 @@ label.set-row { cursor: pointer; }
 .usage-matrix-total { font-size: 12px; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .usage-matrix-grand { font-size: 12px; color: var(--accent); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 
-.usage-budget { display: flex; flex-direction: column; gap: 10px; }
-.usage-budget-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; display: flex; flex-direction: column; gap: 8px; }
-.usage-budget-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.usage-budget-name { font-size: 13px; font-weight: 650; }
-.usage-budget-kind { font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px; }
-.usage-budget-status { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 1px 8px; margin-left: auto; white-space: nowrap; }
-.usage-budget-status.ok { color: var(--ok); background: var(--ok-soft); }
-.usage-budget-status.bad { color: var(--danger); background: var(--danger-soft); }
-.usage-meter { display: flex; flex-direction: column; gap: 3px; }
-.usage-meter-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.usage-meter-track { display: block; height: 6px; background: var(--surface); border-radius: 99px; overflow: hidden; }
-.usage-meter-fill { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
-.usage-meter-fill.over { background: var(--danger); }
-.usage-budget-note { font-size: 11px; color: var(--faint); }
 
 .usage-sessions-wrap { overflow-x: auto; }
 .usage-sessions { min-width: 700px; max-height: 380px; overflow-y: auto; }
@@ -1172,19 +1158,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
   100% { opacity: 0; }
 }
 
-/* ---------- editor de orçamento por perfil (v2.50.0) ----------
-   Vale igual pros dois tipos de perfil (assinatura e chave de API). O bloco fica
-   separado por uma linha de cima porque é um assunto próprio dentro do card, e
-   não mais dois inputs perdidos entre a chave e o diretório. */
-.cp-budget { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
-.cp-budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.cp-budget-head strong { font-size: 12.5px; }
-.cp-budget .a-editrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.cp-budget input[type="number"] { width: 190px; }
-.cp-budget-mais > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 4px 0; user-select: none; }
-.cp-budget-mais > summary:hover { color: var(--text); }
-.cp-budget-mais[open] > summary { margin-bottom: 8px; }
-
 /* ---------- Plano e chaves: o resultado de "Testar perfil" (ui/pure/perfil.js) ----------
    Estas classes nasceram sem regra nenhuma, e os <span> do bloco se emendavam numa frase
    só: "Testado às 15:58o teste não abre sessão...", "Conta fulano@x detectado", "Tipo de
@@ -1210,20 +1183,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
   /* com duas colunas, a coluna 2 é a do selo: o motivo que ficasse nela esticava o selo e
      espremia o valor até zero, e "não sabemos" saía uma letra por linha (medido a 373 px) */
   .cp-chave, .cp-motivo { grid-column: 1 / -1; }
-}
-.cp-atalhos { gap: 6px; }
-/* sete colunas fixas: a semana inteira cabe numa linha só e a leitura é de
-   calendário, não de formulário. Abaixo de 560px vira duas linhas sozinho. */
-.cp-dows { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
-.cp-dow { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
-.cp-dow input { width: 100%; min-width: 0; font-size: 12px; padding: 5px 6px; }
-.cp-datas { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.cp-datas li { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.cp-data-dia { font-variant-numeric: tabular-nums; }
-.cp-data-valor { color: var(--muted); font-variant-numeric: tabular-nums; }
-@media (max-width: 560px) {
-  .cp-dows { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .cp-budget input[type="number"] { width: 100%; }
 }
 
 
@@ -1342,22 +1301,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 .fj-tab td { padding: 6px 8px 6px 0; border-top: 1px solid var(--border-soft); }
 .fj-tab .fj-num { text-align: right; padding-right: 0; }
 .fj-org { font-weight: 600; }
-.fj-conta { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
-.fj-conta.is-cedendo { border-color: var(--urgent); background: var(--accent-soft); }
-.fj-conta-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.fj-user { font-weight: 600; font-size: 13px; }
-.fj-peso, .fj-tag { font-size: 11px; color: var(--muted); }
-.fj-tag { padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; }
-.fj-tag-cede { border-color: var(--urgent); color: var(--urgent); }
-/* barra da cota: o gasto contra a fatia da conta, não contra o teto do perfil */
-.fj-barra { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
-/* usa os tokens SEMANTICOS do app, nao duas cores parecidas: --working (azul, "o
-   Farol esta rodando") pra quem esta consumindo dentro da cota, e --urgent (ambar,
-   "precisa de voce") pra quem estourou e cedeu a vez. Com --accent nos dois, as duas
-   barras saiam identicas na tela e a distincao que o painel existe pra mostrar sumia. */
-.fj-barra > span { display: block; height: 100%; background: var(--working); }
-.fj-conta.is-cedendo .fj-barra > span { background: var(--urgent); }
-.fj-conta-num { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
 /* Selo de estado (Diagnóstico): ok, atenção, falha, informação e neutro. */
 .chip-estado { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 2px 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

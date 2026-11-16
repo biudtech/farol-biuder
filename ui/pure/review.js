@@ -102,7 +102,6 @@ const REROUND_MOTIVO = {
   auto_desligado: (d) => `a revisão automática está desligada na conta ${d} (Sistema > Contas).`,
   review_manual: () => 'a regra da organização ou do autor exige revisão por clique (Sistema > Contas).',
   sem_token: (d) => `a conta ${d} está sem login no gh.`,
-  orcamento: () => 'o orçamento do perfil desta conta estourou.',
   estacionado: (d) => (d === 'cancelado'
     ? 'você cancelou a última tentativa.'
     : 'a última tentativa falhou e ficou estacionada. Volto sozinho se chegar commit novo ou pedirem revisão de novo.'),

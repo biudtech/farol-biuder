@@ -6,9 +6,10 @@ import { SYS_INDEX, buscarNoSistema } from '../ui/pure/sistema-busca.js';
 
 const html = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8');
 
-test('a busca por "orçamento" acha Plano e chaves', () => {
-  const hits = buscarNoSistema(SYS_INDEX, 'orçamento', () => '');
+test('a busca por "chave de API" acha Plano e chaves, e "orçamento" não acha mais nada', () => {
+  const hits = buscarNoSistema(SYS_INDEX, 'chave de API', () => '');
   assert.ok(hits.map((h) => h.sec).includes('plans'));
+  assert.deepEqual(buscarNoSistema(SYS_INDEX, 'orçamento', () => ''), []);
 });
 
 test('consulta vazia não devolve nada', () => {

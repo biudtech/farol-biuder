@@ -43,12 +43,11 @@ test('tabela vazia vira estado vazio e a tela usa um termo só para execução',
   assert.doesNotMatch(hist, /Tokens da operação/);
 });
 
-test('index: orçamento fora do details, termos de entrada e saída e título geral', async () => {
+test('index: sem cartão de orçamento, termos de entrada e saída e título geral', async () => {
   const fs = await import('node:fs');
   const html = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8');
-  const top = html.indexOf('id="usageBudgetTop"'), adv = html.indexOf('id="usageAdvanced"');
-  assert.ok(top > 0 && top < adv, 'usageBudgetTop antes de usageAdvanced');
-  assert.ok(html.indexOf('id="usageBudget"') < adv, 'usageBudget fora do details');
+  assert.ok(html.indexOf('id="usageAdvanced"') > 0);
+  assert.doesNotMatch(html, /usageBudget|Orçamento por perfil/);
   assert.match(html, /data-metric="input"[^>]*>Entrada</);
   assert.match(html, /data-metric="output"[^>]*>Saída</);
   assert.match(html, /<h3>Linha do tempo geral \(sem filtros\)<\/h3>/);

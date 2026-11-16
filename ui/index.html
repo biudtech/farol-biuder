@@ -162,25 +162,18 @@
     <p class="section-desc">O trabalho realizado pelo Farol e os recursos usados em cada execução. Registro permanente; não altera nenhuma decisão da automação.</p>
 
     <div id="usageActivity"></div>
-    <div id="usageBudgetTop" class="card usage-chart-card">
-      <div class="usage-chart-head">
-        <h3>Orçamento por perfil</h3>
-        <span class="usage-caption is-goto" data-goto="sys:plans:#claudeProfilesManager" role="button" tabindex="0" title="Abrir Sistema → Plano e chaves">Sistema → Plano e chaves</span>
-      </div>
-      <div id="usageBudget" class="usage-budget"></div>
-    </div>
     <details class="disc" id="usageAdvanced"><summary>Matriz e histórico técnico · totais gerais, sem os filtros acima</summary><div class="disc-body">
     <div id="usageLocal">
     <div id="usageKpis" class="usage-kpis"></div>
 
     <!-- Justica de fila (spec 2026-09-10-justica-de-fila-entre-orgs): torna VISIVEL o
-         criterio com que o escalonador escolhe a proxima revisao e a cota de cada conta
-         dentro do perfil. Uma automacao que cede a vez, vista de fora, e identica a uma
-         automacao quebrada; este painel e o que separa as duas. Leitura pura. -->
+         criterio com que o escalonador escolhe a proxima revisao. Uma automacao que cede
+         a vez, vista de fora, e identica a uma automacao quebrada; este painel e o que
+         separa as duas. Leitura pura. -->
     <div class="card fj-card" id="filaJustaCard" hidden>
       <div class="fj-head">
         <h3>Justiça de fila</h3>
-        <p class="section-desc">Quem é atendido primeiro e por quê. Com fila, o Farol divide entre as orgs e entre as contas que dividem o mesmo perfil; sem fila, o que chegar é atendido na hora.</p>
+        <p class="section-desc">Quem é atendido primeiro e por quê. Com fila, o Farol divide entre as orgs; sem fila, o que chegar é atendido na hora.</p>
       </div>
       <div id="filaJustaBody"></div>
     </div>

@@ -203,11 +203,12 @@ test('toda menção com data-goto é anunciada como botão (role + tabindex)', (
   // um contrato de acessibilidade que só olha o arquivo de origem vira cego assim
   // que o código muda de casa. Foi o que aconteceu ao mover o bloco de Consumo: o
   // piso caiu de 6 pra 5 e o teste reprovou sem que nenhuma menção tivesse perdido
-  // role ou tabindex.
+  // role ou tabindex. Em 16/11/2026 o piso foi de 6 para 4: as menções que saíram eram
+  // as do cartão de orçamento por perfil, removido junto com o teto de gasto.
   const PUREJS = fonteDosPuros();
   const fontes = [APPJS, HTML, PUREJS];
   const alvos = fontes.reduce((n, src) => n + [...src.matchAll(/data-goto="[^"]*"/g)].length, 0);
-  assert.ok(alvos >= 6, `esperava várias menções navegáveis, achei ${alvos}`);
+  assert.ok(alvos >= 4, `esperava várias menções navegáveis, achei ${alvos}`);
   // cada emissão de data-goto em elemento não interativo tem role/tabindex junto
   for (const src of fontes) {
     const semRole = [...src.matchAll(/<span[^>]*data-goto="[^"]*"[^>]*>/g)]

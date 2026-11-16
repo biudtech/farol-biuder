@@ -170,7 +170,6 @@ test('aba Consumo ativa: os gráficos desenham sem explodir', () => {
       totals: { sessions: 3, costUsd: 1.5, inputTokens: 900, outputTokens: 800 },
       matrixKindNames: ['review'], matrixModelNames: ['opus'],
       matrixSeries: [{ day: new Date().toISOString().slice(0, 10), cells: { review: { opus: { costUsd: 1.5, inputTokens: 900, outputTokens: 800 } } } }],
-      budgets: [{ id: 'p1', label: 'Assinatura', apiKey: false, blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }],
       sessions: [{ id: 's1', at: Date.now(), kind: 'review', model: 'opus', costUsd: 0.4, inputTokens: 400, outputTokens: 500, ref: 'acme/api#1', result: 'ok' }],
       kindNames: ['review'], modelNames: ['opus'],
     },

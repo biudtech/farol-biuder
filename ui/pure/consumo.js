@@ -1,4 +1,4 @@
-// A aba Consumo: séries, matriz por modelo, orçamento por perfil e sessões. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
+// A aba Consumo: séries, matriz por modelo e sessões. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
 // não mudou.
 //
 // Saiu do app.js na onda 5, segundo passo. O bloco inteiro já era puro: não lia nenhuma
@@ -15,10 +15,10 @@
 // lugares (a matriz e a legenda ao lado); um objeto pequeno é o jeito de manter os dois
 // sem devolver o elemento.
 //
-// fmtMoney e escAttrSelector, que moravam fisicamente dentro deste bloco, ficaram em
-// comum.js: Contas, Orçamento e os checks do Sistema também os usam, e deixá-los aqui
-// faria o Sistema depender do Consumo por acidente de posição.
-import { esc, escAttrSelector, fmtCompact, fmtMoney, fmtTok, fmtWhenDay, usageDayKeysBack } from './comum.js';
+// fmtMoney, que morava fisicamente dentro deste bloco, ficou em comum.js: os checks do
+// Sistema também o usam, e deixá-lo aqui faria o Sistema depender do Consumo por
+// acidente de posição.
+import { esc, fmtCompact, fmtMoney, fmtTok, fmtWhenDay, usageDayKeysBack } from './comum.js';
 import { sessionRefCell } from './mencoes.js';
 
 export function usageMetricVal(b, m) {
@@ -279,73 +279,6 @@ export function usageMatrixHtml(u, metric, win) {
     </div>`).join('');
   const foot = `<div class="usage-matrix-row foot" style="grid-template-columns:${cols}"><span>Total</span>${idxAtivos.map(j => `<span class="usage-matrix-total" title="${esc(exact(m.colTotals[j]))}">${esc(fmtUsageMetric(m.colTotals[j], metric))}</span>`).join('')}<span class="usage-matrix-grand" title="${esc(exact(m.grand))}">${esc(fmtUsageMetric(m.grand, metric))}</span></div>`;
   return { html: `<div class="usage-matrix">${head}${rows}${foot}</div>`, caption };
-}
-
-export function usageBudgetHtml(u) {
-  const perfis = (u && u.budgets) || [];
-  if (!perfis.length) return '<div class="usage-empty">Nenhum perfil de IA configurado ainda.</div>';
-  const meter = (label, spent, cap) => {
-    // cap == null: teto NAO configurado (meter() nem chega a ser chamado nesse caso, ver
-    // abaixo). cap === 0 e um teto valido (lib/parse.js aceita 0), e qualquer gasto acima
-    // de zero ja estoura ele, por isso cap > 0 (que tratava 0 como "sem teto") virava um
-    // sliver vazio e nao vermelho, contradizendo o selo "estourado" do cartao (achado de
-    // review). >= no lugar de > pra bater com o mesmo criterio de profileBudgetStatus
-    // (lib/engine/usage.js), que bloqueia em spent >= cap, nao só spent > cap.
-    // cheio quando ha teto e ele foi batido; sem teto a barra fica em zero. Escrito
-    // em passos porque os tres ternarios encadeados numa linha so contavam como
-    // ternario aninhado no gate de qualidade, e a conta em si nao e obvia.
-    let pct = 0;
-    if (cap != null && cap > 0) pct = Math.min(100, (spent / cap) * 100);
-    else if (cap != null && spent > 0) pct = 100;
-    const over = cap != null && spent >= cap;
-    return `<div class="usage-meter">
-      <div class="usage-meter-row"><span>${esc(label)}</span><span>${esc(fmtMoney(spent))} / ${esc(fmtMoney(cap))}</span></div>
-      <span class="usage-meter-track"><span class="usage-meter-fill${over ? ' over' : ''}" style="width:${Math.max(2, pct).toFixed(0)}%"></span></span>
-    </div>`;
-  };
-  return perfis.map(p => {
-    const statusCls = p.blocked ? 'bad' : 'ok';
-    // "tem teto" passou a considerar os overrides: perfil que só configurou sábado
-    // TEM teto, e dizer "nenhum teto definido" ali seria falso
-    const temOverride = Object.keys(p.budgetByWeekday || {}).length > 0 || Object.keys(p.budgetDates || {}).length > 0;
-    const temTeto = (p.budgetDaily != null || p.budgetTotal != null || temOverride);
-    const statusSemTeto = 'no orçamento';
-    // "estourado" seria mentira quando o gasto ainda não passou do teto e o que
-    // barrou foi a projeção: o chip tem que concordar com a nota logo abaixo
-    const previsto = String(p.reason || '').endsWith('-previsto');
-    const statusBloqueado = previsto ? 'no limite' : 'orçamento estourado';
-    const statusComTeto = p.blocked ? statusBloqueado : 'no orçamento';
-    const statusTxt = temTeto ? statusComTeto : statusSemTeto;
-    // o medidor mostra o teto que vale HOJE (base, dia da semana ou data única) e
-    // diz de onde ele veio: sem isso, um sábado com teto próprio mostraria o número
-    // do campo base e pareceria defeito
-    const rotuloDia = { data: 'Teto de hoje', semana: 'Teto deste dia da semana', base: 'Teto diário' }[p.capOrigem] || 'Teto diário';
-    const medidorDiario = Number.isFinite(p.capHoje) ? meter(rotuloDia, p.today, p.capHoje) : '';
-    const medidorTotal = p.budgetTotal != null ? meter('Teto total', p.sinceCutoff, p.budgetTotal) : '';
-    const meters = medidorDiario + medidorTotal;
-    const irAoTeto = `sys:plans:.cp-budget-daily[data-id="${escAttrSelector(p.id)}"]`;
-    // casos excludentes, um por linha: sem teto, com teto previsto e com teto batido
-    const NOTA_PAUSADO = '<span class="usage-budget-note">Automação de gasto pausada pra este perfil (revisão automática, retentativa e busca de contestações).</span>';
-    const notaPrevisto = `<span class="usage-budget-note">A próxima revisão (${esc(fmtMoney(p.tipicoReview || 0))} em média) não caberia no teto, então a automação parou antes de gastar. O clique manual continua liberado.</span>`;
-    const notaSemTeto = `<span class="usage-budget-note">Nenhum teto definido pra este perfil (<span class="is-goto" data-goto="${esc(irAoTeto)}" role="button" tabindex="0">definir em Sistema → Plano e chaves</span>).</span>`;
-    let nota = '';
-    if (!temTeto) nota = notaSemTeto;
-    else if (previsto) nota = notaPrevisto;
-    else if (p.blocked) nota = NOTA_PAUSADO;
-    const kindTxt = p.kind === 'assinatura' ? 'Assinatura' : 'Chave de API';
-    // o nome do perfil leva ao card DELE em Sistema (o input do nome carrega o
-    // mesmo id; seletor montado aqui porque CSS.escape não existe no pure.js)
-    const alvoPerfil = `sys:plans:.cp-label[data-id="${escAttrSelector(p.id)}"]`;
-    return `<div class="usage-budget-card">
-      <div class="usage-budget-head">
-        <span class="usage-budget-name is-goto" data-goto="${esc(alvoPerfil)}" role="button" tabindex="0" title="Abrir este perfil em Sistema → Plano e chaves">${esc(p.label || p.id)}</span>
-        <span class="usage-budget-kind">${kindTxt}</span>
-        <span class="usage-budget-status ${statusCls}">${esc(statusTxt)}</span>
-      </div>
-      ${meters}
-      ${nota}
-    </div>`;
-  }).join('');
 }
 
 export function usageSessionsHtml(u) {

@@ -1377,18 +1377,16 @@ const USO = {
   // matrixSeries é por DIA e a matriz filtra pela janela (usageDayKeysBack), então
   // o dia precisa ser recente de verdade; data fixa cairia fora da janela
   matrixSeries: [{ day: P.usageDayKeysBack(1)[0], cells: { review: { opus: bloco(10, 4000, 5000) }, chat: { sonnet: bloco(1, 400, 400) } } }],
-  budgets: [{ profileId: 'p1', label: 'Assinatura', spent: 12.5, limit: 100, blocked: false }],
   sessions: [{ id: 's1', at: Date.parse('2026-08-17T12:00:00Z'), kind: 'review', model: 'opus', costUsd: 0.42, inputTokens: 4000, outputTokens: 5000, ref: 'o/r#1', result: 'ok' }],
 };
 
-test('Consumo: os quatro construtores rodam e devolvem markup, com dados e sem', () => {
+test('Consumo: os construtores rodam e devolvem markup, com dados e sem', () => {
   // é o teste que teria pego a constante deixada pra trás
   for (const u of [USO, {}]) {
     assert.match(P.usageKpisHtml(u, 7), /</);
     const mtx = P.usageMatrixHtml(u, 'custo', 7);
     assert.equal(typeof mtx.html, 'string');
     assert.equal(typeof mtx.caption, 'string');
-    assert.match(P.usageBudgetHtml(u), /</);
     assert.match(P.usageSessionsHtml(u), /</);
   }
 });
@@ -1396,7 +1394,6 @@ test('Consumo: os quatro construtores rodam e devolvem markup, com dados e sem',
 test('Consumo: resumo vazio vira mensagem de vazio, não markup quebrado', () => {
   assert.match(P.usageMatrixHtml({}, 'custo', 7).html, /usage-empty/);
   assert.equal(P.usageMatrixHtml({}, 'custo', 7).caption, '', 'sem dado a legenda some junto');
-  assert.match(P.usageBudgetHtml({}), /Nenhum perfil/);
   assert.match(P.usageSessionsHtml({}), /Nenhuma sessão/);
 });
 
@@ -1538,7 +1535,7 @@ test('queueCardHtml: sem autor não renderiza o seletor de papel', () => {
 
 const CTX_SIS = {
   config: { claudeProfiles: [{ id: 'p1', label: 'Pessoal', kind: 'apikey', apiKey: 'sk-ant-x', baseUrl: '' }], claudeProfileId: 'p1' },
-  usage: { budgets: [] },
+  usage: {},
   doctor: { claudeAuth: [{ id: 'p1', ready: true, apiKeyMode: true }] },
   ehWin: true,
   accounts: [{ user: 'alice', owners: ['acme'], tokenOk: true }],
@@ -1554,13 +1551,6 @@ test('claudeAuthBadge: acha o perfil, cai no primeiro com chave, e some sem dado
 test('claudeAuthBadge: sem perfil nenhum diz SEM PERFIL, e perfil sem chave diz SEM CHAVE', () => {
   assert.match(P.claudeAuthBadge('', { doctor: { claudeAuth: [] } }), /SEM PERFIL/);
   assert.match(P.claudeAuthBadge('k', { doctor: { claudeAuth: [{ id: 'k', ready: false, apiKeyMode: true }] } }), /SEM CHAVE/);
-});
-
-test('Consumo: o cartão do perfil é de chave de API, com teto e nota quando falta teto', () => {
-  const html = P.usageBudgetHtml({ budgets: [{ id: 'k1', label: 'Chave A', kind: 'apikey', blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }] });
-  assert.match(html, /Chave de API/);
-  assert.match(html, /Nenhum teto definido/);
-  assert.doesNotMatch(html, /assinatura|plano ChatGPT/i);
 });
 
 test('runtimeChecks: perfil de chave de API apontado que não resolve vira check do Diagnóstico', () => {
@@ -1587,13 +1577,6 @@ test('accountsManagerHtml: sem conta mostra o vazio, com conta mostra o cartão 
   assert.match(html, /class="acct-owners" data-user="alice" value="acme"/);
   assert.match(html, /autenticada no gh/);
   assert.doesNotMatch(html, /acct-color|acct-label|acct-kind|act-mute|acct-remove|btnAcctAdd/);
-});
-
-test('claudeProfilesHtml: perfil de chave de API mostra os campos de teto', () => {
-  const api = { ...CTX_SIS, config: { claudeProfiles: [{ id: 'p2', label: 'API', kind: 'apikey', apiKey: 'k', budgetDaily: 10 }], claudeProfileId: 'p2' } };
-  const html = P.claudeProfilesHtml(api);
-  assert.match(html, /cp-budget-daily/);
-  assert.match(html, /value="10"/, 'o teto salvo aparece preenchido');
 });
 
 /* ---------- onda 5, sexto passo: o banner do topo ----------
@@ -1847,46 +1830,14 @@ test('runtimeChecks: sem root não inventa linha (Windows nem tem uid)', () => {
   assert.deepEqual(P.runtimeChecks(undefined), []);
 });
 
-/* ---------- fila vazia com a automação PAUSADA por teto ---------- */
-// Medido em 30/08/2026: o teto diário do perfil padrão estourou às 19:52 e as duas
-// contas ficaram sem revisão automática, enquanto esta tela seguia dizendo "o Farol
-// monitora biudtech a cada 3 minutos". O selo do bloqueio existia, mas só em Sistema
-// e no Consumo, longe da tela onde se pergunta "ele está agindo?".
+/* ---------- fila vazia ---------- */
 
-const BLOQUEADO = { id: 'p1', label: 'Perfil atual', blocked: true, reason: 'diario', today: 94.39, capHoje: 72.31 };
-const LIVRE = { id: 'p2', label: 'Outro', blocked: false, reason: null, today: 1, capHoje: 72.31 };
-
-test('automacaoPausadaPor acha o perfil bloqueado que a conta usa de fato', () => {
-  const usage = { budgets: [BLOQUEADO, LIVRE] };
-  const contas = [{ user: 'a' }];
-  assert.equal(P.automacaoPausadaPor(contas, { claudeProfileId: 'p1' }, usage), BLOQUEADO);
-  assert.equal(P.automacaoPausadaPor(contas, { claudeProfileId: 'p2' }, usage), null);
-});
-
-test('automacaoPausadaPor olha o perfil padrão, que é o que a conta revisora usa', () => {
-  const usage = { budgets: [BLOQUEADO, LIVRE] };
-  assert.equal(P.automacaoPausadaPor([{ user: 'a' }], { claudeProfileId: 'p2' }, usage), null, 'o padrão não é o perfil bloqueado');
-  assert.equal(P.automacaoPausadaPor([{ user: 'b' }], { claudeProfileId: 'p1' }, usage), BLOQUEADO);
-  assert.equal(P.automacaoPausadaPor([], { claudeProfileId: 'p1' }, usage), null, 'sem conta não há automação para pausar');
-});
-
-test('automacaoPausadaPor sem dado nenhum devolve null, não quebra', () => {
-  assert.equal(P.automacaoPausadaPor(undefined, undefined, undefined), null);
-  assert.equal(P.automacaoPausadaPor([], {}, { budgets: [] }), null);
-});
-
-test('a fila vazia diz que a automação está pausada, em vez de tranquilizar', () => {
-  const html = P.queueEmptyOkHtml({ aprovados: 5, owners: ['biudtech'], intervalSeconds: 180, pausado: BLOQUEADO });
-  assert.match(html, /Revisão automática pausada/);
-  assert.match(html, /Perfil atual/);
-  assert.match(html, /US\$ 94\.39 de US\$ 72\.31/);
-  assert.equal(/monitora/.test(html), false, 'não pode dizer que monitora enquanto está parado');
-});
-
-test('sem pausa, a fila vazia continua sendo o vazio bom de sempre', () => {
+test('a fila vazia é o vazio bom de sempre, sem estado de pausa por gasto', () => {
   const html = P.queueEmptyOkHtml({ aprovados: 2, owners: ['biudtech'], intervalSeconds: 180 });
   assert.match(html, /Nada esperando por você/);
   assert.match(html, /aprovou 2 PRs sozinho hoje/);
+  const comCampoAntigo = P.queueEmptyOkHtml({ aprovados: 2, owners: ['biudtech'], intervalSeconds: 180, pausado: { id: 'p1', blocked: true } });
+  assert.equal(comCampoAntigo, html, 'o campo de pausa por teto não muda mais a tela');
 });
 
 /* ---------- auditoria de consumo: a tela tem que distinguir medido de estimado ---------- */

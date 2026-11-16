@@ -3,7 +3,7 @@
 
 import {
   esc, usageMetricVal, usageStackLayers, usageHoverIndex, usageDayKeysBack, usageColorsFor,
-  usageTooltipHtml, fmtUsageMetric, usageKpisHtml, usageMatrixHtml, usageBudgetHtml,
+  usageTooltipHtml, fmtUsageMetric, usageKpisHtml, usageMatrixHtml,
   usageSessionsHtml, filaJustaHtml,
 } from '../pure.js';
 import { estado } from './estado.js';
@@ -99,26 +99,14 @@ function drawUsageTimeline(el, legendEl, u, metric, win, dim) {
 // matriz Tipo x Modelo do periodo escolhido (mesma janela da linha do tempo),
 // com heatmap leve (intensidade da celula sobre a maior celula da matriz).
 
-// um cartao por perfil de Claude configurado (Sistema -> Plano e chaves). Perfil de
-// assinatura (kind 'assinatura') nao tem teto, so uma nota informativa; perfil de
-// chave mostra os 2 medidores (diario/total), gasto x teto.
-//
-// FONTE UNICA (v2.40.0): tudo vem de u.budgets (usageSummary), que traz teto E
-// gasto E bloqueio calculados pela MESMA funcao do gate real (profileBudgetStatus)
-// no momento de cada pushState. Antes, o gasto vinha de estado().doctor.claudeAuth
-// (cache que so recalculava no boot/Verificar agora/salvar perfis) e o teto de
-// estado().config: o cartao congelava enquanto o KPI "Hoje" da mesma tela crescia, e
-// a automacao pausava por estouro com o cartao ainda dizendo "no orcamento".
-
 // tabela das sessoes mais recentes (ate 100, cortado no backend). Log permanente
 // em disco (usage-sessions.json); a UI so mostra as mais novas, com rolagem.
 
-/* Painel de Justiça de fila (spec 2026-09-10-justica-de-fila-entre-orgs). Fica na aba
-   Consumo porque metade dele é dinheiro (a cota da conta dentro do perfil) e a outra
-   metade só faz sentido ao lado dela.
+/* Painel de Justiça de fila (spec 2026-09-10-justica-de-fila-entre-orgs): o rodízio
+   entre as orgs e o teto de revisões simultâneas.
 
-   Decide a PRÓPRIA vaziez, no mesmo padrão do resto desta aba: quem tem uma org e um
-   perfil só não tem rodízio nenhum pra explicar, e um card vazio na tela parece defeito.
+   Decide a PRÓPRIA vaziez, no mesmo padrão do resto desta aba: quem tem uma org só não
+   tem rodízio nenhum pra explicar, e um card vazio na tela parece defeito.
    O filaJustaHtml devolve '' nesse caso, e o card inteiro some. */
 function renderFilaJusta() {
   const card = $('#filaJustaCard'), body = $('#filaJustaBody');
@@ -128,15 +116,8 @@ function renderFilaJusta() {
   card.hidden = !html;
 }
 
-/* O orçamento mora fora do details: pinta ao entrar na aba, em qualquer escopo. */
-function renderOrcamento() {
-  const budget = $('#usageBudget');
-  if (budget) budget.innerHTML = usageBudgetHtml(estado()?.usage ?? {});
-}
-
 function renderUsage() {
   renderFilaJusta();
-  renderOrcamento();
   renderActivity({ window: usageState.window });
   const u = estado() && estado().usage;
   const kpisEl = $('#usageKpis'), tl = $('#usageTimeline'), legend = $('#usageLegend');
@@ -148,8 +129,8 @@ function renderUsage() {
   // (arquivos diferentes). Gatear a aba inteira num campo agregado só deixava a
   // tela se contradizer quando os dois arquivos discordam entre si (achado da
   // revisão final: timeline dizia "nenhuma sessão" com a matriz e a tabela de
-  // sessões cheias logo abaixo). drawUsageTimeline e os builders de matriz,
-  // orçamento e sessões já sabem ficar vazios sozinhos (Task 14); só o
+  // sessões cheias logo abaixo). drawUsageTimeline e os builders de matriz
+  // e sessões já sabem ficar vazios sozinhos (Task 14); só o
   // usageKpisHtml não tem essa defesa, então o guard fica só pra ele.
   if (!u || !u.totals || !u.totals.sessions) kpisEl.innerHTML = '';
   else kpisEl.innerHTML = usageKpisHtml(u, usageState.window);
