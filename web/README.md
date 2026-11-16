@@ -8,7 +8,7 @@ Este pacote é independente do motor: tem `package.json`, `package-lock.json` e 
 Na Vercel, o diretório raiz do projeto é `web/`.
 
 Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e as
-telas Radar, Histórico e Time. Consumo e Sistema ainda estão em construção.
+telas Radar, Histórico, Time e Consumo. Sistema ainda está em construção.
 
 ## Rodar contra um motor local
 
@@ -83,11 +83,12 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people` |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage` |
 | `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das três telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
+| `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e o estado do teto em frases (`teto.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
@@ -476,6 +477,124 @@ Regras que valem para quem mexer nela:
   e a remoção dele é recusada com "login inválido".
 - **A recusa de `POST /api/settings` tem outra forma.** Vem em `code` e `erro`, e a das
   outras ações em `blocked` e `error`; `lerRespostaDeAcao` lê as duas.
+
+## A tela Consumo
+
+A aba `/consumo` é `src/componentes/consumo/Consumo.tsx`. Ela mostra quanto as sessões de IA do
+motor consumiram: tokens e custo em dólar. Só lê: não há ação nela.
+
+| Parte | Componente | De onde vem |
+|---|---|---|
+| Teto de gasto e auditoria | `ResumoDoTeto.tsx` | `usage.budgets` e `usage.auditoria` do snapshot |
+| Período e filtros | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
+| Resumo do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
+| Gasto por dia | `GraficoPorDia.tsx` | `series` |
+| Por tipo e por modelo | `Quebras.tsx` | `byKind` e `models` |
+| Diário de execuções | `Diario.tsx`, `TabelaDeExecucoes.tsx` | `history` |
+| Sessões recentes | `SessoesRecentes.tsx` | `usage.recentSessions` do snapshot |
+
+O contrato, lido do motor:
+
+- **A chave `usage` do snapshot** (`usageSummary`, `lib/engine/usage.js`, pela projeção de
+  `lib/engine/snapshot-usage.js`). A tela guarda `budgets`, `recentSessions`, `auditoria`,
+  `sessionsSince` e `totals.sessions`. A chave traz também as séries por dia (`series`,
+  `stackedSeries`, `matrixSeries`, até 120 dias), que a tela não usa: com elas a soma de um
+  período teria de ser feita aqui.
+- **`usage.budgets`**, um por perfil do Claude (`linhaDeOrcamento`): `id`, `label`, `kind`
+  (`assinatura` ou `apikey`), `capHoje` (o teto que vale hoje) e `capOrigem` (`base`,
+  `semana`, `data` ou `nenhum`), `today` (o gasto do dia), `budgetTotal`, `budgetSince` e
+  `sinceCutoff` (o gasto desde o corte), `blocked`, `reason` (`diario`, `total`,
+  `diario-previsto` ou `total-previsto`), `parcialmenteEstimado` e `tipicoReview`. É a mesma
+  conta do gate, refeita a cada envio do snapshot.
+- **`usage.recentSessions`**: as 100 sessões mais recentes, a mais nova primeiro, com `at`,
+  `kind`, `ref`, `model`, os quatro contadores de tokens, `costUsd`, `costSource` e `status`.
+- **`GET /api/usage`** (`lib/engine/usage-activity.js`, `lib/usage/report.js`) lê o diário
+  inteiro, que não tem poda. Parâmetros, todos opcionais: `start` e `end` (dias `AAAA-MM-DD`,
+  inclusivos; sem eles, os 30 dias que terminam no hoje do motor), `kind`, `model`, `repo`,
+  `account`, `provider` e `device` (igualdade exata; ausente ou `all` não filtra), `search`
+  (até 200 caracteres, na referência, no tipo e no modelo), `focus` (`review` ou `pr`) e
+  `page` (a partir de zero, 8 operações por página). `kind`, `model` e `repo` recortam o
+  relatório inteiro; `search`, `focus` e `page`, só o diário. Responde sempre 200:
+  `{ ok: true, range, options, totals, byKind, completed, retries, unidentified, since,
+  sinceDay, series, models, history, incomplete }`, ou `{ ok: false, motivo }` com uma frase.
+  A tela manda `start`, `end`, `kind`, `model`, `repo`, `search` e `page`.
+
+Regras que valem para quem mexer nela:
+
+- **A tela não soma.** Toda soma é do motor: `totals` para o período, `series` por dia,
+  `byKind` por tipo, `models` por modelo, `auditoria` para o registro inteiro. A tela não soma
+  linhas de uma página nem tentativas de uma operação. As contas daqui são de exibição e
+  estão ditas: a participação percentual (a fatia de uma linha no total do motor), entrada
+  mais saída da mesma linha (para ordenar os modelos) e o que resta para o teto (o teto menos
+  o gasto, dois números do motor).
+- **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
+  informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
+  esse valor, e a tela diz isso junto do resumo, com quantas execuções do período rodaram
+  por assinatura (`totals.subscription`). Cada execução mostra a origem do custo
+  (`costSource`): informado pela sessão, "calculado pelo motor" (a sessão morreu antes de
+  informar, e o motor usa a mediana do custo por token de saída das sessões concluídas do
+  mesmo modelo) ou "Desconhecido", que não mostra o zero gravado.
+- **O dia é o do motor.** O diário agrupa por dia de Brasília (`FUSO_DO_DIA`,
+  `lib/constants.js`). A tela escreve o dia trocando a ordem do texto, sem `Date`, e diz o
+  fuso. A hora de cada execução (`at`) sai no fuso do navegador, como nas outras telas.
+- **O teto em texto.** `estadoDoTeto` (`src/consumo/teto.ts`) escreve a situação ("Dentro do
+  teto", "Pausado: ...", "Sem teto definido"), o gasto contra cada teto e o que o motor deixa
+  de fazer com o perfil pausado: revisão automática, retentativa e busca de contestação; a
+  revisão pedida à mão continua (`budgetBlockedFor`). A cor acompanha, não substitui.
+- **A consulta mora no endereço.** `inicio`, `fim`, `tipo`, `modelo`, `repo`, `q` e `pagina`
+  (`src/consumo/consulta.ts`), no molde do Histórico: filtro, período pronto e página
+  empilham; busca, datas e página corrigida trocam a entrada. A busca espera 300 ms, e cada
+  pedido novo aborta o anterior. Valor que a tela não conhece vai ao motor como veio.
+- **O hoje é o do motor.** Os períodos prontos (7, 30 e 90 dias) terminam no `range.end` do
+  relatório na tela; antes da primeira resposta ficam desabilitados. A tela não lê o relógio.
+- **O gráfico é complemento.** SVG próprio, sem biblioteca, com `role="img"` e um nome que
+  resume o período, o maior dia e o total do motor. A mesma informação está na tabela logo
+  abaixo. A geometria é função pura (`src/consumo/grafico.ts`): escala de passo redondo, até
+  seis rótulos no eixo horizontal, dia sem execução com barra vazia. Período com mais de 120
+  dias não é desenhado. Cores só das variáveis de `globals.css`.
+- **Tabela larga rola no próprio contêiner,** que tem nome e recebe foco. A página não rola
+  para o lado em 375 px.
+- **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda,
+  aparece "Há sessão nova" com o botão Atualizar. O teto e as sessões recentes vêm do
+  snapshot e andam sozinhos.
+- **Estados.** Durante uma carga o relatório anterior fica na tela, esmaecido e com
+  `aria-busy`. Sem execução no período, a tela diz isso (com filtro a frase muda) e não
+  desenha gráfico nem quebras. Falha de rede tem Tentar de novo. `{ ok: false, motivo }`
+  mostra a frase do motor e oferece voltar ao período padrão. Item sem o que o identifica é
+  descartado, contado e avisado; número que não veio aparece como "sem dado", não como zero.
+
+### Lacunas do contrato
+
+- **A recusa não tem código nem campo.** Período inválido volta como 200 com
+  `{ ok: false, motivo }`, e a mesma forma serve para o diário indisponível. A tela não tem
+  como dizer qual parâmetro foi recusado, nem separar recusa de indisponibilidade: mostra a
+  frase. Filtro com valor que não existe não é recusado: volta vazio. O cliente já lê `code`
+  e `campo` de um 400, se a rota passar a responder assim.
+- **Dois dias diferentes.** O diário e `GET /api/usage` usam o dia de Brasília; o agregado
+  (`usage.series`) e o teto (`today`) usam o dia local do processo do motor (`localDay`), que
+  só é o de Brasília se o processo rodar nesse fuso. O snapshot não diz qual é o dia do teto:
+  a tela escreve "hoje, no dia do motor".
+- **O que resta para o teto não vem.** O gate compara com o teto o gasto mais uma reserva
+  (uma revisão típica por sessão de custo desconhecido), e esse número não está no snapshot,
+  só o sinal `parcialmenteEstimado`. O "Resta" da tela é o teto menos o gasto, e a nota avisa
+  quando há reserva.
+- **Sem custo nem cache por modelo no período.** `models` traz execuções e tokens de entrada
+  e de saída. O custo por modelo existe só nas séries diárias do snapshot, que a tela teria
+  de somar.
+- **Sem total por operação.** Uma operação com retomada traz as tentativas, cada uma com os
+  tokens e o custo dela, e nenhuma soma. A tela mostra uma linha por tentativa.
+- **Sem endereço do PR.** Vem só a chave `dono/repo#n`; a tela monta o endereço do GitHub
+  (`urlDoPr`), e referência de outro formato fica como texto.
+- **Os períodos não vêm do motor.** Ele aceita qualquer intervalo e não lista os oferecidos:
+  7, 30 e 90 são escolha da tela, e o hoje dele só se conhece pela resposta.
+- **Página além do fim não é dita.** O motor devolve a última página sem avisar; a tela
+  compara `history.page` com o pedido e corrige o endereço.
+- **`account`, `provider`, `device` e `focus` não são oferecidos.** Uma instância tem uma
+  conta, um provedor e um aparelho; `focus` (só revisões concluídas, ou uma por PR) ficou
+  de fora.
+- **O motivo da falha de uma sessão** (`usage.falhasPorSessao`) não é mostrado: é texto
+  de erro do motor, e cabe ao diagnóstico da tela Sistema.
+- **O teto se edita em outra tela.** O Consumo só mostra; a edição entra com a tela Sistema.
 
 ## O renderizador de markdown
 
