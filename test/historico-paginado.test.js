@@ -149,12 +149,12 @@ test('página muito além do fim responde 200 vazio, com o total verdadeiro', ()
 /* ---------- filtros ---------- */
 
 const MISTO = [
-  item(6, { verdict: 'comment', action: 'comment', card: 'BT-3100', pr: { repo: 'Acme/Api', title: 'Migração do módulo de cobrança', author: 'joao-silva' } }),
-  item(5, { verdict: 'request_changes', action: 'request_changes', card: 'BT-2546', pr: { repo: 'acme/app', title: 'Autenticação por código', author: 'Márcia' } }),
-  item(4, { verdict: 'approve', card: 'BD2-72', pr: { repo: 'outra/app', title: 'Filtro de edições', author: 'ana' } }),
+  item(6, { verdict: 'comment', action: 'comment', card: 'PROJ-3100', pr: { repo: 'Acme/Api', title: 'Migração do módulo de cobrança', author: 'joao-silva' } }),
+  item(5, { verdict: 'request_changes', action: 'request_changes', card: 'PROJ-2546', pr: { repo: 'acme/app', title: 'Autenticação por código', author: 'Márcia' } }),
+  item(4, { verdict: 'approve', card: 'LOJA-72', pr: { repo: 'outra/app', title: 'Filtro de edições', author: 'ana' } }),
   item(3, { verdict: 'approve', card: null, pr: { repo: 'acme/app', title: 'Correção de typo', author: 'ana' } }),
   item(2, { verdict: undefined, status: 'superseded', action: 'skip', pr: { repo: 'acme/api', title: 'Sem veredito', author: 'bia' } }),
-  item(1, { verdict: 'request_changes', card: { key: 'BT-9' }, pr: { repo: 'acme/app', number: 412, title: 'Login quebrado', author: 'bia' } }),
+  item(1, { verdict: 'request_changes', card: { key: 'PROJ-9' }, pr: { repo: 'acme/app', number: 412, title: 'Login quebrado', author: 'bia' } }),
 ];
 
 test('filtro por veredito, um de cada vez', () => {
@@ -177,8 +177,8 @@ test('q busca em repo, número, título, autor e chave do card', () => {
   assert.deepEqual(ids(pedir(MISTO, 'q=acme/app%23412')), ['d1'], 'repo e número juntos');
   assert.deepEqual(ids(pedir(MISTO, 'q=typo')), ['d3'], 'título');
   assert.deepEqual(ids(pedir(MISTO, 'q=bia')), ['d2', 'd1'], 'autor');
-  assert.deepEqual(ids(pedir(MISTO, 'q=BT-2546')), ['d5'], 'card em texto');
-  assert.deepEqual(ids(pedir(MISTO, 'q=bt-9')), ['d1'], 'card em objeto');
+  assert.deepEqual(ids(pedir(MISTO, 'q=PROJ-2546')), ['d5'], 'card em texto');
+  assert.deepEqual(ids(pedir(MISTO, 'q=proj-9')), ['d1'], 'card em objeto');
   assert.deepEqual(ids(pedir(MISTO, 'q=nada-disso-existe')), []);
 });
 

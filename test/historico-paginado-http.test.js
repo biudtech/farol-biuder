@@ -49,7 +49,7 @@ function item(i, extra = {}) {
   return {
     id: `d${i}`, createdAt: 1000 + i, resolvedAt: 2000 + i, key: `acme/app#${i}`,
     pr: { repo: i % 2 ? 'acme/app' : 'acme/api', number: i, url: `https://github.com/acme/app/pull/${i}`, title: `Correção ${i}`, author: 'ana', account: 'revisora' },
-    card: `BT-${i}`, verdict: i % 3 ? 'approve' : 'request_changes', status: 'auto_approved', action: 'approve',
+    card: `PROJ-${i}`, verdict: i % 3 ? 'approve' : 'request_changes', status: 'auto_approved', action: 'approve',
     reasons: [], reviewMarkdown: `Revisão ${i}`, reportMarkdown: `RELATORIO-BRUTO ${i}`,
     payloads: { approve: { event: 'APPROVE', body: `CORPO-DO-PAYLOAD ${i}`, comments: [] } },
     memory: { notes: `MEMORIA-DO-TIME ${i}` },
@@ -104,7 +104,7 @@ test('filtros e busca pela URL, com acento codificado', async () => {
   assert.ok(porVeredito.json.items.every(d => d.verdict === 'request_changes'));
   const porBusca = await pedir(`?q=${encodeURIComponent('CORRECAO 41')}`);
   assert.deepEqual(porBusca.json.items.map(d => d.id), ['d41']);
-  const porCard = await pedir('?q=bt-17&repo=acme/app&veredito=approve');
+  const porCard = await pedir('?q=proj-17&repo=acme/app&veredito=approve');
   assert.deepEqual(porCard.json.items.map(d => d.id), ['d17']);
 });
 
