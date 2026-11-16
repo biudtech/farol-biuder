@@ -7,8 +7,8 @@
 // (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor. A de
 // POST /api/settings vem como `{ ok: false, code, erro }` (lib/engine/chave-do-perfil.js).
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
-import { lerPessoas, type Pessoas } from '@/contratos/time';
-import { marcaDoPerfil, perfilDe, textoDoPerfil } from '@/time/time';
+import { lerPessoas, type PessoasCruas } from '@/contratos/time';
+import { marcaDoPerfil, outrasQueDiferem, perfilDe, textoDoPerfil } from '@/time/time';
 import type { Cliente, Leitor } from '@/transporte/cliente';
 
 // O que POST /api/decide aceita em `action`.
@@ -45,11 +45,12 @@ export type Acao =
   | (Base & { tipo: 'contestacao'; chave: string; autor: string; desfecho: DesfechoDaContestacao | ''; nota: string })
   // O papel e a competência de uma pessoa (POST /api/settings com `people`). O motor troca o
   // mapa inteiro pelo que chega (updateSettings, server.js), então `pessoas` é a lista toda,
-  // já com a pessoa alterada (comPerfil, src/time/time.ts).
-  | (Base & { tipo: 'perfil'; login: string; pessoas: Pessoas })
+  // montada do mapa cru do motor e só com a pessoa alterada (comPerfil, src/time/time.ts).
+  | (Base & { tipo: 'perfil'; login: string; pessoas: PessoasCruas })
   // Tira uma pessoa do Time (removeTeamMember, lib/engine/decision.js): apaga o dossiê, o
-  // perfil e as contestações dela, sem cópia. O que a tela via na hora do clique vai junto
-  // só para a pergunta dizer o que será apagado.
+  // perfil e as contestações dela, sem cópia, e só isso (as revisões dos PRs dela continuam
+  // no histórico e no log). O que a tela via na hora do clique vai junto só para a pergunta
+  // dizer o que será apagado.
   | (Base & { tipo: 'removerAutor'; login: string; entradas: number; temPerfil: boolean; contestacoes: number });
 
 // PUSHBACK_OUTCOMES, lib/taxonomy.js
@@ -182,10 +183,13 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
     };
   }
   if (acao.tipo === 'removerAutor') {
-    // O que removeTeamMember apaga (lib/engine/decision.js, na raiz) e quem lia cada coisa: o
-    // dossiê é lido pela sessão de revisão, o perfil entra no bloco "Perfil do autor" do
-    // prompt (personProfileBlock) e as contestações, além desse bloco, viram lição para
-    // outros autores do repositório (licoesDoRepo). Não há cópia nem rota que desfaça.
+    // O que removeTeamMember apaga (lib/engine/decision.js, na raiz), e só isto: o arquivo
+    // do dossiê, a entrada em config.people e as contestações em que a pessoa é a autora. As
+    // revisões dos PRs dela ficam em decisions.json (GET /api/decisions busca por autor) e no
+    // farol.log. Quem lia cada coisa apagada: o dossiê é lido pela sessão de revisão, o perfil
+    // entra no bloco "Perfil do autor" do prompt (personProfileBlock) e as contestações, além
+    // desse bloco, viram lição para outros autores do repositório (licoesDoRepo). Não há
+    // cópia nem rota que desfaça.
     const dossie = acao.entradas > 0
       ? `o dossiê (${acao.entradas} ${acao.entradas === 1 ? 'entrada' : 'entradas'} de memória nesta tela)`
       : 'o dossiê, se houver';
@@ -195,8 +199,8 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
       : 'os registros de contestação dos PRs dela, se houver';
     return {
       titulo: `Remover ${acao.nome} do Time?`,
-      texto: `O motor apaga tudo o que guarda sobre ${acao.nome}: ${dossie}, ${perfil} e ${contestacoes}. É a pessoa inteira: o motor não apaga uma entrada só. Não dá para desfazer, porque o motor não guarda cópia. Nada muda no GitHub. Nas próximas revisões dos PRs dela a sessão não encontra histórico, o prompt sai sem perfil e sem contestações (tom neutro), e as contestações apagadas deixam de entrar como lição nas revisões de outros autores do mesmo repositório. Se um PR dela for revisado de novo, um dossiê novo começa do zero.`,
-      confirmar: 'Apagar tudo desta pessoa',
+      texto: `O motor apaga três coisas de ${acao.nome}: ${dossie}, ${perfil} e ${contestacoes}. São as três de uma vez: o motor não apaga uma entrada só. Não dá para desfazer, porque o motor não guarda cópia. Não é tudo o que o motor tem sobre ela: as revisões dos PRs dela continuam no Histórico, com ela como autora, e no log do motor. Nada muda no GitHub. Nas próximas revisões dos PRs dela a sessão não encontra o dossiê, o prompt sai sem perfil e sem contestações (tom neutro), e as contestações apagadas deixam de entrar como lição nas revisões de outros autores do mesmo repositório. Se um PR dela for revisado de novo, um dossiê novo começa do zero.`,
+      confirmar: 'Apagar o dossiê, o perfil e as contestações',
     };
   }
   if (acao.tipo !== 'decidir') return null;
@@ -220,9 +224,9 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
 
 // No aceite, dois campos que só duas rotas mandam: `removed` (POST /api/team/remove: havia
 // algo para apagar) e os perfis que ficaram gravados (`config.people` da resposta de
-// POST /api/settings, com as chaves que o motor ignorou em `ignoradas`).
+// POST /api/settings, como veio, com as chaves que o motor ignorou em `ignoradas`).
 export type RespostaDeAcao =
-  | { ok: true; removed?: boolean; pessoas?: Pessoas; ignoradas?: string[] }
+  | { ok: true; removed?: boolean; pessoas?: PessoasCruas; ignoradas?: string[] }
   | { ok: false; blocked?: string; error?: string };
 
 export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
@@ -230,9 +234,8 @@ export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
   if (bruto.ok) {
     const aceite: Extract<RespostaDeAcao, { ok: true }> = { ok: true };
     if (ehBooleano(bruto.removed)) aceite.removed = bruto.removed;
-    const gravadas = ehObjeto(bruto.config) ? lerPessoas(bruto.config.people) : undefined;
-    // perfil ilegível na resposta: não dá para afirmar o que ficou gravado
-    if (gravadas && gravadas.ilegiveis === 0) aceite.pessoas = gravadas.pessoas;
+    // o mapa gravado vai cru, como o enviado: a conferência dos dois é valor a valor
+    if (ehObjeto(bruto.config) && ehObjeto(bruto.config.people)) aceite.pessoas = bruto.config.people;
     if (Array.isArray(bruto.ignoradas) && bruto.ignoradas.length) aceite.ignoradas = bruto.ignoradas.filter(ehTexto);
     return aceite;
   }
@@ -272,21 +275,45 @@ export function mensagemDaRecusa(resposta: { blocked?: string; error?: string })
 
 type Aceite = Extract<RespostaDeAcao, { ok: true }>;
 
+const TETO_DE_NOMES = 5;
+
+function nomesDe(logins: readonly string[]): string {
+  const ditos = logins.slice(0, TETO_DE_NOMES).map((login) => `@${login}`).join(', ');
+  return logins.length > TETO_DE_NOMES ? `${ditos} e mais ${logins.length - TETO_DE_NOMES}` : ditos;
+}
+
 // O que a tela diz depois de um salvar de perfil que o motor aceitou. O `ok` não basta: o
-// motor descarta valor fora da taxonomia dele sem recusar (parsePeople, lib/parse.js), então
-// a frase sai do que a resposta diz que ficou gravado.
+// motor descarta o que não reconhece sem recusar (parsePeople, lib/parse.js), e o salvar
+// troca a lista inteira. Então a frase sai do mapa que a resposta diz que ficou gravado,
+// conferido inteiro contra o enviado: a pessoa editada pelo perfil lido, e cada uma das
+// outras valor a valor.
 function desfechoDoPerfil(acao: Extract<Acao, { tipo: 'perfil' }>, dados: Aceite): Desfecho {
   if (dados.ignoradas?.includes('people')) return { tipo: 'erro', texto: `O motor ignorou o campo de perfis: o perfil de ${acao.nome} não foi gravado.` };
   if (!dados.pessoas) return { tipo: 'ok', texto: `O motor aceitou o pedido de salvar o perfil de ${acao.nome}, mas a resposta não trouxe os perfis gravados: confira o perfil na tela.` };
-  const gravado = perfilDe(dados.pessoas, acao.login);
-  if (marcaDoPerfil(perfilDe(acao.pessoas, acao.login)) === marcaDoPerfil(gravado)) return { tipo: 'ok', texto: `O motor gravou o perfil de ${acao.nome}: ${textoDoPerfil(gravado)}.` };
-  return { tipo: 'erro', texto: `O motor gravou o perfil de ${acao.nome} diferente do pedido: ficou ${textoDoPerfil(gravado)}. O que ele não reconhece, ele descarta.` };
+  const pedido = perfilDe(lerPessoas(acao.pessoas)?.pessoas, acao.login);
+  const gravado = perfilDe(lerPessoas(dados.pessoas)?.pessoas, acao.login);
+  const igual = marcaDoPerfil(pedido) === marcaDoPerfil(gravado);
+  const outras = outrasQueDiferem(acao.pessoas, dados.pessoas, acao.login);
+  const daPessoa = igual
+    ? `O motor gravou o perfil de ${acao.nome}: ${textoDoPerfil(gravado)}.`
+    : `O motor gravou o perfil de ${acao.nome} diferente do pedido: ficou ${textoDoPerfil(gravado)}. O que ele não reconhece, ele descarta.`;
+  if (!outras.length) return { tipo: igual ? 'ok' : 'erro', texto: daPessoa };
+  return {
+    tipo: 'erro',
+    texto: `${daPessoa} Atenção: o perfil de ${outras.length === 1 ? 'outra pessoa' : `outras ${outras.length} pessoas`} ficou diferente do que esta tela enviou, mudou ou saiu da lista (${nomesDe(outras)}). Confira na tela.`,
+  };
 }
 
+const O_QUE_FICA = 'As revisões dos PRs dela continuam no Histórico e no log do motor.';
+
+// A frase diz o que o motor respondeu. `removed: true` quer dizer que havia ao menos uma das
+// três coisas (dossiê, perfil, contestações), não que as três existiam.
 function desfechoDaRemocao(acao: Extract<Acao, { tipo: 'removerAutor' }>, dados: Aceite): Desfecho {
-  if (dados.removed === false) return { tipo: 'ok', texto: `O motor não tinha nada guardado sobre ${acao.nome}: nada foi apagado.` };
-  if (dados.removed === true) return { tipo: 'ok', texto: `O motor apagou o que guardava sobre ${acao.nome}: dossiê, perfil e contestações. Não há como desfazer.` };
-  return { tipo: 'ok', texto: `O motor aceitou o pedido de remover ${acao.nome} do Time e não disse se havia algo para apagar.` };
+  if (dados.removed === false) return { tipo: 'ok', texto: `O motor respondeu que não tinha dossiê, perfil nem contestação de ${acao.nome}: nada foi apagado. ${O_QUE_FICA}` };
+  if (dados.removed === true) {
+    return { tipo: 'ok', texto: `O motor respondeu que apagou o que tinha de ${acao.nome} entre o dossiê, o perfil e as contestações (ele não diz quais existiam). Não há como desfazer. ${O_QUE_FICA}` };
+  }
+  return { tipo: 'ok', texto: `O motor aceitou o pedido de remover ${acao.nome} do Time e não disse se havia algo para apagar. ${O_QUE_FICA}` };
 }
 
 // cancelado: a sessão acabou com o pedido no ar; a tela não mostra nada por isso.

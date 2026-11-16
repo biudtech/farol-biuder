@@ -3,7 +3,8 @@
 // como escrever cada campo. A tela só fatia e formata: a ordem da lista, o que é uma entrada
 // e o que vale como perfil são do motor.
 import type { Contestacao } from '@/contratos/historico';
-import type { Autor, Pessoa, Pessoas } from '@/contratos/time';
+import { ehObjeto, mesmoJson } from '@/contratos/formas';
+import type { Autor, Pessoa, Pessoas, PessoasCruas } from '@/contratos/time';
 import { ROTULO_DA_ACAO } from '@/historico/rotulos';
 import { nomeDoPr } from '@/radar/formato';
 import type { Conexao } from '@/transporte/cliente';
@@ -12,6 +13,10 @@ import { DOMINIOS, rotuloDoDominio, rotuloDoNivel, rotuloDoPapel } from './taxon
 // Quantas entradas o motor guarda por dossiê: writeMemory (lib/engine/decision.js) corta nas
 // dez mais recentes. O teste ao lado confere o número contra o motor.
 export const TETO_DE_ENTRADAS = 10;
+
+// Quantas contestações de uma pessoa entram no prompt de uma revisão: as confirmadas mais
+// recentes (personProfileBlock, lib/engine/review-prompt.js). O teste ao lado confere.
+export const CONTESTACOES_NO_PROMPT = 5;
 
 // O login de quem está com o dossiê aberto é a única coisa da tela que vai ao endereço: é o
 // identificador que o motor já usa. A busca por nome não vai, de propósito.
@@ -86,14 +91,32 @@ export function perfilLimpo(perfil: Pessoa): Pessoa | undefined {
 }
 
 // O corpo de `people` em POST /api/settings. O motor troca o mapa inteiro pelo que chega
-// (updateSettings, server.js): por isso vai a lista toda, com esta pessoa alterada. Pessoa
-// sem papel nem competência sai do mapa, que é o que o motor faria com a entrada vazia.
-export function comPerfil(pessoas: Pessoas, login: string, perfil: Pessoa): Pessoas {
+// (updateSettings, server.js): por isso vai a lista toda. Ela sai do mapa CRU do motor, e só
+// a pessoa editada muda: as outras voltam exatamente como vieram, inclusive com campo que a
+// tela não conhece ou valor que ela não lê (quem decide o que fazer com eles é o motor).
+// Na pessoa editada trocam-se o papel e os domínios; outro campo dela fica. Sem nada, ela
+// sai do mapa, que é o que o motor faria com a entrada vazia. A chave é o login em
+// minúsculas, como o motor guarda; entrada da mesma pessoa em outra caixa é trocada por ela.
+export function comPerfil(cru: PessoasCruas, login: string, perfil: Pessoa): PessoasCruas {
   const chave = chaveDaPessoa(login);
   const limpo = perfilLimpo(perfil);
-  const resto = Object.entries(pessoas).filter(([outro]) => outro !== chave);
+  const antes = Object.entries(cru).filter(([outro]) => chaveDaPessoa(outro) === chave).map(([, valor]) => valor).find(ehObjeto);
+  const resto = Object.entries(cru).filter(([outro]) => chaveDaPessoa(outro) !== chave);
+  const pessoa: Record<string, unknown> = { ...antes };
+  delete pessoa.papel;
+  delete pessoa.dominios;
+  if (limpo?.papel) pessoa.papel = limpo.papel;
+  if (limpo?.dominios) pessoa.dominios = limpo.dominios;
   // fromEntries define propriedade própria, qualquer que seja o login
-  return Object.fromEntries(limpo ? [...resto, [chave, limpo]] : resto);
+  return Object.fromEntries(Object.keys(pessoa).length ? [...resto, [chave, pessoa]] : resto);
+}
+
+// As outras pessoas (todas menos `login`) cujo perfil gravado difere do enviado: mudou, saiu
+// da lista ou apareceu sem ter sido enviada. É a conferência da resposta de um salvar.
+export function outrasQueDiferem(enviado: PessoasCruas, gravado: PessoasCruas, login: string): string[] {
+  const chave = chaveDaPessoa(login);
+  const todas = [...new Set([...Object.keys(enviado), ...Object.keys(gravado)])].filter((outro) => chaveDaPessoa(outro) !== chave);
+  return todas.filter((outro) => !Object.hasOwn(enviado, outro) || !Object.hasOwn(gravado, outro) || !mesmoJson(enviado[outro], gravado[outro]));
 }
 
 // Dois perfis são o mesmo quando têm a mesma marca: o papel e os domínios, em ordem fixa.
@@ -178,15 +201,24 @@ const NOME_DA_CONEXAO: Record<Conexao, string> = {
 };
 
 // Por que a tela não oferece o salvar de um perfil, ou null quando pode. O salvar manda a
-// lista inteira de perfis desta aba: com a lista ausente, incompleta ou possivelmente velha,
-// salvar apagaria perfil que a tela não tem.
-export function motivoQueImpedeSalvar(estado: { pessoas: Pessoas | undefined; ilegiveis: number; conexao: Conexao }): string | null {
-  if (!estado.pessoas) return 'O motor não mandou a lista de perfis a esta tela: não dá para salvar daqui, porque o salvar manda a lista inteira.';
-  if (estado.ilegiveis > 0) {
-    return `${estado.ilegiveis} perfil(is) chegaram do motor em formato que esta tela não lê. Salvar mandaria a lista sem eles, e o motor os apagaria: o salvar fica fechado.`;
-  }
+// lista inteira de perfis desta aba: com a lista ausente ou possivelmente velha, salvar
+// passaria por cima do que o motor tem. `emDia`: o primeiro estado da conexão atual já
+// chegou (`estadoEmDia`, src/estado/app.ts); "conectado" sozinho não basta, porque vem antes
+// dele, ainda com o snapshot da conexão anterior.
+export function motivoQueImpedeSalvar(estado: { cru: PessoasCruas | undefined; conexao: Conexao; emDia: boolean }): string | null {
+  if (!estado.cru) return 'O motor não mandou a lista de perfis a esta tela: não dá para salvar daqui, porque o salvar manda a lista inteira.';
   if (estado.conexao !== 'conectado') {
-    return `Esta aba está sem o estado do motor em dia (conexão: ${NOME_DA_CONEXAO[estado.conexao]}). A lista de perfis daqui pode estar velha, e salvar a mandaria inteira por cima da do motor: o salvar volta quando a conexão voltar.`;
+    return `Esta aba está sem o estado do motor em dia (conexão: ${NOME_DA_CONEXAO[estado.conexao]}). A lista de perfis daqui pode estar velha, e salvar a mandaria inteira por cima da do motor: o salvar volta quando a conexão voltar e o estado chegar.`;
+  }
+  if (!estado.emDia) {
+    return 'A conexão com o motor acabou de abrir e o estado dele ainda não chegou: a lista de perfis daqui é a de antes da queda. O salvar volta quando o estado chegar.';
   }
   return null;
+}
+
+// O aviso de que a tela não leu algum perfil inteiro. Não fecha o salvar: o corpo sai do
+// mapa cru do motor, e essas pessoas voltam para ele como vieram.
+export function avisoDeIlegiveis(ilegiveis: number): string | null {
+  if (ilegiveis <= 0) return null;
+  return `${ilegiveis} perfil(is) chegaram do motor com campo ou formato que esta tela não lê: ela mostra o que conseguiu ler. Salvar o perfil de outra pessoa reenvia esses como vieram, e o que o motor faz com eles vem no resultado do salvar.`;
 }

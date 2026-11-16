@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mesmoJson } from './formas';
 import { lerAutor, lerConfig, lerPessoas, lerTime } from './time';
 
 describe('lerTime: a resposta de GET /api/team', () => {
@@ -43,8 +44,17 @@ describe('lerPessoas: config.people', () => {
     });
   });
 
-  it('campo torto conta como ausente, e entrada que não é objeto é contada', () => {
-    expect(lerPessoas({ ana: { papel: 4, dominios: { backend: 2, dados: '' } }, bruno: 'x', caio: null })).toEqual({ pessoas: { ana: {} }, ilegiveis: 2 });
+  it('pessoa que perde algo na leitura entra com o que deu para ler, e é contada como ilegível', () => {
+    // papel e domínio de forma errada
+    expect(lerPessoas({ ana: { papel: 4, dominios: { backend: 2, dados: '' } } })).toEqual({ pessoas: { ana: {} }, ilegiveis: 1 });
+    // campo que a tela não conhece
+    expect(lerPessoas({ ana: { papel: 'senior', squad: 'plataforma' } })).toEqual({ pessoas: { ana: { papel: 'senior' } }, ilegiveis: 1 });
+    // o que não é objeto fica de fora, e também conta
+    expect(lerPessoas({ bruno: 'x', caio: null, dora: { papel: 'pleno' } })).toEqual({ pessoas: { dora: { papel: 'pleno' } }, ilegiveis: 2 });
+  });
+
+  it('a ordem das chaves não faz uma pessoa ilegível', () => {
+    expect(lerPessoas({ ana: { dominios: { dados: 'basico', backend: 'avancado' }, papel: 'senior' } })?.ilegiveis).toBe(0);
   });
 
   it('o que não é mapa não é lido', () => {
@@ -60,9 +70,13 @@ describe('lerPessoas: config.people', () => {
 });
 
 describe('lerConfig: a chave config do snapshot', () => {
-  it('fica só com os perfis', () => {
+  it('fica só com os perfis: os lidos, para mostrar, e o mapa cru, para o corpo de um salvar', () => {
     const registrar = vi.fn();
-    expect(lerConfig({ intervalSeconds: 300, people: { ana: { papel: 'pleno' } } }, registrar)).toEqual({ people: { ana: { papel: 'pleno' } } });
+    const people = { ana: { papel: 'pleno' } };
+    const lido = lerConfig({ intervalSeconds: 300, claudeProfiles: [{ id: 'p1' }], people }, registrar);
+    expect(lido).toEqual({ people: { ana: { papel: 'pleno' } }, peopleCru: people });
+    // o cru é o próprio objeto do motor, não uma cópia filtrada
+    expect(lido?.peopleCru).toBe(people);
     expect(registrar).not.toHaveBeenCalled();
   });
 
@@ -71,15 +85,34 @@ describe('lerConfig: a chave config do snapshot', () => {
     expect(lerConfig({ people: [] }, vi.fn())).toEqual({});
   });
 
-  it('perfil ilegível é contado, e o registro leva só a contagem', () => {
+  it('perfil ilegível é contado, o cru o mantém como veio, e o registro leva só a contagem', () => {
     const registrar = vi.fn();
-    expect(lerConfig({ people: { ana: { papel: 'pleno' }, bruno: 3 } }, registrar)).toEqual({ people: { ana: { papel: 'pleno' } }, peopleIlegiveis: 1 });
+    const people = { ana: { papel: 'pleno' }, bruno: 3, caio: { papel: 4 }, dora: { papel: 'senior', squad: 'plataforma' } };
+    expect(lerConfig({ people }, registrar)).toEqual({
+      people: { ana: { papel: 'pleno' }, caio: {}, dora: { papel: 'senior' } },
+      peopleCru: people,
+      peopleIlegiveis: 3,
+    });
     expect(registrar).toHaveBeenCalledTimes(1);
-    expect(String(registrar.mock.calls[0]?.[0])).not.toContain('bruno');
+    const aviso = String(registrar.mock.calls[0]?.[0]);
+    expect(aviso).toContain('3 perfil(is)');
+    for (const dado of ['bruno', 'caio', 'dora', 'plataforma', 'senior']) expect(aviso).not.toContain(dado);
   });
 
   it('forma errada da chave mantém o valor anterior', () => {
     expect(lerConfig('x', vi.fn())).toBeUndefined();
     expect(lerConfig(null, vi.fn())).toBeUndefined();
+  });
+});
+
+describe('mesmoJson', () => {
+  it('compara valor a valor, sem olhar a ordem das chaves', () => {
+    expect(mesmoJson({ a: 1, b: { c: [1, 2], d: null } }, { b: { d: null, c: [1, 2] }, a: 1 })).toBe(true);
+    expect(mesmoJson({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    expect(mesmoJson({ a: 1 }, { a: '1' })).toBe(false);
+    expect(mesmoJson([1, 2], [2, 1])).toBe(false);
+    expect(mesmoJson([], {})).toBe(false);
+    expect(mesmoJson(null, {})).toBe(false);
+    expect(mesmoJson('x', 'x')).toBe(true);
   });
 });

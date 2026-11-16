@@ -23,6 +23,18 @@ export function ehListaDeTextos(valor: unknown): valor is string[] {
   return Array.isArray(valor) && valor.every(ehTexto);
 }
 
+// Dois valores de JSON são o mesmo: mesmos campos e mesmos valores, sem olhar a ordem das
+// chaves de um objeto (a de uma lista conta).
+export function mesmoJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => mesmoJson(item, b[i]));
+  }
+  if (!ehObjeto(a) || !ehObjeto(b)) return false;
+  const chaves = Object.keys(a);
+  return chaves.length === Object.keys(b).length && chaves.every((chave) => Object.hasOwn(b, chave) && mesmoJson(a[chave], b[chave]));
+}
+
 export type Validador<T> = (valor: unknown) => valor is T;
 
 // O registro da borda: recebe só o nome da chave e a contagem, nunca o dado.

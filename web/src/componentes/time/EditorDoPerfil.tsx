@@ -2,14 +2,15 @@
 
 // O papel e a competência de uma pessoa. Quem guarda é o motor, em `config.people`, e o
 // POST /api/settings troca o mapa inteiro pelo que chega: o salvar manda a lista de perfis
-// que esta aba tem no momento do clique, com esta pessoa alterada (comPerfil). Por isso a
-// tela só oferece o salvar com a lista inteira e em dia (motivoQueImpedeSalvar), e avisa
-// quando o perfil mudou no motor com a edição aberta.
-import { useId, useState } from 'react';
-import type { Pessoa, Pessoas } from '@/contratos/time';
+// que esta aba tem no momento do clique, montada do mapa cru do motor e só com esta pessoa
+// alterada (comPerfil). Por isso a tela só oferece o salvar com a lista presente e com o
+// estado desta conexão já chegado (motivoQueImpedeSalvar), e avisa quando o perfil mudou no
+// motor com a edição aberta.
+import { useEffect, useId, useState } from 'react';
+import type { Pessoa, PessoasCruas } from '@/contratos/time';
 import type { Acao } from '@/radar/acoes';
 import { DOMINIOS, NIVEIS, PAPEIS, ehConhecido, type Opcao } from '@/time/taxonomia';
-import { chaveDaPessoa, comPerfil, marcaDoPerfil, motivoQueImpedeSalvar } from '@/time/time';
+import { avisoDeIlegiveis, chaveDaPessoa, comPerfil, marcaDoPerfil, motivoQueImpedeSalvar } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
@@ -33,17 +34,29 @@ function opcoesCom(opcoes: readonly Opcao[], valor: string): readonly Opcao[] {
   return valor === '' || ehConhecido(opcoes, valor) ? opcoes : [...opcoes, [valor, `${valor} (valor que esta tela não conhece)`]];
 }
 
-interface Props {
-  login: string;
-  perfil: Pessoa | undefined;
-  // `config.people` do snapshot, inteiro
-  pessoas: Pessoas | undefined;
-  ilegiveis: number;
-  conexao: Conexao;
-  controle: ControleDeAcoes;
+// O alvo das ações de uma pessoa do Time. Salvar e remover usam o mesmo: enquanto uma está
+// no ar, a outra fica desabilitada (useAcoes trava por alvo).
+export function alvoDaPessoa(login: string): string {
+  return `time:${chaveDaPessoa(login)}`;
 }
 
-export function EditorDoPerfil({ login, perfil, pessoas, ilegiveis, conexao, controle }: Props) {
+interface Props {
+  login: string;
+  // o perfil lido, para mostrar
+  perfil: Pessoa | undefined;
+  // `config.people` do snapshot como o motor mandou: é dele que sai o corpo do salvar
+  cru: PessoasCruas | undefined;
+  // quantas pessoas a tela não leu inteiras
+  ilegiveis: number;
+  conexao: Conexao;
+  // o primeiro estado da conexão atual do fluxo já chegou
+  emDia: boolean;
+  controle: ControleDeAcoes;
+  // avisa quem está em volta se há edição por salvar
+  aoMudar(alterado: boolean): void;
+}
+
+export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, controle, aoMudar }: Props) {
   const [rascunho, setRascunho] = useState(() => rascunhoDo(perfil));
   const idDoPapel = useId();
   const idDosDominios = useId();
@@ -59,15 +72,18 @@ export function EditorDoPerfil({ login, perfil, pessoas, ilegiveis, conexao, con
     else mudouNoMotor = true;
   }
   const alterado = editado !== noMotor;
-  const impedimento = motivoQueImpedeSalvar({ pessoas, ilegiveis, conexao });
+  useEffect(() => { aoMudar(alterado); }, [alterado, aoMudar]);
+
+  const impedimento = motivoQueImpedeSalvar({ cru, conexao, emDia });
+  const aviso = avisoDeIlegiveis(ilegiveis);
 
   // os domínios do motor e, depois, os que o perfil traz e a tela não conhece
   const dominios: readonly Opcao[] = [
     ...DOMINIOS,
     ...Object.keys(rascunho.dominios).filter((d) => !ehConhecido(DOMINIOS, d)).map((d): Opcao => [d, `${d} (domínio que esta tela não conhece)`]),
   ];
-  const acao: Acao | null = pessoas && alterado
-    ? { tipo: 'perfil', alvo: `perfil:${chaveDaPessoa(login)}`, nome: `@${login}`, login, pessoas: comPerfil(pessoas, login, { papel: rascunho.papel, dominios: rascunho.dominios }) }
+  const acao: Acao | null = cru && alterado
+    ? { tipo: 'perfil', alvo: alvoDaPessoa(login), nome: `@${login}`, login, pessoas: comPerfil(cru, login, { papel: rascunho.papel, dominios: rascunho.dominios }) }
     : null;
 
   return (
@@ -116,11 +132,12 @@ export function EditorDoPerfil({ login, perfil, pessoas, ilegiveis, conexao, con
         </div>
       ) : null}
 
+      {aviso ? <p className={comuns.nota}>Aviso: {aviso}</p> : null}
       {impedimento ? <p className={`${comuns.nota} ${comuns.bloqueio}`}>Bloqueado: {impedimento}</p> : null}
       {!impedimento && acao ? (
         <>
           <p className={comuns.meta}>
-            O motor guarda os perfis numa lista só, e o salvar a substitui inteira: vai a lista que esta aba tem agora, com @{login} alterada. Alteração de perfil feita em outra aba que ainda não chegou aqui é sobrescrita.
+            O motor guarda os perfis numa lista só, e o salvar a substitui inteira: vai a lista que esta aba tem agora, como o motor a mandou, com @{login} alterada. Alteração de perfil feita em outra aba que ainda não chegou aqui é sobrescrita.
           </p>
           <AcoesDoItem botoes={[{ acao, primario: true }]} controle={controle} />
         </>

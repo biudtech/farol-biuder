@@ -3,9 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Pessoas } from '@/contratos/time';
 import {
-  TETO_DE_ENTRADAS, chaveDaPessoa, comPerfil, contestacoesDoAutor, dataDaEntrada, desfechoDaEntrada, enderecoDoTime, filtrarPorNome,
-  lerEnderecoDoTime, marcaDoPerfil, markdownDosPontos, motivoQueImpedeSalvar, perfilDe, perfilLimpo, prDaEntrada, soComPerfil,
-  textoDaCompetencia, textoDoPapel, textoDoPerfil, textoDoResultado,
+  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, chaveDaPessoa, comPerfil, contestacoesDoAutor, dataDaEntrada, desfechoDaEntrada, enderecoDoTime, filtrarPorNome,
+  avisoDeIlegiveis, lerEnderecoDoTime, marcaDoPerfil, markdownDosPontos, motivoQueImpedeSalvar, outrasQueDiferem, perfilDe, perfilLimpo,
+  prDaEntrada, soComPerfil, textoDaCompetencia, textoDoPapel, textoDoPerfil, textoDoResultado,
 } from './time';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
@@ -68,33 +68,65 @@ describe('o perfil de uma pessoa', () => {
 });
 
 describe('comPerfil: o corpo de people em POST /api/settings', () => {
-  const pessoas: Pessoas = { ana: { papel: 'senior' }, bruno: { papel: 'junior', dominios: { frontend: 'basico' } } };
+  const cru = { ana: { papel: 'senior' }, bruno: { papel: 'junior', dominios: { frontend: 'basico' } } };
 
   it('manda a lista inteira, com a pessoa alterada', () => {
-    expect(comPerfil(pessoas, 'Ana', { papel: 'techlead', dominios: { backend: 'autoridade', dados: '' } })).toEqual({
+    expect(comPerfil(cru, 'Ana', { papel: 'techlead', dominios: { backend: 'autoridade', dados: '' } })).toEqual({
       bruno: { papel: 'junior', dominios: { frontend: 'basico' } },
       ana: { papel: 'techlead', dominios: { backend: 'autoridade' } },
     });
   });
 
-  it('pessoa nova entra pelo login em minúsculas', () => {
-    expect(comPerfil(pessoas, 'Caio-Lima', { papel: 'pleno' })).toEqual({ ...pessoas, 'caio-lima': { papel: 'pleno' } });
+  it('as outras pessoas voltam como vieram: forma errada, valor torto e campo desconhecido', () => {
+    const torto = { ana: { papel: 4 }, bruno: 'x', caio: null, dora: { papel: 'senior', squad: 'plataforma', dominios: { backend: 2 } }, eva: { papel: 'pleno' } };
+    const corpo = comPerfil(torto, 'eva', { papel: 'senior' });
+    expect(corpo).toEqual({ ana: { papel: 4 }, bruno: 'x', caio: null, dora: { papel: 'senior', squad: 'plataforma', dominios: { backend: 2 } }, eva: { papel: 'senior' } });
+    // a mesma referência: nada das outras é remontado
+    expect(corpo.dora).toBe(torto.dora);
+  });
+
+  it('pessoa degradada na leitura não some do corpo quando outra é editada', () => {
+    expect(comPerfil({ ana: { papel: 4 } }, 'bruno', { papel: 'pleno' })).toEqual({ ana: { papel: 4 }, bruno: { papel: 'pleno' } });
+  });
+
+  it('na pessoa editada o campo que a tela não conhece fica, e papel e domínios são trocados', () => {
+    expect(comPerfil({ ana: { papel: 'senior', squad: 'plataforma', dominios: { backend: 2, dados: 'basico' } } }, 'ana', { papel: '', dominios: { dados: 'avancado' } }))
+      .toEqual({ ana: { squad: 'plataforma', dominios: { dados: 'avancado' } } });
+  });
+
+  it('login com maiúsculas entra pela chave em minúsculas, que é a do motor', () => {
+    expect(comPerfil(cru, 'Caio-Lima', { papel: 'pleno' })).toEqual({ ...cru, 'caio-lima': { papel: 'pleno' } });
+    // entrada da mesma pessoa em outra caixa é trocada, não duplicada
+    expect(comPerfil({ 'Ana-Souza': { papel: 'junior', squad: 'x' }, bruno: { papel: 'junior' } }, 'Ana-Souza', { papel: 'senior' }))
+      .toEqual({ bruno: { papel: 'junior' }, 'ana-souza': { papel: 'senior', squad: 'x' } });
   });
 
   it('perfil que ficou vazio tira a pessoa do mapa', () => {
-    expect(comPerfil(pessoas, 'ana', { papel: '', dominios: {} })).toEqual({ bruno: pessoas.bruno });
+    expect(comPerfil(cru, 'ana', { papel: '', dominios: {} })).toEqual({ bruno: cru.bruno });
   });
 
   it('não muda o mapa que recebeu', () => {
-    const antes = JSON.stringify(pessoas);
-    comPerfil(pessoas, 'ana', { papel: 'pleno' });
-    expect(JSON.stringify(pessoas)).toBe(antes);
+    const antes = JSON.stringify(cru);
+    comPerfil(cru, 'ana', { papel: 'pleno' });
+    expect(JSON.stringify(cru)).toBe(antes);
   });
 
   it('um login "__proto__" vira propriedade própria', () => {
     const corpo = comPerfil({}, '__proto__', { papel: 'pleno' });
     expect(Object.hasOwn(corpo, '__proto__')).toBe(true);
     expect(({} as { papel?: string }).papel).toBeUndefined();
+  });
+});
+
+describe('outrasQueDiferem: a conferência da resposta de um salvar', () => {
+  const enviado = { ana: { papel: 'senior' }, bruno: { papel: 'junior', dominios: { frontend: 'basico' } }, caio: { papel: 4 } };
+
+  it('nada difere quando o motor devolve o que recebeu, em qualquer ordem de chaves', () => {
+    expect(outrasQueDiferem(enviado, { caio: { papel: 4 }, bruno: { dominios: { frontend: 'basico' }, papel: 'junior' }, ana: { papel: 'pleno' } }, 'Ana')).toEqual([]);
+  });
+
+  it('diz quem mudou, quem saiu e quem apareceu, sem contar a pessoa editada', () => {
+    expect(outrasQueDiferem(enviado, { ana: { papel: 'senior' }, bruno: { papel: 'junior' }, dora: { papel: 'pleno' } }, 'ana')).toEqual(['bruno', 'caio', 'dora']);
   });
 });
 
@@ -157,6 +189,12 @@ describe('a entrada de memória', () => {
     expect(markdownDosPontos([])).toBe('');
   });
 
+  it('o número de contestações que entram no prompt é o do motor', () => {
+    const fonte = fs.readFileSync(path.join(RAIZ, 'lib/engine/review-prompt.js'), 'utf8');
+    const corte = /pushbacksFor\(login\)\.slice\(0, (\d+)\)/.exec(fonte);
+    expect(corte?.[1]).toBe(String(CONTESTACOES_NO_PROMPT));
+  });
+
   it('o teto de entradas é o do motor', () => {
     const fonte = fs.readFileSync(path.join(RAIZ, 'lib/engine/decision.js'), 'utf8');
     const corte = /blocks\.slice\(0, (\d+)\)/.exec(fonte);
@@ -174,11 +212,17 @@ describe('frases', () => {
     expect(textoDoResultado(4, 0, 'zzz')).toBe('Ninguém passa pela busca, de 4 pessoas');
   });
 
-  it('o salvar só é oferecido com a lista de perfis inteira e em dia', () => {
-    expect(motivoQueImpedeSalvar({ pessoas: {}, ilegiveis: 0, conexao: 'conectado' })).toBeNull();
-    expect(motivoQueImpedeSalvar({ pessoas: undefined, ilegiveis: 0, conexao: 'conectado' })).toMatch(/não mandou a lista de perfis/);
-    expect(motivoQueImpedeSalvar({ pessoas: {}, ilegiveis: 2, conexao: 'conectado' })).toMatch(/^2 perfil\(is\)/);
-    expect(motivoQueImpedeSalvar({ pessoas: {}, ilegiveis: 0, conexao: 'reconectando' })).toMatch(/conexão: reconectando/);
-    expect(motivoQueImpedeSalvar({ pessoas: {}, ilegiveis: 0, conexao: 'sem-motor' })).toMatch(/sem resposta do motor/);
+  it('o salvar só é oferecido com a lista de perfis e com o estado desta conexão já chegado', () => {
+    expect(motivoQueImpedeSalvar({ cru: {}, conexao: 'conectado', emDia: true })).toBeNull();
+    expect(motivoQueImpedeSalvar({ cru: undefined, conexao: 'conectado', emDia: true })).toMatch(/não mandou a lista de perfis/);
+    expect(motivoQueImpedeSalvar({ cru: {}, conexao: 'reconectando', emDia: false })).toMatch(/conexão: reconectando/);
+    expect(motivoQueImpedeSalvar({ cru: {}, conexao: 'sem-motor', emDia: false })).toMatch(/sem resposta do motor/);
+    // conectado no HTTP 200, ainda com o snapshot de antes da queda
+    expect(motivoQueImpedeSalvar({ cru: {}, conexao: 'conectado', emDia: false })).toMatch(/o estado dele ainda não chegou/);
+  });
+
+  it('perfil ilegível vira aviso, não trava', () => {
+    expect(avisoDeIlegiveis(0)).toBeNull();
+    expect(avisoDeIlegiveis(2)).toMatch(/^2 perfil\(is\) chegaram do motor com campo ou formato que esta tela não lê/);
   });
 });

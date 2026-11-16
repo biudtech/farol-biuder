@@ -65,8 +65,10 @@ export function useTime(cliente: Pick<Cliente, 'get'>, recarga: number, marcaAtu
 export interface EnderecoDoTime {
   // o login do dossiê aberto, ou null com a lista na tela
   autor: string | null;
-  // Abrir e fechar o dossiê empilham uma entrada: o voltar do navegador desfaz.
-  ir(autor: string | null): void;
+  // Abrir e fechar o dossiê empilham uma entrada: o voltar do navegador desfaz. `trocar`
+  // substitui a entrada atual: é o fechar depois de uma remoção, para o voltar do navegador
+  // não reabrir o dossiê de quem saiu.
+  ir(autor: string | null, modo?: 'empilhar' | 'trocar'): void;
 }
 
 // A leitura é do Next (useSearchParams); a escrita é pela History API, que o Next integra ao
@@ -75,9 +77,11 @@ export function useEnderecoDoTime(): EnderecoDoTime {
   const params = useSearchParams();
   const caminho = usePathname();
   const autor = useMemo(() => lerEnderecoDoTime(params), [params]);
-  const ir = useCallback((para: string | null) => {
+  const ir = useCallback((para: string | null, modo: 'empilhar' | 'trocar' = 'empilhar') => {
     const query = enderecoDoTime(para);
-    window.history.pushState(null, '', query ? `${caminho}?${query}` : caminho);
+    const url = query ? `${caminho}?${query}` : caminho;
+    if (modo === 'trocar') window.history.replaceState(null, '', url);
+    else window.history.pushState(null, '', url);
   }, [caminho]);
   return { autor, ir };
 }
