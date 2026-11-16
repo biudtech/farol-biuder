@@ -3,15 +3,18 @@
 // A seção Conta revisora e política: quem é a conta, se o token do GitHub está presente (só
 // a presença: o token nunca sai do motor), as organizações monitoradas e a política de
 // aprovação. A política decide o que o motor PUBLICA sozinho no GitHub: o salvar manda a
-// POST /api/accounts/edit só os campos que mudaram, e toda mudança que amplia a publicação
-// automática pergunta antes, dizendo o efeito exato (confirmacaoDoSistema).
-import { useEffect, useId, useState } from 'react';
+// POST /api/accounts/edit só os campos que a pessoa alterou nesta edição (a diferença entre o
+// rascunho e o valor que ela viu ao começar), e toda mudança que amplia a publicação
+// automática pergunta antes, dizendo o efeito exato contra o valor atual do motor
+// (confirmacaoDoSistema).
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ContaRevisora } from '@/contratos/sistema';
 import type { Acao } from '@/radar/acoes';
 import { dataHora } from '@/radar/formato';
 import {
   DOMINIO_DA_POLITICA, ROTULO_DO_DESFECHO, ampliacoesDaConta, camposAlterados, efeitoDaRevisaoAutomatica, efeitoDoDesfecho, marcaDaConta,
-  organizacaoValida, rascunhoDaConta, rotuloDoValor, temOrganizacao, textoDoToken, type Desfecho, type RascunhoDaConta,
+  notaDasRessalvasTravadas, organizacaoValida, rascunhoDaConta, refazerConta, rotuloDoValor, temOrganizacao, textoDoToken, textosDosConflitos,
+  type Desfecho, type RascunhoDaConta,
 } from '@/sistema/politica';
 import type { ControleDeAcoes } from '../radar/useAcoes';
 import comuns from '../radar/Radar.module.css';
@@ -31,9 +34,10 @@ interface PropsDoEditor {
 }
 
 function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor) {
-  const { valor: rascunho, alterado, mudouNoMotor, editar, descartar } = useRascunho<ContaRevisora, RascunhoDaConta>(conta, rascunhoDaConta, marcaDaConta);
+  const { valor: rascunho, partida, alterado, mudouNoMotor, conflitos, editar, descartar } = useRascunho<ContaRevisora, RascunhoDaConta>(conta, rascunhoDaConta, marcaDaConta, refazerConta);
   const [nova, setNova] = useState('');
   const [erroDaNova, setErroDaNova] = useState('');
+  const campoDaNova = useRef<HTMLInputElement>(null);
   const idDaNova = useId();
   const idDoErroDaNova = useId();
   const idDaRevisao = useId();
@@ -43,7 +47,7 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor)
     return () => aoMudar(false);
   }, [alterado, aoMudar]);
 
-  const campos = camposAlterados(conta, rascunho);
+  const campos = camposAlterados(partida, rascunho, conta);
   const temCampo = Object.keys(campos).length > 0;
   const acao: Acao | null = temCampo
     ? { tipo: 'conta', alvo: ALVO_DA_CONTA, nome: `@${conta.user}`, user: conta.user, campos, ampliacoes: ampliacoesDaConta(conta, campos) }
@@ -65,18 +69,24 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor)
     setErroDaNova('');
   }
 
+  function tirar(org: string): void {
+    editar({ ...rascunho, owners: rascunho.owners.filter((outra) => outra !== org) });
+    // o botão clicado sai da tela: o foco vai ao campo de acrescentar, que fica sempre
+    campoDaNova.current?.focus();
+  }
+
   return (
     <>
       <h3 className={estilos.subtitulo}>Organizações monitoradas</h3>
       <p className={comuns.meta}>
-        O motor busca os PRs pedidos à conta só nestas organizações do GitHub. O salvar manda a lista inteira que está aqui, e o motor confere a fila na hora.
+        O motor busca os PRs pedidos à conta só nestas organizações do GitHub. O motor guarda a lista inteira: o salvar manda a lista que ele tem agora, com o que você acrescentou e sem o que você tirou, e ele confere a fila na hora.
       </p>
       {rascunho.owners.length ? (
         <ul className={estilos.orgs} aria-label="Organizações monitoradas">
           {rascunho.owners.map((org) => (
             <li key={org} className={estilos.org}>
               <span>{org}</span>
-              <button type="button" className={comuns.botao} aria-label={`Tirar ${org} das organizações monitoradas`} onClick={() => editar({ ...rascunho, owners: rascunho.owners.filter((outra) => outra !== org) })}>
+              <button type="button" className={comuns.botao} aria-label={`Tirar ${org} das organizações monitoradas`} onClick={() => tirar(org)}>
                 Tirar
               </button>
             </li>
@@ -90,6 +100,7 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor)
           <label className={comuns.rotulo} htmlFor={idDaNova}>Organização a adicionar</label>
           <input
             id={idDaNova}
+            ref={campoDaNova}
             className={comuns.entrada}
             value={nova}
             maxLength={TETO_DA_ORGANIZACAO}
@@ -118,42 +129,39 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor)
           id={idDaRevisao}
           type="checkbox"
           checked={rascunho.autoReview === true}
+          aria-describedby={`${idDaRevisao}-efeito`}
           onChange={(evento) => editar({ ...rascunho, autoReview: evento.target.checked })}
         />
         <div>
           <label htmlFor={idDaRevisao}>Revisão automática</label>
-          <p className={comuns.meta}>{efeitoDaRevisaoAutomatica(rascunho.autoReview)}</p>
+          <p id={`${idDaRevisao}-efeito`} className={comuns.meta}>{efeitoDaRevisaoAutomatica(rascunho.autoReview)}</p>
         </div>
       </div>
       {DESFECHOS.map((campo, i) => {
-        const valor = rascunho[campo];
         const dominio: readonly string[] = DOMINIO_DA_POLITICA[campo];
+        // Com o limpo em espera o com ressalvas é MOSTRADO em espera, sem mexer no rascunho:
+        // voltar o limpo para publicar devolve o campo ao valor que estava.
         const travado = campo === 'onCaveats' && limpoEspera;
-        const mostrado = travado ? 'wait' : valor;
+        const mostrado = travado ? 'wait' : rascunho[campo];
+        const idDoCampo = `${idDosDesfechos}-${i}`;
+        let efeito = mostrado === '' ? 'O motor não mandou este campo.' : efeitoDoDesfecho(campo, mostrado);
+        if (travado) efeito = notaDasRessalvasTravadas(rascunho);
         return (
           <div key={campo} className={estilos.campo}>
-            <label className={comuns.rotulo} htmlFor={`${idDosDesfechos}-${i}`}>{ROTULO_DO_DESFECHO[campo]}</label>
+            <label className={comuns.rotulo} htmlFor={idDoCampo}>{ROTULO_DO_DESFECHO[campo]}</label>
             <select
-              id={`${idDosDesfechos}-${i}`}
+              id={idDoCampo}
               className={comuns.entrada}
               value={mostrado}
               disabled={travado}
-              onChange={(evento) => {
-                const novo = evento.target.value;
-                // o formulário acompanha o que o motor grava: limpo em espera leva o com
-                // ressalvas junto (o campo não vai no corpo: quem o põe em espera é o motor)
-                editar(campo === 'onClean' && novo === 'wait' ? { ...rascunho, onClean: novo, onCaveats: 'wait' } : { ...rascunho, [campo]: novo });
-              }}
+              aria-describedby={`${idDoCampo}-efeito`}
+              onChange={(evento) => editar({ ...rascunho, [campo]: evento.target.value })}
             >
               {mostrado === '' ? <option value="">O motor não mandou este campo</option> : null}
               {dominio.map((opcao) => <option key={opcao} value={opcao}>{rotuloDoValor(campo, opcao)}</option>)}
               {mostrado !== '' && !dominio.includes(mostrado) ? <option value={mostrado}>{rotuloDoValor(campo, mostrado)}</option> : null}
             </select>
-            <p className={comuns.meta}>
-              {travado
-                ? 'Espera você: com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo).'
-                : mostrado === '' ? 'O motor não mandou este campo.' : efeitoDoDesfecho(campo, mostrado)}
-            </p>
+            <p id={`${idDoCampo}-efeito`} className={comuns.meta}>{efeito}</p>
           </div>
         );
       })}
@@ -162,12 +170,13 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar }: PropsDoEditor)
         oQue="a conta e a política"
         alterado={alterado}
         mudouNoMotor={mudouNoMotor}
+        conflitos={textosDosConflitos(conflitos, conta, rascunho)}
         aoDescartar={() => { descartar(); setNova(''); setErroDaNova(''); }}
         impedimento={impedimento}
         erro={alterado && !temCampo ? 'Não há mudança neste formulário que o motor aceite.' : null}
         acao={acao}
         controle={controle}
-        nota="O salvar manda só o que mudou, e o motor aplica sobre a conta que ele tem agora. Das organizações vai a lista inteira que está acima."
+        nota="O salvar manda só os campos que você alterou nesta edição, e o motor aplica sobre a conta que ele tem agora: o que outra pessoa mudou nos outros campos não é desfeito. Das organizações vai a lista que o motor tem agora, com o que você acrescentou e sem o que você tirou."
       />
     </>
   );

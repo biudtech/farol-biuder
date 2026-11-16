@@ -12,6 +12,9 @@ export const ESFORCOS = ['low', 'medium', 'high', 'xhigh'] as const;
 
 export const ROTULO_DO_ESFORCO: Record<string, string> = { low: 'Baixo (low)', medium: 'Médio (medium)', high: 'Alto (high)', xhigh: 'Muito alto (xhigh)' };
 
+// O nome do campo traz o termo oficial do Claude Code (`effort`), como as opções.
+export const NOME_DO_CAMPO_DE_ESFORCO = 'Esforço (effort) da revisão';
+
 // A faixa de `parallelReviews` (sanitizeParallelReviews, lib/parse.js): fora dela o motor
 // ajusta para a ponta. O teste ao lado confere contra o motor.
 export const PARALELO_MINIMO = 1;
@@ -84,27 +87,34 @@ export function efeitoDoCi(ligado: boolean): string {
 }
 
 export const EFEITO_DO_PARALELO = `Quantas sessões de revisão a conta roda ao mesmo tempo, de ${PARALELO_MINIMO} a ${PARALELO_MAXIMO}. Mais sessões juntas esvaziam a fila mais rápido e gastam o plano ou a chave mais depressa.`;
-export const EFEITO_DO_MODELO = 'Vira a flag --model da sessão de revisão do Claude Code. As opções são apelidos de família: quem decide a versão é o Claude Code instalado no motor. O Auto é do Farol, não vira flag: o motor escolhe modelo e esforço pelo PR.';
-export const EFEITO_DO_ESFORCO = 'Vira a flag --effort da sessão de revisão. Mais esforço deixa a sessão mais longa e mais cara.';
+export const EFEITO_DO_MODELO = 'Vira a flag --model da sessão de revisão do Claude Code. As opções são apelidos de família: quem decide a versão é o Claude Code instalado no motor. O Auto é do Farol, não vira flag: o motor escolhe modelo e effort pelo PR. Um nome completo de modelo (claude-...) só entra pelo arquivo de configuração.';
+export const EFEITO_DO_ESFORCO = 'Vira a flag --effort da sessão de revisão. Mais effort deixa a sessão mais longa e mais cara.';
 
-// O teto total da instância, que esta tela não edita: com ele ligado vale o menor dos dois.
-export function notaDoTetoTotal(total: number | undefined): string | null {
+// O limite total de sessões da instância, que esta tela não edita: com ele ligado vale o menor dos dois.
+export function notaDoLimiteTotal(total: number | undefined): string | null {
   if (!total || total <= 0) return null;
-  return `A instância tem também um teto total de ${total} ${total === 1 ? 'sessão' : 'sessões'} ao mesmo tempo (globalParallelReviews), que esta tela não edita: vale o menor dos dois.`;
+  return `A instância tem também um limite total de ${total} ${total === 1 ? 'sessão' : 'sessões'} ao mesmo tempo (globalParallelReviews), que esta tela não edita: vale o menor dos dois.`;
 }
 
 // Só uma mudança da automação amplia o que o motor publica sozinho: desligar o CI antes de
-// aprovar. As outras não mudam o que é publicado.
+// aprovar. As outras não mudam o que é publicado. O efeito tem duas partes, e a segunda é
+// imediata: com a chave desligada, a varredura das esperas já armadas (umaEspera e
+// liberarSemCi, lib/engine/espera-ci.js, na raiz) publica a aprovação de cada PR que estava
+// esperando o CI, com o CI não verde como nota; a pendência que pediu mudanças só pelo CI vai
+// para a mesa.
 export function ampliacoesDaAutomacao(antes: Automacao, corpo: CorpoDaAutomacao): string[] {
   if (corpo.aguardarCiParaAprovar !== false || antes.aguardarCiParaAprovar === false) return [];
-  return ['CI antes de aprovar desligado: a aprovação automática deixa de esperar os checks obrigatórios, e o motor passa a poder publicar APPROVE com o CI vermelho ou ainda rodando. Onde o check não é obrigatório no ruleset do repositório, nada barra o merge depois dessa aprovação.'];
+  return [
+    'Efeito imediato: toda aprovação que já está em "Esperando o CI" é publicada (APPROVE) na próxima varredura do motor, sem esperar os checks, mesmo com o CI vermelho ou ainda rodando, desde que o commit ainda seja o revisado e a política da conta ainda mande aprovar. A pendência que pediu mudanças só por causa do CI não é publicada: vai para "Precisa de você".',
+    'Daqui em diante: a aprovação automática deixa de esperar os checks obrigatórios, e o motor passa a poder publicar APPROVE com o CI vermelho ou ainda rodando. Onde o check não é obrigatório no ruleset do repositório, nada barra o merge depois dessa aprovação.',
+  ];
 }
 
 const NOME_DA_CHAVE: Record<ChaveDaAutomacao, string> = {
   aguardarCiParaAprovar: 'CI antes de aprovar',
   parallelReviews: 'revisões ao mesmo tempo',
   reviewModel: 'modelo',
-  reviewEffort: 'esforço',
+  reviewEffort: 'esforço (effort)',
 };
 
 function valorDaChave(chave: ChaveDaAutomacao, valor: unknown): string {
@@ -117,6 +127,14 @@ function valorDaChave(chave: ChaveDaAutomacao, valor: unknown): string {
 // O pedido numa frase: "CI antes de aprovar: ligado; modelo: opus".
 export function textoDaAutomacao(corpo: CorpoDaAutomacao): string {
   return CHAVES_DA_AUTOMACAO.filter((chave) => corpo[chave] !== undefined).map((chave) => `${NOME_DA_CHAVE[chave]}: ${valorDaChave(chave, corpo[chave])}`).join('; ');
+}
+
+// A chave que a pessoa e o motor mudaram, cada um para um valor: a tela mostra os dois. Só
+// enquanto os dois ainda diferem.
+export function conflitosDaAutomacao(conflitos: readonly string[], noMotor: Automacao, rascunho: Automacao): string[] {
+  return CHAVES_DA_AUTOMACAO
+    .filter((chave) => conflitos.includes(chave) && noMotor[chave] !== rascunho[chave])
+    .map((chave) => `${NOME_DA_CHAVE[chave]}: no motor agora está "${valorDaChave(chave, noMotor[chave])}", e no seu formulário, "${valorDaChave(chave, rascunho[chave])}". Salvar grava o seu.`);
 }
 
 // A conferência do que voltou: cada chave enviada cujo valor gravado difere do pedido, com o

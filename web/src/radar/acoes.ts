@@ -9,10 +9,11 @@
 // POST /api/accounts/edit como `{ ok: false, erro }` e a de POST /api/auth/revoke como
 // `{ ok: false, code }`.
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
+import { mensagemSegura } from '@/contratos/segredos';
 import { lerConfigDoSistema } from '@/contratos/sistema';
 import { lerPessoas, type PessoasCruas } from '@/contratos/time';
 import {
-  TIPOS_DO_SISTEMA, confirmacaoDoSistema, desfechoDoSistema, nomeDoSistema, pedidoDoSistema, recusaDoSistema, rotuloDoSistema,
+  TIPOS_DO_SISTEMA, confirmacaoDoSistema, desfechoDoSistema, nomeDoSistema, pedidoDoSistema, rotuloDoSistema,
   type AceiteDoSistema, type AcaoDoSistema,
 } from '@/sistema/acoes';
 import { marcaDoPerfil, outrasQueDiferem, perfilDe, textoDoPerfil } from '@/time/time';
@@ -59,7 +60,7 @@ export type Acao =
   // no histórico e no log). O que a tela via na hora do clique vai junto só para a pergunta
   // dizer o que será apagado.
   | (Base & { tipo: 'removerAutor'; login: string; entradas: number; temPerfil: boolean; contestacoes: number })
-  // a conta e a política, a automação, o teto de gasto e a revogação de sessão
+  // a conta e a política, a automação e a revogação de sessão
   | AcaoDoSistema;
 
 function ehDoSistema(acao: Acao): acao is AcaoDoSistema {
@@ -267,7 +268,8 @@ export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
   }
   // Código ou frase de forma errada contam como ausentes: a recusa continua sendo recusa. A
   // recusa de POST /api/settings usa `code` e `erro` no lugar de `blocked` e `error`.
-  return { ok: false, blocked: campo(bruto.blocked, ehTexto) ?? campo(bruto.code, ehTexto), error: campo(bruto.error, ehTexto) ?? campo(bruto.erro, ehTexto) };
+  // a frase da recusa é texto do motor para ler: o trecho em formato de credencial é trocado
+  return { ok: false, blocked: campo(bruto.blocked, ehTexto) ?? campo(bruto.code, ehTexto), error: mensagemSegura(bruto.error) ?? mensagemSegura(bruto.erro) };
 };
 
 // A frase de cada código de recusa do motor (`blocked`). Os que vêm com `true` levam junto
@@ -372,7 +374,7 @@ export async function executar(cliente: Pick<Cliente, 'post'>, acao: Acao): Prom
   const { rota, corpo } = pedidoDa(acao);
   const r = await cliente.post(rota, corpo, lerRespostaDeAcao);
   if (r.ok) {
-    if (!r.dados.ok) return { tipo: 'erro', texto: (ehDoSistema(acao) ? recusaDoSistema(acao, r.dados.blocked) : null) ?? mensagemDaRecusa(r.dados) };
+    if (!r.dados.ok) return { tipo: 'erro', texto: mensagemDaRecusa(r.dados) };
     if (acao.tipo === 'perfil') return desfechoDoPerfil(acao, r.dados);
     if (acao.tipo === 'removerAutor') return desfechoDaRemocao(acao, r.dados);
     if (ehDoSistema(acao)) return desfechoDoSistema(acao, r.dados);

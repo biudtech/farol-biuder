@@ -9,7 +9,7 @@ import {
   campo, deGuarda, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, itemDe, lerItens, lerLista, lerRegistro,
   semAusentes, type Leitor, type LeitorDeItem, type Objeto,
 } from './formas';
-import { semSegredos } from './segredos';
+import { mascararSegredos, semSegredos } from './segredos';
 
 // `status`: o estado do ciclo de checagem (constructor e setStatus, server.js).
 export const STATUS_DO_MOTOR = ['starting', 'checking', 'idle', 'error'] as const;
@@ -175,7 +175,7 @@ export const TETO_DO_FEED = 120;
 
 export const lerLinhaDoFeed: LeitorDeItem<LinhaDoFeed> = (v) => {
   if (!ehObjeto(v) || !ehNumero(v.t) || !ehTexto(v.text)) return undefined;
-  return semAusentes({ t: v.t, k: campo(v.k, ehTexto) ?? 'info', text: v.text, a: campo(v.a, ehTexto), s: campo(v.s, ehTexto) });
+  return semAusentes({ t: v.t, k: campo(v.k, ehTexto) ?? 'info', text: mascararSegredos(v.text), a: campo(v.a, ehTexto), s: campo(v.s, ehTexto) });
 };
 
 const lerLinhas = lerLista('activity', lerLinhaDoFeed);
@@ -270,7 +270,7 @@ export function lerMotivos(valor: unknown): Motivo[] {
   const motivos: Motivo[] = [];
   for (const m of valor) {
     if (!ehObjeto(m) || !ehTexto(m.text) || !m.text) continue;
-    motivos.push({ text: m.text, kind: ehTexto(m.kind) && TIPOS_DE_MOTIVO.includes(m.kind) ? (m.kind as TipoDeMotivo) : 'content' });
+    motivos.push({ text: mascararSegredos(m.text), kind: ehTexto(m.kind) && TIPOS_DE_MOTIVO.includes(m.kind) ? (m.kind as TipoDeMotivo) : 'content' });
   }
   return motivos;
 }
@@ -340,7 +340,7 @@ export const lerPendencia: LeitorDeItem<Pendencia> = (v) => {
     esperaCi: lerEsperaCi(v.esperaCi),
     esperaProva: lerEsperaProva(v.esperaProva),
     technical: lerTecnica(v.technical),
-    reportMarkdown: campo(v.reportMarkdown, ehTexto) ?? '',
+    reportMarkdown: mascararSegredos(campo(v.reportMarkdown, ehTexto) ?? ''),
     reasons: lerMotivos(v.reasons),
     attention: lerMotivos(v.attention),
   });
@@ -365,7 +365,8 @@ export const lerDecisoes: Leitor<Decisoes> = (valor, registrar) => {
 };
 
 export const lerStatus = deGuarda(ehStatus);
-export const lerErro = deGuarda(ehErro);
+// o erro do motor é texto para ler: o trecho em formato de credencial é trocado
+export const lerErro: Leitor<string | null> = (valor) => (ehErro(valor) ? (valor === null ? null : mascararSegredos(valor)) : undefined);
 export const lerInstante = deGuarda(ehInstanteOuNulo);
 // montada campo a campo: o que mais vier junto da conta não entra no store
 export const lerConta: Leitor<ContaDoMotor> = (valor) => (ehConta(valor) ? { user: valor.user, tokenOk: valor.tokenOk } : undefined);

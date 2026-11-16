@@ -8,6 +8,11 @@ describe('evento toast do motor', () => {
     expect(lerRecado({ kind: 'error', text: 'Falha ao postar em a/b#1: x' })).toEqual({ tom: 'erro', texto: 'Falha ao postar em a/b#1: x' });
   });
 
+  it('o aviso fica, sem o trecho em formato de credencial', () => {
+    const token = ['gh', 'p_', 'k1L2m3N4'.repeat(4)].join('');
+    expect(lerRecado({ kind: 'error', text: `Falha ao postar em a/b#1: o gh usou ${token}` })).toEqual({ tom: 'erro', texto: 'Falha ao postar em a/b#1: o gh usou [segredo omitido]' });
+  });
+
   it('tipo ausente ou desconhecido vale como informação', () => {
     for (const kind of [undefined, null, 7, 'novo', 'constructor']) expect(lerRecado({ kind, text: 'x' })?.tom).toBe('info');
   });

@@ -9,19 +9,22 @@
 //
 // Segredo não passa daqui. Os tipos lidos só têm campo que a tela mostra, montados um a um, e
 // nenhum deles é token, chave, senha ou credencial: do segredo a tela só conhece a presença
-// (`tokenOk`, `temChave`, `hasCredential`), que é booleano. O único dado guardado como veio é
-// a lista de perfis do Claude, de onde sai o corpo do salvar do teto, e ela passa antes por
-// `semSegredos` (./segredos), que tira o que tem nome ou valor de segredo.
+// (`tokenOk`, `temChave`, `hasCredential`), que é booleano. Nada daqui é guardado como veio: a
+// tela não manda perfil de volta ao motor, então não há lista crua no store. Valor curto que
+// chega em formato de credencial conta como ausente (`textoSeguro`), e mensagem do motor
+// (erro, motivo, aviso, o relatório de diagnóstico) fica, com o trecho trocado por
+// "[segredo omitido]" (`mensagemSegura`, ./segredos).
 import {
-  campo, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, mesmoJson, semAusentes,
+  campo, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, semAusentes,
   type Leitor, type LeitorDeItem, type Registrar,
 } from './formas';
-import { semSegredos, textoSeguro } from './segredos';
+import { mascararSegredos, mensagemSegura, semSegredos, textoSeguro } from './segredos';
 
 // ---------- `config`: automação, perfis do Claude e chaves só de arquivo ----------
 
-// Um perfil do Claude como a tela o mostra. A pasta (`dir`) e a chave (`apiKey`) não são
-// lidas; da chave só a presença (`temChave`).
+// Um perfil do Claude como a tela o mostra. A chave (`apiKey`) e a pasta do perfil de
+// assinatura (`dir`) não são lidas nem guardadas: da chave só a presença (`temChave`), e a
+// pasta é assunto do motor (o caminho dela não vai ao store).
 export interface PerfilDoClaude {
   id: string;
   label?: string;
@@ -30,16 +33,11 @@ export interface PerfilDoClaude {
   temChave?: boolean;
   // o endereço para onde a chave é enviada, quando não é o da Anthropic
   baseUrl?: string;
-  // o teto em dólar (aplicaOrcamento, lib/parse.js): ausente é sem teto, e zero é teto
-  budgetDaily?: number;
-  budgetTotal?: number;
-  budgetSince?: string;
-  // tetos do dia por dia da semana ("0" domingo a "6" sábado) e por data
-  budgetByWeekday?: Record<string, number>;
-  budgetDates?: Record<string, number>;
+  // Não vem assim do motor: o perfil traz algum teto de gasto no arquivo (`budgetDaily`,
+  // `budgetTotal`, `budgetByWeekday` ou `budgetDates`). A tela não mostra nem edita o valor:
+  // só avisa que ele existe, porque o motor ainda pausa revisão automática por ele.
+  temTeto?: true;
 }
-
-export type PerfisCrus = readonly unknown[];
 
 export interface ConfigDoSistema {
   aguardarCiParaAprovar?: boolean;
@@ -48,11 +46,6 @@ export interface ConfigDoSistema {
   reviewModel?: string;
   reviewEffort?: string;
   claudeProfiles?: PerfilDoClaude[];
-  // A lista de perfis como o motor mandou, sem o que tem cara de segredo: é dela que sai o
-  // corpo do salvar do teto, porque o motor troca a lista inteira pelo que chega.
-  claudeProfilesCru?: PerfisCrus;
-  // Não vem do motor: quantos perfis a tela não leu inteiros.
-  claudeProfilesIlegiveis?: number;
   claudeProfileId?: string;
   // só por arquivo, com reinício do motor
   bind?: string;
@@ -64,38 +57,24 @@ export interface ConfigDoSistema {
   segredosDescartados?: number;
 }
 
-function mapaDeTetos(valor: unknown): Record<string, number> | undefined {
-  if (!ehObjeto(valor)) return undefined;
-  const pares = Object.entries(valor).filter((par): par is [string, number] => ehNumero(par[1]));
-  return pares.length ? Object.fromEntries(pares) : undefined;
+// Há teto neste campo: um número (zero também é teto), ou um mapa com algum número.
+function haTeto(valor: unknown): boolean {
+  if (ehNumero(valor)) return true;
+  return ehObjeto(valor) && Object.values(valor).some(ehNumero);
 }
 
 const lerPerfil: LeitorDeItem<PerfilDoClaude> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.id) || !v.id) return undefined;
+  const temTeto = [v.budgetDaily, v.budgetTotal, v.budgetByWeekday, v.budgetDates].some(haTeto);
   return semAusentes({
     id: v.id,
     label: textoSeguro(v.label) || undefined,
     kind: campo(v.kind, ehTexto),
     temChave: campo(v.temChave, ehBooleano),
     baseUrl: textoSeguro(v.baseUrl) || undefined,
-    budgetDaily: campo(v.budgetDaily, ehNumero),
-    budgetTotal: campo(v.budgetTotal, ehNumero),
-    budgetSince: campo(v.budgetSince, ehTexto) || undefined,
-    budgetByWeekday: mapaDeTetos(v.budgetByWeekday),
-    budgetDates: mapaDeTetos(v.budgetDates),
+    temTeto: temTeto ? (true as const) : undefined,
   });
 };
-
-// Os campos do perfil que a tela lê e mostra. O perfil é "lido inteiro" quando não traz
-// nenhum outro (a pasta do perfil de assinatura é do motor e não conta).
-const CAMPOS_DO_PERFIL = ['id', 'label', 'kind', 'temChave', 'baseUrl', 'budgetDaily', 'budgetTotal', 'budgetSince', 'budgetByWeekday', 'budgetDates', 'dir'];
-
-function perfilInteiro(bruto: unknown, lido: PerfilDoClaude | undefined): boolean {
-  if (!lido || !ehObjeto(bruto)) return false;
-  // campo de texto vazio (o endereço de quem usa o da Anthropic) é o mesmo que ausente
-  const semPasta = Object.fromEntries(Object.entries(bruto).filter(([nome, valor]) => nome !== 'dir' && valor !== ''));
-  return Object.keys(bruto).every((nome) => CAMPOS_DO_PERFIL.includes(nome)) && mesmoJson(semPasta, lido);
-}
 
 // As chaves de `config` que a tela Sistema usa. O que vem de forma errada conta como ausente,
 // e a seção que depende da chave diz que o motor não a mandou.
@@ -115,18 +94,9 @@ export function lerConfigDoSistema(valor: unknown, registrar: Registrar): Config
     localAuth: campo(valor.localAuth, ehTexto),
   });
   if (Array.isArray(valor.claudeProfiles)) {
+    // a lista passa por `semSegredos` só para contar o que chegou com cara de segredo
     const { limpo, descartados } = semSegredos(valor.claudeProfiles);
-    const cru = Array.isArray(limpo) ? limpo : [];
-    const perfis: PerfilDoClaude[] = [];
-    let ilegiveis = 0;
-    for (const bruto of cru) {
-      const perfil = lerPerfil(bruto);
-      if (perfil) perfis.push(perfil);
-      if (!perfilInteiro(bruto, perfil)) ilegiveis += 1;
-    }
-    config.claudeProfiles = perfis;
-    config.claudeProfilesCru = cru;
-    if (ilegiveis) config.claudeProfilesIlegiveis = ilegiveis;
+    config.claudeProfiles = lerItens(limpo, lerPerfil)?.itens ?? [];
     // só a contagem vai ao registro: nem o nome do campo nem o valor
     if (descartados) {
       config.segredosDescartados = descartados;
@@ -321,7 +291,7 @@ function lerUso(v: unknown): UsoDoPlano | undefined {
   return semAusentes({
     lido: v.lido,
     ok: campo(v.ok, ehBooleano),
-    erro: textoSeguro(v.erro) || undefined,
+    erro: mensagemSegura(v.erro) || undefined,
     venceEm: campo(v.venceEm, ehNumero),
     faixaDoLogin: campo(v.faixaDoLogin, ehTexto) || undefined,
     desatualizado: campo(v.desatualizado, ehBooleano),
@@ -435,7 +405,7 @@ export type TesteDePerfil =
 function lerCampoDoTeste(v: unknown): CampoDoTeste | undefined {
   if (!ehObjeto(v)) return undefined;
   const valor = ehBooleano(v.valor) ? v.valor : textoSeguro(v.valor);
-  return semAusentes({ valor, origem: campo(v.origem, ehTexto), motivo: campo(v.motivo, ehTexto) });
+  return semAusentes({ valor, origem: campo(v.origem, ehTexto), motivo: mensagemSegura(v.motivo) });
 }
 
 // Os campos que o motor manda no teste, e só eles.
@@ -443,7 +413,7 @@ const CAMPOS_DO_TESTE = ['tipoAuth', 'chave', 'login', 'email', 'plano'];
 
 export function lerTesteDePerfil(bruto: unknown): TesteDePerfil | null {
   if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
-  if (!bruto.ok) return semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: textoSeguro(bruto.motivo) });
+  if (!bruto.ok) return semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo) });
   if (!ehObjeto(bruto.perfil)) return null;
   const brutos = ehObjeto(bruto.perfil.campos) ? bruto.perfil.campos : {};
   const campos: Array<[string, CampoDoTeste]> = [];
@@ -456,7 +426,7 @@ export function lerTesteDePerfil(bruto: unknown): TesteDePerfil | null {
     id: campo(bruto.perfil.id, ehTexto),
     label: textoSeguro(bruto.perfil.label) || undefined,
     kind: campo(bruto.perfil.kind, ehTexto),
-    aviso: textoSeguro(bruto.perfil.aviso) || undefined,
+    aviso: mensagemSegura(bruto.perfil.aviso) || undefined,
     campos: Object.fromEntries(campos),
   });
 }
@@ -469,13 +439,14 @@ export function lerTesteDoJira(bruto: unknown): TesteDoJira | null {
   if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
   return bruto.ok
     ? semAusentes({ ok: true as const, quem: textoSeguro(bruto.quem) || undefined })
-    : semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: textoSeguro(bruto.motivo) });
+    : semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo) });
 }
 
 // A resposta de GET /api/diagnostics: o relatório em markdown, que o motor já entrega com os
 // segredos mascarados (lib/engine/diagnostico.js), e as falhas registradas, de que a tela só
-// usa a contagem. É texto livre: a borda não tem como conferir campo a campo, e a tela o
-// desenha como markdown, sem HTML.
+// usa a contagem. É texto livre: a borda não tem como conferir campo a campo. O que ainda
+// vier em formato de credencial é trocado por "[segredo omitido]", e a tela o desenha como
+// markdown, sem HTML.
 export interface Diagnostico {
   markdown: string;
   falhas: number;
@@ -483,5 +454,5 @@ export interface Diagnostico {
 
 export function lerDiagnostico(bruto: unknown): Diagnostico | null {
   if (!ehObjeto(bruto) || bruto.ok !== true || !ehTexto(bruto.markdown)) return null;
-  return { markdown: bruto.markdown, falhas: Array.isArray(bruto.falhas) ? bruto.falhas.length : 0 };
+  return { markdown: mascararSegredos(bruto.markdown), falhas: Array.isArray(bruto.falhas) ? bruto.falhas.length : 0 };
 }

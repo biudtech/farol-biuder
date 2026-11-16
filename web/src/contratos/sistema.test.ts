@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { aplicarEstadoInteiro } from '@/transporte/estado';
-import { semSegredos } from './segredos';
 import {
   lerConfigDoSistema, lerContas, lerDiagnostico, lerModelos, lerPerfisDoClaude, lerRevogacao, lerSaude, lerSaudeDaRota,
   lerSessoes, lerSitesDoJira, lerTesteDePerfil, lerTesteDoJira,
@@ -18,38 +17,6 @@ const semNenhumSegredo = (valor: unknown) => {
   for (const segredo of SEGREDOS) expect(texto).not.toContain(segredo);
 };
 
-describe('semSegredos', () => {
-  it('tira o campo de nome suspeito, e deixa a presença do segredo, que é booleano', () => {
-    const lido = semSegredos({ id: 'p1', apiKey: CHAVE_DA_ANTHROPIC, temChave: true, tokenOk: false, hasCredential: true, senha: SENHA, token: 3 });
-    expect(lido).toEqual({ limpo: { id: 'p1', temChave: true, tokenOk: false, hasCredential: true }, descartados: 3 });
-  });
-
-  it('tira o valor com prefixo de chave ou de token, qualquer que seja o nome do campo', () => {
-    const lido = semSegredos({ label: TOKEN_DO_GITHUB, nota: TOKEN_DO_ATLASSIAN, lista: ['ok', CHAVE_DA_ANTHROPIC], cabecalho: 'Bearer abcdefgh12345678' });
-    expect(lido).toEqual({ limpo: { lista: ['ok'] }, descartados: 4 });
-  });
-
-  it('tira o endereço com usuário, e deixa o endereço comum e as chaves de projeto do Jira', () => {
-    const lido = semSegredos({ baseUrl: `https://ana:${SENHA}@proxy.exemplo.com`, outro: 'https://api.exemplo.com', projectKeys: ['BT', 'BUGS'] });
-    expect(lido).toEqual({ limpo: { outro: 'https://api.exemplo.com', projectKeys: ['BT', 'BUGS'] }, descartados: 1 });
-  });
-
-  it('o que está fundo demais para conferir sai inteiro, e o protótipo não é mexido', () => {
-    let fundo: unknown = { apiKey: CHAVE_DA_ANTHROPIC };
-    for (let i = 0; i < 12; i += 1) fundo = { dentro: fundo };
-    semNenhumSegredo(semSegredos(fundo).limpo);
-    const comProto = semSegredos(JSON.parse('{"__proto__":{"apiKey":"x"},"id":"p1"}'));
-    expect(Object.getPrototypeOf(comProto.limpo)).toBe(Object.prototype);
-    expect(({} as { apiKey?: string }).apiKey).toBeUndefined();
-  });
-
-  it('valor que não é objeto nem lista passa como veio', () => {
-    expect(semSegredos(3)).toEqual({ limpo: 3, descartados: 0 });
-    expect(semSegredos(null)).toEqual({ limpo: null, descartados: 0 });
-    expect(semSegredos('texto comum')).toEqual({ limpo: 'texto comum', descartados: 0 });
-  });
-});
-
 // A config como configParaFora (lib/engine/chave-do-perfil.js) a manda: o perfil de chave
 // sem `apiKey` e com `temChave`.
 const CONFIG = {
@@ -61,8 +28,8 @@ const CONFIG = {
   reviewEffort: 'high',
   claudeProfileId: 'plano',
   claudeProfiles: [
-    { id: 'plano', label: 'Assinatura', kind: 'dir', dir: '', budgetDaily: 20 },
-    { id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '', temChave: true, budgetTotal: 100, budgetSince: '2026-11-01', budgetByWeekday: { 0: 0, 6: 5 }, budgetDates: { '2026-12-25': 0 } },
+    { id: 'plano', label: 'Assinatura', kind: 'dir', dir: '/home/farol/.farol/claude/plano' },
+    { id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '', temChave: true },
   ],
   bind: '0.0.0.0',
   hostPublico: 'farol.exemplo.com',
@@ -71,7 +38,7 @@ const CONFIG = {
 };
 
 describe('lerConfigDoSistema', () => {
-  it('lê a automação, os perfis e as chaves só de arquivo, e guarda a lista de perfis como veio', () => {
+  it('lê a automação, os perfis e as chaves só de arquivo; a pasta do perfil e a lista crua não ficam', () => {
     const registrar = vi.fn();
     const lido = lerConfigDoSistema(CONFIG, registrar);
     expect(lido).toEqual({
@@ -82,15 +49,17 @@ describe('lerConfigDoSistema', () => {
       reviewEffort: 'high',
       claudeProfileId: 'plano',
       claudeProfiles: [
-        { id: 'plano', label: 'Assinatura', kind: 'dir', budgetDaily: 20 },
-        { id: 'api', label: 'Chave', kind: 'apikey', temChave: true, budgetTotal: 100, budgetSince: '2026-11-01', budgetByWeekday: { 0: 0, 6: 5 }, budgetDates: { '2026-12-25': 0 } },
+        { id: 'plano', label: 'Assinatura', kind: 'dir' },
+        { id: 'api', label: 'Chave', kind: 'apikey', temChave: true },
       ],
-      claudeProfilesCru: CONFIG.claudeProfiles,
       bind: '0.0.0.0',
       hostPublico: 'farol.exemplo.com',
       origensPermitidas: ['https://painel.exemplo.com'],
       port: 47170,
     });
+    // nada do perfil é guardado como veio: nem a pasta, nem uma lista crua
+    expect(JSON.stringify(lido)).not.toContain('/home/farol');
+    expect(Object.keys(lido)).not.toContain('claudeProfilesCru');
     expect(registrar).not.toHaveBeenCalled();
   });
 
@@ -99,25 +68,46 @@ describe('lerConfigDoSistema', () => {
     expect(lerConfigDoSistema(null, vi.fn())).toEqual({});
   });
 
-  it('perfil com campo que a tela não conhece é contado, e o cru o mantém', () => {
-    const perfis = [{ id: 'p1', kind: 'dir', cor: 'azul' }, { label: 'sem id' }, 7];
-    const lido = lerConfigDoSistema({ claudeProfiles: perfis }, vi.fn());
+  it('perfil sem id fica de fora, e campo que a tela não conhece não é guardado', () => {
+    const lido = lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', cor: 'azul' }, { label: 'sem id' }, 7] }, vi.fn());
     expect(lido.claudeProfiles).toEqual([{ id: 'p1', kind: 'dir' }]);
-    expect(lido.claudeProfilesCru).toEqual(perfis);
-    expect(lido.claudeProfilesIlegiveis).toBe(3);
   });
 
-  it('segredo que chegue num perfil é descartado na borda: não fica no lido nem no cru, e o registro leva só a contagem', () => {
+  it.each([
+    ['budgetDaily', { budgetDaily: 20 }],
+    ['budgetDaily zero', { budgetDaily: 0 }],
+    ['budgetTotal', { budgetTotal: 100, budgetSince: '2026-11-01' }],
+    ['budgetByWeekday', { budgetByWeekday: { 6: 5 } }],
+    ['budgetDates', { budgetDates: { '2026-12-25': 0 } }],
+  ])('perfil com teto no arquivo (%s) só ganha a marca de que tem teto: o valor não é guardado', (_nome, teto) => {
+    const lido = lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', ...teto }] }, vi.fn());
+    expect(lido.claudeProfiles).toEqual([{ id: 'p1', kind: 'dir', temTeto: true }]);
+  });
+
+  it('perfil sem teto, ou com campo de teto vazio ou torto, não ganha a marca', () => {
+    for (const semTeto of [{}, { budgetSince: '2026-11-01' }, { budgetByWeekday: {} }, { budgetDates: { x: 'y' } }, { budgetDaily: '20' }, { budgetTotal: null }]) {
+      expect(lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', ...semTeto }] }, vi.fn()).claudeProfiles).toEqual([{ id: 'p1', kind: 'dir' }]);
+    }
+  });
+
+  it('perfil com id que parece chave e não é não some da lista: sk-anthropic-1', () => {
+    const registrar = vi.fn();
+    const lido = lerConfigDoSistema({ claudeProfiles: [{ id: 'sk-anthropic-1', label: 'Chave da Anthropic 1', kind: 'apikey', temChave: true }, { id: 'plano', kind: 'dir' }] }, registrar);
+    expect(lido.claudeProfiles).toEqual([{ id: 'sk-anthropic-1', label: 'Chave da Anthropic 1', kind: 'apikey', temChave: true }, { id: 'plano', kind: 'dir' }]);
+    expect(lido.segredosDescartados).toBeUndefined();
+    expect(registrar).not.toHaveBeenCalled();
+  });
+
+  it('segredo que chegue num perfil é descartado na borda, e o registro leva só a contagem', () => {
     const registrar = vi.fn();
     const lido = lerConfigDoSistema({
       claudeProfiles: [
-        { id: 'api', label: 'Chave', kind: 'apikey', apiKey: CHAVE_DA_ANTHROPIC, temChave: true, baseUrl: `https://u:${SENHA}@proxy.exemplo.com`, budgetDaily: 5 },
+        { id: 'api', label: 'Chave', kind: 'apikey', apiKey: CHAVE_DA_ANTHROPIC, temChave: true, baseUrl: `https://u:${SENHA}@proxy.exemplo.com` },
         { id: 'plano', kind: 'dir', token: TOKEN_DO_GITHUB, credencial: { senha: SENHA } },
       ],
     }, registrar);
     semNenhumSegredo(lido);
-    expect(lido.claudeProfiles).toEqual([{ id: 'api', label: 'Chave', kind: 'apikey', temChave: true, budgetDaily: 5 }, { id: 'plano', kind: 'dir' }]);
-    expect(lido.claudeProfilesCru).toEqual([{ id: 'api', label: 'Chave', kind: 'apikey', temChave: true, budgetDaily: 5 }, { id: 'plano', kind: 'dir' }]);
+    expect(lido.claudeProfiles).toEqual([{ id: 'api', label: 'Chave', kind: 'apikey', temChave: true }, { id: 'plano', kind: 'dir' }]);
     expect(lido.segredosDescartados).toBe(4);
     expect(registrar).toHaveBeenCalledTimes(1);
     const aviso = String(registrar.mock.calls[0]?.[0]);
@@ -137,6 +127,8 @@ describe('o snapshot com segredo não chega ao store', () => {
       reviewActions: [{ nota: CHAVE_DA_ANTHROPIC, senha: SENHA }],
       paths: { home: '/home/farol/.farol', credencial: SENHA },
       esperaConflito: { 'dono/repo#1': { at: 1, head: 'abc', token: TOKEN_DO_GITHUB } },
+      // o erro do motor é texto para ler: fica, sem o trecho
+      error: `falha ao buscar: o gh respondeu 401 para o cabeçalho Authorization: Bearer ${TOKEN_DO_GITHUB}`,
       account: { user: 'farol-bot', tokenOk: true, token: TOKEN_DO_GITHUB },
       accounts: [{ user: 'farol-bot', owners: ['biudtech'], tokenOk: true, token: TOKEN_DO_GITHUB, ghToken: TOKEN_DO_GITHUB, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
       config: {
@@ -149,7 +141,7 @@ describe('o snapshot com segredo não chega ao store', () => {
       },
       jiraSites: [{ id: 'biud', label: 'BIUD', baseUrl: 'https://biud.atlassian.net', owners: ['biudtech'], projectKeys: ['BT'], hasCredential: true, token: TOKEN_DO_ATLASSIAN, credential: { email: 'x@biud.com.br', token: TOKEN_DO_ATLASSIAN } }],
       doctor: { node: 'v24.22.1', gh: 'gh version 2.80.0', claude: '2.1.300 (Claude Code)', ghAuth: true, ghToken: TOKEN_DO_GITHUB, root: false, home: '/home/farol/.farol', claudeAuth: [{ id: 'api', label: 'Chave', ready: true, apiKeyMode: true, apiKey: CHAVE_DA_ANTHROPIC }], checkedAt: 1 },
-      claudePerfis: { problemas: [], uso: { plano: { lido: true, ok: false, erro: `Bearer ${TOKEN_DO_GITHUB}`, janelas: [], credencial: SENHA } } },
+      claudePerfis: { problemas: [], uso: { plano: { lido: true, ok: false, erro: `o CLI respondeu Bearer ${TOKEN_DO_GITHUB}`, janelas: [], credencial: SENHA } } },
       modelos: { cli: { instalada: '2.1.300', token: TOKEN_DO_GITHUB }, claude: [{ valor: 'opus', rotulo: 'Opus', aceitaEsforco: true, apiKey: CHAVE_DA_ANTHROPIC }] },
     }, (aviso) => { avisos.push(aviso); });
     expect(snapshot).not.toBeNull();
@@ -158,10 +150,29 @@ describe('o snapshot com segredo não chega ao store', () => {
     // a presença continua lá, que é o que a tela mostra
     expect(snapshot?.accounts?.[0]?.tokenOk).toBe(true);
     expect(snapshot?.config?.claudeProfiles).toEqual([{ id: 'api', kind: 'apikey', temChave: true }]);
-    expect(snapshot?.config?.claudeProfilesCru).toEqual([{ id: 'api', kind: 'apikey', temChave: true }]);
     expect(snapshot?.jiraSites?.[0]).toEqual({ id: 'biud', label: 'BIUD', baseUrl: 'https://biud.atlassian.net', owners: ['biudtech'], projectKeys: ['BT'], hasCredential: true });
     expect(snapshot?.esperaConflito).toEqual({ 'dono/repo#1': { at: 1, head: 'abc' } });
     expect(snapshot?.baseline).toEqual({ at: 1 });
+    // mensagem do motor não some: perde só o trecho
+    expect(snapshot?.error).toBe('falha ao buscar: o gh respondeu 401 para o cabeçalho Authorization: Bearer [segredo omitido]');
+    expect(snapshot?.claudePerfis?.uso.plano?.erro).toBe('o CLI respondeu Bearer [segredo omitido]');
+    // a pasta do perfil e a do diagnóstico não vão ao store
+    expect(JSON.stringify([snapshot?.config, snapshot?.doctor])).not.toContain('/home/farol');
+  });
+
+  it('texto longo que a tela mostra fica, com o trecho trocado: o review, o feed e o relatório de diagnóstico', () => {
+    const review = `## Review\n\n${'O código lê a variável e segue. '.repeat(10)}\n\nNo log do CI apareceu ${TOKEN_DO_GITHUB} em texto claro.`;
+    const snapshot = aplicarEstadoInteiro(null, {
+      decisions: { pending: [{ id: 'd1', key: 'dono/repo#1', reportMarkdown: review, reasons: [{ text: `o gh respondeu com ${TOKEN_DO_GITHUB}`, kind: 'infra' }] }], resolved: [] },
+      activity: { s1: [{ t: 1, k: 'info', text: `export GH_TOKEN=${TOKEN_DO_GITHUB}` }] },
+    }, () => {});
+    semNenhumSegredo([snapshot?.decisions?.pending, snapshot?.activity]);
+    expect(snapshot?.decisions?.pending[0]?.reportMarkdown).toContain('No log do CI apareceu [segredo omitido] em texto claro.');
+    expect(snapshot?.decisions?.pending[0]?.reportMarkdown).toContain('## Review');
+    expect(snapshot?.decisions?.pending[0]?.reasons[0]?.text).toBe('o gh respondeu com [segredo omitido]');
+    expect(snapshot?.activity?.s1?.[0]?.text).toBe('export GH_TOKEN=[segredo omitido]');
+    const diagnostico = lerDiagnostico({ ok: true, markdown: `# Diagnóstico do Farol\n\n- erro: Authorization: Basic dXN1YXJpbzpzZW5oYS1sb25nYQ==\n`, falhas: [] });
+    expect(diagnostico?.markdown).toBe('# Diagnóstico do Farol\n\n- erro: Authorization: Basic [segredo omitido]\n');
   });
 });
 

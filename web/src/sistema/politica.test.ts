@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { ContaRevisora } from '@/contratos/sistema';
 import {
   DOMINIO_DA_POLITICA, PUBLICA, ampliacoesDaConta, camposAlterados, corpoDaConta, efeitoDaRevisaoAutomatica, efeitoDoDesfecho,
-  marcaDaConta, nomeDoCampoDaConta, organizacaoValida, rascunhoDaConta, rotuloDoValor, temOrganizacao, textoDoToken, textoDosCampos,
+  marcaDaConta, nomeDoCampoDaConta, notaDasRessalvasTravadas, organizacaoValida, organizacoesMescladas, rascunhoDaConta, refazerConta, rotuloDoValor,
+  temOrganizacao, textoDoToken, textoDosCampos, textosDosConflitos, type RascunhoDaConta,
 } from './politica';
 
 // O motor é lido por texto, como em src/time/taxonomia.test.ts.
@@ -39,34 +40,99 @@ describe('a política é a do motor', () => {
   });
 });
 
-describe('camposAlterados: só o que mudou', () => {
+// `visto` é o que a pessoa tinha na tela ao começar a editar; `conta` é o motor de agora.
+const editar = (conta: ContaRevisora, mudanca: Partial<RascunhoDaConta>) => camposAlterados(rascunhoDaConta(conta), { ...rascunhoDaConta(conta), ...mudanca }, conta);
+
+describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
   it('sem edição não há campo', () => {
-    expect(camposAlterados(CONTA, rascunhoDaConta(CONTA))).toEqual({});
+    expect(editar(CONTA, {})).toEqual({});
   });
 
   it('um campo editado vai sozinho', () => {
-    expect(camposAlterados(ABERTA, { ...rascunhoDaConta(ABERTA), onReject: 'wait' })).toEqual({ onReject: 'wait' });
-    expect(camposAlterados(CONTA, { ...rascunhoDaConta(CONTA), autoReview: true })).toEqual({ autoReview: true });
+    expect(editar(ABERTA, { onReject: 'wait' })).toEqual({ onReject: 'wait' });
+    expect(editar(CONTA, { autoReview: true })).toEqual({ autoReview: true });
   });
 
-  it('as organizações vão como lista inteira, na ordem do formulário', () => {
-    expect(camposAlterados(CONTA, { ...rascunhoDaConta(CONTA), owners: ['biudtech', 'acme'] })).toEqual({ owners: ['biudtech', 'acme'] });
-    expect(camposAlterados(CONTA, { ...rascunhoDaConta(CONTA), owners: [] })).toEqual({ owners: [] });
+  it('as organizações vão como lista inteira', () => {
+    expect(editar(CONTA, { owners: ['biudtech', 'acme'] })).toEqual({ owners: ['biudtech', 'acme'] });
+    expect(editar(CONTA, { owners: [] })).toEqual({ owners: [] });
   });
 
   it('com o limpo em espera, o com ressalvas não vai: o motor o põe em espera sozinho', () => {
-    expect(camposAlterados(ABERTA, { ...rascunhoDaConta(ABERTA), onClean: 'wait' })).toEqual({ onClean: 'wait' });
-    expect(camposAlterados(CONTA, { ...rascunhoDaConta(CONTA), onCaveats: 'approve' })).toEqual({});
+    expect(editar(ABERTA, { onClean: 'wait' })).toEqual({ onClean: 'wait' });
+    expect(editar(CONTA, { onCaveats: 'approve' })).toEqual({});
   });
 
   it('valor fora do domínio, ou vazio, nunca vai (vazio faria o motor regravar o padrão, que publica)', () => {
-    expect(camposAlterados(ABERTA, { ...rascunhoDaConta(ABERTA), onClean: '', onReject: 'merge' })).toEqual({});
+    expect(editar(ABERTA, { onClean: '', onReject: 'merge' })).toEqual({});
     const semPolitica: ContaRevisora = { user: 'farol-bot', owners: [], regrasDeReview: 0 };
-    expect(camposAlterados(semPolitica, rascunhoDaConta(semPolitica))).toEqual({});
+    expect(editar(semPolitica, {})).toEqual({});
+  });
+
+  it('campo que OUTRA pessoa mudou no motor não vai no corpo, e por isso não é revertido', () => {
+    const visto = rascunhoDaConta(ABERTA);
+    // ela só mexeu na reprovada; nesse meio alguém pôs a limpa em espera e tirou a revisão automática
+    const agora: ContaRevisora = { ...ABERTA, onClean: 'wait', onCaveats: 'wait', autoReview: false };
+    expect(camposAlterados(visto, { ...visto, onReject: 'wait' }, agora)).toEqual({ onReject: 'wait' });
+  });
+
+  it('o que ela alterou e o motor já tem igual não vai de novo', () => {
+    const visto = rascunhoDaConta(ABERTA);
+    expect(camposAlterados(visto, { ...visto, onReject: 'wait' }, { ...ABERTA, onReject: 'wait' })).toEqual({});
+  });
+
+  it('organização que outra pessoa pôs ou tirou nesse meio fica como o motor a tem', () => {
+    const visto = rascunhoDaConta({ ...CONTA, owners: ['biudtech', 'velha'] });
+    const rascunho = { ...visto, owners: ['biudtech', 'acme'] };
+    // ela tirou "velha" e pôs "acme"; alguém pôs "cnbb" e tirou "biudtech"
+    expect(camposAlterados(visto, rascunho, { ...CONTA, owners: ['velha', 'cnbb'] })).toEqual({ owners: ['cnbb', 'acme'] });
+    expect(organizacoesMescladas(['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'd'])).toEqual(['a', 'b', 'd', 'c']);
+    expect(organizacoesMescladas(['a', 'b'], ['a'], ['A', 'B', 'd'])).toEqual(['A', 'd']);
+    // o que ela pôs e o motor já tem não é repetido
+    expect(organizacoesMescladas(['a'], ['a', 'c'], ['a', 'C'])).toEqual(['a', 'C']);
   });
 
   it('o corpo é a operação de editar, com a conta e os campos', () => {
     expect(corpoDaConta('farol-bot', { onClean: 'wait' })).toEqual({ tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } });
+  });
+});
+
+describe('refazerConta: o rascunho sobre o valor novo do motor', () => {
+  const visto = rascunhoDaConta(ABERTA);
+
+  it('o campo que ela não tocou passa a ser o do motor; o que ela tocou fica', () => {
+    const novo = rascunhoDaConta({ ...ABERTA, autoReview: false, owners: ['biudtech', 'cnbb'] });
+    expect(refazerConta(visto, { ...visto, onReject: 'wait' }, novo)).toEqual({
+      valor: { owners: ['biudtech', 'cnbb'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' },
+      conflitos: [],
+    });
+  });
+
+  it('o mesmo campo mexido pelos dois, cada um para um valor, é conflito; para o mesmo valor, não', () => {
+    const base = rascunhoDaConta({ ...ABERTA, onClean: 'merge' });
+    const refeito = refazerConta(base, { ...base, onClean: 'approve', autoReview: false }, { ...base, onClean: 'wait', autoReview: false });
+    expect(refeito.valor.onClean).toBe('approve');
+    expect(refeito.conflitos).toEqual(['onClean']);
+  });
+
+  it('o conflito é dito com os dois valores, e some quando os dois ficam iguais', () => {
+    const conta: ContaRevisora = { ...ABERTA, onClean: 'wait', autoReview: false };
+    const rascunho = { ...visto, onClean: 'approve', autoReview: true };
+    expect(textosDosConflitos(['onClean', 'autoReview'], conta, rascunho)).toEqual([
+      'Revisão automática: no motor agora está "desligada", e no seu formulário, "ligada". Salvar grava o seu.',
+      'Revisão limpa: no motor agora está "esperar você", e no seu formulário, "publicar a aprovação sozinho". Salvar grava o seu.',
+    ]);
+    expect(textosDosConflitos(['onClean'], conta, { ...rascunho, onClean: 'wait' })).toEqual([]);
+    expect(textosDosConflitos([], conta, rascunho)).toEqual([]);
+  });
+});
+
+describe('o com ressalvas quando o limpo espera', () => {
+  it('a nota diz o ajuste da tela quando o campo estava em publicar, e só a regra quando já esperava', () => {
+    const aberto = rascunhoDaConta(ABERTA);
+    expect(notaDasRessalvasTravadas({ ...aberto, onClean: 'wait' })).toContain('Ajuste da tela: este campo estava em "publicar a aprovação sozinho"');
+    expect(notaDasRessalvasTravadas({ ...aberto, onClean: 'wait' })).toContain('ele volta a "publicar a aprovação sozinho"');
+    expect(notaDasRessalvasTravadas(rascunhoDaConta(CONTA))).toBe('Espera você: com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo).');
   });
 });
 

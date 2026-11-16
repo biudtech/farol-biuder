@@ -19,10 +19,12 @@ export function Par({ nome, children }: { nome: string; children: ReactNode }) {
 }
 
 interface Props {
-  // como a tela chama o que está sendo editado: "a conta e a política", "o teto de Assinatura"
+  // como a tela chama o que está sendo editado: "a conta e a política", "a automação"
   oQue: string;
   alterado: boolean;
   mudouNoMotor: boolean;
+  // os campos que a pessoa e o motor mudaram, cada um para um valor, já por extenso
+  conflitos?: readonly string[];
   aoDescartar(): void;
   // por que o salvar está fechado (conexão, estado que não chegou), ou null
   impedimento: string | null;
@@ -35,13 +37,20 @@ interface Props {
   nota?: string;
 }
 
-export function PeDoFormulario({ oQue, alterado, mudouNoMotor, aoDescartar, impedimento, erro, acao, controle, nota }: Props) {
+export function PeDoFormulario({ oQue, alterado, mudouNoMotor, conflitos = [], aoDescartar, impedimento, erro, acao, controle, nota }: Props) {
   return (
     <>
       {mudouNoMotor ? (
-        <p className={comuns.nota} role="status">
-          Aviso: {oQue} mudou no motor enquanto você editava (outra aba, ou outra pessoa). Salvar grava o que está neste formulário por cima do que o motor tem agora.
-        </p>
+        <div className={comuns.nota} role="status">
+          <p>
+            Aviso: {oQue} mudou no motor enquanto você editava (outra aba, ou outra pessoa). O formulário passou a mostrar o que o motor tem agora nos campos que você não alterou, e o salvar leva só o que você alterou: o que a outra pessoa mudou não é desfeito.
+          </p>
+          {conflitos.length ? (
+            <ul>
+              {conflitos.map((conflito) => <li key={conflito}>{conflito}</li>)}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       {!alterado ? <p className={comuns.meta}>Sem alteração por salvar.</p> : null}
       {alterado && erro ? <p className={comuns.erroDoCampo} role="alert">Erro: {erro}</p> : null}

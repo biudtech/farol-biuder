@@ -2,16 +2,15 @@
 // depois, conferida contra o que o motor respondeu. Sem React. Elas entram na união `Acao` de
 // src/radar/acoes.ts, e passam pelo mesmo `executar` e pelo mesmo gancho `useAcoes`.
 //
-// Cada ação mexe numa seção só: a da conta vai a POST /api/accounts/edit com os campos que
-// mudaram; a da automação e a do teto vão a POST /api/settings, cada uma só com as chaves
-// dela (salvar a automação não reenvia perfil nem teto, e salvar o teto não reenvia a
-// automação); a de sessão vai a POST /api/auth/revoke.
+// Cada ação mexe numa seção só: a da conta vai a POST /api/accounts/edit com os campos que a
+// pessoa alterou; a da automação vai a POST /api/settings só com as chaves de automação que
+// ela alterou; a de sessão vai a POST /api/auth/revoke. Nenhuma ação manda `claudeProfiles`:
+// a tela não edita perfil nem teto de gasto.
 import type { Objeto } from '@/contratos/formas';
-import type { ConfigDoSistema, PerfisCrus } from '@/contratos/sistema';
+import type { ConfigDoSistema } from '@/contratos/sistema';
 import { diferencasDaAutomacao, textoDaAutomacao, type CorpoDaAutomacao } from './automacao';
 import { corpoDaConta, nomeDoCampoDaConta, textoDosCampos, type CamposDaConta } from './politica';
 import { perguntaDeRevogar } from './sessoes';
-import { conferirTeto, efeitosDoTeto, textoDoTeto, type Teto } from './teto';
 
 interface Base {
   // de quem é a ação na tela: uma ação por alvo de cada vez
@@ -21,25 +20,22 @@ interface Base {
 }
 
 export type AcaoDoSistema =
-  // Os campos da conta revisora que mudaram (aplicarEdicao, lib/engine/contas-config.js, na
-  // raiz). `ampliacoes` são as mudanças que ampliam o que o motor publica sozinho, já por
-  // extenso: havendo alguma, a ação pergunta antes.
+  // Os campos da conta revisora que a pessoa alterou (aplicarEdicao,
+  // lib/engine/contas-config.js, na raiz). `ampliacoes` são as mudanças que ampliam o que o
+  // motor publica sozinho, já por extenso e calculadas contra o valor atual do motor: havendo
+  // alguma, a ação pergunta antes.
   | (Base & { tipo: 'conta'; user: string; campos: CamposDaConta; ampliacoes: readonly string[] })
-  // As chaves de automação que mudaram, e só elas.
+  // As chaves de automação que a pessoa alterou, e só elas.
   | (Base & { tipo: 'automacao'; corpo: CorpoDaAutomacao; ampliacoes: readonly string[] })
-  // O teto de um perfil do Claude. `perfis` é a lista inteira para `claudeProfiles`, montada
-  // da crua e só com o teto deste perfil alterado (comTeto, ./teto).
-  | (Base & { tipo: 'teto'; perfil: string; perfis: PerfisCrus; antes: Teto; teto: Teto })
   // Revoga uma sessão pareada pelo `id`. `atual`: é a deste navegador.
   | (Base & { tipo: 'revogarSessao'; id: string; rotulo: string; atual: boolean });
 
-export const TIPOS_DO_SISTEMA = ['conta', 'automacao', 'teto', 'revogarSessao'] as const;
+export const TIPOS_DO_SISTEMA = ['conta', 'automacao', 'revogarSessao'] as const;
 
 export function pedidoDoSistema(acao: AcaoDoSistema): { rota: string; corpo: Objeto } {
   switch (acao.tipo) {
     case 'conta': return { rota: '/api/accounts/edit', corpo: corpoDaConta(acao.user, acao.campos) };
     case 'automacao': return { rota: '/api/settings', corpo: { ...acao.corpo } };
-    case 'teto': return { rota: '/api/settings', corpo: { claudeProfiles: acao.perfis } };
     case 'revogarSessao': return { rota: '/api/auth/revoke', corpo: { id: acao.id } };
   }
 }
@@ -48,7 +44,6 @@ export function rotuloDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return 'Salvar conta e política';
     case 'automacao': return 'Salvar automação';
-    case 'teto': return 'Salvar teto';
     case 'revogarSessao': return 'Revogar';
   }
 }
@@ -57,7 +52,6 @@ export function nomeDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return `Salvar conta e política de ${acao.nome}`;
     case 'automacao': return 'Salvar automação';
-    case 'teto': return `Salvar teto de ${acao.nome}`;
     case 'revogarSessao': return `Revogar a sessão ${acao.nome}`;
   }
 }
@@ -70,9 +64,17 @@ export interface PerguntaDoSistema {
 
 const REGISTRO_DA_POLITICA = 'O motor registra a mudança de política com a data e a origem.';
 
+// Quando a política nova passa a valer, como o motor a lê (os arquivos são da raiz). Ele
+// consulta a política na hora de decidir cada resultado (shouldAutoApprove e shouldAutoReject,
+// lib/engine/approval-policy.js; caminhoNovo, lib/engine/desfecho-da-revisao.js), na hora de
+// começar cada revisão (politicaDeInicio, lib/engine/review-scope.js) e quando uma espera do
+// CI já armada fecha (politicaAindaAprova, lib/engine/espera-ci.js). Ninguém ouve a mudança
+// de configuração para reavaliar a mesa: a pendência que foi a "Precisa de você" porque a
+// política mandava esperar continua lá.
+export const QUANDO_A_POLITICA_VALE = 'Quando passa a valer: o motor lê a política ao começar cada revisão, ao decidir o resultado de cada uma e quando uma espera do CI fecha. Então vale para os PRs da fila a partir da próxima checagem, para as revisões que terminarem daqui em diante e para as aprovações que estão esperando o CI. O que já está em "Precisa de você" não é reavaliado: continua esperando o seu clique.';
+
 // A pergunta antes do POST. A conta e a automação só perguntam quando a mudança AMPLIA o que
-// o motor publica sozinho, dizendo o efeito de cada item; a que reduz vai direto. O teto
-// pergunta sempre, porque baixar pode pausar as revisões e subir pode soltá-las. Revogar
+// o motor publica sozinho, dizendo o efeito de cada item; a que reduz vai direto. Revogar
 // sessão pergunta sempre.
 export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | null {
   switch (acao.tipo) {
@@ -80,7 +82,7 @@ export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | n
       if (!acao.ampliacoes.length) return null;
       return {
         titulo: `Ampliar o que o motor publica sozinho por ${acao.nome}?`,
-        texto: `Esta mudança amplia o que o motor faz e publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} Vale a partir das próximas decisões do motor, e toda publicação continua passando pelos gates dele. ${REGISTRO_DA_POLITICA}`,
+        texto: `Esta mudança amplia o que o motor faz e publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} ${QUANDO_A_POLITICA_VALE} Toda publicação continua passando pelos gates do motor. ${REGISTRO_DA_POLITICA}`,
         confirmar: 'Salvar e ampliar a publicação automática',
       };
     case 'automacao':
@@ -90,14 +92,6 @@ export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | n
         texto: `Esta mudança amplia o que o motor publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} ${REGISTRO_DA_POLITICA}`,
         confirmar: 'Salvar e desligar a espera do CI',
       };
-    case 'teto': {
-      const efeitos = efeitosDoTeto(acao.antes, acao.teto);
-      return {
-        titulo: `Mudar o teto de gasto de ${acao.nome}?`,
-        texto: `O teto de ${acao.nome} passa de ${textoDoTeto(acao.antes)} para ${textoDoTeto(acao.teto)}. ${efeitos.join(' ')} O motor compara o gasto com o teto antes de cada sessão automática; a revisão de um PR só, pedida por você, não é barrada pelo teto.`,
-        confirmar: 'Salvar o teto',
-      };
-    }
     case 'revogarSessao': return perguntaDeRevogar({ rotulo: acao.rotulo, atual: acao.atual });
   }
 }
@@ -137,22 +131,6 @@ function desfechoDaAutomacao(acao: Extract<AcaoDoSistema, { tipo: 'automacao' }>
   return { tipo: 'ok', texto: `O motor gravou: ${textoDaAutomacao(acao.corpo)}.` };
 }
 
-function desfechoDoTeto(acao: Extract<AcaoDoSistema, { tipo: 'teto' }>, dados: AceiteDoSistema): DesfechoDoSistema {
-  if (dados.ignoradas?.includes('claudeProfiles')) return { tipo: 'erro', texto: `O motor ignorou a lista de perfis: o teto de ${acao.nome} não foi gravado.` };
-  const gravados = dados.sistema?.claudeProfilesCru;
-  if (!gravados) return { tipo: 'ok', texto: `O motor aceitou o pedido de mudar o teto de ${acao.nome}, mas a resposta não trouxe os perfis gravados: confira na tela.` };
-  const conferencia = conferirTeto(acao.perfis, gravados, acao.perfil, acao.teto);
-  let texto: string;
-  if (conferencia.gravado === null) texto = `Atenção: o perfil ${acao.nome} não está na lista que o motor gravou.`;
-  else if (conferencia.igual) texto = `O motor gravou o teto de ${acao.nome}: ${textoDoTeto(conferencia.gravado)}.`;
-  else texto = `O motor gravou o teto de ${acao.nome} diferente do pedido: ficou ${textoDoTeto(conferencia.gravado)}. O valor que ele não aceita, ele descarta.`;
-  if (!conferencia.outros.length) return { tipo: conferencia.igual ? 'ok' : 'erro', texto };
-  return {
-    tipo: 'erro',
-    texto: `${texto} Atenção: ${conferencia.outros.length === 1 ? 'outro perfil ficou diferente' : `outros ${conferencia.outros.length} perfis ficaram diferentes`} do que esta tela enviou, mudou ou saiu da lista (${conferencia.outros.join(', ')}). Confira os perfis na tela.`,
-  };
-}
-
 function desfechoDaRevogacao(acao: Extract<AcaoDoSistema, { tipo: 'revogarSessao' }>, dados: AceiteDoSistema): DesfechoDoSistema {
   if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor revogou a sessão deste navegador. Voltando ao pareamento.' };
   return { tipo: 'ok', texto: `O motor revogou a sessão ${acao.nome}: o token dela não vale mais.` };
@@ -164,18 +142,8 @@ export function desfechoDoSistema(acao: AcaoDoSistema, dados: AceiteDoSistema): 
   switch (acao.tipo) {
     case 'conta': return desfechoDaConta(acao, dados);
     case 'automacao': return desfechoDaAutomacao(acao, dados);
-    case 'teto': return desfechoDoTeto(acao, dados);
     case 'revogarSessao': return desfechoDaRevogacao(acao, dados);
   }
-}
-
-// A recusa que só faz sentido dita por esta tela, ou null para valer a frase comum. O salvar
-// do teto manda a lista de perfis: se o endereço de um perfil de chave chegar diferente do
-// gravado, o motor recusa o salvar inteiro e pede a chave de novo (recusaDoEndereco,
-// lib/engine/chave-do-perfil.js). Esta tela não tem campo de chave, e diz isso.
-export function recusaDoSistema(acao: AcaoDoSistema, codigo: string | undefined): string | null {
-  if (acao.tipo !== 'teto' || codigo !== 'chave_exigida') return null;
-  return 'O motor recusou o salvar inteiro: o endereço de um perfil de chave de API chegou diferente do gravado, e para mudá-lo ele exige a chave de novo. Esta tela não digita chave: nada foi gravado.';
 }
 
 // Por que a tela não oferece um salvar, ou null quando pode. Todo salvar parte do que esta

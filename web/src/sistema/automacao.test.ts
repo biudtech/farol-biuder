@@ -3,8 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { SelecaoDeModelo } from '@/contratos/sistema';
 import {
-  CHAVES_DA_AUTOMACAO, ESFORCOS, PARALELO_MAXIMO, PARALELO_MINIMO, aceitaEsforco, ampliacoesDaAutomacao, automacaoDe, corpoDaAutomacao,
-  diferencasDaAutomacao, efeitoDoCi, marcaDaAutomacao, notaDoTetoTotal, paraleloValido, rotuloDoEsforco, rotuloDoModelo, textoDaAutomacao,
+  CHAVES_DA_AUTOMACAO, ESFORCOS, NOME_DO_CAMPO_DE_ESFORCO, PARALELO_MAXIMO, PARALELO_MINIMO, aceitaEsforco, ampliacoesDaAutomacao, automacaoDe, conflitosDaAutomacao, corpoDaAutomacao,
+  diferencasDaAutomacao, efeitoDoCi, marcaDaAutomacao, notaDoLimiteTotal, paraleloValido, rotuloDoEsforco, rotuloDoModelo, textoDaAutomacao,
   type Automacao,
 } from './automacao';
 
@@ -65,11 +65,39 @@ describe('corpoDaAutomacao: só as chaves que mudaram', () => {
 describe('o que amplia a publicação', () => {
   it('só desligar o CI antes de aprovar', () => {
     const ampliacoes = ampliacoesDaAutomacao(ANTES, { aguardarCiParaAprovar: false });
-    expect(ampliacoes).toHaveLength(1);
-    expect(ampliacoes[0]).toContain('CI vermelho');
+    expect(ampliacoes).toHaveLength(2);
+    // o efeito imediato vem primeiro: o que já espera o CI é publicado na próxima varredura
+    expect(ampliacoes[0]).toMatch(/^Efeito imediato: toda aprovação que já está em "Esperando o CI" é publicada \(APPROVE\) na próxima varredura do motor/);
+    expect(ampliacoes[0]).toContain('mesmo com o CI vermelho ou ainda rodando');
+    expect(ampliacoes[0]).toContain('vai para "Precisa de você"');
+    expect(ampliacoes[1]).toMatch(/^Daqui em diante: /);
+    expect(ampliacoes[1]).toContain('CI vermelho');
     expect(ampliacoesDaAutomacao({ ...ANTES, aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: true })).toEqual([]);
     expect(ampliacoesDaAutomacao({ ...ANTES, aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: false })).toEqual([]);
     expect(ampliacoesDaAutomacao(ANTES, { parallelReviews: 4, reviewModel: 'auto', reviewEffort: 'xhigh' })).toEqual([]);
+  });
+});
+
+describe('o efeito imediato de desligar o CI é o que o motor faz', () => {
+  it('com a chave desligada, a varredura publica a aprovação que esperava o CI, e a que pediu mudanças vai para a mesa', () => {
+    const fonte = raiz('lib/engine/espera-ci.js');
+    expect(fonte).toContain('if (!aguardaCiParaAprovar(engine.config)) return liberarSemCi(engine, item, lido.faltando, pedeMudancas);');
+    const liberar = /function liberarSemCi\(engine, item, faltando, pedeMudancas\) \{([\s\S]*?)\n\}/.exec(fonte)?.[1] ?? '';
+    expect(liberar).toContain('if (pedeMudancas) {');
+    expect(liberar).toContain('avisarQueFoiParaAMesa(');
+    expect(liberar).toContain('return postar(engine, item, faltando);');
+    // antes de liberar, a mesma varredura confere a política e o commit
+    expect(fonte).toContain('if (!pedeMudancas && !politicaAindaAprova(engine, item)) return 0;');
+    expect(fonte).toContain('if (lido.head !== item.headSha) { largarPorCommitNovo(engine, item, lido.head); return 0; }');
+  });
+});
+
+describe('chave que os dois mexeram', () => {
+  it('é dita com os dois valores, só enquanto diferem', () => {
+    expect(conflitosDaAutomacao(['reviewModel', 'parallelReviews'], { ...ANTES, reviewModel: 'sonnet', parallelReviews: 2 }, { ...ANTES, reviewModel: '', parallelReviews: 2 })).toEqual([
+      'modelo: no motor agora está "sonnet", e no seu formulário, "padrão do Claude Code". Salvar grava o seu.',
+    ]);
+    expect(conflitosDaAutomacao([], ANTES, { ...ANTES, reviewModel: 'auto' })).toEqual([]);
   });
 });
 
@@ -89,7 +117,7 @@ describe('a conferência do que voltou', () => {
 
 describe('textos', () => {
   it('o pedido numa frase', () => {
-    expect(textoDaAutomacao({ aguardarCiParaAprovar: true, reviewModel: '', reviewEffort: 'high', parallelReviews: 2 })).toBe('CI antes de aprovar: ligado; revisões ao mesmo tempo: 2; modelo: padrão do Claude Code; esforço: high');
+    expect(textoDaAutomacao({ aguardarCiParaAprovar: true, reviewModel: '', reviewEffort: 'high', parallelReviews: 2 })).toBe('CI antes de aprovar: ligado; revisões ao mesmo tempo: 2; modelo: padrão do Claude Code; esforço (effort): high');
   });
 
   it('o efeito do CI muda com o valor, e o desligado diz o risco', () => {
@@ -113,12 +141,18 @@ describe('textos', () => {
     expect(rotuloDoEsforco('max')).toBe('max (valor que esta tela não conhece)');
   });
 
-  it('o paralelismo válido e a nota do teto total', () => {
+  it('o campo de esforço traz o termo oficial, e o modelo aceita nome completo só pelo arquivo', () => {
+    expect(NOME_DO_CAMPO_DE_ESFORCO).toBe('Esforço (effort) da revisão');
+    // a escotilha do nome completo, no motor
+    expect(raiz('lib/parse.js')).toContain('const MODEL_FULL_RE = /^claude-[a-z0-9]+(?:-[a-z0-9]+)*$/;');
+  });
+
+  it('o paralelismo válido e a nota do limite total', () => {
     expect([0, 1, 4, 5, 2.5].map(paraleloValido)).toEqual([false, true, true, false, false]);
-    expect(notaDoTetoTotal(0)).toBeNull();
-    expect(notaDoTetoTotal(undefined)).toBeNull();
-    expect(notaDoTetoTotal(1)).toContain('1 sessão');
-    expect(notaDoTetoTotal(3)).toContain('3 sessões');
+    expect(notaDoLimiteTotal(0)).toBeNull();
+    expect(notaDoLimiteTotal(undefined)).toBeNull();
+    expect(notaDoLimiteTotal(1)).toContain('1 sessão');
+    expect(notaDoLimiteTotal(3)).toContain('3 sessões');
   });
 
   it('a marca muda com qualquer chave', () => {

@@ -7,7 +7,12 @@
 // `campos` troca o valor que a conta tem, e `owners` troca a lista inteira de organizações.
 // Campo que não vai não muda. Campo vazio apagaria o valor e o motor regravaria o padrão (que
 // publica sozinho): por isso a tela nunca manda campo vazio.
+//
+// O que vai é o que A PESSOA alterou nesta edição (camposAlterados): a diferença entre o
+// rascunho e o valor que ela viu ao começar a editar. Se outra pessoa mudou outro campo no
+// motor nesse meio, ele não vai no corpo e não é revertido.
 import type { ContaRevisora } from '@/contratos/sistema';
+import type { Refeito } from './rascunho';
 
 // Os valores de cada campo da política (DOMINIO_DA_POLITICA, lib/settings.js). O teste ao lado
 // confere contra o motor.
@@ -96,20 +101,89 @@ export interface CamposDaConta {
 
 const mesmaLista = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((item, i) => item === b[i]);
 
-// Só o que mudou, e só valor do domínio. Com o "limpo" em espera o "com ressalvas" não vai: o
+// As organizações que vão no corpo: a lista ATUAL do motor, com o que a pessoa acrescentou e
+// sem o que ela tirou nesta edição (a diferença entre o rascunho e a lista que ela viu ao
+// começar). A organização que outra pessoa pôs ou tirou nesse meio fica como o motor a tem.
+export function organizacoesMescladas(vistas: readonly string[], rascunho: readonly string[], atuais: readonly string[]): string[] {
+  const tiradas = vistas.filter((org) => !temOrganizacao(rascunho, org));
+  const postas = rascunho.filter((org) => !temOrganizacao(vistas, org));
+  const mantidas = atuais.filter((org) => !temOrganizacao(tiradas, org));
+  return [...mantidas, ...postas.filter((org) => !temOrganizacao(mantidas, org))];
+}
+
+const DESFECHOS_EM_ORDEM = ['onClean', 'onCaveats', 'onReject'] as const;
+
+// Os campos que A PESSOA alterou nesta edição: a diferença entre o rascunho e o valor que ela
+// viu ao começar (`visto`), nunca a diferença contra a conta de agora. Campo que outra pessoa
+// mudou no motor nesse meio não entra, e por isso não é revertido. Só valor do domínio, e só
+// o que ainda difere do motor (`conta`). Com o "limpo" em espera o "com ressalvas" não vai: o
 // motor o põe em espera sozinho (o com ressalvas nunca é mais permissivo que o limpo), e
 // recusaria o pedido de aprovar.
-export function camposAlterados(conta: ContaRevisora, rascunho: RascunhoDaConta): CamposDaConta {
+export function camposAlterados(visto: RascunhoDaConta, rascunho: RascunhoDaConta, conta: ContaRevisora): CamposDaConta {
   const campos: CamposDaConta = {};
-  if (!mesmaLista(conta.owners, rascunho.owners)) campos.owners = [...rascunho.owners];
-  if (rascunho.autoReview !== undefined && rascunho.autoReview !== conta.autoReview) campos.autoReview = rascunho.autoReview;
-  for (const campo of ['onClean', 'onCaveats', 'onReject'] as const) {
+  if (!mesmaLista(visto.owners, rascunho.owners)) {
+    const mescladas = organizacoesMescladas(visto.owners, rascunho.owners, conta.owners);
+    if (!mesmaLista(mescladas, conta.owners)) campos.owners = mescladas;
+  }
+  if (rascunho.autoReview !== undefined && rascunho.autoReview !== visto.autoReview && rascunho.autoReview !== conta.autoReview) campos.autoReview = rascunho.autoReview;
+  for (const campo of DESFECHOS_EM_ORDEM) {
     const valor = rascunho[campo];
-    if (valor === (conta[campo] ?? '') || !(DOMINIO_DA_POLITICA[campo] as readonly string[]).includes(valor)) continue;
+    if (valor === visto[campo] || valor === (conta[campo] ?? '') || !(DOMINIO_DA_POLITICA[campo] as readonly string[]).includes(valor)) continue;
     if (campo === 'onCaveats' && rascunho.onClean === 'wait') continue;
     campos[campo] = valor;
   }
   return campos;
+}
+
+export type CampoEmConflito = 'autoReview' | Desfecho;
+
+// O rascunho refeito sobre o valor novo do motor (useRascunho): o campo que a pessoa não tocou
+// passa a ser o do motor; o que ela tocou fica com o valor dela, e entra em `conflitos` quando
+// o motor também o mudou, para outro valor. As organizações são mescladas.
+export function refazerConta(visto: RascunhoDaConta, rascunho: RascunhoDaConta, novo: RascunhoDaConta): Refeito<RascunhoDaConta> {
+  const valor: RascunhoDaConta = { ...novo, owners: organizacoesMescladas(visto.owners, rascunho.owners, novo.owners) };
+  const conflitos: CampoEmConflito[] = [];
+  for (const campo of ['autoReview', ...DESFECHOS_EM_ORDEM] as const) {
+    if (rascunho[campo] === visto[campo]) continue;
+    if (campo === 'autoReview') valor.autoReview = rascunho.autoReview;
+    else valor[campo] = rascunho[campo];
+    if (novo[campo] !== visto[campo] && novo[campo] !== rascunho[campo]) conflitos.push(campo);
+  }
+  return { valor, conflitos };
+}
+
+const NOME_DO_CONFLITO: Record<CampoEmConflito, string> = {
+  autoReview: 'Revisão automática',
+  onClean: 'Revisão limpa',
+  onCaveats: 'Revisão com ressalvas',
+  onReject: 'Revisão reprovada',
+};
+
+function valorPorExtenso(campo: CampoEmConflito, valor: boolean | string | undefined): string {
+  if (campo === 'autoReview') return valor === true ? 'ligada' : valor === false ? 'desligada' : 'sem valor';
+  return typeof valor === 'string' && valor !== '' ? rotuloDoValor(campo, valor).toLowerCase() : 'sem valor';
+}
+
+// O campo que a pessoa e o motor mudaram, cada um para um valor: a tela mostra os dois. Só
+// enquanto os dois ainda diferem.
+export function textosDosConflitos(conflitos: readonly string[], conta: ContaRevisora, rascunho: RascunhoDaConta): string[] {
+  const saida: string[] = [];
+  for (const campo of ['autoReview', ...DESFECHOS_EM_ORDEM] as const) {
+    if (!conflitos.includes(campo)) continue;
+    const doMotor = campo === 'autoReview' ? conta.autoReview : conta[campo];
+    const seu = rascunho[campo];
+    if ((doMotor ?? '') === (seu ?? '')) continue;
+    saida.push(`${NOME_DO_CONFLITO[campo]}: no motor agora está "${valorPorExtenso(campo, doMotor)}", e no seu formulário, "${valorPorExtenso(campo, seu)}". Salvar grava o seu.`);
+  }
+  return saida;
+}
+
+// O que a tela diz do "com ressalvas" quando o "limpo" está em espera. O campo do formulário
+// não é mexido: voltar o limpo para publicar devolve o com ressalvas ao valor que estava.
+export function notaDasRessalvasTravadas(rascunho: RascunhoDaConta): string {
+  const base = 'Espera você: com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo).';
+  if (rascunho.onCaveats !== 'approve') return base;
+  return `${base} Ajuste da tela: este campo estava em "publicar a aprovação sozinho" e é mostrado em espera enquanto a limpa esperar; se você salvar assim, o motor o grava em espera, e se voltar a limpa para publicar antes de salvar, ele volta a "publicar a aprovação sozinho".`;
 }
 
 // O corpo de POST /api/accounts/edit: a operação de editar, com a conta e os campos.

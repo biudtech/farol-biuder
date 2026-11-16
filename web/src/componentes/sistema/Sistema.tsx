@@ -1,12 +1,13 @@
 'use client';
 
 // A tela Sistema: a saúde do motor, a conta revisora e a política, a automação, os perfis do
-// Claude com o teto de gasto, o Jira, as sessões pareadas e as chaves que só mudam por
-// arquivo. É a tela que mais pode fazer estrago, então:
+// Claude, o Jira, as sessões pareadas e as chaves que só mudam por arquivo. Não há teto de
+// gasto nela (decisão de 16/11/2026: o revisor não trava por gasto). É a tela que mais pode
+// fazer estrago, então:
 // - nenhum segredo passa por ela: a borda descarta o que tiver cara de segredo
 //   (src/contratos/segredos.ts), e não há campo para digitar token, chave nem credencial;
-// - cada salvar mexe numa seção só, manda só o que foi editado e confere o que o motor
-//   respondeu (src/sistema/acoes.ts);
+// - cada salvar mexe numa seção só, manda só o que a pessoa alterou nesta edição e confere o
+//   que o motor respondeu (src/sistema/acoes.ts);
 // - a mudança que amplia o que o motor publica sozinho no GitHub pergunta antes;
 // - só se salva com o estado da conexão atual já chegado (`estadoEmDia`).
 // A tela fatia e formata: quem mede, decide e grava é o motor.
@@ -19,10 +20,10 @@ import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import comuns from '../radar/Radar.module.css';
 import { Automacao } from './Automacao';
-import { ClaudeETeto } from './ClaudeETeto';
 import { ContaEPolitica } from './ContaEPolitica';
 import { Par } from './Formulario';
 import { Jira } from './Jira';
+import { PerfilDoClaude } from './PerfilDoClaude';
 import { Saude } from './Saude';
 import { Sessoes } from './Sessoes';
 import estilos from './Sistema.module.css';
@@ -31,7 +32,7 @@ const SECOES: ReadonlyArray<[string, string]> = [
   ['saude', 'Saúde'],
   ['conta', 'Conta revisora e política'],
   ['automacao', 'Automação'],
-  ['claude', 'Perfil do Claude e teto de gasto'],
+  ['claude', 'Perfil do Claude'],
   ['jira', 'Jira'],
   ['sessoes', 'Sessões pareadas'],
   ['rede', 'Rede e acesso'],
@@ -39,9 +40,7 @@ const SECOES: ReadonlyArray<[string, string]> = [
 
 // Como a tela chama cada edição por salvar, no aviso do topo.
 function nomeDaEdicao(chave: string): string {
-  if (chave === 'conta') return 'conta e política';
-  if (chave === 'automacao') return 'automação';
-  return 'teto de gasto';
+  return chave === 'conta' ? 'conta e política' : 'automação';
 }
 
 // As chaves que só mudam pelo arquivo de configuração do motor, com reinício. A tela mostra e
@@ -87,7 +86,7 @@ export function Sistema({ app = appDoNavegador }: Props) {
 
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
   const [recargaDasSessoes, setRecargaDasSessoes] = useState(0);
-  // as edições por salvar: "conta", "automacao" e "teto:<id do perfil>"
+  // as edições por salvar: "conta" e "automacao"
   const [porSalvar, setPorSalvar] = useState<readonly string[]>([]);
 
   const marcar = useCallback((chave: string, alterado: boolean) => {
@@ -98,7 +97,6 @@ export function Sistema({ app = appDoNavegador }: Props) {
   }, []);
   const aoMudarConta = useCallback((alterado: boolean) => marcar('conta', alterado), [marcar]);
   const aoMudarAutomacao = useCallback((alterado: boolean) => marcar('automacao', alterado), [marcar]);
-  const aoMudarTeto = useCallback((perfil: string, alterado: boolean) => marcar(`teto:${perfil}`, alterado), [marcar]);
 
   // Fechar ou recarregar a página com edição por salvar pergunta antes (o navegador é quem
   // escreve a pergunta). Trocar de aba do Farol não passa por aqui: a tela avisa no topo.
@@ -116,7 +114,7 @@ export function Sistema({ app = appDoNavegador }: Props) {
   const controle = useMemo<ControleDeAcoes>(() => ({
     ...acoes,
     disparar: async (acao) => {
-      if (acao.tipo === 'conta' || acao.tipo === 'automacao' || acao.tipo === 'teto') acoes.focarResultado();
+      if (acao.tipo === 'conta' || acao.tipo === 'automacao') acoes.focarResultado();
       const aceito = await acoes.disparar(acao);
       if (aceito && acao.tipo === 'revogarSessao') {
         if (acao.atual) app.esquecerSessao('revogada');
@@ -149,7 +147,7 @@ export function Sistema({ app = appDoNavegador }: Props) {
       <Saude cliente={app.cliente} saude={saude} modelos={modelos} perfis={perfis} conta={contas?.[0]} versao={versao} />
       <ContaEPolitica conta={contas?.[0]} controle={controle} impedimento={impedimento} aoMudar={aoMudarConta} />
       <Automacao config={config} modelos={modelos} controle={controle} impedimento={impedimento} aoMudar={aoMudarAutomacao} />
-      <ClaudeETeto cliente={app.cliente} config={config} perfis={perfis} saude={saude} controle={controle} impedimento={impedimento} aoMudar={aoMudarTeto} />
+      <PerfilDoClaude cliente={app.cliente} config={config} perfis={perfis} saude={saude} />
       <Jira cliente={app.cliente} sites={sites} />
       <Sessoes cliente={app.cliente} controle={controle} recarga={recargaDasSessoes} />
       <RedeEAcesso config={config} />

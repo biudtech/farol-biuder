@@ -23,8 +23,8 @@ const TOKEN_DO_GITHUB = `ghp_${'z9Y8x7W6'.repeat(4)}`;
 
 // Os perfis como configParaFora (lib/engine/chave-do-perfil.js) os manda: o de chave sem
 // `apiKey` e com `temChave`.
-const PLANO = { id: 'plano', label: 'Assinatura', kind: 'dir', dir: '', budgetDaily: 20 };
-const API = { id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '', temChave: true, budgetByWeekday: { 6: 5 } };
+const PLANO = { id: 'plano', label: 'Assinatura', kind: 'dir', dir: '/home/farol/.farol/claude/plano' };
+const API = { id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '', temChave: true };
 
 const CONTA = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' };
 const ABERTA = { ...CONTA, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
@@ -122,7 +122,7 @@ const regiao = () => screen.getByRole('status', { name: 'Resultado da última a�
 const SAUDE = 'Saúde';
 const CONTA_E_POLITICA = 'Conta revisora e política';
 const AUTOMACAO = 'Automação';
-const CLAUDE = 'Perfil do Claude e teto de gasto';
+const CLAUDE = 'Perfil do Claude';
 const JIRA = 'Jira';
 const SESSOES_PAREADAS = 'Sessões pareadas';
 const REDE_E_ACESSO = 'Rede e acesso';
@@ -166,6 +166,8 @@ describe('Sistema: a página', () => {
     expect(t.container.innerHTML).not.toContain(TOKEN_DO_GITHUB);
     expect(JSON.stringify(t.store.ler().snapshot)).not.toContain(CHAVE_DA_ANTHROPIC);
     expect(na(CLAUDE).getByRole('alert').textContent).toContain('1 campo(s) com cara de segredo');
+    // os perfis continuam na tela: o segredo sai, o perfil fica
+    expect(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude' })).getAllByRole('heading', { level: 3 })).toHaveLength(2);
     // o caminho de pasta do diagnóstico também não é mostrado
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
@@ -284,6 +286,9 @@ describe('Sistema: conta revisora e política', () => {
     const pergunta = na(CONTA_E_POLITICA).getByRole('group', { name: 'Ampliar o que o motor publica sozinho por @farol-bot?' });
     expect(pergunta.textContent).toContain('Revisão automática ligada: o motor passa a abrir sozinho a sessão de revisão de todo PR pedido a @farol-bot');
     expect(pergunta.textContent).toContain('sem clique');
+    // quando passa a valer, como o motor faz: a mesa não é reavaliada
+    expect(pergunta.textContent).toContain('O que já está em "Precisa de você" não é reavaliado: continua esperando o seu clique.');
+    expect(pergunta.textContent).not.toContain('próximas decisões');
     expect(t.envios()).toEqual([]);
     await clicarEm(na(CONTA_E_POLITICA), 'Voltar sem enviar');
     await assentar();
@@ -329,16 +334,39 @@ describe('Sistema: conta revisora e política', () => {
     expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { autoReview: false, onReject: 'wait' } }]]);
   });
 
-  it('limpo em espera leva o com ressalvas junto: o campo trava, e o corpo não o manda', async () => {
+  it('limpo em espera mostra o com ressalvas em espera, diz o ajuste, e o corpo não o manda', async () => {
     const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
     await assentar();
     mudar(campo(/revisão sai limpa/), 'wait');
     expect(campo(/com ressalvas/).disabled).toBe(true);
     expect(campo(/com ressalvas/).value).toBe('wait');
-    expect(na(CONTA_E_POLITICA).getByText(/o com ressalvas nunca é mais permissivo que o limpo/)).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByText(/o com ressalvas nunca é mais permissivo que o limpo/).textContent).toContain('Ajuste da tela: este campo estava em "publicar a aprovação sozinho" e é mostrado em espera enquanto a limpa esperar');
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await assentar();
     expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } }]]);
+  });
+
+  it('trocar a limpa para esperar e de volta não altera o com ressalvas em silêncio', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    mudar(campo(/revisão sai limpa/), 'wait');
+    mudar(campo(/revisão sai limpa/), 'approve');
+    expect(campo(/com ressalvas/).disabled).toBe(false);
+    expect(campo(/com ressalvas/).value).toBe('approve');
+    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).queryByRole('button', { name: SALVAR })).toBeNull();
+    expect(t.envios()).toEqual([]);
+  });
+
+  it('depois de salvar a limpa em espera, o motor grava as duas em espera e o formulário fica sem alteração', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    mudar(campo(/revisão sai limpa/), 'wait');
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await assentar();
+    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, onClean: 'wait', onCaveats: 'wait' }] });
+    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).queryByText(/mudou no motor enquanto você editava/)).toBeNull();
   });
 
   it('organização nova pergunta e vai como lista inteira; tirar organização não pergunta', async () => {
@@ -403,16 +431,108 @@ describe('Sistema: conta revisora e política', () => {
     expect(na(CONTA_E_POLITICA).getByRole('button', { name: SALVAR })).toBeTruthy();
   });
 
-  it('política que muda no motor com a edição aberta vira aviso, e dá para descartar', async () => {
+  it('política que muda no motor com a edição aberta: o salvar leva só o que a pessoa alterou, e o campo do outro não é revertido', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    // ela só mexe na reprovada
+    mudar(campo(/revisão reprova/), 'wait');
+    // nesse meio outra pessoa desliga a revisão automática e acrescenta uma organização
+    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, owners: ['biudtech', 'cnbb'] }] });
+    expect(na(CONTA_E_POLITICA).getByText(/a conta e a política mudou no motor enquanto você editava.*o salvar leva só o que você alterou: o que a outra pessoa mudou não é desfeito/)).toBeTruthy();
+    // os campos que ela não tocou mostram o que o motor tem agora
+    expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(false);
+    expect(within(na(CONTA_E_POLITICA).getByRole('list', { name: 'Organizações monitoradas' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['biudtechTirar', 'cnbbTirar']);
+    expect(campo(/revisão reprova/).value).toBe('wait');
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await assentar();
+    // nem autoReview nem owners vão no corpo: o que a outra pessoa mudou fica
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onReject: 'wait' } }]]);
+  });
+
+  it('o mesmo campo alterado pelos dois: a tela mostra o valor do motor e o seu, e a pergunta é contra o valor atual do motor', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    // ela desliga a revisão automática e põe a limpa em espera; nesse meio outra pessoa também desliga a revisão automática e muda a limpa para outro valor
+    act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
+    mudar(campo(/revisão sai limpa/), 'wait');
+    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, onClean: 'merge' }] });
+    // autoReview: os dois chegaram ao mesmo valor, não é conflito; a limpa é
+    const aviso = na(CONTA_E_POLITICA).getByText(/mudou no motor enquanto você editava/).closest('div') as HTMLElement;
+    expect(within(aviso).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Revisão limpa: no motor agora está "merge (valor que esta tela não conhece)", e no seu formulário, "esperar você". Salvar grava o seu.',
+    ]);
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } }]]);
+
+    // agora o contrário: ela põe a reprovada em publicar, e nesse meio o motor passa a ter outro valor nela
+    cleanup();
+    const outra = montar();
+    await assentar();
+    mudar(campo(/revisão reprova/), 'request_changes');
+    outra.trocar({ ...BRUTO, accounts: [{ ...CONTA, onReject: 'merge' }] });
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    // a ampliação é calculada contra o motor de agora, que não publicava
+    expect(na(CONTA_E_POLITICA).getByRole('group', { name: /Ampliar o que o motor publica sozinho/ }).textContent).toContain('publicar sozinho o pedido de mudanças (REQUEST_CHANGES)');
+    await clicarEm(na(CONTA_E_POLITICA), 'Voltar sem enviar');
+    // e se o motor já ficou com o valor que ela pôs, não há o que mandar nem o que perguntar
+    outra.trocar({ ...BRUTO, accounts: [{ ...CONTA, onReject: 'request_changes' }] });
+    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
+    expect(outra.envios()).toEqual([]);
+  });
+
+  it('dá para descartar a edição e ficar com o que o motor tem agora', async () => {
     const t = montar();
     await assentar();
     mudar(campo(/revisão reprova/), 'request_changes');
     t.trocar({ ...BRUTO, accounts: [{ ...CONTA, onClean: 'approve' }] });
-    expect(na(CONTA_E_POLITICA).getByText(/a conta e a política mudou no motor enquanto você editava/)).toBeTruthy();
+    expect(campo(/revisão sai limpa/).value).toBe('approve');
     await clicarEm(na(CONTA_E_POLITICA), 'Descartar a edição de a conta e a política');
     expect(campo(/revisão reprova/).value).toBe('wait');
     expect(campo(/revisão sai limpa/).value).toBe('approve');
     expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
+  });
+
+  it('organização que outra pessoa acrescentou nesse meio continua na lista que vai no corpo', async () => {
+    const t = montar();
+    await assentar();
+    mudar(na(CONTA_E_POLITICA).getByLabelText('Organização a adicionar'), 'acme');
+    await clicarEm(na(CONTA_E_POLITICA), 'Adicionar à lista');
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, owners: ['biudtech', 'cnbb'] }] });
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { owners: ['biudtech', 'cnbb', 'acme'] } }]]);
+  });
+
+  it('cada seletor e o checkbox têm o efeito ligado por aria-describedby', async () => {
+    montar();
+    await assentar();
+    const descricao = (elemento: HTMLElement): string => {
+      const id = elemento.getAttribute('aria-describedby');
+      expect(id).toBeTruthy();
+      return document.getElementById(id ?? '')?.textContent ?? '';
+    };
+    expect(descricao(na(CONTA_E_POLITICA).getByLabelText('Revisão automática'))).toContain('Desligada: o PR pedido à conta só entra na fila');
+    expect(descricao(campo(/revisão sai limpa/))).toContain('Espera você: o PR vai a "Precisa de você"');
+    expect(descricao(campo(/com ressalvas/))).toContain('o com ressalvas nunca é mais permissivo que o limpo');
+    expect(descricao(campo(/revisão reprova/))).toContain('Espera você');
+    expect(descricao(na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar'))).toContain('a aprovação automática espera os checks obrigatórios');
+    expect(descricao(na(AUTOMACAO).getByLabelText('Revisões ao mesmo tempo'))).toContain('Quantas sessões de revisão');
+    expect(descricao(na(AUTOMACAO).getByLabelText('Modelo da revisão'))).toContain('Vira a flag --model');
+    expect(descricao(na(AUTOMACAO).getByLabelText('Esforço (effort) da revisão'))).toContain('Vira a flag --effort');
+  });
+
+  it('depois de Tirar uma organização o foco vai ao campo de acrescentar', async () => {
+    montar({ bruto: { ...BRUTO, accounts: [{ ...CONTA, owners: ['biudtech', 'acme'] }] } });
+    await assentar();
+    const botao = na(CONTA_E_POLITICA).getByRole('button', { name: 'Tirar acme das organizações monitoradas' });
+    botao.focus();
+    await clicarEm(na(CONTA_E_POLITICA), 'Tirar acme das organizações monitoradas');
+    expect(document.activeElement).toBe(na(CONTA_E_POLITICA).getByLabelText('Organização a adicionar'));
+    // também quando era a última
+    await clicarEm(na(CONTA_E_POLITICA), 'Tirar biudtech das organizações monitoradas');
+    expect(document.activeElement).toBe(na(CONTA_E_POLITICA).getByLabelText('Organização a adicionar'));
   });
 
   it('sem edição, o formulário acompanha o que o motor manda', async () => {
@@ -450,7 +570,7 @@ describe('Sistema: automação', () => {
     expect(na(AUTOMACAO).getByText(/a aprovação automática espera os checks obrigatórios/)).toBeTruthy();
     expect([...campo('Revisões ao mesmo tempo').options].map((o) => o.value)).toEqual(['1', '2', '3', '4']);
     expect([...campo('Modelo da revisão').options].map((o) => [o.value, o.textContent])).toEqual([['', 'Padrão do Claude'], ['auto', 'Auto (qualidade primeiro)'], ['opus', 'Opus'], ['sonnet', 'Sonnet']]);
-    expect([...campo('Esforço da revisão').options].map((o) => o.value)).toEqual(['', 'low', 'medium', 'high', 'xhigh']);
+    expect([...campo('Esforço (effort) da revisão').options].map((o) => o.value)).toEqual(['', 'low', 'medium', 'high', 'xhigh']);
     expect(na(AUTOMACAO).getByText(/Vira a flag --model/)).toBeTruthy();
     expect(na(AUTOMACAO).getByText('Sem alteração por salvar.')).toBeTruthy();
   });
@@ -471,7 +591,7 @@ describe('Sistema: automação', () => {
     const t = montar({ aoPostar: gravou({ ...CONFIG, reviewModel: 'sonnet', reviewEffort: 'high' }) });
     await assentar();
     mudar(campo('Modelo da revisão'), 'sonnet');
-    mudar(campo('Esforço da revisão'), 'high');
+    mudar(campo('Esforço (effort) da revisão'), 'high');
     await clicarEm(na(AUTOMACAO), SALVAR);
     await assentar();
     expect(t.envios()).toEqual([['/api/settings', { reviewModel: 'sonnet', reviewEffort: 'high' }]]);
@@ -484,6 +604,9 @@ describe('Sistema: automação', () => {
     expect(na(AUTOMACAO).getByText(/o motor pode aprovar com o CI vermelho ou ainda rodando/)).toBeTruthy();
     await clicarEm(na(AUTOMACAO), SALVAR);
     const pergunta = na(AUTOMACAO).getByRole('group', { name: 'Desligar o CI antes de aprovar?' });
+    // o efeito imediato: o que já espera o CI sai na próxima varredura
+    expect(pergunta.textContent).toContain('Efeito imediato: toda aprovação que já está em "Esperando o CI" é publicada (APPROVE) na próxima varredura do motor, sem esperar os checks, mesmo com o CI vermelho ou ainda rodando');
+    expect(pergunta.textContent).toContain('Daqui em diante: a aprovação automática deixa de esperar os checks obrigatórios');
     expect(pergunta.textContent).toContain('passa a poder publicar APPROVE com o CI vermelho ou ainda rodando');
     await clicarEm(na(AUTOMACAO), 'Voltar sem enviar');
     await assentar();
@@ -527,9 +650,25 @@ describe('Sistema: automação', () => {
     montar({ bruto: { ...BRUTO, config: { ...CONFIG, reviewModel: 'claude-opus-5-5', reviewEffort: 'high', globalParallelReviews: 3 } } });
     await assentar();
     expect(campo('Modelo da revisão').selectedOptions[0]?.textContent).toBe('claude-opus-5-5 (fixado no arquivo de configuração; não está no catálogo)');
-    expect(na(AUTOMACAO).getByText(/teto total de 3 sessões ao mesmo tempo/)).toBeTruthy();
+    expect(na(AUTOMACAO).getByText(/limite total de 3 sessões ao mesmo tempo/)).toBeTruthy();
     mudar(campo('Modelo da revisão'), 'auto');
     expect(na(AUTOMACAO).getByText(/com o modelo escolhido o motor não usa este valor/)).toBeTruthy();
+  });
+
+  it('chave que outra pessoa mudou com a edição aberta não vai no corpo, e a que os dois mexeram é dita', async () => {
+    const t = montar({ aoPostar: gravou({ ...CONFIG, parallelReviews: 3, reviewModel: 'sonnet' }) });
+    await assentar();
+    mudar(campo('Revisões ao mesmo tempo'), '3');
+    mudar(campo('Modelo da revisão'), '');
+    // nesse meio alguém troca o modelo e desliga o CI
+    t.trocar({ ...BRUTO, config: { ...CONFIG, reviewModel: 'sonnet', aguardarCiParaAprovar: false } });
+    expect((na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar') as HTMLInputElement).checked).toBe(false);
+    const aviso = na(AUTOMACAO).getByText(/a automação mudou no motor enquanto você editava/).closest('div') as HTMLElement;
+    expect(within(aviso).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['modelo: no motor agora está "sonnet", e no seu formulário, "padrão do Claude Code". Salvar grava o seu.']);
+    await clicarEm(na(AUTOMACAO), SALVAR);
+    await assentar();
+    // o CI que a outra pessoa desligou não é religado, e não há pergunta: ela não mexeu nele
+    expect(t.envios()).toEqual([['/api/settings', { parallelReviews: 3, reviewModel: '' }]]);
   });
 
   it('sem conexão o salvar fica fechado', async () => {
@@ -541,26 +680,63 @@ describe('Sistema: automação', () => {
   });
 });
 
-describe('Sistema: perfil do Claude e teto de gasto', () => {
-  const SALVAR = 'Salvar teto de Assinatura';
-  const CONFIRMAR = 'Salvar o teto: Assinatura';
+describe('Sistema: perfil do Claude', () => {
   const perfil = (nome: string) => within(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude' })).getByRole('heading', { level: 3, name: new RegExp(`^${nome}`) }).closest('li') as HTMLElement);
-  const gravou = (claudeProfiles: unknown) => (rota: string) => (rota === '/api/settings' ? corpo({ ok: true, ignoradas: [], config: { ...CONFIG, claudeProfiles } }) : undefined);
+  const AVISO_DE_TETO = 'Aviso: este perfil tem teto de gasto configurado no arquivo do motor; ele ainda pode pausar revisões automáticas até o teto ser removido do motor.';
 
-  it('mostra os perfis, a presença da credencial, o uso do plano e o teto, sem chave nem pasta', async () => {
+  it('mostra os perfis, o tipo, a presença da credencial e o uso do plano, sem chave nem pasta', async () => {
     const t = montar();
     await assentar();
+    expect(perfil('Assinatura').getByText('Assinatura', { selector: 'span + span' })).toBeTruthy();
     expect(perfil('Assinatura').getByText('Perfil padrão')).toBeTruthy();
     expect(perfil('Assinatura').getByText(/Login presente na pasta do perfil/)).toBeTruthy();
     expect(perfil('Assinatura').getByText('40% usado, volta às 18h')).toBeTruthy();
-    expect(perfil('Assinatura').getByText('Teto no motor agora: US$ 20,00 por dia.')).toBeTruthy();
-    expect((perfil('Assinatura').getByLabelText('Teto do dia, em dólar') as HTMLInputElement).value).toBe('20');
+    expect(perfil('Chave').getByText('Chave de API')).toBeTruthy();
     expect(perfil('Chave').getByText(/Chave presente\. O motor não informa se ela vale/)).toBeTruthy();
-    expect(perfil('Chave').getByText(/teto do dia próprio para sábado \(US\$ 5,00\)/)).toBeTruthy();
-    expect(perfil('Chave').getByText('Teto no motor agora: sem teto.')).toBeTruthy();
-    expect(na(CLAUDE).getByText(/Baixar ou zerar um teto pode pausar as revisões automáticas na hora/)).toBeTruthy();
-    expect(na(CLAUDE).getByText(/ela não tem campo para segredo/)).toBeTruthy();
+    expect(na(CLAUDE).getByText(/Esta seção é só leitura.*não tem campo para segredo/)).toBeTruthy();
     expect(t.container.innerHTML).not.toContain('apiKey');
+    expect(t.container.innerHTML).not.toContain('/home/farol');
+  });
+
+  it('a seção não tem teto: nenhum campo, nenhum salvar, nenhum valor de teto na tela', async () => {
+    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, budgetDaily: 20, budgetTotal: 300, budgetSince: '2026-11-01' }, API] } } });
+    await assentar();
+    expect(na(CLAUDE).queryByRole('textbox')).toBeNull();
+    expect(na(CLAUDE).queryByRole('group')).toBeNull();
+    expect(na(CLAUDE).queryByRole('button', { name: /Salvar|teto/i })).toBeNull();
+    expect(na(CLAUDE).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Testar o perfil Assinatura', 'Testar o perfil Chave']);
+    expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|300|2026-11-01|01\/11\/2026/);
+    // e o valor do teto nem entra no store
+    expect(JSON.stringify(t.store.ler().snapshot?.config)).not.toMatch(/budget|300|2026-11-01/);
+  });
+
+  it.each([
+    ['teto do dia', { budgetDaily: 20 }],
+    ['teto do dia em zero', { budgetDaily: 0 }],
+    ['teto total', { budgetTotal: 300, budgetSince: '2026-11-01' }],
+    ['teto por dia da semana', { budgetByWeekday: { 6: 5 } }],
+    ['teto por data', { budgetDates: { '2026-12-25': 0 } }],
+  ])('perfil com %s no arquivo ganha o aviso só de leitura, e o que não tem não ganha', async (_nome, teto) => {
+    montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, ...teto }, API] } } });
+    await assentar();
+    expect(perfil('Assinatura').getByText(AVISO_DE_TETO)).toBeTruthy();
+    expect(perfil('Chave').queryByText(AVISO_DE_TETO)).toBeNull();
+  });
+
+  it('sem teto em perfil nenhum não há aviso', async () => {
+    montar();
+    await assentar();
+    expect(na(CLAUDE).queryByText(/teto de gasto/)).toBeNull();
+  });
+
+  it('nenhum POST /api/settings sai desta seção, e nenhum POST leva claudeProfiles', async () => {
+    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, budgetDaily: 20 }, API] } } });
+    await assentar();
+    await clicarEm(perfil('Assinatura'), 'Testar o perfil Assinatura');
+    await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
+    await assentar();
+    expect(t.envios().map(([rota]) => rota)).toEqual(['/api/claude/profile-test', '/api/claude/profile-test']);
+    expect(JSON.stringify(t.post.mock.calls.map(([, enviado]) => enviado))).not.toContain('claudeProfiles');
   });
 
   it('Testar perfil diz antes o que o teste faz e que não consome, e manda só o id do perfil', async () => {
@@ -587,109 +763,20 @@ describe('Sistema: perfil do Claude e teto de gasto', () => {
     await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
     await assentar();
     expect(perfil('Chave').getByRole('status', { name: 'Resultado do teste do perfil Chave' }).textContent).toBe('Erro: o motor não testou o perfil: esse perfil está incompleto: falta a chave, ou a pasta fica fora do HOME do Farol.');
+
+    cleanup();
+    montar({ aoPostar: (rota) => (rota === '/api/claude/profile-test' ? REDE : undefined) });
+    await assentar();
+    await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
+    await assentar();
+    expect(perfil('Chave').getByRole('status', { name: 'Resultado do teste do perfil Chave' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede).');
   });
 
-  it('baixar o teto pergunta sempre, com o antes, o depois e a pausa; cancelar não envia', async () => {
-    const t = montar();
+  it('perfil com id que parece chave e não é aparece na lista: sk-anthropic-1', async () => {
+    montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ id: 'sk-anthropic-1', kind: 'apikey', baseUrl: '', temChave: true }, PLANO] } } });
     await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    const pergunta = perfil('Assinatura').getByRole('group', { name: 'Mudar o teto de gasto de Assinatura?' });
-    expect(pergunta.textContent).toContain('passa de US$ 20,00 por dia para US$ 5,00 por dia');
-    expect(pergunta.textContent).toContain('as revisões automáticas deste perfil pausam');
-    await clicarEm(perfil('Assinatura'), 'Voltar sem enviar');
-    await assentar();
-    expect(t.envios()).toEqual([]);
-  });
-
-  it('aceita a pergunta: o corpo é só claudeProfiles, a lista crua com o teto deste perfil trocado', async () => {
-    const t = montar({ aoPostar: gravou([{ ...PLANO, budgetDaily: 5 }, API]) });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    await clicarEm(perfil('Assinatura'), CONFIRMAR);
-    await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { claudeProfiles: [{ id: 'plano', label: 'Assinatura', kind: 'dir', dir: '', budgetDaily: 5 }, API] }]]);
-    // nenhum segredo, nenhuma outra chave de config
-    expect(JSON.stringify(t.envios())).not.toMatch(/apiKey|aguardarCi|reviewModel|people/);
-    expect(regiao().textContent).toContain('O motor gravou o teto de Assinatura: US$ 5,00 por dia.');
-  });
-
-  it('teto total com data de corte, no perfil de chave: os tetos por dia da semana voltam como vieram', async () => {
-    const t = montar({ aoPostar: gravou([PLANO, { ...API, budgetTotal: 100, budgetSince: '2026-11-01' }]) });
-    await assentar();
-    mudar(perfil('Chave').getByLabelText('Teto total, em dólar'), '100');
-    mudar(perfil('Chave').getByLabelText(/Data de corte do teto total/), '2026-11-01');
-    await clicarEm(perfil('Chave'), 'Salvar teto de Chave');
-    await clicarEm(perfil('Chave'), 'Salvar o teto: Chave');
-    await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { claudeProfiles: [PLANO, { ...API, budgetTotal: 100, budgetSince: '2026-11-01' }] }]]);
-  });
-
-  it('zerar o teto avisa que as revisões automáticas param já; tirar o teto tira o campo', async () => {
-    const t = montar({ aoPostar: gravou([{ id: 'plano', label: 'Assinatura', kind: 'dir', dir: '' }, API]) });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '0');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    expect(perfil('Assinatura').getByRole('group', { name: 'Mudar o teto de gasto de Assinatura?' }).textContent).toContain('as revisões automáticas deste perfil param já');
-    await clicarEm(perfil('Assinatura'), 'Voltar sem enviar');
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    expect(perfil('Assinatura').getByRole('group', { name: 'Mudar o teto de gasto de Assinatura?' }).textContent).toContain('o que estava pausado por ele volta a rodar');
-    await clicarEm(perfil('Assinatura'), CONFIRMAR);
-    await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { claudeProfiles: [{ id: 'plano', label: 'Assinatura', kind: 'dir', dir: '' }, API] }]]);
-    expect(regiao().textContent).toContain('O motor gravou o teto de Assinatura: sem teto.');
-  });
-
-  it('valor que o motor descartaria é erro no campo, e não há salvar', async () => {
-    montar();
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '-3');
-    expect(perfil('Assinatura').getByText(/^Erro: Use um valor em dólar de zero para cima/)).toBeTruthy();
-    expect((perfil('Assinatura').getByLabelText('Teto do dia, em dólar') as HTMLInputElement).getAttribute('aria-invalid')).toBe('true');
-    expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '20');
-    mudar(perfil('Assinatura').getByLabelText(/Data de corte do teto total/), '2026-02-30');
-    expect(perfil('Assinatura').getByText(/^Erro: Use um dia que existe/)).toBeTruthy();
-    expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
-  });
-
-  it('o motor gravou diferente, ou mexeu em outro perfil: a tela diz, como erro', async () => {
-    montar({ aoPostar: gravou([{ ...PLANO, budgetDaily: 5 }]) });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    await clicarEm(perfil('Assinatura'), CONFIRMAR);
-    await assentar();
-    expect(regiao().textContent).toContain('Erro: O motor gravou o teto de Assinatura: US$ 5,00 por dia. Atenção: outro perfil ficou diferente do que esta tela enviou, mudou ou saiu da lista (api).');
-  });
-
-  it('a recusa do endereço diz que nada foi gravado e que a tela não digita chave', async () => {
-    montar({ aoPostar: (rota) => (rota === '/api/settings' ? corpo({ ok: false, code: 'chave_exigida', perfis: ['api'], erro: 'Para mudar o endereço deste perfil, digite a chave de novo.' }) : undefined) });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    await clicarEm(perfil('Assinatura'), SALVAR);
-    await clicarEm(perfil('Assinatura'), CONFIRMAR);
-    await assentar();
-    expect(regiao().textContent).toContain('Esta tela não digita chave: nada foi gravado.');
-  });
-
-  it('sem o estado desta conexão o salvar do teto fica fechado', async () => {
-    montar({ estadoEmDia: false });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    expect(perfil('Assinatura').getByText(/^Bloqueado: A conexão com o motor acabou de abrir/)).toBeTruthy();
-    expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
-  });
-
-  it('com segredo descartado dos perfis, o teto não se salva: a lista guardada não é mais a do motor', async () => {
-    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [PLANO, { ...API, apiKey: CHAVE_DA_ANTHROPIC }] } } });
-    await assentar();
-    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
-    expect(perfil('Assinatura').getByText(/^Bloqueado: O motor mandou campo com cara de segredo junto dos perfis/)).toBeTruthy();
-    expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
-    expect(t.envios()).toEqual([]);
+    expect(perfil('sk-anthropic-1').getByText('Chave de API')).toBeTruthy();
+    expect(na(CLAUDE).queryByRole('alert')).toBeNull();
   });
 
   it('sem perfil, a seção diz o que isso significa', async () => {
