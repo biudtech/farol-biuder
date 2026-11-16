@@ -232,6 +232,12 @@ export function ClaudeETeto({ cliente, config, perfis, saude, controle, impedime
   const cru = config?.claudeProfilesCru;
   const ilegiveis = config?.claudeProfilesIlegiveis ?? 0;
   const segredos = config?.segredosDescartados ?? 0;
+  // Com campo descartado por cara de segredo, a lista que a tela guardou não é mais a do
+  // motor: mandá-la de volta poderia apagar o que saiu (um rótulo, um endereço). O teto não
+  // se salva daqui enquanto isso durar.
+  const impedimentoDoTeto = segredos > 0
+    ? 'O motor mandou campo com cara de segredo junto dos perfis, e esta tela o descartou: a lista de perfis que ela guardou não é mais a que o motor tem, e o salvar a mandaria de volta sem esse campo. O teto não se salva daqui enquanto o motor mandar esse campo.'
+    : impedimento;
 
   return (
     <section id="claude" className={estilos.secao} aria-labelledby={idDoTitulo}>
@@ -266,7 +272,7 @@ export function ClaudeETeto({ cliente, config, perfis, saude, controle, impedime
               pronto={saude?.claudeAuth.find((p) => p.id === perfil.id)?.ready}
               uso={perfis && Object.hasOwn(perfis.uso, perfil.id) ? perfis.uso[perfil.id] : undefined}
               controle={controle}
-              impedimento={impedimento}
+              impedimento={impedimentoDoTeto}
               aoMudar={aoMudar}
             />
           ))}

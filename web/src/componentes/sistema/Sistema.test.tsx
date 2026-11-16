@@ -683,6 +683,15 @@ describe('Sistema: perfil do Claude e teto de gasto', () => {
     expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
   });
 
+  it('com segredo descartado dos perfis, o teto não se salva: a lista guardada não é mais a do motor', async () => {
+    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [PLANO, { ...API, apiKey: CHAVE_DA_ANTHROPIC }] } } });
+    await assentar();
+    mudar(perfil('Assinatura').getByLabelText('Teto do dia, em dólar'), '5');
+    expect(perfil('Assinatura').getByText(/^Bloqueado: O motor mandou campo com cara de segredo junto dos perfis/)).toBeTruthy();
+    expect(perfil('Assinatura').queryByRole('button', { name: SALVAR })).toBeNull();
+    expect(t.envios()).toEqual([]);
+  });
+
   it('sem perfil, a seção diz o que isso significa', async () => {
     montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [] } } });
     await assentar();
