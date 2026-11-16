@@ -105,10 +105,43 @@ describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
     expect(v.has('--borda-botao')).toBe(true);
   });
 
+  // O gráfico e as tabelas do Consumo são pintados sobre o cartão (--surface): a barra é
+  // --accent, a linha de base do eixo é --borda-campo, os rótulos do eixo e os cabeçalhos são
+  // --muted, o texto das células é --text e o período pronto marcado usa --foco no contorno.
+  // Parte gráfica pede 3:1 (WCAG 1.4.11); texto, 4,5:1.
+  it('gráfico e tabelas do Consumo sobre o cartão: barra, eixo e marca 3:1, rótulo e texto 4,5:1', () => {
+    for (const grafica of ['--accent', '--borda-campo', '--foco']) {
+      expect(contraste(de(grafica), de('--surface')), `${grafica} sobre --surface`).toBeGreaterThanOrEqual(3);
+    }
+    for (const texto of ['--muted', '--text', '--info-texto']) {
+      expect(contraste(de(texto), de('--surface')), `${texto} sobre --surface`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it('anel de foco e contorno de campo: 3:1', () => {
     for (const fundo of fundos) {
       expect(contraste(de('--foco'), de(fundo)), `--foco sobre ${fundo}`).toBeGreaterThanOrEqual(3);
       expect(contraste(de('--borda-campo'), de(fundo)), `--borda-campo sobre ${fundo}`).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+// As cores do Consumo saem só das variáveis conferidas acima: cor escrita à mão no CSS da
+// tela escaparia deste teste.
+describe('o CSS do Consumo', () => {
+  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../componentes/consumo/Consumo.module.css'), 'utf8');
+
+  it('não tem cor fora das variáveis de globals.css', () => {
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+    const usadas = new Set([...css.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1] as string));
+    expect(usadas.size).toBeGreaterThan(0);
+    for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
+  });
+
+  it('a barra, o eixo e os rótulos do gráfico usam os pares conferidos', () => {
+    expect(css).toContain('.barra { fill: var(--accent); }');
+    expect(css).toContain('.eixo { stroke: var(--borda-campo); stroke-width: 1; }');
+    expect(css).toMatch(/\.rotuloDoEixo \{ fill: var\(--muted\);/);
+    expect(css).toMatch(/\.rolagem \{[^}]*background: var\(--surface\);/);
   });
 });
