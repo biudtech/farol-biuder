@@ -4,18 +4,33 @@
 // este navegador pareado (src/componentes/Aplicacao.tsx).
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
-import { app, useApp } from '@/estado/instancia';
+import { useEffect, useRef, type ReactNode } from 'react';
+import type { App } from '@/estado/app';
+import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { ABAS } from '@/navegacao/abas';
 import { IndicadorDeConexao } from './IndicadorDeConexao';
 import { Logo } from './Logo';
 import { TrocaDeTema } from './TrocaDeTema';
 import estilos from './Casca.module.css';
 
-export function Casca({ children }: { children: ReactNode }) {
+interface Props {
+  children: ReactNode;
+  // existe para o teste trocar a instância
+  app?: App;
+}
+
+export function Casca({ children, app = appDoNavegador }: Props) {
   const caminho = usePathname();
-  const conexao = useApp((e) => e.conexao);
-  const versao = useApp((e) => e.snapshot?.app?.version ?? '');
+  const conexao = useApp((e) => e.conexao, app);
+  const versao = useApp((e) => e.snapshot?.app?.version ?? '', app);
+  const conteudo = useRef<HTMLElement>(null);
+
+  // Quem acabou de parear estava com o foco no formulário, que sumiu: o foco vai ao conteúdo
+  // principal, para o leitor de tela e o teclado não ficarem no vazio. Quem abriu a página já
+  // pareado não tem o foco mexido.
+  useEffect(() => {
+    if (app.store.ler().entrouAgora) conteudo.current?.focus();
+  }, [app]);
 
   return (
     <>
@@ -49,7 +64,7 @@ export function Casca({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main id="conteudo" className={estilos.conteudo} tabIndex={-1}>
+      <main id="conteudo" ref={conteudo} className={estilos.conteudo} tabIndex={-1}>
         {children}
       </main>
     </>

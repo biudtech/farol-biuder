@@ -26,3 +26,18 @@ export function lerPareamento(bruto: unknown): RespostaDoPareamento | null {
   if (bruto.ok === false && bruto.code === 'codigo_invalido') return { ok: false, code: 'codigo_invalido' };
   return null;
 }
+
+// O código de pareamento (lib/local-auth/pareamento.js e LOCAL_AUTH.CODIGO_TAMANHO, na raiz):
+// 10 caracteres do base32 da RFC 4648, A a Z e 2 a 7. O motor normaliza antes de conferir
+// (maiúsculas, sem espaço e sem hífen), e a tela faz o mesmo para conferir a forma antes do
+// POST: tentativa errada conta contra o código pendente, e a quinta o queima.
+export const TAMANHO_DO_CODIGO = 10;
+const CODIGO = /^[A-Z2-7]{10}$/;
+
+export function normalizarCodigo(texto: string): string {
+  return texto.toUpperCase().replace(/[\s-]/g, '');
+}
+
+export function codigoBemFormado(codigo: string): boolean {
+  return CODIGO.test(codigo);
+}

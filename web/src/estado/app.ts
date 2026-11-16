@@ -16,8 +16,9 @@ export type Motor = 'verificando' | 'alcancavel' | 'inalcancavel';
 export type DesfechoDoPareamento = 'pareado' | 'recusado' | 'inalcancavel' | 'cancelado';
 // Por que a tela de pareamento apareceu, quando não foi por escolha de quem está nesta aba.
 // nao-autenticado: o motor recusou o token (401). outra-aba: o token saiu do armazenamento
-// por outra aba (alguém saiu nela, ou ela levou o 401 antes).
-export type MotivoDoPareamento = 'nenhum' | 'nao-autenticado' | 'outra-aba';
+// por outra aba (alguém saiu nela, ou ela levou o 401 antes). saiu: o Sair desta aba, que não
+// pede explicação, só o foco no campo do código. nenhum: a página abriu sem token.
+export type MotivoDoPareamento = 'nenhum' | 'saiu' | 'nao-autenticado' | 'outra-aba';
 
 export interface EstadoDoApp {
   sessao: Sessao;
@@ -183,7 +184,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     },
     sair() {
       cofre.esquecer(cofre.ler());
-      voltarAoPareamento('nenhum');
+      voltarAoPareamento('saiu');
     },
   };
 }

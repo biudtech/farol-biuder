@@ -168,7 +168,7 @@ describe('sessão do front', () => {
     await vi.advanceTimersByTimeAsync(0);
     t.app.sair();
     expect(t.cofre.ler()).toBe('');
-    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', snapshot: null, motivo: 'nenhum' });
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', snapshot: null, motivo: 'saiu' });
     expect((t.pedidos[0]?.init.signal as AbortSignal).aborted).toBe(true);
     const antes = t.pedidos.filter((p) => p.url.endsWith('/api/events')).length;
     await vi.advanceTimersByTimeAsync(120000);
@@ -327,7 +327,7 @@ describe('sessão do front', () => {
 
       a.app.sair();
       await vi.advanceTimersByTimeAsync(0);
-      expect(a.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'nenhum' });
+      expect(a.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu' });
       expect(b.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'outra-aba' });
       expect([a.escritas.total, b.escritas.total]).toEqual([1, 0]);
 
