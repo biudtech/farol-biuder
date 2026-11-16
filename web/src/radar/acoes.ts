@@ -1,13 +1,20 @@
-// As ações do Radar, do Histórico e do Time: a rota e o corpo de cada POST, a leitura da
-// resposta e a frase que a tela mostra depois. Sem React: quem liga isto aos botões é o
-// gancho useAcoes.
+// As ações do Radar, do Histórico, do Time e do Sistema: a rota e o corpo de cada POST, a
+// leitura da resposta e a frase que a tela mostra depois. Sem React: quem liga isto aos botões
+// é o gancho useAcoes. As do Sistema moram em src/sistema/acoes.ts e entram aqui pela união.
 //
-// As nove rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
+// As rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
 // vem como `{ ok: false, blocked?, error? }`: `blocked` é o código do portão que recusou
 // (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor. A de
-// POST /api/settings vem como `{ ok: false, code, erro }` (lib/engine/chave-do-perfil.js).
+// POST /api/settings vem como `{ ok: false, code, erro }` (lib/engine/chave-do-perfil.js), a de
+// POST /api/accounts/edit como `{ ok: false, erro }` e a de POST /api/auth/revoke como
+// `{ ok: false, code }`.
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
+import { lerConfigDoSistema } from '@/contratos/sistema';
 import { lerPessoas, type PessoasCruas } from '@/contratos/time';
+import {
+  TIPOS_DO_SISTEMA, confirmacaoDoSistema, desfechoDoSistema, nomeDoSistema, pedidoDoSistema, recusaDoSistema, rotuloDoSistema,
+  type AceiteDoSistema, type AcaoDoSistema,
+} from '@/sistema/acoes';
 import { marcaDoPerfil, outrasQueDiferem, perfilDe, textoDoPerfil } from '@/time/time';
 import type { Cliente, Leitor } from '@/transporte/cliente';
 
@@ -51,7 +58,13 @@ export type Acao =
   // perfil e as contestações dela, sem cópia, e só isso (as revisões dos PRs dela continuam
   // no histórico e no log). O que a tela via na hora do clique vai junto só para a pergunta
   // dizer o que será apagado.
-  | (Base & { tipo: 'removerAutor'; login: string; entradas: number; temPerfil: boolean; contestacoes: number });
+  | (Base & { tipo: 'removerAutor'; login: string; entradas: number; temPerfil: boolean; contestacoes: number })
+  // a conta e a política, a automação, o teto de gasto e a revogação de sessão
+  | AcaoDoSistema;
+
+function ehDoSistema(acao: Acao): acao is AcaoDoSistema {
+  return (TIPOS_DO_SISTEMA as readonly string[]).includes(acao.tipo);
+}
 
 // PUSHBACK_OUTCOMES, lib/taxonomy.js
 export type DesfechoDaContestacao = 'author_right' | 'we_right' | 'mixed';
@@ -59,6 +72,7 @@ export type DesfechoDaContestacao = 'author_right' | 'we_right' | 'mixed';
 export const CHECAR: Acao = Object.freeze({ tipo: 'checar', alvo: 'checar', nome: '' });
 
 export function pedidoDa(acao: Acao): { rota: string; corpo: Objeto } {
+  if (ehDoSistema(acao)) return pedidoDoSistema(acao);
   switch (acao.tipo) {
     case 'checar': return { rota: '/api/check', corpo: {} };
     // a lista vai sempre explícita, e só existe a revisão headless (mode "auto" é o padrão)
@@ -84,6 +98,7 @@ const ROTULO_DA_DECISAO: Record<Decisao, string> = {
 
 // O texto do botão.
 export function rotuloDa(acao: Acao): string {
+  if (ehDoSistema(acao)) return rotuloDoSistema(acao);
   switch (acao.tipo) {
     case 'checar': return 'Checar agora';
     case 'revisar': return acao.deNovo ? 'Revisar de novo' : 'Revisar agora';
@@ -99,6 +114,7 @@ export function rotuloDa(acao: Acao): string {
 
 // O nome acessível do botão: a ação e o alvo ("Aprovar PR #12 de dono/repo").
 export function nomeDa(acao: Acao): string {
+  if (ehDoSistema(acao)) return nomeDoSistema(acao);
   if (acao.tipo === 'contestacao') return acao.desfecho ? `Gravar o desfecho da contestação de ${acao.nome}` : `Apagar a contestação de ${acao.nome}`;
   if (acao.tipo === 'perfil') return `Salvar papel e competência de ${acao.nome}`;
   if (acao.tipo === 'removerAutor') return `Remover ${acao.nome} do Time`;
@@ -155,6 +171,7 @@ function textoQueSai(acao: Extract<Acao, { tipo: 'decidir' }>): string {
 // prompt de revisões futuras (do autor e, conforme o desfecho, do repositório), e apagar joga
 // o registro fora. A pergunta diz o que sai e em qual PR.
 export function confirmacaoDa(acao: Acao): Confirmacao | null {
+  if (ehDoSistema(acao)) return confirmacaoDoSistema(acao);
   if (acao.tipo === 'cancelar') {
     return {
       titulo: `Cancelar ${acao.nome}?`,
@@ -222,12 +239,17 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
   };
 }
 
-// No aceite, dois campos que só duas rotas mandam: `removed` (POST /api/team/remove: havia
-// algo para apagar) e os perfis que ficaram gravados (`config.people` da resposta de
-// POST /api/settings, como veio, com as chaves que o motor ignorou em `ignoradas`).
+// No aceite, os campos que só algumas rotas mandam: `removed` (POST /api/team/remove: havia
+// algo para apagar), os perfis que ficaram gravados (`config.people` da resposta de
+// POST /api/settings, como veio, com as chaves que o motor ignorou em `ignoradas`) e os do
+// Sistema (AceiteDoSistema): o resto de `config` que a tela lê, sem o que tiver cara de
+// segredo, os campos que POST /api/accounts/edit ignorou e o `eraAtual` da revogação.
 export type RespostaDeAcao =
-  | { ok: true; removed?: boolean; pessoas?: PessoasCruas; ignoradas?: string[] }
+  | ({ ok: true; removed?: boolean; pessoas?: PessoasCruas } & AceiteDoSistema)
   | { ok: false; blocked?: string; error?: string };
+
+// a resposta de uma ação não vai ao registro da borda: o que for descartado é só descartado
+const semRegistro = (): void => {};
 
 export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
   if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
@@ -237,6 +259,10 @@ export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
     // o mapa gravado vai cru, como o enviado: a conferência dos dois é valor a valor
     if (ehObjeto(bruto.config) && ehObjeto(bruto.config.people)) aceite.pessoas = bruto.config.people;
     if (Array.isArray(bruto.ignoradas) && bruto.ignoradas.length) aceite.ignoradas = bruto.ignoradas.filter(ehTexto);
+    if (Array.isArray(bruto.ignorados) && bruto.ignorados.length) aceite.ignorados = bruto.ignorados.filter(ehTexto);
+    if (ehBooleano(bruto.eraAtual)) aceite.eraAtual = bruto.eraAtual;
+    const sistema = lerConfigDoSistema(bruto.config, semRegistro);
+    if (Object.keys(sistema).length) aceite.sistema = sistema;
     return aceite;
   }
   // Código ou frase de forma errada contam como ausentes: a recusa continua sendo recusa. A
@@ -257,6 +283,8 @@ const RECUSAS: Record<string, { texto: string; comDetalhe?: true }> = {
   round_memory: { texto: 'A memória de rodadas deste PR tem pendência aberta, e a publicação foi recusada.' },
   invalid_payload: { texto: 'O texto guardado para esta ação não pode ser publicado.', comDetalhe: true },
   technical_review: { texto: 'A avaliação técnica não permite publicar agora.', comDetalhe: true },
+  // POST /api/auth/revoke (lib/local-auth/acesso.js)
+  sessao_inexistente: { texto: 'O motor não tem mais essa sessão: ela já foi revogada ou expirou. Atualize a lista.' },
 };
 
 const TETO_DO_DETALHE = 400;
@@ -344,9 +372,10 @@ export async function executar(cliente: Pick<Cliente, 'post'>, acao: Acao): Prom
   const { rota, corpo } = pedidoDa(acao);
   const r = await cliente.post(rota, corpo, lerRespostaDeAcao);
   if (r.ok) {
-    if (!r.dados.ok) return { tipo: 'erro', texto: mensagemDaRecusa(r.dados) };
+    if (!r.dados.ok) return { tipo: 'erro', texto: (ehDoSistema(acao) ? recusaDoSistema(acao, r.dados.blocked) : null) ?? mensagemDaRecusa(r.dados) };
     if (acao.tipo === 'perfil') return desfechoDoPerfil(acao, r.dados);
     if (acao.tipo === 'removerAutor') return desfechoDaRemocao(acao, r.dados);
+    if (ehDoSistema(acao)) return desfechoDoSistema(acao, r.dados);
     return { tipo: 'ok', texto: textoDoAceite(acao) };
   }
   switch (r.falha) {
