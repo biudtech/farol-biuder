@@ -252,3 +252,112 @@ describe('executar', () => {
     expect(await executar(cliente, aprovar)).toEqual({ tipo: 'cancelado' });
   });
 });
+
+describe('ações do Time: papel e competência, e remover do Time', () => {
+  const pessoa = { alvo: 'time:ana', nome: '@ana' };
+  const pessoas = { bruno: { papel: 'junior' }, ana: { papel: 'senior', dominios: { backend: 'avancado' } } };
+  const salvar: Acao = { ...pessoa, tipo: 'perfil', login: 'Ana', pessoas };
+  const remover: Acao = { ...pessoa, tipo: 'removerAutor', login: 'Ana', entradas: 3, temPerfil: true, contestacoes: 2 };
+
+  it('salvar manda a lista inteira de perfis em people, como POST /api/settings a lê', () => {
+    expect(pedidoDa(salvar)).toEqual({ rota: '/api/settings', corpo: { people: pessoas } });
+    expect(rotuloDa(salvar)).toBe('Salvar papel e competência');
+    expect(nomeDa(salvar)).toBe('Salvar papel e competência de @ana');
+    expect(idDa(salvar)).toBe('perfil');
+    expect(confirmacaoDa(salvar)).toBeNull();
+  });
+
+  it('remover manda só o login, como o motor o listou', () => {
+    expect(pedidoDa(remover)).toEqual({ rota: '/api/team/remove', corpo: { login: 'Ana' } });
+    expect(rotuloDa(remover)).toBe('Remover do Time');
+    expect(nomeDa(remover)).toBe('Remover @ana do Time');
+    expect(textoDoEnvio(remover)).toBe('Enviando: Remover @ana do Time.');
+  });
+
+  it('remover pergunta antes, dizendo o que é apagado, que não desfaz e o efeito nas revisões', () => {
+    const c = confirmacaoDa(remover);
+    expect(c?.titulo).toBe('Remover @ana do Time?');
+    expect(c?.confirmar).toBe('Apagar tudo desta pessoa');
+    expect(c?.texto).toContain('o dossiê (3 entradas de memória nesta tela)');
+    expect(c?.texto).toContain('o papel e a competência configurados');
+    expect(c?.texto).toContain('todos os registros de contestação dos PRs dela (2 nesta tela)');
+    expect(c?.texto).toContain('o motor não apaga uma entrada só');
+    expect(c?.texto).toContain('Não dá para desfazer');
+    expect(c?.texto).toContain('Nada muda no GitHub');
+    expect(c?.texto).toContain('outros autores do mesmo repositório');
+  });
+
+  it('a pergunta não afirma que existe o que a tela não viu', () => {
+    const c = confirmacaoDa({ ...remover, entradas: 0, temPerfil: false, contestacoes: 0 });
+    expect(c?.texto).toContain('o dossiê, se houver, o papel e a competência, se houver e os registros de contestação dos PRs dela, se houver');
+    expect(confirmacaoDa({ ...remover, entradas: 1 })?.texto).toContain('(1 entrada de memória nesta tela)');
+  });
+
+  it('a resposta do salvar traz os perfis que ficaram gravados', () => {
+    expect(lerRespostaDeAcao({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: pessoas } })).toEqual({ ok: true, pessoas });
+    expect(lerRespostaDeAcao({ ok: true, ignoradas: ['people', 7], config: {} })).toEqual({ ok: true, ignoradas: ['people'] });
+    // perfil ilegível na resposta: a tela não afirma o que ficou gravado
+    expect(lerRespostaDeAcao({ ok: true, config: { people: { ana: 3 } } })).toEqual({ ok: true });
+    expect(lerRespostaDeAcao({ ok: true, removed: false })).toEqual({ ok: true, removed: false });
+  });
+
+  it('a recusa de POST /api/settings vem em code e erro', () => {
+    expect(lerRespostaDeAcao({ ok: false, code: 'chave_exigida', perfis: ['p1'], erro: 'Para mudar o endereço deste perfil, digite a chave de novo.' }))
+      .toEqual({ ok: false, blocked: 'chave_exigida', error: 'Para mudar o endereço deste perfil, digite a chave de novo.' });
+  });
+
+  it('o salvar aceito diz o que o motor gravou, lido da resposta', async () => {
+    const { cliente, post } = clienteQueResponde({ ok: true, dados: { ok: true, pessoas } });
+    expect(await executar(cliente, salvar)).toEqual({ tipo: 'ok', texto: 'O motor gravou o perfil de @ana: papel Sênior; Backend: Avançado.' });
+    expect(post).toHaveBeenCalledWith('/api/settings', { people: pessoas }, lerRespostaDeAcao);
+  });
+
+  it('se o motor gravou diferente do pedido, a tela diz o que ficou', async () => {
+    const descartou = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { bruno: { papel: 'junior' }, ana: { papel: 'senior' } } } });
+    expect(await executar(descartou.cliente, salvar)).toEqual({
+      tipo: 'erro',
+      texto: 'O motor gravou o perfil de @ana diferente do pedido: ficou papel Sênior. O que ele não reconhece, ele descarta.',
+    });
+    const sumiu = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: {} } });
+    expect(await executar(sumiu.cliente, salvar)).toEqual({
+      tipo: 'erro',
+      texto: 'O motor gravou o perfil de @ana diferente do pedido: ficou sem papel nem competência. O que ele não reconhece, ele descarta.',
+    });
+  });
+
+  it('perfil apagado e confirmado pela resposta diz que ficou sem perfil', async () => {
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: true, pessoas: { bruno: { papel: 'junior' } } } });
+    expect(await executar(cliente, { ...salvar, pessoas: { bruno: { papel: 'junior' } } })).toEqual({ tipo: 'ok', texto: 'O motor gravou o perfil de @ana: sem papel nem competência.' });
+  });
+
+  it('sem os perfis na resposta, ou com o campo ignorado, a tela não afirma que gravou', async () => {
+    const semPerfis = clienteQueResponde({ ok: true, dados: { ok: true } });
+    expect(await executar(semPerfis.cliente, salvar)).toEqual({
+      tipo: 'ok',
+      texto: 'O motor aceitou o pedido de salvar o perfil de @ana, mas a resposta não trouxe os perfis gravados: confira o perfil na tela.',
+    });
+    const ignorado = clienteQueResponde({ ok: true, dados: { ok: true, pessoas, ignoradas: ['people'] } });
+    expect(await executar(ignorado.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor ignorou o campo de perfis: o perfil de @ana não foi gravado.' });
+  });
+
+  it('a remoção diz se havia algo para apagar', async () => {
+    const apagou = clienteQueResponde({ ok: true, dados: { ok: true, removed: true } });
+    expect(await executar(apagou.cliente, remover)).toEqual({ tipo: 'ok', texto: 'O motor apagou o que guardava sobre @ana: dossiê, perfil e contestações. Não há como desfazer.' });
+    const nada = clienteQueResponde({ ok: true, dados: { ok: true, removed: false } });
+    expect(await executar(nada.cliente, remover)).toEqual({ tipo: 'ok', texto: 'O motor não tinha nada guardado sobre @ana: nada foi apagado.' });
+    const mudo = clienteQueResponde({ ok: true, dados: { ok: true } });
+    expect(await executar(mudo.cliente, remover)).toEqual({ tipo: 'ok', texto: 'O motor aceitou o pedido de remover @ana do Time e não disse se havia algo para apagar.' });
+  });
+
+  it('login que o motor recusa aparece com a frase dele', async () => {
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: false, error: 'login inválido' } });
+    expect(await executar(cliente, remover)).toEqual({ tipo: 'erro', texto: 'O motor recusou: login inválido' });
+  });
+
+  it('recusa fora de 2xx leva o código do corpo, quando há', async () => {
+    const comCodigo = clienteQueResponde({ ok: false, falha: 'recusado', status: 403, detalhe: { codigo: 'origem_recusada' } });
+    expect(await executar(comCodigo.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor recusou o pedido (HTTP 403, origem_recusada).' });
+    const semCodigo = clienteQueResponde({ ok: false, falha: 'recusado', status: 500 });
+    expect(await executar(semCodigo.cliente, salvar)).toEqual({ tipo: 'erro', texto: 'O motor recusou o pedido (HTTP 500).' });
+  });
+});

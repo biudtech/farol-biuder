@@ -1,10 +1,14 @@
-// As ações do Radar e do Histórico: a rota e o corpo de cada POST, a leitura da resposta e a frase que a
-// tela mostra depois. Sem React: quem liga isto aos botões é o gancho useAcoes.
+// As ações do Radar, do Histórico e do Time: a rota e o corpo de cada POST, a leitura da
+// resposta e a frase que a tela mostra depois. Sem React: quem liga isto aos botões é o
+// gancho useAcoes.
 //
-// As sete rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
+// As nove rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
 // vem como `{ ok: false, blocked?, error? }`: `blocked` é o código do portão que recusou
-// (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor.
+// (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor. A de
+// POST /api/settings vem como `{ ok: false, code, erro }` (lib/engine/chave-do-perfil.js).
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
+import { lerPessoas, type Pessoas } from '@/contratos/time';
+import { marcaDoPerfil, perfilDe, textoDoPerfil } from '@/time/time';
 import type { Cliente, Leitor } from '@/transporte/cliente';
 
 // O que POST /api/decide aceita em `action`.
@@ -38,7 +42,15 @@ export type Acao =
   // O desfecho da contestação de um PR (recordPushback, lib/engine/pushback.js). `desfecho`
   // vazio apaga o registro. Nada é publicado: é memória do motor, que entra no prompt de
   // revisões futuras.
-  | (Base & { tipo: 'contestacao'; chave: string; autor: string; desfecho: DesfechoDaContestacao | ''; nota: string });
+  | (Base & { tipo: 'contestacao'; chave: string; autor: string; desfecho: DesfechoDaContestacao | ''; nota: string })
+  // O papel e a competência de uma pessoa (POST /api/settings com `people`). O motor troca o
+  // mapa inteiro pelo que chega (updateSettings, server.js), então `pessoas` é a lista toda,
+  // já com a pessoa alterada (comPerfil, src/time/time.ts).
+  | (Base & { tipo: 'perfil'; login: string; pessoas: Pessoas })
+  // Tira uma pessoa do Time (removeTeamMember, lib/engine/decision.js): apaga o dossiê, o
+  // perfil e as contestações dela, sem cópia. O que a tela via na hora do clique vai junto
+  // só para a pergunta dizer o que será apagado.
+  | (Base & { tipo: 'removerAutor'; login: string; entradas: number; temPerfil: boolean; contestacoes: number });
 
 // PUSHBACK_OUTCOMES, lib/taxonomy.js
 export type DesfechoDaContestacao = 'author_right' | 'we_right' | 'mixed';
@@ -56,6 +68,9 @@ export function pedidoDa(acao: Acao): { rota: string; corpo: Objeto } {
     case 'restaurar': return { rota: '/api/restore', corpo: { key: acao.chave } };
     // a nota só acompanha um desfecho: apagar o registro apaga a nota junto
     case 'contestacao': return { rota: '/api/pushback', corpo: { key: acao.chave, author: acao.autor, outcome: acao.desfecho, note: acao.desfecho ? acao.nota : '' } };
+    case 'perfil': return { rota: '/api/settings', corpo: { people: acao.pessoas } };
+    // o login vai como o motor o listou: é o nome do arquivo do dossiê
+    case 'removerAutor': return { rota: '/api/team/remove', corpo: { login: acao.login } };
   }
 }
 
@@ -76,12 +91,16 @@ export function rotuloDa(acao: Acao): string {
     case 'ignorar': return 'Ignorar';
     case 'restaurar': return 'Restaurar';
     case 'contestacao': return acao.desfecho ? 'Gravar o desfecho' : 'Apagar a contestação';
+    case 'perfil': return 'Salvar papel e competência';
+    case 'removerAutor': return 'Remover do Time';
   }
 }
 
 // O nome acessível do botão: a ação e o alvo ("Aprovar PR #12 de dono/repo").
 export function nomeDa(acao: Acao): string {
   if (acao.tipo === 'contestacao') return acao.desfecho ? `Gravar o desfecho da contestação de ${acao.nome}` : `Apagar a contestação de ${acao.nome}`;
+  if (acao.tipo === 'perfil') return `Salvar papel e competência de ${acao.nome}`;
+  if (acao.tipo === 'removerAutor') return `Remover ${acao.nome} do Time`;
   return acao.nome ? `${rotuloDa(acao)} ${acao.nome}` : rotuloDa(acao);
 }
 
@@ -162,6 +181,24 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
       confirmar: 'Gravar o desfecho',
     };
   }
+  if (acao.tipo === 'removerAutor') {
+    // O que removeTeamMember apaga (lib/engine/decision.js, na raiz) e quem lia cada coisa: o
+    // dossiê é lido pela sessão de revisão, o perfil entra no bloco "Perfil do autor" do
+    // prompt (personProfileBlock) e as contestações, além desse bloco, viram lição para
+    // outros autores do repositório (licoesDoRepo). Não há cópia nem rota que desfaça.
+    const dossie = acao.entradas > 0
+      ? `o dossiê (${acao.entradas} ${acao.entradas === 1 ? 'entrada' : 'entradas'} de memória nesta tela)`
+      : 'o dossiê, se houver';
+    const perfil = acao.temPerfil ? 'o papel e a competência configurados' : 'o papel e a competência, se houver';
+    const contestacoes = acao.contestacoes > 0
+      ? `todos os registros de contestação dos PRs dela (${acao.contestacoes} nesta tela)`
+      : 'os registros de contestação dos PRs dela, se houver';
+    return {
+      titulo: `Remover ${acao.nome} do Time?`,
+      texto: `O motor apaga tudo o que guarda sobre ${acao.nome}: ${dossie}, ${perfil} e ${contestacoes}. É a pessoa inteira: o motor não apaga uma entrada só. Não dá para desfazer, porque o motor não guarda cópia. Nada muda no GitHub. Nas próximas revisões dos PRs dela a sessão não encontra histórico, o prompt sai sem perfil e sem contestações (tom neutro), e as contestações apagadas deixam de entrar como lição nas revisões de outros autores do mesmo repositório. Se um PR dela for revisado de novo, um dossiê novo começa do zero.`,
+      confirmar: 'Apagar tudo desta pessoa',
+    };
+  }
   if (acao.tipo !== 'decidir') return null;
   if (acao.decisao === 'skip') {
     if (!acao.espera) return null;
@@ -181,15 +218,27 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
   };
 }
 
+// No aceite, dois campos que só duas rotas mandam: `removed` (POST /api/team/remove: havia
+// algo para apagar) e os perfis que ficaram gravados (`config.people` da resposta de
+// POST /api/settings, com as chaves que o motor ignorou em `ignoradas`).
 export type RespostaDeAcao =
-  | { ok: true }
+  | { ok: true; removed?: boolean; pessoas?: Pessoas; ignoradas?: string[] }
   | { ok: false; blocked?: string; error?: string };
 
 export const lerRespostaDeAcao: Leitor<RespostaDeAcao> = (bruto) => {
   if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
-  if (bruto.ok) return { ok: true };
-  // código ou frase de forma errada contam como ausentes: a recusa continua sendo recusa
-  return { ok: false, blocked: campo(bruto.blocked, ehTexto), error: campo(bruto.error, ehTexto) };
+  if (bruto.ok) {
+    const aceite: Extract<RespostaDeAcao, { ok: true }> = { ok: true };
+    if (ehBooleano(bruto.removed)) aceite.removed = bruto.removed;
+    const gravadas = ehObjeto(bruto.config) ? lerPessoas(bruto.config.people) : undefined;
+    // perfil ilegível na resposta: não dá para afirmar o que ficou gravado
+    if (gravadas && gravadas.ilegiveis === 0) aceite.pessoas = gravadas.pessoas;
+    if (Array.isArray(bruto.ignoradas) && bruto.ignoradas.length) aceite.ignoradas = bruto.ignoradas.filter(ehTexto);
+    return aceite;
+  }
+  // Código ou frase de forma errada contam como ausentes: a recusa continua sendo recusa. A
+  // recusa de POST /api/settings usa `code` e `erro` no lugar de `blocked` e `error`.
+  return { ok: false, blocked: campo(bruto.blocked, ehTexto) ?? campo(bruto.code, ehTexto), error: campo(bruto.error, ehTexto) ?? campo(bruto.erro, ehTexto) };
 };
 
 // A frase de cada código de recusa do motor (`blocked`). Os que vêm com `true` levam junto
@@ -221,6 +270,25 @@ export function mensagemDaRecusa(resposta: { blocked?: string; error?: string })
   return detalhe ? `O motor recusou: ${detalhe}` : 'O motor recusou a ação e não disse o motivo.';
 }
 
+type Aceite = Extract<RespostaDeAcao, { ok: true }>;
+
+// O que a tela diz depois de um salvar de perfil que o motor aceitou. O `ok` não basta: o
+// motor descarta valor fora da taxonomia dele sem recusar (parsePeople, lib/parse.js), então
+// a frase sai do que a resposta diz que ficou gravado.
+function desfechoDoPerfil(acao: Extract<Acao, { tipo: 'perfil' }>, dados: Aceite): Desfecho {
+  if (dados.ignoradas?.includes('people')) return { tipo: 'erro', texto: `O motor ignorou o campo de perfis: o perfil de ${acao.nome} não foi gravado.` };
+  if (!dados.pessoas) return { tipo: 'ok', texto: `O motor aceitou o pedido de salvar o perfil de ${acao.nome}, mas a resposta não trouxe os perfis gravados: confira o perfil na tela.` };
+  const gravado = perfilDe(dados.pessoas, acao.login);
+  if (marcaDoPerfil(perfilDe(acao.pessoas, acao.login)) === marcaDoPerfil(gravado)) return { tipo: 'ok', texto: `O motor gravou o perfil de ${acao.nome}: ${textoDoPerfil(gravado)}.` };
+  return { tipo: 'erro', texto: `O motor gravou o perfil de ${acao.nome} diferente do pedido: ficou ${textoDoPerfil(gravado)}. O que ele não reconhece, ele descarta.` };
+}
+
+function desfechoDaRemocao(acao: Extract<Acao, { tipo: 'removerAutor' }>, dados: Aceite): Desfecho {
+  if (dados.removed === false) return { tipo: 'ok', texto: `O motor não tinha nada guardado sobre ${acao.nome}: nada foi apagado.` };
+  if (dados.removed === true) return { tipo: 'ok', texto: `O motor apagou o que guardava sobre ${acao.nome}: dossiê, perfil e contestações. Não há como desfazer.` };
+  return { tipo: 'ok', texto: `O motor aceitou o pedido de remover ${acao.nome} do Time e não disse se havia algo para apagar.` };
+}
+
 // cancelado: a sessão acabou com o pedido no ar; a tela não mostra nada por isso.
 export type Desfecho =
   | { tipo: 'ok'; texto: string }
@@ -248,12 +316,18 @@ export function textoDoEnvio(acao: Acao): string {
 export async function executar(cliente: Pick<Cliente, 'post'>, acao: Acao): Promise<Desfecho> {
   const { rota, corpo } = pedidoDa(acao);
   const r = await cliente.post(rota, corpo, lerRespostaDeAcao);
-  if (r.ok) return r.dados.ok ? { tipo: 'ok', texto: textoDoAceite(acao) } : { tipo: 'erro', texto: mensagemDaRecusa(r.dados) };
+  if (r.ok) {
+    if (!r.dados.ok) return { tipo: 'erro', texto: mensagemDaRecusa(r.dados) };
+    if (acao.tipo === 'perfil') return desfechoDoPerfil(acao, r.dados);
+    if (acao.tipo === 'removerAutor') return desfechoDaRemocao(acao, r.dados);
+    return { tipo: 'ok', texto: textoDoAceite(acao) };
+  }
   switch (r.falha) {
     case 'cancelado': return { tipo: 'cancelado' };
     case 'rede': return { tipo: 'erro', texto: 'Não deu para falar com o motor (falha de rede). Não dá para saber se o pedido chegou: confira a conexão e o estado na tela antes de tentar de novo.' };
     case 'nao_autenticado': return { tipo: 'erro', texto: 'A sessão deste navegador não vale mais no motor. Pareie de novo.' };
-    case 'recusado': return { tipo: 'erro', texto: `O motor recusou o pedido (HTTP ${r.status}).` };
+    // o código, quando o corpo da recusa traz um (`code`)
+    case 'recusado': return { tipo: 'erro', texto: `O motor recusou o pedido (HTTP ${r.status}${r.detalhe ? `, ${r.detalhe.codigo}` : ''}).` };
     case 'resposta_invalida': return { tipo: 'erro', texto: 'O motor respondeu fora do formato esperado. Confira na tela se a ação entrou.' };
   }
 }
