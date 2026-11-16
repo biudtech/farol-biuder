@@ -32,7 +32,7 @@ import {
   parsePeople, migrateSeniorityToPeople,
   normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind, sanearHostPublico, sanearOrigensPermitidas } from './lib/parse.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -69,6 +69,7 @@ import tentativasMod from './lib/engine/usage-tentativas.js';
 import quotaMod from './lib/engine/quota.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
+import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
 import { parseJiraSites, maskJiraSites } from './lib/jira/sites.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
@@ -104,7 +105,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 const PARSERS = {
   parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind,
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind, sanearHostPublico, sanearOrigensPermitidas,
 };
 
 // carência anti-lag do índice de busca do GitHub: logo após EU postar um review, o PR
@@ -127,10 +128,13 @@ class Engine extends EventEmitter {
     super();
     const warn = (m) => this.log('WARN', m); // corrupção de estado precisa aparecer no farol.log
     // config.json antigo (várias contas, modo simples, chaves do que saiu) vira o formato de hoje sem lançar
-    this.configCrua = readJson(CONFIG_FILE, {}, warn); // o arquivo como veio, para o rastro da carga (contas-config.js)
+    // o arquivo como veio, para o rastro da carga (contas-config.js). Presente e ilegível, LANÇA: o motor não sobe com os padrões no lugar dele
+    this.configCrua = lerConfigOuRecusar((m) => this.log('ERROR', m));
     this.config = { ...DEFAULTS, ...normalizarConfig(this.configCrua) };
-    // bind é só de arquivo e chega ao listen e à allowlist: saneia aqui, uma vez, para todo leitor
-    this.config.bind = sanear('bind', this.config.bind, this.config, PARSERS);
+    // bind, hostPublico e origensPermitidas são só de arquivo e chegam ao listen, à allowlist e ao
+    // porteiro: saneia aqui, uma vez, para todo leitor. Valor inválido nas duas da fronteira LANÇA,
+    // antes de qualquer gravação: o motor não sobe (lib/fronteira-hospedada.js)
+    sanearSoDeArquivo(this, PARSERS);
     delete this.config.autoOpenReview; // chave antiga (sessão interativa); o modo autonomo tem semantica nova
     // config.json pode estar malformado (editado à mão,
     // corrompido, versão antiga/incompatível) — normaliza no boot pra nunca derrubar o
@@ -1514,9 +1518,10 @@ export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isP
 
 // execucao direta: modo servidor (`node server.js`)
 if (executadoDireto(import.meta.url)) {
-  start((url, err) => {
+  // a recusa da fronteira (config.json com hostPublico ou origensPermitidas inválidos) sai limpa no stderr
+  subirOuRecusar(() => start((url, err) => {
     if (err) { console.error('[farol] erro ao subir o servidor:', err.message); process.exit(1); }
-    console.log(`[farol] monitorando · UI em ${url}`);
-    console.log('[farol] Ctrl+C para sair');
-  });
+    // um console.log só, com as duas linhas de sempre: o server.js está no teto de linhas do ratchet
+    console.log(`[farol] monitorando · UI em ${url}\n[farol] Ctrl+C para sair`);
+  }));
 }

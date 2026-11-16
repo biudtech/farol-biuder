@@ -54,12 +54,72 @@ Ainda sem versão publicada.
 - **Avaliação técnica pela cópia da BIUD:** a ferramenta fixada vem de `biudtech/eng-behaviour`.
 - **Boot provado em máquina vazia:** o motor sobe sem `gh` logado, responde a API, não escreve fora
   do HOME e sai com 0 no SIGTERM.
+- **Fronteira do motor hospedado (fase 2a):** duas chaves novas, só de arquivo. `hostPublico` é o
+  nome com que o proxy com TLS chega ao motor, aceito no Host sem porta, então o proxy não precisa
+  reescrever o Host. `origensPermitidas` é a lista das origens exatas de onde o front chama a API:
+  o pedido de uma delas que passa pela allowlist ganha cabeçalhos CORS na resposta, qualquer que
+  seja o desfecho (200, 401, 403 do `x-farol`, 404, 500, o stream de eventos), com a origem exata,
+  nunca `*` e sem credenciais. Duas respostas não levam CORS: a da rota de saúde e o 400 de pedido
+  malformado, que saem antes da allowlist. O preflight responde 204 antes da autenticação. Com
+  qualquer uma das duas chaves preenchida a autenticação é exigida sempre, sem configuração que
+  desligue.
+- **`http://` em `origensPermitidas`, só para desenvolvimento:** `http://localhost` e
+  `http://127.0.0.1` (com ou sem porta) são aceitos, para o front rodando na máquina de quem desenvolve.
+  É um desvio declarado do desenho da fase, que fala só em `https://`. Qualquer outro `http://` é
+  inválido.
+- **Valor inválido nas duas chaves impede o boot:** se `hostPublico` ou `origensPermitidas` vêm no
+  `config.json` com valor que o motor não aceita, inclusive um item inválido numa lista de
+  válidos, o motor não sobe: diz no stderr a chave, o valor e o formato aceito, sai com código 1
+  e não altera o arquivo. Vazio significaria "não hospedado", e um erro de digitação deixaria a
+  API sem autenticação atrás de um proxy que reescreve o Host. Chave ausente ou vazia segue sem
+  erro. Tipo trocado não conta como vazio: `"hostPublico": []` e `"origensPermitidas": ""`
+  também impedem o boot.
+- **Nome de chave errado impede o boot:** `hostpublico`, `host_publico`, `origensPermitida`,
+  `LocalAuth` e parecidos eram descartados sem aviso, e o motor subia sem autenticação. Agora a
+  chave que só difere de `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` por
+  maiúsculas, `_`, `-` ou espaço, e a chave desconhecida que começa por `host`, `origens`,
+  `origem`, `origin` ou `localauth`, impedem o boot, e a mensagem diz a chave escrita e a grafia
+  certa.
+- **`localAuth` e `bind` inválidos impedem o boot:** `localAuth` preenchido com qualquer coisa que
+  não seja exatamente `"exigir"` (`"Exigir"`, `true`, `"sim"`) subia sem exigir, e `bind`
+  inválido (`"0.0.0.0:47170"`) voltava calado para o loopback. Agora os dois recusam o boot pelo
+  mesmo caminho.
+- **`config.json` presente e ilegível impede o boot:** arquivo que não dá para ler, vazio, que não
+  é JSON, que é JSON mas não é um objeto, ou que é um link simbólico para um arquivo que não
+  existe (esse contava como ausente, e o motor trocava o link por um arquivo novo). Antes o motor subia com os padrões (loopback puro, sem
+  autenticação, conta padrão agindo sozinha) e deixava uma cópia `.bad` ao lado. Agora diz o
+  motivo e o caminho no stderr, sai com código 1 e não toca no arquivo. A mensagem não cita
+  trecho do arquivo, porque a chave de API mora nele. Arquivo ausente continua sendo instalação
+  nova e sobe. O BOM UTF-8 no início do arquivo é aceito. Em toda recusa de boot o valor citado
+  sai com os caracteres de controle escapados, no log e no stderr.
+- **Rota de saúde:** `GET /api/health` responde `{"ok":true}` sem autenticação, para o probe do
+  orquestrador. Não leva dado nenhum do motor.
+- **Pareamento sem pista para quem está de fora:** código que não vale recebe sempre a mesma
+  recusa, sem dizer se há código esperando nem quantas tentativas restam. O limite de cinco erros
+  continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
+  Quando os erros bloqueiam um código pendente, o motor grava uma linha de aviso no `farol.log`,
+  sem o código e sem o valor tentado.
+
+### Correções
+
+- **Pedido malformado derrubava o motor:** um alvo que não é URL (`GET //`) lançava fora do
+  tratamento de erro do servidor e encerrava o processo. Agora responde 400.
+- **Falha ao montar o estado no stream de eventos derrubava o motor:** o stream já tinha começado
+  a responder, e a tentativa de responder 500 lançava dentro do tratamento de erro. Agora a
+  conexão é fechada e o processo segue, e o cliente sai do registro do servidor mesmo quando a
+  falha vem depois de ele ter sido registrado.
+- **Dois cabeçalhos `Host`:** o pedido era aceito pelo primeiro e o segundo era ignorado. Agora é
+  recusado.
+- **`OPTIONS` executava a rota:** um `OPTIONS /api/state` devolvia o estado. Todo `OPTIONS` em
+  `/api/` agora responde 204 sem executar nada.
 
 ### Para quem sobe uma instância
 
 - Uma instância nova, com a pasta de dados vazia e o `gh` logado, nasce revisando, aprovando e
   reprovando sozinha. A receita para subir sem agir está em `docs/CONFIGURATION.md`.
-- Hospedada, a instância precisa de `"localAuth": "exigir"` no `config.json`.
+- Hospedada com `hostPublico` ou `origensPermitidas` no `config.json`, a instância já exige
+  autenticação. Sem nenhuma das duas (motor em loopback atrás de um proxy que reescreve o Host),
+  ela continua precisando de `"localAuth": "exigir"`.
 
 ## v2.80.1
 

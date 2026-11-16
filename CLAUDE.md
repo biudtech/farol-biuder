@@ -76,9 +76,11 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/env.js` | A leitura de `process.env` dos módulos de `lib/` (stubs de teste, depuração, cópia do ambiente sem certas variáveis). `lib/paths.js` lê as de caminho, e o `server.js` lê e ajusta o `PATH` e monta o ambiente do `gh` |
 | `lib/io.js` | `run` e `runShell` (todo `gh` passa aqui; nunca lançam, devolvem `{ ok, code, stdout, stderr }`), `readJson`, escrita atômica |
 | `lib/settings.js` | A tabela única das preferências (`SETTINGS`) e `normalizarConfig`, que lê `config.json` antigo sem lançar |
-| `lib/parse.js` | Normalizadores de config: perfis do Claude, pessoas, `bind`, e o saneamento de modelo e esforço (os valores que entram numa linha de comando) |
+| `lib/parse.js` | Normalizadores de config: perfis do Claude, pessoas, `bind`, `hostPublico`, `origensPermitidas`, e o saneamento de modelo e esforço (os valores que entram numa linha de comando) |
 | `lib/http-server.js` | HTTP e SSE: as rotas de `/api` e a entrega da `ui/` |
-| `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota |
+| `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota menos a de saúde: o loopback com a porta, o `hostPublico` sem porta e as `origensPermitidas`, tudo por igualdade exata. Devolve a origem configurada que casou, e recusa pedido com dois `Host` |
+| `lib/http-cors.js` | Os cabeçalhos CORS da origem que a allowlist devolveu (nunca `*`, sem credenciais) e a resposta do preflight |
+| `lib/fronteira-hospedada.js` | A carga do `config.json` no boot e as recusas de boot: arquivo presente e ilegível, inclusive o link simbólico para nada (ausente é instalação nova e sobe; BOM UTF-8 é aceito), nome de chave errado que lembra `hostPublico`, `origensPermitidas`, `localAuth` ou `bind`, e valor inválido nessas quatro. Em todas o motor não sobe e o `config.json` não é tocado. Também saneia as chaves só de arquivo (`bind`, `hostPublico` e `origensPermitidas`) |
 | `lib/http-ui.js` | Resolve o que fica fora de `/api`: arquivo de `ui/` ou o `index.html` |
 | `lib/local-auth/` | Autenticação da API: `modo.js` (quando é exigida), `acesso.js` (o porteiro), `pareamento.js` e `sessoes.js` (só hash em disco), `inventario.js` (toda rota `/api` classificada) |
 | `lib/estado-delta.js` | O snapshot vai para a tela por diferença |
@@ -235,7 +237,7 @@ O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 
 | Caminho | O que é |
 |---|---|
-| `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`) |
+| `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`, `hostPublico`, `origensPermitidas`) |
 | `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot e prompt que falta é copiado (ver o mapa); o `.claude/settings.json` não |
 | `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/` |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
@@ -262,13 +264,31 @@ perfil leva só `temChave` (`lib/engine/chave-do-perfil.js`, travado em
 
 ## A API do motor
 
-Escuta em `127.0.0.1:47170` por padrão. A ordem das defesas, em toda requisição: allowlist de Host e
-Origin (`lib/http-guard.js`), o cabeçalho `x-farol: 1` em todo POST, e a autenticação por Bearer
-quando exigida (`config.localAuth: "exigir"`, ou `bind` fora do loopback). O token nasce em
-`POST /api/auth/pair`, trocado por um código de `node tools/farol-parear.js`. Não há cookie.
+Escuta em `127.0.0.1:47170` por padrão. A ordem das defesas, em toda requisição
+(`lib/http-server.js`):
 
-Toda rota de `/api` está classificada em `lib/local-auth/inventario.js`, e rota nova sem classe
-reprova em `test/local-auth-inventario.test.js`. O estado inteiro sai em `GET /api/state` e, por
+1. alvo que não é URL responde 400;
+2. `GET /api/health` responde `{ "ok": true }` aqui, antes de tudo o mais: é o probe do
+   orquestrador, que chega com um Host fora de qualquer lista. Corpo fixo, sem dado do motor;
+3. allowlist de Host e Origin (`lib/http-guard.js`). Recusa é 403, sem cabeçalho CORS;
+4. origem de `config.origensPermitidas`: a resposta ganha os cabeçalhos CORS, qualquer que seja
+   o desfecho dali em diante (`lib/http-cors.js`);
+5. `OPTIONS` em `/api/` responde 204 e não executa rota;
+6. o cabeçalho `x-farol: 1` em todo POST;
+7. a autenticação por Bearer quando exigida: sempre no modo hospedado (`config.hostPublico` ou
+   `config.origensPermitidas` preenchidos, sem chave que desligue), e também com
+   `config.localAuth: "exigir"` ou `bind` fora do loopback (`lib/local-auth/modo.js`).
+
+O token nasce em `POST /api/auth/pair`, trocado por um código de `node tools/farol-parear.js`.
+Não há cookie, e a recusa do pareamento é uma só, sem dizer se há código esperando. Valor
+inválido em `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` não vira vazio nem
+loopback, nome errado numa dessas chaves não é descartado calado, e `config.json` presente e
+ilegível não vira os padrões: nos três casos o motor não sobe (`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar).
+
+Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (31 caminhos; três
+públicos, cada um só no método dele: o pareamento, o status da autenticação e a saúde), e rota
+nova sem classe reprova em `test/local-auth-inventario.test.js`. O estado inteiro sai em `GET /api/state` e, por
 diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada, travada em
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
 recalcula.

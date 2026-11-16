@@ -42,11 +42,18 @@ test('nenhuma rota aparece em duas classes', () => {
 // título contava 57 e eram 58 com as duas públicas; agora são 27.
 // Em 15/11/2026 a assinatura do Claude voltou (decisão do dono) e com ela o login pela tela:
 // /api/claude/login-web/start, /code e /cancel. As não públicas foram de 25 a 28, e o total de 27 a 30.
-test('as classes da spec cobrem os 30 caminhos, e as públicas são só as duas de autenticação', () => {
-  const naoPublicas = Object.entries(CLASSES).filter(([c]) => c !== 'autenticacao-publica').flatMap(([, rotas]) => rotas);
+// A fase 2a (fronteira hospedada) trouxe a rota de saúde, GET /api/health, numa classe pública
+// própria: as não públicas seguem 28, as públicas foram de 2 a 3 e o total de 30 a 31.
+test('as classes da spec cobrem os 31 caminhos, e as públicas são só as duas de autenticação e a de saúde', () => {
+  const publicas = ['autenticacao-publica', 'saude-publica'];
+  const naoPublicas = Object.entries(CLASSES).filter(([c]) => !publicas.includes(c)).flatMap(([, rotas]) => rotas);
   assert.equal(naoPublicas.length, 28);
+  assert.equal(todasAsRotas().length, 31);
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
-  assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-sensivel', 'recebe-segredo', 'sessao-paga']);
+  assert.deepEqual(CLASSES['saude-publica'], ['/api/health']);
+  assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-sensivel', 'recebe-segredo', 'saude-publica', 'sessao-paga']);
+  // toda rota de classe pública tem método em PUBLICAS, e PUBLICAS não tem rota de outra classe
+  assert.deepEqual(Object.keys(PUBLICAS).sort(), publicas.flatMap(c => CLASSES[c]).sort());
 });
 
 test('toda rota inventariada existe no servidor (sem classe morta)', () => {
@@ -66,7 +73,11 @@ test('o servidor e o inventário têm as mesmas rotas, e nenhuma é do que saiu 
 });
 
 test('a exceção pública depende do método', () => {
-  assert.deepEqual({ ...PUBLICAS }, { '/api/auth/pair': 'POST', '/api/auth/status': 'GET' });
+  assert.deepEqual({ ...PUBLICAS }, { '/api/auth/pair': 'POST', '/api/auth/status': 'GET', '/api/health': 'GET' });
+  assert.equal(rotaPublicaDeAutenticacao('GET', '/api/health'), true);
+  assert.equal(rotaPublicaDeAutenticacao('POST', '/api/health'), false);
+  assert.equal(rotaPublicaDeAutenticacao('HEAD', '/api/health'), false);
+  assert.equal(rotaPublicaDeAutenticacao('GET', '/api/health/'), false);
   assert.equal(rotaPublicaDeAutenticacao('POST', '/api/auth/pair'), true);
   assert.equal(rotaPublicaDeAutenticacao('GET', '/api/auth/status'), true);
   assert.equal(rotaPublicaDeAutenticacao('GET', '/api/auth/pair'), false);

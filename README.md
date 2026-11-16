@@ -45,7 +45,8 @@ Tudo mora em `~/.farol/config.json`; a tela (Sistema) edita a maior parte. O det
 | A conta revisora: login, organizações monitoradas (`owners`) e a política (`autoReview`, `onClean`, `onCaveats`, `onReject`) | `conta`, pela tela ou pelo arquivo | [A conta revisora e a política](docs/CONFIGURATION.md#a-conta-revisora-e-a-política) |
 | O perfil do Claude: por assinatura (login feito pela própria tela) ou por chave de API (a chave entra e não sai mais do motor) | `claudeProfiles`, pela tela | [Perfis do Claude](docs/CONFIGURATION.md#perfis-do-claude) |
 | O Jira de cada organização, para a revisão ler o card | `jiraSites`, pela tela | [Jira](docs/CONFIGURATION.md#jira) |
-| Autenticação da API: `"localAuth": "exigir"`, obrigatório em qualquer instância que não seja só da própria máquina | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
+| Motor hospedado: `hostPublico` (o nome com que o proxy chega ao motor) e `origensPermitidas` (de onde o front chama a API). Qualquer uma das duas já exige autenticação | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
+| Autenticação da API sem as duas chaves acima: `"localAuth": "exigir"`, obrigatório em qualquer instância que não seja só da própria máquina | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
 
 Com a autenticação exigida, a tela pede um código de pareamento. Gere um no servidor com
 `node tools/farol-parear.js`.

@@ -24,9 +24,17 @@ function armazenamentoFalso() {
 test('a recusa diz qual é, e a contagem só aparece quando existe', () => {
   assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: 3 }), /não confere.*Restam 3 tentativas/);
   assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: 1 }), /Resta 1 tentativa/);
-  assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: null }), /^Código não confere\.$/);
-  assert.match(textoDaRecusa({ ok: false, code: 'bloqueado', restantes: 0 }), /Cinco tentativas erradas/);
-  assert.match(textoDaRecusa({ ok: false, code: 'sem_codigo_pendente' }), /10 minutos ou já ter sido usado/);
+  // é a recusa que o servidor manda hoje, uma só: sem contagem, ela diz o que conferir e quando gerar outro
+  for (const r of [{ ok: false, code: 'codigo_invalido', restantes: null }, { ok: false, code: 'codigo_invalido' }]) {
+    assert.match(textoDaRecusa(r), /^Código não confere\. Confira o que digitou\./);
+    assert.match(textoDaRecusa(r), /10 minutos, já foi usado ou teve cinco tentativas erradas.*gere outro no terminal\.$/);
+  }
+  // o servidor não manda mais `bloqueado` nem `sem_codigo_pendente` (a recusa é uma só): a tela
+  // não guarda texto para eles, e código que ela não conhece cai na falha de comunicação
+  for (const code of ['bloqueado', 'sem_codigo_pendente']) {
+    assert.match(textoDaRecusa({ ok: false, code, restantes: 0 }), /não deu para falar com o Farol/i, code);
+  }
+  assert.doesNotMatch(fs.readFileSync(path.join(RAIZ, 'ui', 'pure', 'pareamento.js'), 'utf8'), /bloqueado:|sem_codigo_pendente/);
   assert.match(textoDaRecusa(null), /não deu para falar com o Farol/i);
   assert.match(textoDaRecusa({ ok: false, code: 'inventado' }), /não deu para falar com o Farol/i);
 });
