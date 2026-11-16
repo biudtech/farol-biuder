@@ -89,7 +89,6 @@
 /* o relatório anterior fica na tela, esmaecido, enquanto o novo não chega */
 .relatorio[data-esmaecida] { opacity: .55; }
 
-.situacao { font-size: 13.5px; font-weight: 600; }
 .linhas {
   display: flex;
   flex-direction: column;

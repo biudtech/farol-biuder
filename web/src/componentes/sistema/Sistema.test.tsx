@@ -682,7 +682,6 @@ describe('Sistema: automação', () => {
 
 describe('Sistema: perfil do Claude', () => {
   const perfil = (nome: string) => within(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude' })).getByRole('heading', { level: 3, name: new RegExp(`^${nome}`) }).closest('li') as HTMLElement);
-  const AVISO_DE_TETO = 'Aviso: este perfil tem teto de gasto configurado no arquivo do motor; ele ainda pode pausar revisões automáticas até o teto ser removido do motor.';
 
   it('mostra os perfis, o tipo, a presença da credencial e o uso do plano, sem chave nem pasta', async () => {
     const t = montar();
@@ -698,35 +697,16 @@ describe('Sistema: perfil do Claude', () => {
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
-  it('a seção não tem teto: nenhum campo, nenhum salvar, nenhum valor de teto na tela', async () => {
+  it('a seção não tem teto: nenhum campo, nenhum salvar, nenhum valor nem aviso de teto na tela', async () => {
     const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, budgetDaily: 20, budgetTotal: 300, budgetSince: '2026-11-01' }, API] } } });
     await assentar();
     expect(na(CLAUDE).queryByRole('textbox')).toBeNull();
     expect(na(CLAUDE).queryByRole('group')).toBeNull();
     expect(na(CLAUDE).queryByRole('button', { name: /Salvar|teto/i })).toBeNull();
     expect(na(CLAUDE).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Testar o perfil Assinatura', 'Testar o perfil Chave']);
-    expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|300|2026-11-01|01\/11\/2026/);
+    expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|300|2026-11-01|01\/11\/2026|[Tt]eto|pausar/);
     // e o valor do teto nem entra no store
-    expect(JSON.stringify(t.store.ler().snapshot?.config)).not.toMatch(/budget|300|2026-11-01/);
-  });
-
-  it.each([
-    ['teto do dia', { budgetDaily: 20 }],
-    ['teto do dia em zero', { budgetDaily: 0 }],
-    ['teto total', { budgetTotal: 300, budgetSince: '2026-11-01' }],
-    ['teto por dia da semana', { budgetByWeekday: { 6: 5 } }],
-    ['teto por data', { budgetDates: { '2026-12-25': 0 } }],
-  ])('perfil com %s no arquivo ganha o aviso só de leitura, e o que não tem não ganha', async (_nome, teto) => {
-    montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, ...teto }, API] } } });
-    await assentar();
-    expect(perfil('Assinatura').getByText(AVISO_DE_TETO)).toBeTruthy();
-    expect(perfil('Chave').queryByText(AVISO_DE_TETO)).toBeNull();
-  });
-
-  it('sem teto em perfil nenhum não há aviso', async () => {
-    montar();
-    await assentar();
-    expect(na(CLAUDE).queryByText(/teto de gasto/)).toBeNull();
+    expect(JSON.stringify(t.store.ler().snapshot?.config)).not.toMatch(/budget|300|2026-11-01|temTeto/);
   });
 
   it('nenhum POST /api/settings sai desta seção, e nenhum POST leva claudeProfiles', async () => {

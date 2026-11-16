@@ -5,9 +5,8 @@
 // esta tela não cria perfil, não digita chave, não faz login e não tem teto de gasto. Nenhum
 // POST /api/settings com `claudeProfiles` sai daqui.
 //
-// Decisão de 16/11/2026: o revisor não trava por gasto, e a tela não mostra nem edita teto. O
-// gate de orçamento ainda existe no motor e sai dele em mudança própria; enquanto existir, o
-// perfil que traz teto no arquivo ganha um aviso só de leitura.
+// Decisão de 16/11/2026: o revisor não trava por gasto. O motor não tem teto, e a tela não
+// mostra, não edita nem avisa teto: o campo que um config antigo ainda traga é ignorado.
 import { useId } from 'react';
 import { lerTesteDePerfil, type CampoDoTeste, type ConfigDoSistema, type PerfilDoClaude as Perfil, type PerfisDoClaude, type Saude, type TesteDePerfil, type UsoDoPlano } from '@/contratos/sistema';
 import { dataHora } from '@/radar/formato';
@@ -18,8 +17,6 @@ import { useChamada } from './useChamada';
 import estilos from './Sistema.module.css';
 
 export const ROTA_DO_TESTE_DE_PERFIL = '/api/claude/profile-test';
-
-export const AVISO_DE_TETO = 'Aviso: este perfil tem teto de gasto configurado no arquivo do motor; ele ainda pode pausar revisões automáticas até o teto ser removido do motor.';
 
 const TIPO: Record<string, string> = { dir: 'Assinatura', apikey: 'Chave de API' };
 const NOME_DO_CAMPO: Record<string, string> = { tipoAuth: 'Tipo de autenticação', chave: 'Chave', login: 'Login', email: 'E-mail', plano: 'Plano' };
@@ -99,7 +96,6 @@ function CartaoDoPerfil({ perfil, cliente, padrao, pronto, uso }: PropsDoPerfil)
           </Par>
         )) : null}
       </dl>
-      {perfil.temTeto ? <p className={comuns.nota}>{AVISO_DE_TETO}</p> : null}
 
       <p className={comuns.meta}>
         {deChave

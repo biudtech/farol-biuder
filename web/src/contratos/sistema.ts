@@ -33,10 +33,6 @@ export interface PerfilDoClaude {
   temChave?: boolean;
   // o endereço para onde a chave é enviada, quando não é o da Anthropic
   baseUrl?: string;
-  // Não vem assim do motor: o perfil traz algum teto de gasto no arquivo (`budgetDaily`,
-  // `budgetTotal`, `budgetByWeekday` ou `budgetDates`). A tela não mostra nem edita o valor:
-  // só avisa que ele existe, porque o motor ainda pausa revisão automática por ele.
-  temTeto?: true;
 }
 
 export interface ConfigDoSistema {
@@ -57,22 +53,14 @@ export interface ConfigDoSistema {
   segredosDescartados?: number;
 }
 
-// Há teto neste campo: um número (zero também é teto), ou um mapa com algum número.
-function haTeto(valor: unknown): boolean {
-  if (ehNumero(valor)) return true;
-  return ehObjeto(valor) && Object.values(valor).some(ehNumero);
-}
-
 const lerPerfil: LeitorDeItem<PerfilDoClaude> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.id) || !v.id) return undefined;
-  const temTeto = [v.budgetDaily, v.budgetTotal, v.budgetByWeekday, v.budgetDates].some(haTeto);
   return semAusentes({
     id: v.id,
     label: textoSeguro(v.label) || undefined,
     kind: campo(v.kind, ehTexto),
     temChave: campo(v.temChave, ehBooleano),
     baseUrl: textoSeguro(v.baseUrl) || undefined,
-    temTeto: temTeto ? (true as const) : undefined,
   });
 };
 

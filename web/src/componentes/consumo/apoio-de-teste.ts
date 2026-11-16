@@ -62,16 +62,6 @@ export function relatorioDoMotor(extra: Record<string, unknown> = {}): Record<st
   };
 }
 
-// Uma linha de teto, como linhaDeOrcamento (lib/engine/usage.js) a monta.
-export function tetoDoMotor(extra: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    id: 'p1', label: 'Assinatura do time', kind: 'assinatura', budgetDaily: 50, budgetTotal: null, budgetSince: null,
-    budgetByWeekday: {}, budgetDates: {}, capHoje: 50, capOrigem: 'base', today: 12.5, sinceCutoff: 300,
-    blocked: false, reason: null, parcialmenteEstimado: false, tipicoReview: 4.1, sugestaoDiaria: 70,
-    ...extra,
-  };
-}
-
 // Uma sessão recente, como sessaoParaTela (lib/engine/snapshot-usage.js) a deixa passar.
 export function sessaoDoMotor(n: number, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -88,7 +78,6 @@ export function consumoDoMotor(extra: Record<string, unknown> = {}): Record<stri
   return {
     totals: { sessions: 42, inputTokens: 1, outputTokens: 1, cacheReadTokens: 1, cacheCreationTokens: 1, costUsd: 900 },
     series: [], stackedSeries: {}, matrixSeries: [],
-    budgets: [tetoDoMotor()],
     recentSessions: [sessaoDoMotor(1), sessaoDoMotor(2)],
     falhasPorSessao: {},
     auditoria: { total: parte(42, 900), util: parte(39, 810), perdido: parte(3, 90), medido: parte(41, 880), estimado: parte(1, 20), desconhecido: parte(0, 0) },
