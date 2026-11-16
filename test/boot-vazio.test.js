@@ -107,13 +107,15 @@ test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOM
   const estado = await resposta.json();
   assert.deepEqual(estado.queue, [], 'instância nova nasce com a fila vazia');
 
-  // espera a primeira checagem terminar: é ela que grava o resto do estado, e o que vazasse
-  // para fora do HOME vazaria até aqui
+  // espera a primeira checagem terminar (sem conta no gh ela acaba em erro dito, nunca em
+  // processo morto): o que vazasse para fora do HOME vazaria ate aqui
   const depois = await esperar(async () => {
     const e = await (await fetch(url)).json();
-    return e.lastCheckAt && e.status !== 'checking' ? e : null;
+    return ['idle', 'error'].includes(e.status) ? e : null;
   }, 30000, 'a primeira checagem terminar');
-  assert.deepEqual(depois.queue, [], 'sem conta no gh, a primeira checagem não põe nada na fila');
+  console.log(JSON.stringify({ status: depois.status, error: depois.error, account: depois.account, accounts: depois.accounts }));
+  assert.deepEqual(depois.queue, [], 'sem conta no gh, a primeira checagem nao poe nada na fila');
+  assert.equal(filho.exitCode, null, 'o motor segue de pe depois da primeira checagem');
 
   filho.kill('SIGTERM');
   const fim = await fimDoFilho;
