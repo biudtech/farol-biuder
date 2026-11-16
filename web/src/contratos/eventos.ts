@@ -4,6 +4,7 @@
 // `engine.emit('toast', { kind, text })`, e lib/http-server.js repassa a todo cliente como
 // `event: toast` com esse objeto em JSON. `kind` é "info", "ok" ou "error".
 import { ehObjeto, ehTexto } from './formas';
+import { mascararSegredos } from './segredos';
 
 export type TomDoRecado = 'info' | 'ok' | 'erro';
 
@@ -21,7 +22,8 @@ const TONS: Record<string, TomDoRecado> = { info: 'info', ok: 'ok', error: 'erro
 // informação, que é como a tela antiga tratava.
 export function lerRecado(bruto: unknown): RecadoDoMotor | null {
   if (!ehObjeto(bruto) || !ehTexto(bruto.text)) return null;
-  const limpo = bruto.text.replace(/\s+/g, ' ').trim();
+  // o aviso pode citar o que veio de fora (erro do gh): o trecho em formato de credencial é trocado
+  const limpo = mascararSegredos(bruto.text).replace(/\s+/g, ' ').trim();
   if (!limpo) return null;
   const texto = limpo.length > TETO_DO_RECADO ? `${limpo.slice(0, TETO_DO_RECADO)}…` : limpo;
   const tom = ehTexto(bruto.kind) && Object.hasOwn(TONS, bruto.kind) ? (TONS[bruto.kind] as TomDoRecado) : 'info';

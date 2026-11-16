@@ -26,7 +26,9 @@ describe('chaves de topo do snapshot', () => {
 
   it('app confere a identidade que o motor emite', () => {
     const app = { name: 'Farol', version: '3.0.0-dev', platform: 'linux' };
-    expect(LEITORES.app(app, () => {})).toBe(app);
+    expect(LEITORES.app(app, () => {})).toEqual(app);
+    // montada campo a campo: o que vier junto não entra
+    expect(LEITORES.app({ ...app, extra: 1 }, () => {})).toEqual(app);
     for (const torto of [null, 'Farol', [], {}, { name: 'Farol', version: 3, platform: 'linux' }, { name: 'Farol', version: '3' }]) {
       expect(LEITORES.app(torto, () => {})).toBeUndefined();
     }

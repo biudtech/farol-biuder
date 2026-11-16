@@ -145,3 +145,22 @@ describe('o CSS do Consumo', () => {
     expect(css).toMatch(/\.rolagem \{[^}]*background: var\(--surface\);/);
   });
 });
+
+// O mesmo para a tela Sistema, que diz o estado de cada verificação com texto sobre o fundo
+// suave do estado (os pares de "texto de estado sobre o fundo suave dele", acima).
+describe('o CSS do Sistema', () => {
+  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../componentes/sistema/Sistema.module.css'), 'utf8');
+
+  it('não tem cor fora das variáveis de globals.css', () => {
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+    const usadas = new Set([...css.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1] as string));
+    expect(usadas.size).toBeGreaterThan(0);
+    for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
+  });
+
+  it('o estado de uma verificação usa o texto de estado sobre o fundo suave dele', () => {
+    expect(css).toContain('.estado[data-estado="ok"] { background: var(--ok-soft); color: var(--ok-texto); }');
+    expect(css).toContain('.estado[data-estado="atencao"] { background: var(--danger-soft); color: var(--danger-texto); }');
+    expect(css).toMatch(/\.erro \{[^}]*background: var\(--danger-soft\);[^}]*color: var\(--danger-texto\);/);
+  });
+});

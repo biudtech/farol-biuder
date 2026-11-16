@@ -70,10 +70,10 @@ describe('lerPessoas: config.people', () => {
 });
 
 describe('lerConfig: a chave config do snapshot', () => {
-  it('fica só com os perfis: os lidos, para mostrar, e o mapa cru, para o corpo de um salvar', () => {
+  it('dos perfis de review ficam os lidos, para mostrar, e o mapa cru, para o corpo de um salvar', () => {
     const registrar = vi.fn();
     const people = { ana: { papel: 'pleno' } };
-    const lido = lerConfig({ intervalSeconds: 300, claudeProfiles: [{ id: 'p1' }], people }, registrar);
+    const lido = lerConfig({ intervalSeconds: 300, soundEnabled: true, people }, registrar);
     expect(lido).toEqual({ people: { ana: { papel: 'pleno' } }, peopleCru: people });
     // o cru é o próprio objeto do motor, não uma cópia filtrada
     expect(lido?.peopleCru).toBe(people);

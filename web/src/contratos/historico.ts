@@ -9,6 +9,7 @@
 import {
   campo, ehBooleano, ehNumero, ehObjeto, ehTexto, lerItens, lerRegistro, semAusentes, type LeitorDeItem,
 } from './formas';
+import { mascararSegredos } from './segredos';
 import { lerCard, lerMotivos, lerPrDaPendencia, lerTecnica, type Motivo, type PrDaPendencia } from './radar';
 
 // O resumo da comparação entre rodadas (roundSummary, lib/engine/review-projection.js).
@@ -116,7 +117,7 @@ export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
     rounds: lerRodadas(v.rounds),
     stages: lerEtapas(v.stages),
     verificationCheckpoint: lerConferencia(v.verificationCheckpoint),
-    reportMarkdown: campo(v.reportMarkdown, ehTexto) ?? '',
+    reportMarkdown: mascararSegredos(campo(v.reportMarkdown, ehTexto) ?? ''),
     reasons: lerMotivos(v.reasons),
     attention: lerMotivos(v.attention),
   });

@@ -1,7 +1,9 @@
 'use client';
 
 // A casca das cinco abas: marca, navegação, estado da conexão, tema e Sair. Só existe com
-// este navegador pareado (src/componentes/Aplicacao.tsx).
+// este navegador pareado (src/componentes/Aplicacao.tsx). O Sair pede ao motor que revogue a
+// sessão deste navegador antes de apagar o token daqui (app.sair, src/estado/app.ts): enquanto
+// o motor não responde o botão diz "Saindo", e o desfecho aparece na tela de pareamento.
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -23,6 +25,7 @@ export function Casca({ children, app = appDoNavegador }: Props) {
   const caminho = usePathname();
   const conexao = useApp((e) => e.conexao, app);
   const versao = useApp((e) => e.snapshot?.app?.version ?? '', app);
+  const saindo = useApp((e) => e.saindo, app);
   const conteudo = useRef<HTMLElement>(null);
 
   // Quem acabou de parear estava com o foco no formulário, que sumiu: o foco vai ao conteúdo
@@ -60,7 +63,10 @@ export function Casca({ children, app = appDoNavegador }: Props) {
         <div className={estilos.acoes}>
           <IndicadorDeConexao conexao={conexao} />
           <TrocaDeTema />
-          <button type="button" className={estilos.botao} onClick={() => app.sair()}>Sair</button>
+          <button type="button" className={estilos.botao} disabled={saindo} onClick={() => { void app.sair(); }}>
+            {saindo ? 'Saindo…' : 'Sair'}
+          </button>
+          <span className={estilos.soLeitor} role="status">{saindo ? 'Saindo: pedindo ao motor que revogue a sessão deste navegador.' : ''}</span>
         </div>
       </header>
 

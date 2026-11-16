@@ -7,6 +7,7 @@
 // Do autor só o `login` é exigido; todo outro campo de forma errada conta como ausente. É dado
 // sobre pessoas: o que é descartado aqui é só contado, nunca escrito em registro nenhum.
 import { campo, ehObjeto, ehTexto, lerItens, mesmoJson, semAusentes, type Leitor, type LeitorDeItem } from './formas';
+import { lerConfigDoSistema, type ConfigDoSistema } from './sistema';
 
 // Uma entrada do dossiê: o motor grava uma por revisão resolvida (writeMemory,
 // lib/engine/decision.js), com o dia (AAAA-MM-DD, em UTC), o PR (`dono/repo#n`), o que foi
@@ -101,10 +102,10 @@ export function lerPessoas(v: unknown): { pessoas: Pessoas; ilegiveis: number } 
   return { pessoas: Object.fromEntries(boas), ilegiveis };
 }
 
-// A chave `config` do snapshot, só com os perfis. O resto da config do motor
-// (configParaFora, lib/engine/chave-do-perfil.js) não é guardado: entra aqui quando uma
-// tela precisar.
-export interface ConfigDoMotor {
+// A chave `config` do snapshot: os perfis de review do Time e o que a tela Sistema usa
+// (ConfigDoSistema, ./sistema). O resto da config do motor (configParaFora,
+// lib/engine/chave-do-perfil.js) não é guardado: entra aqui quando uma tela precisar.
+export interface ConfigDoMotor extends ConfigDoSistema {
   // os perfis lidos, para mostrar; ausente quando o motor não mandou o mapa, ou mandou em
   // outra forma
   people?: Pessoas;
@@ -117,11 +118,13 @@ export interface ConfigDoMotor {
 
 export const lerConfig: Leitor<ConfigDoMotor> = (valor, registrar) => {
   if (!ehObjeto(valor)) return undefined;
+  const config: ConfigDoMotor = lerConfigDoSistema(valor, registrar);
   const lido = lerPessoas(valor.people);
-  if (!lido || !ehObjeto(valor.people)) return {};
+  if (!lido || !ehObjeto(valor.people)) return config;
   // só a contagem vai ao registro: nem login nem valor
   if (lido.ilegiveis) registrar(`snapshot: ${lido.ilegiveis} perfil(is) de "config.people" com campo ou forma que a tela não lê`);
-  const config: ConfigDoMotor = { people: lido.pessoas, peopleCru: valor.people };
+  config.people = lido.pessoas;
+  config.peopleCru = valor.people;
   if (lido.ilegiveis) config.peopleIlegiveis = lido.ilegiveis;
   return config;
 };

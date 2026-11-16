@@ -70,6 +70,15 @@
   cursor: pointer;
 }
 .botao:hover { background: var(--surface-2); }
+.botao:disabled { opacity: .6; cursor: default; }
+.soLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .icone { width: 34px; padding: 0; }
 .icone svg { width: 17px; height: 17px; }
 

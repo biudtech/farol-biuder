@@ -12,8 +12,8 @@ function coletor() {
 describe('state: o snapshot inteiro', () => {
   it('entra com as chaves conhecidas e ignora a desconhecida', () => {
     const { avisos, registrar } = coletor();
-    const novo = aplicarEstadoInteiro(null, { app: APP, status: 'idle', modelos: [1, 2], chaveNova: { x: 1 } }, registrar);
-    expect(novo).toEqual({ app: APP, status: 'idle', modelos: [1, 2] });
+    const novo = aplicarEstadoInteiro(null, { app: APP, status: 'idle', filaJusta: [1, 2], chaveNova: { x: 1 } }, registrar);
+    expect(novo).toEqual({ app: APP, status: 'idle', filaJusta: [1, 2] });
     expect(avisos).toEqual([]);
   });
 
@@ -54,12 +54,12 @@ describe('state: o snapshot inteiro', () => {
 });
 
 describe('state-patch: a diferença por chave de topo', () => {
-  const base: Snapshot = { app: APP, status: 'idle', modelos: [1], error: 'antigo' };
+  const base: Snapshot = { app: APP, status: 'idle', filaJusta: [1], error: 'antigo' };
 
   it('troca as chaves de campos e apaga as de removidos, como o motor emite', () => {
     const { avisos, registrar } = coletor();
-    const novo = aplicarPatch(base, { campos: { status: 'checking', modelos: [1, 2] }, removidos: ['error'] }, registrar);
-    expect(novo).toEqual({ app: APP, status: 'checking', modelos: [1, 2] });
+    const novo = aplicarPatch(base, { campos: { status: 'checking', filaJusta: [1, 2] }, removidos: ['error'] }, registrar);
+    expect(novo).toEqual({ app: APP, status: 'checking', filaJusta: [1, 2] });
     expect(avisos).toEqual([]);
   });
 
@@ -69,7 +69,7 @@ describe('state-patch: a diferença por chave de topo', () => {
     const novo = aplicarPatch(base, { campos: { status: 'checking' }, removidos: [] }, registrar);
     expect(base).toEqual(copia);
     expect(novo).not.toBe(base);
-    expect(novo?.modelos).toBe(base.modelos);
+    expect(novo?.filaJusta).toBe(base.filaJusta);
   });
 
   it('valor null é valor, não remoção', () => {
