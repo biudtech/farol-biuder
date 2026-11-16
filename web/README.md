@@ -84,12 +84,12 @@ corrigida sozinho, o `overrides` sai.
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
 | `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, o descarte do que tem cara de segredo |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
 | `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das três telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e o estado do teto em frases (`teto.ts`) |
-| `src/sistema/` | A lógica do Sistema, sem React: a política da conta e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o teto de gasto (`teto.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`) e as ações, com corpo, pergunta e conferência (`acoes.ts`) |
+| `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`) e as ações, com corpo, pergunta e conferência (`acoes.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
@@ -625,23 +625,34 @@ Regras que valem para quem mexer nela:
   de fora.
 - **O motivo da falha de uma sessão** (`usage.falhasPorSessao`) não é mostrado: é texto
   de erro do motor. As falhas registradas aparecem no relatório do motor, na tela Sistema.
-- **O teto se edita em outra tela.** O Consumo só mostra; a edição está na tela Sistema.
+- **O teto não se edita por tela nenhuma.** O Consumo só mostra. Por decisão de 16/11/2026 o
+  revisor não trava por gasto: a tela Sistema não tem teto, e o gate de orçamento sai do motor
+  em mudança própria, junto com o que esta tela mostra dele.
 
 ## A tela Sistema
 
 A aba `/sistema` é `src/componentes/sistema/Sistema.tsx`. É a tela que mais pode fazer estrago:
-muda o que o motor publica sozinho no GitHub, o que ele gasta e quem tem acesso a ele. Sete
-seções, cada uma com título próprio e um índice no topo:
+muda o que o motor publica sozinho no GitHub e quem tem acesso a ele. Sete seções, cada uma com
+título próprio e um índice no topo:
 
 | Seção | Componente | De onde vem | O que edita |
 |---|---|---|---|
 | Saúde | `Saude.tsx` | `doctor`, `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
 | Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
 | Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `aguardarCiParaAprovar`, `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
-| Perfil do Claude e teto de gasto | `ClaudeETeto.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | `budgetDaily`, `budgetTotal` e `budgetSince` de um perfil, por `POST /api/settings` |
+| Perfil do Claude | `PerfilDoClaude.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | nada |
 | Jira | `Jira.tsx` | `jiraSites` do snapshot; `POST /api/jira/test` | nada |
 | Sessões pareadas | `Sessoes.tsx` | `POST /api/auth/sessions` | revoga uma sessão, por `POST /api/auth/revoke` |
 | Rede e acesso | `Sistema.tsx` | `bind`, `port`, `hostPublico`, `origensPermitidas` e `localAuth` de `config` | nada |
+
+**A tela não tem teto de gasto** (decisão de 16/11/2026): o revisor é autônomo e não trava por
+gasto. Ela não mostra nem edita teto, e nenhum `POST /api/settings` com `claudeProfiles` sai do
+front (`sistema/acoes.test.ts` confere que não há ação nem fonte que monte esse corpo). O gate
+de orçamento ainda existe no motor e sai dele em mudança própria. Enquanto existir, o perfil
+que traz teto no arquivo (`budgetDaily`, `budgetTotal`, `budgetByWeekday` ou `budgetDates`) ganha
+um aviso só de leitura: o teto ainda pode pausar revisões automáticas. O leitor guarda só a
+marca `temTeto`, não o valor. A tela Consumo, que mostra o estado do teto, sai junto com a
+mudança do motor.
 
 O contrato, lido do motor:
 
@@ -654,25 +665,36 @@ O contrato, lido do motor:
   |---|---|---|---|
   | `aguardarCiParaAprovar` | o booleano | só `true` liga; o resto vira `false` | `aguardaCiParaAprovar`, `lib/engine/gate-espera.js` |
   | `parallelReviews` | o número | fora de 1 a 4 vai para a ponta; o que não é número mantém o anterior | `parallelLimit`, `lib/engine/headless-fila.js` |
-  | `reviewModel` | o texto (vazio é o padrão do Claude Code) | fora do catálogo mantém o anterior | `buildModelFlags`, `lib/engine/session.js`, e o roteador do Auto |
+  | `reviewModel` | o texto (vazio é o padrão do Claude Code) | fora do catálogo e do formato de nome completo mantém o anterior | `buildModelFlags`, `lib/engine/session.js`, e o roteador do Auto |
   | `reviewEffort` | o texto (vazio não manda a flag) | fora de `low`, `medium`, `high`, `xhigh` mantém o anterior | `buildModelFlags`, `lib/engine/session.js` |
-  | `claudeProfiles` | a lista INTEIRA de perfis | perfil incompleto sai da lista; teto inválido fica sem teto; data que não existe é descartada | `authDaConta` (`lib/engine/perfil-claude.js`) e `budgetBlockedFor` (`lib/engine/usage.js`) |
   | `people` | o mapa INTEIRO (tela Time) | valor fora da taxonomia é descartado | `personProfileBlock`, `lib/engine/review-prompt.js` |
-  | `jiraSites` | a lista INTEIRA (esta tela não manda) | site inválido ou repetido sai da lista | `lib/engine/jira.js` |
+  | `claudeProfiles` | a lista INTEIRA (o front não manda) | perfil incompleto sai da lista | `authDaConta`, `lib/engine/perfil-claude.js` |
+  | `jiraSites` | a lista INTEIRA (o front não manda) | site inválido ou repetido sai da lista | `lib/engine/jira.js` |
 
   `bind`, `hostPublico`, `origensPermitidas`, `port` e `localAuth` não são aceitas: voltam em
   `ignoradas`.
-- **`claudeProfiles` sem segredo.** Para fora o perfil de chave sai sem `apiKey` e com
-  `temChave` (`configParaFora`). Na volta, perfil de chave que chega sem chave mantém a
-  guardada (`comChaveGuardada`), e a pasta do perfil de assinatura é sempre a do arquivo
-  (`semPastaDaTela`). Mudar o endereço (`baseUrl`) de um perfil de chave sem mandar a chave
-  recusa o salvar inteiro com `chave_exigida`.
+- **`reviewModel` aceita dois formatos** (`sanitizeModel`, `lib/parse.js`): um apelido do
+  catálogo (`auto`, `best`, `opus`, `sonnet`, `fable`) ou um nome completo `claude-...`, só com
+  letras minúsculas, dígitos e hífen, que é a escotilha para modelo novo. O seletor oferece só
+  o catálogo que o motor manda; o nome completo entra pelo arquivo de configuração e aparece
+  na tela como opção extra, dita como fixada no arquivo. Qualquer nome com `haiku` é recusado.
 - **`POST /api/accounts/edit`** (`aplicarEdicao`, `lib/engine/contas-config.js`) recebe
   `{ tipo: "editar", user, campos }` e aplica sobre a conta que o motor tem: cada campo troca o
   valor, e `owners` troca a lista inteira de organizações. Campo que não vai não muda. Campo
   vazio apaga o valor, e o motor regrava o padrão, que publica sozinho. Responde
   `{ ok: true, ignoradas, ignorados }` (sem a conta gravada), ou `{ ok: false, erro }`. Com
   `onClean` em `wait` o motor põe `onCaveats` em `wait`, e recusa o pedido de `approve`.
+- **Quando a política nova vale.** O motor lê a política ao começar cada revisão
+  (`politicaDeInicio`, `lib/engine/review-scope.js`), ao decidir o resultado de cada uma
+  (`shouldAutoApprove` e `shouldAutoReject`, `lib/engine/approval-policy.js`) e quando uma
+  espera do CI já armada fecha (`politicaAindaAprova`, `lib/engine/espera-ci.js`). O evento
+  `settings-changed` é emitido e ninguém o ouve: a pendência que já está em "Precisa de você"
+  porque a política mandava esperar não é reavaliada, e continua esperando o clique.
+- **Desligar `aguardarCiParaAprovar` tem efeito imediato.** Na varredura seguinte, toda
+  aprovação que estava esperando o CI é publicada sem esperar os checks, mesmo com o CI
+  vermelho, se o commit ainda é o revisado e a política ainda manda aprovar; a pendência que
+  pediu mudanças só pelo CI vai para a mesa (`umaEspera` e `liberarSemCi`,
+  `lib/engine/espera-ci.js`).
 - **`POST /api/auth/sessions`** responde `{ ok, sessoes: [{ id, rotulo, criadoEm, ultimoUsoEm,
   atual }] }`; `id` é um pedaço do hash do token. **`POST /api/auth/revoke`** recebe `{ id }` e
   responde `{ ok: true, eraAtual }` ou `{ ok: false, code: "sessao_inexistente" }`.
@@ -683,49 +705,74 @@ O contrato, lido do motor:
 
 Regras que valem para quem mexer nela:
 
-- **Segredo não passa da borda.** `src/contratos/segredos.ts` tira o que tem nome de segredo
-  (token, chave de API, senha, credencial) e valor que não é booleano, o texto com prefixo de
-  chave ou de token e o endereço com usuário. Os tipos lidos de `src/contratos/sistema.ts` são
-  montados campo a campo, sem campo de segredo: do segredo a tela só conhece a presença
-  (`tokenOk`, `temChave`, `hasCredential`). O teste `sistema.test.ts` passa um snapshot com
-  token, chave, senha e credencial e confere que nada disso chega ao store. Chave do snapshot
-  sem tipo também passa por `semSegredos`. A tela não tem campo para digitar segredo.
+- **Segredo não passa da borda** (`src/contratos/segredos.ts`). Duas regras, estreitas de
+  propósito, porque erram para os dois lados se forem frouxas:
+  - por nome do campo, só TEXTO é descartado, e só quando o nome é um dos da tabela
+    `NOMES_DE_SEGREDO` ou termina num deles, palavra a palavra (`token`, `ghToken`,
+    `anthropicApiKey`, `senha`, `credential`, `authorization` e afins). Número e booleano nunca
+    são segredo: `inputTokens`, `tokens`, `tokenOk`, `hasCredential` passam. Nome que só
+    contém o pedaço não casa: `tokenizer`, `secretaria`, `chaveDoCard`, `key`, `cardKey`,
+    `projectKeys`;
+  - por valor, os formatos conhecidos de credencial, em qualquer posição do texto: JWT,
+    `AKIA` e `ASIA` da AWS, `glpat-`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `sk-ant-`,
+    `sk-` só no formato de chave (longa e sem separador, para `sk-anthropic-1` passar),
+    `xox?-` do Slack, `ATATT` do Atlassian, bloco PEM de chave privada, `Bearer` e `Basic`
+    seguidos de credencial e endereço com `usuario:senha@`.
+- **Texto curto sai inteiro; texto para ler só perde o trecho.** Um valor de até 200
+  caracteres com formato de credencial (um rótulo, um endereço, um id) é descartado. Texto
+  que a tela mostra para ler nunca some inteiro: o trecho é trocado por "[segredo omitido]"
+  (`mascararSegredos`). Passam por essa máscara: o review (`reportMarkdown`, no Radar e no
+  Histórico), os motivos de uma pendência (`reasons`), as linhas do feed de uma sessão
+  (`activity`), o erro do motor (`error` do snapshot), o aviso do motor (evento `toast`), a
+  frase de uma recusa (`error` e `erro` das respostas de ação), o erro de leitura do uso do
+  plano (`claudePerfis.uso.*.erro`), o motivo e o aviso do teste de perfil, o motivo do teste
+  do Jira e o relatório de `GET /api/diagnostics`.
+- **Os tipos lidos não têm campo de segredo.** Os de `src/contratos/sistema.ts` são montados
+  campo a campo: do segredo a tela só conhece a presença (`tokenOk`, `temChave`,
+  `hasCredential`). Do perfil do Claude a chave (`apiKey`) e a pasta (`dir`) não são lidas nem
+  guardadas, e não há lista crua de perfis no store, porque a tela não manda perfil de volta.
+  O teste `sistema.test.ts` passa um snapshot com token, chave, senha e credencial e confere
+  que nada disso chega ao store. Chave do snapshot sem tipo também passa por `semSegredos`. A
+  tela não tem campo para digitar segredo.
 - **O que ainda entra como veio.** Dois valores do store não são montados campo a campo, por
   desenho dos lotes anteriores: os itens de `decisions.resolved` e `config.people` cru (o
-  corpo do salvar do Time). Texto livre (o review, o feed de uma sessão, o relatório de
-  `GET /api/diagnostics`) não tem campo a conferir: quem o mascara é o motor.
-- **Um salvar, uma seção.** O corpo leva só o que foi editado: a conta manda os campos que
-  mudaram; a automação, as chaves que mudaram; o teto, só `claudeProfiles`. Salvar a automação
-  não reenvia política nem teto.
-- **O teto sai da lista crua.** `config.claudeProfilesCru` é a lista de perfis como o motor a
-  mandou; `comTeto` (`src/sistema/teto.ts`) troca os três campos do teto do perfil editado e
-  devolve o resto como veio, inclusive campo que a tela não conhece e os tetos por dia da
-  semana e por data. Se a borda descartou algo com cara de segredo dos perfis, o teto não se
-  salva: a lista guardada deixou de ser a do motor.
-- **O `ok` não é o desfecho.** A automação e o teto conferem a `config` da resposta contra o
-  enviado, chave a chave e perfil a perfil (`diferencasDaAutomacao`, `conferirTeto`): "gravou",
-  "gravou diferente do pedido" e, no teto, se outro perfil mudou ou saiu da lista. A rota da
+  corpo do salvar do Time).
+- **Um salvar, uma seção, só o que a pessoa alterou.** O corpo leva a diferença entre o
+  rascunho e o valor que a pessoa viu ao começar a editar, não a diferença contra o motor de
+  agora: a conta manda os campos que ela alterou (`camposAlterados`); a automação, as chaves
+  que ela alterou. Salvar a automação não reenvia política nem perfis.
+- **Valor que muda no motor com a edição aberta** (`useRascunho`, `src/sistema/rascunho.ts`).
+  Sem edição, o formulário acompanha o motor. Com edição, o rascunho é refeito sobre o valor
+  novo: o campo que a pessoa não tocou passa a mostrar o que o motor tem, e não vai no corpo,
+  então o que outra pessoa mudou não é desfeito. Das organizações vai a lista atual do motor,
+  com o que a pessoa acrescentou e sem o que ela tirou (`organizacoesMescladas`). O campo que
+  os dois mexeram, cada um para um valor, aparece no aviso com os dois valores, e a pergunta
+  de ampliação é calculada contra o valor atual do motor. Cada formulário tem o descartar.
+- **O `ok` não é o desfecho.** A automação confere a `config` da resposta contra o enviado,
+  chave a chave (`diferencasDaAutomacao`): "gravou" ou "gravou diferente do pedido". A rota da
   conta não devolve a conta gravada: a tela diz o que pediu, o que o motor disse ter ignorado,
   e manda conferir no estado que chega.
 - **Só salva com o estado em dia.** `impedimentoDeSalvar`: conectado e com o primeiro `state`
-  da conexão atual (`estadoEmDia`). Vale para a conta, a automação e o teto.
+  da conexão atual (`estadoEmDia`). Vale para a conta e a automação.
 - **Ampliar a publicação pergunta antes.** `ampliacoesDaConta` e `ampliacoesDaAutomacao` listam,
   com o efeito exato, o que amplia o que o motor faz ou publica sem clique: ligar a revisão
   automática, trocar esperar por publicar em qualquer dos três desfechos, acrescentar
-  organização e desligar o CI antes de aprovar. Havendo item, a pergunta abre no próprio
-  formulário. O que reduz vai direto. O teto pergunta sempre, com o antes, o depois e se pode
-  pausar ou soltar as revisões automáticas. Revogar sessão pergunta sempre.
+  organização e desligar o CI antes de aprovar. A pergunta da conta diz quando a política nova
+  vale e que a mesa não é reavaliada; a do CI diz primeiro o efeito imediato. O que reduz vai
+  direto. Revogar sessão pergunta sempre.
 - **A tela não manda campo vazio da política.** Vazio faria o motor regravar o padrão.
   `camposAlterados` só manda valor do domínio (`DOMINIO_DA_POLITICA`, conferido por teste
-  contra `lib/settings.js`), e não manda `onCaveats` com `onClean` em espera.
+  contra `lib/settings.js`), e não manda `onCaveats` com `onClean` em espera. Nesse caso o
+  campo é mostrado em espera sem mexer no rascunho, e a nota diz o ajuste: voltar a limpa para
+  publicar devolve o com ressalvas ao valor que estava.
 - **Valores permitidos.** Os modelos vêm do catálogo do motor (`modelos.claude`). Os níveis de
-  esforço e a faixa do paralelismo são cópia conferida por teste contra `lib/parse.js`
-  (`automacao.test.ts`). O teto aceita dólar de zero para cima, com vírgula ou ponto, e dia
-  que existe; o que o motor descartaria calado é erro no campo.
-- **Edição aberta.** `useRascunho`: se o valor muda no motor com a edição aberta, a tela avisa
-  e oferece descartar; sem edição, o formulário acompanha o motor. Cada formulário tem o
-  descartar. Com edição por salvar a tela avisa no topo e segura o fechar e o recarregar da
-  página (`beforeunload`).
+  `effort` e a faixa do paralelismo são cópia conferida por teste contra `lib/parse.js`
+  (`automacao.test.ts`).
+- **Edição por salvar.** A tela avisa no topo e segura o fechar e o recarregar da página
+  (`beforeunload`).
+- **Acessibilidade.** O efeito de cada seletor e de cada checkbox está ligado ao campo por
+  `aria-describedby`. Depois de "Tirar" uma organização o foco vai ao campo de acrescentar.
+  Depois de um salvar o foco vai à região de resultado.
 - **Saúde é o que o motor mediu.** `verificacoesDaSaude` escreve uma linha por verificação, com
   o estado em texto ("OK", "Atenção", "Sem dado"); os rótulos são os de `ambienteDoDoctor`
   (`lib/engine/diagnostico.js`), conferidos por teste. Rodar o diagnóstico de novo não abre
@@ -733,10 +780,10 @@ Regras que valem para quem mexer nela:
 - **Sessão atual.** Revogar a sessão `atual` avisa que este navegador volta ao pareamento, e
   depois do aceite a tela chama `app.esquecerSessao('revogada')`: o token sai daqui e a tela
   vai ao pareamento. Revogar outra pede a lista de novo.
-- **Só leitura.** Jira (sites e credencial), o login e o token do GitHub, a criação e a
-  remoção de perfil do Claude, a chave de API, o login da assinatura, o perfil padrão, os
-  tetos por dia da semana e por data, e as cinco chaves de rede. `bind`, `hostPublico` e
-  `origensPermitidas` mudam só pelo arquivo: tirar a própria origem trancaria a tela para fora.
+- **Só leitura.** Os perfis do Claude (criar, tirar, chave de API, login da assinatura, perfil
+  padrão), o Jira (sites e credencial), o login e o token do GitHub, e as cinco chaves de
+  rede. `bind`, `hostPublico` e `origensPermitidas` mudam só pelo arquivo: tirar a própria
+  origem trancaria a tela para fora.
 
 ### Lacunas do contrato
 
@@ -755,20 +802,24 @@ Regras que valem para quem mexer nela:
   que o GitHub o aceita. A chave de API só tem `temChave`: o teste do perfil não a confere,
   porque custaria uma chamada paga. Validade de verdade só há para o login da assinatura
   (teste do perfil) e para a credencial do Jira (teste de conexão).
-- **A lista de perfis vai e volta inteira, sem versão.** O teto não tem operação por perfil:
-  duas abas salvando ao mesmo tempo se sobrescrevem, e uma lista velha apagaria o perfil
-  criado em outra aba, com a chave dele. O corpo do dado cru, o salvar fechado sem o estado
-  da conexão e a conferência da resposta reduzem a janela, não a fecham. A correção é no
-  motor: uma operação de teto por perfil, como a conta tem em `accounts/edit`.
+- **O gate de orçamento ainda está no motor.** A tela não tem teto, mas um teto gravado no
+  arquivo continua pausando revisão automática até a mudança do motor sair. A tela avisa por
+  perfil, sem o valor.
 - **A rota da conta não devolve a conta gravada.** `POST /api/accounts/edit` responde só
   `ok` e `ignorados`: a conferência do que ficou depende do snapshot seguinte.
+- **As organizações vão como lista inteira, sem versão.** O que a tela manda é a lista atual
+  do motor com a diferença da pessoa, o que fecha o caso de quem viu a mudança chegar; a
+  mudança de outra aba que ainda não chegou a esta é sobrescrita. A correção é no motor:
+  operação de acrescentar e de tirar organização.
+- **A política nova não reavalia a mesa.** Trocar esperar por publicar não publica o que já
+  está em "Precisa de você", e a tela diz isso na pergunta. Não há rota para reavaliar.
 - **A lista de sessões não está no snapshot nem tem evento.** Sessão criada ou revogada em
   outro navegador só aparece ao atualizar a lista.
 - **As regras de review por organização e autor** (`reviewRules`) não são mostradas nem
   editadas: a tela só avisa que existem, porque decidem quem é revisado sozinho.
-- **O teto total de sessões** (`globalParallelReviews`), o intervalo de checagem, a retomada
+- **O limite total de sessões** (`globalParallelReviews`), o intervalo de checagem, a retomada
   de sessão, o modo rápido e as outras preferências que o motor aceita ficaram de fora deste
-  lote. O teto total aparece como nota quando está ligado.
+  lote. O limite total aparece como nota quando está ligado.
 - **Trocar de aba do Farol descarta a edição sem perguntar.** A página só segura o fechar e o
   recarregar.
 - **O diagnóstico não tem mensagem por verificação.** `doctor` traz valores, não frases: os
@@ -858,12 +909,18 @@ O token da sessão fica no `localStorage` da origem do front, que é um só para
   `POST /api/auth/sessions` e a revoga pelo `id` em `POST /api/auth/revoke`, com 5 s de prazo
   para as duas chamadas. As outras abas abertas vão ao pareamento junto, e parear numa aba
   conecta as outras;
-- falha de rede, prazo vencido, rota que recusa ou sessão `atual` fora da lista não impedem o
-  sair local: o token sai deste navegador do mesmo jeito, e a tela de pareamento diz qual dos
-  dois aconteceu (`textoDaSaida`, `src/sistema/sessoes.ts`): a sessão foi revogada no motor,
-  ou só esquecida aqui e continua valendo lá até expirar. Nesse caso ela se revoga em
-  Sistema, Sessões pareadas, a partir de um navegador pareado, ou todas de uma vez com
-  `node tools/farol-parear.js --revogar-todas`;
+- falha de rede, prazo vencido, rota que recusa, sessão `atual` fora da lista ou exceção no
+  caminho não impedem o sair local: o token sai deste navegador do mesmo jeito (`try/finally`),
+  e a tela de pareamento diz o que aconteceu (`textoDaSaida`, `src/sistema/sessoes.ts`). São
+  três desfechos: a sessão foi revogada no motor; nada foi revogado, e ela continua valendo lá
+  até expirar (não deu para pedir a lista, a rota recusou, ou a sessão não estava na lista);
+  ou não deu para confirmar, quando o pedido de revogação saiu e a resposta não chegou (rede,
+  ou o prazo venceu na segunda chamada). Nesse último a tela não afirma nem uma coisa nem
+  outra. Para derrubar a sessão: Sistema, Sessões pareadas, a partir de um navegador pareado,
+  ou todas de uma vez com `node tools/farol-parear.js --revogar-todas`;
 - se o motor já recusava o token (401) quando o Sair o consultou, a tela vai ao pareamento
   pelo 401, com o aviso dele, e não diz que revogou;
+- se outra aba já gravou outro token (pareou de novo) enquanto o Sair corria, esta aba não
+  vai ao pareamento com um token válido guardado: relê o armazenamento e segue pareada com o
+  novo, quer o aviso do navegador (`storage`) tenha chegado antes, quer só o 401;
 - um 401 apaga só o token que foi recusado, nunca o que outra aba acabou de guardar.

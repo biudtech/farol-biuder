@@ -225,24 +225,33 @@ Ainda sem versão publicada.
   e toda mudança que amplia o que o motor publica sozinho (ligar a revisão automática, trocar
   esperar por publicar, acrescentar organização) pergunta antes, dizendo o efeito. Automação
   edita CI antes de aprovar, revisões ao mesmo tempo, modelo e esforço, com o efeito de cada
-  um, e desligar o CI antes de aprovar também pergunta. Perfil do Claude e teto de gasto
-  mostra os perfis, a presença da credencial, o uso do plano, o teste do perfil (que não
-  consome nada) e o teto em dólar por dia e total; mudar o teto pergunta sempre, dizendo se
-  pode pausar ou soltar as revisões automáticas. Jira mostra os sites, a presença da
+  um; desligar o CI antes de aprovar também pergunta, dizendo primeiro o efeito imediato (as
+  aprovações que já esperam o CI são publicadas na varredura seguinte, mesmo com o CI
+  vermelho). Perfil do Claude mostra os perfis, o tipo, a presença da credencial, o uso do
+  plano e o teste do perfil (que não consome nada), só para leitura. Jira mostra os sites, a presença da
   credencial e o teste de conexão. Sessões pareadas lista os navegadores com acesso, com o
   atual marcado, e revoga um por vez; revogar o atual leva este navegador ao pareamento.
   Rede e acesso mostra `bind`, `hostPublico` e `origensPermitidas`, que só mudam pelo arquivo.
-  Nenhum segredo passa pela tela: ela não tem campo para token, chave nem credencial, e o que
-  chegar do motor com cara de segredo é descartado antes de entrar na tela. Cada salvar confere
-  o que o motor respondeu e diz quando ele gravou diferente do pedido. Ficaram só para leitura,
-  e continuam na tela antiga: os sites e a credencial do Jira (o motor aceita trocar o endereço
-  de um site sem pedir a credencial de novo, e isso se corrige nele), a criação de perfil do Claude, a chave de API e
-  o login da assinatura (pedem segredo digitado), o perfil padrão, os tetos por dia da semana
-  e por data e as regras de review por organização e autor.
+  A tela não tem teto de gasto, por decisão de 16/11/2026: o revisor é autônomo e não trava
+  por gasto. O gate de orçamento ainda existe no motor e sai dele em mudança própria; enquanto
+  isso, o perfil que traz teto no arquivo ganha um aviso de que ele ainda pode pausar revisões
+  automáticas. Nenhum segredo passa pela tela: ela não tem campo para token, chave nem
+  credencial. O que chegar do motor em campo de segredo, ou em formato de credencial, é
+  descartado antes de entrar na tela, e num texto para ler (review, erro, aviso, relatório) só
+  o trecho é trocado por "[segredo omitido]". Cada salvar leva só o que a pessoa alterou
+  naquela edição, não desfaz o que outra pessoa mudou nesse meio, confere o que o motor
+  respondeu e diz quando ele gravou diferente do pedido. Trocar esperar por publicar não
+  publica o que já está em "Precisa de você": o motor não reavalia a mesa, e a pergunta diz.
+  Ficaram só para leitura, e continuam na tela antiga: os sites e a credencial do Jira (o
+  motor aceita trocar o endereço de um site sem pedir a credencial de novo, e isso se corrige
+  nele), a criação de perfil do Claude, a chave de API e o login da assinatura (pedem segredo
+  digitado), o perfil padrão e as regras de review por organização e autor.
 - **"Sair" revoga a sessão no motor:** o Sair do front novo passa a pedir ao motor que revogue
   a sessão do navegador antes de apagar o token dele. Se o motor não responde em 5 segundos,
   recusa ou não lista a sessão, o navegador sai do mesmo jeito, e a tela de pareamento diz se
-  a sessão foi revogada no motor ou só esquecida ali, e como derrubá-la nesse caso.
+  a sessão foi revogada no motor, se só foi esquecida ali, ou se não deu para confirmar (o
+  pedido de revogação saiu e a resposta não chegou), e como derrubá-la. Se outra aba pareou de
+  novo nesse meio, a aba segue pareada com o token novo.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
