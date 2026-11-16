@@ -361,3 +361,12 @@ test('a guarda da chave é pura: não muta o patch, e patch sem perfis passa igu
   assert.equal(comChaveGuardada(outro, config), outro);
   assert.equal(comChaveGuardada(null, config), null);
 });
+
+test('endereço só de barras não passa por "vazio": sem a chave é recusado', () => {
+  const config = { claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', apiKey: CHAVE, baseUrl: '' }] };
+  for (const baseUrl of ['/', '//', ' / ']) {
+    const r = recusaDoEndereco({ claudeProfiles: [{ id: 'a', kind: 'apikey', baseUrl }] }, config);
+    assert.equal(r && r.code, 'chave_exigida', `endereço ${JSON.stringify(baseUrl)}`);
+  }
+  assert.equal(recusaDoEndereco({ claudeProfiles: [{ id: 'a', kind: 'apikey', baseUrl: '  ' }] }, config), null, 'só espaço é vazio de verdade');
+});

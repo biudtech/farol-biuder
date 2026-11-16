@@ -43,12 +43,17 @@ function saveClaudeProfiles(profiles, defaultId) {
    some no próximo salvar. Nada foi gravado, então a tela volta ao que o motor guarda. */
 const recusas = new Map();
 
+// Não redesenha nem tira o foco: o endereço digitado continua no campo, e ao digitar a chave os
+// dois vão no mesmo salvar. Tirar o foco dispararia o `change` de um campo de chave pela metade.
 function mostrarRecusa(r) {
-  for (const id of r.perfis || []) recusas.set(id, r.erro || 'O motor recusou esta mudança.');
+  const motivo = r.erro || 'O motor recusou esta mudança.';
   if (r.config && Array.isArray(r.config.claudeProfiles)) estado().config.claudeProfiles = r.config.claudeProfiles;
-  if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
-  renderClaudeProfiles();
-  toast('error', r.erro || 'Erro ao salvar configurações', 5000);
+  for (const id of r.perfis || []) {
+    recusas.set(id, motivo);
+    const lugar = document.querySelector(`.cp-teste-erro[data-recusa="${CSS.escape(id)}"]`);
+    if (lugar) lugar.textContent = motivo;
+  }
+  toast('error', motivo, 5000);
 }
 
 /* Resultado do último teste de cada perfil, por id. Fica na tela, nunca na configuração:
@@ -184,7 +189,9 @@ $('#claudeProfilesManager').addEventListener('click', (e) => {
       patch.claudeProfileId = '';
     }
     renderClaudeProfiles(); renderAccountsManager();
-    api('/api/settings', patch);
+    // a remoção também pode ser recusada (outro perfil do mesmo salvar com endereço pendente):
+    // a tela volta ao que o motor guarda em vez de mostrar removido o que continua lá
+    api('/api/settings', patch).then((r) => { if (r?.code === 'chave_exigida') { mostrarRecusa(r); renderClaudeProfiles(); } });
     return;
   }
   // A2: testar é explícito e não altera nada (confere a forma do perfil, sem chamada paga)
