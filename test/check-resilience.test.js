@@ -13,7 +13,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const { BASELINE_FILE, STATE_DIR } = await import('../lib/paths.js');
-const { localDay } = await import('../lib/engine/usage.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
 
@@ -107,71 +106,35 @@ test('PR ignorado não ressuscita depois de um ciclo com busca falha', async () 
   assert.equal(e.queue.length, 0, 'não volta pra fila sozinho');
 });
 
-// gate de orçamento por perfil de chave de API dentro do toReview real do check()
-// (não a expressão reimplementada em test/budget-gate.test.js): usa o checkEngine()
-// desta suíte, que já monta um Engine real com todo colaborador de rede stubado.
-test('check(): perfil apikey com orçamento estourado NÃO dispara auto-revisão', async () => {
-  const e = checkEngine();
-  e.config.conta.autoReview = true; // aqui, ao contrário do default da suíte, queremos que dispare
-  e.token = 'tok-me';
-  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 }];
-  e.config.claudeProfileId = 'p1';
-  e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
-  const launchCalls = [];
-  e.launchReview = (urls, mode) => { launchCalls.push({ urls, mode }); };
-  e.scenario = { panorama: [PR], mine: [PR], reviewed: [] };
-  await e.check('test');
-  assert.equal(e.queue.length, 1, 'o PR segue na fila (só o disparo automático é que pausa)');
-  assert.equal(launchCalls.length, 0, 'orçamento estourado barra o launchReview automático');
-});
-
-test('check(): perfil apikey dentro do orçamento dispara auto-revisão normalmente', async () => {
+test('check(): conta com revisão automática dispara a auto-revisão do PR pedido', async () => {
   const e = checkEngine();
   e.config.conta.autoReview = true;
   e.token = 'tok-me';
-  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
+  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '' }];
   e.config.claudeProfileId = 'p1';
   const launchCalls = [];
   e.launchReview = (urls, mode) => { launchCalls.push({ urls, mode }); };
   e.scenario = { panorama: [PR], mine: [PR], reviewed: [] };
   await e.check('test');
   assert.equal(e.queue.length, 1);
-  assert.equal(launchCalls.length, 1, 'sem estouro, o disparo automático roda normalmente');
+  assert.equal(launchCalls.length, 1, 'o disparo automático roda');
   assert.deepEqual(launchCalls[0].urls, [PR.url], 'o PR elegível é o que entra no launchReview');
-});
-
-// retry pós-falha transitória (server.js chama this.retryTargets(...) e relança via
-// this.launchReview): o MESMO caminho do incidente de 04/08/2026 (sessão falha,
-// classificada como transitória, fica em retryAfterNet e é relançada sozinha todo
-// ciclo). Tinha ZERO noção de orçamento antes desta correção.
-test('check(): retry pós-transitório NÃO relança PR de conta com orçamento estourado', async () => {
-  const e = checkEngine();
-  e.token = 'tok-me';
-  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 }];
-  e.config.claudeProfileId = 'p1';
-  e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
-  e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR } });
-  const launchCalls = [];
-  e.launchReview = (urls, mode) => { launchCalls.push({ urls, mode }); };
-  e.scenario = { panorama: [], mine: [], reviewed: [] };
-  await e.check('test');
-  assert.equal(launchCalls.length, 0, 'orçamento estourado barra o relançamento automático do retry');
 });
 
 // Desde a Task 2.3 (G9), o retry pós-rede relança o OBJETO guardado via
 // enqueueHeadless (não mais launchReview por URL): preserva requested/knownHead
 // do objeto guardado em vez de re-resolver pela URL (que os derrubava).
-test('check(): retry pós-transitório relança normalmente quando o perfil está dentro do orçamento', async () => {
+test('check(): retry pós-transitório relança o objeto guardado', async () => {
   const e = checkEngine();
   e.token = 'tok-me';
-  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
+  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '' }];
   e.config.claudeProfileId = 'p1';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR, requested: true, knownHead: 'c'.repeat(40) } });
   const enqueued = [];
   e.enqueueHeadless = (pr) => { enqueued.push(pr); };
   e.scenario = { panorama: [], mine: [], reviewed: [] };
   await e.check('test');
-  assert.equal(enqueued.length, 1, 'sem estouro, o retry relança como sempre relançou');
+  assert.equal(enqueued.length, 1, 'o retry relança como sempre relançou');
   assert.equal(enqueued[0].url, PR.url);
   assert.equal(enqueued[0].requested, true, 'G9: relança o objeto guardado, requested sobrevive');
   assert.equal(enqueued[0].knownHead, 'c'.repeat(40), 'G9: knownHead sobrevive ao relançamento');
@@ -187,7 +150,7 @@ test('check(): retry pós-transitório relança normalmente quando o perfil est�
 test('check(): PR relançado pelo retry sai da fila visível e volta a visto (card não mente "aguardando você") (G9)', async () => {
   const e = checkEngine();
   e.token = 'tok-me';
-  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
+  e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '' }];
   e.config.claudeProfileId = 'p1';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR, requested: true, knownHead: 'c'.repeat(40) } });
   // estado deixado pela falha transitória original (runOneHeadless): unsee + queue.push,
@@ -201,129 +164,4 @@ test('check(): PR relançado pelo retry sai da fila visível e volta a visto (ca
   assert.equal(enqueued.length, 1, 'relançou o PR');
   assert.equal(e.queue.some(p => p.key === PR.key), false, 'sai da fila visível: o card não pode mostrar Revisar ativo com a revisão já rodando');
   assert.equal(e.seen.has(PR.key), true, 'volta a visto: mesmo efeito que o launchReview produzia no lançamento manual');
-});
-
-// budgetWarned (o toast "orçamento estourado"): deve disparar UMA vez ao estourar,
-// ficar mudo em ciclos seguintes enquanto seguir estourado, e voltar a disparar depois
-// de um ciclo em que o perfil não estava mais bloqueado (destravou e travou de novo).
-// Cobre a correção do finding 4: sem a reconciliação no topo do check(), um perfil que
-// destrava com a fila vazia (ou sem PR elegível) nunca sai do Set e o próximo estouro
-// real fica silencioso.
-test('budgetWarned: toast do orçamento não repete enquanto seguir estourado, mas volta após destravar e travar de novo', async () => {
-  const e = checkEngine();
-  e.config.conta.autoReview = true;
-  e.token = 'tok-me';
-  const profile = { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 };
-  e.config.claudeProfiles = [profile];
-  e.config.claudeProfileId = 'p1';
-  e.launchReview = () => {};
-  const toasts = [];
-  e.on('toast', ev => toasts.push(ev));
-
-  // ciclo 1: estourado, dispara UM toast
-  e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
-  e.scenario = { panorama: [PR], mine: [PR], reviewed: [] };
-  await e.check('test');
-  assert.equal(toasts.filter(t => t.kind === 'error').length, 1, 'primeiro estouro avisa uma vez');
-
-  // ciclo 2: segue estourado, NÃO repete o toast
-  await e.check('test');
-  assert.equal(toasts.filter(t => t.kind === 'error').length, 1, 'estouro contínuo não repete o toast');
-
-  // ciclo 3: perfil destrava (gasto zerado), fila vazia (nenhum PR pra "ver" a
-  // reconciliação pelo caminho do toReview): a reconciliação do topo do check() tem
-  // que tirar o id do Set mesmo assim
-  e.usage.byProfileDay = {};
-  e.scenario = { panorama: [], mine: [], reviewed: [] };
-  await e.check('test');
-  assert.equal(toasts.filter(t => t.kind === 'error').length, 1, 'destravar não gera toast novo');
-
-  // ciclo 4: trava de novo com o mesmo PR: o toast tem que voltar
-  e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
-  e.scenario = { panorama: [PR], mine: [PR], reviewed: [] };
-  await e.check('test');
-  assert.equal(toasts.filter(t => t.kind === 'error').length, 2, 'novo estouro depois de destravar avisa de novo');
-});
-
-// G16: o gate de orçamento (budgetBlockedFor) roda no ENFILEIRAMENTO (toReview,
-// retryTargets). Num lote grande, o teto pode estourar ENTRE a fila e a vez deste
-// PR chegar na boca da sessão. runOneHeadless precisa re-checar imediatamente
-// antes de abrir a sessão: se estourou nesse meio tempo, estaciona (não descarta)
-// em vez de gastar uma sessão que o gate já teria barrado no enfileiramento.
-test('runOneHeadless re-checa o orçamento antes de abrir a sessão (G16)', async () => {
-  const e = checkEngine();
-  e.token = 'tok-me';
-  e.prState = async () => 'OPEN'; // não é o caso do jaMergeado; segue pro gate de orçamento
-  // No enfileiramento (toReview/retryTargets, fora deste teste) o gate ainda estava
-  // livre, e foi assim que o PR chegou até aqui; agora, na boca da sessão, o teto já
-  // estourou (o gasto aconteceu enquanto o PR esperava a vez na fila).
-  e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
-  e.runHeadlessReview = async () => { throw new Error('runHeadlessReview não deveria rodar: o orçamento já tinha estourado'); };
-  e.headlessBusyAccounts.set('me', 1); // slot ocupado pelo escalonador antes de chamar runOneHeadless
-  // estado deixado por uma falha transitória anterior: entrada viva em retryAfterNet
-  // e o PR já marcado como visto (o mesmo estado que os 3 sites irmãos herdam do
-  // catch quando chegam no ramo de estacionamento)
-  e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR } });
-  e.seen.add(PR.key);
-  e.queue = [];
-
-  const toasts = [];
-  e.on('toast', ev => toasts.push(ev));
-
-  await e.runOneHeadless({ ...PR }, 'me');
-
-  assert.equal(e.autoReviewParked.has(PR.key), true, 'PR entra em autoReviewParked (estaciona, não descarta)');
-  assert.equal(e.retryAfterNet.has(PR.key), false, 'C1: retryAfterNet é limpo, senão a entrada órfã desfaz o estacionamento quando o orçamento liberar');
-  assert.equal(e.queue.some(p => p.key === PR.key), true, 'I1: o PR volta pra fila visível, como os outros 3 sites de estacionamento');
-  assert.equal(e.seen.has(PR.key), false, 'I1: volta a não visto, o card não pode sumir da fila pra sempre');
-  assert.equal(e.headlessBusyAccounts.has('me'), false, 'devolve o slot ao escalonador');
-  assert.equal(toasts.filter(t => t.kind === 'info').length, 1, 'um único toast informativo');
-});
-
-// Invariante 4: clique manual nunca é barrado pelos gates automáticos. O limite do plano
-// logo acima já respeitava `pr.manual`, e o orçamento não: com teto 0 (ou estourado) o
-// botão Revisar estacionava o PR de novo, contra o que o guia e a tela prometem.
-test('runOneHeadless: clique manual atravessa o orçamento estourado e abre a sessão', async () => {
-  const e = checkEngine();
-  e.token = 'tok-me';
-  e.prState = async () => 'OPEN';
-  e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
-  let abriu = false;
-  e.runHeadlessReview = async () => { abriu = true; throw new Error('sessão de teste'); };
-  e.headlessBusyAccounts.set('me', 1);
-
-  await e.runOneHeadless({ ...PR, manual: true }, 'me');
-
-  assert.equal(abriu, true, 'o clique abre a sessão mesmo com o orçamento estourado');
-  assert.notEqual(((e.parkedMotivos || {})[PR.key] || {}).tipo, 'orcamento', 'o clique não estaciona por orçamento');
-});
-
-// M3 (revisão final da onda 3): o estouro no meio de um LOTE estaciona PR por PR, e
-// cada um emitia o próprio toast. Lote de 8 PRs = 8 toasts empilhados dizendo a mesma
-// coisa sobre o mesmo perfil, no mesmo segundo. O aviso único é o padrão que o gate de
-// enfileiramento já usa (budgetWarned, reconciliado no topo do check() quando o perfil
-// destrava), e o estacionamento passa a compartilhar o MESMO Set: uma janela de
-// bloqueio, um aviso, venha ele da fila ou da boca da sessão.
-test('runOneHeadless: orçamento estourado avisa UMA vez por perfil, não por PR do lote (M3)', async () => {
-  const e = checkEngine();
-  e.token = 'tok-me';
-  e.prState = async () => 'OPEN';
-  e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
-  e.runHeadlessReview = async () => { throw new Error('não deveria abrir sessão nenhuma'); };
-
-  const toasts = [];
-  e.on('toast', ev => toasts.push(ev));
-
-  const lote = [1, 2, 3].map(n => ({ ...PR, key: `acme/repo#${n}`, url: `https://github.com/acme/repo/pull/${n}` }));
-  for (const pr of lote) {
-    e.headlessBusyAccounts.set('me', 1);
-    await e.runOneHeadless(pr, 'me');
-  }
-
-  for (const pr of lote) {
-    assert.equal(e.autoReviewParked.has(pr.key), true, 'todos os PRs do lote estacionam, o aviso é que não se repete');
-  }
-  assert.equal(toasts.filter(t => t.kind === 'info').length, 1,
-    'três PRs barrados pelo mesmo estouro, um aviso só');
-  assert.equal(e.budgetWarned.has('p1'), true, 'o aviso fica registrado na mesma janela de bloqueio do gate de enfileiramento');
 });

@@ -46,7 +46,6 @@ function engineBase() {
     accountForPr: () => 'eu',
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
-    budgetBlockedFor: () => null,
     // ninguém mais revisando: o gate de pulo (v2.48.4) lê isto e o default do
     // stub é "só eu", pra estes testes seguirem falando só de re-revisão
     outrosRevisando: () => [],
@@ -135,7 +134,6 @@ test('reReviewTargets: respeita as mesmas travas de conta do toReview', () => {
     e => { e.tokenFor = () => null; },
     e => { e.autoReviewParked.add(KEY); },
     e => { e.retryAfterNet.set(KEY, { tries: 1 }); },
-    e => { e.budgetBlockedFor = () => ({ id: 'p1', label: 'perfil' }); },
   ]) {
     const e = engineBase();
     quebra(e);

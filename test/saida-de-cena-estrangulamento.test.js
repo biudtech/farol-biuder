@@ -47,7 +47,6 @@ function engineFalso(extra = {}) {
     accountForPr: () => 'eu',
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
-    budgetBlockedFor: () => null,
     outrosRevisando: () => [],
     markSeen() { },
     unsee() { },

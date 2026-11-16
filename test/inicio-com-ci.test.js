@@ -16,7 +16,6 @@ function motor() {
   e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.aguardarCiParaRevisar = true;
   e.prState = async () => 'OPEN';
-  e.budgetBlockedFor = () => null;
   e.writeInflight = e.pushState = e.processHeadless = e.saveDecisions = e.log = () => {};
   e.queue = [];
   e.decisions = { pending: [], resolved: [] };

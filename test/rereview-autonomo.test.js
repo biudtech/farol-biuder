@@ -33,7 +33,6 @@ function engineBase() {
   e.accountForPr = () => 'conta';
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
-  e.budgetBlockedFor = () => false;
   e.outrosRevisando = () => [];
   return e;
 }

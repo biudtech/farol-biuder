@@ -50,7 +50,6 @@ function engineBase() {
   e.accountForPr = () => 'revisora';
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
-  e.budgetBlockedFor = () => false;
   e.outrosRevisando = () => [];
   e.ghEnv = () => ({});
   e.saveReReviewLaunched = () => {};
@@ -99,7 +98,6 @@ test('cada trava que segura o round vira um motivo nomeado, nunca silêncio', ()
   const casos = [
     ['auto_desligado', (e) => { e.autoReviewFor = () => false; }],
     ['sem_token', (e) => { e.tokenFor = () => ''; }],
-    ['orcamento', (e) => { e.budgetBlockedFor = () => ({ id: 'p', label: 'P' }); }],
     ['rascunho', (e) => { e.panorama[0].isDraft = true; }],
     ['saiu_de_cena', (e) => { e.skipComentado[KEY] = { at: 1, quem: 'ana' }; }],
     ['ancora', (e) => { e.reReviewLaunched[KEY] = { head: H2, dia: '2026-09-09', rodadas: 1 }; }],

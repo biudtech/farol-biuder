@@ -72,13 +72,6 @@ test('sem perfil utilizável não há autenticação, e a sessão nem abre', asy
   }
 });
 
-test('orçamento estourado pausa a automação do perfil, sem trocar de perfil', () => {
-  const e = engineCom([A, B], { claudeProfileId: 'ka' });
-  e.profileBudgetStatus = (p) => ({ blocked: p.id === 'ka' });
-  assert.equal(e.resolveClaudeAuth('eu').id, 'ka');
-  assert.equal(e.budgetBlockedFor('eu').id, 'ka');
-});
-
 /* ---------- limite do plano ---------- */
 
 test('o limite fica no perfil, e o PR espera o reset sem estacionar e sem abrir sessão', async () => {
@@ -188,7 +181,6 @@ test('o perfil de chave de API é do Claude, e o limite é lido pela tabela úni
   assert.equal(prov.provedorDoPerfil(A).id, 'claude');
   assert.equal(prov.provedorDoPerfil({ kind: 'dir' }).id, 'claude', 'a assinatura por pasta voltou em 15/11/2026');
   assert.equal(prov.provedorDoPerfil({ kind: 'maquina' }), null, 'outros formatos não são mais de provedor nenhum');
-  assert.equal(prov.semCustoEmDolar('apikey'), false);
   assert.deepEqual(prov.modeloDoProvedor({ reviewModel: 'opus', reviewEffort: 'high' }, 'claude'), { modelo: 'opus', esforco: 'high' });
   const lido = prov.limiteDaMensagem('claude', "You've hit your usage limit · resets 5:50pm", agora);
   assert.equal(lido.limite, true);

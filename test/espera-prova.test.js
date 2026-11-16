@@ -717,21 +717,6 @@ test('automação desligada pausa a recuperação sem descartar a pendência', a
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'a pausa pela automação avisou uma vez');
 });
 
-test('orçamento restabelecido libera a recuperação sem exigir uma revisão manual', async () => {
-  const e = motor();
-  const d = await revisado(e, INCOMPLETA);
-  e.autoReviewParked.add(PR.key);
-  e.parkedMotivos[PR.key] = { tipo: 'orcamento', motivo: 'limite de orçamento' };
-  e.budgetBlockedFor = () => true;
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.match(d.esperaProva.impedimento, /Orçamento/);
-  e.budgetBlockedFor = () => false;
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.equal(e.autoReviewParked.has(PR.key), false);
-  assert.equal(d.esperaProva.impedimento, '');
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'a pausa pelo orçamento avisou uma vez');
-});
-
 test('clique avulso e PR da própria conta não ganham recuperação com publicação automática', () => {
   const e = motor();
   const r = { headSha: HEAD, approvalEvidence: ['avaliação técnica atual ausente'] };

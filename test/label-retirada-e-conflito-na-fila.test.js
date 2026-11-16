@@ -27,7 +27,7 @@ function engineBase() {
     autoReviewParked: new Set(), parkedMotivos: {}, retryAfterNet: new Map(), skipComentado: {},
     headlessQueue: [], activeReviews: new Map(), queue: [], config: {}, seen: new Set(),
     accountForPr: () => 'revisora', autoReviewFor: () => true, tokenFor: () => 'tok',
-    budgetBlockedFor: () => false, outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
+    outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
     emit: () => {}, pushState: () => {}, refreshTokens: async () => {},
   });
   return e;

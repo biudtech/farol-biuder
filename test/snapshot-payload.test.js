@@ -29,14 +29,13 @@ function consumoSintetico() {
   return e;
 }
 
-test('snapshot conserva gráficos, sessões e orçamento, com menos bytes e sem podar o diário', t => {
+test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diário', t => {
   const e = consumoSintetico();
   const antes = structuredClone({ usage: e.usage, sessions: e.usageSessions });
   const completo = usage.usageSummary(e);
   const compacto = snapshotUsage(completo);
   assert.equal(compacto.totals, completo.totals);
   assert.equal(compacto.auditoria, completo.auditoria);
-  assert.equal(compacto.budgets, completo.budgets);
   assert.equal(compacto.retentionDays, completo.retentionDays);
   assert.equal(compacto.recentSessions.length, 100);
   assert.equal(compacto.series.length, 120);
@@ -64,15 +63,13 @@ test('snapshot conserva gráficos, sessões e orçamento, com menos bytes e sem 
   t.diagnostic(`Consumo sintético, 120 dias: ${bytesAntes} -> ${bytesDepois} bytes; diário e renderização preservados.`);
 });
 
-test('cache compacto reutiliza séries, mas atualiza orçamento, falhas e novos registros', () => {
+test('cache compacto reutiliza séries, mas atualiza falhas e novos registros', () => {
   const e = consumoSintetico();
   const original = usage.usageSummary(e);
   const first = snapshotUsage(original);
-  const novoOrcamento = [{ id: 'perfil', blocked: true, today: 1, capHoje: 1 }];
   const novasFalhas = { 'a-0': { motivo: 'falha posterior' } };
-  const next = snapshotUsage({ ...original, budgets: novoOrcamento, falhasPorSessao: novasFalhas });
+  const next = snapshotUsage({ ...original, falhasPorSessao: novasFalhas });
   assert.equal(next.series, first.series);
-  assert.equal(next.budgets, novoOrcamento);
   assert.equal(next.falhasPorSessao, novasFalhas);
   const trocouSessao = snapshotUsage({ ...original, recentSessions: [{ ...original.recentSessions[0], status: 'descartada' }] });
   assert.equal(trocouSessao.recentSessions[0].status, 'descartada');

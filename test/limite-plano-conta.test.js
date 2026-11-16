@@ -141,7 +141,7 @@ test('limite sem hora de reset trava a assinatura por um prazo estimado de uma h
   assert.equal(e.retryAfterNet.get('o/r#7').notBefore, ate, 'o PR espera o prazo, sem relançar a cada ciclo');
 });
 
-test('a fila automática não enfileira PR de assinatura no limite (mesmo lugar do gate de orçamento)', () => {
+test('a fila automática não enfileira PR de assinatura no limite', () => {
   const fonte = fs.readFileSync(path.join(import.meta.dirname, '..', 'server.js'), 'utf8');
   const i = fonte.indexOf('const toReview = ');
   assert.ok(i >= 0);

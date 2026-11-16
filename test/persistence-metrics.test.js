@@ -106,23 +106,6 @@ test('API pública applyUsage invalida séries mesmo antes de uma gravação por
   assert.equal(summary.series.length, 1); assert.equal(summary.series[0].sessions, 1);
   assert.equal(summary.stackedSeries.byKind[0].items.find(i => i.name === 'review').costUsd, 2);
 });
-test('virada do dia e alterações de orçamento não congelam no cache histórico', () => {
-  const time = clock('2026-10-24T23:59:00-03:00');
-  try {
-    const e = engine(); e.config.claudeProfiles = [{ id: 'p1', kind: 'apikey', label: 'Primeiro', budgetDaily: 1 }];
-    usage.recordUsage(e, 'a1', 'fixture', event(2), 'claude-opus-4-8', 'p1');
-    const before = usage.usageSummary(e); assert.equal(before.budgets[0].blocked, true); assert.equal(before.budgets[0].today, 2);
-    time.set('2026-10-25T00:01:00-03:00');
-    const after = usage.usageSummary(e); assert.equal(after.budgets[0].today, 0);
-    assert.equal(after.series, before.series, 'histórico é reutilizado sem congelar o orçamento dinâmico');
-    e.config.claudeProfiles[0].budgetDates = { '2026-10-25': 0 };
-    e.config.claudeProfiles[0].label = 'Alterado';
-    const capped = usage.usageSummary(e); assert.equal(capped.budgets[0].blocked, true); assert.equal(capped.budgets[0].capHoje, 0);
-    assert.equal(capped.budgets[0].label, 'Alterado'); assert.equal(capped.budgets[0].capOrigem, 'data');
-    e.config.claudeProfiles[0].budgetDates['2026-10-25'] = 10;
-    assert.equal(usage.usageSummary(e).budgets[0].blocked, false);
-  } finally { time.restore(); }
-});
 test('falhas das sessões continuam atuais mesmo com séries históricas reaproveitadas', () => {
   const e = engine(); usage.recordUsage(e, 'a1', 'fixture', event(1), 'claude-opus-4-8');
   const before = usage.usageSummary(e); assert.equal(before.falhasPorSessao.a1, undefined);

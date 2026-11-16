@@ -113,60 +113,6 @@ test('normalizeClaudeProfiles: kind desconhecido é ignorado, mesmo com chave', 
   assert.deepEqual(out, []);
 });
 
-test('normalizeClaudeProfiles: budgetDaily/budgetTotal válidos são aceitos como número', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: 3, budgetTotal: 20.5 },
-  ]);
-  assert.equal(out[0].budgetDaily, 3);
-  assert.equal(out[0].budgetTotal, 20.5);
-});
-
-test('normalizeClaudeProfiles: budgetDaily/budgetTotal malformados (string não numérica, negativo) viram undefined', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: 'abc', budgetTotal: -5 },
-  ]);
-  assert.equal(out[0].budgetDaily, undefined);
-  assert.equal(out[0].budgetTotal, undefined);
-});
-
-test('normalizeClaudeProfiles: budgetSince válido (YYYY-MM-DD) é aceito, formato errado vira undefined', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetSince: '2026-08-01' },
-    { id: 'p2', label: 'P2', kind: 'apikey', apiKey: 'sk-2', budgetSince: '01/08/2026' },
-    { id: 'p3', label: 'P3', kind: 'apikey', apiKey: 'sk-3' },
-  ]);
-  assert.equal(out[0].budgetSince, '2026-08-01');
-  assert.equal(out[1].budgetSince, undefined);
-  assert.equal(out[2].budgetSince, undefined);
-});
-
-test('normalizeClaudeProfiles: budgetDaily/budgetTotal rejeita tipos garbage (array, boolean, objeto) como undefined', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: [5], budgetTotal: true },
-    { id: 'p2', label: 'P2', kind: 'apikey', apiKey: 'sk-2', budgetDaily: { value: 10 }, budgetTotal: null },
-  ]);
-  assert.equal(out[0].budgetDaily, undefined);
-  assert.equal(out[0].budgetTotal, undefined);
-  assert.equal(out[1].budgetDaily, undefined);
-  assert.equal(out[1].budgetTotal, undefined);
-});
-
-test('normalizeClaudeProfiles: budgetDaily/budgetTotal vazio (string vazia) vira undefined, não zero', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: '', budgetTotal: '  ' },
-  ]);
-  assert.equal(out[0].budgetDaily, undefined);
-  assert.equal(out[0].budgetTotal, undefined);
-});
-
-test('normalizeClaudeProfiles: budgetDaily/budgetTotal aceitam zero explícito (número 0) e strings numéricas válidas', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: 0, budgetTotal: '3.5' },
-  ]);
-  assert.equal(out[0].budgetDaily, 0);
-  assert.equal(out[0].budgetTotal, 3.5);
-});
-
 test('sanitizeClaudeDir: rejeita aspas duplas e quebras de linha, aceita o resto', () => {
   assert.equal(sanitizeClaudeDir('C:\\ok'), 'C:\\ok');
   assert.equal(sanitizeClaudeDir('C:\\bad"quote'), '');
@@ -230,45 +176,4 @@ test('logStamp: carimbo do farol.log em Brasília com offset explícito, nunca U
   assert.equal(logStamp(new Date('2026-08-17T01:04:36Z')), '2026-08-16 22:04:36 -03:00');
   // formato estável pro LINHA_RE do log-taxonomy: data hora offset, tudo ASCII
   assert.match(logStamp(), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{2}:\d{2}$/);
-});
-
-/* ---------- orçamento por dia da semana e por data (v2.50.0) ---------- */
-
-test('normalizeClaudeProfiles: aceita teto por dia da semana e por data', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: { '0': 10, '6': 20 }, budgetDates: { '2026-08-25': 300 } },
-  ]);
-  assert.deepEqual(out[0].budgetByWeekday, { '0': 10, '6': 20 });
-  assert.deepEqual(out[0].budgetDates, { '2026-08-25': 300 });
-});
-
-// config editada à mão com UMA linha torta não pode levar as outras seis junto
-test('normalizeClaudeProfiles: chave ou valor invalido é descartado sem levar o resto', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1',
-      budgetByWeekday: { '1': 10, '9': 5, 'seg': 7, '2': -1, '3': [4] },
-      budgetDates: { '2026-08-25': 300, '25/08/2026': 50, '2026-08-26': 'lixo' } },
-  ]);
-  assert.deepEqual(out[0].budgetByWeekday, { '1': 10 });
-  assert.deepEqual(out[0].budgetDates, { '2026-08-25': 300 });
-});
-
-test('normalizeClaudeProfiles: mapa vazio ou nao-objeto vira campo ausente', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: {}, budgetDates: 'nao-e-objeto' },
-    { id: 'p2', label: 'P2', kind: 'apikey', apiKey: 'sk-2', budgetByWeekday: ['array'], budgetDates: null },
-  ]);
-  assert.equal('budgetByWeekday' in out[0], false);
-  assert.equal('budgetDates' in out[0], false);
-  assert.equal('budgetByWeekday' in out[1], false);
-  assert.equal('budgetDates' in out[1], false);
-});
-
-// 0 é um teto VÁLIDO ("não gaste nada neste dia"), não ausência de teto
-test('normalizeClaudeProfiles: teto 0 sobrevive nos mapas', () => {
-  const out = normalizeClaudeProfiles([
-    { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetByWeekday: { '0': 0 }, budgetDates: { '2026-08-25': 0 } },
-  ]);
-  assert.equal(out[0].budgetByWeekday['0'], 0);
-  assert.equal(out[0].budgetDates['2026-08-25'], 0);
 });

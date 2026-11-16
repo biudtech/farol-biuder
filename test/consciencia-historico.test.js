@@ -347,7 +347,6 @@ function engineFiacao(extra = {}) {
     accountForPr: () => 'eu',
     autoReviewFor: () => true,
     tokenFor: () => 'tok',
-    budgetBlockedFor: () => null,
     outrosRevisando: () => [],
     markSeen(k) { this.seenKeys.push(k); },
     unsee() { },

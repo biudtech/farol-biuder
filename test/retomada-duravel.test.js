@@ -173,7 +173,6 @@ test('PR fechado enquanto aguardava o retry: a referência sai junto', async () 
   const e = motor();
   semear(e);
   e.token = 'tok';
-  e.budgetBlockedFor = () => false;
   e.prState = async () => 'CLOSED';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR }, notBefore: null });
   await e._repescarRetry([], new Set());
@@ -215,18 +214,6 @@ test('queda transitória: a referência vai pro disco com head e contexto e sobr
   assert.equal(item.perfilId, 'ka');
   const b = new Engine();
   assert.equal(b.retomadas.get(PR.key).retomarSid, SID, 'o retry deixou de ser só memória');
-});
-
-test('orçamento estourado na boca da sessão: estaciona sem abrir sessão e sem consumir a retomada', async () => {
-  const e = motor();
-  semear(e);
-  e.prState = async () => 'OPEN';
-  e.budgetBlockedFor = () => ({ id: 'p1', label: 'Perfil 1' });
-  await e.runOneHeadless({ ...PR }, 'trabalho');
-  assert.equal(e.chamadas.length, 0);
-  assert.equal(e.autoReviewParked.has(PR.key), true);
-  assert.equal(e.retomadas.get(PR.key).retomarSid, SID);
-  assert.equal(linha(PR.key).estado, 'pendente');
 });
 
 test('PR já mergeado na boca da sessão: a referência é consumida', async () => {

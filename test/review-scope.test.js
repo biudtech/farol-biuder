@@ -21,7 +21,6 @@ function engine(reviewRules, autoReview = true) {
   e.writeInflight = () => {};
   e.processHeadless = () => {};
   e.bloqueiaAutomatico = async () => false;
-  e.budgetBlockedFor = () => null;
   e.outrosRevisando = () => [];
   e.prState = async () => 'OPEN';
   e.jaResolvido = async () => false;
@@ -77,7 +76,6 @@ test('disparo inicial com a conta só na fila lança a organização Automático
   const e = engine(SO_CNBB, false);
   e.queue = [pr(), CNBB()];
   e._registraPulo = () => false;
-  e._registraCotaCedida = () => false;
   let lancados;
   e.launchReview = async urls => { lancados = urls; };
   await e._dispararAutomacoes(e.queue);
@@ -92,17 +90,6 @@ test('nova rodada por push com a conta só na fila segue a regra da organizaçã
     e.staleInfo = { [CNBB().key]: { stale: true, head: 'novo', lastState: 'CHANGES_REQUESTED' } };
     assert.equal(e.reReviewTargets(new Set()).length, esperado);
   }
-});
-
-test('a cota do perfil conta a conta só na fila que tem organização Automático', () => {
-  const e = engine(SO_CNBB, false);
-  e.profileOfAccount = () => ({ id: 'perfil' });
-  e.queue = [CNBB()];
-  assert.deepEqual(e.contasDoPerfil('perfil').map(c => [c.user, c.waiting]), [['revisor', true]]);
-  e.queue = [pr()];
-  assert.deepEqual(e.contasDoPerfil('perfil').map(c => [c.user, c.waiting]), [['revisor', false]], 'PR da organização na fila não disputa a cota');
-  e.config.conta.reviewRules = undefined;
-  assert.deepEqual(e.contasDoPerfil('perfil'), [], 'sem regra Automático, a conta só na fila não disputa');
 });
 
 test('reconferência técnica e recuperação da prova seguem a regra, nos dois sentidos', async () => {
@@ -274,7 +261,6 @@ test('disparo inicial seleciona apenas organização e autor permitidos', async 
   const e = engine({ acme: { mode: 'manual', authors: { joao: 'auto' } }, externa: { mode: 'manual' } });
   e.queue = [pr(), { ...pr('maria'), key: 'acme/app#2', url: 'https://github.com/acme/app/pull/2' }, pr('joao', 'externa')];
   e._registraPulo = () => false;
-  e._registraCotaCedida = () => false;
   let lancados;
   e.launchReview = async urls => { lancados = urls; };
   await e._dispararAutomacoes(e.queue);

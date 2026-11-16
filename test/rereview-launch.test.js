@@ -42,7 +42,6 @@ function engineBase() {
   e.accountForPr = () => 'conta';
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
-  e.budgetBlockedFor = () => false;
   e.outrosRevisando = () => [];
   e.headlessQueue = [];
   e.activeReviews = new Map();

@@ -110,16 +110,6 @@ test('retry esgotado estaciona com tipo esgotado e o último erro como motivo', 
   assert.match(e.parkedMotivos['o/r#3'].motivo, /fetch failed/);
 });
 
-test('orçamento estourado na boca da sessão estaciona com tipo orcamento', async () => {
-  const e = engineBase();
-  e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
-  e.runHeadlessReview = async () => { throw new Error('não deveria abrir sessão'); };
-  e.headlessBusyAccounts.set('eu', 1);
-  await e.runOneHeadless(prDe('o/r#4'), 'eu');
-  assert.equal(e.parkedMotivos['o/r#4'].tipo, 'orcamento');
-  assert.match(e.parkedMotivos['o/r#4'].motivo, /P1/);
-});
-
 test('o motivo persiste entre reinícios da Engine, no MESMO arquivo do estacionamento', async () => {
   const e1 = engineBase();
   e1.runHeadlessReview = async () => { throw new Error(MSG_CONTRATO); };
@@ -215,7 +205,6 @@ test('queueCardHtml: PR estacionado mostra quando parou, por que, e que o Revisa
 test('queueCardHtml: cada tipo de estacionamento tem a própria frase', () => {
   const de = (tipo) => P.queueCardHtml(PR, { people: {}, mark: MARK, parked: { 'acme/api#7': { at: '2026-09-03T16:21:56Z', motivo: 'm', tipo } } });
   assert.match(de('cancelado'), /cancelada por você/);
-  assert.match(de('orcamento'), /orçamento/);
   assert.match(de('esgotado'), /várias vezes/);
   assert.match(de('falha'), /falhou/);
 });
