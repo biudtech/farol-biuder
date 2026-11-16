@@ -141,8 +141,7 @@ test('_repescarRetry relança o objeto guardado, preservando retomarSid e knownH
   const enfileirados = [];
   const pr = { ...PR_BASE, retomarSid: 'abc-12345', knownHead: HEAD, requested: true };
   e.accountForPr = () => 'trabalho';
-  e.isMuted = () => false;
-  e.tokens = { trabalho: 'tok' };
+  e.token = 'tok';
   e.budgetBlockedFor = () => false;
   e.skipComentado = {};
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });

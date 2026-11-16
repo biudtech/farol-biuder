@@ -43,9 +43,8 @@ beforeEach(() => { chamadas.length = 0; runImpl = null; });
 
 function engineDe(conta) {
   const e = new Engine();
-  e.config.accounts = [{ user: conta, owners: ['biudtech'] }];
+  e.config.conta = { user: conta, owners: ['biudtech'] };
   e.token = 'tok';
-  e.tokens = { [conta]: 'tok' };
   e.tokenOk = true;
   e.refreshTokens = async () => { };
   e.log = () => { };
@@ -186,7 +185,7 @@ test('gate sem engine.myPRs: autor igual à conta em caixa diferente nunca sai c
 test('gate sem engine.myPRs: o desfecho do PR próprio posta COMMENT', () => {
   const e = engineDe('wandersonbiuder');
   delete e.myPRs;
-  e.config.accounts[0].onClean = 'approve';
+  e.config.conta.onClean = 'approve';
   const pr = { ...prDo('WandersonBiuder'), requested: true };
   const resultado = { ...aprovavel(), headSha: 'abc123', payloads: { approve: { event: 'APPROVE', body: 'ok' }, comment: { event: 'COMMENT', body: 'Leitura completa.' } } };
   const novo = caminhoNovo(e, pr, resultado, { ok: false, motivo: 'pr_proprio' }, false);

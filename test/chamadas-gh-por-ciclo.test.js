@@ -56,7 +56,6 @@ function motor() {
   e.skipComentado = {};
   e.pushbackScanned = {};
   e.pushbacks = {};
-  e.isMuted = () => false;
   e.budgetBlockedFor = () => false;
   e.reviewActions = () => Object.fromEntries(PRS('').map((p) => [p.key, { kind: 'request_changes' }]));
   e.log = () => { };

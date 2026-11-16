@@ -7,7 +7,7 @@ assertExternalNodeRuntime();
 // headless do Claude Code.
 // Zero dependencias externas: roda com Node puro (e dentro do Electron).
 import fs from 'node:fs';
-import { politicaDeInicio, normalizarRegras, contaTemAutomatico } from './lib/engine/review-scope.js';
+import { politicaDeInicio, contaTemAutomatico } from './lib/engine/review-scope.js';
 import path from 'node:path';
 import os from 'node:os';
 import { EventEmitter } from 'node:events';
@@ -28,9 +28,8 @@ import { DEFAULT_PORT, TEMPOS } from './lib/constants.js';
 import env from './lib/env.js';
 import { modelLabel, isPermanentBranch, logStamp, semControle } from './lib/format.js';
 import { gravarLinhaDeLog } from './lib/log-arquivo.js';
-import { ACCOUNT_PALETTE } from './lib/taxonomy.js'; // resto da taxonomia é usado nos colaboradores (review/pushback)
 import {
-  parseAccounts, parsePeople, migrateSeniorityToPeople,
+  parsePeople, migrateSeniorityToPeople,
   normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
@@ -41,9 +40,7 @@ import decisionMod from './lib/engine/decision.js';
 import ghMod from './lib/engine/gh-queries.js';
 import limiteGhMod from './lib/engine/limite-gh.js';
 import { chavesEstacionadas, ancoraAposReinicio } from './lib/engine/estado-do-boot.js';
-import contasGh from './lib/engine/contas-gh.js';
 import contasConfig from './lib/engine/contas-config.js';
-import contaQueAge from './lib/engine/conta-que-age.js';
 import versaoClaude from './lib/engine/versao-claude.js';
 import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
 import sessionMod from './lib/engine/session.js';
@@ -71,7 +68,7 @@ import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
 import quotaMod from './lib/engine/quota.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
-import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar } from './lib/settings.js';
+import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { parseJiraSites, maskJiraSites } from './lib/jira/sites.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
@@ -105,7 +102,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 // continua puro (sem importar meio mundo) e existe UM lugar só onde a lista de
 // parsers usada por preferência é montada.
 const PARSERS = {
-  parseAccounts, parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
+  parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort,
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind,
 };
@@ -129,13 +126,13 @@ class Engine extends EventEmitter {
   constructor() {
     super();
     const warn = (m) => this.log('WARN', m); // corrupção de estado precisa aparecer no farol.log
-    const configSalva = readJson(CONFIG_FILE, {}, warn);
-    this.config = { ...DEFAULTS, ...configSalva };
+    // config.json antigo (várias contas, modo simples, chaves do que saiu) vira o formato de hoje sem lançar
+    this.configCrua = readJson(CONFIG_FILE, {}, warn); // o arquivo como veio, para o rastro da carga (contas-config.js)
+    this.config = { ...DEFAULTS, ...normalizarConfig(this.configCrua) };
     // bind é só de arquivo e chega ao listen e à allowlist: saneia aqui, uma vez, para todo leitor
     this.config.bind = sanear('bind', this.config.bind, this.config, PARSERS);
     delete this.config.autoOpenReview; // chave antiga (sessão interativa); o modo autonomo tem semantica nova
-    this.config.accounts = parseAccounts(this.config.accounts); // normaliza (array de {user,owners})
-    // idem accounts/people acima: config.json pode estar malformado (editado à mão,
+    // config.json pode estar malformado (editado à mão,
     // corrompido, versão antiga/incompatível) — normaliza no boot pra nunca derrubar o
     // app (achado de auditoria: claudeProfiles como string/objeto lançava TypeError em
     // resolveClaudeConfigDir/allClaudeAuthInfo/ghEnv, quebrando toda busca de PR).
@@ -162,7 +159,6 @@ class Engine extends EventEmitter {
     this.config.people = migrateSeniorityToPeople(this.config.seniority, parsePeople(this.config.people));
     delete this.config.seniority;
     env.setDebugSpawns(this.config.debugSpawns); // espelha pro logger de spawns
-    this.tokens = {};                // token por conta (login -> token), preenchido no refreshTokens
     this.status = 'starting';        // starting | checking | idle | error
     this.lastError = null;
     this.lastCheckAt = null;
@@ -359,9 +355,8 @@ class Engine extends EventEmitter {
         if (fs.existsSync(src)) { ensureDir(path.dirname(dst)); fs.copyFileSync(src, dst); }
       }
     } catch { /* sincronizar o protocolo nunca derruba o boot */ }
-    // a política mora só na conta (30/09/2026): a migração escreve em cada conta o que ela
-    // já fazia e descarta as chaves gerais antigas (lib/engine/contas-migracao.js)
-    if (contasConfig.aplicarMigracao(this) || !fs.existsSync(CONFIG_FILE)) this.saveConfig();
+    // a política mora só na conta (30/09/2026): vai por extenso para o arquivo, com o rastro do que a carga decidiu
+    if (contasConfig.aoCarregar(this) || !fs.existsSync(CONFIG_FILE)) this.saveConfig();
     this.ensureWorkspaceTrusted();
   }
 
@@ -482,55 +477,15 @@ class Engine extends EventEmitter {
   unsee(key) { if (this.seen.delete(key)) this.saveSeen(); }
 
   // --- GitHub ---
-  // lista normalizada de contas monitoradas: [{ user, owners }]. Sem config.accounts,
-  // cai na conta unica legada (ghUser + owners). A [0] e a primaria.
-  accountList() {
-    const raw = Array.isArray(this.config.accounts) ? this.config.accounts : [];
-    let base = raw
-      .map(a => ({
-        user: String((a && a.user) || '').trim(),
-        owners: Array.isArray(a && a.owners) ? a.owners.map(String).map(s => s.trim()).filter(Boolean) : [],
-        label: (a && a.label != null) ? String(a.label).trim() : '',
-        color: (a && a.color != null) ? String(a.color).trim() : '',
-        kind: (a && a.kind != null) ? String(a.kind).trim() : '',
-        muted: !!(a && a.muted),
-        ...(a?.reviewRules && { reviewRules: normalizarRegras(a.reviewRules) }),
-        // política de automação da conta: a gravação escreve os quatro por extenso
-        autoReview: (a && (a.autoReview === true || a.autoReview === false)) ? a.autoReview : undefined,
-        onClean: (a && (a.onClean === 'approve' || a.onClean === 'wait')) ? a.onClean : undefined,
-        onCaveats: (a && (a.onCaveats === 'approve' || a.onCaveats === 'wait')) ? a.onCaveats : undefined,
-        onReject: (a && (a.onReject === 'request_changes' || a.onReject === 'wait')) ? a.onReject : undefined,
-        // perfil de assinatura Claude desta conta (undefined = herda o global/legado)
-        claudeProfileId: (a && a.claudeProfileId != null && String(a.claudeProfileId).trim()) ? String(a.claudeProfileId).trim() : undefined,
-        // peso na cota do perfil: a regra de peso válido é do parseAccounts, que saneia toda
-        // gravação; sem esta linha o rateio da cota lia sempre `undefined` (25/09/2026)
-        budgetWeight: (a && a.budgetWeight) || undefined,
-        // padrões do time que a revisão considera (lib/engine/padroes-do-time.js); a tela
-        // de Contas e o prompt leem daqui, e o saneamento é o do parseAccounts
-        padroesRevisao: (a && typeof a.padroesRevisao === 'string' && a.padroesRevisao) || undefined
-      }))
-      .filter(a => a.user);
-    if (!base.length) base = [{ user: (this.config.ghUser || '').trim(), owners: this.config.owners || [], label: '', color: '', kind: '', muted: false }];
-    // preenche defaults de identidade: rótulo = login (ou org), cor estável por índice
-    return base.map((a, i) => ({
-      ...a,
-      label: a.label || a.user || a.owners[0] || 'conta',
-      color: a.color || ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length],
-      muted: !!a.muted
-    }));
-  }
-
-  // login está numa conta silenciada? (fora do painel Todas, dos avisos e da auto-revisão)
-  isMuted(user) {
-    const u = String(user || '').toLowerCase();
-    return this.accountList().some(a => a.user.toLowerCase() === u && a.muted);
-  }
+  // Uma instância, uma conta revisora (corte do lote 14). A lista tem UM elemento, vindo de
+  // config.conta: os consumidores do núcleo seguem iterando, e a fila não foi reescrita.
+  accountList() { return [contasConfig.contaConfigurada(this.config)]; }
 
   // política de automação POR CONTA, lida só da conta. A regra de cada pergunta mora em
   // lib/engine/contas-config.js, junto da edição e do rastro.
   // ao chegar PR nesta conta: revisar sozinho (headless) ou só colocar na fila?
   autoReviewFor(user) { return contasConfig.revisaSozinho(this, user); }
-  // nome da conta nos motivos do card (apelido, senão o login); vazio para "todas"
+  // nome da conta nos motivos do card (o login); vazio para "todas"
   scopeLabel(scope) { return contasConfig.rotuloDaConta(this, scope); }
   inicioAutomaticoDaFila() { return Object.fromEntries(this.queue.map(p => [p.key, politicaDeInicio(this, p).automatic])); }
   // quando aprovável: 'approve' (postar sozinho) ou 'wait' (aguardar você). clean = sem ressalvas
@@ -538,100 +493,75 @@ class Engine extends EventEmitter {
   // quando a revisão pede mudanças: 'request_changes' (reprovar sozinho, opt-in por conta) ou 'wait'
   rejectPolicyFor(user) { return contasConfig.acaoAoReprovar(this, user); }
 
-  // login da conta primaria (identidade default; chamadas gh nao ligadas a um PR)
-  primaryUser() { return (this.accountList()[0] || {}).user || this.config.ghUser || ''; }
+  // login da conta revisora (a única identidade que age no GitHub)
+  primaryUser() { return this.accountList()[0].user; }
 
-  // uniao dos owners de todas as contas (panorama, candidatos de reviewer)
-  allOwners() {
-    const set = new Set();
-    for (const a of this.accountList()) for (const o of a.owners) set.add(o);
-    return [...set];
-  }
-
-  // conta monitorada dona de um owner (org); fallback = primaria. Com duas contas na org,
-  // a que AGE vence: ativa com token, depois ativa, e a silenciada só quando ninguém mais
-  // cobre (06/10/2026, lib/engine/conta-que-age.js)
-  accountForOwner(owner) {
-    const dona = contaQueAge.contaDaOrg(this, owner);
-    return (dona && dona.user) || this.primaryUser();
-  }
-
-  // conta a usar num PR: a que ele ja veio marcada, senao pela org do repo
-  // por que o PR ficou com essa conta (busca, org ou reserva); ver lib/engine/contas-gh.js
-  atribuicaoDoPr(pr) { return contasGh.atribuicaoDoPr(this, pr); }
-
-  accountForPr(pr) { return contasGh.accountForPr(this, pr); }
+  // todo PR é da conta revisora: a marca `account` de um item antigo não escolhe identidade
+  accountForPr() { return this.primaryUser(); }
 
   // sem conta configurada, detecta a conta ativa do gh desta maquina: cada
   // pessoa do time usa a propria autenticacao, nada viaja com o app
   async resolveAccount() {
-    if (this.config.ghUser) return;
+    if (this.primaryUser()) return;
     const r = await io.run('gh', ['api', 'user', '--jq', '.login'], { env: { ...process.env, GH_PAGER: 'cat' } });
     const login = r.ok ? r.stdout.trim() : '';
     if (login) {
-      this.config.ghUser = login;
-      contasConfig.aplicarMigracao(this); // a conta detectada nasce com a política por extenso
+      contasConfig.contaDetectada(this, login); // herda a política gravada antes do login (contas-config.js)
       this.saveConfig();
       this.emit('toast', { kind: 'info', text: `Conta do GitHub detectada: @${login}. Ajuste em Sistema se usar outra.` });
     }
   }
 
-  // token por conta (map login -> token), buscado on-demand do gh (nunca persistido).
-  // this.token = token da conta primaria (compat com chamadas gh sem conta).
+  // token da conta revisora, buscado on-demand do gh (nunca persistido)
   async refreshTokens() {
-    this.tokens = this.tokens || {};
-    const primary = this.primaryUser();
-    let primaryOk = false;
+    let ok = false;
     for (const acc of this.accountList()) {
       if (!acc.user) continue;
       const r = await io.run('gh', ['auth', 'token', '--user', acc.user]);
-      const tok = r.ok ? r.stdout.trim() : null;
-      if (tok) this.tokens[acc.user] = tok; else delete this.tokens[acc.user];
-      // sem token é estado: uma linha quando começa, não uma por ciclo (contas-gh.js)
-      if (tok) contasGh.tokenVoltou(this, acc.user);
-      else contasGh.avisarSemToken(this, acc.user, `gh auth token --user ${acc.user} falhou: ${r.stderr.trim() || 'sem saida'} (conta sem token no gh)`);
-      if (acc.user === primary) { this.token = tok; primaryOk = !!tok; }
+      this.token = r.ok ? r.stdout.trim() || null : null;
+      ok = !!this.token;
+      // sem token é estado: uma linha quando começa, não uma por ciclo (gh-queries.js)
+      if (ok) ghMod.tokenVoltou(this, acc.user);
+      else ghMod.avisarSemToken(this, acc.user, `gh auth token --user ${acc.user} falhou: ${r.stderr.trim() || 'sem saida'} (conta sem token no gh)`);
     }
-    this.tokenOk = primaryOk;
-    return primaryOk;
+    this.tokenOk = ok;
+    return ok;
   }
 
   // compat: alguns caminhos chamam refreshToken (singular)
   async refreshToken() { return this.refreshTokens(); }
 
-  // token da conta pedida, SEM herdar identidade (raiz A1): user vazio = primária
-  // (único fallback legítimo, pedido explícito da conta padrão, ex.: update.js).
-  // Conta pedida sem token = null; quem precisa agir checa isso ANTES de rodar gh.
-  tokenFor(user) {
-    if (!user) return this.token || null;
-    return (this.tokens && this.tokens[user]) || null;
-  }
+  // O token da conta revisora, o único que existe. O login pedido não escolhe token: um
+  // login diferente do configurado (item antigo, chamador desatualizado) é ignorado, e
+  // quem precisa agir continua checando isto ANTES de rodar gh.
+  tokenFor() { return this.token || null; }
 
-  // env de child-process com o GH_TOKEN da conta pedida (sem user = primaria, o único
-  // fallback legítimo, ex.: update.js). Conta pedida SEM token = erro alto (raiz A1):
-  // herdar o token de outra conta fazia busca @me, review postado e sessão Claude
-  // saírem com a identidade errada. Os call sites de produção pré-checam com tokenFor
-  // e caem nos seus caminhos de falha; este throw é a rede de segurança fail-loud
-  // (mesma filosofia do ehMac/ehWin da UI). A frase "sem token no gh" é contrato
-  // com a classificação de erro transitório do runOneHeadless.
+  // env de child-process com o GH_TOKEN da conta revisora. O argumento não escolhe
+  // identidade (login diferente de config.conta.user é ignorado); ele só diz que o chamador
+  // AGE em nome de uma conta, e aí sem token é erro alto (raiz A1): seguir sem GH_TOKEN
+  // faria o gh cair no chaveiro ou no ambiente e a busca @me, o review postado e a sessão
+  // Claude sairiam com a identidade errada. Sem user é o caminho legado do doctor e do
+  // boot, que nunca lança. Os call sites de produção pré-checam com tokenFor e caem nos
+  // seus caminhos de falha; este throw é a rede de segurança fail-loud. A frase "sem token
+  // no gh" é contrato com a classificação de erro transitório do runOneHeadless.
   ghEnv(user) {
     const env = { ...process.env, GH_PAGER: 'cat', PAGER: 'cat', GH_PROMPT_DISABLED: '1' };
-    const tok = this.tokenFor(user);
-    if (user && !tok) throw new Error(`conta ${user} sem token no gh (rode: gh auth login --user ${user})`);
+    const conta = this.primaryUser();
+    const tok = this.tokenFor();
+    if (user && !tok) throw new Error(`conta ${conta || user} sem token no gh (rode: gh auth login --user ${conta || user})`);
     // limpa ANTES de setar, pela mesma razão do applyClaudeAuthEnv: o env parte de
     // { ...process.env }, e um token exportado no shell de quem abriu o Farol é
     // identidade herdada igual à do A1, só que vinda de fora. Sem token resolvido
-    // (primária sem token, caminho legado do doctor/boot) o filho saía agindo como
-    // o dono daquela variável, calado; agora o gh cai no próprio keyring, que é o
-    // que "sem token" sempre quis dizer. As DUAS variáveis porque o gh lê as duas
-    // no github.com (GH_TOKEN vence, GITHUB_TOKEN é a reserva) e limpar uma só
-    // deixaria a mesma herança entrar pela vizinha.
+    // (caminho legado do doctor/boot) o filho saía agindo como o dono daquela variável,
+    // calado; agora o gh cai no próprio keyring, que é o que "sem token" sempre quis
+    // dizer. As DUAS variáveis porque o gh lê as duas no github.com (GH_TOKEN vence,
+    // GITHUB_TOKEN é a reserva) e limpar uma só deixaria a mesma herança entrar pela vizinha.
     delete env.GH_TOKEN;
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
-    // perfil do Claude (assinatura ou chave de API) que o Farol usa pra esta conta: ver resolveClaudeAuth
-    // (perfil por conta > perfil padrão do Farol > primeiro perfil utilizável).
-    applyClaudeAuthEnv(env, this.resolveClaudeAuth(user));
+    // perfil do Claude (assinatura ou chave de API) que o Farol usa: ver resolveClaudeAuth
+    // (perfil padrão do Farol > primeiro perfil utilizável).
+    applyClaudeAuthEnv(env, this.resolveClaudeAuth());
     return env;
   }
 
@@ -747,13 +677,10 @@ class Engine extends EventEmitter {
   async _coletarPanorama() {
       await this.resolveAccount();
       await this.refreshTokens();
-      await contasGh.atualizarContasGh(this);
       const accounts = this.accountList();
 
-      // painel: todos os PRs abertos das orgs monitoradas (sem alerta). Cada conta
-      // busca nas SUAS orgs com o proprio token; dedup por chave pelo G18 (a conta capaz
-      // vence a silenciada ou sem token; empate, a 1a), igual ao da fila logo abaixo:
-      // 1a conta vencendo, um PR de terceiro na org ficava com a silenciada (06/10/2026)
+      // painel: todos os PRs abertos das orgs monitoradas (sem alerta), com o token da
+      // conta revisora; dedup por chave (o mesmo PR não entra duas vezes)
       const panoramaMap = new Map();
       let anyOk = false;
       // G15: owners cuja busca RESPONDEU neste ciclo (list !== null). A poda do
@@ -773,7 +700,7 @@ class Engine extends EventEmitter {
           if (list === null) continue;
           anyOk = true;
           ownersOk.add(String(owner).toLowerCase());
-          for (const pr of list) contaQueAge.guardarPelaCapaz(this, panoramaMap, pr, acc.user);
+          for (const pr of list) if (!panoramaMap.has(pr.key)) panoramaMap.set(pr.key, pr);
         }
       }
       const panorama = [...panoramaMap.values()];
@@ -786,13 +713,9 @@ class Engine extends EventEmitter {
         const part = await this.searchPRs(['--review-requested=@me'], acc.user);
         if (part === null) continue;
         mineAnyOk = true;
-        // G18: o mesmo PR pode chegar por duas contas (time com as duas). A
-        // conta CAPAZ de agir (não silenciada, com token) vence a incapaz;
-        // empate mantém a primeira, o comportamento de sempre.
-        for (const pr of part) contaQueAge.guardarPelaCapaz(this, mineMap, pr, acc.user);
+        for (const pr of part) if (!mineMap.has(pr.key)) mineMap.set(pr.key, pr);
       }
       if (mineAnyOk) mine = [...mineMap.values()];
-      if (mine) contasGh.registrarPedidos(this, mine);
       if (mine === null && !anyOk) throw new Error('todas as buscas gh falharam (veja o log)');
 
       // indicador no panorama: PRs que EU ja revisei (qualquer conta, inclusive fora
@@ -887,10 +810,6 @@ class Engine extends EventEmitter {
   }
 
   async _dispararAutomacoes(fresh) {
-      // contas silenciadas seguem monitoradas (aparecem ao selecionar a conta), mas
-      // ficam fora dos avisos de PR novo e da auto-revisão: nada de barulho nem de
-      // revisar sozinho o PR-teste abandonado.
-      const freshActive = fresh.filter(p => !this.isMuted(this.accountForPr(p)));
       // auto-revisão respeita a política POR CONTA e vale pra TODA a fila elegível,
       // não só os que acabaram de chegar: ligar "revisa na hora" numa conta passa a
       // valer pros PRs que JÁ estavam esperando (era o gap de "configurei e não agiu").
@@ -909,7 +828,7 @@ class Engine extends EventEmitter {
       const foraDeCena = [];
       const toReview = this.queue.filter(p => {
         const acct = this.accountForPr(p);
-        if (this.isMuted(acct) || !this.tokenFor(acct)) return false;
+        if (!this.tokenFor(acct)) return false;
         // conta, organização e autor numa decisão só (review-scope.js): Automático na organização
         // revisa sozinho mesmo com a conta só na fila
         if (!politicaDeInicio(this, p).automatic) return false;
@@ -945,9 +864,9 @@ class Engine extends EventEmitter {
         if (this._registraCotaCedida(acct)) return false;
         return true;
       });
-      if (freshActive.length > 0) {
+      if (fresh.length > 0) {
         // `auto` fala dos PRs que ACABARAM de chegar, não de qualquer PR da fila automática
-        this.emit('new-prs', { items: freshActive, total: this.queue.filter(p => !this.isMuted(this.accountForPr(p))).length, auto: freshActive.some(p => toReview.some(t => t.key === p.key)) });
+        this.emit('new-prs', { items: fresh, total: this.queue.length, auto: fresh.some(p => toReview.some(t => t.key === p.key)) });
       }
       if (toReview.length) this.launchReview(toReview.map(p => p.url), 'auto');
       // fire-and-forget, no padrão do scanPushbacks: sair de cena é cortesia com quem
@@ -1179,11 +1098,10 @@ class Engine extends EventEmitter {
     this.checkNow();
   }
 
-  // qual AUTENTICAÇÃO usar pras sessões desta conta GitHub. Cascata: 1) accounts[].claudeProfileId
-  // da própria conta; 2) claudeProfileId global (padrão do Farol); 3) o primeiro perfil utilizável,
-  // de assinatura ou de chave de API. null = sem perfil utilizável (a sessão não abre;
-  // lib/engine/perfil-claude.js).
-  resolveClaudeAuth(user) { return perfilMod.authDaConta(this.config, user); }
+  // qual AUTENTICAÇÃO usar pras sessões. Cascata: 1) claudeProfileId (padrão do Farol);
+  // 2) o primeiro perfil utilizável, de assinatura ou de chave de API. null = sem perfil
+  // utilizável (a sessão não abre; lib/engine/perfil-claude.js).
+  resolveClaudeAuth() { return perfilMod.authDaConta(this.config); }
 
   // status de TODOS os perfis salvos, pro doctor mostrar quem está pronto: chave preenchida
   // ou pasta da assinatura com login gravado. Não abre o CLI nem toca a rede.
@@ -1220,7 +1138,7 @@ class Engine extends EventEmitter {
       home: HOME,
       workspace: WORKSPACE,
       claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
-      ...perfilMod.prontidaoParaDoctor(this.config, primary), // o perfil que o motor vai usar tem credencial?
+      ...perfilMod.prontidaoParaDoctor(this.config), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
     };
     if (forcarVersaoClaude || this.claudeVersao) {
@@ -1236,7 +1154,7 @@ class Engine extends EventEmitter {
   updateSettings(patch, origem) {
     const previous = this.config;
     this.config = { ...previous };
-    let intervalChanged = false, userChanged = false;
+    let intervalChanged = false;
     const politicaAntes = contasConfig.retratoDaPolitica(this.config);
     // itera o PATCH, não a allowlist: é o que permite VER a chave que ninguém
     // reconhece e devolvê-la em `ignoradas`, em vez de deixar a tela dizer
@@ -1244,33 +1162,19 @@ class Engine extends EventEmitter {
     const ignoradas = [];
     for (const k of Object.keys(patch || {})) {
       if (!EDITAVEIS.has(k)) { ignoradas.push(k); continue; }
-      // O saneamento inteiro vive na tabela (lib/settings.js). Aqui ficam só os efeitos
-      // colaterais, que são de ciclo de vida do engine e não do valor: reprogramar o
-      // polling e invalidar o token quando a identidade muda.
-      let v = this.sanearPreferencia(k, patch[k]);
+      // O saneamento inteiro vive na tabela (lib/settings.js). Aqui fica só o efeito
+      // colateral, que é de ciclo de vida do engine e não do valor: reprogramar o polling.
       if (k === 'intervalSeconds') intervalChanged = true;
-      if (k === 'accounts') {
-        // só re-autentica se as CONTAS (user/owners) mudaram; editar rótulo, cor,
-        // tipo ou silenciar não mexe em token, então não força um re-login/re-check.
-        const sig = arr => JSON.stringify((arr || []).map(a => [String(a.user).toLowerCase(), (a.owners || []).map(o => String(o).toLowerCase()).sort()]));
-        if (sig(v) !== sig(this.config.accounts)) userChanged = true;
-      }
-      if (k === 'ghUser') userChanged = userChanged || v !== this.config.ghUser;
-      this.config[k] = v;
+      this.config[k] = this.sanearPreferencia(k, patch[k]);
     }
-    contasConfig.normalizarDepoisDeAplicar(this, patch);
     try { this.saveConfig(); }
     catch (error) { this.config = previous; throw error; }
     contasConfig.registrarMudancas(this, contasConfig.mudancasDePolitica(politicaAntes, contasConfig.retratoDaPolitica(this.config)), origem);
     env.setDebugSpawns(this.config.debugSpawns); // liga/desliga o logger depois de salvar
-    if (userChanged) { this.token = null; this.tokenOk = false; this.tokens = {}; }
-    if (intervalChanged || userChanged) this.checkNow();
+    if (intervalChanged) this.checkNow();
     // perfil (lista ou padrão global) mudou: o badge do perfil de chave de API (doctor.claudeAuth)
     // fica desatualizado até o próximo boot ou clique em "Reverificar" - recalcula na hora
-    // pra badge refletir o estado real logo após salvar. NÃO inclui 'accounts': editar
-    // cor/rótulo/tipo/org/claudeProfileId de uma conta não muda o resultado de
-    // allClaudeAuthInfo() (ela só lê claudeProfiles), então redisparar doctor() aqui só
-    // gastava 3 subprocessos à toa (achado da revisão final).
+    // pra badge refletir o estado real logo após salvar.
     if ('claudeProfiles' in patch || 'claudeProfileId' in patch) {
       this.doctor().catch(() => {});
     }
@@ -1283,7 +1187,7 @@ class Engine extends EventEmitter {
     return { ok: true, ignoradas };
   }
   origemDe(userAgent) { return contasConfig.origemDaRequisicao(userAgent); }
-  // conta editada por OPERAÇÃO sobre a config atual, nunca pela lista que a tela tinha
+  // conta editada por OPERAÇÃO sobre a config atual, nunca pelo que a tela tinha na memória
   editarConta(op, origem) { return contasConfig.editarConta(this, op, origem); }
 
   // Credencial do Jira: colaborador lib/jira/credentials.js, único lugar que lê ou
@@ -1322,12 +1226,8 @@ class Engine extends EventEmitter {
       error: this.lastError,
       baseline: this.baseline ??= lerBaseline(BASELINE_FILE),   // desde quando vigia (lido uma vez)
       account: { user: this.primaryUser(), tokenOk: this.tokenOk },
-      // a projecao de cada conta pra tela mora em lib/engine/contas-gh.js, junto do resto
-      // do que este app sabe sobre conta: o snapshot aqui so junta as pecas
-      accounts: contasGh.projecaoDasContas(this),
-      // contas do gh x contas do Farol: login não monitorado, conta sem login, org em duas
-      // contas e org sugerida (lib/engine/contas-gh.js)
-      contasGh: contasGh.diagnosticoDoEngine(this),
+      // lista de UM: a conta revisora como a tela a vê (lib/engine/contas-config.js)
+      accounts: contasConfig.contasParaTela(this),
       pushbacks: this.pushbacks,
       config: { ...this.config },
       // lista mascarada dos sites do Jira: mesmos campos do config, mais só a
@@ -1416,7 +1316,7 @@ class Engine extends EventEmitter {
     return (this.config.claudeProfiles || []).find(x => x.id === auth.id) || null;
   }
 
-  /* Contas ATIVAS que dividem um perfil (Política 2). Ativa = não silenciada e com
+  /* Contas ATIVAS que dividem um perfil (Política 2). Ativa = com
      revisão automática ligada: quem não revisa sozinho não disputa cota, e incluí-la no
      divisor encolheria a fatia de quem de fato trabalha.
 
@@ -1430,16 +1330,15 @@ class Engine extends EventEmitter {
     for (const p of this.queue) {
       const dona = String(this.accountForPr(p) || '').toLowerCase();
       if (!dona) continue;
-      if (this.isMuted(dona) || !this.tokenFor(dona) || !politicaDeInicio(this, p).automatic) continue;
+      if (!this.tokenFor(dona) || !politicaDeInicio(this, p).automatic) continue;
       if (this.autoReviewParked.has(p.key) || this.skipComentado[p.key]) continue;
       espera.add(dona);
     }
     return this.accountList()
-      .filter(a => a && a.user && !this.isMuted(a.user) && contaTemAutomatico(this, a.user))
+      .filter(a => a && a.user && contaTemAutomatico(this, a.user))
       .filter(a => { const pf = this.profileOfAccount(a.user); return pf && pf.id === profileId; })
       .map(a => ({
         user: String(a.user).toLowerCase(),
-        weight: a.budgetWeight,
         waiting: espera.has(String(a.user).toLowerCase()),
       }));
   }
@@ -1576,7 +1475,7 @@ class Engine extends EventEmitter {
     if (this.inflightRecuperado && this.inflightRecuperado.length) {
       const presos = this.inflightRecuperado;
       this.inflightRecuperado = [];
-      // os tokens ANTES da limpeza: `this.tokens` nasce vazio no construtor e só é
+      // o token ANTES da limpeza: `this.token` nasce vazio no construtor e só é
       // preenchido pelo refreshTokens de dentro do check(), que roda depois daqui.
       // Sem isto, o `if (!engine.tokenFor(acc)) continue` do limparLabelsOrfas caía
       // em TODA iteração, de forma síncrona, e a cura da label presa nunca removeu
@@ -1607,10 +1506,10 @@ function start(onReady) {
   return { engine, server, port: engine.config.port };
 }
 
-const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
+const farol = { start, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch,
   normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv };
 export default farol;
-export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch, parseAccounts,
+export { start, registrarSaidaOrdenada, HOME, WORKSPACE, Engine, modelLabel, isPermanentBranch,
   normalizeClaudeProfiles, normalizeClaudeProfileId, applyClaudeAuthEnv };
 
 // execucao direta: modo servidor (`node server.js`)

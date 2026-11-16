@@ -49,8 +49,7 @@ function prDaFila(n, extra) {
 function novoEngine() {
   const engine = new Engine();
   engine.token = 'token-falso';
-  engine.tokens = { eu: 'token-falso' };
-  engine.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  engine.config.conta = { user: 'eu', owners: ['acme'] };
   engine.saveDecisions = () => { };
   engine.pushState = () => { };
   engine.refreshTokens = async () => { };
@@ -106,6 +105,18 @@ function arquivoAutor(login) {
   return path.join(FAROL_HOME, 'workspace', 'state', 'authors', `${login}.md`);
 }
 
+
+// Item que carrega `account` de outra conta (pendência ou retomada de instalação antiga) roda e
+// posta como a revisora. Com a marca antiga gravada na decisão, a retirada do pedido de mudanças
+// automático nunca achava o pedido (pedidosAutomaticos compara a conta) e a prova da sessão
+// ficava sem decisão concluída.
+test('recordDecision grava a conta revisora, não a marca de conta que o item trouxe', () => {
+  const engine = novoEngine();
+  const item = engine.recordDecision({ ...PR, account: 'conta-de-outra-instalacao' }, resultado(), { status: 'auto_rejected' });
+  assert.equal(item.pr.account, engine.accountForPr(PR));
+  assert.equal(item.pr.account, engine.primaryUser());
+  assert.notEqual(item.pr.account, '');
+});
 
 test('recordDecision ignora o pr do envelope: a identidade vem da fila', () => {
   const engine = novoEngine();
@@ -185,7 +196,7 @@ test('caminho automático: auto-approve grava decisão e memória com a identida
 test('caminho automático: auto-reject também atribui a memória pela fila', async () => {
   runImpl = roteadorPost();
   const engine = novoEngine();
-  engine.config.accounts = [{ user: 'eu', owners: ['acme'], onReject: 'request_changes' }];
+  engine.config.conta = { user: 'eu', owners: ['acme'], onReject: 'request_changes' };
   const meuPR = prDaFila(44, { requested: true });
   engine.runClaudeStream = async () => ({
     text: JSON.stringify({

@@ -59,7 +59,6 @@ test('o PR que saiu da fila e espera vaga vira linha na fila de execução, só 
   const snap = snapshot();
   const esperando = { key: 'acme/app#5', repo: 'acme/app', number: 5, url: 'https://github.com/acme/app/pull/5', account: 'alice', title: 'Na espera', author: 'autora', updatedAt: new Date().toISOString() };
   snap.headlessWaiting = ['acme/app#5'];
-  snap.headlessWaitingContas = { 'acme/app#5': 'alice' };
   snap.headlessWaitingPrs = [esperando];
   receber(snap);
   const html = $('#queue').innerHTML;

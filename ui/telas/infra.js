@@ -2,7 +2,6 @@
    feedback visual de operações assíncronas). */
 
 import { esc, opDismissDelay, opTransition } from '../pure.js';
-import { escopo } from './estado.js';
 import { comAutorizacao } from '../transporte.js';
 
 export const $ = (s) => document.querySelector(s);
@@ -257,7 +256,7 @@ const TEXTO_DA_LISTA_VAZIA = {
 export function textoDaListaVazia(vs) {
   const f = TEXTO_DA_LISTA_VAZIA[vs];
   if (f) return f();
-  return `Nenhum PR aberto ${escopo() === 'all' ? 'nas organizações monitoradas' : 'nesta conta'}.`;
+  return 'Nenhum PR aberto nas organizações monitoradas.';
 }
 
 // a dimensão escolhe de qual mapa do envelope sair e onde estão os nomes das camadas
@@ -270,18 +269,6 @@ export const DIMENSAO_DO_CONSUMO = {
 export function tituloDaNotificacao(auto, n) {
   if (auto) return n === 1 ? 'PR novo, na fila da revisão automática' : `${n} PRs novos, na fila da revisão automática`;
   return n === 1 ? 'PR aguardando sua revisão' : `${n} PRs aguardando sua revisão`;
-}
-
-// conta silenciada mostra a pausa; as demais mostram a contagem, quando há o que contar
-export function selo(a, showCounts, att) {
-  if (a.muted) return '<span class="seg-pause">⏸</span>';
-  return showCounts && att ? `<span class="seg-count">${att}</span>` : '';
-}
-
-// '__all__' passa tudo; usuário nomeado compara sem caixa; vazio pede entrada SEM dono
-export function doUsuario(dono, user) {
-  if (user === '__all__') return true;
-  return user ? dono.toLowerCase() === user.toLowerCase() : !dono;
 }
 
 // três estados, e o que não é 'running' nem 'done' é erro: o ícone não inventa um

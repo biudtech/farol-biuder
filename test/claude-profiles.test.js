@@ -16,19 +16,21 @@ after(() => { try { fs.rmSync(HOME, { recursive: true, force: true }); } catch {
 
 const CHAVE = (id, extra = {}) => ({ id, label: `Chave ${id}`, kind: 'apikey', apiKey: `sk-ant-${id}`, baseUrl: '', ...extra });
 
-test('resolveClaudeAuth: perfil apikey da conta vence o padrão global', () => {
+test('resolveClaudeAuth: o perfil padrão vale para a conta revisora; não existe mais perfil próprio por conta', () => {
   const engine = new Engine();
   engine.config.claudeProfiles = [CHAVE('trabalho'), { id: 'chave-pessoal', label: 'Chave pessoal', kind: 'apikey', apiKey: 'sk-ant-123', baseUrl: '' }];
-  engine.config.claudeProfileId = 'trabalho';
-  engine.config.accounts = [{ user: 'bob', owners: ['x'], claudeProfileId: 'chave-pessoal' }];
+  engine.config.claudeProfileId = 'chave-pessoal';
+  // campo antigo gravado à mão na conta: ninguém lê
+  engine.config.conta = { user: 'bob', owners: ['x'], claudeProfileId: 'trabalho' };
   assert.deepEqual(engine.resolveClaudeAuth('bob'), { kind: 'apikey', id: 'chave-pessoal', apiKey: 'sk-ant-123', baseUrl: '' });
+  assert.equal('claudeProfileId' in engine.accountList()[0], false);
 });
 
 test('resolveClaudeAuth: padrão global apikey, conta sem override', () => {
   const engine = new Engine();
   engine.config.claudeProfiles = [{ id: 'chave', label: 'Chave', kind: 'apikey', apiKey: 'sk-ant-456', baseUrl: 'https://proxy.x' }];
   engine.config.claudeProfileId = 'chave';
-  engine.config.accounts = [{ user: 'carol', owners: [] }];
+  engine.config.conta = { user: 'carol', owners: [] };
   assert.deepEqual(engine.resolveClaudeAuth('carol'), { kind: 'apikey', id: 'chave', apiKey: 'sk-ant-456', baseUrl: 'https://proxy.x' });
 });
 
@@ -75,7 +77,7 @@ test('ghEnv: perfil apikey seta ANTHROPIC_API_KEY/BASE_URL, nunca CLAUDE_CONFIG_
   const engine = new Engine();
   engine.config.claudeProfiles = [{ id: 'chave', label: 'Chave', kind: 'apikey', apiKey: 'sk-ant-abc', baseUrl: 'https://proxy.x' }];
   engine.config.claudeProfileId = 'chave';
-  engine.tokens = { bob: 't-b' };
+  engine.token = 't-b';
   const env = engine.ghEnv('bob');
   assert.equal(env.ANTHROPIC_API_KEY, 'sk-ant-abc');
   assert.equal(env.ANTHROPIC_BASE_URL, 'https://proxy.x');
@@ -86,7 +88,7 @@ test('ghEnv: perfil apikey sem baseUrl não seta ANTHROPIC_BASE_URL', () => {
   const engine = new Engine();
   engine.config.claudeProfiles = [{ id: 'chave', label: 'Chave', kind: 'apikey', apiKey: 'sk-ant-abc', baseUrl: '' }];
   engine.config.claudeProfileId = 'chave';
-  engine.tokens = { bob: 't-b' };
+  engine.token = 't-b';
   const env = engine.ghEnv('bob');
   assert.equal('ANTHROPIC_BASE_URL' in env, false);
 });
@@ -98,7 +100,7 @@ test('ghEnv: credencial herdada da máquina não sobrevive ao perfil escolhido, 
   };
   comEnvDaMaquina(heranca, () => {
     const engine = new Engine();
-    engine.tokens = { bob: 't-b' };
+    engine.token = 't-b';
     engine.config.claudeProfiles = [{ id: 'chave', label: 'Chave', kind: 'apikey', apiKey: 'sk-ant-perfil', baseUrl: '' }];
     engine.config.claudeProfileId = 'chave';
     const env = engine.ghEnv('bob');
@@ -152,25 +154,17 @@ test('updateSettings: persiste claudeProfiles e claudeProfileId globais, e desca
   assert.equal(engine.config.claudeProfileId, 'trabalho');
 });
 
-test('updateSettings: persiste claudeProfileId por conta via accounts[]', () => {
+test('editar a conta NÃO redispara doctor (allClaudeAuthInfo não lê a conta)', async () => {
   const engine = new Engine();
-  engine.updateSettings({
-    accounts: [{ user: 'bob', owners: ['biudtech'], claudeProfileId: 'trabalho' }]
-  });
-  assert.equal(engine.config.accounts[0].claudeProfileId, 'trabalho');
-  assert.equal(engine.accountList()[0].claudeProfileId, 'trabalho');
-  const snap = engine.snapshot();
-  assert.equal(snap.accounts[0].claudeProfileId, 'trabalho');
-});
-
-test('updateSettings: accounts sozinho NÃO redispara doctor (allClaudeAuthInfo não lê accounts)', async () => {
-  const engine = new Engine();
+  engine.pushState = () => { };
+  engine.checkNow = () => { };
+  engine.config.conta = { user: 'dave', owners: [] };
   let doctorCalls = 0;
   const originalDoctor = engine.doctor.bind(engine);
   engine.doctor = (...args) => { doctorCalls++; return originalDoctor(...args); };
-  engine.updateSettings({ accounts: [{ user: 'dave', owners: [] }] });
+  assert.equal(engine.editarConta({ tipo: 'editar', user: 'dave', campos: { owners: ['acme'] } }).ok, true);
   await new Promise(r => setTimeout(r, 30));
-  assert.equal(doctorCalls, 0, 'editar accounts não deveria recalcular doctor - achado da revisão final');
+  assert.equal(doctorCalls, 0, 'editar a conta não deveria recalcular doctor - achado da revisão final');
 });
 
 test('updateSettings: claudeProfiles/claudeProfileId continuam disparando doctor normalmente', async () => {
@@ -200,7 +194,7 @@ test('boot com config.json malformado (claudeProfiles string, claudeProfileId n�
     const e = new Engine();
     const auth = e.resolveClaudeAuth('qualquer');
     const info = e.allClaudeAuthInfo();
-    e.tokens = { qualquer: 'tok' };
+    e.token = 'tok';
     const env = e.ghEnv('qualquer');
     console.log(JSON.stringify({
       claudeProfiles: e.config.claudeProfiles,
@@ -242,26 +236,12 @@ test('updateSettings: recalcula allClaudeAuthInfo quando claudeProfiles muda', a
 // (só no front) passou a mandar UM ÚNICO patch combinado. Este teste prova que o
 // backend (updateSettings, síncrono, sem await no meio) sempre suportou esse patch
 // combinado atomicamente — documentando que o padrão "um patch só" é seguro.
-test('updateSettings: patch combinado (claudeProfiles+claudeProfileId+accounts) é atômico', () => {
+test('updateSettings: patch combinado (claudeProfiles+claudeProfileId) é atômico', () => {
   const engine = new Engine();
-  engine.updateSettings({
-    claudeProfiles: [CHAVE('p1')],
-    claudeProfileId: 'p1',
-    accounts: [
-      { user: 'alice', owners: [], claudeProfileId: 'p1' },
-      { user: 'bob', owners: [], claudeProfileId: 'p1' }
-    ]
-  });
-  // agora remove p1 num ÚNICO patch (simulando o novo comportamento do front)
-  engine.updateSettings({
-    claudeProfiles: [],
-    claudeProfileId: '',
-    accounts: [
-      { user: 'alice', owners: [] }, // já sem claudeProfileId, como o front calcularia
-      { user: 'bob', owners: [] }
-    ]
-  });
+  engine.updateSettings({ claudeProfiles: [CHAVE('p1')], claudeProfileId: 'p1' });
+  assert.equal(engine.config.claudeProfileId, 'p1');
+  // agora remove p1 num ÚNICO patch
+  engine.updateSettings({ claudeProfiles: [], claudeProfileId: '' });
   assert.equal(engine.config.claudeProfileId, '');
-  assert.equal(engine.config.accounts.find(a => a.user === 'alice').claudeProfileId, undefined);
-  assert.equal(engine.config.accounts.find(a => a.user === 'bob').claudeProfileId, undefined);
+  assert.deepEqual(engine.config.claudeProfiles, []);
 });

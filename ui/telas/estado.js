@@ -1,7 +1,6 @@
-// O estado que a tela inteira lê: o último snapshot do SSE, o escopo de conta e a aba atual.
+// O estado que a tela inteira lê: o último snapshot do SSE e a aba atual.
 //
-// POR QUE EXISTE: 109 das 169 funções do ui/app.js liam variável de módulo (STATE em 68,
-// SCOPE em 19). Com as telas em módulos, cada uma precisaria importar o bootstrap de volta
+// POR QUE EXISTE: 109 das 169 funções do ui/app.js liam variável de módulo (STATE em 68). Com as telas em módulos, cada uma precisaria importar o bootstrap de volta
 // só para ler STATE, que é o ciclo que a Fase 1b existe para evitar. Aqui a leitura é de mão
 // única.
 //
@@ -15,19 +14,14 @@
 // Cada setter abaixo tem os donos que REALMENTE o chamam hoje (nem todos são só o
 // ui/app.js, e essa lista é o que evita a próxima extração quebrar por engano):
 //   definirEstado    -> só ui/app.js (o handler do evento 'state' do SSE).
-//   definirEscopo    -> ui/app.js (boot, a partir do localStorage, e o clique na barra
-//                        de contas), telas/contas.js (rebuildAccounts saneia escopo
-//                        órfão quando a conta some) e telas/sistema-contas.js (silenciar
-//                        ou remover a conta que é o escopo atual solta ela pra 'all').
 //   definirAba       -> só ui/app.js (switchTab).
 //   definirPlataforma -> só ui/app.js (aplicaPlataforma, reconciliando com o SO real
 //                        que o snapshot do engine manda).
 let STATE = null;
-let SCOPE = 'all';
 let ABA = 'radar';
 // Palpite do primeiro paint (antes do primeiro estado chegar pelo SSE); o ui/app.js
 // reconcilia com app.platform assim que o snapshot chega, por definirPlataforma. Mora
-// aqui, e não no bootstrap, pela mesma razão de STATE/SCOPE/ABA: mais de uma tela
+// aqui, e não no bootstrap, pela mesma razão de STATE/ABA: mais de uma tela
 // (por exemplo o editor de perfis Claude) precisa perguntar "é Windows?", e um módulo
 // de tela não pode importar o bootstrap de volta só pra fazer essa pergunta.
 // O guarda `typeof navigator` é só pra este módulo não explodir se algum dia for
@@ -37,7 +31,6 @@ let ABA = 'radar';
 let PLATAFORMA = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/.test(navigator.userAgent) ? 'darwin' : 'win32';
 
 const estado = () => STATE;
-const escopo = () => SCOPE;
 const abaAtual = () => ABA;
 const ehMac = () => PLATAFORMA === 'darwin';
 const ehWin = () => PLATAFORMA === 'win32';
@@ -50,7 +43,6 @@ const ehWin = () => PLATAFORMA === 'win32';
 const ehElectron = () => typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron');
 
 function definirEstado(novo) { STATE = novo; }
-function definirEscopo(novo) { SCOPE = novo; }
 function definirAba(nome) { ABA = nome; }
 function definirPlataforma(p) { if (p) PLATAFORMA = p; }
 
@@ -63,10 +55,14 @@ function definirPlataforma(p) { if (p) PLATAFORMA = p; }
 // Radar (papelPicker de cada card) e pelo Time; junto das outras leituras derivadas
 // desta lista pela mesma razão: mais de uma tela precisa e nenhuma pode importar a
 // outra só por causa disto.
+// A conta revisora desta instância, como o snapshot a manda (lista de um). null antes do
+// primeiro estado. Lida pelo Radar (política e limite do plano no card) e pela tela de Contas.
+function contaRevisora() { return (estado()?.accounts || [])[0] || null; }
+
 function peopleOf() { return (estado()?.config && estado().config.people) || {}; }
 
 export {
-  estado, escopo, abaAtual, definirEstado, definirEscopo, definirAba,
-  peopleOf,
+  estado, abaAtual, definirEstado, definirAba,
+  peopleOf, contaRevisora,
   ehMac, ehWin, ehElectron, definirPlataforma,
 };

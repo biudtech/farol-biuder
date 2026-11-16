@@ -125,8 +125,8 @@ test('clique, endosso e reenvio sem avaliação não publicam aprovação', asyn
 
 test('Engine real não alcança o transporte de publicação sem prova técnica', async () => {
   const e = Object.create(Engine.prototype);
-  e.config = { accounts: [{ user: 'reviewer', owners: ['org'] }] };
-  e.accountForPr = () => 'reviewer'; e.isMuted = () => false;
+  e.config = { conta: { user: 'reviewer', owners: ['org'] } };
+  e.accountForPr = () => 'reviewer';
   e.token = 'fixture'; e.tokenFor = () => 'fixture'; e.log = () => {};
   const original = io.run;
   let transport = 0;
@@ -143,7 +143,7 @@ test('mudança comprovada de contexto agenda uma revisão própria sem repetiç�
   const item = { technicalRecheck: true, key: 'org/repo#1', pr: { repo: 'org/repo', requested: true } };
   let queued = 0;
   const e = { decisions: { pending: [item] }, accountForPr: () => 'reviewer', autoReviewFor: () => true,
-    isMuted: () => false, tokenFor: () => 'fixture', enqueueHeadless: () => { queued++; return { ok: true }; }, saveDecisions: () => {} };
+    tokenFor: () => 'fixture', enqueueHeadless: () => { queued++; return { ok: true }; }, saveDecisions: () => {} };
   launchTechnicalRechecks(e); launchTechnicalRechecks(e);
   assert.equal(queued, 1);
   item.technicalRecheck = true; item.pr.requested = false;

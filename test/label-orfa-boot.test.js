@@ -1,8 +1,8 @@
 // A limpeza de label presa no boot precisa de TOKEN, e ele não existe ainda.
 //
 // DEFEITO QUE ORIGINOU (medido em 30/08/2026): `start()` chamava limparLabelsOrfas
-// ANTES do primeiro `check()`, e `this.tokens` só é preenchido pelo refreshTokens de
-// dentro do check. Com `tokens` vazio, o `if (!engine.tokenFor(acc)) continue` do
+// ANTES do primeiro `check()`, e o token só é preenchido pelo refreshTokens de
+// dentro do check. Sem o token, o `if (!engine.tokenFor(acc)) continue` do
 // limparLabelsOrfas caía em toda iteração, de forma síncrona, e a função terminava no
 // mesmo tick sem uma única chamada gh. A cura da label presa da v2.54.3 nunca removeu
 // nada em produção, e o teste da função ficava verde porque injeta `tokenFor`.

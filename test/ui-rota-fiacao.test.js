@@ -22,7 +22,7 @@ const disparar = (tipo) => { for (const fn of ouvintes.get(tipo) || []) fn({ typ
 irPara('/#sistema/accounts');
 
 await import('../ui/app.js');
-const { abaAtual, escopo } = await import('../ui/telas/estado.js');
+const { abaAtual } = await import('../ui/telas/estado.js');
 const { radarSubAtual } = await import('../ui/telas/radar.js');
 const { secaoDoSistema, switchSistemaSection } = await import('../ui/telas/sistema.js');
 
@@ -33,12 +33,9 @@ const ESTADO = {
   app: { name: 'Farol', version: '2.72.0', platform: 'win32' },
   status: 'ocioso', error: null,
   account: { user: 'alice', tokenOk: true },
-  accounts: [
-    { user: 'alice', owners: ['acme'], label: 'Pessoal', color: '#f80' },
-    { user: 'bob', owners: ['beta'], label: 'Trabalho', color: '#08f' },
-  ],
+  accounts: [{ user: 'alice', owners: ['acme'] }],
   config: {
-    ghUser: 'alice', owners: ['acme'], accounts: [{ user: 'alice', owners: ['acme'] }, { user: 'bob', owners: ['beta'] }],
+    conta: { user: 'alice', owners: ['acme'] },
     intervalSeconds: 300, parallelReviews: 1, theme: 'dark', mergeBlockedRepos: [],
     people: {}, claudeProfiles: [], claudeProfileId: '',
   },
@@ -100,19 +97,17 @@ test('endereço inválido cai no padrão e o endereço é corrigido', () => {
   assert.deepEqual(ultima(), ['replace', '/radar/pra-mim']);
 });
 
-test('trocar de lugar pela tela empilha; trocar de conta substitui', () => {
+test('trocar de lugar pela tela empilha; o link antigo com ?conta= abre sem a conta e o endereço é corrigido', () => {
   irPara('/sistema/contas');
   disparar('popstate');
   switchSistemaSection('jira');
   disparar('click');
   assert.deepEqual(ultima(), ['push', '/sistema/jira']);
-  // a conta é filtro: a barra de contas só existe com duas contas, que o estado tem
+  // a conta saiu do endereço com a barra de contas (uma instância, uma conta)
   irPara('/radar/pra-mim?conta=bob');
   disparar('popstate');
-  assert.equal(escopo(), 'bob');
-  irPara('/radar/pra-mim');
-  disparar('popstate');
-  assert.equal(escopo(), 'all', 'sem conta no endereço, numa aba com a barra, é Todas');
+  assert.equal(abaAtual(), 'radar');
+  assert.deepEqual(ultima(), ['replace', '/radar/pra-mim']);
 });
 
 test('endereço de aba que saiu (Entregas, Destaques) cai no Radar, na sub-aba Pra mim, sem aviso, e o endereço diz isso', () => {
@@ -134,17 +129,6 @@ test('clique que não muda nada não escreve no histórico', () => {
 });
 
 // ---------------------------------------------------------------- revisão do Codex sobre 8c1a1e2
-
-test('Codex 4: conta que não está configurada no endereço cai em Todas na hora, e o endereço é corrigido', () => {
-  irPara('/radar/pra-mim?conta=bob');
-  disparar('popstate');
-  assert.equal(escopo(), 'bob', 'controle: conta configurada vale');
-  irPara('/radar/pra-mim?conta=fulano');
-  disparar('popstate');
-  assert.equal(escopo(), 'all', 'conta desconhecida não vira escopo, nem guardado');
-  assert.equal(localStorage.getItem('farol-scope'), 'all');
-  assert.deepEqual(ultima(), ['replace', '/radar/pra-mim']);
-});
 
 test('Codex 6: caixa de revisão cuja busca termina depois de a rota mudar não abre nem empilha', async () => {
   const { caixaAberta } = await import('../ui/telas/caixa-revisao.js');

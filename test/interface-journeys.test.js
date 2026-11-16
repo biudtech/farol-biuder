@@ -6,7 +6,8 @@ import { roundSummaryHtml } from '../ui/pure/round-summary.js';
 import { resolvedRow } from '../ui/pure/review.js';
 test('grupos preservam todos os itens, ordem interna, escape e recolhimento', () => {
   const rows = [{ account: 'a', repo: '<repo>', html: '<b>1</b>' }, { account: 'b', repo: 'outro', html: '<b>2</b>' }, { account: 'a', repo: '<repo>', html: '<b>3</b>' }];
-  assert.deepEqual(queueGroups(rows, 'account').map(g => g.rows.length), [2, 1]);
+  assert.deepEqual(queueGroups(rows, 'repo').map(g => g.rows.length), [2, 1]);
+  assert.equal(groupedQueue(rows, 'account'), '<b>1</b><b>2</b><b>3</b>', 'agrupar por conta saiu: modo antigo guardado cai em sem agrupamento');
   const html = groupedQueue(rows, 'repo', new Set(['repo:<repo>']));
   assert.match(html, /&lt;repo&gt;/); assert.doesNotMatch(html, /<repo>/); assert.match(html, /data-queue-group="repo:&lt;repo&gt;">/);
   for (const n of [1, 2, 3]) assert.equal(html.split(`<b>${n}</b>`).length, 2);
@@ -16,7 +17,7 @@ test('roteiro não confunde configuração com autenticação e não aceita pol�
   assert.deepEqual(setupSteps({ config: { claudeProfiles: [{ id: 'p' }] } }).map(s => s.checked), [false, false, false]);
   const steps = setupSteps({ accounts: [{ tokenOk: true, owners: ['org'] }], doctor: { claudeAuth: [{ ready: true }] } });
   assert.deepEqual(steps.map(s => s.checked), [true, true, false]);
-  assert.equal(setupSteps({ accounts: [{ tokenOk: true, muted: true, owners: ['org'] }] })[0].checked, false);
+  assert.equal(setupSteps({ accounts: [{ tokenOk: false, owners: ['org'] }] })[0].checked, false);
 });
 test('resumo da rodada distingue dado ausente e informação interna neutralizada', () => {
   assert.equal(roundSummaryHtml({ schema: 2 }), '');

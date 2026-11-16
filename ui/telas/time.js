@@ -1,11 +1,8 @@
-/* Farol · UI: aba Time (memória de review por pessoa, separada por conta). */
+/* Farol · UI: aba Time (memória de review por pessoa). */
 
 import { esc, personMention, avatar, papelPicker, domainMatrix } from '../pure.js';
-import { estado, escopo, peopleOf } from './estado.js';
-import { $, get, showOp, closeOp, confirmModal, api, toast, doUsuario } from './infra.js';
-import {
-  TWEAK, OWNER2USER, multiAccount, acctStyleFor, memGroupHead,
-} from './contas.js';
+import { peopleOf } from './estado.js';
+import { $, get, showOp, closeOp, confirmModal, api, toast } from './infra.js';
 import { registrarTela } from './registro.js';
 
 /* ---------- perfil de review por pessoa ----------
@@ -14,19 +11,16 @@ import { registrarTela } from './registro.js';
    o mapa de pessoas do estado) foi para telas/estado.js na Task 8: o Radar
    também precisa dele, e nenhum dos dois pode importar o outro. */
 
-/* ---------- render: time (separado por conta) ---------- */
+/* ---------- render: time ---------- */
 async function loadTeam() {
   const box = $('#team');
   const opId = 'load-team';
   showOp(opId, { type: 'data', title: 'Carregando time', inline: true, container: box });
   const team = (await get('/api/team')) || [];
   closeOp(opId, 'done');
-  const multi = multiAccount();
   const people = peopleOf();   // idem renderDecisions: um mapa só pra toda a passada
-  // conta de uma entrada: pelo owner do ref (owner/repo#num); antigo (só nome) = sem conta
-  const entryUser = e => { const ref = e.ref || ''; const owner = ref.includes('/') ? ref.split('/')[0] : ''; return owner ? (OWNER2USER[owner.toLowerCase()] || '') : ''; };
   const refShort = ref => (ref.includes('/') ? ref.split('/').slice(1).join('/') : ref);
-  const memberCard = (m, entries, user) => {
+  const memberCard = (m, entries) => {
     const last = entries[0];
     const verdictChip = last && last.verdict ? `<span class="verdict ${/approve/i.test(last.verdict) ? 'approve' : 'rc'}">${esc(last.verdict)}</span>` : '';
     const es = entries.slice(0, 3).map(e => `
@@ -35,7 +29,7 @@ async function loadTeam() {
         ${e.bullets.length ? `<ul>${e.bullets.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
       </div>`).join('');
     return `
-    <div class="card ${multi ? 'member-card' : ''}" style="${multi ? acctStyleFor(user) : ''}">
+    <div class="card">
       <div class="member-head">
         ${avatar(m.login)}
         <div class="names">
@@ -53,39 +47,15 @@ async function loadTeam() {
       <div class="member-entries">${es}</div>
     </div>`;
   };
-  // membros com entradas visíveis pro grupo pedido ('__all__' = todas; '' = sem conta)
-  const groupCards = (user) => {
-    const out = [];
-    for (const m of team) {
-      const es = (m.entries || []).filter(e => doUsuario(entryUser(e), user));
-      if (es.length) out.push(memberCard(m, es, user === '__all__' ? entryUser(es[0]) : user));
-    }
-    return out;
-  };
-  const emptyMsg = `<div class="empty"><span class="big">👋</span>${escopo() === 'all' ? 'Ainda não há memória de reviews.' : 'Nenhuma memória nesta conta ainda.'}<br><small>A cada PR revisado, o Farol registra recorrências e ganhos por pessoa.</small></div>`;
-  if (escopo() === 'all' && multi) {
-    const parts = [];
-    for (const a of (estado().accounts || [])) {
-      if (a.muted && TWEAK.muted !== 'Esmaecer') continue;
-      const c = groupCards(a.user);
-      if (c.length) { parts.push(memGroupHead(a.user)); parts.push(c.join('')); }
-    }
-    const geral = groupCards('');
-    if (geral.length) { parts.push(memGroupHead('')); parts.push(geral.join('')); }
-    box.innerHTML = parts.join('') || emptyMsg;
-  } else if (escopo() !== 'all') {
-    const c = groupCards(escopo());
-    box.innerHTML = c.length ? c.join('') : emptyMsg;
-  } else {
-    const c = groupCards('__all__');
-    box.innerHTML = c.length ? c.join('') : emptyMsg;
-  }
+  const cards = team.filter(m => (m.entries || []).length).map(m => memberCard(m, m.entries));
+  const emptyMsg = '<div class="empty"><span class="big">👋</span>Ainda não há memória de reviews.<br><small>A cada PR revisado, o Farol registra recorrências e ganhos por pessoa.</small></div>';
+  box.innerHTML = cards.length ? cards.join('') : emptyMsg;
 }
 
 // Remover do Time: ação destrutiva, então o botão SÓ abre o modal de confirmação
 // (padrão do app pra tudo que apaga, ver confirmModal) explicando o efeito; nada
 // acontece sem o clique em Remover. A remoção vale pra pessoa INTEIRA (o dossiê é
-// um só), então os cards dela em todos os grupos (conta e "Geral") saem juntos.
+// um só).
 $('#team').addEventListener('click', async (e) => {
   const btn = e.target.closest('.member-remove');
   if (!btn) return;
@@ -95,7 +65,7 @@ $('#team').addEventListener('click', async (e) => {
     title: `Remover @${login} do Time?`,
     body: `<p>Apaga <b>desta máquina</b> tudo o que o Farol guarda sobre ${personMention(login, 'xs')}:</p>
       <ul>
-        <li>o dossiê com o histórico de reviews (todos os grupos, inclusive "Geral");</li>
+        <li>o dossiê com o histórico de reviews;</li>
         <li>o papel e a matriz de competência configurados;</li>
         <li>os registros de contestação.</li>
       </ul>

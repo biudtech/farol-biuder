@@ -22,7 +22,7 @@ import { roundSummaryHtml } from './round-summary.js';
 // de STATE, global proibida aqui).
 //
 // Revisões recentes, a linha inteira: três colunas (ícone, conteúdo, quando e ações). A
-// barra esquerda colorida NÃO entra aqui: ela significa urgência (acctMark no app.js) e
+// barra esquerda colorida NÃO entra aqui: ela significa urgência e
 // esta seção é histórico resolvido. O autor fica em linha própria (.rr-person), fora do
 // .rr-title: o título tem ellipsis, e um título comprido já empurrou o autor para fora da
 // tela sem aviso.
@@ -101,7 +101,6 @@ const REROUND_MOTIVO = {
   rascunho: () => 'o PR está como rascunho.',
   auto_desligado: (d) => `a revisão automática está desligada na conta ${d} (Sistema > Contas).`,
   review_manual: () => 'a regra da organização ou do autor exige revisão por clique (Sistema > Contas).',
-  conta_silenciada: (d) => `a conta ${d} está silenciada.`,
   sem_token: (d) => `a conta ${d} está sem login no gh.`,
   orcamento: () => 'o orçamento do perfil desta conta estourou.',
   estacionado: (d) => (d === 'cancelado'
@@ -476,7 +475,6 @@ export function resolvedRow(r, ctx) {
     <div class="rr-main">
       <div class="rr-head">
         <a class="rr-ref" href="${esc(url || '#')}" target="_blank" rel="noreferrer">${esc(r.key)}</a>
-        ${ctx.chip || ''}
         ${r.card ? `<span class="pill">${esc(r.card)}</span>` : ''}
         <span class="rr-verdict${vcls ? ` ${vcls}` : ''}">${label}${act}${r.viaAdmin ? ' · decidido pelo admin' : ''}</span>
       </div>

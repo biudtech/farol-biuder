@@ -12,7 +12,7 @@ const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8');
 // (postarReconstruindo) para o APPROVE, o REQUEST_CHANGES e os caminhos da decisão sem mesa.
 test('revisão automática: toda postagem passa via revisao, pela boca das retentativas', () => {
   const fonte = ler('lib/engine/desfecho-da-revisao.js');
-  assert.equal((fonte.match(/postarComRetentativas\(\n\s+\(\) => engine\.postReview\(pr, \{ \.\.\.p, commit_id: ctx\.headShaAtual \}, \{ via: 'revisao', continuidade: ctx\.continuidade, roundReview: ctx\.result\.roundReview, verdict: ctx\.result\.verdict \}\)\);/g) || []).length, 1);
+  assert.equal((fonte.match(/postarComRetentativas\(\n\s+\(\) => engine\.postReview\(pr, \{ \.\.\.p, commit_id: ctx\.headShaAtual \}, \{ via: 'revisao', roundReview: ctx\.result\.roundReview, verdict: ctx\.result\.verdict \}\)\);/g) || []).length, 1);
   const chamadas = (fonte.match(/await postarReconstruindo\(engine, ctx, /g) || []).length;
   assert.equal(chamadas, 3, 'approve, request_changes da sessão e os caminhos novos');
 });

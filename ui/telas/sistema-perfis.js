@@ -10,7 +10,6 @@
 import { claudeProfilesHtml, genId, perfilTesteHtml, perfilProblemasHtml } from '../pure.js';
 import { estado } from './estado.js';
 import { $, api, toast } from './infra.js';
-import { rebuildAccounts } from './contas.js';
 import { renderAccountsManager } from './sistema-contas.js';
 import { renderLoginWeb, tratouLoginWeb } from './login-claude.js';
 
@@ -160,13 +159,6 @@ $('#claudeProfilesManager').addEventListener('click', (e) => {
     if (estado().config.claudeProfileId === id) {
       estado().config.claudeProfileId = '';
       patch.claudeProfileId = '';
-    }
-    // a conta que apontava para o perfil apagado volta ao padrão: o SERVIDOR limpa, sobre a
-    // config atual (lib/engine/contas-config.js); aqui só o reflexo imediato na tela
-    const accounts = (estado().accounts || []);
-    if (accounts.some(a => a.claudeProfileId === id)) {
-      estado().accounts = accounts.map(a => a.claudeProfileId === id ? { ...a, claudeProfileId: undefined } : a);
-      rebuildAccounts();
     }
     renderClaudeProfiles(); renderAccountsManager();
     api('/api/settings', patch);

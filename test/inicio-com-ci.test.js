@@ -13,7 +13,7 @@ const PR = { key: 'acme/app#7', repo: 'acme/app', url: 'https://github.com/acme/
 
 function motor() {
   const e = new Engine();
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.aguardarCiParaRevisar = true;
   e.prState = async () => 'OPEN';
   e.budgetBlockedFor = () => null;
@@ -78,8 +78,8 @@ test('uma decisão de outro head que chega durante a consulta de CI não é alte
 
 test('re-review comum volta a ser elegível depois do CI mesmo sem pedido de revisão na fila', async () => {
   const e = motor();
-  e.config.accounts[0].autoReview = true; // a conta revisa sozinha, lida pelo autoReviewFor real
-  e.tokens = { eu: 'token-teste' };
+  e.config.conta.autoReview = true; // a conta revisa sozinha, lida pelo autoReviewFor real
+  e.token = 'token-teste';
   e.panorama = [{ ...PR, requested: false }];
   e.staleInfo[PR.key] = { stale: true, head: 'head-comum', lastState: 'APPROVED' };
   e.headQuietoDesde[PR.key] = { head: 'head-comum', at: 1 };

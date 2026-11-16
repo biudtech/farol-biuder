@@ -64,8 +64,7 @@ beforeEach(() => {
 function motor({ checks = [], reprova = 'request_changes' } = {}) {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.aguardarCiParaAprovar = true;
   e.approvePolicyFor = () => 'approve';
   e.rejectPolicyFor = () => reprova;

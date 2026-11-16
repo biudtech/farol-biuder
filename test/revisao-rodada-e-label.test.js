@@ -53,7 +53,6 @@ function motor({ resposta, policy = 'approve' } = {}) {
   e.config.claudeProfileId = 'ka';
   e.accountForPr = (pr) => pr.account || 'eu';
   e.tokenFor = () => 'tok-eu';
-  e.isMuted = () => false;
   e.logs = [];
   e.log = (nivel, msg) => { e.logs.push(`${nivel} ${msg}`); };
   e.prState = async () => 'OPEN';
@@ -109,7 +108,7 @@ test('launchReReviews carimba rodadaAutomatica no PR enfileirado', async () => {
     headQuietoDesde: { [pr.key]: { head: 'sha-novo', at: 0 } },
     reReviewLaunched: {}, decisions: { pending: [], resolved: [] },
     autoReviewParked: new Set(), retryAfterNet: new Map(), headlessQueue: [], activeReviews: new Map(),
-    accountForPr: () => 'eu', isMuted: () => false, autoReviewFor: () => true, tokenFor: () => 'tok',
+    accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 'tok',
     budgetBlockedFor: () => null, outrosRevisando: () => [], skipComentado: {},
     saveReReviewLaunched() { }, emit() { }, enqueueHeadless(p) { enq.push(p); },
     bloqueiaAutomatico: async () => false, fetchPrFiles: async () => null,

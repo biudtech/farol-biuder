@@ -38,7 +38,6 @@ function approvableResult(extra) {
 function engineWithPolicy(policy) {
   const e = new Engine();
   e.config.autoApproveAll = true;
-  e.config.accounts = [];
   // a espera do CI é opt-in desde 02/10/2026: estes casos testam a chave LIGADA
   e.config.aguardarCiParaAprovar = true;
   e.approvePolicyFor = () => policy;

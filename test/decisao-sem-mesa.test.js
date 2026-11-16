@@ -83,9 +83,8 @@ function motor({ checks = [], aprova = 'approve', reprova = 'request_changes', c
   const e = new Engine();
   e.config.aguardarCiParaAprovar = ciObrigatorio;
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
   // política da conta gravada por extenso e lida pelos métodos reais do motor (contas-config.js)
-  e.config.accounts = [{ user: 'eu', owners: ['acme'], autoReview: true, onClean: aprova, onCaveats: aprova, onReject: reprova }];
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: aprova, onCaveats: aprova, onReject: reprova };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };
@@ -126,14 +125,12 @@ const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 const semMesa = (e) => assert.equal(e.eventos.some(([t]) => t === 'needs-decision'), false, JSON.stringify(e.eventos));
 
 for (const caso of ['ci', 'reenvio', 'commit novo']) {
-  test(`silenciada depois da análise: conclusão persistida com ${caso}`, async () => {
+  test(`depois da análise: conclusão persistida com ${caso}`, async () => {
     const e = motor({ checks: [{ nome: 'test', estado: 'rodando' }] });
     sessao(e);
     await e.runHeadlessReview(PR(130));
-    assert.ok(pendente(e, 130).trabalhoIniciado);
     assert.equal(envios.length, 0);
     e.decisions = JSON.parse(JSON.stringify(e.decisions));
-    e.config.accounts[0].muted = true;
     gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
     if (caso === 'commit novo') {
       gh.head = HEAD_NOVO;
@@ -152,7 +149,6 @@ for (const caso of ['ci', 'reenvio', 'commit novo']) {
     assert.deepEqual(envios.map(p => p.event), ['APPROVE']);
     assert.equal(envios[0].commit_id, HEAD);
     assert.equal(resolvida(e, 130).status, 'auto_approved');
-    assert.equal(e.config.accounts[0].muted, true);
   });
 }
 

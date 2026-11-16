@@ -68,7 +68,7 @@ test('revisão nova comprova e preserva a versão da evidência, mesmo com conta
 
 test('nova revisão substitui a decisão esgotada e persiste a versão para a publicação após reinício', () => {
   const e = Object.create(Engine.prototype);
-  e.config = { accounts: [{ user: 'reviewer', owners: ['org'] }] };
+  e.config = { conta: { user: 'reviewer', owners: ['org'] } };
   e.accountForPr = () => 'reviewer'; e.saveDecisions = () => {};
   e.decisions = { pending: [{ key: pr.key, provaEsgotada: true }], resolved: [] };
   e.resolveIntoHistory = item => e.decisions.resolved.push(item);

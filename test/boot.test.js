@@ -47,7 +47,7 @@ test('config aplica os defaults conhecidos', () => {
   assert.equal(config.reviewModel, '', 'default = modelo bom (Opus), não econômico');
   assert.equal(config.reviewEffort, '', 'default = sem flag, o CLI decide pelo modelo');
   assert.equal(config.autoPushback, true);
-  assert.ok(Array.isArray(config.accounts), 'accounts normalizado em array');
+  assert.equal('accounts' in config, false, 'a lista de contas saiu: uma instância, uma conta');
   assert.equal(typeof config.people, 'object', 'people migrado/normalizado');
 });
 

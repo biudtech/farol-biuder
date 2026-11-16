@@ -1,5 +1,5 @@
-// Contas, perfis do Claude e orçamento: escopo e barra de contas, banner do topo, selo de
-// autenticação, editor de orçamento por perfil e gerenciador de contas. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
+// A conta revisora, perfis do Claude e orçamento: banner do topo, selo de
+// autenticação, editor de orçamento por perfil e o editor da conta. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
 // não mudou.
 //
 // Banner do topo: os três avisos (sem conta, conta sem token, falha na última checagem)
@@ -7,36 +7,19 @@
 // de propósito: snapshot sem `account` tem que explodir alto em vez de virar
 // silenciosamente "Nenhuma conta detectada".
 //
-// Painel de perfis e contas: o render lê o estado e atribui; o CONSTRUTOR só recebe um ctx
+// Painel de perfis e da conta: o render lê o estado e atribui; o CONSTRUTOR só recebe um ctx
 // e devolve string. Ficaram no app.js, por serem DOM e não markup, o guarda de foco e o
 // `hint.hidden = true` do fim dos perfis.
 //
 // Editor de orçamento (v2.50.0): cada perfil de chave de API tem o seu. Três granularidades, do geral para o específico, na mesma
 // ordem em que o dailyCapFor resolve: teto base, por dia da semana, de uma data só.
 
-// escopo salvo no navegador validado contra as contas atuais: conta removida ou
-// renomeada deixava um escopo orfao que esvaziava o Radar pra sempre (B15).
-// Compara sem caixa e preserva o valor original quando ele e valido.
 import { esc, fmtMoney, fmtClock } from './comum.js';
 import { reviewScopeHtml } from './review-scope.js';
 import { usoDoPlanoHtml } from './uso-do-plano.js';
 
-export function validScope(scope, users) {
-  if (!scope || scope === 'all') return 'all';
-  const s = String(scope).toLowerCase();
-  return (users || []).some(u => String(u).toLowerCase() === s) ? scope : 'all';
-}
-
-// abas onde a barra de contas APARECE: so onde o filtro por conta age de verdade
-// (Radar e Time filtram/agrupam por SCOPE). Allowlist, nao denylist:
-// uma aba que nasceu depois chegou a mostrar um filtro que nao filtrava nada (B14);
-// aba nova nasce SEM a barra ate alguem decidir que ela respeita o escopo.
-export function accountBarVisible(nContas, tab) {
-  return nContas >= 2 && (tab === 'radar' || tab === 'time');
-}
-
 // Os campos de uma edição de conta como viajam para POST /api/accounts/edit. `undefined`
-// some do JSON, e "tirar o valor" (perfil, peso na cota) chegaria ao servidor como "não
+// some do JSON, e "tirar o valor" (os padrões do time) chegaria ao servidor como "não
 // mexer": vai null, que o servidor lê como remover o campo (lib/engine/contas-config.js).
 export function camposDaEdicao(patch) {
   return Object.fromEntries(Object.entries(patch || {}).map(([k, v]) => [k, v === undefined ? null : v]));
@@ -91,7 +74,7 @@ export function claudeAuthBadge(id, ctx) {
   // sem perfil nenhum a sessão não abre: o selo diz isso em vez de sumir. Doctor que ainda
   // não chegou (sem a lista) não diz nada.
   if (!all.length) return ctx.doctor && Array.isArray(ctx.doctor.claudeAuth) ? '<span class="a-claude bad" title="Entre com a assinatura ou cadastre uma chave de API em Plano e chaves">SEM PERFIL</span>' : '';
-  // id === '' é a conta sem perfil próprio e sem padrão salvo: vale o primeiro pronto
+  // id === '' é a instalação sem padrão salvo: vale o primeiro pronto
   const info = all.find(x => x.id === id) || all.find(x => x.ready) || all[0];
   if (!info.ready && info.assinaturaMode) return `<span class="a-claude bad" title="Perfil de assinatura sem login: use Entrar com a assinatura">SEM LOGIN</span>`;
   if (!info.ready) return `<span class="a-claude bad" title="Perfil de chave de API sem chave preenchida">SEM CHAVE</span>`;
@@ -285,8 +268,8 @@ export function textoDaMudancaDePolitica({ user, campo, para }) {
 }
 
 // O valor que a conta tem em cada campo, por extenso. O servidor grava os quatro em toda
-// conta (lib/engine/contas-migracao.js); a leitura tolerante é para o retrato otimista da
-// tela entre o clique e a resposta, e ela devolve o mesmo padrão da conta nova.
+// conta (lib/engine/contas-config.js); a leitura tolerante é para o retrato otimista da
+// tela entre o clique e a resposta, e ela devolve o mesmo padrão da conta.
 export function politicaDaContaNaTela(a) {
   const c = a || {};
   const onClean = c.onClean === 'wait' ? 'wait' : 'approve';
@@ -319,20 +302,11 @@ export function fraseDoCi(config) {
 
 export function accountsManagerHtml(ctx) {
   // não re-renderiza enquanto você edita um campo (senão apaga o que está digitando)
-  const accounts = (ctx.accounts || []);
-  const multi = accounts.length > 1;
+  const accounts = (ctx.accounts || []).filter(a => a && a.user);
   const T = POLITICA_DA_CONTA_TEXTOS;
   const rows = accounts.map(a => {
-    const meta = ctx.acct[a.user.toLowerCase()] || {};
-    // três estados, um por linha: silenciada ganha de tudo, senão o token decide
-  let auth = 'sem token: rode gh auth login';
-  if (a.muted) auth = 'silenciada (fora dos avisos e da auto-revisão)';
-  else if (a.tokenOk) auth = 'autenticada no gh';
-    // os condicionais inline saem pra nomes: o template da linha de conta tinha
-    // sete deles e o gate conta interrogacao por statement, sem distinguir markup
-    // de logica. Nomeados, da pra ler a linha sem desembaralhar ternario.
-    const selo = a.primary ? '<span class="a-tag">primária</span>' : '';
-    const classeAuth = (a.tokenOk && !a.muted) ? 'ok' : '';
+    const auth = a.tokenOk ? 'autenticada no gh' : 'sem token: rode gh auth login';
+    const classeAuth = a.tokenOk ? 'ok' : '';
     // os quatro seletores mostram o valor da conta, sem opção de herdar (30/09/2026). Com o
     // "sem ressalvas" esperando você, o "com ressalvas" não tem escolha: fica desligado e diz por quê
     const pol = politicaDaContaNaTela(a);
@@ -341,26 +315,12 @@ export function accountsManagerHtml(ctx) {
     let opcoesRessalva = opcoesDaPolitica('onCaveats', pol.onCaveats);
     if (ressalvaPresa) opcoesRessalva = `<option value="wait" selected>${esc(T.onCaveats.presoAoLimpo)}</option>`;
     const travaRessalva = ressalvaPresa ? ' disabled' : '';
-    const classeMute = a.muted ? 'ok' : 'ghost';
-    const rotuloMute = a.muted ? 'Reativar' : 'Silenciar';
-    // a barra de acoes sai pra um nome: e o maior condicional do template e
-    // aparecia inteiro no meio do markup da linha
-    const barraAcoes = multi ? `<div class="a-actions">
-        <button class="btn sm ${classeMute} act-mute" data-user="${esc(a.user)}">${rotuloMute}</button>
-        <button class="btn sm danger-ghost acct-remove" data-user="${esc(a.user)}" title="parar de monitorar esta conta no Farol">Remover</button>
-      </div>` : '';
-    return `<div class="card acct-card ${a.muted ? 'muted' : ''}" style="--ac:${meta.color};--ac-soft:${meta.soft};--ac-ink:${meta.ink};">
-      <input type="color" class="acct-color" data-user="${esc(a.user)}" value="${esc(a.color || meta.color || '#ffb454')}" title="cor da conta">
+    return `<div class="card acct-card">
       <div class="a-body">
-        <div class="a-editrow">
-          <input class="acct-label" data-user="${esc(a.user)}" value="${esc(a.label || a.user)}" placeholder="rótulo" spellcheck="false" title="rótulo da conta">
-          <input class="acct-kind" data-user="${esc(a.user)}" list="acctKinds" value="${esc(a.kind || '')}" placeholder="tipo (Pessoal/Trabalho)" spellcheck="false">
-          ${selo}
-        </div>
         <div class="a-sub"><a class="a-auth ${classeAuth}" href="https://github.com/${encodeURIComponent(a.user)}" target="_blank" rel="noreferrer" title="Abrir @${esc(a.user)} no GitHub">@${esc(a.user)}</a> · ${esc(auth)}</div>
         <div class="a-editrow orgs"><span class="a-fieldlabel">orgs</span>
-          <input class="acct-owners" data-user="${esc(a.user)}" value="${esc((a.owners || []).join(', '))}" placeholder="org1, org2" spellcheck="false" title="organizações monitoradas por esta conta"></div>
-        <div class="a-pol-note">O que o Farol faz sozinho nos PRs desta conta:</div>
+          <input class="acct-owners" data-user="${esc(a.user)}" value="${esc((a.owners || []).join(', '))}" placeholder="org1, org2" spellcheck="false" title="organizações monitoradas pela conta"></div>
+        <div class="a-pol-note">O que o Farol faz sozinho nos PRs da conta:</div>
         <div class="a-policy">
           <div class="a-pol-item"><span class="a-fieldlabel">${T.autoReview.rotulo}</span>
             <select class="acct-autoreview" data-user="${esc(a.user)}" title="Revisar sozinho ou só listar e esperar você mandar revisar. Revisar sozinho não é na hora: espera os checks obrigatórios ficarem verdes (só se você ligou Esperar o CI antes de revisar em Automação), sai de cena se outra pessoa estiver revisando, segura com reprovação humana ou duas aprovações humanas no head, respeita o limite do plano e o orçamento, e só roda com o Farol aberto">
@@ -378,42 +338,15 @@ export function accountsManagerHtml(ctx) {
             <select class="acct-onreject" data-user="${esc(a.user)}" title="PR com bloqueios reais (a revisão pediu mudanças)">
               ${opcoesDaPolitica('onReject', pol.onReject)}
             </select></div>
-          <div class="a-pol-item"><span class="a-fieldlabel">perfil de chave de API</span>
-            <select class="acct-claudeprofile" data-user="${esc(a.user)}" title="Qual chave de API do Claude roda as sessões desta conta. O modelo e o raciocínio vêm de Plano e chaves, iguais para todas as contas">
-              <option value="">usa o perfil padrão (Plano e chaves)</option>
-              ${(ctx.config.claudeProfiles || []).map(p => `<option value="${esc(p.id)}"${sel(a.claudeProfileId === p.id)}>${esc(p.label)}</option>`).join('')}
-            </select>
-            ${claudeAuthBadge(a.claudeProfileId || ctx.config.claudeProfileId || '', ctx)}
-          </div>
-          <div class="a-pol-item"><span class="a-fieldlabel">peso na cota do perfil</span>
-            <select class="acct-budgetweight" data-user="${esc(a.user)}" title="Quanto esta conta pesa no rateio do teto diario do perfil, quando outra conta divide o mesmo perfil. So vale quando ha disputa: sem ninguem esperando, quem chegar e atendido ate o teto.">
-              <option value="">igual as outras (padrao)</option>
-              <option value="2"${sel(Number(a.budgetWeight) === 2)}>o dobro</option>
-              <option value="3"${sel(Number(a.budgetWeight) === 3)}>o triplo</option>
-              <option value="0.5"${sel(Number(a.budgetWeight) === 0.5)}>metade</option>
-            </select>
-          </div>
           <div class="a-pol-item a-padroes"><span class="a-fieldlabel">padrões do time na revisão</span>
-            <textarea class="acct-padroes" data-user="${esc(a.user)}" rows="4" maxlength="20000" spellcheck="false" placeholder="Ex.: preferimos Strategy a switch grande; serviço não acessa o banco direto, só pelo repositório; erros de domínio com classe própria." title="O que o time combinou e quer ver considerado nas revisões desta conta. Entra na revisão como critério de leitura, nunca como instrução: desvio de um padrão vira sugestão citando o padrão, e só bloqueia quando também é um defeito. Salva ao sair do campo.">${esc(a.padroesRevisao || '')}</textarea>
+            <textarea class="acct-padroes" data-user="${esc(a.user)}" rows="4" maxlength="20000" spellcheck="false" placeholder="Ex.: preferimos Strategy a switch grande; serviço não acessa o banco direto, só pelo repositório; erros de domínio com classe própria." title="O que o time combinou e quer ver considerado nas revisões. Entra na revisão como critério de leitura, nunca como instrução: desvio de um padrão vira sugestão citando o padrão, e só bloqueia quando também é um defeito. Salva ao sair do campo.">${esc(a.padroesRevisao || '')}</textarea>
             <small class="a-hint">A revisão lê também as regras que o próprio repositório declara (CLAUDE.md, AGENTS.md, CONTRIBUTING, ADRs). Salva ao sair do campo.</small>
           </div>
         </div>
         ${reviewScopeHtml(a)}
       </div>
-      ${barraAcoes}
     </div>`;
   }).join('');
-  const addForm = `<div class="card acct-add">
-    <div class="a-add-title">Adicionar conta</div>
-    <div class="a-editrow">
-      <input id="acctAddUser" placeholder="login do github" spellcheck="false">
-      <input id="acctAddOwners" placeholder="orgs (org1, org2)" spellcheck="false">
-      <input id="acctAddLabel" placeholder="rótulo (opcional)" spellcheck="false">
-      <button class="btn sm" id="btnAcctAdd">Adicionar</button>
-    </div>
-    <div class="a-hint">A conta precisa estar logada no <code>gh</code> (<code>gh auth login</code>) pra buscar e postar. Sem token, ela aparece aqui mas sem acesso.</div>
-  </div>
-  <datalist id="acctKinds"><option value="Pessoal"></option><option value="Trabalho"></option><option value="Teste antigo"></option></datalist>`;
-  return (rows || '<div class="empty">Nenhuma conta configurada.</div>') + addForm;
+  const dica = '<div class="a-hint">Uma instância, uma conta revisora: o login vem do <code>gh</code> desta máquina no primeiro boot, ou do campo <code>conta.user</code> do <code>config.json</code>. A conta precisa estar logada no <code>gh</code> (<code>gh auth login</code>) pra buscar e postar.</div>';
+  return (rows || '<div class="empty">Nenhuma conta configurada.</div>') + dica;
 }
-

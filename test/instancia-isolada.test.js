@@ -70,10 +70,10 @@ function rodarIsolada(corpo) {
     io.run = async (...a) => { chamadas.push(a); return { ok: true, code: 0, stdout: '{"labels":[{"name":"eu:revisando"}]}', stderr: '' }; };
     io.runShell = io.run;
     const engine = {
-      config: { accounts: [{ user: 'eu', owners: ['acme'] }] }, token: 'tok', queue: [], panorama: [],
+      config: { conta: { user: 'eu', owners: ['acme'] } }, token: 'tok', queue: [], panorama: [],
       activeReviews: new Map([['s1', { id: 's1', mode: 'auto', keys: ['acme/app#7'] }]]),
       log() {}, emit() {}, pushState() {}, ghEnv: () => ({}), tokenFor: () => 'tok', refreshTokens: async () => {},
-      accountForPr: () => 'eu', accountForOwner: () => 'eu', accountList() { return this.config.accounts; },
+      accountForPr: () => 'eu', primaryUser: () => 'eu', accountList() { return [this.config.conta]; },
       cancelSession: (id) => { cancelados.push(id); return { ok: true }; },
     };
     const r = await (async () => { ${corpo} })();

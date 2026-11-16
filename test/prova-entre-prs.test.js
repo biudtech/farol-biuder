@@ -58,8 +58,7 @@ const DOC = { path: 'docs/guia.md', sha: 'blob-guia', status: 'modified', lines:
 function motor(rodadas, prompts) {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.autoApproveAll = true;
   e.approvePolicyFor = () => 'wait';
   e.saveDecisions = () => { };

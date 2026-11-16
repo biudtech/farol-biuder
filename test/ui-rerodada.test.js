@@ -49,7 +49,7 @@ test('parado: tom de "precisa de você", motivo em português e escapado', () =>
   const html = P.reRoundBoxHtml(P.reRoundStatus({ estado: 'parado', motivo: 'outros_revisando', detalhe: '<b>ana</b>' }, stale()));
   assert.doesNotMatch(html, /<b>ana<\/b>/);
   assert.match(html, /&lt;b&gt;ana/);
-  for (const motivo of ['rascunho', 'conta_silenciada', 'sem_token', 'orcamento', 'estacionado', 'saiu_de_cena', 'coordenacao', 'pendencia_viva', 'consciencia', 'ancora', 'desconhecido']) {
+  for (const motivo of ['rascunho', 'sem_token', 'orcamento', 'estacionado', 'saiu_de_cena', 'coordenacao', 'pendencia_viva', 'consciencia', 'ancora', 'desconhecido']) {
     const x = P.reRoundStatus({ estado: 'parado', motivo, detalhe: 'conta' }, stale());
     assert.ok(x.texto.length > 10, motivo);
     semTravessao(x.lead + x.texto);
@@ -156,10 +156,10 @@ test('todo contador local de pendência exclui a espera do CI, e a tela tem a se
   const ler = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
   // a espera da prova técnica (17/10/2026) também não pede você; a pausada por algo que só uma
   // pessoa desfaz (`pedeVoce`, 06/11/2026) pede, e todo contador lê o mesmo predicado
-  // o texto só prova a régua comum; o resultado da contagem por conta é observado em
-  // test/ui-fila-revisoes-ativas.test.js (attentionCount soma as pendências que precisam de você)
-  assert.match(ler('ui/telas/contas.js'), /separarPendentes\(estado\(\)\.decisions\?\.pending\)\.precisam\.filter\(/, 'contagem por conta pela mesma régua da seção');
-  assert.match(ler('ui/telas/paleta.js'), /comandosDasPendencias\(estado\(\)\?\.decisions\?\.pending, \{ scopeVisible, decide, decideComConfirmacao, ciObrigatorio: estado\(\)\?\.config\?\.aguardarCiParaAprovar === true \}\)/, 'paleta usa a projeção comum de ações');
+  // o texto só prova a régua comum; o resultado da contagem é observado em
+  // test/ui-fila-revisoes-ativas.test.js (o contador de Pra mim soma as pendências que precisam de você)
+  assert.match(ler('ui/telas/radar.js'), /const \{ precisam \} = separarPendentes\(estado\(\)\.decisions\?\.pending \|\| \[\]\);\n\s+poe\('#rcMim', precisam\.length \+ dadosDaFila\(\)\.total\)/, 'o contador de Pra mim pela mesma régua da seção');
+  assert.match(ler('ui/telas/paleta.js'), /comandosDasPendencias\(estado\(\)\?\.decisions\?\.pending, \{ decide, decideComConfirmacao, ciObrigatorio: estado\(\)\?\.config\?\.aguardarCiParaAprovar === true \}\)/, 'paleta usa a projeção comum de ações');
   const radar = ler('ui/telas/radar.js');
   assert.match(radar, /const \{ precisam: pending, esperandoCi \} = separarPendentes\(/);
   assert.match(radar, /\$\('#decisionsCount'\)\.textContent = pending\.length/, 'o contador da seção (e o da sub-aba, que o lê) só vê quem precisa de você');

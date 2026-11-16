@@ -69,9 +69,8 @@ function avaliacao(achados, visto) {
 function motor() {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'], autoReview: true,
-    onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' }];
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true,
+    onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };
@@ -173,7 +172,7 @@ function sessaoComDivida(e, { corrigir = true, erro, bloqueada = false, malforma
 for (const politica of ['approve', 'wait']) test(`dívida repetida pela sessão é corrigida na mesma conversa e respeita ressalvas=${politica}`, async () => {
   const e = motor();
   // Sem ressalvas aprovaria: no caso wait, só a classe correta mantém a pendência.
-  e.config.accounts[0].onCaveats = politica;
+  e.config.conta.onCaveats = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973)], {});
   const chamadas = sessaoComDivida(e);
   const n = politica === 'approve' ? 1820 : 1821;
@@ -245,7 +244,7 @@ test('interrupção de rede durante a correção continua sendo falha recuperáv
 
 for (const politica of ['request_changes', 'wait']) test(`correção sem resposta não publica texto antigo nem esgota a correção, com defeito real e reprovação=${politica}`, async () => {
   const e = motor();
-  e.config.accounts[0].onReject = politica;
+  e.config.conta.onReject = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973), supressor(1940)], {});
   const chamadas = sessaoComDivida(e, { bloqueada: true, defeitoReal: true });
   const n = politica === 'request_changes' ? 1825 : 1826;
@@ -292,7 +291,7 @@ test('sem identificador de conversa, a correção permanece recuperável e não 
 
 for (const politica of ['request_changes', 'wait']) test(`continuação malformada não transforma o objeto reclassificado em parecer novo, com defeito real e reprovação=${politica}`, async () => {
   const e = motor();
-  e.config.accounts[0].onReject = politica;
+  e.config.conta.onReject = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973), supressor(1940)], {});
   const chamadas = sessaoComDivida(e, { malformada: true, defeitoReal: true });
   const n = politica === 'request_changes' ? 1828 : 1829;

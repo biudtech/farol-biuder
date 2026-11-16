@@ -28,8 +28,7 @@ after(() => {
 function motor(resposta) {
   const e = new Engine();
   e.token = 'x';
-  e.tokens = { eu: 'x' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.pushState = () => { };
   e.refreshTokens = async () => { };
   e.log = () => { };
@@ -58,7 +57,6 @@ test('scanPushbacks grava o marcador antes do registro do pushback', async () =>
   e.pushbackScanned = {};
   e.pushbacks = {};
   e.config.autoPushback = true;
-  e.isMuted = () => false;
   e.accountForPr = () => 'eu';
   const ordem = [];
   e.savePushbackScanned = () => ordem.push('marcador');

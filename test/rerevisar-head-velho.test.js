@@ -48,8 +48,7 @@ const PR = {
 function novoEngine() {
   const engine = new Engine();
   engine.token = 'token-falso';
-  engine.tokens = { eu: 'token-falso' };
-  engine.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  engine.config.conta = { user: 'eu', owners: ['acme'] };
   engine.saveDecisions = () => { };
   engine.pushState = () => { };
   engine.refreshTokens = async () => { };

@@ -55,8 +55,7 @@ const PR = (n, marcas = { requested: true }) => ({ key: `acme/app#${n}`, repo: '
 function motor() {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.approvePolicyFor = () => 'approve';
   e.rejectPolicyFor = () => 'request_changes';
   e.autoReviewFor = () => true;

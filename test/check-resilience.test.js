@@ -27,7 +27,7 @@ const PR = {
 function checkEngine() {
   const e = new Engine();
   // a revisão automática é da conta (30/09/2026): nenhuma conta desta suíte revisa sozinha
-  e.config.accounts = [{ user: 'me', owners: ['acme'], autoReview: false }];
+  e.config.conta = { user: 'me', owners: ['acme'], autoReview: false };
   e.seen = new Set();
   e.reReviewedKeys = new Set();
   e.decisions = { pending: [], resolved: [] };
@@ -112,8 +112,8 @@ test('PR ignorado não ressuscita depois de um ciclo com busca falha', async () 
 // desta suíte, que já monta um Engine real com todo colaborador de rede stubado.
 test('check(): perfil apikey com orçamento estourado NÃO dispara auto-revisão', async () => {
   const e = checkEngine();
-  e.config.accounts[0].autoReview = true; // aqui, ao contrário do default da suíte, queremos que dispare
-  e.tokens = { me: 'tok-me' };
+  e.config.conta.autoReview = true; // aqui, ao contrário do default da suíte, queremos que dispare
+  e.token = 'tok-me';
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 }];
   e.config.claudeProfileId = 'p1';
   e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
@@ -127,8 +127,8 @@ test('check(): perfil apikey com orçamento estourado NÃO dispara auto-revisão
 
 test('check(): perfil apikey dentro do orçamento dispara auto-revisão normalmente', async () => {
   const e = checkEngine();
-  e.config.accounts[0].autoReview = true;
-  e.tokens = { me: 'tok-me' };
+  e.config.conta.autoReview = true;
+  e.token = 'tok-me';
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
   e.config.claudeProfileId = 'p1';
   const launchCalls = [];
@@ -146,7 +146,7 @@ test('check(): perfil apikey dentro do orçamento dispara auto-revisão normalme
 // ciclo). Tinha ZERO noção de orçamento antes desta correção.
 test('check(): retry pós-transitório NÃO relança PR de conta com orçamento estourado', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 }];
   e.config.claudeProfileId = 'p1';
   e.usage.byProfileDay = { [`p1|${localDay()}`]: { sessions: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 1 } };
@@ -163,7 +163,7 @@ test('check(): retry pós-transitório NÃO relança PR de conta com orçamento 
 // do objeto guardado em vez de re-resolver pela URL (que os derrubava).
 test('check(): retry pós-transitório relança normalmente quando o perfil está dentro do orçamento', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
   e.config.claudeProfileId = 'p1';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR, requested: true, knownHead: 'c'.repeat(40) } });
@@ -186,7 +186,7 @@ test('check(): retry pós-transitório relança normalmente quando o perfil est�
 // revisão relançada já está rodando por trás, mentindo "aguardando você".
 test('check(): PR relançado pelo retry sai da fila visível e volta a visto (card não mente "aguardando você") (G9)', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 100 }];
   e.config.claudeProfileId = 'p1';
   e.retryAfterNet.set(PR.key, { tries: 1, pr: { ...PR, requested: true, knownHead: 'c'.repeat(40) } });
@@ -211,8 +211,8 @@ test('check(): PR relançado pelo retry sai da fila visível e volta a visto (ca
 // real fica silencioso.
 test('budgetWarned: toast do orçamento não repete enquanto seguir estourado, mas volta após destravar e travar de novo', async () => {
   const e = checkEngine();
-  e.config.accounts[0].autoReview = true;
-  e.tokens = { me: 'tok-me' };
+  e.config.conta.autoReview = true;
+  e.token = 'tok-me';
   const profile = { id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', baseUrl: '', budgetDaily: 1 };
   e.config.claudeProfiles = [profile];
   e.config.claudeProfileId = 'p1';
@@ -250,80 +250,9 @@ test('budgetWarned: toast do orçamento não repete enquanto seguir estourado, m
 // PR chegar na boca da sessão. runOneHeadless precisa re-checar imediatamente
 // antes de abrir a sessão: se estourou nesse meio tempo, estaciona (não descarta)
 // em vez de gastar uma sessão que o gate já teria barrado no enfileiramento.
-// G18: o mesmo PR pode chegar por duas contas (time com as duas, review pedido
-// nos dois logins). Até aqui o dedup do mineMap mantinha sempre a PRIMEIRA
-// versão vista, mesmo quando essa conta é incapaz de agir (silenciada ou sem
-// token): o PR ficava mudo, preso numa identidade que nunca dispara aviso nem
-// auto-revisão, enquanto a outra conta, capaz, era descartada. Agora a conta
-// CAPAZ (não silenciada, com token) vence a incapaz no dedup; empate mantém a
-// primeira, o comportamento de sempre.
-test('G18: no mesmo PR achado por duas contas, a capaz vence a incapaz no dedup do mineMap', async () => {
-  const e = checkEngine();
-  e.config.accounts = [
-    { user: 'muted-acc', owners: [], muted: true, autoReview: false },
-    { user: 'voce', owners: [], autoReview: false },
-  ];
-  e.tokens = { 'muted-acc': 'tok-muted', voce: 'tok-voce' };
-  // as duas contas acham o MESMO PR (mesma key); cada uma carimba a própria
-  // identidade em `account`, como a busca real faz (gh-queries.js).
-  e.searchPRs = async (extraArgs, user) => {
-    if (extraArgs[0] === '--review-requested=@me') return [{ ...PR, account: user }];
-    return [];
-  };
-  await e.check('test');
-
-  assert.equal(e.queue.length, 1, 'o PR entra na fila uma única vez (dedup por key)');
-  assert.equal(e.accountForPr(e.queue[0]), 'voce',
-    'accountForPr resolve pra conta CAPAZ (não silenciada); o PR não fica mudo preso na conta incapaz');
-});
-
-// G18 (empate): as duas contas são CAPAZES (nem silenciada, nem sem token). O
-// critério só decide quando uma das duas está incapaz; em empate, o dedup
-// mantém a PRIMEIRA vista, o comportamento de sempre (não fica reordenando à
-// toa quando as duas contas podem agir de verdade).
-test('G18: duas contas CAPAZES acham o mesmo PR, a primeira não é destronada (empate mantém a primeira)', async () => {
-  const e = checkEngine();
-  e.config.accounts = [
-    { user: 'primeira', owners: [], autoReview: false },
-    { user: 'segunda', owners: [], autoReview: false },
-  ];
-  e.tokens = { primeira: 'tok-primeira', segunda: 'tok-segunda' };
-  e.searchPRs = async (extraArgs, user) => {
-    if (extraArgs[0] === '--review-requested=@me') return [{ ...PR, account: user }];
-    return [];
-  };
-  await e.check('test');
-
-  assert.equal(e.queue.length, 1, 'o PR entra na fila uma única vez (dedup por key)');
-  assert.equal(e.accountForPr(e.queue[0]), 'primeira',
-    'as duas contas podem agir: o dedup mantém a primeira, sem trocar à toa');
-});
-
-// G18 (sem token): o outro jeito de ficar incapaz, sem depender de muted. Uma
-// conta monitorada sem token pra ela (ver tokenFor) nunca consegue buscar nem
-// postar por essa identidade; o mesmo critério de capacidade tem que pegar
-// esse caso, não só o silenciado.
-test('G18: primeira conta sem token perde pra segunda capaz no dedup do mineMap', async () => {
-  const e = checkEngine();
-  e.config.accounts = [
-    { user: 'sem-token', owners: [], autoReview: false },
-    { user: 'voce', owners: [], autoReview: false },
-  ];
-  e.tokens = { voce: 'tok-voce' }; // 'sem-token' fica de fora: tokenFor devolve null
-  e.searchPRs = async (extraArgs, user) => {
-    if (extraArgs[0] === '--review-requested=@me') return [{ ...PR, account: user }];
-    return [];
-  };
-  await e.check('test');
-
-  assert.equal(e.queue.length, 1, 'o PR entra na fila uma única vez (dedup por key)');
-  assert.equal(e.accountForPr(e.queue[0]), 'voce',
-    'accountForPr resolve pra conta CAPAZ (com token); sem token é incapaz mesmo não estando silenciada');
-});
-
 test('runOneHeadless re-checa o orçamento antes de abrir a sessão (G16)', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.prState = async () => 'OPEN'; // não é o caso do jaMergeado; segue pro gate de orçamento
   // No enfileiramento (toReview/retryTargets, fora deste teste) o gate ainda estava
   // livre, e foi assim que o PR chegou até aqui; agora, na boca da sessão, o teto já
@@ -356,7 +285,7 @@ test('runOneHeadless re-checa o orçamento antes de abrir a sessão (G16)', asyn
 // botão Revisar estacionava o PR de novo, contra o que o guia e a tela prometem.
 test('runOneHeadless: clique manual atravessa o orçamento estourado e abre a sessão', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.prState = async () => 'OPEN';
   e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
   let abriu = false;
@@ -377,7 +306,7 @@ test('runOneHeadless: clique manual atravessa o orçamento estourado e abre a se
 // bloqueio, um aviso, venha ele da fila ou da boca da sessão.
 test('runOneHeadless: orçamento estourado avisa UMA vez por perfil, não por PR do lote (M3)', async () => {
   const e = checkEngine();
-  e.tokens = { me: 'tok-me' };
+  e.token = 'tok-me';
   e.prState = async () => 'OPEN';
   e.budgetBlockedFor = () => ({ id: 'p1', label: 'P1' });
   e.runHeadlessReview = async () => { throw new Error('não deveria abrir sessão nenhuma'); };

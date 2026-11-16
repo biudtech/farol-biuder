@@ -34,11 +34,10 @@ function engineCom(perfis = [A], extra = {}) {
   e.doctor = async () => ({});
   e.saveConfig = () => { };
   e.accountForPr = () => 'eu';
-  e.isMuted = () => false;
-  e.tokens = { eu: 't1' };
+  e.token = 't1';
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });
   e.prState = async () => 'OPEN';
-  e.config.accounts = [{ user: 'eu', owners: ['o'] }];
+  e.config.conta = { user: 'eu', owners: ['o'] };
   e.config.claudeProfiles = perfis;
   e.config.claudeProfileId = '';
   Object.assign(e.config, extra);
@@ -71,15 +70,6 @@ test('sem perfil utilizável não há autenticação, e a sessão nem abre', asy
   } finally {
     if (antes !== undefined) process.env.FAROL_HEADLESS_CMD = antes;
   }
-});
-
-test('conta com perfil próprio usa só ele: perfil próprio quebrado não transborda para o padrão', () => {
-  const e = engineCom([A, B], { claudeProfileId: 'ka' });
-  e.config.accounts = [{ user: 'eu', owners: ['o'], claudeProfileId: 'kb' }];
-  assert.equal(e.resolveClaudeAuth('eu').id, 'kb');
-  e.config.accounts[0].claudeProfileId = 'apagado';
-  assert.equal(e.resolveClaudeAuth('eu'), null, 'a conta presa a um perfil que sumiu fica sem perfil em vez de gastar a chave de outro');
-  assert.deepEqual(perfilMod.problemasDePerfil(e.config), [{ escopo: 'conta', user: 'eu', profileId: 'apagado', code: 'perfil-inexistente' }]);
 });
 
 test('orçamento estourado pausa a automação do perfil, sem trocar de perfil', () => {

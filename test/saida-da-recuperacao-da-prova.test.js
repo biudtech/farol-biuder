@@ -62,8 +62,7 @@ beforeEach(() => {
 function motor(politica = ['wait', 'wait'], { automatica = true } = {}) {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'], autoReview: automatica, onClean: politica[0], onCaveats: politica[1], onReject: 'wait' }];
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: automatica, onClean: politica[0], onCaveats: politica[1], onReject: 'wait' };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };
@@ -82,7 +81,7 @@ function motor(politica = ['wait', 'wait'], { automatica = true } = {}) {
 
 // liga ou desliga "quando chega um PR pra você" na conta, como a tela de Contas faz
 function revisaSozinha(e, ligada) {
-  e.config.accounts[0].autoReview = ligada;
+  e.config.conta.autoReview = ligada;
 }
 
 function sessao(e, extra) {

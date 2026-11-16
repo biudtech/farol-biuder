@@ -24,7 +24,6 @@ function engineAlvo(marcador = '2026-08-01T09:00:00Z') {
   e.panorama = [{ key: 'o/r#2', updatedAt: '2026-08-01T10:00:00Z' }];
   e.pushbackScanned = {};
   e.pushbackFalhas = {};
-  e.isMuted = () => false;
   e.accountForPr = () => 'eu';
   e.config.autoPushback = true;
   e.savePushbackScanned = () => { };

@@ -13,9 +13,8 @@ import {
   automacaoPausadaPor, queueCardHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
   contasNoLimiteDaFila, queueLimitHtml, queueWaitingCardHtml,
 } from '../pure.js';
-import { estado, escopo, peopleOf } from './estado.js';
+import { estado, peopleOf, contaRevisora } from './estado.js';
 import { $, api, toast, copyToClipboard, lembrarAbertos } from './infra.js';
-import { scopeVisible, acctMark, acctOf, prUser } from './contas.js';
 import { revisarUrls } from './consumo.js';
 import { groupedQueue } from '../pure/queue-groups.js';
 import { filaSemRevisoesAtivas, revisaoAtiva, mesmaRevisao } from '../pure/fila.js';
@@ -29,7 +28,7 @@ let queueGrouping = 'none';
 const closedQueueGroups = new Set();
 try {
   const saved = safeJsonParse(localStorage.getItem('farol-queue-view') || '{}') || {};
-  if (['none', 'account', 'repo'].includes(saved.mode)) queueGrouping = saved.mode;
+  if (['none', 'repo'].includes(saved.mode)) queueGrouping = saved.mode;
   for (const key of (Array.isArray(saved.closed) ? saved.closed.slice(0, 256) : [])) if (typeof key === 'string') closedQueueGroups.add(key);
 } catch { /* preferência local ausente ou incompatível: mantém a fila aberta */ }
 function saveQueueView() {
@@ -80,7 +79,7 @@ function switchRadarSub(nome) {
 // Contagem das sub-abas. 'Pra mim' soma a fila visível e o que espera decisão sua.
 function renderRadarNav() {
   const poe = (sel, n) => { const e = $(sel); if (!e) return; e.textContent = n || ''; e.hidden = !n; };
-  const { precisam } = separarPendentes((estado().decisions?.pending || []).filter(scopeVisible));
+  const { precisam } = separarPendentes(estado().decisions?.pending || []);
   poe('#rcMim', precisam.length + dadosDaFila().total);
 }
 // menu ··· do card: abre um por vez, e fecha ao clicar fora
@@ -115,11 +114,10 @@ $('#radarSubs').addEventListener('click', (e) => {
 
 /* ---------- render: decisoes pendentes ---------- */
 function execucaoDaDecisao(d) {
-  const pr = { ...d.pr, key: d.key, account: d.account || d.pr?.account };
+  const pr = { ...d.pr, key: d.key };
   return {
-    ativa: revisaoAtiva(pr, estado().activeSessions || [], prUser),
-    aguardando: (estado().headlessWaiting || []).some(key =>
-      mesmaRevisao(pr, { key, account: estado().headlessWaitingContas?.[key] }, prUser)),
+    ativa: revisaoAtiva(pr, estado().activeSessions || []),
+    aguardando: (estado().headlessWaiting || []).some(key => mesmaRevisao(pr, { key })),
   };
 }
 
@@ -129,7 +127,7 @@ function renderDecisions() {
   const mexendo = (box) => document.activeElement && box.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName);
   if (mexendo($('#decisions')) || mexendo($('#esperaCi'))) { renderResolved(); return; }
   // quem espera o CI não precisa de você: sai do contador e ganha seção própria (30/09/2026)
-  const { precisam: pending, esperandoCi } = separarPendentes((estado().decisions?.pending || []).filter(scopeVisible));
+  const { precisam: pending, esperandoCi } = separarPendentes(estado().decisions?.pending || []);
   // uma leitura só pra toda a renderização: os cards desta passada têm que
   // enxergar o MESMO mapa de pessoas, senão um SSE no meio do map faria dois
   // cards da mesma tela discordarem sobre o papel de alguém
@@ -142,18 +140,16 @@ function renderDecisions() {
   $('#esperaCiCount').textContent = esperandoCi.length;
   const naEspera = new Set(esperandoCi);
   const card = d => {
-    const m = acctMark(d);
     const author = (d.pr && d.pr.author) || d.author || '';
     // card de commit novo (v2.59.3): barra, veredito, motivos, aviso e botões saem daqui
     const meta = staleCardMeta(d, (estado().reRounds || {})[d.key], execucaoDaDecisao(d), ciObrigatorio);
     // Compacta (07/11/2026): uma linha com a frase, o trio da prontidão e a ação principal
-    if (!cardCheio(d.key)) return linhaDaDecisao(d, meta, { mark: m, ciObrigatorio, espera: naEspera.has(d) });
+    if (!cardCheio(d.key)) return linhaDaDecisao(d, meta, { ciObrigatorio, espera: naEspera.has(d) });
     return `
-    <div class="card decision ${meta.cardClass}" data-id="${esc(d.id)}" data-url="${esc(d.pr?.url || '')}" style="${m.style}">
+    <div class="card decision ${meta.cardClass}" data-id="${esc(d.id)}" data-url="${esc(d.pr?.url || '')}">
       <div class="decision-head">
         ${meta.verdictHtml}
         <a class="dec-ref" href="${esc(d.pr?.url || '#')}" target="_blank" rel="noreferrer">${esc(d.key)}</a>
-        ${m.chip}
         ${d.card ? `<span class="pill">${esc(d.card)}</span>` : '<span class="pill">sem card</span>'}
         <span class="dec-when" title="${esc(fmtStamp(d.createdAt))}">${esc(fmtWhenDay(d.createdAt))}</span>
         ${setaDoCard(d.key)}
@@ -201,12 +197,11 @@ function renderResolved() {
   const box0 = $('#resolved');
   // guarda de foco: não re-renderiza enquanto você digita a nota / escolhe o desfecho
   if (document.activeElement && box0.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
-  const resolved = (estado().decisions?.resolved || []).filter(scopeVisible);
+  const resolved = estado().decisions?.resolved || [];
   const wrap = $('#resolvedWrap');
   wrap.hidden = resolved.length === 0;
   if (!resolved.length) { $('#resolved').innerHTML = ''; return; }
-  // a linha inteira mora no pure.js (testada); aqui só se resolve o que depende de
-  // estado global: a etiqueta da conta (escopo/TWEAK).
+  // a linha inteira mora no pure.js (testada)
   // Compacta: Revisões recentes vira uma linha "N resolvidas hoje · mostrar" (07/11/2026)
   if (!recentesVisiveis()) { $('#resolved').innerHTML = rodapeDasRecentesHtml(resolved, false); return; }
   const topo = ehCompacta() ? rodapeDasRecentesHtml(resolved, true) : '';
@@ -216,19 +211,18 @@ function renderResolved() {
     revisando: execucaoDaDecisao(r).ativa,
     markdown: md,
     openKeys: radarAbertos,
-    chip: acctMark(r).chip
   })).join('');
 }
 
 /* ---------- render: radar ---------- */
 function dadosDaFila() {
-  const semAtivas = lista => filaSemRevisoesAtivas(lista, estado().activeSessions || [], prUser);
-  const q = semAtivas(estado().queue || []).filter(scopeVisible);
+  const semAtivas = lista => filaSemRevisoesAtivas(lista, estado().activeSessions || []);
+  const q = semAtivas(estado().queue || []);
   const decisoes = new Set((estado().decisions?.pending || []).map(d => d.key));
   const acionaveis = new Set(q.map(pr => pr.key));
   const esperando = new Set(estado().headlessWaiting || []);
-  const aguardando = semAtivas(estado().headlessWaitingPrs || []).filter(pr => scopeVisible(pr)
-    && esperando.has(pr.key) && !acionaveis.has(pr.key) && !decisoes.has(pr.key));
+  const aguardando = semAtivas(estado().headlessWaitingPrs || []).filter(pr =>
+    esperando.has(pr.key) && !acionaveis.has(pr.key) && !decisoes.has(pr.key));
   const total = q.length + aguardando.length;
   return { q, aguardando, total };
 }
@@ -237,10 +231,10 @@ function dadosDaFila() {
 // e, sem ela, a conta
 function manualDe(pr) {
   const mapa = estado().inicioAutomatico || {};
-  return Object.hasOwn(mapa, pr.key) ? !mapa[pr.key] : (acctOf(pr) || {}).autoReview === false;
+  return Object.hasOwn(mapa, pr.key) ? !mapa[pr.key] : (contaRevisora() || {}).autoReview === false;
 }
 function cardDaFila(pr, posicao, ctx) {
-  if (!cardCheio(pr.key)) return linhaDaFila(pr, { mark: ctx.mark, posicao, parado: !!(ctx.parked || {})[pr.key], manual: manualDe(pr) });
+  if (!cardCheio(pr.key)) return linhaDaFila(pr, { posicao, parado: !!(ctx.parked || {})[pr.key], manual: manualDe(pr) });
   return queueCardHtml(pr, { ...ctx, pronLado: setaDoCard(pr.key) });
 }
 function cardDaFilaDeExecucao(pr, ctx) {
@@ -252,7 +246,7 @@ function renderQueue() {
   const qbox = $('#queue');
   if (document.activeElement && qbox.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   const { q, aguardando, total } = dadosDaFila();
-  renderResumoPraMim(scopeVisible, total);
+  renderResumoPraMim(total);
   const people = peopleOf();   // idem renderDecisions: um mapa só pra toda a passada
   $('#queueCount').hidden = total === 0;
   // sem itens não há o que agrupar: o seletor some junto com a fila
@@ -274,10 +268,8 @@ function renderQueue() {
     // aprovadosHoje compara o dia em fuso LOCAL e vive no pure.js (testada la)
     box.innerHTML = queueEmptyOkHtml({
       aprovados: aprovadosHoje(estado().decisions?.resolved),
-      // as orgs saem da régua do que é DE FATO buscado (conta não silenciada e com
-      // token), no escopo em que a lista acima foi filtrada. Ler config.owners aqui
-      // mostrava um campo que o accountList() do server descarta quando há contas.
-      owners: orgsMonitoradas(estado().accounts, escopo()),
+      // as orgs saem da régua do que é DE FATO buscado (conta com token)
+      owners: orgsMonitoradas(estado().accounts),
       intervalSeconds: estado().config?.intervalSeconds,
       // fila vazia com a automação pausada por teto não é "está tudo em dia":
       // é "nada vai ser revisado sozinho até liberar" (ver automacaoPausadaPor)
@@ -286,22 +278,18 @@ function renderQueue() {
     return;
   }
   const parked = estado().parked || {};
-  // limite do plano e quem mais está revisando (02/10/2026, ui/pure/revisando.js): conta com
-  // 2 ou mais cards na mesma espera ganha um aviso só no topo, e os cards a forma curta
-  const contaDe = (pr) => (acctOf(pr) || {}).user || '';
-  const limiteDe = (pr) => {
-    const conta = acctOf(pr) || {};
-    return manualDe(pr) ? 0 : conta.limitePlanoAte || 0;
-  };
+  // limite do plano (02/10/2026, ui/pure/revisando.js): com 2 ou mais cards na mesma espera,
+  // a fila ganha um aviso só no topo, e os cards a forma curta
+  const conta = contaRevisora() || {};
+  const contaDe = () => conta.user || '';
+  const limiteDe = (pr) => (manualDe(pr) ? 0 : conta.limitePlanoAte || 0);
   const noTopo = contasNoLimiteDaFila(q, { contaDe, limiteDe, parked });
-  const varias = Object.keys(noTopo).length > 1;
-  const avisos = Object.entries(noTopo).map(([conta, v]) => queueLimitHtml(acctOf({ account: conta }), v.ate, v.n, varias)).join('');
-  const rows = q.map((pr, i) => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFila(pr, i + 1, {
-    people, mark: acctMark(pr), parked,
+  const avisos = Object.values(noTopo).map((v) => queueLimitHtml(v.ate, v.n)).join('');
+  const rows = q.map((pr, i) => ({ repo: pr.repo, html: cardDaFila(pr, i + 1, {
+    people, parked,
     limiteAte: limiteDe(pr), limiteNoTopo: !!noTopo[contaDe(pr)], manual: manualDe(pr),
     esperaConflito: estado().esperaConflito,
-  }) })).concat(aguardando.map(pr => ({ account: contaDe(pr), repo: pr.repo, html: cardDaFilaDeExecucao(pr, {
-    mark: acctMark(pr),
+  }) })).concat(aguardando.map(pr => ({ repo: pr.repo, html: cardDaFilaDeExecucao(pr, {
     espera: (estado().headlessWaitingDetails || {})[pr.key],
   }) })));
   box.innerHTML = avisos + groupedQueue(rows, queueGrouping, closedQueueGroups);

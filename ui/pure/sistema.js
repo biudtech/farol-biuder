@@ -14,8 +14,7 @@
 //
 // Checks de OPERAÇÃO: os de ambiente respondem "o Farol consegue rodar?", e nenhum respondia
 // "o Farol vai achar alguma coisa?". Conta sem organização deixava os cinco verdes e o
-// painel vazio para sempre, sem erro nem log. Um check por conta, mais um agregado para o
-// caso de tudo silenciado.
+// painel vazio para sempre, sem erro nem log. Um check por conta.
 //
 // Diagnóstico: é a única saída do app que alguém lê fora do app, então mudança aqui é
 // mudança de contrato com quem socorre.
@@ -156,7 +155,7 @@ export function logSummaryShort(grupos, n = 3) {
 export function operationChecks(accounts) {
   const lista = (Array.isArray(accounts) ? accounts : []).filter(a => a && String(a.user || '').trim());
   if (!lista.length) return [];
-  const alvo = u => `sys:accounts:.acct-label[data-user="${escAttrSelector(u)}"]`;
+  const alvo = u => `sys:accounts:.acct-owners[data-user="${escAttrSelector(u)}"]`;
   const checks = lista.map(a => {
     const orgs = (a.owners || []).filter(Boolean);
     if (!orgs.length) {
@@ -176,14 +175,8 @@ export function operationChecks(accounts) {
         detail: `no limite de requisições do GitHub: as buscas desta conta voltam às ${fmtClock(Number(a.limiteGhAte))}` };
     }
     return { ok: true, label: `Monitoramento de @${a.user}`, goto: alvo(a.user),
-      detail: `vigiando ${orgs.join(', ')}${a.muted ? ' (silenciada: não aparece no painel)' : ''}` };
+      detail: `vigiando ${orgs.join(', ')}` };
   });
-  // silenciar UMA conta é escolha; silenciar todas esvazia o painel inteiro, e aí
-  // o vazio volta a não ter explicação, que é justamente o defeito de origem
-  if (lista.length && lista.every(a => a.muted)) {
-    checks.push({ ok: false, label: 'Painel', goto: 'sys:accounts:#accountsManager',
-      detail: 'todas as contas estão silenciadas: nada aparece no painel, mesmo com PR esperando' });
-  }
   return checks;
 }
 
@@ -272,11 +265,10 @@ export function runtimeChecks(doctor, _config = {}, claudePerfis = {}) {
 // A2: o texto diz o que a sessão FAZ nesse caso (usa o primeiro perfil de chave de API
 // utilizável, ou nenhum), sem fingir que o perfil escolhido está valendo.
 function perfilProblemaTexto(p) {
-  const onde = p.escopo === 'conta' ? `a conta @${p.user}` : 'o padrão do Farol';
   const causa = p.code === 'perfil-invalido'
     ? `aponta para o perfil "${p.profileId}", que está incompleto (falta a chave)`
     : `aponta para o perfil "${p.profileId}", que não existe mais`;
-  return `${onde} ${causa}: as sessões dela não usam esse perfil até você escolher outro`;
+  return `o padrão do Farol ${causa}: as sessões não usam esse perfil até você escolher outro`;
 }
 
 

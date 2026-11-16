@@ -3,9 +3,7 @@
 // conteúdo não mudou.
 //
 // Os cards saíram do app.js na onda 5, quarto passo: o render lê o estado, filtra e seta
-// os contadores; o CARD em si só recebe o PR e um ctx. O acctMark ficou no app.js de
-// propósito e o ctx recebe o RESULTADO dele (ctx.mark): ele depende de SCOPE, TWEAK e da
-// tabela de contas, uma cadeia que não tem a ver com desenhar o card.
+// os contadores; o CARD em si só recebe o PR e um ctx.
 //
 // O vazio que CONFIRMA: vazio bom merece dizer o que o app fez, não só que não há nada
 // (quantos PRs foram aprovados sozinhos hoje, quais orgs são monitoradas e de quanto em
@@ -20,9 +18,8 @@ import { avisosDoCard, limitNoteHtml, othersLineHtml } from './revisando.js';
 
 /* A automação está pausada por teto de gasto? PURA.
 
-   Devolve o primeiro perfil BLOQUEADO que alguma conta monitorada usa de fato
-   (override da conta, senão o padrão do Farol), ou null. Conta silenciada não conta:
-   ela já está fora da automação por escolha.
+   Devolve o perfil padrão do Farol quando ele está BLOQUEADO (é o que a conta revisora usa),
+   ou null.
 
    POR QUE ISTO EXISTE (medido em 30/08/2026): o teto diário do perfil padrão estourou
    às 19:52, num dia em que a autoanálise (que passa por fora do gate, por decisão)
@@ -35,13 +32,9 @@ export function automacaoPausadaPor(accounts, config, usage) {
   const budgets = (usage && usage.budgets) || [];
   if (!budgets.length) return null;
   const padrao = (config && config.claudeProfileId) || '';
-  for (const a of accounts || []) {
-    if (!a || a.muted) continue;
-    const id = a.claudeProfileId || padrao;
-    const b = budgets.find(x => x.id === id);
-    if (b && b.blocked) return b;
-  }
-  return null;
+  if (!(accounts || []).some(a => a)) return null;
+  const b = budgets.find(x => x.id === padrao);
+  return b && b.blocked ? b : null;
 }
 
 // Frase do bloqueio, no eixo certo. Os motivos `-previsto` dizem que o gasto ainda NÃO
@@ -64,21 +57,13 @@ function textoPausa(b) {
    com contas o motor ignorava aquele campo e a tela seguia exibindo ele. Medido em
    12/09/2026: `config.owners` dizia uma org enquanto as contas monitoravam cinco.
 
-   A régua é o que de fato é BUSCADO, e por isso as duas exclusões não são zelo:
-   `searchPRs` pula conta sem token (`lib/engine/gh-queries.js`) e conta silenciada está
-   fora da automação por escolha, como `automacaoPausadaPor` logo acima já reconhece.
-
-   O escopo entra aqui porque a LISTA da fila é filtrada por ele (`scopeVisible`) e a frase
-   não era: escolher uma conta no seletor seguia citando org que ela nem cobre. */
-export function orgsMonitoradas(accounts, scope) {
-  const todas = String(scope || 'all') === 'all';
-  const alvo = String(scope || '').toLowerCase();
-  // minúscula -> primeira grafia vista: a mesma org em duas contas é uma org só, e quem
-  // lê deve ver o nome do jeito que cadastrou, não normalizado
+   A régua é o que de fato é BUSCADO: `searchPRs` pula conta sem token
+   (`lib/engine/gh-queries.js`). */
+export function orgsMonitoradas(accounts) {
+  // minúscula -> primeira grafia vista: quem lê deve ver o nome do jeito que cadastrou
   const vistas = new Map();
   for (const a of Array.isArray(accounts) ? accounts : []) {
-    if (!a || a.muted || !a.tokenOk) continue;
-    if (!todas && String(a.user || '').toLowerCase() !== alvo) continue;
+    if (!a || !a.tokenOk) continue;
     for (const org of orgsDaConta(a)) if (!vistas.has(org.toLowerCase())) vistas.set(org.toLowerCase(), org);
   }
   return [...vistas.values()];
@@ -155,7 +140,6 @@ export function parkedNoteHtml(info, rotulo = 'Revisar') {
 }
 
 export function queueCardHtml(pr, ctx) {
-  const m = ctx.mark;
   // os selos inline saem do template: dentro dele o gate conta todos os ternarios
   // do literal como um statement so, e o template fica ilegivel de tao denso
   const seloRascunho = pr.isDraft ? '<span class="badge">rascunho</span>' : '';
@@ -166,7 +150,7 @@ export function queueCardHtml(pr, ctx) {
   // revisando, o limite some, porque fala de uma revisão automática que não
   // vai acontecer.
   // a decisão do motor por PR (conta, organização e autor); sem ela, a conta
-  const automaticaDesativada = typeof ctx.manual === 'boolean' ? ctx.manual : m.acct?.autoReview === false;
+  const automaticaDesativada = ctx.manual === true;
   const parkedInfo = (ctx.parked || {})[pr.key];
   const av = avisosDoCard(pr, { temParada: !!parkedInfo, limiteAtivo: !automaticaDesativada && Number(ctx.limiteAte) > Date.now(), limiteNoTopo: !!ctx.limiteNoTopo });
   const parked = parkedNoteHtml(parkedInfo, av.rotulo);
@@ -179,10 +163,10 @@ export function queueCardHtml(pr, ctx) {
   // por filho (avatar, conteúdo, ações, na anatomia do Claude Design), e um quarto filho
   // jogava o avatar na coluna elástica e as ações para baixo (visão Todas, 25/09/2026).
   return `
-    <div class="card pr-card urgent" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}" style="${m.style}">
+    <div class="card pr-card urgent" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}">
       ${avatar(pr.author)}
       <div class="info">
-        <div class="pr-ref">${m.dot}<a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>${m.chip}${seloRascunho}${seloRepedida}</div>
+        <div class="pr-ref"><a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>${seloRascunho}${seloRepedida}</div>
         <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
         <div class="pr-sub">${personMention(pr.author, 'xs')} · atualizado ${fmtRel(pr.updatedAt)}${papel}</div>
         ${parked}${pessoas}${limite}${manual}${conflito}
@@ -207,13 +191,12 @@ export function queueCardHtml(pr, ctx) {
 // Revisar/Ignorar: o executor ainda pode pega-lo, e um
 // segundo disparo aqui criaria duas revisoes para o mesmo commit.
 export function queueWaitingCardHtml(pr, ctx) {
-  const m = ctx.mark;
   const estado = 'Na fila de execução';
   const espera = filaEsperaHtml(ctx.espera);
-  return `<div class="card pr-card" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}" style="${m.style}">
+  return `<div class="card pr-card" data-key="${esc(pr.key)}" data-url="${esc(pr.url)}">
     ${avatar(pr.author)}
     <div class="info">
-      <div class="pr-ref">${m.dot}<a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a>${m.chip}</div>
+      <div class="pr-ref"><a href="${esc(pr.url)}" target="_blank" rel="noreferrer">${esc(pr.key)}</a></div>
       <div class="pr-title" title="${esc(pr.title)}">${esc(pr.title)}</div>
       <div class="pr-sub">${personMention(pr.author, 'xs')} · atualizado ${fmtRel(pr.updatedAt)}</div>
       <div class="pr-coord">${estado}. Ainda não há resultado desta execução.</div>${espera}

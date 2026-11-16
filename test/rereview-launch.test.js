@@ -40,7 +40,6 @@ function engineBase() {
   e.retryAfterNet = new Map();
   e.skipComentado = {};
   e.accountForPr = () => 'conta';
-  e.isMuted = () => false;
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
   e.budgetBlockedFor = () => false;

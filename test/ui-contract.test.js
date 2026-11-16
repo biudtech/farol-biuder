@@ -54,7 +54,7 @@ test('a paleta de comandos usa funções de decisão que EXISTEM no app.js', () 
   assert.match(APPJS, /function decide\(/, 'decide() definida');
   assert.match(APPJS, /async function decideComConfirmacao\(/, 'decideComConfirmacao() definida');
   assert.match(fonteDosPuros(), /run: \(\) => decideComConfirmacao\(/, 'a paleta chama a versão com confirmação');
-  assert.match(APPJS, /comandosDasPendencias\(estado\(\)\?\.decisions\?\.pending, \{ scopeVisible, decide, decideComConfirmacao, ciObrigatorio: estado\(\)\?\.config\?\.aguardarCiParaAprovar === true \}\)/);
+  assert.match(APPJS, /comandosDasPendencias\(estado\(\)\?\.decisions\?\.pending, \{ decide, decideComConfirmacao, ciObrigatorio: estado\(\)\?\.config\?\.aguardarCiParaAprovar === true \}\)/);
 });
 
 test('a paleta não lista o botão da própria paleta', () => {
@@ -66,16 +66,16 @@ test('o clique num item da paleta fecha a paleta ANTES de rodar e captura a reje
   assert.match(APPJS, /cmdClose\(\); Promise\.resolve\(\)\.then\(\(\) => items\[idx\]\.run\(\)\)\.catch\(/);
 });
 
-test('paleta individual e lote excluem reconferência, espera e autoria; lote respeita o escopo', async () => {
+test('paleta individual e lote excluem reconferência, espera e autoria', async () => {
   const normal = id => ({ id, key: `acme/repo#${id}`, verdict: 'approve', technical: { state: 'pass' } });
   const pendentes = [normal('1'), { ...normal('2'), blockedKind: 'technical_recheck' },
     { ...normal('3'), esperaProva: {} }, { ...normal('4'), esperaCi: {} }, { ...normal('5'), prProprio: true },
-    { ...normal('6'), oculta: true }, normal('7'), { ...normal('8'), blockedKind: 'stale_head' }];
+    normal('7'), { ...normal('8'), blockedKind: 'stale_head' }];
   const chamadas = [], confirmadas = [];
-  const comandos = comandosDasPendencias(pendentes, { scopeVisible: d => !d.oculta,
+  const comandos = comandosDasPendencias(pendentes, {
     decide: async (...args) => chamadas.push(args), decideComConfirmacao: (...args) => confirmadas.push(args) });
   assert.deepEqual(comandos.filter(c => c.kind === 'decisão' && c.label.startsWith('Aprovar')).map(c => c.label),
-    ['Aprovar acme/repo#1', 'Aprovar acme/repo#6', 'Aprovar acme/repo#7']);
+    ['Aprovar acme/repo#1', 'Aprovar acme/repo#7']);
   const lote = comandos.find(c => c.kind === 'lote');
   assert.equal(lote.label, 'Aprovar as 2 pendentes');
   await lote.run();

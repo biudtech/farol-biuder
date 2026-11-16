@@ -89,14 +89,11 @@ test('nota do limite: longa com o rótulo do botão, curta sob o aviso do topo, 
   assert.equal(limitNoteHtml(0, 'longa', 'Revisar', AGORA), '');
 });
 
-test('aviso no topo: com uma conta não nomeia a conta; com várias nomeia e põe o ponto', () => {
-  const uma = queueLimitHtml({ user: 'eu', label: 'BIUD', color: '#f0a' }, AS_21, 3, false, AGORA);
-  assert.equal(texto(uma), 'Revisão automática esperando o limite do plano do Claude: recomeço sozinho às 21:00. Vale para 3 PRs desta fila. O botão Revisar de cada um tenta agora, mas pode bater no mesmo limite.');
-  assert.doesNotMatch(uma, /acct-dot/);
-  const varias = queueLimitHtml({ user: 'eu', label: 'BIUD', color: '#f0a' }, AS_21, 2, true, AGORA);
-  assert.match(texto(varias), /^Revisão automática da conta BIUD esperando/);
-  assert.match(varias, /acct-dot/);
-  assert.match(varias, /role="status"/);
+test('aviso no topo: uma conta por instância, então o aviso não nomeia conta nem põe ponto', () => {
+  const aviso = queueLimitHtml(AS_21, 3, AGORA);
+  assert.equal(texto(aviso), 'Revisão automática esperando o limite do plano do Claude: recomeço sozinho às 21:00. Vale para 3 PRs desta fila. O botão Revisar de cada um tenta agora, mas pode bater no mesmo limite.');
+  assert.doesNotMatch(aviso, /acct-dot|da conta/);
+  assert.match(aviso, /role="status"/);
 });
 
 test('contasNoLimiteDaFila: 2 ou mais cards da mesma conta, sem contar parado nem fora de cena', () => {

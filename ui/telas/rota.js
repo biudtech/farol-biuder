@@ -20,17 +20,15 @@
    Quem chega em `/` (o login do Google, quando não guarda o caminho pedido) vê a tela como
    sempre (o que estava guardado), e o endereço passa a dizer onde ela está. */
 
-import { enderecoDaPagina, lerRota, escreverRota, mudancaDeRota, accountBarVisible, validScope, JANELA_PADRAO_DO_CONSUMO } from '../pure.js';
-import { estado, abaAtual, escopo, definirEscopo } from './estado.js';
+import { enderecoDaPagina, lerRota, escreverRota, mudancaDeRota, JANELA_PADRAO_DO_CONSUMO } from '../pure.js';
+import { estado, abaAtual } from './estado.js';
 import { aoNavegar } from './registro.js';
-import { guardarEscopo } from './contas.js';
 import { radarSubAtual, switchRadarSub } from './radar.js';
 import { secaoDoSistema, sysGoTo } from './sistema.js';
 import { janelaDoConsumo, escolherJanelaDoConsumo } from './consumo.js';
 import { caixaAberta, abrirCaixaRevisao, fecharCaixaRevisao } from './caixa-revisao.js';
 
 let _switchTab = null;
-let _rerenderScope = null;
 let ULTIMO_ENDERECO = '';  // o que este módulo escreveu (ou aplicou) por último
 let APLICANDO = false;     // aplicando uma rota: a tela muda, mas não é navegação nova
 let ROTA_DE_ENTRADA = null; // a do endereço aberto, reaplicada quando o primeiro estado chega
@@ -48,12 +46,9 @@ function converterAntigo(rota) {
   history.replaceState({ farol: true, caixa: false }, '', ULTIMO_ENDERECO);
 }
 
-function nContas() { return ((estado() && estado().accounts) || []).length; }
-
 function capturarRota() {
   const aba = abaAtual();
   const rota = { aba, sub: radarSubAtual(), secao: secaoDoSistema(), pr: caixaAberta() };
-  if (accountBarVisible(nContas(), aba) && escopo() !== 'all') rota.conta = escopo();
   if (aba === 'consumo') rota.janela = janelaDoConsumo();
   return rota;
 }
@@ -78,18 +73,6 @@ function sincronizarUrl(substituir = false) {
   history.replaceState(estadoDaEntrada(rota), '', endereco);
 }
 
-function aplicarConta(rota) {
-  let alvo = rota.conta || '';
-  if (!alvo && accountBarVisible(nContas(), rota.aba)) alvo = 'all';
-  // a mesma régua da barra de contas (validScope): conta que não está configurada aqui não
-  // vira escopo nem fica guardada; cai em Todas na hora, e o endereço é corrigido
-  if (alvo) alvo = validScope(alvo, ((estado() && estado().accounts) || []).map((a) => a.user));
-  if (!alvo || alvo === escopo()) return;
-  definirEscopo(alvo);
-  guardarEscopo(alvo);
-  if (estado()) _rerenderScope();
-}
-
 function aplicarRadar(rota) {
   if (radarSubAtual() !== rota.sub) switchRadarSub(rota.sub);
 }
@@ -112,7 +95,6 @@ function aplicarJanela(janela) {
 function aplicarRota(rota) {
   APLICANDO = true;
   try {
-    aplicarConta(rota);
     if (abaAtual() !== rota.aba) _switchTab(rota.aba);
     if (rota.aba === 'consumo') aplicarJanela(rota.janela);
     if (rota.aba === 'radar') aplicarRadar(rota);
@@ -161,7 +143,6 @@ function depoisDoEstado() {
 
 function initRota(deps) {
   _switchTab = deps.switchTab;
-  _rerenderScope = deps.rerenderScope;
   if (!historicoDisponivel()) return;
   // A rota de entrada espera o primeiro estado: antes dele as telas não sabem desenhar
   // (Sistema, por exemplo, lê o snapshot ao entrar) e as abas opcionais nem existem. O

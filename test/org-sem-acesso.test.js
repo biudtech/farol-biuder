@@ -22,7 +22,7 @@ const SEM_ACESSO = 'Invalid search query "state:open type:pr user:team-x".';
 
 function motor() {
   const e = new Engine();
-  e.tokens = { alex: 'tok' };
+  e.token = 'tok';
   e.logs = [];
   e.log = (nivel, msg) => e.logs.push({ nivel, msg });
   return e;

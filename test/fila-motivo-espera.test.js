@@ -1,7 +1,6 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { processHeadless } from '../lib/engine/headless-fila.js';
-import { esperaParaTela } from '../lib/engine/conta-na-tela.js';
+import { processHeadless, esperaParaTela } from '../lib/engine/headless-fila.js';
 import { queueWaitingCardHtml } from '../ui/pure/radar.js';
 
 beforeEach(t => {

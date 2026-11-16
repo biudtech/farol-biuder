@@ -8,13 +8,12 @@ function gruposDaPintura(pintar) {
   const grupo = (id, campos, visivel = () => true) => ({ id, campos, visivel, pintar: pintar[id] });
   return [
     grupo('plataforma', ['app']),
-    grupo('contas', ['accounts', 'account', 'config', 'queue', 'decisions', 'activeSessions']),
     grupo('status', ['app', 'status', 'error', 'account', 'activeSessions', 'buscasPausadas']),
-    grupo('sessoes', ['activeSessions', 'activity', 'headlessWaiting', 'headlessWaitingContas', 'accounts'], mim),
-    grupo('decisoes', ['decisions', 'accounts', 'config', 'reRounds', 'pushbacks', 'activeSessions', 'headlessWaiting', 'headlessWaitingContas'], mim),
+    grupo('sessoes', ['activeSessions', 'activity', 'headlessWaiting', 'accounts'], mim),
+    grupo('decisoes', ['decisions', 'accounts', 'config', 'reRounds', 'pushbacks', 'activeSessions', 'headlessWaiting'], mim),
     grupo('fila', ['queue', 'headlessWaitingPrs', 'activeSessions', 'decisions', 'headlessWaiting', 'headlessWaitingDetails', 'accounts', 'config', 'parked', 'usage', 'status', 'lastCheckAt'], mim),
     grupo('navegacao', ['queue', 'decisions', 'activeSessions', 'headlessWaiting', 'accounts'], radar),
-    grupo('configuracoes', ['app', 'paths', 'config', 'accounts', 'account', 'contasGh', 'doctor', 'jiraSites', 'modelos'], sistema),
+    grupo('configuracoes', ['app', 'paths', 'config', 'accounts', 'account', 'doctor', 'jiraSites', 'modelos'], sistema),
     grupo('relogio', ['lastCheckAt', 'nextCheckAt', 'status', 'activeSessions', 'activity']),
     grupo('consumo', ['usage', 'config', 'filaJusta', 'accounts', 'activeSessions'], () => telaVisivel('consumo')),
   ];

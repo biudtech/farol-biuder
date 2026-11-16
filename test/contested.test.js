@@ -34,7 +34,6 @@ function engineWithPolicy(policy) {
   const e = new Engine();
   // política mais permissiva possível: se o gate deixar passar, é bug
   e.config.autoApproveAll = true;
-  e.config.accounts = [];
   e.approvePolicyFor = () => policy;
   e.rejectPolicyFor = () => 'request_changes';
   e.accountForPr = () => 'alguem';

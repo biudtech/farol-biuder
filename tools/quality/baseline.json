@@ -1,6 +1,6 @@
 {
   "lib/engine/decision.js": {
-    "maxLines": 164,
+    "maxLines": 162,
     "jsonStringifyCru": 2,
     "profundidadeExcedida": 2
   },
@@ -17,7 +17,7 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 457,
+    "maxLines": 451,
     "profundidadeExcedida": 3
   },
   "lib/engine/session.js": {
@@ -45,10 +45,9 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 536,
-    "jsonStringifyCru": 1,
+    "maxLines": 471,
     "processEnvDireto": 5,
-    "ternarioAninhado": 3,
+    "ternarioAninhado": 2,
     "tempoMagico": 1,
     "profundidadeExcedida": 5
   },
@@ -71,9 +70,6 @@
   "ui/telas/consumo.js": {
     "ternarioAninhado": 1
   },
-  "ui/telas/contas.js": {
-    "ternarioAninhado": 3
-  },
   "ui/telas/diagnostico.js": {
     "ternarioAninhado": 2
   },
@@ -91,6 +87,6 @@
     "ternarioAninhado": 2
   },
   "ui/telas/time.js": {
-    "ternarioAninhado": 2
+    "ternarioAninhado": 1
   }
 }

@@ -105,7 +105,7 @@ button { font: inherit; }
 .tabs-row { display: contents; }
 body.electron .topbar-main { padding-right: 150px; }
 body.electron.mac .topbar-main { padding-right: 22px; padding-left: 84px; }
-.topbar button, .topbar nav, .topbar .account-bar { -webkit-app-region: no-drag; }
+.topbar button, .topbar nav { -webkit-app-region: no-drag; }
 .brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .logo { width: 24px; height: 24px; flex: none; }
 .logo .beam { fill: var(--accent); }
@@ -138,42 +138,6 @@ body.electron.mac .topbar-main { padding-right: 22px; padding-left: 84px; }
 .nav-item.active { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
 
 .top-actions { display: flex; align-items: center; gap: 8px; }
-
-/* ---------- barra de contas ---------- */
-.account-bar { display: flex; align-items: center; gap: 6px; padding: 0 22px 10px; flex-wrap: wrap; }
-.acct-seg {
-  display: inline-flex; align-items: center; gap: 7px;
-  border: 1px solid transparent; background: transparent; color: var(--muted);
-  padding: 5px 12px; border-radius: 99px; cursor: pointer; font-weight: 600; font-size: 12.5px;
-  transition: all .15s ease; white-space: nowrap;
-}
-.acct-seg:hover { background: var(--surface-2); color: var(--text); }
-.acct-seg .seg-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ac); flex: none; }
-.acct-seg.active { color: var(--seg-fg, var(--text)); background: var(--seg-bg, var(--surface-2)); }
-.acct-seg.active .seg-dot { box-shadow: 0 0 6px var(--ac); }
-.acct-seg.muted { opacity: .62; }
-.acct-seg .seg-count { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 0 7px; min-width: 18px; text-align: center; background: var(--seg-badge-bg, var(--border)); color: var(--seg-badge-fg, var(--muted)); }
-.acct-seg .seg-pause { font-size: 11px; opacity: .8; }
-
-/* ---------- faixa de identidade ---------- */
-.identity-strip {
-  display: flex; align-items: center; gap: 11px;
-  padding: 11px 15px; margin: 4px 0 2px;
-  border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface);
-}
-.identity-strip.one { border-left: 3px solid var(--ac); }
-.identity-strip .id-avatar {
-  width: 30px; height: 30px; border-radius: 50%; flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 13px; background: var(--ac); color: var(--ac-ink);
-}
-.identity-strip .id-body { min-width: 0; flex: 1; }
-.identity-strip .id-line { font-size: 13.5px; }
-.identity-strip .id-handle { font-weight: 700; color: var(--ac); }
-.identity-strip .id-org { color: var(--muted); font-size: 12px; }
-.identity-strip .id-summary { font-size: 13px; color: var(--muted); }
-.identity-strip .id-tag { font-size: 10.5px; font-weight: 700; color: var(--ac); background: var(--ac-soft); border-radius: 99px; padding: 2px 9px; flex: none; }
 
 /* ---------- layout ---------- */
 main { max-width: 1000px; margin: 0 auto; padding: 16px 24px 60px; }
@@ -265,8 +229,6 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 .act-more { font-weight: 700; letter-spacing: 1px; line-height: 1; }
 
 /* marcador de conta no card */
-.acct-chip { font-size: 10.5px; font-weight: 700; color: var(--ac); background: var(--ac-soft); border-radius: 99px; padding: 2px 9px; white-space: nowrap; }
-.acct-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ac); flex: none; }
 
 .avatar {
   position: relative; width: 38px; height: 38px; border-radius: 50%;
@@ -360,7 +322,7 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
    Não reusa .row de propósito: .row é do Panorama, Entregas e Destaques, e ali a
    coluna 3 é só o relógio, então tudo empilhava na coluna do meio e a metade direita
    da linha ficava em branco. Aqui a coluna 3 ancora o quando E as ações.
-   Sem barra esquerda colorida: barra significa urgência (ver acctMark no app.js) e
+   Sem barra esquerda colorida: barra significa urgência e
    esta seção é histórico resolvido. A cor do desfecho vive no selo .rr-verdict. */
 .rrow {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px;
@@ -435,7 +397,7 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 .empty .big { font-size: 22px; display: block; margin-bottom: 6px; }
 
 /* ---------- decisões ---------- */
-/* A barra esquerda diz o ESTADO, não a conta (ver acctMark em app.js).
+/* A barra esquerda diz o ESTADO, não a conta.
    Camada 1 (agir) é âmbar; blocker é vermelho; o que está rodando é azul; o resolvido
    e o aprovável são verdes. Contexto não leva barra nenhuma. */
 .card.urgent { border-left: 3px solid var(--urgent); }
@@ -510,12 +472,8 @@ body[data-tab="sistema"] main { max-width: 1150px; padding-top: var(--sp-5); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- destaques ---------- */
-.group-head { display: flex; align-items: center; gap: 8px; margin: 20px 0 8px; font-size: 12.5px; font-weight: 700; color: var(--ac); }
-.group-head .g-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ac); }
-.group-head .g-sub { color: var(--muted); font-weight: 500; }
 
 /* ---------- time ---------- */
-.member-card { border-left: 3px solid var(--ac); }
 .member-head { display: flex; align-items: center; gap: 12px; }
 .member-head .names { flex: 1; }
 .member-head .name { font-weight: 650; }
@@ -647,24 +605,17 @@ label.set-row { cursor: pointer; }
 
 /* ---------- sistema: contas ---------- */
 .acct-card { display: flex; align-items: flex-start; gap: 13px; border-left: 3px solid var(--ac); }
-.acct-card .acct-color { width: 30px; height: 30px; flex: none; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; margin-top: 2px; }
-.acct-card .acct-color::-webkit-color-swatch-wrapper { padding: 2px; }
-.acct-card .acct-color::-webkit-color-swatch { border: 0; border-radius: 6px; }
 .acct-card .a-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .acct-card .a-editrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .acct-card .a-editrow.orgs { gap: 6px; }
 .acct-card .a-fieldlabel { font-size: 11px; color: var(--faint); font-weight: 600; }
-.acct-card .acct-label { font-weight: 650; font-size: 13.5px; width: 150px; max-width: 45%; background: var(--surface-2); color: var(--text); border: 1px solid transparent; border-radius: 7px; padding: 4px 8px; }
-.acct-card .acct-kind { font-size: 12px; width: 130px; background: var(--surface-2); color: var(--muted); border: 1px solid transparent; border-radius: 7px; padding: 4px 8px; }
 .acct-card .acct-owners { flex: 1; min-width: 140px; font-size: 12.5px; background: var(--surface-2); color: var(--text); border: 1px solid transparent; border-radius: 7px; padding: 4px 8px; }
-.acct-card .acct-label:hover, .acct-card .acct-kind:hover, .acct-card .acct-owners:hover { border-color: var(--border); }
-.acct-card .acct-label:focus, .acct-card .acct-kind:focus, .acct-card .acct-owners:focus { outline: none; border-color: var(--ac); background: var(--surface); }
-.acct-card .a-tag { font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px; }
+.acct-card .acct-owners:hover { border-color: var(--border); }
+.acct-card .acct-owners:focus { outline: none; border-color: var(--ac); background: var(--surface); }
 .acct-card .a-sub { color: var(--muted); font-size: 12px; }
 .acct-card .a-auth { color: var(--muted); }
 .acct-card .a-auth.ok { color: var(--ok); }
 .acct-card .a-actions { display: flex; flex-direction: column; gap: 6px; flex: none; align-items: stretch; }
-.acct-card.muted { opacity: .72; }
 .review-scope { margin-top: 1rem; border-top: 1px solid var(--border-soft); padding-top: .75rem; }
 .review-scope summary { cursor: pointer; font-weight: 600; font-size: .8125rem; }
 .review-scope-count { color: var(--muted); font-size: .75rem; font-weight: 400; margin-left: .5rem; }
@@ -740,7 +691,6 @@ label.set-row { cursor: pointer; }
 .check .led { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--border); }
 .check.ok .led { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 .check.bad .led { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
-.check.muted .led { background: var(--faint); }
 .check .label { font-weight: 600; font-size: 13px; }
 .check .detail { color: var(--muted); font-size: 12px; margin-top: 1px; word-break: break-all; }
 
@@ -1318,10 +1268,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
 .callout.warn svg { color: var(--accent); }
 
 /* ---------- divergência entre o gh da máquina e as contas do Farol (v2.62.0) ---------- */
-.contas-gh { max-width: 860px; }
-.contas-gh-lista { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; }
-.contas-gh-item { line-height: 1.45; }
-.contas-gh-acao { white-space: nowrap; }
 
 /* ---------- site do Jira ---------- */
 /* O cartao era uma pilha de inputs sem rotulo, com a credencial na mesma fileira dos
@@ -1446,7 +1392,6 @@ body.sem-engine #statusPill { animation: pulse-soft 1.4s infinite; }
   background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   font-size: 13px; line-height: 1.45; color: var(--text); text-wrap: pretty;
 }
-.queue-limit .acct-dot { margin-top: 6px; }
 .queue-limit + .queue-limit { margin-top: -4px; }
 @media (max-width: 620px) {
   .queue-limit { padding: 10px 12px; }

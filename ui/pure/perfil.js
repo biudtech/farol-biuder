@@ -65,13 +65,12 @@ function perfilProblemasHtml(problemas) {
   const lista = Array.isArray(problemas) ? problemas : [];
   if (!lista.length) return '';
   const linhas = lista.map((p) => {
-    const onde = p.escopo === 'conta' ? `A conta @${esc(p.user)}` : 'O padrão do Farol';
     const causa = (TEXTO_DO_PROBLEMA[p.code] || TEXTO_DO_PROBLEMA['perfil-inexistente'])(esc(p.profileId));
-    return `<li>${onde} ${causa}.</li>`;
+    return `<li>O padrão do Farol ${causa}.</li>`;
   }).join('');
   return `<div class="banner cp-problemas" role="alert">
     <ul class="cp-problemas-lista">${linhas}</ul>
-    <span class="cp-problemas-fim">Enquanto isso, as sessões dessas contas não usam esse perfil. Escolha outro perfil abaixo.</span>
+    <span class="cp-problemas-fim">Enquanto isso, as sessões não usam esse perfil. Escolha outro perfil abaixo.</span>
   </div>`;
 }
 

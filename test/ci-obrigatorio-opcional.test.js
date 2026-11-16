@@ -115,12 +115,6 @@ test('Sistema > Automação: as chaves que nascem ligadas só desligam com false
   assert.ok(sistema.includes(linha), linha);
 });
 
-test('uma config com o marcador do esquema 2 não reabre a migração', async () => {
-  const M = (await import('../lib/engine/contas-migracao.js')).default;
-  const comMarcador = { esquemaConfig: 2, aguardarCiParaAprovar: true, reReviewResume: false };
-  assert.deepEqual(M.migrarPadroes(comMarcador), { mudou: false, valores: {}, mudancas: [] }, 'a escolha gravada fica');
-});
-
 test('botão Aprovar desligado: o título só fala de CI com a chave ligada', () => {
   assert.equal(tituloDoAprovarDesligado(true), 'A aprovação exige prova técnica atual e CI obrigatório verde');
   assert.equal(tituloDoAprovarDesligado(false), 'A aprovação exige prova técnica atual');
@@ -202,7 +196,7 @@ test('sem check obrigatório no ruleset: a leitura marca, e o aviso da aprovaç�
       statusCheckRollup: [rodada('lint', 'FAILURE'), rodada('build', 'SUCCESS'), rodada('e2e', null, 'IN_PROGRESS')] }) };
   };
   try {
-    const engine = { accountForPr: () => 'eu', accountForOwner: () => 'eu', tokenFor: () => 'tk', ghEnv: () => ({}) };
+    const engine = { accountForPr: () => 'eu', primaryUser: () => 'eu', tokenFor: () => 'tk', ghEnv: () => ({}) };
     const lido = await checks.bloqueadoPorChecks(engine, { url: 'https://github.com/o/r/pull/1', repo: 'o/r' });
     assert.deepEqual([lido.bloqueado, lido.semExigencia], [false, true]);
     assert.deepEqual(lido.naoVerdes, [{ nome: 'lint', estado: 'vermelho' }, { nome: 'e2e', estado: 'rodando' }]);
@@ -224,12 +218,3 @@ test('sem check obrigatório no ruleset: a leitura marca, e o aviso da aprovaç�
   assert.deepEqual(avisoDaAprovacao({ checksObrigatorios: [] }), [], 'CI obrigatório verde: sem aviso');
 });
 
-test('migração do esquema 2: o que se distingue como escolha fica; o indistinguível segue a migração única', async () => {
-  const M = (await import('../lib/engine/contas-migracao.js')).default;
-  const jaNoPadraoNovo = M.migrarPadroes({ esquemaConfig: 1, reReviewResume: true, aguardarCiParaAprovar: false });
-  assert.deepEqual([jaNoPadraoNovo.valores, jaNoPadraoNovo.mudancas], [{}, []], 'true gravado é escolha ou já o padrão: nada muda, nada vai ao rastro');
-  const indistinguivel = M.migrarPadroes({ esquemaConfig: 1, reReviewResume: false, aguardarCiParaAprovar: false });
-  assert.deepEqual(indistinguivel.valores, { reReviewResume: true });
-  assert.deepEqual(indistinguivel.mudancas, [], 'reReviewResume não muda risco: fora do rastro da política');
-  assert.match(ler('docs/CONFIGURATION.md'), /indistinguível do padrão antigo/);
-});

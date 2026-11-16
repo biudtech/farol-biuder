@@ -26,7 +26,7 @@ function engineBase() {
     staleInfo: {}, headQuietoDesde: {}, reReviewLaunched: {}, decisions: { pending: [], resolved: [] },
     autoReviewParked: new Set(), parkedMotivos: {}, retryAfterNet: new Map(), skipComentado: {},
     headlessQueue: [], activeReviews: new Map(), queue: [], config: {},
-    accountForPr: () => 'revisora', isMuted: () => false, autoReviewFor: () => true, tokenFor: () => 'tok',
+    accountForPr: () => 'revisora', autoReviewFor: () => true, tokenFor: () => 'tok',
     budgetBlockedFor: () => false, outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
     emit: () => {},
   });

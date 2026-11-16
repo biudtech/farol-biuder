@@ -19,7 +19,7 @@ function pagina() {
 }
 
 test('mudanças de execução atualizam decisões e histórico sem esperar outro snapshot', () => {
-  for (const campo of ['activeSessions', 'headlessWaiting', 'headlessWaitingContas']) {
+  for (const campo of ['activeSessions', 'headlessWaiting']) {
     const { agenda, flush, contagem } = pagina();
     agenda.invalidar([campo]); flush();
     assert.equal(contagem.decisoes, 1, `${campo} deve atualizar os cards de execução`);

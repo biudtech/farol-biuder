@@ -83,8 +83,7 @@ function motor({ aprova = 'approve', reprova = 'request_changes', checks = () =>
   const e = new Engine();
   e.config.aguardarCiParaAprovar = ciObrigatorio;
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
-  e.config.accounts = [{ user: 'eu', owners: ['acme'] }];
+  e.config.conta = { user: 'eu', owners: ['acme'] };
   e.approvePolicyFor = () => aprova;
   e.rejectPolicyFor = () => reprova;
   e.autoReviewFor = () => true;
@@ -268,12 +267,10 @@ test('a marca do CI herda a prova da rodada só do mesmo head', () => {
   assert.equal(marcaDoCi(HEAD).comRodada, false);
 });
 
-test('conta silenciada depois da análise conclui a retirada pelo recibo da revisão admitida', async () => {
+test('a retirada que esperava o CI conclui na varredura quando ele fecha', async () => {
   let checks = [{ nome: 'test', estado: 'rodando' }];
   const e = await duasRodadas(16, { aprova: 'wait', checks: () => checks });
-  const pendente = e.decisions.pending.find((x) => x.key === KEY(16));
-  assert.ok(pendente.trabalhoIniciado, 'a revisão deixou o recibo');
-  e.config.accounts[0].muted = true;
+  assert.ok(e.decisions.pending.find((x) => x.key === KEY(16)), 'a pendência espera o CI');
   checks = [];
   await e.varrerEsperas();
   assert.deepEqual(eventos(), ['DISMISS']);
@@ -437,10 +434,9 @@ test('PR fechado não recebe retirada', async () => {
   assert.deepEqual(eventos(), []);
 });
 
-test('conta silenciada não age', async () => {
+test('PR da própria conta que revisa não recebe retirada', async () => {
   const e = comHistorico(29);
-  e.config.accounts[0].muted = true;
-  assert.deepEqual(await retirar(e, 29), { ok: false, motivo: 'conta' });
+  assert.deepEqual(await retirarPedidoResolvido(e, { ...PR(29), author: 'eu' }, HEAD), { ok: false, motivo: 'conta' });
   assert.deepEqual(eventos(), []);
 });
 

@@ -47,7 +47,6 @@ function engineBase() {
   e.skipComentado = {};
   e.config = {};
   e.accountForPr = () => 'eu';
-  e.isMuted = () => false;
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
   e.ghEnv = () => ({});

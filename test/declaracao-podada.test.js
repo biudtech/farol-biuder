@@ -53,7 +53,7 @@ test('a falha gravada pela conferência 2 (que travava) não segura mais a recup
   fs.mkdirSync(path.dirname(PROFILE_FILE), { recursive: true });
   fs.writeFileSync(PROFILE_FILE, JSON.stringify({ repositories: { 'org/front': { declaration: { testDirs: ['src', 'src/sumiu'] } } } }));
   const fp = profileFor('org/front').fingerprint;
-  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, isMuted: () => false, tokenFor: () => 't', autoReviewParked: new Set() };
+  const engine = { accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 't', autoReviewParked: new Set() };
   const gravada = { schema: 1, verdict: 'not-run', failure: 'declaration', missingDirs: [AUSENTES[0]], declarationProfile: fp, declarationCheck: 2 };
   assert.equal(await pausaDaRecuperacao(engine, { key: 'org/front#1', pr: { repo: 'org/front' }, technicalReview: gravada }), '');
   fs.rmSync(PROFILE_FILE, { force: true });

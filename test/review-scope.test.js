@@ -8,15 +8,13 @@ const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-review-scope-'));
 process.env.FAROL_HOME = testHome;
 const { Engine } = await import('../server.js');
 const { editarRegra, normalizarRegras, politicaDeInicio } = await import('../lib/engine/review-scope.js');
-const { parseAccounts } = await import('../lib/parse.js');
 const { reviewScopeHtml } = await import('../ui/pure/review-scope.js');
 after(() => fs.rmSync(testHome, { recursive: true, force: true }));
 
 const pr = (author = 'joao', org = 'acme') => ({ key: `${org}/app#1`, repo: `${org}/app`, number: 1, url: `https://github.com/${org}/app/pull/1`, account: 'revisor', author });
 function engine(reviewRules, autoReview = true) {
   const e = new Engine();
-  e.config.accounts = [{ user: 'revisor', owners: ['acme'], autoReview, onClean: 'wait', onCaveats: 'wait', onReject: 'wait', ...(reviewRules ? { reviewRules } : {}) }];
-  e.tokens = { revisor: 'token-de-teste' };
+  e.config.conta = { user: 'revisor', owners: ['acme'], autoReview, onClean: 'wait', onCaveats: 'wait', onReject: 'wait', ...(reviewRules ? { reviewRules } : {}) };
   e.token = 'token-de-teste';
   e.log = () => {};
   e.pushState = () => {};
@@ -37,7 +35,7 @@ test('sem regra nova, preserva automático, manual e o contrato anterior de retr
     const e = engine(undefined, ligado);
     assert.equal(politicaDeInicio(e, pr()).automatic, ligado);
     assert.equal(politicaDeInicio(e, pr(), { retry: true }).automatic, true);
-    assert.equal(Object.hasOwn(e.config.accounts[0], 'reviewRules'), false);
+    assert.equal(Object.hasOwn(e.config.conta, 'reviewRules'), false);
   }
 });
 
@@ -55,7 +53,7 @@ test('autor tem precedência na organização, e a exceção automática vale co
   assert.equal(politicaDeInicio(e, pr('maria', 'outra-org')).automatic, true);
   // 12/11/2026: a regra vale nos dois sentidos. Autor Automático revisa sozinho mesmo com a conta só
   // na fila, e quem não tem regra segue a conta.
-  e.config.accounts[0].autoReview = false;
+  e.config.conta.autoReview = false;
   assert.equal(politicaDeInicio(e, pr('joao')).automatic, true);
   assert.equal(politicaDeInicio(e, pr('maria')).automatic, false);
   assert.equal(politicaDeInicio(e, pr('maria', 'outra-org')).automatic, false);
@@ -71,7 +69,7 @@ test('conta só na fila com uma organização Automático revisa sozinha só ela
   assert.deepEqual(politicaDeInicio(e, CNBB()), { automatic: true, mode: 'auto', source: 'organizacao', organization: 'edicoes-cnbb' });
   assert.equal(politicaDeInicio(e, pr()).automatic, false, 'a organização sem regra segue a conta');
   assert.equal(politicaDeInicio(e, pr(), { retry: true }).automatic, true, 'o contrato anterior da retentativa sem regra fica');
-  e.config.accounts[0].reviewRules = { 'edicoes-cnbb': { mode: 'auto', authors: { estagiario: 'manual' } } };
+  e.config.conta.reviewRules = { 'edicoes-cnbb': { mode: 'auto', authors: { estagiario: 'manual' } } };
   assert.equal(politicaDeInicio(e, CNBB('estagiario')).automatic, false, 'autor Manual vence a organização Automático');
 });
 
@@ -103,7 +101,7 @@ test('a cota do perfil conta a conta só na fila que tem organização Automáti
   assert.deepEqual(e.contasDoPerfil('perfil').map(c => [c.user, c.waiting]), [['revisor', true]]);
   e.queue = [pr()];
   assert.deepEqual(e.contasDoPerfil('perfil').map(c => [c.user, c.waiting]), [['revisor', false]], 'PR da organização na fila não disputa a cota');
-  e.config.accounts[0].reviewRules = undefined;
+  e.config.conta.reviewRules = undefined;
   assert.deepEqual(e.contasDoPerfil('perfil'), [], 'sem regra Automático, a conta só na fila não disputa');
 });
 
@@ -129,11 +127,10 @@ test('reconferência técnica e recuperação da prova seguem a regra, nos dois 
   }
 });
 
-test('contas revisoras têm regras independentes para a mesma organização e autor', () => {
+test('a regra é da conta revisora: a marca de outra conta no item não escapa dela', () => {
   const e = engine(manual);
-  e.config.accounts.push({ user: 'outro', owners: ['acme'], autoReview: true });
   assert.equal(politicaDeInicio(e, pr()).automatic, false);
-  assert.equal(politicaDeInicio(e, { ...pr(), account: 'outro' }).automatic, true);
+  assert.equal(politicaDeInicio(e, { ...pr(), account: 'outro' }).automatic, false);
 });
 
 test('autor desconhecido não atravessa restrição e login de bot é aceito', () => {
@@ -165,23 +162,22 @@ test('remover uma regra restaura herança e preserva autores e demais organizaç
   assert.equal(conta.reviewRules.acme.mode, 'manual');
 });
 
-test('operações pontuais persistem, sobrevivem a edição antiga de cor e não mudam políticas atuais', () => {
+test('operações pontuais persistem, sobrevivem a outra edição da conta e não mudam políticas atuais', () => {
   const e = engine();
-  e.updateSettings({ accounts: e.config.accounts });
-  const antes = JSON.parse(JSON.stringify(e.config.accounts));
+  const antes = JSON.parse(JSON.stringify(e.config.conta));
   assert.notEqual(e.editarConta({ tipo: 'regra-review', user: 'revisor', organization: 'ACME', author: '@Maria', mode: 'manual' }).ok, false);
-  e.editarConta({ tipo: 'editar', user: 'revisor', campos: { color: '#ffffff' } });
+  e.editarConta({ tipo: 'editar', user: 'revisor', campos: { owners: ['acme', 'outra'] } });
   const conta = e.accountList()[0];
   assert.equal(conta.reviewRules.acme.authors.maria, 'manual');
-  for (const campo of ['autoReview', 'onClean', 'onCaveats', 'onReject']) assert.equal(conta[campo], antes[0][campo]);
+  for (const campo of ['autoReview', 'onClean', 'onCaveats', 'onReject']) assert.equal(conta[campo], antes[campo]);
   assert.deepEqual(e.snapshot().accounts[0].reviewRules, conta.reviewRules);
   assert.equal(new Engine().accountList()[0].reviewRules.acme.authors.maria, 'manual');
-  assert.equal(parseAccounts(antes)[0].reviewRules, undefined);
+  assert.equal(antes.reviewRules, undefined);
 });
 
 test('edição inválida não grava e conta inexistente é recusada', () => {
   const e = engine(manual);
-  e.updateSettings({ accounts: e.config.accounts });
+  e.saveConfig();
   const antes = fs.readFileSync(path.join(testHome, 'config.json'), 'utf8');
   assert.equal(e.editarConta({ tipo: 'regra-review', user: 'revisor', organization: 'acme', mode: 'invalido' }).ok, false);
   assert.equal(e.editarConta({ tipo: 'regra-review', user: 'ausente', organization: 'acme', mode: 'auto' }).ok, false);
@@ -202,9 +198,9 @@ test('retry consulta a regra atual, inclusive quando a sessão original foi por 
   const e = engine(manual);
   e.retryAfterNet.set(pr().key, { tries: 1, pr: { ...pr(), manual: true } });
   assert.deepEqual(e.retryTargets(new Set(), new Set()), []);
-  e.config.accounts[0].reviewRules = automatico;
+  e.config.conta.reviewRules = automatico;
   assert.equal(e.retryTargets(new Set(), new Set()).length, 1);
-  e.config.accounts[0].reviewRules = manual;
+  e.config.conta.reviewRules = manual;
   assert.equal(e.enqueueHeadless({ ...pr(), manual: true, automaticRetry: true }).ok, false);
 });
 
@@ -215,7 +211,7 @@ test('repescagem marca a retomada como automática sem perder a origem nem o aut
   assert.equal(e.headlessQueue.length, 1);
   assert.equal(e.headlessQueue[0].automaticRetry, true);
   assert.equal(e.headlessQueue[0].author, 'joao');
-  e.config.accounts[0].reviewRules = manual;
+  e.config.conta.reviewRules = manual;
   let sessoes = 0;
   e.runHeadlessReview = async () => { sessoes++; };
   await e.runOneHeadless(e.headlessQueue.shift(), 'revisor');
@@ -228,7 +224,7 @@ test('troca para manual enquanto aguarda vaga devolve o PR à fila e libera o sl
   const alvo = pr();
   e.markSeen(alvo.key);
   assert.equal(e.enqueueHeadless(alvo).ok, true);
-  e.config.accounts[0].reviewRules = manual;
+  e.config.conta.reviewRules = manual;
   e.headlessBusyAccounts.set('revisor', 1);
   let sessoes = 0;
   e.runHeadlessReview = async () => { sessoes++; };
@@ -269,7 +265,7 @@ test('novas rodadas por push e por pendência respeitam o autor e não queimam �
     await e.launchReReviews();
     assert.equal(e.headlessQueue.length, 0);
     assert.equal(e.reReviewLaunched[pr().key], undefined);
-    e.config.accounts[0].reviewRules = { acme: { mode: 'manual', authors: { joao: 'auto' } } };
+    e.config.conta.reviewRules = { acme: { mode: 'manual', authors: { joao: 'auto' } } };
     assert.equal(e.reReviewTargets(new Set()).length, 1);
   }
 });
@@ -290,7 +286,7 @@ test('mudança durante consulta assíncrona também impede a sessão e preserva 
   const e = engine(automatico);
   let sessoes = 0;
   e.runHeadlessReview = async () => { sessoes++; };
-  e.prState = async () => { e.config.accounts[0].reviewRules = manual; return 'OPEN'; };
+  e.prState = async () => { e.config.conta.reviewRules = manual; return 'OPEN'; };
   await e.runOneHeadless({ ...pr(), manual: true, automaticRetry: true }, 'revisor');
   assert.equal(sessoes, 0);
   assert.equal(e.queue.length, 1);
@@ -301,7 +297,7 @@ test('troca para manual durante a repescagem não oculta o PR nem marca visto', 
   e.queue = [pr()];
   e.unsee(pr().key);
   e.retryAfterNet.set(pr().key, { tries: 1, pr: { ...pr(), manual: true } });
-  e.prState = async () => { e.config.accounts[0].reviewRules = manual; return 'OPEN'; };
+  e.prState = async () => { e.config.conta.reviewRules = manual; return 'OPEN'; };
   await e._repescarRetry([], new Set());
   assert.equal(e.headlessQueue.length, 0);
   assert.equal(e.queue.length, 1);
@@ -313,7 +309,7 @@ test('troca para manual durante o gate de nova rodada não consome a âncora', a
   e.panorama = [pr()];
   e.staleInfo = { [pr().key]: { stale: true, head: 'novo', lastState: 'CHANGES_REQUESTED' } };
   e.headQuietoDesde = { [pr().key]: { head: 'novo', at: 1 } };
-  e.bloqueiaAutomatico = async () => { e.config.accounts[0].reviewRules = manual; return false; };
+  e.bloqueiaAutomatico = async () => { e.config.conta.reviewRules = manual; return false; };
   await e.launchReReviews();
   assert.equal(e.headlessQueue.length, 0);
   assert.equal(e.reReviewLaunched[pr().key], undefined);
@@ -330,7 +326,7 @@ test('mudança durante consulta libera apenas a vaga original e preserva a próx
   // A próxima sessão fica ocupando sua vaga; só o efeito externo da sessão é dublado.
   e.runOneHeadless = p => { iniciados.push(p.key); };
   e.processHeadless = () => Engine.prototype.processHeadless.call(e);
-  e.prState = async () => { e.config.accounts[0].reviewRules = manual; return 'OPEN'; };
+  e.prState = async () => { e.config.conta.reviewRules = manual; return 'OPEN'; };
   await Engine.prototype.runOneHeadless.call(e, { ...pr(), manual: true, automaticRetry: true }, 'revisor');
   assert.deepEqual(iniciados, [seguinte.key]);
   assert.equal(e.headlessBusyAccounts.get('revisor'), 1, 'a próxima sessão ainda ocupa a conta');
@@ -354,13 +350,15 @@ test('tela distingue herança, autor, publicação e conta manual, e escapa text
 // Revisão independente (12/11/2026): duas telas ainda decidiam só pela conta. O card da fila dizia
 // "desativada para esta conta" num PR da CNBB que ia ser revisado sozinho, e a tela
 // oferecia ligar a conta inteira, o que ligaria a BIUD junto.
-test('o card da fila segue a decisão do PR, e sem ela cai na conta', async () => {
+test('o card da fila segue a decisão do PR que a tela lhe passa', async () => {
   const P = await import('../ui/pure.js');
-  const mark = { style: '', varStyle: '', dim: '', chip: '', dot: '', acct: { label: 'cnbb', autoReview: false } };
-  const card = (manual) => P.queueCardHtml(CNBB(), { people: {}, mark, ...(manual === undefined ? {} : { manual }) });
+  const card = (manual) => P.queueCardHtml(CNBB(), { people: {}, ...(manual === undefined ? {} : { manual }) });
   assert.doesNotMatch(card(false), /Revisão automática desativada/);
   assert.match(card(true), /Revisão automática desativada para este PR/);
-  assert.match(card(undefined), /Revisão automática desativada para este PR/, 'sem a decisão do motor, vale a conta');
+  // sem a decisão do motor quem cai na conta é a tela (manualDe, ui/telas/radar.js), antes de chamar o card
+  assert.doesNotMatch(card(undefined), /Revisão automática desativada/);
+  const radar = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'radar.js'), 'utf8');
+  assert.match(radar, /Object\.hasOwn\(mapa, pr\.key\) \? !mapa\[pr\.key\] : \(contaRevisora\(\) \|\| \{\}\)\.autoReview === false/);
 });
 
 test('o motor manda para a tela, por PR, se a revisão inicia sozinha', () => {

@@ -31,8 +31,7 @@ function motor({ estados, head = HEAD }) {
   const e = new Engine();
   e.log = () => { };
   e.accountForPr = () => 'conta';
-  e.isMuted = () => false;
-  e.tokens = { conta: 'tok' };
+  e.token = 'tok';
   e.prState = async () => 'OPEN';
   e.bloqueadoPorHistorico = async () => ({ bloqueado: false, head: '', quem: [], decisivos: [] });
   e.headSha = async () => head;

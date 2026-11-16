@@ -87,13 +87,13 @@ test('perfil apontado que não existe aparece como erro, nunca como "usa o padr�
   assert.match(html, /não usam esse perfil/);
   assert.doesNotMatch(html, /usa o padrão/i);
   assert.equal(perfilProblemasHtml([]), '', 'sem problema, nenhum aviso');
-  const daConta = perfilProblemasHtml([{ escopo: 'conta', user: 'ana-exemplo', profileId: 'x', code: 'perfil-invalido' }]);
-  assert.match(daConta, /@ana-exemplo/);
-  assert.match(daConta, /incompleto/);
+  const invalido = perfilProblemasHtml([{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-invalido' }]);
+  assert.match(invalido, /O padrão do Farol aponta para o perfil "x"/);
+  assert.match(invalido, /incompleto/);
 });
 
 test('o markup escapa o que vem da configuração', () => {
-  const html = perfilProblemasHtml([{ escopo: 'conta', user: '"><script>alert(1)</script>', profileId: '<img src=x>', code: 'perfil-inexistente' }]);
+  const html = perfilProblemasHtml([{ escopo: 'padrao', user: '"><script>alert(1)</script>', profileId: '<img src=x>', code: 'perfil-inexistente' }]);
   assert.doesNotMatch(html, /<script|<img/i);
 });
 

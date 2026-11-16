@@ -26,7 +26,7 @@ function source(status = 'complete') {
 function setup() {
   const e = new Engine();
   e.config = { ...e.config, jiraSites: [], reReviewResume: false, reviewContextMode: 'off',
-    accounts: [{ user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }] };
+    conta: { user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' } };
   e.accountForPr = () => 'fixture'; e.tokenFor = () => ''; e.resolveClaudeAuth = () => ({ kind: 'apikey', id: '', apiKey: '', baseUrl: '' });
   e.headSha = async () => H;
   e.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H });

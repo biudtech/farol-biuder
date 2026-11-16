@@ -41,7 +41,7 @@ test('Automação e Contas dizem onde a decisão mora, e nenhuma fala em herdar'
   assert.match(automacao, /Se uma conta revisa e aprova sozinha é decidido só em <span class="is-goto" data-goto="sys:accounts:#accountsManager"/);
   const contas = HTML.slice(HTML.indexOf('id="sys-accounts"'), HTML.indexOf('id="sys-automation"'));
   assert.doesNotMatch(contas, /herda|padrão geral/);
-  assert.match(contas, /A política de automação é por conta/);
+  assert.match(contas, /A política de automação é dela/);
 });
 
 test('Contas: os quatro seletores mostram o valor da conta, sem opção de herdar', () => {
@@ -125,11 +125,11 @@ test('a Justiça de fila usa o nome novo do teto total', () => {
   assert.match(html, /<h4>Teto total desta instalação<\/h4>/);
 });
 
-test('Contas: o perfil diz que escolhe a chave de API do Claude, e que o modelo vem da Automação', () => {
-  const html = P.accountsManagerHtml({ accounts: [BIUDER], acct: {}, config: { claudeProfiles: [] } });
-  assert.match(html, /perfil de chave de API/);
-  assert.match(html, /O modelo e o raciocínio vêm de Plano e chaves/);
-  assert.doesNotMatch(html, /a-fieldlabel">perfil de IA</);
+test('Conta: o perfil do Claude não é mais escolhido na conta (uma instância, um perfil padrão)', () => {
+  const html = P.accountsManagerHtml({ accounts: [BIUDER], config: { claudeProfiles: [{ id: 'p1', label: 'Um', kind: 'apikey' }] } });
+  assert.doesNotMatch(html, /acct-claudeprofile|acct-budgetweight|perfil de chave de API|peso na cota/);
+  assert.doesNotMatch(html, /acct-remove|act-mute|btnAcctAdd|acct-color|acct-kind|acct-label/, 'sem adicionar, remover, silenciar, cor, tipo nem rótulo');
+  assert.match(html, /class="acct-owners" data-user="biuder"/);
 });
 
 test('Automação: nenhuma chave promete o que o engine não faz', () => {

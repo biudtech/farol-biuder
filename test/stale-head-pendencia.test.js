@@ -39,15 +39,16 @@ test('recordDecision: pendência viva (sem blockedKind) NUNCA é superseded por 
   assert.equal(e.decisions.pending.length, 1, 'pendência de julgamento é sua, ninguém tira da mesa');
 });
 
-test('recordDecision preserva pr.account na pendência (I1: a fila headless relança pela identidade certa)', () => {
+test('recordDecision grava na pendência a conta revisora, não a marca que o item trouxe (I1: a fila headless relança pela identidade certa)', () => {
   const e = engineMinima();
-  const prComConta = { ...PR, account: 'conta-dona-do-pr' };
+  e.config = { conta: { user: 'revisora', owners: ['acme'] } };
+  const prComConta = { ...PR, account: 'conta-de-outra-instalacao' };
   const item = e.recordDecision(prComConta, { verdict: 'approve', reasons: [] }, { status: 'pending' });
-  assert.equal(item.pr.account, 'conta-dona-do-pr');
-  assert.equal(e.decisions.pending[0].pr.account, 'conta-dona-do-pr');
+  assert.equal(item.pr.account, 'revisora');
+  assert.equal(e.decisions.pending[0].pr.account, 'revisora');
 });
 
-test('recordDecision sem pr.account grava string vazia, nunca undefined (allowlist sempre tem a chave)', () => {
+test('recordDecision sem conta configurada grava string vazia, nunca undefined (allowlist sempre tem a chave)', () => {
   const e = engineMinima();
   const item = e.recordDecision(PR, { verdict: 'approve', reasons: [] }, { status: 'pending' });
   assert.equal(item.pr.account, '');

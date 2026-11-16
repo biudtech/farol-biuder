@@ -54,9 +54,8 @@ beforeEach(() => { envios = []; gh = { head: HEAD }; });
 function motor() {
   const e = new Engine();
   e.token = 'token-falso';
-  e.tokens = { eu: 'token-falso' };
   // política da conta gravada por extenso e lida pelos métodos reais do motor (contas-config.js)
-  e.config.accounts = [{ user: 'eu', owners: ['acme'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' }];
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };

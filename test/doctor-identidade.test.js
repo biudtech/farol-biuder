@@ -70,10 +70,8 @@ const probeDeAuth = () => chamadas.find(c => c.cmd === 'gh' && c.args[0] === 'au
 
 test('doctor: sem conta configurada, o probe de auth não carrega o token da máquina', async () => {
   const e = engineMudo();
-  e.config.accounts = [];
-  e.config.ghUser = '';
+  e.config.conta = null;
   e.token = null;
-  e.tokens = {};
   await comEnvDaMaquina({ GH_TOKEN: 'tok-da-maquina', GITHUB_TOKEN: 'tok-da-maquina' }, async () => {
     await e.doctor();
     const probe = probeDeAuth();
@@ -88,9 +86,8 @@ test('doctor: sem conta configurada, o probe de auth não carrega o token da má
 
 test('doctor: com conta primária, o probe de auth carrega o token DELA, não o da máquina', async () => {
   const e = engineMudo();
-  e.config.accounts = [{ user: 'alice', owners: ['acme'] }];
+  e.config.conta = { user: 'alice', owners: ['acme'] };
   e.token = 'tok-alice';
-  e.tokens = { alice: 'tok-alice' };
   await comEnvDaMaquina({ GH_TOKEN: 'tok-da-maquina' }, async () => {
     await e.doctor();
     const probe = probeDeAuth();
