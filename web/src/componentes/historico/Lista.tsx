@@ -5,7 +5,7 @@
 // terceiro nível e os campos numa lista de descrição, com o nome de cada um escrito.
 import { memo } from 'react';
 import type { Revisao } from '@/contratos/historico';
-import { parecerQueDifere, textoDaAcao, textoDoStatus } from '@/historico/rotulos';
+import { parecerQueDifere, textoDoPublicado, textoDoStatus } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import { ReferenciaDoPr } from '../radar/Bloco';
 import comuns from '../radar/Radar.module.css';
@@ -41,7 +41,7 @@ const Item = memo(function Item({ revisao: r, aoAbrir }: PropsDoItem) {
       <dl className={estilos.campos}>
         {r.pr?.author ? <Campo nome="Autor">{r.pr.author}</Campo> : null}
         {r.card ? <Campo nome="Card">{r.card}</Campo> : null}
-        <Campo nome="Publicado">{textoDaAcao(r.action)}</Campo>
+        <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
         <Campo nome="Quando">{quando || 'Sem data registrada'}</Campo>

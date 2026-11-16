@@ -46,11 +46,28 @@ describe('ações do Histórico: revisar de novo e contestação', () => {
     expect(idDa(deNovo)).toBe('revisar');
   });
 
-  it('gravar o desfecho não publica nada e não pede confirmação', () => {
+  // lib/engine/pushback.js: recordPushback grava confirmado e manual; pushbacksFor leva o
+  // registro ao prompt das revisões do autor; licoesDoRepo leva author_right e mixed ao das
+  // revisões de outros autores do repositório; pushbackTargets pula o PR com registro manual.
+  it('gravar o desfecho pede confirmação, dizendo onde o registro entra e que nada é publicado', () => {
     expect(rotuloDa(gravar)).toBe('Gravar o desfecho');
     expect(nomeDa(gravar)).toBe('Gravar o desfecho da contestação de PR #12 de dono/repo');
     expect(idDa(gravar)).toBe('contestacao:gravar');
-    expect(confirmacaoDa(gravar)).toBeNull();
+    const c = confirmacaoDa(gravar);
+    expect(c?.titulo).toBe('Gravar o desfecho da contestação de PR #12 de dono/repo?');
+    expect(c?.confirmar).toBe('Gravar o desfecho');
+    expect(c?.texto).toMatch(/confirmado e registrado à mão/);
+    expect(c?.texto).toMatch(/entra no prompt das próximas revisões dos PRs do autor/);
+    expect(c?.texto).toMatch(/o motor deixa de procurar contestação neste PR sozinho/);
+    expect(c?.texto).toMatch(/Nada é publicado no GitHub[.]$/);
+  });
+
+  it('só o desfecho em que a revisão errou vai ao prompt das revisões de outros autores do repositório', () => {
+    const outros = /também no das revisões de PRs de outros autores neste repositório/;
+    expect(confirmacaoDa({ ...gravar, desfecho: 'mixed' })?.texto).toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'author_right' })?.texto).toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'we_right' })?.texto).not.toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'we_right' })?.texto).toMatch(/entra no prompt das próximas revisões dos PRs do autor/);
   });
 
   it('apagar o registro pede confirmação, dizendo o que se perde e que nada é publicado', () => {
@@ -60,6 +77,7 @@ describe('ações do Histórico: revisar de novo e contestação', () => {
     const c = confirmacaoDa(apagar);
     expect(c?.titulo).toBe('Apagar a contestação de PR #12 de dono/repo?');
     expect(c?.texto).toMatch(/sai da memória do motor, com a nota/);
+    expect(c?.texto).toMatch(/o motor volta a poder detectar contestação neste PR sozinho/);
     expect(c?.texto).toMatch(/Nada é publicado no GitHub\./);
     expect(c?.confirmar).toBe('Apagar o registro');
   });

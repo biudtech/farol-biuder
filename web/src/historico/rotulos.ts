@@ -3,16 +3,18 @@
 // tabela não conhece aparece cru, em vez de sumir ou de quebrar a linha.
 //
 // De onde vem cada valor (arquivos na raiz do repositório):
-// - `status`: quem resolve a revisão grava um destes. `auto_approved`, `auto_rejected` e
-//   `commented_own_pr` saem de statusAutomatico (lib/engine/desfecho-automatico.js);
-//   `posted`, `already_reviewed`, `skipped`, `superseded`, `already_merged` e
-//   `already_closed`, de lib/engine/decision.js; `approval_not_needed`, de
-//   lib/engine/desfecho-da-revisao.js, espera-ci.js, espera-prova-decidida.js e
-//   postagem-recusada.js. `pending` não é de item resolvido: é a pendência da mesa, que só
-//   chega aqui pelo detalhe por chave (GET /api/decision);
+// - `status`: quem resolve a revisão grava um destes, em lib/engine/decision.js,
+//   desfecho-da-revisao.js, desfecho-automatico.js (o mapa STATUS), espera-ci.js,
+//   espera-pr-proprio.js, espera-prova-decidida.js e postagem-recusada.js. `pending` não é
+//   de item resolvido: é a pendência da mesa, que só chega aqui pelo detalhe por chave
+//   (GET /api/decision);
 // - `action`: os quatro valores de `VEREDITOS` em lib/engine/historico-paginado.js, que são
 //   também os do filtro `veredito`.
-// O teste ao lado lê esses arquivos e reprova se o motor passar a gravar um valor sem rótulo.
+// O que o teste ao lado garante, e só isto: ele varre lib/engine/*.js, pega todo arquivo que
+// chama resolveIntoHistory ou recordDecision e reprova se um literal escrito num `status:`
+// (ou `const status =`) desses arquivos, ou no mapa STATUS, não tiver rótulo aqui. Status
+// montado de outro jeito (vindo de variável de outro arquivo, por exemplo) escapa da
+// varredura, e na tela aparece cru.
 
 function proprio(mapa: Record<string, string>, chave: string | undefined): string | undefined {
   return chave !== undefined && Object.hasOwn(mapa, chave) ? mapa[chave] : undefined;
@@ -45,8 +47,24 @@ export const ROTULO_DA_ACAO: Record<string, string> = {
   skip: 'Nada publicado',
 };
 
-export function textoDaAcao(action: string | undefined): string {
-  return proprio(ROTULO_DA_ACAO, action) ?? action ?? 'Sem registro do que foi publicado';
+// O que o motor conta como publicado (PUBLICADOS, lib/engine/historico-paginado.js). Todo o
+// resto, inclusive `action` ausente ou de valor desconhecido, ele trata como não publicado
+// (é o que o filtro "Não publicados" traz), e a tela segue a mesma régua.
+export const PUBLICADOS: readonly string[] = ['approve', 'request_changes', 'comment'];
+
+export function foiPublicado(action: string | undefined): boolean {
+  return action !== undefined && PUBLICADOS.includes(action);
+}
+
+// O campo "Publicado" de uma revisão. A pendência da mesa ainda não publicou nada, qualquer
+// que seja o `action` dela. Valor que a tabela não conhece aparece cru, sem contar como
+// publicado.
+export function textoDoPublicado(revisao: { action?: string; status?: string }): string {
+  if (revisao.status === 'pending') return 'Nada publicado ainda';
+  const { action } = revisao;
+  if (foiPublicado(action)) return proprio(ROTULO_DA_ACAO, action) ?? (action as string);
+  if (action === undefined || action === 'skip') return ROTULO_DA_ACAO.skip as string;
+  return `${ROTULO_DA_ACAO.skip} (o motor registrou "${action}")`;
 }
 
 const PARECER: Record<string, string> = {

@@ -36,8 +36,8 @@ export type Acao =
   | (Base & { tipo: 'ignorar'; chave: string })
   | (Base & { tipo: 'restaurar'; chave: string })
   // O desfecho da contestação de um PR (recordPushback, lib/engine/pushback.js). `desfecho`
-  // vazio apaga o registro. Nada é publicado: é memória do motor, que calibra o tom das
-  // próximas revisões do autor.
+  // vazio apaga o registro. Nada é publicado: é memória do motor, que entra no prompt de
+  // revisões futuras.
   | (Base & { tipo: 'contestacao'; chave: string; autor: string; desfecho: DesfechoDaContestacao | ''; nota: string });
 
 // PUSHBACK_OUTCOMES, lib/taxonomy.js
@@ -131,8 +131,9 @@ function textoQueSai(acao: Extract<Acao, { tipo: 'decidir' }>): string {
 
 // Ação que pede confirmação antes do POST: as três que publicam no GitHub (Aprovar, Pedir
 // mudanças e Comentar), o Pular de uma pendência que o motor resolveria sozinho, o
-// cancelamento, que joga fora a sessão em curso, e o apagar de uma contestação registrada. A
-// pergunta diz o que sai e em qual PR.
+// cancelamento, que joga fora a sessão em curso, e a contestação: gravar o desfecho muda o
+// prompt de revisões futuras (do autor e, conforme o desfecho, do repositório), e apagar joga
+// o registro fora. A pergunta diz o que sai e em qual PR.
 export function confirmacaoDa(acao: Acao): Confirmacao | null {
   if (acao.tipo === 'cancelar') {
     return {
@@ -142,11 +143,23 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
     };
   }
   if (acao.tipo === 'contestacao') {
-    if (acao.desfecho) return null;
+    if (!acao.desfecho) {
+      return {
+        titulo: `Apagar a contestação de ${acao.nome}?`,
+        texto: `O registro de contestação de ${acao.nome} sai da memória do motor, com a nota: deixa de entrar no prompt das próximas revisões, e o motor volta a poder detectar contestação neste PR sozinho. Nada é publicado no GitHub.`,
+        confirmar: 'Apagar o registro',
+      };
+    }
+    // O que recordPushback faz, e quem lê o registro depois (lib/engine/pushback.js, na raiz):
+    // pushbacksFor (as revisões do autor), licoesDoRepo (as de outros autores do repositório,
+    // só quando a revisão errou) e pushbackTargets (a detecção automática, que pula o manual).
+    const outros = acao.desfecho === 'we_right'
+      ? ''
+      : ' e, por ser um desfecho em que a revisão errou, também no das revisões de PRs de outros autores neste repositório';
     return {
-      titulo: `Apagar a contestação de ${acao.nome}?`,
-      texto: `O registro de contestação de ${acao.nome} sai da memória do motor, com a nota, e deixa de calibrar as próximas revisões do autor. Nada é publicado no GitHub.`,
-      confirmar: 'Apagar o registro',
+      titulo: `Gravar o desfecho da contestação de ${acao.nome}?`,
+      texto: `O desfecho de ${acao.nome} fica na memória do motor como confirmado e registrado à mão. Com a nota, ele entra no prompt das próximas revisões dos PRs do autor${outros}. Com o registro à mão o motor deixa de procurar contestação neste PR sozinho. Nada é publicado no GitHub.`,
+      confirmar: 'Gravar o desfecho',
     };
   }
   if (acao.tipo !== 'decidir') return null;

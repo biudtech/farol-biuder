@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
-import { parecerQueDifere, textoDaAcao, textoDoStatus } from '@/historico/rotulos';
+import { foiPublicado, parecerQueDifere, textoDoPublicado, textoDoStatus } from '@/historico/rotulos';
 import { ROTULO_DO_MOTIVO, dataComAno, nomeDoPr, prDaUrl } from '@/radar/formato';
 import type { Motivo } from '@/contratos/radar';
 import { Markdown } from '../Markdown';
@@ -95,7 +95,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
       <dl className={estilos.campos}>
         {r.pr?.author ? <Campo nome="Autor">{r.pr.author}</Campo> : null}
         {r.card ? <Campo nome="Card">{r.card}</Campo> : null}
-        <Campo nome="Publicado">{textoDaAcao(r.action)}</Campo>
+        <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
         {resolvida ? <Campo nome="Resolvida em">{resolvida}</Campo> : null}
@@ -118,7 +118,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
 
       <section className={estilos.secao} aria-labelledby={idDoTexto}>
         <h3 id={idDoTexto} className={estilos.tituloDaSecao}>Texto do parecer</h3>
-        {r.reportMarkdown && parecer && r.action !== undefined && r.action !== 'skip' ? (
+        {r.reportMarkdown && parecer && r.status !== 'pending' && foiPublicado(r.action) ? (
           <p className={comuns.nota}>
             O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
           </p>
@@ -166,11 +166,15 @@ export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoT
 
   useEffect(() => { titulo.current?.focus(); }, []);
 
-  // Escape fecha de qualquer lugar da página. A pergunta de confirmação de uma ação trata o
-  // próprio Escape e não deixa o evento chegar aqui.
+  // Escape fecha de qualquer lugar da página, menos de dentro de um campo de texto ou de um
+  // seletor: ali Escape é do campo (desfaz a digitação, fecha a lista). A pergunta de
+  // confirmação de uma ação trata o próprio Escape e não deixa o evento chegar aqui.
   useEffect(() => {
     const aoTeclar = (evento: KeyboardEvent): void => {
-      if (evento.key === 'Escape' && !evento.defaultPrevented) aoFechar();
+      if (evento.key !== 'Escape' || evento.defaultPrevented) return;
+      const alvo = evento.target;
+      if (alvo instanceof HTMLElement && (alvo.isContentEditable || alvo.matches('input, textarea, select'))) return;
+      aoFechar();
     };
     document.addEventListener('keydown', aoTeclar);
     return () => document.removeEventListener('keydown', aoTeclar);

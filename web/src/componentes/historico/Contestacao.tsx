@@ -2,8 +2,10 @@
 
 // A contestação de um PR: o registro que o motor guarda quando o autor contesta uma revisão
 // (lib/engine/pushback.js, na raiz). Só aparece quando o snapshot traz registro para o PR. O
-// que está "pending" é suspeita do motor esperando confirmação; gravar um desfecho o confirma,
-// e "não houve contestação" apaga o registro. Nada disso publica no GitHub.
+// que está "pending" é suspeita do motor esperando confirmação; gravar um desfecho o confirma
+// e o marca como manual, e "não houve contestação" apaga o registro. Nada disso publica no
+// GitHub, mas o registro confirmado entra no prompt de revisões futuras: as duas ações
+// perguntam antes (confirmacaoDa, src/radar/acoes.ts).
 import { useId, useState } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import { DESFECHOS_DA_CONTESTACAO, textoDoDesfecho } from '@/historico/rotulos';
@@ -62,7 +64,7 @@ export function Contestacao({ revisao, registro, controle }: Props) {
         </p>
       )}
       <p className={comuns.meta}>
-        O registro é do PR, não desta rodada, e calibra o tom das próximas revisões do autor. Gravar não publica nada no GitHub.
+        O registro é do PR, não desta rodada. Confirmado, ele entra no prompt das próximas revisões dos PRs do autor; com o desfecho &quot;o autor tinha razão&quot; ou &quot;meio-termo&quot;, também no de revisões de outros autores neste repositório. Quem grava aqui marca o registro como feito à mão, e o motor deixa de procurar contestação neste PR sozinho. Gravar não publica nada no GitHub.
       </p>
 
       <div className={estilos.formulario}>
@@ -93,7 +95,9 @@ export function Contestacao({ revisao, registro, controle }: Props) {
         </div>
       </div>
 
-      <AcoesDoItem botoes={[{ acao, primario: suspeita }]} controle={controle} />
+      {/* A chave é o desfecho escolhido: trocar o seletor com a pergunta aberta monta os botões
+          de novo, e a pergunta fecha sem o aviso de que o motor mudou o item (não mudou). */}
+      <AcoesDoItem key={desfecho} botoes={[{ acao, primario: suspeita }]} controle={controle} />
     </section>
   );
 }

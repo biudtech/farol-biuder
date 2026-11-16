@@ -89,11 +89,12 @@ describe('Histórico: a lista', () => {
     montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1, { status: 'status_novo', action: 'acao_nova' }), { id: 'x', key: 'dono/repo#3' }])) });
     await assentar();
     expect(screen.getByText('status_novo')).toBeTruthy();
-    expect(screen.getByText('acao_nova')).toBeTruthy();
+    // action desconhecido aparece cru, mas não conta como publicado (a régua do motor)
+    expect(screen.getByText('Nada publicado (o motor registrou "acao_nova")')).toBeTruthy();
     const pobre = screen.getAllByRole('listitem')[1] as HTMLElement;
     expect(within(pobre).getByRole('heading', { level: 3 }).textContent).toBe('dono/repo#3');
     expect(within(pobre).queryByRole('link')).toBeNull();
-    expect(within(pobre).getByText('Sem registro do que foi publicado')).toBeTruthy();
+    expect(within(pobre).getByText('Nada publicado')).toBeTruthy();
     expect(within(pobre).getByText('Sem data registrada')).toBeTruthy();
   });
 
@@ -425,6 +426,30 @@ describe('Histórico: detalhe da revisão', () => {
     expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
   });
 
+  it('action desconhecido não é tratado como publicado: sem o aviso de texto diferente', async () => {
+    montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'posted', action: 'acao_nova', verdict: 'approve' })])) });
+    await assentar();
+    const detalhe = screen.getByRole('region', { name: 'Revisão de PR #12 de dono/repo' });
+    expect(within(detalhe).getByText('Nada publicado (o motor registrou "acao_nova")')).toBeTruthy();
+    expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
+  });
+
+  it('pendência da mesa aberta pela chave mostra que nada foi publicado ainda', async () => {
+    const pendente = revisaoDoMotor(12, { status: 'pending', action: undefined, resolvedAt: undefined, verdict: 'request_changes' });
+    montar({
+      url: '/historico?id=d12&pr=dono%2Frepo%2312',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([])) : corpo({ found: true, decision: pendente })),
+    });
+    await assentar();
+    await assentar();
+    const detalhe = screen.getByRole('region', { name: 'Revisão de PR #12 de dono/repo' });
+    const campos = [...detalhe.querySelectorAll('dl > div')].map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
+    expect(campos).toContain('Publicado: Nada publicado ainda');
+    expect(campos).toContain('Situação: Esperando a sua decisão no Radar');
+    expect(campos).toContain('Parecer da revisão: pedir mudanças');
+    expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
+  });
+
   it('revisão sem texto gravado diz isso', async () => {
     montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { reportMarkdown: '' })])) });
     await assentar();
@@ -556,11 +581,18 @@ describe('Histórico: ações do detalhe', () => {
     });
     const secao = screen.getByRole('region', { name: 'Contestação do autor' });
     expect(within(secao).getByText(/O motor suspeita que o autor contestou a revisão deste PR: era intencional\./)).toBeTruthy();
-    expect(within(secao).getByText(/Gravar não publica nada no GitHub\./)).toBeTruthy();
+    expect(within(secao).getByText(/entra no prompt das próximas revisões dos PRs do autor.*também no de revisões de outros autores neste repositório.*o motor deixa de procurar contestação neste PR sozinho.*Gravar não publica nada no GitHub[.]/)).toBeTruthy();
     expect((within(secao).getByLabelText('Desfecho') as HTMLSelectElement).value).toBe('author_right');
     fireEvent.change(within(secao).getByLabelText('Desfecho'), { target: { value: 'mixed' } });
     fireEvent.change(within(secao).getByLabelText('Nota curta (opcional)'), { target: { value: '  parte procedia  ' } });
     await clicar(`Gravar o desfecho da contestação de ${NOME}`);
+    // gravar muda o prompt de revisões futuras: pergunta antes, com o que acontece
+    expect(t.post).not.toHaveBeenCalled();
+    const pergunta = screen.getByRole('group', { name: `Gravar o desfecho da contestação de ${NOME}?` });
+    expect(pergunta.textContent).toContain('também no das revisões de PRs de outros autores neste repositório');
+    expect(pergunta.textContent).toContain('o motor deixa de procurar contestação neste PR sozinho');
+    expect(pergunta.textContent).toContain('Nada é publicado no GitHub.');
+    await clicar(`Gravar o desfecho: ${NOME}`);
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/pushback', { key: 'dono/repo#12', author: 'ana', outcome: 'mixed', note: 'parte procedia' }]);
     expect(regiao().querySelector('p')?.textContent).toBe(`O motor aceitou o pedido: gravar o desfecho da contestação de ${NOME}.`);
   });
@@ -587,6 +619,36 @@ describe('Histórico: ações do detalhe', () => {
     await clicar(`Apagar a contestação de ${NOME}`);
     await clicar(`Apagar o registro: ${NOME}`);
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/pushback', { key: 'dono/repo#12', author: 'ana', outcome: '', note: '' }]);
+  });
+
+  it('trocar o desfecho com a pergunta aberta fecha a pergunta, sem dizer que o motor mudou o item', async () => {
+    const t = await abrir({ decisions: resolvidas('d12'), pushbacks: { 'dono/repo#12': { author: 'ana', outcome: 'mixed', status: 'confirmed' } } });
+    const secao = screen.getByRole('region', { name: 'Contestação do autor' });
+    await clicar(`Gravar o desfecho da contestação de ${NOME}`);
+    expect(screen.getByRole('group', { name: `Gravar o desfecho da contestação de ${NOME}?` })).toBeTruthy();
+    await act(async () => { fireEvent.change(within(secao).getByLabelText('Desfecho'), { target: { value: '' } }); });
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(/o motor mudou este item/)).toBeNull();
+    expect(screen.getByRole('button', { name: `Apagar a contestação de ${NOME}` })).toBeTruthy();
+    // e a pergunta de apagar, aberta, fecha do mesmo jeito ao voltar para um desfecho
+    await clicar(`Apagar a contestação de ${NOME}`);
+    await act(async () => { fireEvent.change(within(secao).getByLabelText('Desfecho'), { target: { value: 'we_right' } }); });
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(/o motor mudou este item/)).toBeNull();
+    expect(t.post).not.toHaveBeenCalled();
+  });
+
+  it('Escape dentro de um campo do detalhe não fecha o detalhe', async () => {
+    await abrir({ decisions: resolvidas('d12'), pushbacks: { 'dono/repo#12': { author: 'ana', outcome: 'mixed', status: 'confirmed' } } });
+    const secao = screen.getByRole('region', { name: 'Contestação do autor' });
+    for (const campo of [within(secao).getByLabelText('Nota curta (opcional)'), within(secao).getByLabelText('Desfecho')]) {
+      await act(async () => { fireEvent.keyDown(campo, { key: 'Escape' }); });
+      expect(screen.getByRole('region', { name: `Revisão de ${NOME}` })).toBeTruthy();
+      expect(window.location.search).toBe('?id=d12&pr=dono%2Frepo%2312');
+    }
+    // fora de campo, Escape continua fechando
+    await act(async () => { fireEvent.keyDown(screen.getByRole('button', { name: 'Voltar à lista' }), { key: 'Escape' }); });
+    expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
   });
 
   it('recusa do motor aparece na região de resultado, e o aviso dele (toast) também', async () => {
