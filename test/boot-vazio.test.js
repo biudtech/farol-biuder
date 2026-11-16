@@ -26,6 +26,8 @@ const CWD = path.join(RAIZ, 'cwd');
 const BIN = path.join(RAIZ, 'bin');
 for (const pasta of [CASA, TMP, CWD, BIN]) fs.mkdirSync(pasta);
 
+const DEPURAR = process.argv.includes('--depurar');
+
 let filho = null;
 after(() => {
   if (filho && filho.exitCode === null && filho.signalCode === null) filho.kill('SIGKILL');
@@ -107,15 +109,19 @@ test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOM
   const estado = await resposta.json();
   assert.deepEqual(estado.queue, [], 'instância nova nasce com a fila vazia');
 
-  // espera a primeira checagem terminar (sem conta no gh ela acaba em erro dito, nunca em
-  // processo morto): o que vazasse para fora do HOME vazaria ate aqui
+  // Espera a primeira checagem terminar. Sem conta no gh ela acaba em erro dito na tela
+  // (`status: 'error'`), nunca em processo morto. O que vazasse para fora do HOME vazaria
+  // até aqui: é a checagem que grava o resto do estado.
   const depois = await esperar(async () => {
     const e = await (await fetch(url)).json();
     return ['idle', 'error'].includes(e.status) ? e : null;
   }, 30000, 'a primeira checagem terminar');
-  console.log(JSON.stringify({ status: depois.status, error: depois.error, account: depois.account, accounts: depois.accounts }));
-  assert.deepEqual(depois.queue, [], 'sem conta no gh, a primeira checagem nao poe nada na fila');
-  assert.equal(filho.exitCode, null, 'o motor segue de pe depois da primeira checagem');
+  assert.deepEqual(depois.queue, [], 'sem conta no gh, a primeira checagem não põe nada na fila');
+  // a saúde inteira (gh, claude, perfis) também responde sem gh nem claude instalados
+  const saude = await fetch(`http://127.0.0.1:${porta}/api/doctor`);
+  assert.equal(saude.status, 200);
+  assert.equal(filho.exitCode, null, 'o motor segue de pé depois da primeira checagem');
+  if (DEPURAR) console.log(JSON.stringify({ status: depois.status, error: depois.error, casa: listar(CASA) }));
 
   filho.kill('SIGTERM');
   const fim = await fimDoFilho;
