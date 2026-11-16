@@ -49,7 +49,6 @@ function engineBase() {
   e.autoReviewFor = () => true;
   e.tokenFor = () => 'tok';
   e.ghEnv = () => ({});
-  e.budgetBlockedFor = () => false;
   e.outrosRevisando = () => [];
   e.reviewActions = () => ({});
   e.toasts = [];

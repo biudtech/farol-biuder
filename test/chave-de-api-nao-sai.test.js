@@ -285,13 +285,13 @@ test('com a chave redigitada no mesmo salvar, o endereço troca', async () => {
   assert.equal(perfilNoDisco('k1').apiKey, CHAVE);
 });
 
-test('com o endereço igual, rótulo e orçamento mudam sem pedir a chave; espaço e barra final não são mudança', async () => {
+test('com o endereço igual, o rótulo muda sem pedir a chave, e campo de teto antigo não é gravado; espaço e barra final não são mudança', async () => {
   for (const [baseUrl, label] of [[ENDERECO, 'Um'], [`  ${ENDERECO}  `, 'Dois'], [`${ENDERECO}/`, 'Três'], [`"${ENDERECO}"`, 'Quatro']]) {
     const r = await pedir('POST', '/api/settings', { claudeProfiles: comK1({ baseUrl, label, budgetDaily: 7 }) });
     assert.equal(r.json.ok, true, `endereço ${JSON.stringify(baseUrl)}`);
     assert.equal(perfil('k1').label, label);
     assert.equal(perfil('k1').apiKey, CHAVE);
-    assert.equal(perfilNoDisco('k1').budgetDaily, 7);
+    assert.equal('budgetDaily' in perfilNoDisco('k1'), false);
   }
 });
 

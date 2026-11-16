@@ -1,9 +1,10 @@
 'use client';
 
-// A tela Consumo: o estado do teto e as sessões recentes vêm da chave `usage` do snapshot; o
-// período (somas, gasto por dia, quebras e diário) vem de GET /api/usage, onde quem soma,
-// filtra e pagina é o motor. A tela fatia e formata: não soma itens, não tem preço por modelo
-// e não decide pausa. A consulta mora no endereço da página.
+// A tela Consumo: a auditoria do registro e as sessões recentes vêm da chave `usage` do
+// snapshot; o período (somas, gasto por dia, quebras e diário) vem de GET /api/usage, onde
+// quem soma, filtra e pagina é o motor. A tela fatia e formata: não soma itens e não tem preço
+// por modelo. Ela só mede: o motor não tem teto de gasto, e nada aqui pausa revisão. A
+// consulta mora no endereço da página.
 //
 // O relatório não se refaz a cada evento do fluxo: quando o snapshot passa a contar sessão que
 // o relatório não viu, aparece um aviso com o botão Atualizar, e a pessoa decide quando.
@@ -15,12 +16,12 @@ import {
 } from '@/consumo/consulta';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import comuns from '../radar/Radar.module.css';
+import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
 import { Diario } from './Diario';
 import { Filtros } from './Filtros';
 import { GraficoPorDia } from './GraficoPorDia';
 import { PorModelo, PorTipo } from './Quebras';
 import { ResumoDoPeriodo } from './ResumoDoPeriodo';
-import { ResumoDoTeto } from './ResumoDoTeto';
 import { SessoesRecentes } from './SessoesRecentes';
 import { useEnderecoDoConsumo, useRelatorio } from './useConsumo';
 import estilos from './Consumo.module.css';
@@ -32,8 +33,6 @@ interface Props {
 
 export function Consumo({ app = appDoNavegador }: Props) {
   const { consulta, ir } = useEnderecoDoConsumo();
-  const tetos = useApp((e) => e.snapshot?.usage?.budgets, app);
-  const tetosDescartados = useApp((e) => e.snapshot?.usage?.budgetsDescartados, app);
   const auditoria = useApp((e) => e.snapshot?.usage?.auditoria, app);
   const sessoes = useApp((e) => e.snapshot?.usage?.recentSessions, app);
   const sessoesDescartadas = useApp((e) => e.snapshot?.usage?.sessoesDescartadas, app);
@@ -76,7 +75,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
     <div className={estilos.consumo}>
       <h1 className={comuns.titulo}>Consumo</h1>
 
-      <ResumoDoTeto tetos={tetos} descartados={tetosDescartados ?? 0} auditoria={auditoria} />
+      <AuditoriaDoRegistro auditoria={auditoria} />
 
       <Filtros consulta={consulta} opcoes={opcoes} periodo={relatorio?.range ?? null} fim={fim} aoBuscar={aoBuscar} aoMudar={aoMudar} aoLimpar={aoLimpar} />
 

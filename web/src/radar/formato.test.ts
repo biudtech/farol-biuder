@@ -99,6 +99,8 @@ describe('frases', () => {
     expect(textoDoEstacionado({ at: '', motivo: 'x', tipo: 'cancelado' })).toBe('Revisão automática parada: a última sessão foi cancelada. Ela não relança sozinha.');
     expect(textoDoEstacionado({ at: '', motivo: '', tipo: 'legado' })).toMatch(/sem motivo registrado/);
     expect(textoDoEstacionado({ at: '', motivo: 'rede', tipo: 'esgotado' })).toMatch(/último erro: rede/);
+    // o teto de gasto saiu do motor em 16/11/2026: não há frase de orçamento estourado
+    expect(textoDoEstacionado({ at: '', motivo: 'perfil antigo', tipo: 'orcamento' })).not.toMatch(/orçamento/);
     expect(textoDoEstacionado({ at: '', motivo: '', tipo: 'tipo-novo' })).toMatch(/: falhou\./);
     expect(textoDoEstacionado({ at: '', motivo: '', tipo: 'constructor' })).toMatch(/: falhou\./);
   });

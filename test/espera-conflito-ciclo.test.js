@@ -27,7 +27,7 @@ function engineBase() {
     autoReviewParked: new Set(), parkedMotivos: {}, retryAfterNet: new Map(), skipComentado: {},
     headlessQueue: [], activeReviews: new Map(), queue: [], config: {},
     accountForPr: () => 'revisora', autoReviewFor: () => true, tokenFor: () => 'tok',
-    budgetBlockedFor: () => false, outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
+    outrosRevisando: () => [], ghEnv: () => ({}), log: () => {},
     emit: () => {},
   });
   e.decisions.pending.push({

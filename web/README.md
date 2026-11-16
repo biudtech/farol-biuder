@@ -88,7 +88,7 @@ corrigida sozinho, o `overrides` sai.
 | `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das três telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
-| `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e o estado do teto em frases (`teto.ts`) |
+| `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e a auditoria do registro em frases (`auditoria.ts`) |
 | `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`) e as ações, com corpo, pergunta e conferência (`acoes.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
@@ -484,11 +484,12 @@ Regras que valem para quem mexer nela:
 ## A tela Consumo
 
 A aba `/consumo` é `src/componentes/consumo/Consumo.tsx`. Ela mostra quanto as sessões de IA do
-motor consumiram: tokens e custo em dólar. Só lê: não há ação nela.
+motor consumiram: tokens e custo em dólar. Só lê: não há ação nela. E só mede: o motor não tem
+teto de gasto (decisão de 16/11/2026), então a tela não mostra teto, bloqueio nem pausa.
 
 | Parte | Componente | De onde vem |
 |---|---|---|
-| Teto de gasto e auditoria | `ResumoDoTeto.tsx` | `usage.budgets` e `usage.auditoria` do snapshot |
+| Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |
 | Período e filtros | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
 | Resumo do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
 | Gasto por dia | `GraficoPorDia.tsx` | `series` |
@@ -499,16 +500,10 @@ motor consumiram: tokens e custo em dólar. Só lê: não há ação nela.
 O contrato, lido do motor:
 
 - **A chave `usage` do snapshot** (`usageSummary`, `lib/engine/usage.js`, pela projeção de
-  `lib/engine/snapshot-usage.js`). A tela guarda `budgets`, `recentSessions`, `auditoria`,
+  `lib/engine/snapshot-usage.js`). A tela guarda `recentSessions`, `auditoria`,
   `sessionsSince` e `totals.sessions`. A chave traz também as séries por dia (`series`,
   `stackedSeries`, `matrixSeries`, até 120 dias), que a tela não usa: com elas a soma de um
   período teria de ser feita aqui.
-- **`usage.budgets`**, um por perfil do Claude (`linhaDeOrcamento`): `id`, `label`, `kind`
-  (`assinatura` ou `apikey`), `capHoje` (o teto que vale hoje) e `capOrigem` (`base`,
-  `semana`, `data` ou `nenhum`), `today` (o gasto do dia), `budgetTotal`, `budgetSince` e
-  `sinceCutoff` (o gasto desde o corte), `blocked`, `reason` (`diario`, `total`,
-  `diario-previsto` ou `total-previsto`), `parcialmenteEstimado` e `tipicoReview`. É a mesma
-  conta do gate, refeita a cada envio do snapshot.
 - **`usage.recentSessions`**: as 100 sessões mais recentes, a mais nova primeiro, com `at`,
   `kind`, `ref`, `model`, os quatro contadores de tokens, `costUsd`, `costSource` e `status`.
 - **`GET /api/usage`** (`lib/engine/usage-activity.js`, `lib/usage/report.js`) lê o diário
@@ -530,9 +525,8 @@ Regras que valem para quem mexer nela:
 - **A tela não soma.** Toda soma é do motor: `totals` para o período, `series` por dia,
   `byKind` por tipo, `models` por modelo, `auditoria` para o registro inteiro. A tela não soma
   linhas de uma página nem tentativas de uma operação. As contas daqui são de exibição e
-  estão ditas: a participação percentual (a fatia de uma linha no total do motor), entrada
-  mais saída da mesma linha (para ordenar os modelos) e o que resta para o teto (o teto menos
-  o gasto, dois números do motor).
+  estão ditas: a participação percentual (a fatia de uma linha no total do motor) e entrada
+  mais saída da mesma linha (para ordenar os modelos).
 - **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
   informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
   esse valor, e a tela diz isso junto do resumo. A modalidade aparece nas três parcelas em
@@ -542,17 +536,13 @@ Regras que valem para quem mexer nela:
   (`costSource`): informado pela sessão, "calculado pelo motor" (a sessão morreu antes de
   informar, e o motor usa a mediana do custo por token de saída das sessões concluídas do
   mesmo modelo) ou "Desconhecido", que não mostra o zero gravado.
-- **Dois relógios, cada um com o seu nome.** O período e o diário são em "dia de Brasília"
-  (`FUSO_DO_DIA`, `lib/constants.js`). O teto é no "dia local do processo do motor"
-  (`localDay`), e a tela avisa que, com o motor em UTC, ele vira às 21h de Brasília. A tela
-  escreve o dia trocando a ordem do texto, sem `Date`. A hora de cada execução (`at`) sai no
-  fuso do navegador, como nas outras telas.
-- **O teto em texto.** `estadoDoTeto` (`src/consumo/teto.ts`) escreve a situação ("Dentro do
-  teto", "Pausado: ...", "Sem teto definido"), o gasto contra cada teto e o que o motor deixa
-  de fazer com o perfil pausado (`budgetBlockedFor`): a fila automática, a nova rodada
-  automática de um PR já revisado (`travaDoRound`), a retentativa, a recuperação de prova, a
-  busca de contestação e a revisão em lote, mesmo pedida à mão. Só a revisão manual de um PR
-  fora de lote continua (`lib/engine/review.js`). A cor acompanha, não substitui.
+- **O dia é o de Brasília.** O período e o diário são em "dia de Brasília" (`FUSO_DO_DIA`,
+  `lib/constants.js`). A tela escreve o dia trocando a ordem do texto, sem `Date`. A hora de
+  cada execução (`at`) sai no fuso do navegador, como nas outras telas.
+- **A auditoria em texto.** `linhasDaAuditoria` (`src/consumo/auditoria.ts`) escreve o total
+  do registro inteiro, o que não virou resultado, o que o motor calculou e o que ficou com
+  custo desconhecido. É medição: nenhuma dessas frases fala de limite, e nada na tela pausa
+  revisão. A lista de teto por perfil que um motor antigo ainda mande em `usage` não é lida.
 - **A consulta mora no endereço.** `inicio`, `fim`, `tipo`, `modelo`, `repo`, `q` e `pagina`
   (`src/consumo/consulta.ts`), no molde do Histórico: filtro, período pronto e página
   empilham; busca, datas e página corrigida trocam a entrada. A busca espera 300 ms, e cada
@@ -577,8 +567,8 @@ Regras que valem para quem mexer nela:
   para o lado em 375 px.
 - **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda,
   aparece o aviso de sessão nova com o botão Atualizar, dizendo que ela pode não entrar no
-  recorte (o aviso não olha período nem filtro). O teto e as sessões recentes vêm do snapshot
-  e andam sozinhos.
+  recorte (o aviso não olha período nem filtro). A auditoria e as sessões recentes vêm do
+  snapshot e andam sozinhas.
 - **Estados.** Durante uma carga o relatório anterior fica na tela, esmaecido e com
   `aria-busy`. Sem execução no período, a tela diz isso (com filtro a frase muda) e não
   desenha gráfico nem quebras. Falha de rede tem Tentar de novo. `{ ok: false, motivo }`
@@ -598,17 +588,13 @@ Regras que valem para quem mexer nela:
   frase. Filtro com valor que não existe não é recusado: volta vazio. O cliente já lê `code`
   e `campo` de um 400, se a rota passar a responder assim.
 - **Dois dias diferentes.** O diário e `GET /api/usage` usam o dia de Brasília; o agregado
-  (`usage.series`) e o teto (`today`) usam o dia local do processo do motor (`localDay`), que
-  só é o de Brasília se o processo rodar nesse fuso. O snapshot não diz qual é o dia do teto
-  nem o fuso do processo: a tela escreve "hoje, no dia local do processo do motor".
+  (`usage.series`) usa o dia local do processo do motor (`localDay`), que só é o de Brasília
+  se o processo rodar nesse fuso. A tela não usa o agregado, e por isso só fala no dia de
+  Brasília.
 - **As execuções por chave de API não são contadas.** O motor soma o dólar delas e conta só
   as de custo desconhecido. A tela não tira a contagem por diferença.
 - **A tentativa de fora do filtro não vem marcada.** A tela marca a de fora do período
   comparando o dia dela com `range`; para o filtro teria de repetir a regra do motor.
-- **O que resta para o teto não vem.** O gate compara com o teto o gasto mais uma reserva
-  (uma revisão típica por sessão de custo desconhecido), e esse número não está no snapshot,
-  só o sinal `parcialmenteEstimado`. O "Resta" da tela é o teto menos o gasto, e a nota avisa
-  quando há reserva.
 - **Sem custo nem cache por modelo no período.** `models` traz execuções e tokens de entrada
   e de saída. O custo por modelo existe só nas séries diárias do snapshot, que a tela teria
   de somar.
@@ -625,9 +611,9 @@ Regras que valem para quem mexer nela:
   de fora.
 - **O motivo da falha de uma sessão** (`usage.falhasPorSessao`) não é mostrado: é texto
   de erro do motor. As falhas registradas aparecem no relatório do motor, na tela Sistema.
-- **O teto não se edita por tela nenhuma.** O Consumo só mostra. Por decisão de 16/11/2026 o
-  revisor não trava por gasto: a tela Sistema não tem teto, e o gate de orçamento sai do motor
-  em mudança própria, junto com o que esta tela mostra dele.
+- **Sem gasto por perfil.** O snapshot não traz mais linha por perfil do Claude (ela existia
+  para o teto, que saiu). Cada sessão recente vem com o `profileId`, que a tela não lê, e
+  `GET /api/usage` não filtra por perfil.
 
 ## A tela Sistema
 
@@ -646,13 +632,11 @@ título próprio e um índice no topo:
 | Rede e acesso | `Sistema.tsx` | `bind`, `port`, `hostPublico`, `origensPermitidas` e `localAuth` de `config` | nada |
 
 **A tela não tem teto de gasto** (decisão de 16/11/2026): o revisor é autônomo e não trava por
-gasto. Ela não mostra nem edita teto, e nenhum `POST /api/settings` com `claudeProfiles` sai do
-front (`sistema/acoes.test.ts` confere que não há ação nem fonte que monte esse corpo). O gate
-de orçamento ainda existe no motor e sai dele em mudança própria. Enquanto existir, o perfil
-que traz teto no arquivo (`budgetDaily`, `budgetTotal`, `budgetByWeekday` ou `budgetDates`) ganha
-um aviso só de leitura: o teto ainda pode pausar revisões automáticas. O leitor guarda só a
-marca `temTeto`, não o valor. A tela Consumo, que mostra o estado do teto, sai junto com a
-mudança do motor.
+gasto. O motor não tem mais o gate, e a tela não mostra, não edita nem avisa teto. Nenhum
+`POST /api/settings` com `claudeProfiles` sai do front, e nenhum fonte lê campo de teto
+(`sistema/acoes.test.ts` confere as duas coisas). O campo de teto que um `config.json` antigo
+ainda traga num perfil (`budgetDaily`, `budgetTotal`, `budgetSince`, `budgetByWeekday` ou
+`budgetDates`) é descartado pelo motor na carga e não chega à tela.
 
 O contrato, lido do motor:
 
@@ -802,9 +786,6 @@ Regras que valem para quem mexer nela:
   que o GitHub o aceita. A chave de API só tem `temChave`: o teste do perfil não a confere,
   porque custaria uma chamada paga. Validade de verdade só há para o login da assinatura
   (teste do perfil) e para a credencial do Jira (teste de conexão).
-- **O gate de orçamento ainda está no motor.** A tela não tem teto, mas um teto gravado no
-  arquivo continua pausando revisão automática até a mudança do motor sair. A tela avisa por
-  perfil, sem o valor.
 - **A rota da conta não devolve a conta gravada.** `POST /api/accounts/edit` responde só
   `ok` e `ignorados`: a conferência do que ficou depende do snapshot seguinte.
 - **As organizações vão como lista inteira, sem versão.** O que a tela manda é a lista atual

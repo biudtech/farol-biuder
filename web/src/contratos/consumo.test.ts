@@ -179,27 +179,19 @@ describe('a chave usage do snapshot', () => {
   const avisos: string[] = [];
   const registrar = (aviso: string): void => { avisos.push(aviso); };
 
-  // uma linha como linhaDeOrcamento (lib/engine/usage.js) a monta
-  const teto = {
-    id: 'p1', label: 'Assinatura do time', kind: 'assinatura', budgetDaily: 50, budgetTotal: null, budgetSince: null,
-    budgetByWeekday: {}, budgetDates: {}, capHoje: 50, capOrigem: 'base', today: 12.5, sinceCutoff: 300,
-    blocked: false, reason: null, parcialmenteEstimado: false, tipicoReview: 4.1, sugestaoDiaria: 70,
-  };
   const sessao = { id: id(1), at: 1000, day: '2026-11-16', kind: 'review', ref: 'dono/repo#12', account: 'rev', profileId: 'p1', model: 'Sonnet 5', farol: '3.0.0-dev', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido', status: 'ok', provider: 'claude', billingKind: 'dir' };
   const parte = (sessions: number, costUsd: number) => ({ sessions, costUsd });
 
-  it('guarda o teto por perfil, as sessões recentes, a auditoria e a contagem do agregado', () => {
+  it('guarda as sessões recentes, a auditoria e a contagem do agregado', () => {
     const lido = lerConsumoDoSnapshot({
       totals: { sessions: 42, costUsd: 900 },
       series: [{ day: '2026-11-16', sessions: 1 }],
-      budgets: [teto],
       recentSessions: [sessao],
       auditoria: { total: parte(42, 900), util: parte(40, 880), perdido: parte(2, 20), medido: parte(41, 890), estimado: parte(1, 10), desconhecido: parte(0, 0) },
       sessionsSince: 500,
       retentionDays: 120,
     }, registrar);
     expect(lido).toEqual({
-      budgets: [{ id: 'p1', label: 'Assinatura do time', kind: 'assinatura', capHoje: 50, capOrigem: 'base', today: 12.5, sinceCutoff: 300, blocked: false, parcialmenteEstimado: false, tipicoReview: 4.1 }],
       recentSessions: [{ at: 1000, day: '2026-11-16', kind: 'review', status: 'ok', ref: 'dono/repo#12', model: 'Sonnet 5', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido' }],
       auditoria: { total: parte(42, 900), util: parte(40, 880), perdido: parte(2, 20), medido: parte(41, 890), estimado: parte(1, 10), desconhecido: parte(0, 0) },
       sessionsSince: 500,
@@ -211,27 +203,29 @@ describe('a chave usage do snapshot', () => {
   it('o que não é objeto mantém o valor anterior; chave sem as listas vira objeto vazio', () => {
     for (const torto of [null, 'x', 3, []]) expect(lerConsumoDoSnapshot(torto, registrar)).toBeUndefined();
     expect(lerConsumoDoSnapshot({}, registrar)).toEqual({});
-    expect(lerConsumoDoSnapshot({ budgets: 'x', recentSessions: {}, auditoria: { total: { sessions: 1 } }, totals: { sessions: -1 } }, registrar)).toEqual({});
+    expect(lerConsumoDoSnapshot({ recentSessions: {}, auditoria: { total: { sessions: 1 } }, totals: { sessions: -1 } }, registrar)).toEqual({});
   });
 
-  it('perfil sem id e sessão sem hora são descartados, contados e registrados sem o dado', () => {
+  it('sessão sem hora é descartada, contada e registrada sem o dado', () => {
     avisos.length = 0;
-    const lido = lerConsumoDoSnapshot({ budgets: [teto, { label: 'sem id' }, null], recentSessions: [sessao, { ref: 'dono/segredo#1' }] }, registrar);
-    expect(lido?.budgets).toHaveLength(1);
-    expect(lido?.budgetsDescartados).toBe(2);
+    const lido = lerConsumoDoSnapshot({ recentSessions: [sessao, { ref: 'dono/segredo#1' }] }, registrar);
     expect(lido?.recentSessions).toHaveLength(1);
     expect(lido?.sessoesDescartadas).toBe(1);
-    expect(avisos).toEqual([
-      'snapshot: 2 item(ns) de "usage.budgets" com forma inesperada, descartado(s)',
-      'snapshot: 1 item(ns) de "usage.recentSessions" com forma inesperada, descartado(s)',
-    ]);
+    expect(avisos).toEqual(['snapshot: 1 item(ns) de "usage.recentSessions" com forma inesperada, descartado(s)']);
+  });
+
+  // O teto de gasto saiu do motor em 16/11/2026. Um motor antigo ainda manda `usage.budgets`:
+  // a tela não guarda a lista, não registra aviso e não lê bloqueio dela.
+  it('a lista de teto de um motor antigo não é guardada nem vira aviso', () => {
+    avisos.length = 0;
+    const teto = { id: 'p1', label: 'Assinatura do time', kind: 'assinatura', budgetDaily: 0, capHoje: 0, capOrigem: 'base', today: 12.5, blocked: true, reason: 'diario' };
+    const lido = lerConsumoDoSnapshot({ budgets: [teto, { label: 'sem id' }], recentSessions: [sessao] }, registrar);
+    expect(lido).toEqual({ recentSessions: [expect.objectContaining({ at: 1000 })] });
+    expect(JSON.stringify(lido)).not.toMatch(/budget|blocked|capHoje/);
+    expect(avisos).toEqual([]);
   });
 
   it('os campos lidos existem no que o motor emite', () => {
-    const linha = /function linhaDeOrcamento\([\s\S]*?\n\}/.exec(fonte('lib/engine/usage.js'))?.[0] ?? '';
-    for (const nome of ['id', 'label', 'kind', 'budgetTotal', 'budgetSince', 'capHoje', 'capOrigem', 'today', 'sinceCutoff', 'blocked', 'reason', 'parcialmenteEstimado', 'tipicoReview']) {
-      expect(linha, nome).toMatch(new RegExp(`\\b${nome}\\b`));
-    }
     const projecao = /const CAMPOS_DA_SESSAO = \[([\s\S]*?)\];/.exec(fonte('lib/engine/snapshot-usage.js'))?.[1] ?? '';
     for (const nome of ['at', 'kind', 'ref', 'model', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'costUsd', 'costSource', 'status']) {
       expect(projecao, nome).toContain(`'${nome}'`);
@@ -239,6 +233,8 @@ describe('a chave usage do snapshot', () => {
     // a tela diz que o motor manda no máximo as 100 sessões mais recentes
     expect(fonte('lib/engine/usage.js')).toContain('function recentSessionsFrom(engine, limit = 100) {');
     const resumo = fonte('lib/engine/usage.js');
-    for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: auditoriaDeConsumo(sessions)', 'sessionsSince:', 'budgets: budgetsFrom(']) expect(resumo, nome).toContain(nome);
+    for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: auditoriaDeConsumo(sessions)', 'sessionsSince:']) expect(resumo, nome).toContain(nome);
+    // o motor não tem teto de gasto: nem a lista por perfil, nem o gate
+    expect(resumo).not.toMatch(/budgets|budgetBlockedFor|profileBudgetStatus/);
   });
 });

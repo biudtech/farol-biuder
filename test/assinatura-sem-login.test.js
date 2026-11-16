@@ -159,13 +159,6 @@ test('o motivo da recusa do login sai sem o código inteiro e sem cada metade de
   assert.equal(loginWeb.motivoDaFalha('Login failed: a b', 'aaaaaaaaaa#b'), 'Login failed: a b');
 });
 
-test('Consumo: o cartão do perfil de assinatura diz Assinatura, e o de chave diz Chave de API', () => {
-  const cartao = (kind) => P.usageBudgetHtml({ budgets: [{ id: 'p', label: 'Perfil', kind, blocked: false, today: 0, sinceCutoff: 0, budgetDaily: null, budgetTotal: null }] });
-  assert.match(cartao('assinatura'), /usage-budget-kind">Assinatura</);
-  assert.doesNotMatch(cartao('assinatura'), /Chave de API/);
-  assert.match(cartao('apikey'), /usage-budget-kind">Chave de API</);
-});
-
 // --- login pela tela: cancelar pelo perfil, e a saída ordenada -------------------------------
 
 const LINK = 'https://claude.com/cai/oauth/authorize?code=true&state=abc';

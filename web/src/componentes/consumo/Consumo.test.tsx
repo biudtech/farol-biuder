@@ -9,10 +9,9 @@ import type { Resultado } from '@/transporte/cliente';
 import { voltarPara } from '../historico/apoio-de-teste';
 import { Consumo } from './Consumo';
 import { PERIODOS } from '@/consumo/consulta';
-import { NOTA_DA_PAUSA } from '@/consumo/teto';
 import { ESPERA_DA_BUSCA_MS } from './Filtros';
 import { SESSOES_A_VISTA } from './SessoesRecentes';
-import { consumoDoMotor, operacaoDoMotor, relatorioDoMotor, sessaoDoMotor, somaDoMotor, tetoDoMotor } from './apoio-de-teste';
+import { consumoDoMotor, operacaoDoMotor, relatorioDoMotor, sessaoDoMotor, somaDoMotor } from './apoio-de-teste';
 
 vi.mock('next/navigation', async () => (await import('../historico/apoio-de-teste')).navegacaoDeMentira);
 
@@ -673,62 +672,51 @@ describe('Consumo: estados', () => {
   it('os avisos do motor aparecem na região de resultado, e dá para dispensar', async () => {
     const t = montar();
     await assentar();
-    act(() => { t.store.trocar({ recados: [{ n: 1, tom: 'erro', texto: 'Orçamento do perfil "Assinatura do time" estourado.' }] as unknown as EstadoDoApp['recados'] }); });
+    act(() => { t.store.trocar({ recados: [{ n: 1, tom: 'erro', texto: 'Buscas pausadas pelo limite do GitHub.' }] as unknown as EstadoDoApp['recados'] }); });
     const regiao = screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
-    expect(regiao.textContent).toContain('Orçamento do perfil "Assinatura do time" estourado.');
+    expect(regiao.textContent).toContain('Buscas pausadas pelo limite do GitHub.');
     await clicar('Dispensar');
     expect(regiao.textContent).toBe('');
   });
 });
 
-describe('Consumo: o teto', () => {
-  const teto = () => secao('Teto de gasto');
+describe('Consumo: a auditoria do registro', () => {
+  const auditoria = () => secao('Auditoria do registro');
 
-  it('diz em texto o gasto, o teto, o que resta e que a revisão automática segue', async () => {
+  it('diz em texto o total do registro e o que não virou resultado, com o custo dito estimado', async () => {
     montar();
     await assentar();
-    expect(within(teto()).getByRole('heading', { level: 3 }).textContent).toBe('Assinatura do time Assinatura');
-    expect(within(teto()).getByText('Dentro do teto: a revisão automática segue.')).toBeTruthy();
-    expect(within(teto()).getByText('Hoje, no dia local do processo do motor: US$ 12,50 estimados de US$ 50,00 (teto diário). Resta US$ 37,50.')).toBeTruthy();
-    expect(within(teto()).getByText('O "hoje" do teto é o dia local do processo do motor, não o dia de Brasília do diário: com o motor em UTC, ele vira às 21h de Brasília.')).toBeTruthy();
-    expect(within(teto()).getByText('Registro inteiro de sessões: US$ 900,00 estimados em 42 sessões.')).toBeTruthy();
-    expect(within(teto()).getByText(/^Não viraram resultado .*US\$ 90,00 em 3 sessões, 10% do custo registrado\.$/)).toBeTruthy();
+    expect(within(auditoria()).getByText('Registro inteiro de sessões: US$ 900,00 estimados em 42 sessões.')).toBeTruthy();
+    expect(within(auditoria()).getByText(/^Não viraram resultado .*US\$ 90,00 em 3 sessões, 10% do custo registrado\.$/)).toBeTruthy();
+    expect(within(auditoria()).getByText(/^Custo calculado pelo motor.*US\$ 20,00 em 1 sessão\.$/)).toBeTruthy();
   });
 
-  it('pausado: a palavra está no texto, com o que o motor deixa de fazer', async () => {
-    montar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [tetoDoMotor({ today: 51, blocked: true, reason: 'diario' }), tetoDoMotor({ id: 'p2', label: 'Chave', kind: 'apikey', capHoje: null, capOrigem: 'nenhum', budgetDaily: null })] })) });
-    await assentar();
-    const [primeiro, segundo] = within(teto()).getAllByRole('listitem').filter((item) => item.querySelector('h3'));
-    expect(within(primeiro as HTMLElement).getByText('Pausado: o teto de hoje foi atingido.')).toBeTruthy();
-    expect(within(primeiro as HTMLElement).getByText(/Teto atingido\.$/)).toBeTruthy();
-    expect(within(primeiro as HTMLElement).getByText(NOTA_DA_PAUSA)).toBeTruthy();
-    expect(NOTA_DA_PAUSA).toMatch(/revisão em lote, mesmo pedida por você\. A revisão de um PR só, pedida por você, continua liberada\.$/);
-    expect(within(segundo as HTMLElement).getByText('Sem teto definido: este perfil não pausa por gasto.')).toBeTruthy();
-    expect(within(segundo as HTMLElement).getByText('Hoje, no dia local do processo do motor: US$ 12,50 estimados, sem teto diário.')).toBeTruthy();
-  });
-
-  it('sem a chave no snapshot, sem perfil e com perfil ilegível dizem coisas diferentes', async () => {
+  it('sem a auditoria no snapshot a seção diz que ela ainda não chegou', async () => {
     montar({ snapshot: {} });
     await assentar();
-    expect(within(teto()).getByText('O estado do teto ainda não chegou do motor.')).toBeTruthy();
-    cleanup();
-    montar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [] })) });
-    await assentar();
-    expect(within(teto()).getByText('Nenhum perfil do Claude configurado no motor: não há teto, e nada pausa por gasto.')).toBeTruthy();
-    cleanup();
-    montar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [{ label: 'sem id' }] })) });
-    await assentar();
-    expect(within(teto()).getByText(/1 perfil\(is\) chegaram em formato que esta tela não lê/)).toBeTruthy();
-    expect(within(teto()).queryByText(/Nenhum perfil do Claude configurado/)).toBeNull();
+    expect(within(auditoria()).getByText('A auditoria do registro ainda não chegou do motor.')).toBeTruthy();
   });
 
-  it('o teto muda com o snapshot, sem pedir nada ao motor', async () => {
+  it('muda com o snapshot, sem pedir nada ao motor', async () => {
     const t = montar();
     await assentar();
-    act(() => { t.store.trocar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [tetoDoMotor({ today: 47, blocked: true, reason: 'diario-previsto' })] })) }); });
-    expect(within(teto()).getByText('Pausado: a próxima revisão não cabe no teto de hoje.')).toBeTruthy();
-    expect(within(teto()).getByText(/^O motor projeta US\$ 4,10 para a próxima revisão/)).toBeTruthy();
+    const parte = (sessions: number, costUsd: number) => ({ sessions, costUsd });
+    act(() => { t.store.trocar({ snapshot: snapshotCom(consumoDoMotor({ auditoria: { total: parte(43, 910), perdido: parte(0, 0), estimado: parte(0, 0), desconhecido: parte(2, 0) } })) }); });
+    expect(within(auditoria()).getByText('Registro inteiro de sessões: US$ 910,00 estimados em 43 sessões.')).toBeTruthy();
+    expect(within(auditoria()).getByText('Custo desconhecido: 2 sessões, fora de todo valor em dólar.')).toBeTruthy();
     expect(t.pedidos()).toHaveLength(1);
+  });
+});
+
+// O teto de gasto saiu em 16/11/2026: o revisor não trava por dinheiro. A tela não tem o
+// bloco, não diz pausa por gasto e ignora a lista de teto que um motor antigo ainda mande.
+describe('Consumo: sem teto de gasto', () => {
+  it('não há bloco de teto, nem com a lista de um motor antigo dizendo que o perfil está bloqueado', async () => {
+    const antigo = { id: 'p1', label: 'Assinatura do time', kind: 'assinatura', budgetDaily: 0, capHoje: 0, capOrigem: 'base', today: 51, blocked: true, reason: 'diario', tipicoReview: 4.1 };
+    montar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [antigo] })) });
+    await assentar();
+    expect(screen.queryByRole('heading', { name: 'Teto de gasto' })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/[Tt]eto de gasto|[Pp]ausad|orçamento|Assinatura do time/);
   });
 });
 

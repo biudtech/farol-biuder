@@ -125,7 +125,8 @@ lançar e devolve só o que o motor ainda lê. As regras, do comentário e do c�
   antigo sem o marcador `esquemaConfig`, o campo que a conta não escolheu recebe o que valia
   então: revisa pela chave geral antiga, com ressalvas só aprova com `autoApproveAll`
   verdadeiro, e reprovar sozinha fica em `wait`. Vale também antes de existir login.
-- Perfil do Claude que não é `dir` nem `apikey` sai.
+- Perfil do Claude que não é `dir` nem `apikey` sai, e do perfil que fica saem os campos de
+  teto de gasto (`budgetDaily` e os outros quatro), que não têm mais leitor.
 - `seniority` atravessa e vira o perfil por pessoa (`people`) no boot.
 - Chave que não está em `SETTINGS` nem em `CHAVES_SO_DE_ARQUIVO` é descartada.
 
@@ -353,13 +354,33 @@ renovar sozinho (`lib/engine/uso-do-plano.js`, tela em `ui/pure/uso-do-plano.js`
 
 A leitura dentro do container não foi medida com um Claude Code real neste repositório.
 
-### Orçamento por perfil
+### Sem teto de gasto
 
-Cada perfil, dos dois tipos, aceita teto em dólar: `budgetDaily`, `budgetTotal` (contado a
-partir de `budgetSince`, `YYYY-MM-DD`), `budgetByWeekday` (`"0"` domingo a `"6"` sábado) e
-`budgetDates` (por data). O teto do dia sai de `dailyCapFor` (`lib/engine/usage.js`): data
-única vence dia da semana, que vence o teto base. `0` é teto válido; campo ausente é sem teto.
-Estourar pausa a revisão automática (`budgetBlockedFor`); o clique manual atravessa.
+O motor não tem teto de gasto (decisão de 16/11/2026): nenhuma revisão automática, nova
+rodada, retentativa, recuperação de prova, busca de contestação ou lote é barrada, adiada ou
+estacionada por dinheiro. O consumo continua medido e mostrado (`lib/engine/usage.js`,
+`GET /api/usage`), com o custo sempre dito estimado; ele só não decide nada.
+
+Um `config.json` antigo pode trazer teto num perfil: `budgetDaily`, `budgetTotal`,
+`budgetSince`, `budgetByWeekday` e `budgetDates`. O motor sobe normalmente,
+`normalizeClaudeProfiles` (`lib/parse.js`) descarta os cinco campos na carga e o perfil
+continua valendo. A carga não reescreve o arquivo por causa deles: eles somem na próxima
+gravação da configuração (qualquer salvar pela tela). E o PR que estava estacionado por
+orçamento num estado gravado antes volta a ser elegível no boot (`estacionamentoDoBoot`,
+`lib/engine/estado-do-boot.js`): o motor regrava o `auto-review-parked.json` sem ele e grava
+uma linha INFO no `farol.log` com quantos voltaram e quais, uma vez. Travado em
+`test/sem-teto-de-gasto.test.js`.
+
+O que continua segurando revisão automática não é gasto medido pelo motor: o limite de uso
+da assinatura do Claude (acima), o teto de uso que a organização põe no Claude
+(`limite-da-organizacao`, `lib/log-taxonomy.js`: falha permanente, que estaciona o PR até
+alguém subir o teto lá ou trocar o perfil), a pausa das buscas pelo limite de requisições do
+GitHub e o teto de revisões simultâneas (`parallelReviews` e `globalParallelReviews`).
+
+Efeito para quem opera: a nova rodada por commit não tem contagem diária nem limite de gasto.
+O que a segura é a espera de 5 minutos com o head quieto (`HEAD_QUIETO_MS`) e, depois de 3
+rodadas presas seguidas (`MAX_RODADAS_PRESAS`, `lib/engine/review.js`), a espera de 30 minutos
+(`HEAD_QUIETO_LONGO_MS`). Um autor que empurra commit o dia todo gera rodadas o dia todo.
 
 ## Avaliação técnica dos PRs revisados
 

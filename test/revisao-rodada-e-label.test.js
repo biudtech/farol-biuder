@@ -109,7 +109,7 @@ test('launchReReviews carimba rodadaAutomatica no PR enfileirado', async () => {
     reReviewLaunched: {}, decisions: { pending: [], resolved: [] },
     autoReviewParked: new Set(), retryAfterNet: new Map(), headlessQueue: [], activeReviews: new Map(),
     accountForPr: () => 'eu', autoReviewFor: () => true, tokenFor: () => 'tok',
-    budgetBlockedFor: () => null, outrosRevisando: () => [], skipComentado: {},
+    outrosRevisando: () => [], skipComentado: {},
     saveReReviewLaunched() { }, emit() { }, enqueueHeadless(p) { enq.push(p); },
     bloqueiaAutomatico: async () => false, fetchPrFiles: async () => null,
   };

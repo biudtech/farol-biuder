@@ -52,15 +52,6 @@ test('resolveClaudeAuth: devolve o id do perfil resolvido; sem perfis não há i
   assert.equal(engine.resolveClaudeAuth('qualquer').id, 'chave-x');
   engine.config.claudeProfiles = [];
   assert.equal(engine.resolveClaudeAuth('qualquer'), null);
-  assert.equal(engine.profileOfAccount('qualquer'), null, 'sem perfil não há a quem atribuir teto');
-});
-
-test('profileBudgetStatus (fachada): delega pro usage.js com this.usage', () => {
-  const engine = new Engine();
-  engine.config.claudeProfiles = [{ id: 'p1', label: 'P1', kind: 'apikey', apiKey: 'sk-1', budgetDaily: 1 }];
-  const profile = engine.config.claudeProfiles[0];
-  // sem nenhum uso registrado ainda: não bloqueia
-  assert.equal(engine.profileBudgetStatus(profile).blocked, false);
 });
 
 function comEnvDaMaquina(vars, fn) {

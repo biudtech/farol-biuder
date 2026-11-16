@@ -1,7 +1,8 @@
 // O que a tela Consumo lê do motor (os arquivos citados ficam na raiz do repositório):
 // - a chave `usage` do snapshot (usageSummary, lib/engine/usage.js, pela projeção de
-//   lib/engine/snapshot-usage.js): o teto por perfil, as sessões mais recentes e a auditoria
-//   do registro inteiro;
+//   lib/engine/snapshot-usage.js): as sessões mais recentes e a auditoria do registro
+//   inteiro. O motor não tem teto de gasto (saiu em 16/11/2026): a chave não traz teto nem
+//   bloqueio, e a lista de teto por perfil que um motor antigo ainda mande não é lida;
 // - GET /api/usage (lib/engine/usage-activity.js e lib/usage/report.js): o relatório de um
 //   período, com as somas, a série por dia, as quebras e uma página do diário.
 //
@@ -29,50 +30,6 @@ function ehDia(valor: unknown): valor is string {
 }
 
 // ---------- a chave `usage` do snapshot ----------
-
-// O teto de um perfil do Claude (linhaDeOrcamento, lib/engine/usage.js). Os valores são em
-// dólar. `capHoje` é o teto que vale hoje (o base, o do dia da semana ou o de uma data), e
-// `capOrigem` diz de onde ele veio: "data", "semana", "base" ou "nenhum". `today` é o gasto do
-// dia do motor, e `sinceCutoff` o gasto desde `budgetSince` (ou de todo o registro, sem ele).
-// `blocked` é a mesma conta do gate do motor, e `reason` diz qual teto: "diario", "total",
-// "diario-previsto" ou "total-previsto" (a próxima revisão não cabe).
-export interface TetoDoPerfil {
-  id: string;
-  label?: string;
-  // "assinatura" ou "apikey"
-  kind?: string;
-  budgetTotal?: number;
-  budgetSince?: string;
-  capHoje?: number;
-  capOrigem?: string;
-  today?: number;
-  sinceCutoff?: number;
-  blocked?: boolean;
-  reason?: string;
-  // parte do gasto comparado com o teto é reserva de sessão com custo desconhecido
-  parcialmenteEstimado?: boolean;
-  // o custo típico de uma revisão, que o gate projeta antes de iniciar a próxima
-  tipicoReview?: number;
-}
-
-const lerTeto: LeitorDeItem<TetoDoPerfil> = (v) => {
-  if (!ehObjeto(v) || !ehTextoComConteudo(v.id)) return undefined;
-  return semAusentes({
-    id: v.id,
-    label: campo(v.label, ehTextoComConteudo),
-    kind: campo(v.kind, ehTextoComConteudo),
-    budgetTotal: campo(v.budgetTotal, ehQuantia),
-    budgetSince: campo(v.budgetSince, ehDia),
-    capHoje: campo(v.capHoje, ehQuantia),
-    capOrigem: campo(v.capOrigem, ehTextoComConteudo),
-    today: campo(v.today, ehQuantia),
-    sinceCutoff: campo(v.sinceCutoff, ehQuantia),
-    blocked: campo(v.blocked, ehBooleano),
-    reason: campo(v.reason, ehTextoComConteudo),
-    parcialmenteEstimado: campo(v.parcialmenteEstimado, ehBooleano),
-    tipicoReview: campo(v.tipicoReview, ehQuantia),
-  });
-};
 
 // Uma execução de IA, como a tela a mostra numa linha: é a forma comum da sessão recente do
 // snapshot (sessaoParaTela, lib/engine/snapshot-usage.js) e da tentativa do diário
@@ -151,8 +108,6 @@ function lerAuditoria(v: unknown): Auditoria | undefined {
 // `stackedSeries`, `matrixSeries`) não são guardadas: a tela lê o período em GET /api/usage,
 // onde a soma é do motor.
 export interface ConsumoDoSnapshot {
-  // um por perfil do Claude configurado; ausente quando o motor não mandou a lista
-  budgets?: TetoDoPerfil[];
   // as sessões mais recentes do registro (até 100), a mais nova primeiro
   recentSessions?: Execucao[];
   auditoria?: Auditoria;
@@ -160,25 +115,20 @@ export interface ConsumoDoSnapshot {
   sessionsSince?: number;
   // quantas sessões o agregado do motor já contou: serve só para a tela perceber consumo novo
   sessoesContadas?: number;
-  // Não vêm do motor: quantos itens de cada lista a tela não leu.
-  budgetsDescartados?: number;
+  // Não vem do motor: quantas sessões recentes a tela não leu.
   sessoesDescartadas?: number;
 }
 
 export const lerConsumoDoSnapshot: Leitor<ConsumoDoSnapshot> = (valor, registrar) => {
   if (!ehObjeto(valor)) return undefined;
-  const tetos = lerItens(valor.budgets, lerTeto);
   const sessoes = lerItens(valor.recentSessions, lerExecucao);
-  // só a contagem vai ao registro: nem perfil nem referência de PR
-  if (tetos?.descartados) registrar(`snapshot: ${tetos.descartados} item(ns) de "usage.budgets" com forma inesperada, descartado(s)`);
+  // só a contagem vai ao registro, sem a referência do PR
   if (sessoes?.descartados) registrar(`snapshot: ${sessoes.descartados} item(ns) de "usage.recentSessions" com forma inesperada, descartado(s)`);
   return semAusentes({
-    budgets: tetos?.itens,
     recentSessions: sessoes?.itens,
     auditoria: lerAuditoria(valor.auditoria),
     sessionsSince: campo(valor.sessionsSince, ehQuantia) || undefined,
     sessoesContadas: ehObjeto(valor.totals) ? campo(valor.totals.sessions, ehContagem) : undefined,
-    budgetsDescartados: tetos?.descartados || undefined,
     sessoesDescartadas: sessoes?.descartados || undefined,
   });
 };

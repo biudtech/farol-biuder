@@ -41,9 +41,31 @@ provedor e modalidade histórica podem estar ausentes. Só eventos recebidos ent
 no consolidado. Falha de leitura é indisponibilidade, não consumo zero. A falta de
 cobertura anterior ao primeiro registro também é sinalizada.
 
-Orçamento, matriz e histórico técnico anteriores continuam disponíveis em uma
-seção recolhida, com seus totais gerais explicitamente separados dos filtros de
-atividade. Nenhuma nova contagem modifica os gates ou a política de revisão.
+A matriz e o histórico técnico anteriores continuam disponíveis em uma seção
+recolhida da tela antiga, com seus totais gerais explicitamente separados dos
+filtros de atividade. Nenhuma contagem modifica os gates ou a política de revisão.
+
+## O consumo mede, não barra
+
+O motor não tem teto de gasto (decisão de 16/11/2026: o revisor é autônomo e não
+trava por dinheiro). Saíram o orçamento em dólar por perfil do Claude
+(`budgetDaily`, `budgetTotal`, `budgetSince`, `budgetByWeekday`, `budgetDates`), o
+gate que pausava a automação quando ele estourava, a cota de cada conta dentro do
+perfil, o estacionamento do PR por orçamento, o toast e a linha de aviso no log.
+Com eles saíram as contas que só serviam ao gate: a reserva por sessão de custo
+desconhecido, a mediana do custo de uma revisão e a sugestão de teto.
+
+Nenhuma revisão automática, nova rodada, retentativa, recuperação de prova, busca
+de contestação ou lote consulta o gasto. O registro de consumo é o mesmo de antes:
+as sessões, o custo estimado, a origem do custo (`costSource`), a auditoria do
+registro inteiro, as séries e `GET /api/usage`. A chave `usage` do snapshot não
+traz mais `budgets`.
+
+Config e estado antigos: os campos de teto de um perfil são descartados na carga
+do `config.json`, sem erro, e o PR estacionado por orçamento volta a ser elegível
+no boot. O detalhe está em
+[`CONFIGURATION.md`](CONFIGURATION.md#sem-teto-de-gasto), e a trava em
+`test/sem-teto-de-gasto.test.js`.
 
 O registro de consumo do Claude distingue o uso do coordenador do uso da árvore
 inteira. Quando o evento final oferece `modelUsage` completo, os tokens incluem

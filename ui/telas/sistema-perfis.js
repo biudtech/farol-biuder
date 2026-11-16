@@ -1,7 +1,4 @@
-/* Farol · UI: perfis do Claude (assinatura e chave de API) e o orçamento de cada perfil (Sistema). O
-   orçamento não é assunto à parte: ele edita campos de dentro do MESMO perfil
-   (budgetDaily, budgetByWeekday, budgetDates, budgetTotal, budgetSince), então é
-   profundidade do perfil, não um terceiro tema. Contas do GitHub são outro estado
+/* Farol · UI: perfis do Claude (assinatura e chave de API) (Sistema). Contas do GitHub são outro estado
    (estado().accounts, não estado().config.claudeProfiles) e outro container
    (#accountsManager, não #claudeProfilesManager): moram em telas/sistema-contas.js. O
    único ponto de contato é cp-remove, que precisa limpar a referência ao perfil removido
@@ -79,75 +76,9 @@ export function renderClaudeProfiles() {
 }
 
 /* editor de perfis de chave de API do Claude: adicionar / remover / editar */
-/* ---------- cliques do editor de orçamento ----------
-   Separado do handler grande de cliques do gerenciador porque são cinco botões de
-   um mesmo assunto; devolve true quando tratou, pra o handler original sair cedo. */
-
-// escreve o mesmo valor num conjunto de dias da semana (atalho "dias úteis" e "fim
-// de semana"). Sem valor base preenchido não faz nada e explica: copiar `undefined`
-// pros sete dias apagaria a configuração em silêncio.
-function espalhaTeto(id, dows) {
-  const campo = document.querySelector(`.cp-budget-daily[data-id="${CSS.escape(id)}"]`);
-  const v = (campo && campo.value.trim()) || '';
-  if (v === '') { toast('info', 'Preencha o teto por dia antes de copiar pros dias.', 3500); return; }
-  saveClaudeProfiles(mapProfile(id, p => {
-    const porDia = { ...(p.budgetByWeekday || {}) };
-    for (const d of dows) porDia[d] = Number(v);
-    return { ...p, budgetByWeekday: porDia };
-  }));
-}
-
-function adicionaDataDeTeto(id) {
-  const dia = document.querySelector(`.cp-budget-date-new[data-id="${CSS.escape(id)}"]`);
-  const val = document.querySelector(`.cp-budget-date-val[data-id="${CSS.escape(id)}"]`);
-  const d = (dia && dia.value) || '';
-  const v = (val && val.value.trim()) || '';
-  if (!d || v === '') { toast('info', 'Escolha a data e o valor do teto desse dia.', 3500); return; }
-  saveClaudeProfiles(mapProfile(id, p => ({ ...p, budgetDates: { ...(p.budgetDates || {}), [d]: Number(v) } })));
-}
-
-function removeDataDeTeto(id, dia) {
-  saveClaudeProfiles(mapProfile(id, p => {
-    const datas = { ...(p.budgetDates || {}) };
-    delete datas[dia];
-    return { ...p, budgetDates: datas };
-  }));
-}
-
-// vazio APAGA a chave (o dia volta ao teto base), nunca grava 0: 0 é um teto
-// válido que bloquearia o dia inteiro, e seria o oposto do que "limpar" quer dizer
-function salvaTetoDoDia(id, dow, valor) {
-  return saveClaudeProfiles(mapProfile(id, p => {
-    const porDia = { ...(p.budgetByWeekday || {}) };
-    if (valor === '') delete porDia[dow]; else porDia[dow] = Number(valor);
-    return { ...p, budgetByWeekday: porDia };
-  }));
-}
-
-function tratouOrcamento(t) {
-  const id = t.dataset && t.dataset.id;
-  if (!id) return false;
-  // a sugestão só PREENCHE o campo; quem salva é o change do próprio input, e é
-  // por isso que ela nunca passa a bloquear sozinha (decisão de 20/08/2026)
-  if (t.classList.contains('cp-usar-sugerido')) {
-    const campo = document.querySelector(`.cp-budget-daily[data-id="${CSS.escape(id)}"]`);
-    if (campo) { campo.value = t.dataset.valor; campo.dispatchEvent(new Event('change', { bubbles: true })); }
-    return true;
-  }
-  if (t.classList.contains('cp-budget-uteis')) { espalhaTeto(id, ['1', '2', '3', '4', '5']); return true; }
-  if (t.classList.contains('cp-budget-fds')) { espalhaTeto(id, ['0', '6']); return true; }
-  if (t.classList.contains('cp-budget-limpa-dow')) {
-    saveClaudeProfiles(mapProfile(id, p => ({ ...p, budgetByWeekday: {} })));
-    return true;
-  }
-  if (t.classList.contains('cp-budget-date-add')) { adicionaDataDeTeto(id); return true; }
-  if (t.classList.contains('cp-budget-date-del')) { removeDataDeTeto(id, t.dataset.dia); return true; }
-  return false;
-}
-
 $('#claudeProfilesManager').addEventListener('click', (e) => {
   const t = e.target;
-  if (tratouOrcamento(t) || tratouLoginWeb(t)) return;
+  if (tratouLoginWeb(t)) return;
   // mostrar/ocultar a chave de um perfil já salvo (não é validação nem salvamento, só
   // alterna o type do input entre password e text).
   if (t.classList.contains('cp-toggle-key')) {
@@ -208,20 +139,9 @@ $('#claudeProfilesManager').addEventListener('click', (e) => {
   }
 });
 
-// aplica uma transformação num perfil e devolve a lista inteira, que é o que o
-// PATCH /api/settings espera (claudeProfiles é substituído por completo). Existe
-// pra os handlers de orçamento não repetirem o mesmo .map cinco vezes.
-function mapProfile(id, fn) {
-  return (estado().config.claudeProfiles || []).map(p => (p.id === id ? fn(p) : p));
-}
-
 $('#claudeProfilesManager').addEventListener('change', (e) => {
   const t = e.target;
-  // teto por dia da semana: mesmo caminho dos outros campos, só que o valor mora
-  // num mapa em vez de num campo solto. Vazio APAGA a chave (o dia volta ao teto
-  // base), nunca grava 0, porque 0 é um teto válido que bloquearia o dia inteiro.
-  if (t.classList.contains('cp-budget-dow')) return salvaTetoDoDia(t.dataset.id, t.dataset.dow, t.value.trim());
-  const camposEditaveis = ['cp-label', 'cp-apikey', 'cp-baseurl', 'cp-budget-daily', 'cp-budget-total', 'cp-budget-since'];
+  const camposEditaveis = ['cp-label', 'cp-apikey', 'cp-baseurl'];
   if (camposEditaveis.some(cls => t.classList.contains(cls))) {
     const id = t.dataset.id;
     // campo de chave vazio não salva nada: a guardada continua, e para apagar remove-se o perfil
@@ -245,18 +165,6 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
         next.baseUrl = t.value.trim();
         const chaveDigitada = digitado(`.cp-apikey[data-id="${CSS.escape(id)}"]`);
         if (chaveDigitada) next.apiKey = chaveDigitada;
-      }
-      if (t.classList.contains('cp-budget-daily')) {
-        const v = t.value.trim();
-        if (v === '') delete next.budgetDaily; else next.budgetDaily = Number(v);
-      }
-      if (t.classList.contains('cp-budget-total')) {
-        const v = t.value.trim();
-        if (v === '') delete next.budgetTotal; else next.budgetTotal = Number(v);
-      }
-      if (t.classList.contains('cp-budget-since')) {
-        const v = t.value.trim();
-        if (v === '') delete next.budgetSince; else next.budgetSince = v;
       }
       return next;
     });

@@ -73,20 +73,11 @@ describe('lerConfigDoSistema', () => {
     expect(lido.claudeProfiles).toEqual([{ id: 'p1', kind: 'dir' }]);
   });
 
-  it.each([
-    ['budgetDaily', { budgetDaily: 20 }],
-    ['budgetDaily zero', { budgetDaily: 0 }],
-    ['budgetTotal', { budgetTotal: 100, budgetSince: '2026-11-01' }],
-    ['budgetByWeekday', { budgetByWeekday: { 6: 5 } }],
-    ['budgetDates', { budgetDates: { '2026-12-25': 0 } }],
-  ])('perfil com teto no arquivo (%s) só ganha a marca de que tem teto: o valor não é guardado', (_nome, teto) => {
-    const lido = lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', ...teto }] }, vi.fn());
-    expect(lido.claudeProfiles).toEqual([{ id: 'p1', kind: 'dir', temTeto: true }]);
-  });
-
-  it('perfil sem teto, ou com campo de teto vazio ou torto, não ganha a marca', () => {
-    for (const semTeto of [{}, { budgetSince: '2026-11-01' }, { budgetByWeekday: {} }, { budgetDates: { x: 'y' } }, { budgetDaily: '20' }, { budgetTotal: null }]) {
-      expect(lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', ...semTeto }] }, vi.fn()).claudeProfiles).toEqual([{ id: 'p1', kind: 'dir' }]);
+  // O teto de gasto saiu do motor em 16/11/2026: o campo de teto que um config antigo ainda
+  // traga não é guardado nem vira marca nenhuma no perfil.
+  it('campo de teto de um config antigo não é guardado nem marca o perfil', () => {
+    for (const teto of [{ budgetDaily: 20 }, { budgetDaily: 0 }, { budgetTotal: 100, budgetSince: '2026-11-01' }, { budgetByWeekday: { 6: 5 } }, { budgetDates: { '2026-12-25': 0 } }]) {
+      expect(lerConfigDoSistema({ claudeProfiles: [{ id: 'p1', kind: 'dir', ...teto }] }, vi.fn()).claudeProfiles).toEqual([{ id: 'p1', kind: 'dir' }]);
     }
   });
 

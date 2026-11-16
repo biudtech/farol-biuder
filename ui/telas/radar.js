@@ -10,7 +10,7 @@ import { criterioTecnicoHtml } from '../pure/review.js';
 import {
   esc, fmtStamp, fmtWhenDay, personMention, papelPicker, reasonGroupsHtml,
   resolvedRow, listViewState, queueEmptyOkHtml, aprovadosHoje, orgsMonitoradas,
-  automacaoPausadaPor, queueCardHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
+  queueCardHtml, staleCardMeta, tituloDoAprovarDesligado, separarPendentes,
   contasNoLimiteDaFila, queueLimitHtml, queueWaitingCardHtml,
 } from '../pure.js';
 import { estado, peopleOf, contaRevisora } from './estado.js';
@@ -271,9 +271,6 @@ function renderQueue() {
       // as orgs saem da régua do que é DE FATO buscado (conta com token)
       owners: orgsMonitoradas(estado().accounts),
       intervalSeconds: estado().config?.intervalSeconds,
-      // fila vazia com a automação pausada por teto não é "está tudo em dia":
-      // é "nada vai ser revisado sozinho até liberar" (ver automacaoPausadaPor)
-      pausado: automacaoPausadaPor(estado().accounts, estado().config, estado().usage),
     });
     return;
   }

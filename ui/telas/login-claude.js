@@ -79,7 +79,7 @@ function fecharLoginWeb() {
 }
 
 /* Os cliques do login dentro do gerenciador de perfis; devolve true quando tratou, pra o
-   handler de lá sair cedo (o mesmo contrato do tratouOrcamento). */
+   handler de lá sair cedo. */
 export function tratouLoginWeb(t) {
   if (t.classList.contains('cp-login')) { abrirLoginWeb(t.dataset.id || ''); return true; }
   if (t.id === 'cpLoginWebEnviar') { enviarCodigoDoLogin(); return true; }

@@ -27,7 +27,6 @@ function engineDeFila() {
   e.freeHeadlessSlot = () => { };
   e.writeInflight = () => { };
   e.prState = async () => 'OPEN';
-  e.budgetBlockedFor = () => null;
   e.accountForPr = () => 'conta';
   return e;
 }

@@ -49,7 +49,7 @@ test('parado: tom de "precisa de você", motivo em português e escapado', () =>
   const html = P.reRoundBoxHtml(P.reRoundStatus({ estado: 'parado', motivo: 'outros_revisando', detalhe: '<b>ana</b>' }, stale()));
   assert.doesNotMatch(html, /<b>ana<\/b>/);
   assert.match(html, /&lt;b&gt;ana/);
-  for (const motivo of ['rascunho', 'sem_token', 'orcamento', 'estacionado', 'saiu_de_cena', 'coordenacao', 'pendencia_viva', 'consciencia', 'ancora', 'desconhecido']) {
+  for (const motivo of ['rascunho', 'sem_token', 'estacionado', 'saiu_de_cena', 'coordenacao', 'pendencia_viva', 'consciencia', 'ancora', 'desconhecido']) {
     const x = P.reRoundStatus({ estado: 'parado', motivo, detalhe: 'conta' }, stale());
     assert.ok(x.texto.length > 10, motivo);
     semTravessao(x.lead + x.texto);

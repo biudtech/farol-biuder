@@ -87,7 +87,7 @@ test('a tela oferece assinatura e chave de API: login pela tela, sem terminal e 
   assert.equal((comPlano.match(/class="btn sm cp-login" data-id="s1"/g) || []).length, 1);
   assert.match(comPlano, /class="btn sm cp-testar" data-id="s1"/);
   assert.doesNotMatch(comPlano, /cp-apikey|cp-baseurl/, 'perfil de assinatura não tem campo de chave');
-  assert.match(comPlano, /cp-budget-daily/, 'o orçamento vale para os dois tipos');
+  assert.doesNotMatch(comPlano + comChave, /cp-budget|Orçamento|[Tt]eto/, 'o perfil não tem mais campo de teto de gasto');
 });
 
 test('o resultado do teste mostra a origem de cada informação', () => {

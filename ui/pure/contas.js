@@ -1,5 +1,5 @@
-// A conta revisora, perfis do Claude e orçamento: banner do topo, selo de
-// autenticação, editor de orçamento por perfil e o editor da conta. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
+// A conta revisora e os perfis do Claude: banner do topo, selo de
+// autenticação e o editor da conta. Extraído do ui/pure.js na Fase 1a da reorganização; o conteúdo
 // não mudou.
 //
 // Banner do topo: os três avisos (sem conta, conta sem token, falha na última checagem)
@@ -10,11 +10,8 @@
 // Painel de perfis e da conta: o render lê o estado e atribui; o CONSTRUTOR só recebe um ctx
 // e devolve string. Ficaram no app.js, por serem DOM e não markup, o guarda de foco e o
 // `hint.hidden = true` do fim dos perfis.
-//
-// Editor de orçamento (v2.50.0): cada perfil de chave de API tem o seu. Três granularidades, do geral para o específico, na mesma
-// ordem em que o dailyCapFor resolve: teto base, por dia da semana, de uma data só.
 
-import { esc, fmtMoney, fmtClock } from './comum.js';
+import { esc, fmtClock } from './comum.js';
 import { reviewScopeHtml } from './review-scope.js';
 import { usoDoPlanoHtml } from './uso-do-plano.js';
 
@@ -57,18 +54,6 @@ export function statusBannerHtml(s = {}) {
 // e o markup fica legível: `${sel(a.onClean === 'approve')}` em vez do ternário inteiro.
 function sel(cond) { return cond ? ' selected' : ''; }
 
-// Selo do teto estourado. Os motivos `-previsto` dizem que o gasto ainda NÃO
-// passou do teto, mas a próxima revisão passaria: é a diferença entre "acabou" e
-// "a próxima não cabe", e a ação de quem lê é diferente em cada caso.
-function seloOrcamento(budget) {
-  const eixo = String(budget.reason || '').startsWith('total') ? 'orçamento total' : 'orçamento diário';
-  if (String(budget.reason || '').endsWith('-previsto')) {
-    const custo = Number(budget.tipicoReview || 0).toFixed(2);
-    return `<span class="a-claude bad" title="a próxima revisão (US$ ${custo} em média) passaria do ${eixo}, então a automação pausou antes de gastar (clique manual continua liberado)">🔴 ${eixo} no limite</span>`;
-  }
-  return `<span class="a-claude bad" title="${eixo} estourado, automação pausada (clique manual continua liberado)">🔴 ${eixo} estourado</span>`;
-}
-
 export function claudeAuthBadge(id, ctx) {
   const all = (ctx.doctor && ctx.doctor.claudeAuth) || [];
   // sem perfil nenhum a sessão não abre: o selo diz isso em vez de sumir. Doctor que ainda
@@ -78,101 +63,8 @@ export function claudeAuthBadge(id, ctx) {
   const info = all.find(x => x.id === id) || all.find(x => x.ready) || all[0];
   if (!info.ready && info.assinaturaMode) return `<span class="a-claude bad" title="Perfil de assinatura sem login: use Entrar com a assinatura">SEM LOGIN</span>`;
   if (!info.ready) return `<span class="a-claude bad" title="Perfil de chave de API sem chave preenchida">SEM CHAVE</span>`;
-  // bloqueio de orçamento vem de ctx.usage.budgets (fonte única, viva a cada
-  // pushState, v2.40.0); o doctor parou de carregar blocked/reason, e este selo
-  // lia de lá (achado da revisão adversarial: o ramo tinha virado código morto).
-  const budget = ((ctx.usage && ctx.usage.budgets) || []).find(b => b.id === (info.id || id)) || {};
-  if (budget.blocked) return seloOrcamento(budget);
   if (info.assinaturaMode) return `<span class="a-claude ok" title="Login da assinatura gravado na pasta do perfil">assinatura com login</span>`;
   return `<span class="a-claude ok" title="Autenticação por chave de API">🔑 chave configurada</span>`;
-}
-
-const DIAS_DO_TETO = [
-  { dow: '1', nome: 'seg' }, { dow: '2', nome: 'ter' }, { dow: '3', nome: 'qua' },
-  { dow: '4', nome: 'qui' }, { dow: '5', nome: 'sex' },
-  { dow: '6', nome: 'sáb' }, { dow: '0', nome: 'dom' },
-];
-
-const CAP_ORIGEM_LABEL = { data: 'só hoje', semana: 'deste dia da semana', base: 'padrão' };
-
-// valor de input numérico: campo vazio quando não há teto (placeholder explica),
-// nunca 0, porque 0 é um teto VÁLIDO que bloqueia tudo e seria mentira mostrá-lo
-function valorTeto(v) { return Number.isFinite(v) ? v : ''; }
-
-function linhaGastoHoje(info) {
-  if (!info) return '';
-  const gasto = fmtMoney(info.today || 0);
-  if (!Number.isFinite(info.capHoje)) return `Hoje: ${gasto} (sem teto)`;
-  const origem = CAP_ORIGEM_LABEL[info.capOrigem] || '';
-  // 0 é teto de verdade: o número sozinho ("de US$ 0.00") não dizia que a automação parou.
-  // A origem fica junto, senão um 0 do dia da semana ou da data não diz onde mudar.
-  if (info.capHoje === 0) {
-    const de = info.capOrigem === 'base' || !origem ? '' : ` ${origem}`;
-    return `Hoje: ${gasto} · teto 0${de}: revisão automática pausada`;
-  }
-  const marca = info.capOrigem === 'base' ? '' : ` · teto ${origem}`;
-  return `Hoje: ${gasto} de ${fmtMoney(info.capHoje)}${marca}`;
-}
-
-function botaoSugestao(p, info) {
-  // some assim que existe teto salvo: sugestão é ajuda pra começar, não conselho
-  // permanente, e um botão que reescreve o que a pessoa configurou seria hostil
-  const sugestao = info && info.sugestaoDiaria;
-  if (!sugestao || Number.isFinite(p.budgetDaily)) return '';
-  // arredonda em centavos: o valor cru é uma mediana com 9 casas, e ela ia parar
-  // dentro do config.json e do campo da tela do jeito que saiu da conta
-  const emCentavos = Math.round(sugestao * 100) / 100;
-  return `<button class="btn sm ghost cp-usar-sugerido" data-id="${esc(p.id)}" data-valor="${emCentavos}"
-    title="Mediana do que você gastou nos dias úteis dos últimos 30 dias. Só passa a valer depois de salvar.">usar ${esc(fmtMoney(sugestao))}</button>`;
-}
-
-function campoDia(p, d) {
-  const v = valorTeto((p.budgetByWeekday || {})[d.dow]);
-  return `<label class="cp-dow"><span>${esc(d.nome)}</span>
-    <input class="cp-budget-dow" type="number" min="0" step="0.01" data-id="${esc(p.id)}" data-dow="${d.dow}" value="${v}" placeholder="padrão"></label>`;
-}
-
-function linhaData(p, dia, valor) {
-  return `<li><span class="cp-data-dia">${esc(dia)}</span><span class="cp-data-valor">${esc(fmtMoney(valor))}</span>
-    <button class="btn icon sm ghost cp-budget-date-del" data-id="${esc(p.id)}" data-dia="${esc(dia)}" title="Remover o teto desta data" aria-label="Remover o teto desta data">✕</button></li>`;
-}
-
-function listaDeDatas(p) {
-  const datas = Object.entries(p.budgetDates || {}).sort((a, b) => a[0].localeCompare(b[0]));
-  if (!datas.length) return '<p class="a-hint">Nenhuma data com teto próprio.</p>';
-  return `<ul class="cp-datas">${datas.map(([dia, v]) => linhaData(p, dia, v)).join('')}</ul>`;
-}
-
-export function budgetEditorHtml(p, info) {
-  const id = esc(p.id);
-  return `<div class="cp-budget">
-    <div class="cp-budget-head"><strong>Orçamento</strong><span class="a-hint">${esc(linhaGastoHoje(info))}</span></div>
-    <div class="a-editrow">
-      <input class="cp-budget-daily" type="number" min="0" step="0.01" data-id="${id}" value="${valorTeto(p.budgetDaily)}" placeholder="Teto por dia (US$, vazio = sem teto)">
-      ${botaoSugestao(p, info)}
-    </div>
-    <div class="a-editrow">
-      <input class="cp-budget-total" type="number" min="0" step="0.01" data-id="${id}" value="${valorTeto(p.budgetTotal)}" placeholder="Teto total (US$, vazio = sem teto)">
-      <input class="cp-budget-since" type="date" data-id="${id}" value="${esc(p.budgetSince || '')}" title="Contar o teto total a partir desta data">
-    </div>
-    <p class="a-hint">Campo vazio: sem teto. 0 pausa a revisão automática deste perfil (o clique manual continua valendo).</p>
-    <details class="cp-budget-mais">
-      <summary>Ajustar por dia</summary>
-      <div class="a-editrow cp-atalhos">
-        <button class="btn sm ghost cp-budget-uteis" data-id="${id}" title="Copia o teto por dia para segunda a sexta">aplicar aos dias úteis</button>
-        <button class="btn sm ghost cp-budget-fds" data-id="${id}" title="Copia o teto por dia para sábado e domingo">aplicar ao fim de semana</button>
-        <button class="btn sm ghost cp-budget-limpa-dow" data-id="${id}" title="Remove os tetos por dia da semana (volta todos ao padrão)">limpar</button>
-      </div>
-      <div class="cp-dows">${DIAS_DO_TETO.map(d => campoDia(p, d)).join('')}</div>
-      <p class="a-hint">Dia em branco usa o teto por dia lá de cima; 0 pausa naquele dia.</p>
-      <div class="a-editrow">
-        <input class="cp-budget-date-new" type="date" data-id="${id}" title="Data com teto próprio">
-        <input class="cp-budget-date-val" type="number" min="0" step="0.01" data-id="${id}" placeholder="Teto só nesse dia (US$)">
-        <button class="btn sm cp-budget-date-add" data-id="${id}">adicionar</button>
-      </div>
-      ${listaDeDatas(p)}
-    </details>
-  </div>`;
 }
 
 // O campo da chave nasce sempre vazio: a chave não sai do motor, que manda só `temChave`.
@@ -196,12 +88,6 @@ export function claudeProfilesHtml(ctx) {
   const c = ctx.config || {};
   const profiles = c.claudeProfiles || [];
   const rows = profiles.map(p => {
-    // gasto vem de ctx.usage.budgets (fonte unica do orcamento, viva a cada
-    // pushState), nunca mais do cache do doctor, que congelava o "Hoje" daqui
-    // enquanto a aba Consumo andava (v2.40.0)
-    const budgetInfo = ((ctx.usage && ctx.usage.budgets) || []).find(x => x.id === p.id);
-    // todo o orçamento sai de budgetEditorHtml: teto base, por dia da semana e por data única
-    const camposOrcamento = budgetEditorHtml(p, budgetInfo);
     const assinatura = p.kind === 'dir';
     const uso = assinatura ? usoDoPlanoHtml(((ctx.claudePerfis || {}).uso || {})[p.id]) : '';
     const camposChave = assinatura ? '<div class="a-hint">Assinatura do Claude: o login fica guardado no próprio Farol, numa pasta só deste perfil.</div>' : camposDaChaveHtml(p, (ctx.recusas || {})[p.id]);
@@ -211,7 +97,7 @@ export function claudeProfilesHtml(ctx) {
         <input class="cp-label" data-id="${esc(p.id)}" value="${esc(p.label)}" placeholder="nome do perfil" spellcheck="false">
         ${claudeAuthBadge(p.id, ctx)}
       </div>
-      ${camposChave + camposOrcamento}
+      ${camposChave}
       ${uso}
       <div class="cp-teste" data-teste="${esc(p.id)}"></div>
     </div>

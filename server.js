@@ -7,7 +7,7 @@ assertExternalNodeRuntime();
 // headless do Claude Code.
 // Zero dependencias externas: roda com Node puro.
 import fs from 'node:fs';
-import { politicaDeInicio, contaTemAutomatico } from './lib/engine/review-scope.js';
+import { politicaDeInicio } from './lib/engine/review-scope.js';
 import path from 'node:path';
 import os from 'node:os';
 import { EventEmitter } from 'node:events';
@@ -39,7 +39,7 @@ import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
 import decisionMod from './lib/engine/decision.js';
 import ghMod from './lib/engine/gh-queries.js';
 import limiteGhMod from './lib/engine/limite-gh.js';
-import { chavesEstacionadas, ancoraAposReinicio } from './lib/engine/estado-do-boot.js';
+import { estacionamentoDoBoot, ancoraAposReinicio } from './lib/engine/estado-do-boot.js';
 import contasConfig from './lib/engine/contas-config.js';
 import versaoClaude from './lib/engine/versao-claude.js';
 import { catalogoParaTela as catalogoDeModelos } from './lib/modelos.js';
@@ -66,7 +66,6 @@ import esperaProvaMod from './lib/engine/espera-prova.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
-import quotaMod from './lib/engine/quota.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
@@ -222,15 +221,18 @@ class Engine extends EventEmitter {
     // Dois formatos no disco: a lista crua de keys (até a v2.57.3) e `{ keys, motivos }`
     // (v2.57.4, ver saveAutoReviewParked em lib/engine/review.js). Lista antiga entra
     // sem motivo; objeto sem `keys` (inclusive o `{}` corrompido) degrada pra vazio.
-    const parkedSalvo = readJson(path.join(STATE_DIR, 'auto-review-parked.json'), [], warn);
-    this.autoReviewParked = new Set(chavesEstacionadas(parkedSalvo)); // keys que falharam sem ser rede (ou foram canceladas): aguardam ação manual, não relançam sozinhas
-    // motivo e hora de cada estacionamento, pra tela (só de key que está no Set:
-    // motivo órfão é lixo de migração e não sobrevive ao boot)
-    this.parkedMotivos = {};
-    const motivosSalvos = (parkedSalvo && !Array.isArray(parkedSalvo) && parkedSalvo.motivos && typeof parkedSalvo.motivos === 'object') ? parkedSalvo.motivos : {};
-    for (const k of this.autoReviewParked) if (motivosSalvos[k] && typeof motivosSalvos[k] === 'object') this.parkedMotivos[k] = motivosSalvos[k];
+    // O que parou por orçamento num estado antigo não volta ao estacionamento: o teto de
+    // gasto saiu em 16/11/2026 (estacionamentoDoBoot, lib/engine/estado-do-boot.js).
+    const parkedSalvo = estacionamentoDoBoot(readJson(path.join(STATE_DIR, 'auto-review-parked.json'), [], warn));
+    this.autoReviewParked = new Set(parkedSalvo.keys); // keys que falharam sem ser rede (ou foram canceladas): aguardam ação manual, não relançam sozinhas
+    // motivo e hora de cada estacionamento, pra tela (só de key que está no Set)
+    this.parkedMotivos = parkedSalvo.motivos;
+    // Uma linha, uma vez: o arquivo é regravado sem os soltos, e o boot seguinte não repete.
+    if (parkedSalvo.soltos.length) {
+      this.saveAutoReviewParked();
+      this.log('INFO', `teto de gasto removido: ${parkedSalvo.soltos.length} PR(s) estacionado(s) por orçamento voltaram à fila automática: ${parkedSalvo.soltos.join(', ')}.`);
+    }
     this.parkedPruneStrikes = new Map(); // key estacionada -> ausências SEGUIDAS do panorama (memória; reinício zera, lado seguro)
-    this.budgetWarned = new Set(); // ids de perfil apikey já avisados de orçamento estourado, enquanto o estouro persistir (evita repetir o toast a cada checagem)
     // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
     // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
     this.usage = { ...usageMod.defaultUsage(), ...readJson(usageMod.USAGE_FILE, {}, warn) };
@@ -584,19 +586,6 @@ class Engine extends EventEmitter {
     this.checking = true;
     this.setStatus('checking');
     try {
-      // reconcilia budgetWarned com a realidade ATUAL dos perfis, independente da fila
-      // ter PR nenhum pra oferecer a chance de "destravar": sem isso, um perfil que
-      // estourou com a fila vazia (ou só com PRs excluídos por outro motivo) nunca sai
-      // do Set quando o gasto volta a caber, e o próximo estouro de verdade fica mudo
-      // (sem toast).
-      // Desde a Política 2 o Set guarda DOIS formatos: `idDoPerfil` (teto duro estourado)
-      // e `idDoPerfil|conta` (cota da conta cedendo a vez). Reconciliar os dois no mesmo
-      // laço é obrigatório: tratar a chave composta como id de perfil não acharia perfil
-      // nenhum, o aviso sairia do Set todo ciclo e o toast de cota repetiria sem parar,
-      // que é exatamente o barulho que este Set existe pra impedir.
-      for (const chave of [...this.budgetWarned]) {
-        if (!this._avisoDeOrcamentoAindaVale(chave)) this.budgetWarned.delete(chave);
-      }
       const { panorama, queue, fresh, mineList, ownersOk, monitoredOwners } = await this._coletarPanorama();
 
       // G15: poda do estacionamento (mesmo padrão da poda do reReviewLaunched em
@@ -844,28 +833,6 @@ class Engine extends EventEmitter {
         if (this.limiteDoPlanoAte(acct)) return false;
         if (this.skipComentado[p.key]) { foraDeCena.push(p); return false; }
         if (this._registraPulo(p, pulados)) return false;
-        const blockedProfile = this.budgetBlockedFor(acct);
-        if (blockedProfile) {
-          if (!this.budgetWarned.has(blockedProfile.id)) {
-            this.budgetWarned.add(blockedProfile.id);
-            this.emit('toast', { kind: 'error', text: `Orçamento do perfil "${blockedProfile.label}" estourado; automação pausada até liberar (clique manual continua liberado).` });
-            // rastro DURÁVEL, pelo mesmo motivo do gate de consciência (skip-review.js):
-            // toast some, e visto de fora uma automação pausada por teto é idêntica a uma
-            // automação quebrada. Em 30/08/2026 o teto estourou às 19:52 e o farol.log,
-            // que é a fonte do Diagnóstico, não tinha uma linha sequer sobre isso.
-            this.log('WARN', `orçamento do perfil "${blockedProfile.label}" estourado; revisão automática pausada até liberar (clique manual continua valendo).`);
-          }
-          return false;
-        }
-        /* COTA da conta dentro do perfil (Política 2, spec 2026-09-10). Avaliada DEPOIS
-           do teto duro de propósito: perfil estourado barra todo mundo e essa é a
-           mensagem certa; a cota é um segundo motivo, mais cedo e mais seletivo, e só
-           existe quando duas contas dividem o mesmo perfil E a outra está esperando.
-
-           O aviso NOMEIA os dois lados. O toast antigo dizia só "orçamento do perfil X
-           estourado", e com duas contas no mesmo perfil essa frase escondia justamente o
-           que a pessoa precisa saber: quem consumiu e quem ficou sem vez. */
-        if (this._registraCotaCedida(acct)) return false;
         return true;
       });
       if (fresh.length > 0) {
@@ -1246,7 +1213,7 @@ class Engine extends EventEmitter {
       inicioAutomatico: this.inicioAutomaticoDaFila(),
       // PRs em conflito com a base: { key: { at, head } }, sem sessão nem label (lib/engine/espera-conflito.js)
       esperaConflito: Object.fromEntries(Object.entries(this.esperaConflito || {}).map(([k, v]) => [k, { at: v.at, head: v.head, updatedAt: v.updatedAt }])),
-      // PRs da fila que estacionaram (falha, cancelamento, orçamento): o card mostra
+      // PRs da fila que estacionaram (falha, cancelamento, label retirada): o card mostra
       // quando e por quê, senão "nunca revisou" e "revisou e caiu" são idênticos na tela
       parked: this.parkedParaUi(),
       // card de commit novo (pendência stale_head): o que o round automático vai fazer e
@@ -1257,9 +1224,10 @@ class Engine extends EventEmitter {
       activeSessions: this.sessoesParaTela(),
       activity: Object.fromEntries(this.activity),
       ...reviewMod.esperaParaTela(this),
-      // Justiça de fila (spec 2026-09-10): leitura PURA do estado que as três
-      // políticas já produzem, sem coleta nova. É o que torna o rodízio visível: uma
-      // automação que cede a vez, vista de fora, é idêntica a uma automação quebrada.
+      // Justiça de fila (spec 2026-09-10): leitura PURA do estado que o rodízio entre
+      // organizações e o teto de revisões simultâneas já produzem, sem coleta nova. É o
+      // que torna o rodízio visível: uma automação que cede a vez, vista de fora, é
+      // idêntica a uma automação quebrada.
       filaJusta: this.filaJusta(),
       decisions: snapshotDecisions(this),
       reviewActions: snapshotReviewActions(this),
@@ -1291,85 +1259,18 @@ class Engine extends EventEmitter {
   falhasRecentes(opcoes) { return falhasMod.falhasRecentes(this, opcoes); }
   falhaDaSessao(sessionId) { return falhasMod.falhaDaSessao(this, sessionId); }
   usageSummary() { return usageMod.usageSummary(this); }
-  // custo típico de UMA revisão, medido no próprio histórico do mês (mediana).
-  // Alimenta a projeção do gate: o teto pergunta se a PRÓXIMA revisão cabe.
-  custoTipicoReview() { return usageMod.custoTipicoDoEngine(this); }
-  profileBudgetStatus(profile) { return usageMod.budgetStatusFor(this, profile); }
-
-  // devolve o perfil bloqueado por orçamento pra essa conta, ou null se não estiver
-  // bloqueada (conta sem perfil, perfil sem teto, ou dentro do teto). Usado em
-  // TODO caminho automático de gasto (toReview, retry pós-transitório, scan de
-  // pushback), pra nenhum deles vazar gasto quando um perfil já estourou.
-  // Desde a v2.48.4 vale pros DOIS tipos de perfil: o teto de assinatura não fala
-  // de fatura, fala de ritmo, e era a metade que faltava da mesma feature.
   // Até quando a assinatura do Claude desta conta está no limite do plano (0 = livre).
-  // Fachada de lib/engine/limite-plano.js, consultada nos mesmos pontos do orçamento.
+  // Fachada de lib/engine/limite-plano.js.
   limiteDoPlanoAte(acct) { return limiteAte(this, acct); }
 
-  budgetBlockedFor(acct) {
-    const profile = this.profileOfAccount(acct);
-    if (profile && this.profileBudgetStatus(profile).blocked) return profile;
-    return null;
-  }
-
-  // perfil Claude efetivo de uma conta GitHub. Sem perfil utilizável devolve null: não há a
-  // quem atribuir teto nem cota.
-  profileOfAccount(acct) {
-    const auth = this.resolveClaudeAuth(acct);
-    if (!auth || !auth.id) return null;
-    return (this.config.claudeProfiles || []).find(x => x.id === auth.id) || null;
-  }
-
-  /* Contas ATIVAS que dividem um perfil (Política 2). Ativa = com
-     revisão automática ligada: quem não revisa sozinho não disputa cota, e incluí-la no
-     divisor encolheria a fatia de quem de fato trabalha.
-
-     `waiting` é "tem PR esperando na fila AGORA", e é ele que faz a cota morder só
-     quando há disputa. Sai da fila VIVA (this.queue) e de propósito NÃO reconsulta o
-     gate de orçamento: isso recursaria (o gate é justamente quem chama esta função). Os
-     filtros aqui são os baratos e síncronos do toReview, o suficiente pra distinguir
-     "tem alguém esperando" de "a fila do outro está vazia". */
-  contasDoPerfil(profileId) {
-    const espera = new Set();
-    for (const p of this.queue) {
-      const dona = String(this.accountForPr(p) || '').toLowerCase();
-      if (!dona) continue;
-      if (!this.tokenFor(dona) || !politicaDeInicio(this, p).automatic) continue;
-      if (this.autoReviewParked.has(p.key) || this.skipComentado[p.key]) continue;
-      espera.add(dona);
-    }
-    return this.accountList()
-      .filter(a => a && a.user && contaTemAutomatico(this, a.user))
-      .filter(a => { const pf = this.profileOfAccount(a.user); return pf && pf.id === profileId; })
-      .map(a => ({
-        user: String(a.user).toLowerCase(),
-        waiting: espera.has(String(a.user).toLowerCase()),
-      }));
-  }
-
-  // Veredito da COTA desta conta dentro do perfil dela (Política 2). Fachada fina: a
-  // decisão inteira é pura e mora em lib/engine/usage.js.
-  quotaBlockedFor(acct) {
-    const profile = this.profileOfAccount(acct);
-    if (!profile) return null;
-    const st = quotaMod.quotaStatusFor(
-      profile,
-      (this.usageSessions && this.usageSessions.sessions) || [],
-      this.contasDoPerfil(profile.id),
-      acct,
-      usageMod.custoTipicoDoEngine(this)
-    );
-    return st.blocked ? { profile, ...st } : null;
-  }
-
   /* Painel de Justiça de fila (spec 2026-09-10-justica-de-fila-entre-orgs). Junta o que
-     as três políticas já sabem, sem medir nada novo:
+     o escalonador já sabe, sem medir nada novo:
 
      - por ORG: quantos PRs esperam, há quanto tempo espera o mais antigo, e quando ela
        foi atendida pela última vez (o critério do rodízio, em cima da mesa);
-     - por PERFIL: teto do dia, e cada conta contra a própria cota, marcando quem está
-       cedendo a vez e pra quem;
-     - teto GLOBAL: em curso contra teto, só quando ligado.
+     - teto GLOBAL de revisões simultâneas: em curso contra teto, só quando ligado.
+
+     A cota de gasto por conta dentro do perfil saiu junto com o teto de gasto (16/11/2026).
 
      Leitura pura: não decide nada, não escreve nada. */
   filaJusta() {
@@ -1391,73 +1292,10 @@ class Engine extends EventEmitter {
     // sem ordem aqui: a tela ordena como o escalonador atende (ordemDoEscalonador, fila-justa.js)
     const porOrg = [...orgs.values()];
 
-    const sessions = (this.usageSessions && this.usageSessions.sessions) || [];
-    const tipico = usageMod.custoTipicoDoEngine(this);
-    const porPerfil = (this.config.claudeProfiles || [])
-      .map(profile => this._filaJustaDoPerfil(profile, sessions, tipico))
-      .filter(p => p.contas.length > 0);
-
     let total = 0;
     for (const n of this.headlessBusyAccounts.values()) total += n;
     const tetoGlobal = Number(this.config.globalParallelReviews) || 0;
-    return { porOrg, porPerfil, emCurso: total, tetoGlobal };
-  }
-
-  /* Gate da COTA no enfileiramento (Política 2). Devolve true quando esta conta cede a
-     vez. Mora num método próprio, e não inline no filtro do toReview, pelo mesmo motivo
-     do `_registraPulo` logo acima: o filtro já é o ponto mais aninhado do check(), e
-     enfiar mais um bloco com aviso dentro dele passa do teto de profundidade do gate de
-     qualidade do repo (tools/quality) — que é uma régua boa, não burocracia.
-
-     O aviso NOMEIA os dois lados. O toast antigo dizia só "orçamento do perfil X
-     estourado", e com duas contas no mesmo perfil essa frase escondia justamente o que
-     a pessoa precisa saber: quem consumiu e quem ficou sem vez. */
-  _registraCotaCedida(acct) {
-    const cota = this.quotaBlockedFor(acct);
-    if (!cota) return false;
-    // chave por perfil+conta, e não só por perfil: duas contas cedendo a vez são dois
-    // fatos diferentes, e colapsá-las esconderia uma das duas.
-    const chave = `${cota.profile.id}|${acct}`;
-    if (this.budgetWarned.has(chave)) return true;
-    this.budgetWarned.add(chave);
-    const para = cota.cedendoPara.map(u => `@${u}`).join(', ');
-    const gasto = cota.spent.toFixed(2), teto = cota.quota.toFixed(2);
-    this.emit('toast', { kind: 'info', text: `@${acct} atingiu a cota do dia dentro do perfil "${cota.profile.label}" (US$ ${gasto} de US$ ${teto}) e está cedendo a vez para ${para}. Volta sozinha quando a fila do outro lado esvaziar ou o dia virar; clique manual continua liberado.` });
-    // rastro DURÁVEL pelo mesmo motivo do teto: toast some, e vista de fora uma
-    // automação em rodízio é idêntica a uma automação quebrada.
-    this.log('INFO', `cota: @${acct} cedeu a vez para ${cota.cedendoPara.join(', ')} no perfil "${cota.profile.label}" (gasto US$ ${gasto} de cota US$ ${teto}).`);
-    return true;
-  }
-
-  // uma linha do painel por perfil. Separado do filaJusta() pelo mesmo motivo do
-  // _registraCotaCedida: o map dentro do map passava do teto de profundidade do gate.
-  _filaJustaDoPerfil(profile, sessions, tipico) {
-    const contas = this.contasDoPerfil(profile.id);
-    return {
-      id: profile.id,
-      label: profile.label || profile.id,
-      tetoDoDia: usageMod.dailyCapFor(profile, usageMod.localDay()),
-      contas: contas.map(c => {
-        const st = quotaMod.quotaStatusFor(profile, sessions, contas, c.user, tipico);
-        return {
-          user: c.user, peso: quotaMod.pesoDaConta(c), esperando: c.waiting,
-          cota: st.quota, gasto: st.spent, cedendo: st.blocked, cedendoPara: st.cedendoPara,
-        };
-      }),
-    };
-  }
-
-  /* O aviso de orçamento guardado em `budgetWarned` ainda descreve a realidade ATUAL?
-     Desde a Política 2 o Set guarda DOIS formatos: `idDoPerfil` (teto duro estourado) e
-     `idDoPerfil|conta` (cota da conta cedendo a vez). Reconciliar os dois é obrigatório:
-     tratar a chave composta como id de perfil não acharia perfil nenhum, o aviso sairia
-     do Set todo ciclo e o toast de cota repetiria sem parar, que é exatamente o barulho
-     que este Set existe pra impedir. */
-  _avisoDeOrcamentoAindaVale(chave) {
-    const corte = String(chave).indexOf('|');
-    if (corte >= 0) return !!this.quotaBlockedFor(String(chave).slice(corte + 1));
-    const profile = (this.config.claudeProfiles || []).find(p => p.id === chave);
-    return !!(profile && this.profileBudgetStatus(profile).blocked);
+    return { porOrg, emCurso: total, tetoGlobal };
   }
 
   pushState() { this.emit('state', this.snapshot()); }

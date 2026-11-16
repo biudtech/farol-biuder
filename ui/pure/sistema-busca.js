@@ -10,7 +10,6 @@ import { sysNorm } from './comum.js';
 export const SYS_INDEX = [
   { sec: 'overview', at: '#setupManager', title: 'Configuração e retomada', hint: 'onboarding, começar, roteiro, configurar, retomar' },
   { sec: 'overview', at: '#doctor', title: 'Saúde do ambiente', hint: 'doctor, gh, claude, git bash, diagnóstico' },
-  { sec: 'plans', at: '#claudeProfilesManager', title: 'Orçamento por perfil', hint: 'orçamento, teto, limite, custo, gasto, cota' },
   { sec: 'accounts', at: '#accountsManager', title: 'Contas do GitHub', hint: 'conta, identidade, cor, silenciar, política, token, usuário, login, gh' },
   // as organizações monitoradas são da conta (a seção Conexões, que as repetia sem efeito, saiu em 03/10/2026)
   { sec: 'accounts', at: '#accountsManager', title: 'Organizações monitoradas (por conta)', hint: 'org, organização, owners, repositórios' },
@@ -22,7 +21,7 @@ export const SYS_INDEX = [
   { sec: 'automation', at: '#sys-row-teto-global', title: 'Teto total desta instalação', hint: 'teto, total, global, paralelismo, simultâneo, instalação' },
   { sec: 'plans', at: '#sys-row-esforco', title: 'Esforço de raciocínio', hint: 'effort, pensar, raciocínio, alto, baixo, xhigh' },
   { sec: 'automation', at: '#sys-row-intervalo', title: 'Intervalo de checagem', hint: 'polling, minutos, frequência' },
-  { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, chave de API, perfil, proxy, url base, teto, orçamento' },
+  { sec: 'plans', at: '#claudeProfilesManager', title: 'Perfis de IA e chaves', hint: 'claude, chave de API, perfil, proxy, url base, assinatura' },
   { sec: 'prefs', at: '#sys-row-sound', title: 'Som ao chegar PR novo', hint: 'som, aviso, notificação' },
   { sec: 'prefs', at: '#rowAutostart', title: 'Iniciar com o sistema', hint: 'autostart, inicialização, segundo plano, iniciar com o Windows, iniciar com o macOS, login' },
   { sec: 'diag', at: '#sys-row-spawns', title: 'Registrar processos (diagnóstico)', hint: 'spawns, terminal piscando, debug' },

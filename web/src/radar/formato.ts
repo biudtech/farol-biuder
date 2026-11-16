@@ -135,7 +135,6 @@ const PARADA: Record<string, (motivo: string) => string> = {
   cancelado: () => 'a última sessão foi cancelada',
   autenticacao: () => 'a credencial usada na revisão expirou (renove o login do perfil do Claude)',
   'label-retirada': () => 'a label de revisão foi retirada do PR',
-  orcamento: (motivo) => (motivo ? `o orçamento estourou (${motivo})` : 'o orçamento estourou'),
   esgotado: (motivo) => (motivo ? `falhou várias vezes seguidas (último erro: ${motivo})` : 'falhou várias vezes seguidas'),
   legado: () => 'parou sem motivo registrado',
 };

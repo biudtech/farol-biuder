@@ -121,7 +121,7 @@ test('Automação: "por conta" é sempre por conta, e o total da instalação te
 });
 
 test('a Justiça de fila usa o nome novo do teto total', () => {
-  const html = P.filaJustaHtml({ porOrg: [], porPerfil: [], emCurso: 1, tetoGlobal: 3 });
+  const html = P.filaJustaHtml({ porOrg: [], emCurso: 1, tetoGlobal: 3 });
   assert.match(html, /<h4>Teto total desta instalação<\/h4>/);
 });
 

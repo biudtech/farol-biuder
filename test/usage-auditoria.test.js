@@ -114,10 +114,10 @@ test('sessão completa continua com custo MEDIDO, sem passar por estimativa', ()
   assert.equal(s.status, 'ok');
 });
 
-test('o gasto parcial entra no AGREGADO, senão o teto de orçamento segue cego', () => {
+test('o gasto parcial entra no AGREGADO, senão o total da tela segue cego', () => {
   const eng = engineDeTeste([medida(), medida(), medida()]);
   usage.recordUsage(eng, 'r9', 'alguem', { usage: { output_tokens: 500 }, farol_parcial: true }, 'claude-opus-5', 'p1', 'x');
-  assert.equal(eng.usage.totals.costUsd, 0.5, 'dinheiro real gasto tem que contar no teto');
+  assert.equal(eng.usage.totals.costUsd, 0.5, 'dinheiro real gasto tem que contar no total');
   assert.equal(eng.usage.totals.outputTokens, 500);
 });
 

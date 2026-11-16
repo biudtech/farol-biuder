@@ -22,6 +22,7 @@ cada coisa mora, o que não se negocia e como rodar sem estragar nada.
 | [`README.md`](README.md) | o que é, como rodar, o mínimo de configuração |
 | [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | o invariante 4 em detalhe: gates de postagem, dedup, re-revisão, checkpoint |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | a conta e a política, perfis do Claude, Jira, preferências, hospedagem |
+| [`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md) | o que o registro de consumo mede e por que ele não barra revisão |
 | [`docs/QUALITY.md`](docs/QUALITY.md) | o gate do repositório e o ratchet de qualidade |
 | [`docs/RUNTIME.md`](docs/RUNTIME.md) | o contrato de versão do Node |
 | [`docs/SOURCE-STORAGE.md`](docs/SOURCE-STORAGE.md) | o cache das fontes de revisão e os limites dele |
@@ -111,7 +112,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
-| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `quota.js`, `falhas.js` |
+| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
 | Histórico | `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
 | Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js` |
 

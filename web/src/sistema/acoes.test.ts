@@ -45,10 +45,9 @@ describe('o pedido de cada ação do Sistema', () => {
     // `claudeProfiles:` como chave de um objeto seria um corpo sendo montado (o tipo lido usa `?:`)
     expect(fontes.filter(([, fonte]) => /claudeProfiles\s*:/.test(fonte)).map(([nome]) => nome)).toEqual([]);
     expect(fontes.filter(([, fonte]) => /claudeProfilesCru|PerfisCrus/.test(fonte)).map(([nome]) => nome)).toEqual([]);
-    // fora da tela Consumo (que só mostra o teto, e sai com a mudança do motor), o único lugar
-    // que cita os campos de teto é o leitor que marca "este perfil tem teto"
-    const comTeto = fontes.map(([nome, fonte]) => [nome.replace(/\\/g, '/'), fonte] as const).filter(([nome, fonte]) => !nome.includes('consumo') && /budgetDaily|budgetTotal|budgetSince/.test(fonte));
-    expect(comTeto.map(([nome]) => nome)).toEqual(['contratos/sistema.ts']);
+    // o teto de gasto saiu do motor em 16/11/2026: nenhum fonte lê campo de teto nem bloqueio
+    const comTeto = fontes.filter(([, fonte]) => /budget(Daily|Total|Since|ByWeekday|Dates|s\b)|temTeto|capHoje|tipicoReview/.test(fonte));
+    expect(comTeto.map(([nome]) => nome)).toEqual([]);
   });
 
   it('rótulo, nome acessível e id', () => {
