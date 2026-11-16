@@ -19,17 +19,21 @@ cada coisa mora, o que não se negocia e como rodar sem estragar nada.
 
 | guia | assunto |
 |---|---|
-| [`README.md`](README.md) | o que é, como rodar, o mínimo de configuração |
+| [`README.md`](README.md) | o que é, as duas partes, como subir o motor, rodar o front e parear |
+| [`web/README.md`](web/README.md) | o front: como rodar, convenções e o contrato de cada tela |
 | [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | o invariante 4 em detalhe: gates de postagem, dedup, re-revisão, checkpoint |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | a conta e a política, perfis do Claude, Jira, preferências, hospedagem |
 | [`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md) | o que o registro de consumo mede e por que ele não barra revisão |
 | [`docs/QUALITY.md`](docs/QUALITY.md) | o gate do repositório e o ratchet de qualidade |
 | [`docs/RUNTIME.md`](docs/RUNTIME.md) | o contrato de versão do Node |
 | [`docs/SOURCE-STORAGE.md`](docs/SOURCE-STORAGE.md) | o cache das fontes de revisão e os limites dele |
+| [`docs/CONTEXTO-FRONTEND.md`](docs/CONTEXTO-FRONTEND.md) | o mapa sintático do código do PR e os modos de `reviewContextMode` |
 
-`docs/superpowers/` guarda os desenhos e os planos (o da fase 1 é
-`docs/superpowers/plans/2026-11-12-farol-biuder-fase-1-motor-enxuto.md`). São registro de decisão, não
-guia: não descrevem o código de hoje.
+`docs/superpowers/` guarda os desenhos e os planos. São registro de decisão, não guia: não
+descrevem o código de hoje. O desenho vigente é
+`docs/superpowers/specs/2026-11-12-farol-biuder-enxuto-design.md`; as fases 1 a 4 dele (o corte
+do motor, o contrato para o front, o front e a saída da tela antiga) estão feitas, e a 5
+(container e publicação) não está neste repositório.
 
 ## O que é
 
@@ -52,7 +56,7 @@ em JSON.
 ## Mapa de arquivos
 
 Só cita o que existe, e não é completo: lista os arquivos principais de cada assunto (em
-`lib/engine/`, cerca de um terço dos arquivos fica sem linha aqui). Cada arquivo de `lib/` abre
+`lib/engine/`, cerca de um quinto dos arquivos fica sem linha aqui). Cada arquivo de `lib/` abre
 com um comentário que diz o que ele faz e por quê: o mapa aponta o lugar, o cabeçalho é a fonte.
 Para a lista inteira, `git ls-files lib`.
 
@@ -63,7 +67,7 @@ Para a lista inteira, `git ls-files lib`.
 | `server.js` | A classe `Engine` (estado, ciclo de checagem, fila, snapshot) e as fachadas que delegam para `lib/engine/`. `start()` sobe o HTTP e só então começa a monitorar: o listen na porta é o lock de instância única |
 | `package.json` | Scripts e o contrato de Node (`engines.node`). Sem `dependencies` |
 | `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos (`CLAUDE.md`, `prompts/pr-review-auto.md`, que é o contrato da revisão headless, os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`) e copia o que faltar em `prompts/` (a pasta inteira se faltar o `pr-review-auto.md`, e cada prompt do template que o workspace não tiver, sem sobrescrever). O resto vem só da primeira cópia e nunca é atualizado, inclusive o `.claude/settings.json`. O `.claude/guardas.json` (o que a sessão não pode rodar) também vai na primeira cópia, mas essa cópia não é usada: a sessão lê o do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
-| `web/` | O front (Next.js e TypeScript), a única tela: fala direto com a API do motor e tem o pareamento, a casca das cinco abas e as cinco telas (Radar, Histórico, Time, Consumo e Sistema). Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Guia em [`web/README.md`](web/README.md) |
+| `web/` | O front (Next.js e TypeScript), a única tela: fala direto com a API do motor e tem o pareamento, a casca das cinco abas e as cinco telas (Radar, Histórico, Time, Consumo e Sistema). Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Em `web/src/`: `app/` (as rotas, uma pasta por aba), `componentes/` (os componentes, com uma pasta por tela), `contratos/` (tipos e leitores do que o motor manda), `transporte/` (o cliente da API e o SSE), `estado/` (o store), a lógica sem React de cada tela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), `markdown/`, `navegacao/`, `tema/`, `seguranca/` e `proxy.ts` (a CSP). Guia em [`web/README.md`](web/README.md) |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
 | `tools/` | Gate e utilitários (tabela abaixo) |
@@ -104,28 +108,33 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 
 | Assunto | Arquivos |
 |---|---|
-| Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `review-prompt.js` (o prompt), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `desfecho-da-revisao.js` |
-| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js` |
-| Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
+| Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
+| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
+| Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
-| Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
+| Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
-| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
+| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
 | Histórico | `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
-| Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js` |
+| Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
 
 ### `tools/`
 
 | Caminho | Papel |
 |---|---|
 | `tools/check-syntax.js` | `npm run check`: `node --check` em todo `.js` descoberto |
-| `tools/quality/` | `npm run lint`: `gate.js` (ratchet contra `baseline.json`, só para baixo), `rules.js`, `higiene.js` |
+| `tools/quality/` | `npm run lint`: `gate.js` (ratchet contra `baseline.json`, só para baixo), `rules.js` e `strip.js` (as regras e o removedor de strings e comentários), `higiene.js` |
 | `tools/rodar-testes.js` | `npm test`: `node --test` com teto de 4 de concorrência, sobre os testes do motor (`tools/descoberta-de-testes.js` monta os padrões, sem o front) |
 | `tools/hooks/pre-push` | Recusa push direto na `main` e roda o gate. Instala com `npm run hooks:install` |
 | `tools/farol-parear.js` | Imprime um código de pareamento da API no stdout; `--revogar-todas` |
 | `tools/jira-mcp.js` | O servidor MCP local do Jira que a sessão usa. Recebe só o id do site e lê a credencial do disco |
 | `tools/simular-politica.js`, `tools/diagnosticar-legados.js` | Leitura: o que mudaria com outra política; o que há de formato antigo no disco |
+| `tools/replay-saida-review.js` | Replay offline da saída pública única, sem modelo ([`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md)) |
+| `tools/replay-contexto.js`, `tools/benchmark-contexto.js`, `tools/comparar-contexto-engine.js`, `tools/medir-parser-frontend.js` | Medição do mapa de contexto e do parser, sobre fontes sintéticas e sem modelo |
+| `tools/provar-fontes-github.js` | Prova de aquisição das fontes de um PR público, só leitura, com `FAROL_HOME` temporário |
+| `tools/medicao/contagem-dobrada.js` | Compara, num stream capturado de sessão, a soma do acumulador de uso com a soma por mensagem |
+| `tools/git-env.js`, `tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js` | Apoio das ferramentas: o ambiente do `git`, as pastas que nenhuma ferramenta abre, os padrões de teste do motor |
 
 ## Invariantes do projeto
 
@@ -240,7 +249,7 @@ O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 |---|---|
 | `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`, `hostPublico`, `origensPermitidas`) |
 | `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot e prompt que falta é copiado (ver o mapa); o `.claude/settings.json` não |
-| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/` |
+| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/`, os materiais da avaliação técnica em `technical-review/` |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
 | `claude/<id>/` | A pasta de configuração de cada perfil de assinatura do Claude, com o login |
 | `jira-credentials.json` | A credencial do Jira, fora do `config.json` |
@@ -297,6 +306,13 @@ diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
 recalcula.
 
+As rotas, todas em `lib/http-server.js`:
+
+| Método | Rotas |
+|---|---|
+| `GET` | `/api/health`, `/api/auth/status`, `/api/state`, `/api/events` (SSE), `/api/decision`, `/api/decisions`, `/api/team`, `/api/usage`, `/api/log`, `/api/log/triage`, `/api/diagnostics`, `/api/doctor` |
+| `POST` | `/api/auth/pair`, `/api/auth/sessions`, `/api/auth/revoke`, `/api/check`, `/api/review`, `/api/cancel`, `/api/decide`, `/api/ignore`, `/api/restore`, `/api/pushback`, `/api/settings`, `/api/accounts/edit`, `/api/team/remove`, `/api/claude/profile-test`, `/api/claude/login-web/start`, `/api/claude/login-web/code`, `/api/claude/login-web/cancel`, `/api/jira/credential`, `/api/jira/credential/remove`, `/api/jira/test` |
+
 Nem toda rota tem tela. O front lê o estado só pelo SSE (não chama `GET /api/state`, que
 serve a `tools/diagnosticar-legados.js` e a quem consulta à mão) e não usa `GET /api/log`, `GET /api/log/triage`,
 `POST /api/jira/credential`, `POST /api/jira/credential/remove` nem as três de
@@ -310,8 +326,8 @@ Das preferências de `POST /api/settings`, o front edita `aguardarCiParaAprovar`
 `parallelReviews`, `reviewModel`, `reviewEffort` e `people`. Só mudam pela API ou pelo arquivo:
 `jiraSites`, `claudeProfiles`, `claudeProfileId`, `intervalSeconds`, `globalParallelReviews`,
 `reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`.
-`soundEnabled`, `theme` e `autostart` são resto da tela antiga: a API aceita e grava, e nada no
-motor lê.
+`soundEnabled`, `theme` e `autostart`, da tela antiga, saíram da tabela: voltam em `ignoradas`,
+e num `config.json` antigo são descartadas na carga (`test/preferencias-sem-leitor.test.js`).
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
@@ -342,11 +358,14 @@ escreve no log, nem no 200 nem no 400.
 - **Rodar**: `node server.js` (ou `npm run server`, que antes confere Node e plataforma). Node
   `>=24.22.1 <25`, Linux, com `gh` e `claude` no PATH do usuário. Não rode como root: o Claude Code
   recusa o modo headless com uid 0, e toda revisão morreria no spawn.
-- **Gate, antes de qualquer entrega**: `npm run check && npm run lint && npm test`. O `lint` é
+- **Gate do motor, antes de qualquer entrega**: `npm run check && npm run lint && npm test`. O `lint` é
   ratchet: reprova contagem que sobe contra `tools/quality/baseline.json`. Corrigiu dívida?
   `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão.
 - **Nunca passe de 4 de concorrência** na suíte (`FAROL_TEST_CONCORRENCIA`, de 1 a 4).
-- **Fora de Linux**, rode o gate num container `node:24.22.1-bookworm` com o repositório montado.
+- **Gate do front**, em `web/`: `npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build`
+  (o que o job `web` do CI roda).
+- **Fora de Linux** o motor não roda (`lib/node-runtime.js` recusa): rode o gate num Linux com
+  Node 24.22.1 (WSL, por exemplo). O CI roda em `ubuntu-latest`.
 - **Instância para olhar**: `FAROL_HOME=/tmp/farol-teste node server.js` sobe o motor sem
   tocar nos dados reais, e por ser isolada não escreve no GitHub. Para trocar a porta, grave
   `{"port": 47180}` no `config.json` dela antes de subir.
