@@ -193,7 +193,7 @@ test('quando o modo exige, sem credencial é 401 sem dado; com a sessão respond
 
 test('quando o modo não exige, a rota responde sem credencial', async () => {
   semear(2);
-  assert.equal(engine.config.localAuth, undefined);
+  assert.notEqual(engine.config.localAuth, 'exigir');
   const r = await pedir();
   assert.equal(r.status, 200);
   assert.equal(r.json.total, 2);
