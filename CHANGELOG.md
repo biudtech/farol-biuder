@@ -182,12 +182,16 @@ Ainda sem versão publicada.
   com o login no endereço, e mostra as entradas de memória uma a uma (o dia, o PR, o que foi
   publicado e os pontos anotados) e as contestações que o motor guarda dos PRs da pessoa.
   Dele saem duas ações. Salvar papel e competência manda a lista inteira de perfis, que é
-  como o motor a recebe, e diz o que ficou gravado de fato; fica fechado quando a aba não tem
-  a lista inteira e em dia, e avisa quando o perfil mudou no motor com a edição aberta. A
-  tela diz o efeito: o perfil entra no prompt das revisões dos PRs da pessoa e molda o tom,
-  sem mudar a decisão. Remover do Time apaga o dossiê, o perfil e as contestações da pessoa,
-  de uma vez e sem volta, e por isso pergunta antes dizendo o que será apagado e o efeito nas
-  próximas revisões. O motor não apaga uma entrada só, não manda os valores permitidos do
+  como o motor a recebe, montada do que o motor mandou e só com a pessoa alterada, e diz o
+  que ficou gravado de fato, inclusive se o perfil de outra pessoa mudou; fica fechado
+  quando a aba não tem a lista ou, depois de uma queda, enquanto o estado da conexão nova não
+  chega, e avisa quando o perfil mudou no motor com a edição aberta. Sair do dossiê com
+  edição por salvar pergunta antes. A tela diz o efeito: o perfil entra no prompt das
+  revisões dos PRs da pessoa e molda o tom, sem mudar a decisão. Remover do Time apaga o
+  dossiê, o perfil e as contestações da pessoa, de uma vez e sem volta, e por isso pergunta
+  antes dizendo o que será apagado, o que continua (as revisões dos PRs dela ficam no
+  Histórico e no log do motor) e o efeito nas próximas revisões. O motor não apaga uma
+  entrada só, não manda os valores permitidos do
   perfil (a tela tem uma cópia conferida por teste) e não avisa quando a lista muda: a tela
   mostra o botão Atualizar quando há revisão resolvida nova. Nada do Time fica no navegador.
   A tela antiga continua servida pelo motor, sem mudança.

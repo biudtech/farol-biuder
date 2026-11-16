@@ -362,8 +362,9 @@ O contrato, lido do motor:
   o nome do arquivo do dossiê (`state/authors/<login>.md`); `name` repete o login quando o
   dossiê não traz nome; `date` é o dia em UTC (`AAAA-MM-DD`), `ref` é `dono/repo#n`, `verdict`
   é o que foi publicado (`APPROVE`, `REQUEST CHANGES` ou `REQUEST_CHANGES`, `COMMENT`) e
-  `bullets` são até dois pontos factuais sobre o trabalho. A ordem é a do motor: quem tem a
-  entrada mais recente primeiro. O motor guarda dez entradas por pessoa
+  `bullets` são os pontos que a sessão anotou sobre o trabalho (quantos, quem pede é o prompt da
+  revisão; `writeMemory` grava os que vierem). A ordem é a do motor: quem tem a entrada mais recente
+  primeiro. O motor guarda dez entradas por pessoa
   (`writeMemory`, `lib/engine/decision.js`).
 - **`config.people`** (`parsePeople`, `lib/parse.js`): `{ login em minúsculas: { papel?,
   dominios?: { dominio: nivel } } }`. Os valores aceitos são os de `lib/taxonomy.js`.
@@ -371,9 +372,11 @@ O contrato, lido do motor:
   (`updateSettings`, `server.js`). Valor fora da taxonomia é descartado sem recusa, e pessoa
   sem papel nem competência sai do mapa. Responde `{ ok, ignoradas, config }`.
 - **`POST /api/team/remove` com `{ login }`** (`removeTeamMember`, `lib/engine/decision.js`)
-  apaga o arquivo do dossiê, a entrada da pessoa em `config.people` e todo registro de
-  `pushbacks` em que ela é a autora. Não há cópia: não se desfaz. Responde
-  `{ ok: true, removed }` (`removed: false` quando não havia nada) ou
+  apaga três coisas, e só elas: o arquivo do dossiê, a entrada da pessoa em `config.people` e
+  todo registro de `pushbacks` em que ela é a autora. Não há cópia: não se desfaz. As
+  revisões dos PRs dela continuam no histórico (`GET /api/decisions` busca por autor) e no
+  log do motor. Responde `{ ok: true, removed }` (`removed: true` quando havia ao menos uma
+  das três, sem dizer quais; `false` quando não havia nenhuma) ou
   `{ ok: false, error: "login inválido" }` para login fora do formato do GitHub.
 
 Regras que valem para quem mexer nela:
@@ -395,22 +398,47 @@ Regras que valem para quem mexer nela:
   foi publicado quando o motor diz; os pontos são desenhados de markdown, que é como o motor
   os grava. As contestações dos PRs da pessoa aparecem só para leitura: o desfecho se
   confirma no Histórico.
-- **Salvar manda a lista inteira.** O corpo é o `config.people` que a aba tem no momento do
-  clique, com a pessoa alterada (`comPerfil`). Por isso o salvar só é oferecido com a lista
-  inteira e em dia (`motivoQueImpedeSalvar`): fica fechado quando o snapshot não trouxe os
-  perfis, quando algum perfil chegou ilegível (salvar o apagaria) e quando o fluxo de eventos
-  não está conectado (a lista pode estar velha). Se o perfil da pessoa muda no motor com a
-  edição aberta, a tela avisa e deixa descartar a edição. O que não dá para evitar está dito
-  na tela: alteração de outra aba que ainda não chegou aqui é sobrescrita.
-- **O `ok` do salvar não é o desfecho.** O motor descarta valor que não reconhece sem
-  recusar. A frase do resultado sai do `config.people` da resposta: "gravou", ou "gravou
-  diferente do pedido", com o que ficou.
-- **Remover pergunta antes.** É a pessoa inteira e não se desfaz. A pergunta
-  (`confirmacaoDa`, `src/radar/acoes.ts`) diz o que é apagado, com o que a tela vê (quantas
-  entradas, se há perfil, quantas contestações), e o efeito: a sessão não encontra histórico,
-  o prompt sai sem perfil e sem contestações, e as contestações apagadas deixam de entrar
-  como lição nas revisões de outros autores do repositório. Depois do aceite a tela pede a
-  lista de novo; o perfil e as contestações saem com o estado que o motor empurra.
+- **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
+  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). O corpo do salvar
+  sai do cru que a aba tem no momento do clique, e só a pessoa editada muda (`comPerfil`):
+  as outras voltam como vieram, inclusive com campo que a tela não conhece ou valor que ela
+  não lê. Na pessoa editada trocam-se o papel e os domínios; outro campo dela fica. A chave
+  é o login em minúsculas, como o motor guarda.
+- **Ilegível avisa, não fecha.** Pessoa que a tela não leu inteira (o JSON lido difere do
+  cru) é contada em `peopleIlegiveis` e vira aviso no editor. O salvar segue aberto, porque
+  o corpo não tira ninguém.
+- **Quando o salvar fica fechado** (`motivoQueImpedeSalvar`): sem a lista de perfis no
+  snapshot; com o fluxo de eventos fora de "conectado"; e, depois de uma reconexão, enquanto
+  o primeiro `state` da conexão nova não chega. Para isso o store tem `estadoEmDia`
+  (`src/estado/app.ts`): "conectado" vem no HTTP 200, ainda com o snapshot de antes da queda,
+  e o sinal só vira verdadeiro com o estado inteiro daquela conexão. O indicador de conexão
+  das outras telas não mudou.
+- **Perfil que muda no motor com a edição aberta** vira aviso, e dá para descartar a edição.
+  O que não dá para evitar está dito na tela: alteração de outra aba que ainda não chegou
+  aqui é sobrescrita.
+- **Edição por salvar não se perde calada.** Escape e "Voltar à lista" com papel ou
+  competência alterados perguntam antes de descartar. Trocar de pessoa só acontece pelo
+  endereço (o voltar e o avançar do navegador, um link colado), e isso a página não segura:
+  o dossiê troca e a edição vai embora sem pergunta.
+- **O `ok` do salvar não é o desfecho.** O motor descarta o que não reconhece sem recusar.
+  A frase do resultado sai do `config.people` da resposta, conferido inteiro contra o
+  enviado: "gravou", "gravou diferente do pedido" e, se o perfil de outra pessoa mudou ou
+  saiu da lista, quem (`outrasQueDiferem`).
+- **Salvar e remover da mesma pessoa se excluem.** As duas ações têm o mesmo alvo
+  (`alvoDaPessoa`): com uma no ar, o botão da outra fica desabilitado.
+- **Remover pergunta antes, e não promete mais do que o motor faz.** A pergunta
+  (`confirmacaoDa`, `src/radar/acoes.ts`) diz as três coisas apagadas, com o que a tela vê
+  (quantas entradas, se há perfil, quantas contestações), que não se desfaz, que as revisões
+  dos PRs da pessoa continuam no Histórico e no log, e o efeito: a sessão não encontra o
+  dossiê, o prompt sai sem perfil e sem contestações, e as contestações apagadas deixam de
+  entrar como lição nas revisões de outros autores do repositório. O resultado repete o que
+  o motor respondeu em `removed`, sem afirmar que as três existiam.
+- **Depois de uma remoção aceita** o dossiê fecha (trocando a entrada do endereço), a tela
+  pede a lista de novo e, enquanto a carga nova não chega ou se ela falhar, quem foi removido
+  não aparece na lista nem abre com Salvar e Remover. O erro da carga, com o Tentar de novo,
+  e o aviso de Atualizar aparecem também com o dossiê aberto.
+- **Contestações no dossiê.** Só leitura. A tela diz que entram no prompt as 5 confirmadas
+  mais recentes da pessoa (`personProfileBlock`; o teste confere o número contra o motor).
 - **O efeito do papel e da competência, como a tela o diz.** Entram no prompt das revisões
   dos PRs da pessoa, no bloco "Perfil do autor" (`personProfileBlock`,
   `lib/engine/review-prompt.js`): o papel dá o tom e a competência por domínio calibra a
@@ -426,8 +454,15 @@ Regras que valem para quem mexer nela:
   nem no snapshot: a tela tem a cópia conferida por teste.
 - **O salvar de perfil não é por pessoa.** `people` vai e volta inteiro, sem versão: o motor
   não tem como recusar uma lista velha, e duas abas salvando ao mesmo tempo se sobrescrevem
-  sem que nenhuma fique sabendo. A edição da conta já é por operação (`accounts/edit`); a de
-  perfil não.
+  sem que nenhuma fique sabendo. O que a tela faz (corpo do dado cru, salvar fechado sem o
+  estado da conexão, conferência da resposta) reduz a janela, não a fecha. A correção de
+  fundo é no motor: uma operação por pessoa sobre a config atual, como a conta já tem em
+  `accounts/edit`.
+- **Remover não apaga o histórico nem o log.** `removeTeamMember` não toca em
+  `decisions.json` nem no `farol.log`: o login da pessoa continua nas revisões dos PRs dela
+  e nas linhas de log. Quem precisa tirar a pessoa de tudo não consegue por esta rota.
+- **O voltar do navegador descarta a edição sem perguntar.** A página não tem como segurar
+  a troca de endereço feita pelo navegador.
 - **A lista não avisa que mudou.** Não há chave no snapshot nem evento para o Time. O aviso
   de Atualizar olha as revisões resolvidas, que não dizem se a memória de alguém mudou, e uma
   remoção feita em outra aba só aparece na próxima carga.
