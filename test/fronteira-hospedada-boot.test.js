@@ -162,6 +162,18 @@ test('origensPermitidas com um item inválido entre válidos: o motor não sobe'
   assert.doesNotMatch(t.erros, /"hostPublico" tem valor/, 'a chave certa não é citada');
 });
 
+// Um processo só para as duas coisas que só o processo prova: a recusa por NOME de chave errado
+// sai pelo mesmo caminho (código 1, stderr limpo), e o que vai ao stderr passa pelo filtro de
+// controles, como a linha do log.
+test('nome de chave errado: o motor não sobe, e o stderr sai sem controle de terminal', async () => {
+  const porta = await portaLivre();
+  const t = await rodar(JSON.stringify({ port: porta, hostpublico: 'farol.exemplo.com', origensPermitidas: ['https://painel.exemplo.com\u009b31m\u2028'] }), porta);
+  await assertRecusou(t, /a chave "hostpublico" não existe.*"hostPublico"/);
+  assert.match(t.erros, /"origensPermitidas" tem valor recusado/);
+  assert.doesNotMatch(t.erros, /[\u0080-\u009f\u2028\u2029]/, 'nenhum controle cru no stderr');
+  assert.ok(t.erros.includes('\\u009b31m\\u2028'), t.erros);
+});
+
 /* ---------- config.json presente e ilegível ---------- */
 
 const ILEGIVEIS = [

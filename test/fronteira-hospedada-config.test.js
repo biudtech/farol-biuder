@@ -66,6 +66,9 @@ const TORTOS = [
   [{ hostPublico: 0 }, ['hostPublico']],
   [{ hostPublico: false }, ['hostPublico']],
   [{ hostPublico: '*' }, ['hostPublico']],
+  // tipo errado não é vazio: lista no lugar do texto e texto no lugar da lista também recusam
+  [{ hostPublico: [] }, ['hostPublico']],
+  [{ origensPermitidas: '' }, ['origensPermitidas']],
   [{ hostPublico: 'farol.exemplo.com\r\nx: 1' }, ['hostPublico']],
   [{ origensPermitidas: 'https://painel.exemplo.com' }, ['origensPermitidas']],
   [{ origensPermitidas: ['https://painel.exemplo.com/'] }, ['origensPermitidas']],
@@ -109,7 +112,7 @@ for (const [torto, chaves] of TORTOS) {
 
 const VAZIOS = [
   {}, { hostPublico: '', origensPermitidas: [] }, { hostPublico: null, origensPermitidas: null },
-  { hostPublico: '' }, { origensPermitidas: [] }, { hostPublico: [] },
+  { hostPublico: '' }, { origensPermitidas: [] }, { hostPublico: null }, { origensPermitidas: null },
 ];
 
 for (const vazio of VAZIOS) {
