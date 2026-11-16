@@ -1,0 +1,6 @@
+.aviso {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 48px 20px;
+  color: var(--muted);
+}
