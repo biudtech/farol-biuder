@@ -83,13 +83,30 @@ function cru(texto) {
     s.on('connect', () => s.write(texto));
     s.on('data', c => (d += c));
     s.on('close', () => {
-      const [cabeca = '', ...resto] = d.split('\r\n\r\n');
+      const corte = d.indexOf('\r\n\r\n');
+      const cabeca = corte < 0 ? d : d.slice(0, corte);
       const linhas = cabeca.split('\r\n');
-      resolve({ status: Number((linhas[0] || '').split(' ')[1]) || 0, linhas: linhas.slice(1), cabeca, body: resto.join('\r\n\r\n'), vazio: d === '' });
+      const resto = corte < 0 ? '' : d.slice(corte + 4);
+      const body = /^transfer-encoding: *chunked\s*$/im.test(cabeca) ? semPedacos(resto) : resto;
+      resolve({ status: Number((linhas[0] || '').split(' ')[1]) || 0, linhas: linhas.slice(1), cabeca, body, vazio: d === '' });
     });
     s.on('error', err => { if (err.code !== 'ECONNRESET') reject(err); });
     setTimeout(() => s.destroy(), 3000).unref();
   });
+}
+
+// Corpo em pedaços (Transfer-Encoding: chunked) de volta ao texto: o tamanho em hexa, o
+// pedaço, e assim até o tamanho zero.
+function semPedacos(texto) {
+  let resto = texto;
+  let corpo = '';
+  for (;;) {
+    const fim = resto.indexOf('\r\n');
+    const tamanho = fim < 0 ? 0 : Number.parseInt(resto.slice(0, fim), 16);
+    if (!tamanho) return corpo;
+    corpo += resto.slice(fim + 2, fim + 2 + tamanho);
+    resto = resto.slice(fim + 2 + tamanho + 2);
+  }
 }
 
 function pedidoCru(linha, cabecalhos) {
@@ -547,16 +564,25 @@ test('ataque: Host com userinfo ou com @ é recusado', async () => {
   });
 });
 
-// O servidor lê um Host só. Se o parser aceitar dois, vale o primeiro, e o segundo não pode
-// transformar uma recusa em aceite; se recusar o pedido, melhor ainda.
-test('ataque: dois cabeçalhos Host nunca fazem o do atacante passar', async () => {
-  await hospedado(async () => {
-    const atacantePrimeiro = await pedidoCru('GET /api/state HTTP/1.1', ['Host: atacante.net', `Host: ${HOST}`, `Authorization: Bearer ${token}`]);
-    assert.ok(atacantePrimeiro.status === 403 || atacantePrimeiro.status === 400, String(atacantePrimeiro.status));
-    assert.doesNotMatch(atacantePrimeiro.body, /"decisions"/);
-    const publicoPrimeiro = await pedidoCru('GET /api/state HTTP/1.1', [`Host: ${HOST}`, 'Host: atacante.net']);
-    assert.ok([400, 401, 403].includes(publicoPrimeiro.status), String(publicoPrimeiro.status));
-  });
+// O Node guarda o primeiro Host e descarta os outros sem avisar: com dois, o proxy e o motor
+// poderiam ler nomes diferentes do mesmo pedido. Dois Host é recusa, em qualquer ordem e mesmo
+// com credencial válida (lib/http-guard.js, hostDoPedido).
+test('ataque: pedido com dois cabeçalhos Host é recusado em qualquer ordem', async () => {
+  const pares = () => [['atacante.net', HOST], [HOST, 'atacante.net'], [HOST, HOST], [local(), 'atacante.net'], ['atacante.net', local()], [local(), local()]];
+  for (const ligar of [false, true]) {
+    await hospedado(async () => {
+      for (const [primeiro, segundo] of pares()) {
+        const r = await pedidoCru('GET /api/state HTTP/1.1', [`Host: ${primeiro}`, `Host: ${segundo}`, `Authorization: Bearer ${token}`]);
+        assert.equal(r.status, 403, `${primeiro} + ${segundo}, hospedado=${ligar}`);
+        assert.match(r.body, /"motivo":"host"/);
+        assert.doesNotMatch(r.body, /"decisions"/);
+      }
+      // controle: com um Host só e a mesma credencial, o pedido cru chega ao estado
+      const um = await pedidoCru('GET /api/state HTTP/1.1', [`Host: ${local()}`, `Authorization: Bearer ${token}`]);
+      assert.equal(um.status, 200);
+      assert.match(um.body, /"decisions"/);
+    }, ligar ? undefined : {});
+  }
 });
 
 test('ataque: o alvo do pedido não contrabandeia o host (forma absoluta e barra dupla)', async () => {

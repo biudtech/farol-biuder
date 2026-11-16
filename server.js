@@ -32,7 +32,7 @@ import {
   parsePeople, migrateSeniorityToPeople,
   normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind } from './lib/parse.js';
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind, sanearHostPublico, sanearOrigensPermitidas } from './lib/parse.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -104,7 +104,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 const PARSERS = {
   parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind,
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind, sanearHostPublico, sanearOrigensPermitidas,
 };
 
 // carência anti-lag do índice de busca do GitHub: logo após EU postar um review, o PR
@@ -129,8 +129,9 @@ class Engine extends EventEmitter {
     // config.json antigo (várias contas, modo simples, chaves do que saiu) vira o formato de hoje sem lançar
     this.configCrua = readJson(CONFIG_FILE, {}, warn); // o arquivo como veio, para o rastro da carga (contas-config.js)
     this.config = { ...DEFAULTS, ...normalizarConfig(this.configCrua) };
-    // bind é só de arquivo e chega ao listen e à allowlist: saneia aqui, uma vez, para todo leitor
-    this.config.bind = sanear('bind', this.config.bind, this.config, PARSERS);
+    // bind, hostPublico e origensPermitidas são só de arquivo e chegam ao listen, à allowlist e ao
+    // porteiro: saneia aqui, uma vez, para todo leitor
+    for (const chave of ['bind', 'hostPublico', 'origensPermitidas']) this.config[chave] = sanear(chave, this.config[chave], this.config, PARSERS);
     delete this.config.autoOpenReview; // chave antiga (sessão interativa); o modo autonomo tem semantica nova
     // config.json pode estar malformado (editado à mão,
     // corrompido, versão antiga/incompatível) — normaliza no boot pra nunca derrubar o

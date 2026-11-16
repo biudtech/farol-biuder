@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sanearHostPublico, sanearOrigensPermitidas } from '../lib/parse.js';
-import { validarHostEOrigem } from '../lib/http-guard.js';
+import { validarHostEOrigem, hostDoPedido } from '../lib/http-guard.js';
 import { exigeAutenticacao } from '../lib/local-auth/modo.js';
 import { SETTINGS, EDITAVEIS, defaults, paraGravar, sanear, normalizarConfig } from '../lib/settings.js';
 
@@ -200,6 +200,20 @@ test('sem Origin e com Origin do loopback nada muda, e a resposta não ganha `co
   assert.deepEqual(validarHostEOrigem({ ...hospedado, host: LOCAL }), { ok: true });
   assert.deepEqual(validarHostEOrigem({ ...hospedado, host: LOCAL, origin: `http://127.0.0.1:${PORTA}` }), { ok: true });
   assert.deepEqual(validarHostEOrigem({ ...hospedado, host: LOCAL, origin: `http://localhost:${PORTA}` }), { ok: true });
+});
+
+/* ---------- um Host só ---------- */
+
+test('hostDoPedido devolve o Host só quando veio um cabeçalho Host', () => {
+  const pedido = (...hosts) => ({ headers: { host: hosts[0] }, headersDistinct: hosts.length ? { host: hosts } : {} });
+  assert.equal(hostDoPedido(pedido(HOST)), HOST);
+  assert.equal(hostDoPedido(pedido(HOST, 'atacante.net')), undefined);
+  assert.equal(hostDoPedido(pedido('atacante.net', HOST)), undefined);
+  assert.equal(hostDoPedido(pedido(HOST, HOST)), undefined, 'repetido igual também é dois');
+  assert.equal(hostDoPedido(pedido()), undefined);
+  assert.equal(hostDoPedido({ headers: {}, headersDistinct: { host: [] } }), undefined);
+  for (const torto of [undefined, null, {}, { headers: null }]) assert.equal(hostDoPedido(torto), undefined);
+  assert.deepEqual(validarHostEOrigem({ host: hostDoPedido(pedido(HOST, HOST)), porta: PORTA, hostPublico: HOST }), RECUSA_HOST);
 });
 
 /* ---------- autenticação exigida no modo hospedado ---------- */
