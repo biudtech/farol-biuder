@@ -110,13 +110,18 @@ describe('sessão do front', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', conexao: 'conectado' });
 
-    fluxo.enviar(`event: state\ndata: ${JSON.stringify({ app: APP, status: 'ok', chaveNova: 1 })}\n\n`);
+    fluxo.enviar(`event: state\ndata: ${JSON.stringify({ app: APP, status: 'idle', chaveNova: 1 })}\n\n`);
     await vi.advanceTimersByTimeAsync(0);
-    expect(t.app.store.ler().snapshot).toEqual({ app: APP, status: 'ok' });
+    expect(t.app.store.ler().snapshot).toEqual({ app: APP, status: 'idle' });
 
     fluxo.enviar('event: state-patch\ndata: {"campos":{"status":"checking"},"removidos":[]}\n\n');
     await vi.advanceTimersByTimeAsync(0);
     expect(t.app.store.ler().snapshot).toEqual({ app: APP, status: 'checking' });
+
+    // a linha nova do feed de uma sessão chega no evento activity, entre um estado e outro
+    fluxo.enviar('event: activity\ndata: {"id":"a1","item":{"t":5,"k":"tool","text":"lendo o diff"},"lidos":2}\n\n');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().snapshot?.activity).toEqual({ a1: [{ t: 5, k: 'tool', text: 'lendo o diff' }] });
   });
 
   it('código recusado não guarda nada e continua no pareamento', async () => {

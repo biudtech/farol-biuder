@@ -3,7 +3,7 @@
 import { lerPareamento, lerStatusDaAutenticacao } from '@/contratos/auth';
 import type { Snapshot } from '@/contratos/snapshot';
 import { criarCliente, type Cliente, type Conexao } from '@/transporte/cliente';
-import { aplicarEstadoInteiro, aplicarPatch, type Registrar } from '@/transporte/estado';
+import { aplicarAtividade, aplicarEstadoInteiro, aplicarPatch, type Registrar } from '@/transporte/estado';
 import { CHAVE_DO_TOKEN, type CofreDoToken } from '@/transporte/token';
 import { criarStore, type Store } from './store';
 
@@ -85,16 +85,16 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   }
 
   function aoEvento(tipo: string, dados: string): void {
-    // Os outros eventos do motor (toast, activity, needs-decision e afins) ainda não têm
-    // quem os leia: entram com as telas.
-    if (tipo !== 'state' && tipo !== 'state-patch') return;
+    // Os outros eventos do motor (toast, needs-decision e afins) ainda não têm quem os leia:
+    // entram com as telas. O `activity` é a linha nova do feed de uma sessão (Radar).
+    if (tipo !== 'state' && tipo !== 'state-patch' && tipo !== 'activity') return;
     let bruto: unknown;
     try { bruto = JSON.parse(dados); } catch {
       registrar(`snapshot: o evento ${tipo} não trouxe JSON e foi descartado`);
       return;
     }
     const anterior = store.ler().snapshot;
-    const aplicar = tipo === 'state' ? aplicarEstadoInteiro : aplicarPatch;
+    const aplicar = { state: aplicarEstadoInteiro, 'state-patch': aplicarPatch, activity: aplicarAtividade }[tipo];
     store.trocar({ snapshot: aplicar(anterior, bruto, registrar) });
   }
 
