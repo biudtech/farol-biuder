@@ -296,15 +296,27 @@ recalcula.
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
-(`lib/engine/historico-paginado.js`). Todos os parâmetros são opcionais: `page` (a partir de 1),
-`pageSize` (padrão 30, teto 100), `q` (busca sem caixa e sem acento em repositório, número,
-título, autor do PR e chave do card; até 200 caracteres), `veredito` (`approve`,
-`request_changes` ou `comment`) e `repo` (`dono/nome` exato, sem caixa). Responde
-`{ ok, page, pageSize, total, pages, items, repos }`: `total` e `pages` contam o que passou nos
-filtros, e `repos` são os repositórios de todo o histórico. Cada item sai pela mesma projeção do
-snapshot (`decisionForUi`), e as pendentes ficam só no snapshot. Parâmetro inválido ou repetido
-responde 400 com `{ ok: false, code: "parametro_invalido", campo }`; página além do fim
-responde 200 com `items` vazio. A rota só lê: não altera o histórico e não escreve no log.
+(`lib/engine/historico-paginado.js`). Todos os parâmetros são opcionais:
+
+- `page` (a partir de 1) e `pageSize` (padrão 30, teto 100);
+- `q`, até 200 caracteres: busca sem caixa e sem acento em repositório, número, título, autor do
+  PR e chave do card. Os termos são separados por espaço e todos têm de aparecer. Hífen e
+  sublinhado fazem parte do termo: `proj-9` casa com `PROJ-9`, e não com "proj" num campo e 9
+  em outro. Busca que fica sem letra nem dígito (`-`, `_`, só espaço) vale como sem busca;
+- `veredito`: filtra pelo que foi publicado no PR (o `action` do item), não pelo parecer da
+  sessão (`verdict`). Aceita `approve`, `request_changes`, `comment` e `skip`, que é o que não
+  foi postado (pulado na mesa, substituído por rodada nova, PR já mergeado ou fechado, aprovação
+  que deixou de ser necessária). Item sem `action`, ou com outro valor, entra em `skip`;
+- `repo`, até 200 caracteres: `dono/nome` exato, sem caixa, com os espaços das pontas aparados.
+
+Responde `{ ok, page, pageSize, total, pages, items, repos }`: `total` e `pages` contam o que
+passou nos filtros, e `repos` são os repositórios de todo o histórico, uma entrada por
+repositório (sem diferenciar caixa, com a grafia do item mais recente). Cada item sai pela
+mesma projeção do snapshot (`decisionForUi`), e as pendentes ficam só no snapshot. Parâmetro
+inválido ou repetido responde 400 com `{ ok: false, code: "parametro_invalido", campo }`;
+página além do fim responde 200 com `items` vazio. Campo torto num item guardado (título ou
+autor que não é texto) conta como vazio na busca. A rota só lê: não altera o histórico e não
+escreve no log, nem no 200 nem no 400.
 
 ## Como rodar e testar
 

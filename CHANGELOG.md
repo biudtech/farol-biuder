@@ -98,11 +98,13 @@ Ainda sem versão publicada.
   motor guarda (até 3.000), uma página por vez, para a tela de Histórico do front novo; o estado
   continua levando só as 30 mais recentes. Parâmetros, todos opcionais: `page`, `pageSize`
   (padrão 30, teto 100), `q` (busca sem caixa e sem acento em repositório, número, título, autor
-  do PR e chave do card), `veredito` (`approve`, `request_changes` ou `comment`) e `repo`
-  (`dono/nome`). A resposta traz a página, o total depois dos filtros e a lista dos repositórios
-  do histórico. Cada revisão sai com os mesmos campos que a tela já recebe no estado. Parâmetro
-  inválido ou repetido responde 400 dizendo o campo; página além do fim responde vazio. Exige a
-  mesma autenticação das outras leituras, e só lê.
+  do PR e chave do card; um termo com hífen ou sublinhado, como `proj-9`, casa inteiro),
+  `veredito` e `repo` (`dono/nome`). O `veredito` filtra pelo que foi publicado no PR, não pelo
+  parecer da revisão: `approve`, `request_changes`, `comment` ou `skip`, que é o que não foi
+  postado. A resposta traz a página, o total depois dos filtros e a lista dos repositórios do
+  histórico, uma entrada por repositório. Cada revisão sai com os mesmos campos que a tela já
+  recebe no estado. Parâmetro inválido ou repetido responde 400 dizendo o campo; página além do
+  fim responde vazio. Exige a mesma autenticação das outras leituras, e só lê.
 - **Pareamento sem pista para quem está de fora:** código que não vale recebe sempre a mesma
   recusa, sem dizer se há código esperando nem quantas tentativas restam. O limite de cinco erros
   continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
