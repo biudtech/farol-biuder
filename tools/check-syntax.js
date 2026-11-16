@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { executadoDireto } from '../lib/paths.js';
-import { ignorar } from './nao-e-fonte.js';
+import { ehOFront, ignorar } from './nao-e-fonte.js';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 // Este gate olha TODO .js do projeto, entao nao pula nada alem do comum.
@@ -48,6 +48,8 @@ const TEMPLATE_DISTRIBUIDO = path.join('workspace-template', '.claude');
  */
 function ignorado(dir, nome, raiz) {
   if (nome === '.claude') return path.join(dir, nome) !== path.join(raiz, TEMPLATE_DISTRIBUIDO);
+  // o front tem gate próprio (tools/nao-e-fonte.js)
+  if (ehOFront(dir, nome, raiz)) return true;
   return IGNORAR.has(nome);
 }
 
