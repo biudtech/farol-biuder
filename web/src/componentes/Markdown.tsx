@@ -1,6 +1,7 @@
 // Desenha o markdown de um review com elementos do React, a partir da árvore de
-// src/markdown/markdown.ts. Não há HTML montado por texto: todo conteúdo é filho de texto, e
-// o único atributo que vem do review é o `href`, que o leitor só entrega quando é https.
+// src/markdown/markdown.ts. Não há HTML montado por texto: todo conteúdo é filho de texto. Do
+// review vêm três valores de atributo, já filtrados pelo leitor: o `href` (só https), o
+// `data-linguagem` do bloco de código e o `start` da lista numerada.
 import { memo, useMemo, type ReactNode } from 'react';
 import { TETO_DE_TEXTO, lerMarkdown, type Bloco, type Trecho } from '@/markdown/markdown';
 import estilos from './Markdown.module.css';

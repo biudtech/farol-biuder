@@ -164,13 +164,13 @@ Ainda sem versão publicada.
   cru. O detalhe abre na própria página, com os motivos, o resumo técnico, as rodadas, as
   etapas e o texto do parecer. Dele saem duas ações: Revisar de novo, que abre uma análise
   nova do PR (o clique não publica; a análise termina pela política da conta), e o desfecho
-  da contestação do autor, quando o motor tem registro para o PR (gravar não publica nada;
-  apagar o registro pergunta antes). A lista não se refaz sozinha: quando o motor resolve
+  da contestação do autor, quando o motor tem registro para o PR (gravar e apagar não
+  publicam nada, mas mudam o prompt de revisões futuras, e por isso perguntam antes). A lista não se refaz sozinha: quando o motor resolve
   revisão nova, aparece um aviso com o botão Atualizar. Parâmetro que o motor recusa (400)
   aparece com o nome do campo, e página além do fim volta para a última. O texto do review
   passa a ser desenhado de markdown por um leitor próprio, sem dependência e sem HTML
   (títulos, listas, citação, código, negrito, itálico e link só `https`), com teto de tamanho
-  e de profundidade; o Radar usa o mesmo desenho no lugar do texto pré-formatado. O motor só
+  e de profundidade, e endereço que passa do teto ou encosta no corte fica como texto; o Radar usa o mesmo desenho no lugar do texto pré-formatado. O motor só
   entrega uma revisão pela chave do PR, e a mais recente: o link para uma revisão antiga de
   um PR com várias só abre quando ela está na página carregada. A tela antiga continua
   servida pelo motor, sem mudança.

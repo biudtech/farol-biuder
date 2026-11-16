@@ -1,19 +1,22 @@
 // O leitor de markdown do front: transforma o texto de um review numa árvore de blocos e
 // trechos, que o componente Markdown desenha com elementos do React. Sem dependência e sem
 // HTML: a árvore só tem texto, então marcação crua no review (`<script>`, `<img onerror>`)
-// aparece como texto, e o único atributo que sai do texto é o `href`, conferido por
-// linkSeguro.
+// aparece como texto. Do texto saem três valores que viram atributo, cada um filtrado: o
+// `href` (linkSeguro), a linguagem do bloco de código e o número inicial da lista.
 //
 // É um subconjunto, de propósito: títulos, parágrafos, listas, citação, bloco de código com
 // cerca, régua, negrito, itálico, código em linha e link https. Tabela, imagem, HTML, nota de
 // rodapé e bloco de código por recuo não são lidos: aparecem como o texto que são.
 //
-// Entrada de fora: a leitura é linear no tamanho do texto (nenhuma expressão regular com
-// retrocesso sobre a linha inteira, e toda busca de fecho que falha é lembrada), e tem teto de
-// tamanho e de profundidade.
+// Entrada de fora: o custo da leitura é limitado (nenhuma expressão regular com retrocesso
+// sobre a linha inteira, e toda busca de fecho que falha é lembrada), e há teto de tamanho e
+// de profundidade. O pior caso é o `)` de cada `[texto](`, procurado em até TETO_DA_URL + 300
+// caracteres: tamanho do texto vezes isso.
 
-// O review do motor tem teto de 60.000 caracteres (MAX_REVIEW_BODY, lib/engine/public-review.js,
-// na raiz). O que passar daqui é cortado, e o documento diz que foi.
+// O teto do texto, contado depois da expansão das tabulações. O que passar é cortado, e o
+// documento diz que foi. O motor limita em 60.000 o corpo do payload que publica
+// (MAX_REVIEW_BODY, lib/engine/public-review.js, na raiz), mas o texto da projeção pode vir
+// de outra fonte, sem esse teto.
 export const TETO_DE_TEXTO = 100_000;
 // citação e lista, uma dentro da outra
 export const TETO_DE_PROFUNDIDADE = 6;

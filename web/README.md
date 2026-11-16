@@ -130,8 +130,11 @@ jeito.
 
 Resposta fora de 2xx vira a falha `recusado`, com o status. Quando o corpo da recusa traz um
 código (`code`), a falha leva `detalhe: { codigo, campo? }`: é assim que a tela sabe qual
-parâmetro o motor recusou no 400 de `GET /api/decisions`. Só esses dois textos saem do corpo
-de uma recusa, e com teto de 80 caracteres.
+parâmetro o motor recusou no 400 de `GET /api/decisions`. Só esses dois saem do corpo de uma
+recusa, e só com forma de identificador (letra, depois letras, dígitos, sublinhado ou hífen,
+até 80). Quem responde fora de 2xx pode não ser o motor (um proxy no caminho), então o corpo
+só é lido quando se declara JSON, até 16 kB e em até 2 s: corpo maior, sem fim ou parado é
+largado, e a recusa segue só com o status.
 
 **Como ler o estado.** `useApp((e) => e.snapshot?.chave)`. O seletor devolve um primitivo ou
 uma referência que já está no store, nunca um objeto montado na hora. A definição do dado é do
@@ -282,9 +285,15 @@ Regras que valem para quem mexer nela:
   (inteiro a partir de 1). Página além do fim (200 com `items` vazio e `pages` maior que zero)
   volta para a última.
 - **Rótulos numa tabela só.** `src/historico/rotulos.ts` traduz `status` e `action`. O teste
-  ao lado lê os arquivos do motor que resolvem uma revisão e reprova se aparecer valor sem
-  rótulo; valor desconhecido aparece cru na tela. O parecer da sessão (`verdict`) só aparece
-  quando difere do que foi publicado.
+  ao lado varre `lib/engine/*.js`, pega todo arquivo que chama `resolveIntoHistory` ou
+  `recordDecision` e reprova se um literal escrito num `status:` desses arquivos não tiver
+  rótulo. É uma leitura de texto: status montado de outro jeito escapa dela, e na tela
+  aparece cru. O parecer da sessão (`verdict`) só aparece quando difere do que foi publicado.
+- **Publicado é o que o motor conta como publicado.** Só `approve`, `request_changes` e
+  `comment` (`PUBLICADOS`, em `lib/engine/historico-paginado.js`). `action` ausente ou de
+  valor desconhecido aparece como "Nada publicado" (o desconhecido, com o valor cru ao lado),
+  que é como o filtro do motor o trata. A pendência da mesa, que só chega pelo detalhe por
+  chave, mostra "Nada publicado ainda".
 - **A lista não se refaz sozinha.** Quando o snapshot passa a ter revisão resolvida mais nova
   que a da última carga (`marcaDasResolvidas`: o id e a hora do topo de `decisions.resolved`),
   aparece o aviso "Há revisões novas" com o botão Atualizar, que pede a mesma página de novo.
@@ -294,16 +303,21 @@ Regras que valem para quem mexer nela:
   descartado, contado e avisado. O resultado ("61 revisões, página 2 de 3") sai numa região
   viva educada.
 - **Detalhe.** Abre na própria página, no lugar da lista (que continua montada), com o foco
-  no título; Escape ou "Voltar à lista" fecham, e o foco volta ao botão que abriu. Mostra o
+  no título; Escape ou "Voltar à lista" fecham, e o foco volta ao botão que abriu. Escape
+  dentro de um campo de texto ou de um seletor é do campo, e não fecha o detalhe. Mostra o
   que foi publicado, os motivos (`reasons`), os pontos de atenção (`attention`), o resumo
   técnico (`technical`), as rodadas (`rounds`), as etapas (`stages`), a conferência de
   afirmações e o texto do parecer, desenhado de markdown.
 - **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo" manda
   `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o clique não
   publica, mas a análise que ele abre termina pela política da conta, que pode publicar
-  sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR: gravar
-  um desfecho (`POST /api/pushback`) não publica nada e não pergunta; apagar o registro
-  (desfecho vazio) pergunta antes.
+  sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR, e as
+  duas ações dela (`POST /api/pushback`) perguntam antes. Nenhuma publica no GitHub, mas
+  gravar um desfecho tem efeito além da tela (`lib/engine/pushback.js`): o registro fica
+  confirmado e marcado como manual, entra no prompt das próximas revisões dos PRs do autor
+  e, com o desfecho `author_right` ou `mixed`, no das revisões de outros autores do mesmo
+  repositório; e o motor deixa de procurar contestação naquele PR sozinho. Apagar o registro
+  (desfecho vazio) desfaz isso. A pergunta diz o que vale para o desfecho escolhido.
 
 ### Lacunas do contrato
 
@@ -322,30 +336,59 @@ Regras que valem para quem mexer nela:
   aberta.
 - **Sessão em curso por revisão.** O item não diz se o PR já está sendo revisado de novo. A
   tela oferece "Revisar de novo" e mostra a resposta do motor.
+- **O aviso do motor cita uma tela que não existe aqui.** Quando o motor suspeita de
+  contestação, o aviso dele (evento `toast`, texto de `lib/engine/pushback.js`) manda
+  confirmar o desfecho em "Revisões recentes", que é da tela antiga. A tela nova mostra o
+  aviso como o motor escreveu; o desfecho se confirma no detalhe da revisão, no Histórico.
 
 ## O renderizador de markdown
 
 `src/markdown/markdown.ts` lê o texto de um review e devolve uma árvore de blocos e trechos;
 `src/componentes/Markdown.tsx` desenha a árvore com elementos do React. Não há dependência,
-`dangerouslySetInnerHTML` nem HTML montado por texto: todo conteúdo é filho de texto, e o
-único atributo que sai do review é o `href`.
+`dangerouslySetInnerHTML` nem HTML montado por texto: todo conteúdo é filho de texto. Três
+atributos levam valor que sai do review, cada um filtrado: o `href` do link (só o que passa
+em `linkSeguro`), o `data-linguagem` do bloco de código (a palavra depois da cerca, só
+letras, dígitos e `_ + # . -`, até 40) e o `start` da lista numerada (um número de até nove
+dígitos).
 
 O que ele lê: títulos (`#` a `######`), parágrafos (a quebra de linha fica, como no GitHub),
 listas com marcador e numeradas (uma dentro da outra), citação, bloco de código com cerca
 (crases ou tis), régua, negrito, itálico, código em linha, link `[texto](https://...)` e
 endereço `https://` solto.
 
-O que ele não lê, e aparece como o texto que é: HTML (`<script>`, `<img>`), tabela, imagem,
-nota de rodapé, bloco de código por recuo, e link de qualquer esquema que não seja `https`
-(`javascript:`, `data:`, `http:`, caminho relativo), ou com usuário e senha no endereço. O
-link sai com `rel="noreferrer noopener"` e `target="_blank"`.
+O que ele não lê, e aparece como o texto que é: HTML (`<script>`, `<img>`), tabela, nota de
+rodapé, bloco de código por recuo e imagem (`![texto](endereço)` aparece inteira, e o
+endereço dela não vira link).
 
-Tetos, porque o texto vem de fora: 100.000 caracteres (o review do motor tem teto de 60.000;
-o que passar é cortado, e a tela diz), 6 níveis de citação e lista, 6 níveis de ênfase e
-2.048 caracteres de endereço. Além do teto de profundidade o conteúdo vira texto. A leitura é
-linear no tamanho do texto, e `markdown.test.ts` tem as entradas que travariam um leitor
-ingênuo. O título do texto começa no nível 4 (`nivelBase`), porque o review aparece dentro de
-um cartão ou de uma seção que já tem título.
+O link (`linkSeguro`) só existe para endereço `https` com host. Não vira link, e fica como
+texto: outro esquema (`javascript:`, `data:`, `http:`, caminho relativo), arroba na
+autoridade (usuário e senha, mesmo vazios, como em `https://@host`), espaço, caractere de
+controle ou controle de direção do texto (U+202A a U+202E, U+2066 a U+2069) no endereço. No
+endereço solto o texto visível é o endereço normalizado, que é para onde o link vai (um host
+escrito com ponto ideográfico aparece com o ponto comum). O link sai com
+`rel="noreferrer noopener"` e `target="_blank"`. Destino local ou de rede interna
+(`https://localhost`, por exemplo) passa: é `https`, o endereço fica à vista e quem abre é a
+pessoa.
+
+Tetos, porque o texto vem de fora:
+
+- 100.000 caracteres, contados depois de a tabulação virar quatro espaços. O que passar é
+  cortado, sem partir par substituto, e a tela diz. O motor limita em 60.000 o corpo do
+  payload que publica (`MAX_REVIEW_BODY`), mas o texto que a projeção entrega pode vir de
+  outra fonte (o relatório da sessão saneado), que não tem esse teto;
+- 2.048 caracteres de endereço. Endereço solto que não terminou antes disso, ou que encosta
+  no fim de um texto cortado, fica texto inteiro: não vira link para um pedaço dele;
+- 6 níveis de citação e lista e 6 níveis de ênfase. Além deles o conteúdo vira texto.
+
+O custo da leitura é limitado, não estritamente linear: não há expressão regular com
+retrocesso sobre a linha, e a busca de fecho que falha é lembrada, mas cada `[texto](`
+procura o `)` em até 2.348 caracteres. O pior caso é o texto de 100.000 caracteres feito só
+de `[a](`, que custa perto de 60 milhões de passos (entre 0,1 e 0,2 s onde foi medido).
+`markdown.test.ts` mede as entradas que travariam um leitor ingênuo, com 100.000 caracteres
+cada, e exige menos de 1,5 s por entrada.
+
+O título do texto começa no nível 4 (`nivelBase`), porque o review aparece dentro de um
+cartão ou de uma seção que já tem título.
 
 ## Segurança
 
