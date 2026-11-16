@@ -94,7 +94,7 @@ export const ResumoDoPeriodo = memo(function ResumoDoPeriodo({ relatorio, vazio 
         </dl>
       )}
       <p className={comuns.meta}>
-        De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar. Em perfil de assinatura ninguém cobra esse valor por sessão: ele é uma estimativa, que serve para comparar dias e para o teto.
+        De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar. Em perfil de assinatura ninguém cobra esse valor por sessão: ele é uma estimativa, que serve para comparar dias.
       </p>
       {semExecucao ? null : avisosDoPeriodo(relatorio).map((aviso) => <p key={aviso} className={comuns.meta}>{aviso}</p>)}
       {completed && !semExecucao ? <p className={comuns.meta}>Revisão concluída é a operação cuja última execução terminou bem no período. Não quer dizer que o review foi publicado.</p> : null}
