@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { EmConstrucao } from '@/componentes/EmConstrucao';
+import { Radar } from '@/componentes/radar/Radar';
 
 export const metadata: Metadata = { title: 'Radar' };
 
-export default function Radar() {
-  return <EmConstrucao titulo="Radar" />;
+export default function PaginaDoRadar() {
+  return <Radar />;
 }

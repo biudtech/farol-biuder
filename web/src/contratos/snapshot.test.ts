@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CHAVES_DO_SNAPSHOT, VALIDADORES } from './snapshot';
+import { CHAVES_DO_SNAPSHOT, LEITORES } from './snapshot';
 
 // A lista fechada do motor mora em test/snapshot-chaves.test.js, na raiz do repositório.
 // Lida por texto, porque o arquivo sobe a Engine ao ser importado.
@@ -20,14 +20,15 @@ describe('chaves de topo do snapshot', () => {
     expect([...CHAVES_DO_SNAPSHOT].sort()).toEqual(doMotor.slice().sort());
   });
 
-  it('toda chave tem validador, e nenhum validador sobra', () => {
-    expect(Object.keys(VALIDADORES).sort()).toEqual([...CHAVES_DO_SNAPSHOT].sort());
+  it('toda chave tem leitor, e nenhum leitor sobra', () => {
+    expect(Object.keys(LEITORES).sort()).toEqual([...CHAVES_DO_SNAPSHOT].sort());
   });
 
   it('app confere a identidade que o motor emite', () => {
-    expect(VALIDADORES.app({ name: 'Farol', version: '3.0.0-dev', platform: 'linux' })).toBe(true);
+    const app = { name: 'Farol', version: '3.0.0-dev', platform: 'linux' };
+    expect(LEITORES.app(app, () => {})).toBe(app);
     for (const torto of [null, 'Farol', [], {}, { name: 'Farol', version: 3, platform: 'linux' }, { name: 'Farol', version: '3' }]) {
-      expect(VALIDADORES.app(torto)).toBe(false);
+      expect(LEITORES.app(torto, () => {})).toBeUndefined();
     }
   });
 });

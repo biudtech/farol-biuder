@@ -127,6 +127,30 @@ Ainda sem versão publicada.
   restrita à própria origem e ao endereço do motor, e endereço do motor que não é uma origem
   limpa (com curinga, por exemplo) é recusado. A tela antiga continua servida pelo motor, sem
   mudança.
+- **Tela Radar no front novo (fase 3, lote 2):** a aba Radar de `web/` deixa de ser "Em
+  construção". Os blocos, nesta ordem: "Precisa de você" (as pendências, com Aprovar, Pedir
+  mudanças, Comentar e Pular), "Analisando agora" (as sessões em curso, com o feed e o
+  Cancelar), "Esperando o CI" (desde quando e quais checks faltam), "Fila" (com Revisar agora
+  e Ignorar) e os ignorados (com Restaurar); no topo, Checar agora e a revisão sob demanda pela
+  URL de um PR. A tela só fatia e formata o que o motor manda. PR da própria conta não mostra
+  Aprovar nem Pedir mudanças, e pendência de commit novo só deixa revisar de novo ou pular; nos
+  outros casos a tela oferece a ação e mostra a recusa do motor, em português, pelo código que
+  ele devolve. Aprovar, Pedir mudanças e Comentar publicam no GitHub e perguntam antes de
+  enviar, dizendo o que sai e em qual PR; Cancelar uma sessão e Pular uma pendência de
+  "Esperando o CI" também perguntam. O texto que a tela mostra é o review do parecer: quando a
+  ação clicada é outra, a pergunta avisa que o motor publica o texto que ele preparou para
+  ela, que a tela não mostra. Depois de um clique nada muda por conta da tela: o botão diz
+  "Enviando", a tela diz que o motor aceitou o pedido ou por que recusou, e o desfecho de fato
+  (publicado, já havia um review igual, falhou) vem no aviso do motor, que a tela passa a
+  mostrar. Quem tira o item do lugar é o estado que o motor empurra. Motor sem conta, sem
+  token do `gh`, com a checagem falhando ou com as buscas pausadas aparece como aviso. Título
+  de PR, motivo, feed, aviso do motor e o texto do review entram sempre como texto (o review
+  em markdown aparece pré-formatado), e o link do PR só existe para URL do GitHub por HTTPS.
+  As chaves do snapshot que a tela usa passam a ter tipo e conferência na borda: campo de
+  forma errada conta como ausente e o item aparece com o que deu para ler; pendência que não
+  dá para ler vira aviso no bloco, em vez de sumir. O motor não manda a lista dos PRs
+  ignorados, então o bloco dos ignorados mostra só o que foi ignorado naquela aba. A tela
+  antiga continua servida pelo motor, sem mudança.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do

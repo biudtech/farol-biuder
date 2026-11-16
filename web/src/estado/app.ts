@@ -1,9 +1,10 @@
 // A sessão do front: liga o cliente do motor ao store. Sem React aqui, para dar para testar
 // com um fetch de mentira. A instância que as telas usam está em ./instancia.
 import { lerPareamento, lerStatusDaAutenticacao } from '@/contratos/auth';
+import { lerRecado, type RecadoDoMotor } from '@/contratos/eventos';
 import type { Snapshot } from '@/contratos/snapshot';
 import { criarCliente, type Cliente, type Conexao } from '@/transporte/cliente';
-import { aplicarEstadoInteiro, aplicarPatch, type Registrar } from '@/transporte/estado';
+import { aplicarAtividade, aplicarEstadoInteiro, aplicarPatch, type Registrar } from '@/transporte/estado';
 import { CHAVE_DO_TOKEN, type CofreDoToken } from '@/transporte/token';
 import { criarStore, type Store } from './store';
 
@@ -20,6 +21,17 @@ export type DesfechoDoPareamento = 'pareado' | 'recusado' | 'inalcancavel' | 'ca
 // pede explicação, só o foco no campo do código. nenhum: a página abriu sem token.
 export type MotivoDoPareamento = 'nenhum' | 'saiu' | 'nao-autenticado' | 'outra-aba';
 
+// Um aviso do motor (evento `toast`) como a tela o guarda: `n` é a ordem de chegada, e
+// serve de chave.
+export interface RecadoNaTela extends RecadoDoMotor {
+  n: number;
+}
+
+// Quantos recados do motor ficam na tela: chegando o quarto, o mais antigo sai.
+export const TETO_DE_RECADOS = 3;
+
+const SEM_RECADOS: readonly RecadoNaTela[] = Object.freeze([]);
+
 export interface EstadoDoApp {
   sessao: Sessao;
   motor: Motor;
@@ -29,6 +41,8 @@ export interface EstadoDoApp {
   // true quando a casca apareceu no lugar do pareamento (pareou aqui ou em outra aba): a
   // casca leva o foco ao conteúdo. Com token já guardado, na carga da página, é false.
   entrouAgora: boolean;
+  // os avisos mais recentes do motor, do mais antigo ao mais novo
+  recados: readonly RecadoNaTela[];
 }
 
 export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
@@ -38,6 +52,7 @@ export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
   snapshot: null,
   motivo: 'nenhum',
   entrouAgora: false,
+  recados: SEM_RECADOS,
 });
 
 export interface App {
@@ -51,6 +66,8 @@ export interface App {
   // Aborta as chamadas em curso e apaga o token deste navegador (as outras abas vão ao
   // pareamento junto). Não revoga a sessão no motor.
   sair(): void;
+  // Tira da tela os avisos do motor.
+  dispensarRecados(): void;
 }
 
 // O pedaço da janela que a sessão usa: o evento `storage`, que o navegador dispara nas OUTRAS
@@ -76,6 +93,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   let tokenDaSessao = '';
   // só a sondagem mais recente grava o resultado
   let sondagem = 0;
+  let recadosRecebidos = 0;
 
   const cliente = criarCliente({ base, cofre, buscar, registrar, aoNaoAutenticado: () => voltarAoPareamento('nao-autenticado') });
 
@@ -85,16 +103,27 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   }
 
   function aoEvento(tipo: string, dados: string): void {
-    // Os outros eventos do motor (toast, activity, needs-decision e afins) ainda não têm
-    // quem os leia: entram com as telas.
-    if (tipo !== 'state' && tipo !== 'state-patch') return;
+    // Os outros eventos do motor (needs-decision, new-prs e afins) ainda não têm quem os
+    // leia: entram com as telas. O `activity` é a linha nova do feed de uma sessão, e o
+    // `toast` é o aviso com que o motor diz o desfecho de uma ação ou de uma revisão.
+    if (tipo !== 'state' && tipo !== 'state-patch' && tipo !== 'activity' && tipo !== 'toast') return;
     let bruto: unknown;
     try { bruto = JSON.parse(dados); } catch {
       registrar(`snapshot: o evento ${tipo} não trouxe JSON e foi descartado`);
       return;
     }
+    if (tipo === 'toast') {
+      const recado = lerRecado(bruto);
+      if (!recado) {
+        registrar('fluxo de eventos: um toast chegou fora do formato e foi descartado');
+        return;
+      }
+      recadosRecebidos += 1;
+      store.trocar({ recados: [...store.ler().recados, { ...recado, n: recadosRecebidos }].slice(-TETO_DE_RECADOS) });
+      return;
+    }
     const anterior = store.ler().snapshot;
-    const aplicar = tipo === 'state' ? aplicarEstadoInteiro : aplicarPatch;
+    const aplicar = { state: aplicarEstadoInteiro, 'state-patch': aplicarPatch, activity: aplicarAtividade }[tipo];
     store.trocar({ snapshot: aplicar(anterior, bruto, registrar) });
   }
 
@@ -119,7 +148,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     fechar();
     cliente.cancelarChamadas();
     tokenDaSessao = '';
-    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', motivo, entrouAgora: false });
+    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', motivo, entrouAgora: false, recados: SEM_RECADOS });
     void verificarMotor();
   }
 
@@ -185,6 +214,9 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     sair() {
       cofre.esquecer(cofre.ler());
       voltarAoPareamento('saiu');
+    },
+    dispensarRecados() {
+      store.trocar({ recados: SEM_RECADOS });
     },
   };
 }

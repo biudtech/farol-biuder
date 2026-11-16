@@ -7,8 +7,8 @@ rota de API, cookie nem segredo.
 Este pacote é independente do motor: tem `package.json`, `package-lock.json` e gate próprios.
 Na Vercel, o diretório raiz do projeto é `web/`.
 
-Hoje ele entrega a fundação: transporte, contratos, pareamento e a casca das cinco abas
-(Radar, Histórico, Time, Consumo e Sistema), cada uma ainda em construção.
+Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e a
+tela Radar. Histórico, Time, Consumo e Sistema ainda estão em construção.
 
 ## Rodar contra um motor local
 
@@ -83,8 +83,9 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`), com um CSS Module só |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
 | `src/navegacao/` | A lista das abas |
@@ -102,9 +103,13 @@ os dados vêm do navegador. A lista das abas é `src/navegacao/abas.ts`.
 o motor emite, nunca inventado:
 
 - chave do snapshot: em `src/contratos/snapshot.ts`, troque o `unknown` da chave em
-  `FormasDoSnapshot` pelo tipo e o `qualquer` dela em `VALIDADORES` pelo validador. As chaves
-  de topo são lista fechada no motor (`test/snapshot-chaves.test.js`, na raiz), e
-  `snapshot.test.ts` reprova se as duas listas divergirem;
+  `FormasDoSnapshot` pelo tipo e o `qualquer` dela em `LEITORES` pelo leitor. O leitor devolve
+  o valor conferido, ou `undefined` quando a forma não é a esperada. Para lista e mapa use
+  `lerLista` e `lerRegistro` (`src/contratos/formas.ts`), com um leitor de item que monta o
+  item campo a campo: só o que identifica o item é exigido (sem ele o item é descartado, com
+  registro, e o resto da lista entra); todo outro campo é opcional no tipo, e campo de forma
+  errada, ou `null`, conta como ausente (`campo`). O item aparece com o que deu para ler. As chaves de topo são lista fechada no motor (`test/snapshot-chaves.test.js`, na
+  raiz), e `snapshot.test.ts` reprova se as duas listas divergirem;
 - resposta de rota: um leitor `(bruto: unknown) => Tipo | null`, como os de
   `src/contratos/auth.ts`.
 
@@ -124,11 +129,17 @@ jeito.
 **Como ler o estado.** `useApp((e) => e.snapshot?.chave)`. O seletor devolve um primitivo ou
 uma referência que já está no store, nunca um objeto montado na hora. A definição do dado é do
 motor: a tela fatia e formata, não recalcula. Chave que chega com forma errada mantém o valor
-anterior e deixa um aviso no console; a tela precisa saber desenhar sem a chave.
+anterior e deixa um aviso no console; a tela precisa saber desenhar sem a chave. Depois de um
+POST a tela não muda nada por conta própria: mostra o resultado e espera o estado que o motor
+empurra.
 
-**Eventos do motor.** O fluxo entrega hoje só `state` e `state-patch` ao store. Os outros
-(`toast`, `activity`, `needs-decision` e afins) passam por `aoEvento`, em `src/estado/app.ts`,
-e ainda não têm quem os leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
+**Eventos do motor.** O fluxo entrega ao store `state`, `state-patch`, `activity` (a linha
+nova do feed de uma sessão, que entra no fim do feed dela em `snapshot.activity`) e `toast`
+(o aviso com que o motor diz o desfecho de uma ação ou de uma revisão: `{ kind, text }`, com
+`kind` `info`, `ok` ou `error`; lido em `src/contratos/eventos.ts`, com teto de 400
+caracteres, e guardado em `recados`, os três mais recentes). Os outros (`needs-decision`,
+`new-prs` e afins) passam por `aoEvento`, em `src/estado/app.ts`, e ainda não têm quem os
+leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
 evento é descartado, o fluxo segue e o console recebe um aviso, uma vez.
 
 O fluxo se cuida sozinho: 90 s sem nada do motor (contados desde o pedido, antes mesmo dos
@@ -152,6 +163,85 @@ Consulte-a antes de usar uma API do Next: ela mudou entre versões (o antigo `mi
 
 **Texto.** Tela e comentários em português, sem travessão. Jargão de IA não se traduz (token,
 prompt).
+
+## A tela Radar
+
+A aba `/radar` é `src/componentes/radar/Radar.tsx`. Ela lê o snapshot do store, fatia nos
+blocos e liga os botões às ações:
+
+| Bloco | Componente | De onde vem |
+|---|---|---|
+| Ações gerais (Checar agora, revisar pela URL de um PR) | `AcoesGerais.tsx` | `status`, `lastCheckAt`, `nextCheckAt` |
+| Precisa de você | `PrecisaDeVoce.tsx` | `decisions.pending` sem espera |
+| Analisando agora | `AnalisandoAgora.tsx` | `activeSessions` e `activity` |
+| Esperando o CI | `EsperandoOCi.tsx` | `decisions.pending` com `esperaCi`, ou com `esperaProva` que o motor retoma sozinho |
+| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails` |
+| Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista) |
+
+Os avisos do topo saem de `account`, `status`, `error` e `buscasPausadas`. No pé da tela fica
+a região de resultado (`aria-live`): o envio em curso, o que o motor respondeu ao pedido e os
+avisos dele (evento `toast`).
+
+Regras que valem para quem mexer nela:
+
+- **A tela não decide.** Os botões de uma pendência saem de `acoesDaPendencia`
+  (`src/radar/fatias.ts`), que lê só `prProprio` e `blockedKind: "stale_head"`. Fora disso a
+  tela oferece a ação e mostra a recusa do motor. Não acrescente regra de elegibilidade aqui:
+  se faltar um campo, ele entra no snapshot do motor.
+- **Um PR aparece uma vez.** `fatiarFila` tira da Fila o PR com sessão em curso, e da espera
+  de execução o que ainda está na fila ou já tem pendência. É só exibição: a lista do motor
+  não muda, e a contagem do título conta o que está na tela.
+- **Ação.** Todo POST passa por `executar` (`src/radar/acoes.ts`) e pelo gancho `useAcoes`,
+  que guarda o que está no ar por alvo (o PR ou a sessão), desabilita os botões do alvo e
+  publica o envio e o resultado na região viva. A recusa do motor chega em
+  `{ ok: false, blocked, error }`: `blocked` é o código, e a frase de cada código está na
+  tabela `RECUSAS`. Código novo do motor entra ali; sem entrada, a tela mostra a frase que o
+  motor mandou.
+- **O `ok` do motor não é o desfecho.** Depois de `{ ok: true }` a tela só diz "O motor
+  aceitou o pedido". Numa decisão o motor responde `ok` também quando já havia um review
+  igual e ele não publicou de novo: o que aconteceu de fato vem no aviso dele (`toast`), que
+  a tela mostra como texto. Não escreva frase que afirme publicação a partir do `ok`.
+- **Confirmação.** `confirmacaoDa` diz quais ações perguntam antes e com que texto: as três
+  que publicam no GitHub (Aprovar, Pedir mudanças e Comentar), o Pular de uma pendência de
+  "Esperando o CI" (descarta o que o motor faria sozinho) e o Cancelar. A pergunta abre no
+  próprio cartão, fecha com Escape, e fecha sozinha, dizendo por quê, se o motor mudar o item
+  e a ação deixar de ser oferecida. Ao confirmar, o foco vai à região de resultado.
+- **O texto mostrado é o do parecer.** `reportMarkdown` é o review do parecer da sessão. O
+  motor publica o texto que guardou para a ação clicada, com comentários em linha. Por isso a
+  pergunta só diz "o review mostrado acima" quando a ação é a do parecer; nas outras ela
+  avisa que sai um texto que a tela não mostra.
+- **Texto de fora é texto.** Título, autor, motivo, feed, aviso do motor e review entram como
+  filho de texto do React, nunca por `dangerouslySetInnerHTML`. O review vem em markdown e
+  aparece pré-formatado; a renderização de markdown fica para o Histórico. O link do PR passa
+  por `linkDoPr`: só `https://github.com/`, com `rel="noreferrer noopener"` e
+  `target="_blank"`. A revisão sob demanda manda a URL canônica do PR (`prDaUrl`), não o que
+  foi digitado.
+- **Cor não é o único sinal.** Erro e aviso começam dizendo o que são ("Erro:", "Aviso:",
+  "Bloqueado:").
+- **Hora.** As datas saem de `dataHora`, no fuso do navegador, sempre absolutas: a tela não
+  tem relógio próprio, e os testes não dependem da hora.
+- **Desenho.** A tela lê cada chave do snapshot por um seletor próprio, e os blocos são
+  `memo`: o bloco só é redesenhado quando a fatia dele muda de referência
+  (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a um bloco, use `useMemo`.
+
+### Lacunas do contrato
+
+O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
+do motor, não com regra na tela:
+
+- **O texto de cada ação.** A projeção da pendência (`decisionForUi`) traz só o review do
+  parecer. O texto e os comentários em linha que o motor publica em Aprovar, Pedir mudanças e
+  Comentar (`payloads`) não saem do motor, então a tela não consegue mostrá-los antes do
+  clique.
+- **As ações permitidas por pendência.** Não há campo que diga o que cada pendência aceita
+  (por exemplo, Aprovar barrado pela avaliação técnica). A tela oferece o botão e o motor
+  recusa.
+- **Quando o motor revisa de novo sozinho** (`reRounds`). A pendência de commit novo mostra o
+  motivo do bloqueio e o Revisar agora, mas não diz se e quando a rodada automática sai.
+- **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
+  na aba aberta.
+- **O bloco de cada pendência.** Não há campo que diga se a pendência espera clique ou se
+  resolve sozinha: a tela corta pela presença de `esperaCi` e de `esperaProva` sem `pedeVoce`.
 
 ## Segurança
 

@@ -7,23 +7,24 @@
 //
 // A conferência é aqui, na borda: chave desconhecida é ignorada, e forma errada numa chave
 // conhecida não derruba a tela, só é registrada e o valor anterior fica.
-import { CHAVES_DO_SNAPSHOT, VALIDADORES, type ChaveDoSnapshot, type Snapshot } from '@/contratos/snapshot';
-import { ehListaDeTextos, ehObjeto, type Objeto } from '@/contratos/formas';
+import { CHAVES_DO_SNAPSHOT, LEITORES, type ChaveDoSnapshot, type Snapshot } from '@/contratos/snapshot';
+import { ehListaDeTextos, ehObjeto, ehTexto, type Objeto, type Registrar } from '@/contratos/formas';
+import { TETO_DO_FEED, lerLinhaDoFeed, type LinhaDoFeed } from '@/contratos/radar';
 
-export type Registrar = (aviso: string) => void;
+export type { Registrar };
 
 type Rascunho = Partial<Record<ChaveDoSnapshot, unknown>>;
 
 const CONHECIDAS: ReadonlySet<string> = new Set(CHAVES_DO_SNAPSHOT);
 
-// Copia para o rascunho as chaves conhecidas de `campos` que passam no validador. A que não
-// passa fica como estava no rascunho. Devolve se algo mudou.
+// Copia para o rascunho as chaves conhecidas de `campos` que o leitor da chave aceita, já
+// sem os itens tortos. A que o leitor recusa fica como estava no rascunho. Devolve se algo mudou.
 function mesclar(rascunho: Rascunho, campos: Objeto, registrar: Registrar): boolean {
   let mudou = false;
   for (const chave of CHAVES_DO_SNAPSHOT) {
     if (!Object.hasOwn(campos, chave)) continue;
-    const valor = campos[chave];
-    if (!VALIDADORES[chave](valor)) {
+    const valor = LEITORES[chave](campos[chave], registrar);
+    if (valor === undefined) {
       registrar(`snapshot: a chave "${chave}" chegou com forma inesperada e foi mantida como estava`);
       continue;
     }
@@ -65,4 +66,24 @@ export function aplicarPatch(anterior: Snapshot | null, bruto: unknown, registra
     mudou = true;
   }
   return mudou ? (rascunho as Snapshot) : anterior;
+}
+
+// O evento `activity` do motor: uma linha nova do feed de uma sessão, `{ id, item }`
+// (pushActivity, lib/engine/session.js). O snapshot só traz o feed inteiro quando o estado é
+// empurrado por outro motivo; entre um e outro, a linha chega por aqui. Ela entra no fim do
+// feed daquela sessão, com o mesmo teto que o motor guarda, e o próximo `state` ou
+// `state-patch` que trouxer `activity` substitui tudo.
+export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, registrar: Registrar): Snapshot | null {
+  if (!anterior) return anterior;
+  const item = ehObjeto(bruto) ? lerLinhaDoFeed(bruto.item) : undefined;
+  if (!ehObjeto(bruto) || !ehTexto(bruto.id) || !item) {
+    registrar('snapshot: o evento activity chegou fora do formato e foi descartado');
+    return anterior;
+  }
+  const { id } = bruto;
+  const feeds: Array<[string, LinhaDoFeed[]]> = Object.entries(anterior.activity ?? {});
+  const feed = feeds.find(([sessao]) => sessao === id)?.[1] ?? [];
+  const novo = [...feed, item].slice(-TETO_DO_FEED);
+  // fromEntries define propriedade própria: um id "__proto__" não mexe no protótipo
+  return { ...anterior, activity: Object.fromEntries([...feeds.filter(([sessao]) => sessao !== id), [id, novo]]) };
 }

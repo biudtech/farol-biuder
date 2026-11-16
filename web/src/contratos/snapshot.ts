@@ -5,8 +5,17 @@
 // motor: aqui só se confere a forma, na borda, antes de o valor entrar no store.
 //
 // Cada lote de tela tipa as chaves que usa: troca o `unknown` da chave em FormasDoSnapshot
-// pelo tipo lido do que o motor emite, e o `qualquer` dela em VALIDADORES pelo validador.
-import { ehObjeto, ehTexto } from './formas';
+// pelo tipo lido do que o motor emite, e o `qualquer` dela em LEITORES pelo leitor. As do
+// Radar estão em ./radar.
+import { deGuarda, ehObjeto, ehTexto, type Leitor } from './formas';
+import {
+  lerAtividade, lerBuscasPausadas, lerChavesEmEspera, lerConta, lerDecisoes, lerDetalhesDaEspera, lerErro,
+  lerEsperaConflito, lerEstacionados, lerFila, lerInicioAutomatico, lerInstante, lerPrsEmEspera, lerSessoes,
+  lerStatus,
+  type BuscaPausada, type ContaDoMotor, type Decisoes, type DetalheDaEspera, type EsperaConflito,
+  type Estacionado, type InicioAutomatico, type ItemDaFila, type LinhaDoFeed, type PrEmEspera,
+  type SessaoAtiva, type StatusDoMotor,
+} from './radar';
 
 export const CHAVES_DO_SNAPSHOT = [
   'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',
@@ -29,29 +38,29 @@ export interface FormasDoSnapshot {
   app: AppDoMotor;
   modelos: unknown;
   claudePerfis: unknown;
-  status: unknown;
-  error: unknown;
+  status: StatusDoMotor;
+  error: string | null;
   baseline: unknown;
-  account: unknown;
+  account: ContaDoMotor;
   accounts: unknown;
   pushbacks: unknown;
   config: unknown;
   jiraSites: unknown;
-  lastCheckAt: unknown;
-  nextCheckAt: unknown;
-  buscasPausadas: unknown;
-  queue: unknown;
-  inicioAutomatico: unknown;
-  esperaConflito: unknown;
-  parked: unknown;
+  lastCheckAt: number | null;
+  nextCheckAt: number | null;
+  buscasPausadas: BuscaPausada[];
+  queue: ItemDaFila[];
+  inicioAutomatico: InicioAutomatico;
+  esperaConflito: EsperaConflito;
+  parked: Record<string, Estacionado>;
   reRounds: unknown;
-  activeSessions: unknown;
-  activity: unknown;
-  headlessWaiting: unknown;
-  headlessWaitingPrs: unknown;
-  headlessWaitingDetails: unknown;
+  activeSessions: SessaoAtiva[];
+  activity: Record<string, LinhaDoFeed[]>;
+  headlessWaiting: string[];
+  headlessWaitingPrs: PrEmEspera[];
+  headlessWaitingDetails: Record<string, DetalheDaEspera>;
   filaJusta: unknown;
-  decisions: unknown;
+  decisions: Decisoes;
   reviewActions: unknown;
   usage: unknown;
   doctor: unknown;
@@ -62,42 +71,43 @@ export interface FormasDoSnapshot {
 // precisa saber desenhar sem ela.
 export type Snapshot = { readonly [C in ChaveDoSnapshot]?: FormasDoSnapshot[C] };
 
-export type Validador<T> = (valor: unknown) => valor is T;
-
 // Chave ainda sem tipo: passa qualquer valor, e quem a ler recebe `unknown`.
-const qualquer = (valor: unknown): valor is unknown => valor !== undefined;
+const qualquer: Leitor<unknown> = (valor) => valor;
 
 function ehApp(valor: unknown): valor is AppDoMotor {
   return ehObjeto(valor) && ehTexto(valor.name) && ehTexto(valor.version) && ehTexto(valor.platform);
 }
 
-export const VALIDADORES: { readonly [C in ChaveDoSnapshot]: Validador<FormasDoSnapshot[C]> } = {
-  app: ehApp,
+// Um leitor por chave. Devolve o valor conferido, ou `undefined` quando a forma não é a
+// esperada (a chave fica como estava). Nas listas e nos mapas o item torto é descartado e
+// registrado, e o resto entra.
+export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapshot[C]> } = {
+  app: deGuarda(ehApp),
   modelos: qualquer,
   claudePerfis: qualquer,
-  status: qualquer,
-  error: qualquer,
+  status: lerStatus,
+  error: lerErro,
   baseline: qualquer,
-  account: qualquer,
+  account: lerConta,
   accounts: qualquer,
   pushbacks: qualquer,
   config: qualquer,
   jiraSites: qualquer,
-  lastCheckAt: qualquer,
-  nextCheckAt: qualquer,
-  buscasPausadas: qualquer,
-  queue: qualquer,
-  inicioAutomatico: qualquer,
-  esperaConflito: qualquer,
-  parked: qualquer,
+  lastCheckAt: lerInstante,
+  nextCheckAt: lerInstante,
+  buscasPausadas: lerBuscasPausadas,
+  queue: lerFila,
+  inicioAutomatico: lerInicioAutomatico,
+  esperaConflito: lerEsperaConflito,
+  parked: lerEstacionados,
   reRounds: qualquer,
-  activeSessions: qualquer,
-  activity: qualquer,
-  headlessWaiting: qualquer,
-  headlessWaitingPrs: qualquer,
-  headlessWaitingDetails: qualquer,
+  activeSessions: lerSessoes,
+  activity: lerAtividade,
+  headlessWaiting: lerChavesEmEspera,
+  headlessWaitingPrs: lerPrsEmEspera,
+  headlessWaitingDetails: lerDetalhesDaEspera,
   filaJusta: qualquer,
-  decisions: qualquer,
+  decisions: lerDecisoes,
   reviewActions: qualquer,
   usage: qualquer,
   doctor: qualquer,

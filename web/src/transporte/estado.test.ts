@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from '@/contratos/snapshot';
-import { aplicarEstadoInteiro, aplicarPatch } from './estado';
+import { aplicarAtividade, aplicarEstadoInteiro, aplicarPatch } from './estado';
 
 const APP = { name: 'Farol', version: '3.0.0-dev', platform: 'linux' };
 
@@ -12,14 +12,14 @@ function coletor() {
 describe('state: o snapshot inteiro', () => {
   it('entra com as chaves conhecidas e ignora a desconhecida', () => {
     const { avisos, registrar } = coletor();
-    const novo = aplicarEstadoInteiro(null, { app: APP, status: 'ok', queue: [1, 2], chaveNova: { x: 1 } }, registrar);
-    expect(novo).toEqual({ app: APP, status: 'ok', queue: [1, 2] });
+    const novo = aplicarEstadoInteiro(null, { app: APP, status: 'idle', modelos: [1, 2], chaveNova: { x: 1 } }, registrar);
+    expect(novo).toEqual({ app: APP, status: 'idle', modelos: [1, 2] });
     expect(avisos).toEqual([]);
   });
 
   it('forma errada numa chave conhecida mantém o valor anterior e registra', () => {
     const { avisos, registrar } = coletor();
-    const anterior: Snapshot = { app: APP, status: 'ok' };
+    const anterior: Snapshot = { app: APP, status: 'idle' };
     const novo = aplicarEstadoInteiro(anterior, { app: { name: 7 }, status: 'checking' }, registrar);
     expect(novo).toEqual({ app: APP, status: 'checking' });
     expect(avisos).toHaveLength(1);
@@ -28,13 +28,13 @@ describe('state: o snapshot inteiro', () => {
 
   it('forma errada sem valor anterior deixa a chave ausente', () => {
     const { avisos, registrar } = coletor();
-    expect(aplicarEstadoInteiro(null, { app: 'torto', status: 'ok' }, registrar)).toEqual({ status: 'ok' });
+    expect(aplicarEstadoInteiro(null, { app: 'torto', status: 'idle' }, registrar)).toEqual({ status: 'idle' });
     expect(avisos).toHaveLength(1);
   });
 
   it('chave que o motor deixou de mandar some', () => {
     const { registrar } = coletor();
-    expect(aplicarEstadoInteiro({ app: APP, status: 'ok' }, { app: APP }, registrar)).toEqual({ app: APP });
+    expect(aplicarEstadoInteiro({ app: APP, status: 'idle' }, { app: APP }, registrar)).toEqual({ app: APP });
   });
 
   it('corpo que não é objeto não troca nada', () => {
@@ -46,20 +46,20 @@ describe('state: o snapshot inteiro', () => {
 
   it('chave de protótipo no corpo não vira estado', () => {
     const { registrar } = coletor();
-    const corpo: unknown = JSON.parse('{"__proto__":{"app":"x"},"constructor":1,"status":"ok"}');
+    const corpo: unknown = JSON.parse('{"__proto__":{"app":"x"},"constructor":1,"status":"idle"}');
     const novo = aplicarEstadoInteiro(null, corpo, registrar);
-    expect(novo).toEqual({ status: 'ok' });
+    expect(novo).toEqual({ status: 'idle' });
     expect(Object.keys(novo as object)).toEqual(['status']);
   });
 });
 
 describe('state-patch: a diferença por chave de topo', () => {
-  const base: Snapshot = { app: APP, status: 'ok', queue: [1], error: 'antigo' };
+  const base: Snapshot = { app: APP, status: 'idle', modelos: [1], error: 'antigo' };
 
   it('troca as chaves de campos e apaga as de removidos, como o motor emite', () => {
     const { avisos, registrar } = coletor();
-    const novo = aplicarPatch(base, { campos: { status: 'checking', queue: [1, 2] }, removidos: ['error'] }, registrar);
-    expect(novo).toEqual({ app: APP, status: 'checking', queue: [1, 2] });
+    const novo = aplicarPatch(base, { campos: { status: 'checking', modelos: [1, 2] }, removidos: ['error'] }, registrar);
+    expect(novo).toEqual({ app: APP, status: 'checking', modelos: [1, 2] });
     expect(avisos).toEqual([]);
   });
 
@@ -69,7 +69,7 @@ describe('state-patch: a diferença por chave de topo', () => {
     const novo = aplicarPatch(base, { campos: { status: 'checking' }, removidos: [] }, registrar);
     expect(base).toEqual(copia);
     expect(novo).not.toBe(base);
-    expect(novo?.queue).toBe(base.queue);
+    expect(novo?.modelos).toBe(base.modelos);
   });
 
   it('valor null é valor, não remoção', () => {
@@ -100,7 +100,77 @@ describe('state-patch: a diferença por chave de topo', () => {
 
   it('patch sem estado para mesclar é descartado', () => {
     const { avisos, registrar } = coletor();
-    expect(aplicarPatch(null, { campos: { status: 'ok' }, removidos: [] }, registrar)).toBeNull();
+    expect(aplicarPatch(null, { campos: { status: 'idle' }, removidos: [] }, registrar)).toBeNull();
     expect(avisos).toHaveLength(1);
+  });
+});
+
+describe('lista com item torto: o item sai e a chave entra', () => {
+  it('a fila entra sem o item de forma errada, com o registro da contagem', () => {
+    const { avisos, registrar } = coletor();
+    const bom = { key: 'dono/repo#1', url: 'https://github.com/dono/repo/pull/1' };
+    const novo = aplicarEstadoInteiro(null, { queue: [bom, { key: 7 }] }, registrar);
+    expect(novo).toEqual({ queue: [bom] });
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toContain('queue');
+  });
+
+  it('fila que não é lista mantém a anterior', () => {
+    const { avisos, registrar } = coletor();
+    const anterior: Snapshot = { queue: [{ key: 'dono/repo#1', url: 'u' }] };
+    const novo = aplicarPatch(anterior, { campos: { queue: 'torta', status: 'idle' }, removidos: [] }, registrar);
+    expect(novo?.queue).toBe(anterior.queue);
+    expect(novo?.status).toBe('idle');
+    expect(avisos).toHaveLength(1);
+  });
+});
+
+describe('activity: a linha nova do feed de uma sessão', () => {
+  const linha = (t: number) => ({ t, k: 'tool', text: `linha ${t}` });
+  const base: Snapshot = { app: APP, activity: { a1: [linha(1)], a2: [linha(9)] } };
+
+  it('entra no fim do feed da sessão, sem alterar o estado anterior nem os outros feeds', () => {
+    const { avisos, registrar } = coletor();
+    const copia = structuredClone(base);
+    const novo = aplicarAtividade(base, { id: 'a1', item: linha(2), lidos: 3 }, registrar);
+    expect(novo?.activity?.a1).toEqual([linha(1), linha(2)]);
+    expect(novo?.activity?.a2).toBe(base.activity?.a2);
+    expect(novo?.app).toBe(base.app);
+    expect(base).toEqual(copia);
+    expect(avisos).toEqual([]);
+  });
+
+  it('sessão que o snapshot ainda não trouxe ganha o feed com a linha', () => {
+    const { registrar } = coletor();
+    expect(aplicarAtividade({ app: APP }, { id: 'a7', item: linha(1) }, registrar)?.activity).toEqual({ a7: [linha(1)] });
+  });
+
+  it('guarda só as 120 linhas mais recentes, como o motor', () => {
+    const { registrar } = coletor();
+    const cheio: Snapshot = { activity: { a1: Array.from({ length: 120 }, (_, i) => linha(i)) } };
+    const feed = aplicarAtividade(cheio, { id: 'a1', item: linha(500) }, registrar)?.activity?.a1 ?? [];
+    expect(feed).toHaveLength(120);
+    expect(feed[0]).toEqual(linha(1));
+    expect(feed.at(-1)).toEqual(linha(500));
+  });
+
+  it('evento torto não troca nada e registra', () => {
+    const { avisos, registrar } = coletor();
+    const tortos = [null, 'x', {}, { id: 'a1' }, { id: 7, item: linha(1) }, { id: 'a1', item: { t: 'agora', k: 'tool', text: 'x' } }];
+    for (const torto of tortos) expect(aplicarAtividade(base, torto, registrar)).toBe(base);
+    expect(avisos).toHaveLength(tortos.length);
+  });
+
+  it('sem estado ainda, a linha é descartada sem aviso (o state traz o feed inteiro)', () => {
+    const { avisos, registrar } = coletor();
+    expect(aplicarAtividade(null, { id: 'a1', item: linha(1) }, registrar)).toBeNull();
+    expect(avisos).toEqual([]);
+  });
+
+  it('id de protótipo vira entrada comum', () => {
+    const { registrar } = coletor();
+    const novo = aplicarAtividade({ app: APP }, JSON.parse('{"id":"__proto__","item":{"t":1,"k":"info","text":"x"}}'), registrar);
+    expect(Object.keys(novo?.activity ?? {})).toEqual(['__proto__']);
+    expect(Object.getPrototypeOf(novo?.activity)).toBe(Object.prototype);
   });
 });
