@@ -30,6 +30,8 @@ const { Engine } = await import('../server.js');
 const fanout = (await import('../lib/engine/fanout.js')).default;
 const retomada = await import('../lib/engine/retomada-duravel.js');
 const { retomadaAposFalhaBlock } = await import('../lib/engine/review.js');
+const { registrarLimite } = await import('../lib/engine/limite-plano.js');
+const { LIMITE_PLANO_FILE } = await import('../lib/paths.js');
 
 const prMetricsOriginal = fanout.prMetrics;
 fanout.prMetrics = async () => null;
@@ -214,6 +216,30 @@ test('queda transitória: a referência vai pro disco com head e contexto e sobr
   assert.equal(item.perfilId, 'ka');
   const b = new Engine();
   assert.equal(b.retomadas.get(PR.key).retomarSid, SID, 'o retry deixou de ser só memória');
+});
+
+// A recusa temporária na boca da sessão que sobrou é o limite do plano (o teto de gasto, que
+// também recusava ali, saiu em 16/11/2026): o PR espera o reset sem abrir sessão, e a
+// referência de retomada continua guardada, em memória e no disco.
+test('limite do plano na boca da sessão: espera sem abrir sessão e sem consumir a retomada', async () => {
+  const e = motor();
+  semear(e);
+  e.prState = async () => 'OPEN';
+  const ate = Date.now() + 60 * 60 * 1000;
+  registrarLimite(e, 'trabalho', ate);
+  // o limite é gravado em disco: sai no fim, para a Engine do teste seguinte não nascer nele
+  try {
+    assert.equal(e.limiteDoPlanoAte('trabalho'), ate, 'a assinatura da conta está no limite');
+    await e.runOneHeadless({ ...PR }, 'trabalho');
+    assert.equal(e.chamadas.length, 0, 'nenhuma sessão abriu');
+    assert.equal(e.autoReviewParked.has(PR.key), false, 'limite de janela não estaciona');
+    assert.equal(e.retryAfterNet.get(PR.key).notBefore, ate, 'o PR espera o reset');
+    assert.equal(e.retomadas.get(PR.key).retomarSid, SID, 'a referência não foi consumida');
+    assert.equal(linha(PR.key).estado, 'pendente');
+    assert.equal(linha(PR.key).retomarSid, SID, 'e continua no disco');
+    const b = new Engine();
+    assert.equal(b.retomadas.get(PR.key).retomarSid, SID, 'e sobrevive ao reinício');
+  } finally { fs.rmSync(LIMITE_PLANO_FILE, { force: true }); }
 });
 
 test('PR já mergeado na boca da sessão: a referência é consumida', async () => {

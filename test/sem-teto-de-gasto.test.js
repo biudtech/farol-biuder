@@ -27,7 +27,7 @@ const CONFIG_ANTIGA = JSON.stringify({
 fs.writeFileSync(CONFIG, CONFIG_ANTIGA);
 
 const { Engine } = await import('../server.js');
-const { STATE_DIR, BASELINE_FILE } = await import('../lib/paths.js');
+const { STATE_DIR, BASELINE_FILE, LOG_FILE } = await import('../lib/paths.js');
 const usage = (await import('../lib/engine/usage.js')).default;
 const { normalizeClaudeProfiles } = await import('../lib/parse.js');
 const { retryTargets } = await import('../lib/engine/review-retry.js');
@@ -45,8 +45,15 @@ const PR = {
 const gasto = () => ({ sessions: 3, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 500 });
 
 // O motor do cenário: o perfil antigo já gastou hoje, e toda saída é guardada para conferir.
-function motor() {
+// Os cinco campos de teto são REINJETADOS no perfil em memória, com valores que o gasto já
+// estourou: o saneador os tira na carga, e sem isto um gate que voltasse lendo esses campos
+// passaria despercebido. Cada caminho abaixo é provado com o teto presente e estourado.
+function motor({ comTeto = true } = {}) {
   const e = new Engine();
+  if (comTeto) {
+    const { budgetDaily, budgetTotal, budgetSince, budgetByWeekday, budgetDates } = PERFIL_ANTIGO;
+    Object.assign(e.config.claudeProfiles[0], { budgetDaily, budgetTotal, budgetSince, budgetByWeekday: { ...budgetByWeekday }, budgetDates: { [usage.localDay()]: 0 } });
+  }
   e.avisos = [];
   e.linhas = [];
   e.on('toast', (t) => e.avisos.push(t));
@@ -88,6 +95,13 @@ test('o saneador de perfis descarta os cinco campos de teto, nos dois tipos de p
   const [chave, pasta] = normalizeClaudeProfiles([PERFIL_ANTIGO, { ...PERFIL_ANTIGO, id: 'p2', kind: 'dir', dir: '' }]);
   assert.deepEqual(Object.keys(chave).sort(), ['apiKey', 'baseUrl', 'id', 'kind', 'label']);
   assert.deepEqual(Object.keys(pasta).sort(), ['dir', 'id', 'kind', 'label']);
+});
+
+test('o cenário tem o teto reinjetado e estourado em todos os eixos', () => {
+  const perfil = motor().config.claudeProfiles[0];
+  for (const campo of TETOS) assert.equal(campo in perfil, true, `${campo} está no perfil em memória`);
+  assert.equal(perfil.budgetDaily, 0);
+  assert.equal(perfil.budgetDates[usage.localDay()], 0);
 });
 
 test('o motor não tem mais gate, fachada nem aviso de teto', () => {
@@ -139,6 +153,8 @@ test('na vez do PR a sessão abre, do automático e do lote, e nada estaciona po
     assert.equal(abriu, 1, 'a sessão abriu');
     assert.notEqual((e.parkedMotivos[PR.key] || {}).tipo, 'orcamento');
     assert.deepEqual(e.avisos.filter(t => falaDeTeto(t.text)), []);
+    // a sessão de teste falhou e o PR estacionou por falha, em disco: sai para o caso seguinte
+    fs.rmSync(PARKED_FILE, { force: true });
   }
 });
 
@@ -152,9 +168,15 @@ test('a retentativa, a busca de contestação e a nova rodada não olham o gasto
   e.decisions = { pending: [], resolved: [{ key: PR.key, status: 'auto_rejected', action: 'request_changes', reasons: ['quebra'], resolvedAt: 1 }] };
   assert.deepEqual(pushbackTargets(e, e.reviewActions()).map(p => p.key), [PR.key], 'a busca de contestação segue');
 
-  const fonte = fs.readFileSync(new URL('../lib/engine/review.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(fonte, /parado\('orcamento'/, 'a nova rodada não tem motivo de orçamento');
-  assert.equal(typeof reviewMod.reReviewTargets, 'function');
+  // nova rodada: a conta pediu mudanças, chegou commit novo e o head está quieto faz tempo
+  e.panorama = [{ ...PR }];
+  e.staleInfo = { [PR.key]: { stale: true, head: 'sha-novo', lastState: 'CHANGES_REQUESTED' } };
+  e.headQuietoDesde = { [PR.key]: { head: 'sha-novo', at: 0 } };
+  e.reReviewLaunched = {};
+  e.decisions = { pending: [], resolved: [] };
+  e.retryAfterNet.clear();
+  assert.deepEqual(reviewMod.explicaReRound(e, e.panorama[0], new Set()), { estado: 'relanca', headRound: 'sha-novo', gatilho: 'A' }, 'nenhuma trava segura a nova rodada');
+  assert.deepEqual(e.reReviewTargets(new Set()).map(p => p.key), [PR.key], 'a nova rodada sai');
 });
 
 test('PR estacionado por orçamento num estado gravado antes volta a ser elegível no boot, e os outros motivos ficam', () => {
@@ -177,19 +199,49 @@ test('PR estacionado por orçamento num estado gravado antes volta a ser elegív
   } finally { fs.rmSync(PARKED_FILE, { force: true }); }
 });
 
-test('a recuperação da prova do PR que estava estacionado por orçamento segue sem pausa depois do boot', async () => {
+test('o boot registra a soltura numa linha INFO, regrava o arquivo e não repete no boot seguinte', () => {
+  const noLog = () => (fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '').split('\n').filter(l => /teto de gasto removido/.test(l));
   fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.rmSync(LOG_FILE, { force: true });
   fs.writeFileSync(PARKED_FILE, JSON.stringify({
-    keys: [PR.key], motivos: { [PR.key]: { at: '2026-11-10T10:00:00.000Z', motivo: 'perfil "Perfil antigo"', tipo: 'orcamento' } },
+    keys: ['acme/app#1', 'acme/app#2', 'acme/app#4'],
+    motivos: {
+      'acme/app#1': { at: '2026-11-10T10:00:00.000Z', motivo: 'perfil "Perfil antigo"', tipo: 'orcamento' },
+      'acme/app#2': { at: '2026-11-10T10:00:00.000Z', motivo: 'cancelada por você', tipo: 'cancelado' },
+      'acme/app#4': { at: '2026-11-10T10:00:00.000Z', motivo: 'perfil "Perfil antigo"', tipo: 'orcamento' },
+    },
   }));
   try {
-    const e = motor();
-    assert.equal(await pausaDaRecuperacao(e, { key: PR.key, pr: { ...PR } }), '');
-  } finally { fs.rmSync(PARKED_FILE, { force: true }); }
+    new Engine();
+    const linhas = noLog();
+    assert.equal(linhas.length, 1, 'uma linha só');
+    assert.match(linhas[0], /\[INFO\] teto de gasto removido: 2 PR\(s\) estacionado\(s\) por orçamento voltaram à fila automática: acme\/app#1, acme\/app#4\.$/);
+    const gravado = JSON.parse(fs.readFileSync(PARKED_FILE, 'utf8'));
+    assert.deepEqual(gravado.keys, ['acme/app#2'], 'o arquivo foi regravado sem os soltos');
+    assert.deepEqual(Object.keys(gravado.motivos), ['acme/app#2']);
+    new Engine();
+    assert.equal(noLog().length, 1, 'o segundo boot não registra de novo');
+    fs.rmSync(LOG_FILE, { force: true });
+    fs.writeFileSync(PARKED_FILE, JSON.stringify({ keys: ['acme/app#2'], motivos: {} }));
+    new Engine();
+    assert.equal(noLog().length, 0, 'sem PR solto não há linha');
+  } finally { fs.rmSync(PARKED_FILE, { force: true }); fs.rmSync(LOG_FILE, { force: true }); }
+});
+
+// O PR aqui NÃO foi solto pelo boot: está estacionado por outro caminho que a recuperação
+// retoma sozinha (retentativas esgotadas por falha de rede). Com o teto reinjetado e
+// estourado, a recuperação não pausa.
+test('a recuperação da prova de um PR estacionado por falha de rede não pausa por gasto', async () => {
+  const e = motor();
+  e.autoReviewParked.add(PR.key);
+  e.parkedMotivos[PR.key] = { at: '2026-11-10T10:00:00.000Z', motivo: 'fetch failed', tipo: 'esgotado' };
+  assert.equal(e.autoReviewParked.has(PR.key), true, 'o PR segue estacionado');
+  assert.equal(await pausaDaRecuperacao(e, { key: PR.key, pr: { ...PR } }), '');
 });
 
 test('o snapshot mede o consumo e não leva teto nem bloqueio', () => {
-  const e = motor();
+  // sem a reinjeção: aqui a pergunta é o que sai de uma config antiga carregada de verdade
+  const e = motor({ comTeto: false });
   const snap = e.snapshot();
   assert.equal('budgets' in snap.usage, false, 'usage.budgets saiu');
   assert.equal(snap.usage.auditoria.total.sessions, 2, 'a auditoria do registro fica');

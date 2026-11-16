@@ -227,6 +227,11 @@ class Engine extends EventEmitter {
     this.autoReviewParked = new Set(parkedSalvo.keys); // keys que falharam sem ser rede (ou foram canceladas): aguardam ação manual, não relançam sozinhas
     // motivo e hora de cada estacionamento, pra tela (só de key que está no Set)
     this.parkedMotivos = parkedSalvo.motivos;
+    // Uma linha, uma vez: o arquivo é regravado sem os soltos, e o boot seguinte não repete.
+    if (parkedSalvo.soltos.length) {
+      this.saveAutoReviewParked();
+      this.log('INFO', `teto de gasto removido: ${parkedSalvo.soltos.length} PR(s) estacionado(s) por orçamento voltaram à fila automática: ${parkedSalvo.soltos.join(', ')}.`);
+    }
     this.parkedPruneStrikes = new Map(); // key estacionada -> ausências SEGUIDAS do panorama (memória; reinício zera, lado seguro)
     // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
     // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
