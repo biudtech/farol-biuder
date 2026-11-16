@@ -7,8 +7,8 @@ rota de API, cookie nem segredo.
 Este pacote é independente do motor: tem `package.json`, `package-lock.json` e gate próprios.
 Na Vercel, o diretório raiz do projeto é `web/`.
 
-Hoje ele entrega a fundação: transporte, contratos, pareamento e a casca das cinco abas
-(Radar, Histórico, Time, Consumo e Sistema), cada uma ainda em construção.
+Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e a
+tela Radar. Histórico, Time, Consumo e Sistema ainda estão em construção.
 
 ## Rodar contra um motor local
 
@@ -83,8 +83,9 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`), com um CSS Module só |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
 | `src/navegacao/` | A lista das abas |
@@ -102,9 +103,12 @@ os dados vêm do navegador. A lista das abas é `src/navegacao/abas.ts`.
 o motor emite, nunca inventado:
 
 - chave do snapshot: em `src/contratos/snapshot.ts`, troque o `unknown` da chave em
-  `FormasDoSnapshot` pelo tipo e o `qualquer` dela em `VALIDADORES` pelo validador. As chaves
-  de topo são lista fechada no motor (`test/snapshot-chaves.test.js`, na raiz), e
-  `snapshot.test.ts` reprova se as duas listas divergirem;
+  `FormasDoSnapshot` pelo tipo e o `qualquer` dela em `LEITORES` pelo leitor. O leitor devolve
+  o valor conferido, ou `undefined` quando a forma não é a esperada. Para lista e mapa use
+  `lerLista` e `lerRegistro` (`src/contratos/formas.ts`): o item de forma errada é descartado,
+  com registro, e o resto entra. Campo que o motor só grava em certos casos é opcional no
+  tipo. As chaves de topo são lista fechada no motor (`test/snapshot-chaves.test.js`, na
+  raiz), e `snapshot.test.ts` reprova se as duas listas divergirem;
 - resposta de rota: um leitor `(bruto: unknown) => Tipo | null`, como os de
   `src/contratos/auth.ts`.
 
@@ -124,11 +128,14 @@ jeito.
 **Como ler o estado.** `useApp((e) => e.snapshot?.chave)`. O seletor devolve um primitivo ou
 uma referência que já está no store, nunca um objeto montado na hora. A definição do dado é do
 motor: a tela fatia e formata, não recalcula. Chave que chega com forma errada mantém o valor
-anterior e deixa um aviso no console; a tela precisa saber desenhar sem a chave.
+anterior e deixa um aviso no console; a tela precisa saber desenhar sem a chave. Depois de um
+POST a tela não muda nada por conta própria: mostra o resultado e espera o estado que o motor
+empurra.
 
-**Eventos do motor.** O fluxo entrega hoje só `state` e `state-patch` ao store. Os outros
-(`toast`, `activity`, `needs-decision` e afins) passam por `aoEvento`, em `src/estado/app.ts`,
-e ainda não têm quem os leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
+**Eventos do motor.** O fluxo entrega ao store `state`, `state-patch` e `activity` (a linha
+nova do feed de uma sessão, que entra no fim do feed dela em `snapshot.activity`). Os outros
+(`toast`, `needs-decision` e afins) passam por `aoEvento`, em `src/estado/app.ts`, e ainda
+não têm quem os leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
 evento é descartado, o fluxo segue e o console recebe um aviso, uma vez.
 
 O fluxo se cuida sozinho: 90 s sem nada do motor (contados desde o pedido, antes mesmo dos
@@ -152,6 +159,43 @@ Consulte-a antes de usar uma API do Next: ela mudou entre versões (o antigo `mi
 
 **Texto.** Tela e comentários em português, sem travessão. Jargão de IA não se traduz (token,
 prompt).
+
+## A tela Radar
+
+A aba `/radar` é `src/componentes/radar/Radar.tsx`. Ela lê o snapshot do store, fatia nos
+blocos e liga os botões às ações:
+
+| Bloco | Componente | De onde vem |
+|---|---|---|
+| Ações gerais (Checar agora, revisar pela URL de um PR) | `AcoesGerais.tsx` | `status`, `lastCheckAt`, `nextCheckAt` |
+| Precisa de você | `PrecisaDeVoce.tsx` | `decisions.pending` sem espera |
+| Analisando agora | `AnalisandoAgora.tsx` | `activeSessions` e `activity` |
+| Esperando o CI | `EsperandoOCi.tsx` | `decisions.pending` com `esperaCi`, ou com `esperaProva` que o motor retoma sozinho |
+| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails` |
+| Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista) |
+
+Os avisos do topo saem de `account`, `status`, `error` e `buscasPausadas`.
+
+Regras que valem para quem mexer nela:
+
+- **A tela não decide.** Os botões de uma pendência saem de `acoesDaPendencia`
+  (`src/radar/fatias.ts`), que lê só `prProprio` e `blockedKind: "stale_head"`. Fora disso a
+  tela oferece a ação e mostra a recusa do motor. Não acrescente regra de elegibilidade aqui:
+  se faltar um campo, ele entra no snapshot do motor.
+- **Ação.** Todo POST passa por `executar` (`src/radar/acoes.ts`) e pelo gancho `useAcoes`,
+  que guarda o que está no ar por alvo (o PR ou a sessão), desabilita os botões do alvo e
+  publica o resultado na região `aria-live` do pé da tela. A recusa do motor chega em
+  `{ ok: false, blocked, error }`: `blocked` é o código, e a frase de cada código está na
+  tabela `RECUSAS`. Código novo do motor entra ali; sem entrada, a tela mostra a frase que o
+  motor mandou.
+- **Confirmação.** `confirmacaoDa` diz quais ações perguntam antes (Aprovar, Pedir mudanças e
+  Cancelar) e com que texto. A pergunta abre no próprio cartão.
+- **Texto de fora é texto.** Título, autor, motivo, feed e review entram como filho de texto
+  do React, nunca por `dangerouslySetInnerHTML`. O review vem em markdown e aparece
+  pré-formatado; a renderização de markdown fica para o Histórico. O link do PR passa por
+  `linkDoPr`: só `https://github.com/`, com `rel="noreferrer noopener"` e `target="_blank"`.
+- **Hora.** As datas saem de `dataHora`, no fuso do navegador, sempre absolutas: a tela não
+  tem relógio próprio, e os testes não dependem da hora.
 
 ## Segurança
 
