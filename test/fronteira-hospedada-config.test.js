@@ -135,11 +135,81 @@ test('a recusa cita o valor recusado e, numa lista, só os itens recusados', () 
   assert.doesNotMatch(erro.message, /"https:\/\/painel\.exemplo\.com"[,\]]/, 'o item válido não aparece como recusado');
 });
 
-test('config.json que não é JSON não derruba o boot', () => {
-  gravar('{ "hostPublico": "farol.exemplo.com", ');
+// config.json PRESENTE e ilegível não vira "padrões": os padrões são loopback puro, sem
+// autenticação, e a conta padrão age sozinha. Quem hospedou com hostPublico e a política em
+// espera e corrompeu o arquivo (edição pela metade, vírgula sobrando) ganharia uma instância
+// aberta que aprova sozinha. O motor não sobe, e o arquivo fica como estava, sem cópia ao lado.
+// Até aqui este arquivo travava o contrário ("config.json que não é JSON não derruba o boot").
+const SEGREDO = 'sk-ant-segredo-plantado-0123456789';
+const ILEGIVEIS = [
+  ['lixo', 'isto não é json'],
+  ['chave sem aspas', '{broken'],
+  ['truncado no meio', `{ "hostPublico": "farol.exemplo.com", "claudeProfiles": [{ "kind": "apikey", "apiKey": "${SEGREDO}`],
+  ['vírgula sobrando', `{ "hostPublico": "farol.exemplo.com", "apiKey": "${SEGREDO}", }`],
+  ['erro colado no segredo', `{ "apiKey": "${SEGREDO}" x }`],
+  ['lista', '[]'],
+  ['lista com objeto', '[{ "hostPublico": "farol.exemplo.com" }]'],
+  ['texto', '"texto"'],
+  ['número', '42'],
+  ['null', 'null'],
+  ['booleano', 'true'],
+  ['vazio (zero bytes)', ''],
+  ['só espaço', '  \n\t\n'],
+];
+
+for (const [nome, conteudo] of ILEGIVEIS) {
+  test(`config.json ilegível (${nome}): a Engine não nasce, diz o arquivo e não o toca`, () => {
+    gravar(conteudo);
+    const antes = fs.readFileSync(CONFIG_FILE);
+    let erro = null;
+    try { new Engine(); } catch (e) { erro = e; }
+    assert.ok(erro, 'a Engine tem que lançar');
+    assert.equal(erro.code, 'CONFIG_ILEGIVEL');
+    assert.match(erro.message, /config\.json ilegível, o motor não sobe: /);
+    assert.ok(erro.message.includes(CONFIG_FILE), 'a mensagem diz o caminho do arquivo');
+    assert.equal(erro.message.includes('\n'), false, 'uma linha só');
+    // a chave de API mora neste arquivo: o trecho que o erro do parser citaria não vai para a mensagem
+    assert.equal(erro.message.includes('sk-ant'), false, 'nenhum pedaço do conteúdo na mensagem');
+    assert.equal(erro.message.includes('plantado'), false);
+    assert.deepEqual(fs.readFileSync(CONFIG_FILE), antes, 'o config.json fica byte a byte como estava');
+    assert.deepEqual(fs.readdirSync(HOME), ['config.json'], 'nem cópia .bad, nem arquivo novo ao lado');
+  });
+}
+
+test('a recusa do arquivo ilegível diz o que há de errado: vazio, não é objeto, onde o JSON quebra', () => {
+  const motivo = (conteudo) => {
+    gravar(conteudo);
+    try { new Engine(); } catch (e) { return e.message; }
+    return '';
+  };
+  assert.match(motivo(''), /o arquivo está vazio/);
+  assert.match(motivo('   \n'), /o arquivo está vazio/);
+  assert.match(motivo('[]'), /é JSON válido, mas não é um objeto \(é uma lista\)/);
+  assert.match(motivo('"texto"'), /não é um objeto \(é um texto\)/);
+  assert.match(motivo('null'), /não é um objeto \(é null\)/);
+  assert.match(motivo('{ "a": 1'), /não é JSON válido/);
+  assert.match(motivo('{\n  "a": 1,\n  "b": 2,,\n}'), /não é JSON válido \(linha 3, coluna \d+\)/);
+});
+
+test('config.json que é uma pasta, e não um arquivo, também impede o boot', () => {
+  fs.mkdirSync(CONFIG_FILE, { recursive: true });
+  let erro = null;
+  try { new Engine(); } catch (e) { erro = e; }
+  assert.ok(erro);
+  assert.equal(erro.code, 'CONFIG_ILEGIVEL');
+  assert.match(erro.message, /não deu para ler/);
+});
+
+test('controle: config.json AUSENTE é instalação nova, e a Engine nasce', () => {
+  assert.equal(fs.existsSync(CONFIG_FILE), false);
   const engine = new Engine();
   assert.equal(engine.config.hostPublico, '');
-  assert.deepEqual(engine.config.origensPermitidas, []);
+  assert.equal(fs.existsSync(CONFIG_FILE), true, 'a instalação nova grava o primeiro config.json');
+});
+
+test('controle: objeto vazio é config válido', () => {
+  gravar('{}');
+  assert.equal(new Engine().config.hostPublico, '');
 });
 
 test('updateSettings e editarConta devolvem as duas chaves sem mudar nada', () => {
