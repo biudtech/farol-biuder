@@ -98,7 +98,7 @@ corrigida sozinho, o `overrides` sai.
 | `src/seguranca/` | A regra da Content-Security-Policy e os cabeçalhos fixos que o `next.config.ts` devolve |
 | `src/proxy.ts` | Gera o nonce e o cabeçalho da CSP a cada pedido; o `matcher` dele diz o que fica de fora |
 
-## Convenções para os próximos lotes
+## Convenções
 
 **Onde entra tela.** Cada aba é uma pasta em `src/app/` com um `page.tsx` fino, que só escolhe
 o componente. A tela mesma é um componente em `src/componentes/`, com `'use client'`, porque
