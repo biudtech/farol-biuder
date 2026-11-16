@@ -85,7 +85,7 @@ não escreve no GitHub.
 
 | Caminho | O que é |
 |---|---|
-| `server.js` | A entrada do motor: `node server.js`, ou `npm run server`, que antes confere Node e plataforma |
+| `server.js` | A entrada do motor: `node server.js` ou `npm run server`. O próprio `server.js` confere plataforma e Node antes de tudo |
 | `lib/engine/` | O ciclo de revisão: fila, sessão, gates, postagem, re-revisão, consumo |
 | `lib/http-server.js` | A API (`/api`) e o SSE |
 | `lib/local-auth/` | Autenticação e pareamento da API |

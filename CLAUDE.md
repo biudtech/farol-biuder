@@ -96,7 +96,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/workspace.js` | Leitura dos dossiês por autor que a revisão alimenta |
 | `lib/git-env.js`, `lib/git-isolado.js` | Ambiente do `git`: o comum e o isolado (sem config da máquina) que roda sobre a fonte de revisão |
 | `lib/session-deadline.js`, `lib/spawnlog.js`, `lib/bounded-file.js`, `lib/persistence-metrics.js` | Prazo da sessão, registro opcional de processos, leitura limitada, métricas de gravação |
-| `lib/jira/` | Folhas do Jira: `sites.js`, `credentials.js` (credencial fora do `config.json`), `client.js`, `card.js`, `cache.js`, `errors.js`, `fontes-produto.js`. Não se importam entre si: quem compõe é `lib/engine/jira.js` |
+| `lib/jira/` | Folhas do Jira: `sites.js`, `credentials.js` (credencial fora do `config.json`), `client.js`, `card.js`, `cache.js`, `errors.js`, `fontes-produto.js`. O `client.js` importa o `errors.js`; fora isso não se importam, e quem compõe é `lib/engine/jira.js` |
 | `lib/review-source/` | Aquisição e cache das fontes do PR (`index.js`, `git.js`, `github.js`, `store.js`), leitura verificável (`reader.js`), orçamento de disco e recuperação, e `caminho-protegido.js` (o que a sessão pode ver de arquivo de ambiente e credencial) |
 | `lib/review-context/` | Mapa sintático e seleção de contexto sobre a fonte fixada. Nunca concede prova de leitura |
 | `lib/technical-review/` | A avaliação técnica do PR revisado com a ferramenta fixada em `tool.json`: `setup.js` (instalação), `runtime.js` e `worker.js` (execução), `evidence.js` (as lacunas que impedem APPROVE), `verdict.js`, `publication.js` (a conferência na hora de postar) |
@@ -216,9 +216,12 @@ mesmo head postam uma vez. Só commit novo abre rodada nova. Travado em
 **Head que anda durante a sessão não recebe o review.** O desfecho confere o head antes de postar; se
 mudou, nada sai e a pendência fica marcada `stale_head` (`lib/engine/desfecho-da-revisao.js`).
 
-**PR da própria conta sai como COMMENT.** O GitHub recusa a revisão decisiva do autor. O gate
-responde `pr_proprio`, o portão recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta
-COMMENT (`lib/engine/pr-proprio.js`, `lib/engine/espera-pr-proprio.js`). Travado em
+**PR da própria conta não é revisado.** A revisão nem abre: `motivoParaNaoExecutar`
+(`lib/engine/porta-de-execucao.js`) tira o PR do lançamento e `enqueueHeadless`
+(`lib/engine/review.js`) o recusa por qualquer caminho, clique inclusive. O que vem depois é o
+caso residual, de quando o autor não pôde ser lido antes: o gate responde `pr_proprio`, o portão
+recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta COMMENT
+(`lib/engine/pr-proprio.js`, `lib/engine/espera-pr-proprio.js`). Travado em
 `test/pr-proprio.test.js`.
 
 **Espera do CI é opcional.** `aguardarCiParaAprovar` nasce desligada e é lida num lugar só
@@ -355,7 +358,9 @@ escreve no log, nem no 200 nem no 400.
 
 ## Como rodar e testar
 
-- **Rodar**: `node server.js` (ou `npm run server`, que antes confere Node e plataforma). Node
+- **Rodar**: `node server.js` ou `npm run server`. Nos dois o `server.js` confere plataforma e
+  Node nas três primeiras linhas (`assertExternalNodeRuntime`); o `npm run` confere também antes,
+  pelo `preserver`. Node
   `>=24.22.1 <25`, Linux, com `gh` e `claude` no PATH do usuário. Não rode como root: o Claude Code
   recusa o modo headless com uid 0, e toda revisão morreria no spawn.
 - **Gate do motor, antes de qualquer entrega**: `npm run check && npm run lint && npm test`. O `lint` é

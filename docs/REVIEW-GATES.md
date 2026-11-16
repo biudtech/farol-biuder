@@ -332,16 +332,33 @@ A marca `stale_head` é gravada em vários arquivos. Para a lista de hoje:
 
 ## PR da própria conta
 
-O GitHub recusa a revisão decisiva do autor. Aqui a regra tem quatro pontas:
+O motor não revisa PR da conta que revisa: o GitHub recusa a revisão decisiva do autor, e a
+label `<conta>:revisando` no próprio PR mostraria o autor revisando o próprio trabalho. A
+pergunta é uma só, `ehMeu` (`lib/engine/pr-proprio.js`): `ehPrProprio` compara o autor do PR
+com a conta revisora, sem diferenciar caixa, e autor ou conta vazios não provam nada. As
+pontas, na ordem em que um PR as encontra:
 
-- `ehPrProprio` (`lib/engine/pr-proprio.js`) compara o autor do PR com a conta revisora, sem
-  diferenciar caixa.
-- O gate responde `pr_proprio` para o APPROVE, e `shouldAutoReject` devolve falso.
-- O portão de postagem recusa APPROVE e REQUEST_CHANGES por qualquer via, inclusive o clique.
-- O desfecho posta a revisão como COMMENT (`payloadDoPrProprio`), quando a política da conta para
-  aquele veredito é automática; com a conta em `wait`, vai à mesa.
+1. **A revisão não abre.** No lançamento (`launchReviewInner`, `lib/engine/review.js`), o autor
+   que o item não trazia é lido do GitHub (`comAutor`, `lib/engine/autor-do-pr.js`) e
+   `executaveis` (`lib/engine/porta-de-execucao.js`) tira do lote o PR próprio, com o aviso de
+   que a revisão não abre em PR próprio.
+2. **A fila recusa.** `enqueueHeadless` (`lib/engine/review.js`), por onde toda revisão headless
+   passa, pergunta `motivoParaNaoExecutar` de novo e responde `{ ok: false, code: 'pr-proprio' }`
+   por qualquer caminho, clique inclusive.
 
-Uma pendência de PR próprio que estava em espera é largada por `lib/engine/espera-pr-proprio.js`.
+   Daqui em diante é o caso residual: a leitura do autor falhou (falta de dado não bloqueia), a
+   sessão rodou, e o autor só ficou conhecido depois.
+3. **O gate** responde `pr_proprio` para o resultado (`shouldAutoApprove`), e `shouldAutoReject`
+   devolve falso (`lib/engine/approval-policy.js`).
+4. **O portão de postagem** recusa APPROVE e REQUEST_CHANGES por qualquer via, inclusive o
+   clique (`recusaDePrProprio`, `lib/engine/postagem-portao.js`). Para item que chegou sem
+   autor, ele é lido ali e a recusa é conferida de novo.
+5. **O desfecho** posta a revisão como COMMENT (`payloadDoPrProprio`,
+   `lib/engine/desfecho-automatico.js`) quando a política da conta para aquele veredito é
+   automática; com a conta em `wait`, vai à mesa.
+6. **A espera** de um PR que se descobre próprio é largada, e a pendência ganha a marca
+   `prProprio` (`lib/engine/espera-pr-proprio.js`), que a projeção leva ao front.
+
 Travado em `test/pr-proprio.test.js`.
 
 ## Texto público
