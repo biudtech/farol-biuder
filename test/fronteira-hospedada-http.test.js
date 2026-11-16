@@ -722,11 +722,11 @@ test('POST /api/settings e POST /api/accounts/edit não mudam hostPublico nem or
   const antes = { hostPublico: engine.config.hostPublico, origensPermitidas: engine.config.origensPermitidas };
   const ataque = { hostPublico: 'atacante.net', origensPermitidas: ['https://atacante.net'] };
   const h = { 'x-farol': '1' };
-  const settings = await pedir('POST', '/api/settings', { headers: h, corpo: { ...ataque, soundEnabled: false } });
+  const settings = await pedir('POST', '/api/settings', { headers: h, corpo: { ...ataque, reviewFast: true } });
   assert.equal(settings.status, 200);
   const corpo = JSON.parse(settings.body);
   assert.deepEqual(corpo.ignoradas.slice().sort(), ['hostPublico', 'origensPermitidas']);
-  assert.equal(corpo.config.soundEnabled, false, 'o resto do salvar entrou');
+  assert.equal(corpo.config.reviewFast, true, 'o resto do salvar entrou');
   engine.config = { ...engine.config, conta: { user: 'revisora', owners: ['biudtech'] } };
   for (const op of [
     { user: 'revisora', tipo: 'editar', campos: { ...ataque, onClean: 'wait' } },

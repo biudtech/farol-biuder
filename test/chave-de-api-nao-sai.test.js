@@ -111,12 +111,12 @@ test('(a) o snapshot não traz a chave em lugar nenhum: o perfil de chave leva s
 });
 
 test('a projeção é pura: não muta a config, e config sem perfil passa igual', () => {
-  const config = { theme: 'dark', claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', apiKey: CHAVE, baseUrl: 'https://x.example' }] };
+  const config = { reviewFast: true, claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', apiKey: CHAVE, baseUrl: 'https://x.example' }] };
   const antes = structuredClone(config);
   const fora = configParaFora(config);
   assert.deepEqual(config, antes);
-  assert.deepEqual(fora, { theme: 'dark', claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', baseUrl: 'https://x.example', temChave: true }] });
-  assert.deepEqual(configParaFora({ theme: 'dark' }), { theme: 'dark' });
+  assert.deepEqual(fora, { reviewFast: true, claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', baseUrl: 'https://x.example', temChave: true }] });
+  assert.deepEqual(configParaFora({ reviewFast: true }), { reviewFast: true });
   assert.deepEqual(configParaFora({ claudeProfiles: [null, { id: 'b', kind: 'apikey', apiKey: '' }] }).claudeProfiles, [null, { id: 'b', kind: 'apikey', temChave: false }]);
 });
 
@@ -137,7 +137,7 @@ test('(b) a (e) varredura: nenhuma rota GET do inventário responde com a chave'
 });
 
 test('(c) o SSE não manda a chave, nem no state inicial nem no state-patch', async () => {
-  const texto = await ouvirEventos('state-patch', () => { pedir('POST', '/api/settings', { soundEnabled: !engine.config.soundEnabled }); });
+  const texto = await ouvirEventos('state-patch', () => { pedir('POST', '/api/settings', { reviewFast: !engine.config.reviewFast }); });
   assert.match(texto, /event: state\n/);
   assert.match(texto, /event: state-patch\n/, 'a mudança de configuração chegou por diferença');
   assert.match(texto.split('event: state-patch\n')[1], /"config"/, 'e a diferença trouxe a config');
@@ -146,7 +146,7 @@ test('(c) o SSE não manda a chave, nem no state inicial nem no state-patch', as
 
 test('(d) e (e) as respostas de POST não trazem a chave', async () => {
   const chamadas = [
-    ['/api/settings', { theme: 'dark' }],
+    ['/api/settings', { reviewFast: true }],
     ['/api/claude/profile-test', { profileId: 'k1' }],
     ['/api/claude/profile-test', {}],
     ['/api/accounts/edit', {}],
@@ -160,7 +160,7 @@ test('(d) e (e) as respostas de POST não trazem a chave', async () => {
     assert.equal(r.status, 200, `POST ${rota}`);
     semChave(r.corpo, `POST ${rota}`);
   }
-  const r = await pedir('POST', '/api/settings', { theme: 'dark' });
+  const r = await pedir('POST', '/api/settings', { reviewFast: true });
   assert.equal(r.json.config.claudeProfiles.find((p) => p.id === 'k1').temChave, true);
 });
 
@@ -199,7 +199,7 @@ test('os outros segredos também não saem: GitHub, Jira, autenticação local e
   assert.equal(s.jiraSites.find((x) => x.id === 'site1').hasCredential, true, 'do Jira sai só a existência');
   for (const rota of todasAsRotas().filter((r) => r !== '/api/events')) limpo((await pedir('GET', rota)).corpo, `GET ${rota}`);
   const posts = [
-    ['/api/settings', { theme: 'dark' }], ['/api/claude/profile-test', { profileId: 's1' }], ['/api/accounts/edit', {}],
+    ['/api/settings', { reviewFast: true }], ['/api/claude/profile-test', { profileId: 's1' }], ['/api/accounts/edit', {}],
     ['/api/auth/sessions', {}], ['/api/jira/test', { siteId: 'site1' }], ['/api/jira/credential', { siteId: 'site1' }],
     ['/api/auth/pair', { codigo: 'ERRADO0000', rotulo: 'x' }],
   ];
@@ -258,9 +258,9 @@ const ENDERECO = 'https://proxy.exemplo.com/v1';
 
 test('mudar o endereço sem redigitar a chave é recusado, e nada do salvar é gravado', async () => {
   const antes = fs.readFileSync(CONFIG_FILE, 'utf8');
-  const tema = engine.config.theme;
+  const rapido = engine.config.reviewFast;
   const lista = comK1({ baseUrl: ENDERECO, label: 'Rótulo que não entra' }).map((p) => (p.id === 's1' ? { ...p, label: 'Plano que não entra' } : p));
-  const r = await pedir('POST', '/api/settings', { claudeProfiles: lista, theme: tema === 'dark' ? 'light' : 'dark' });
+  const r = await pedir('POST', '/api/settings', { claudeProfiles: lista, reviewFast: !rapido });
   assert.equal(r.status, 200);
   assert.equal(r.json.ok, false);
   assert.equal(r.json.code, 'chave_exigida');
@@ -272,7 +272,7 @@ test('mudar o endereço sem redigitar a chave é recusado, e nada do salvar é g
   assert.equal(perfil('k1').apiKey, CHAVE);
   assert.equal(perfil('k1').label, 'Chave renomeada');
   assert.equal(perfil('s1').label, 'Plano', 'o outro perfil do mesmo salvar também não entra');
-  assert.equal(engine.config.theme, tema, 'nem o outro campo do mesmo salvar');
+  assert.equal(engine.config.reviewFast, rapido, 'nem o outro campo do mesmo salvar');
   assert.equal(fs.readFileSync(CONFIG_FILE, 'utf8'), antes, 'o config.json não foi tocado');
 });
 
@@ -318,7 +318,7 @@ test('a regra do endereço é pura: só perfil de chave que já existe, com ende
     { id: 'b', label: 'B', kind: 'apikey', apiKey: CHAVE, baseUrl: 'https://b.exemplo.com' },
   ] };
   const patch = (...perfis) => ({ claudeProfiles: perfis });
-  assert.equal(recusaDoEndereco({ theme: 'dark' }, config), null);
+  assert.equal(recusaDoEndereco({ reviewFast: true }, config), null);
   assert.equal(recusaDoEndereco(null, config), null);
   assert.equal(recusaDoEndereco(patch({ id: 'a', kind: 'apikey', baseUrl: '' }, { id: 'b', kind: 'apikey', baseUrl: 'https://b.exemplo.com//' }), config), null);
   assert.equal(recusaDoEndereco(patch({ id: 'novo', kind: 'apikey', baseUrl: 'https://x.exemplo.com' }), config), null, 'perfil novo não tem chave guardada para desviar');
@@ -357,7 +357,7 @@ test('a guarda da chave é pura: não muta o patch, e patch sem perfis passa igu
   assert.equal(saida.claudeProfiles[0].apiKey, CHAVE);
   assert.equal(saida.claudeProfiles[0].label, 'A2');
   assert.deepEqual(saida.claudeProfiles.slice(1), [null, 'lixo']);
-  const outro = { theme: 'light' };
+  const outro = { reviewFast: false };
   assert.equal(comChaveGuardada(outro, config), outro);
   assert.equal(comChaveGuardada(null, config), null);
 });
