@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pendencia } from '@/contratos/radar';
-import { acoesDaPendencia, avisosDoMotor, chavesAusentes, fatiarPendencias, textoDaChecagem, textoDaFilaVazia } from './fatias';
+import { acoesDaPendencia, avisosDoMotor, chavesAusentes, fatiarFila, fatiarPendencias, textoDaChecagem, textoDaFilaVazia } from './fatias';
 
 function pendencia(extra: Partial<Pendencia> = {}): Pendencia {
   return { id: 'd1', key: 'dono/repo#1', reportMarkdown: '', reasons: [], attention: [], ...extra };
@@ -104,7 +104,33 @@ describe('estado da checagem e fila vazia', () => {
 
 describe('chaves de que os blocos dependem', () => {
   it('diz quais o estado não trouxe', () => {
-    expect(chavesAusentes({ decisions: { pending: [], resolved: [] }, activeSessions: [], queue: [] })).toEqual([]);
+    expect(chavesAusentes({ decisions: { pending: [], resolved: [], ilegiveis: 0 }, activeSessions: [], queue: [] })).toEqual([]);
     expect(chavesAusentes({ activeSessions: [] })).toEqual(['as pendências', 'a fila']);
+  });
+});
+
+describe('fila sem PR repetido na tela', () => {
+  const pr = (key: string) => ({ key, url: `https://github.com/${key.replace('#', '/pull/')}` });
+
+  it('PR com sessão em curso sai da fila e da espera', () => {
+    const r = fatiarFila([pr('a/b#1'), pr('a/b#2')], [pr('a/b#1'), pr('a/b#3')], [{ id: 's1', keys: ['a/b#1'] }, { id: 's2', pr: { key: 'A/B#3' } }], []);
+    expect(r.fila.map((p) => p.key)).toEqual(['a/b#2']);
+    expect(r.emEspera).toEqual([]);
+  });
+
+  it('PR em espera que está na fila, ou que tem pendência, aparece uma vez só', () => {
+    const r = fatiarFila([pr('a/b#1')], [pr('a/b#1'), pr('a/b#2'), pr('a/b#3'), pr('a/b#3')], [], [pendencia({ key: 'a/b#2' })]);
+    expect(r.fila.map((p) => p.key)).toEqual(['a/b#1']);
+    expect(r.emEspera.map((p) => p.key)).toEqual(['a/b#3']);
+  });
+
+  it('PR da fila com pendência continua na fila: quem manda na fila é o motor', () => {
+    expect(fatiarFila([pr('a/b#1')], [], [], [pendencia({ key: 'a/b#1' })]).fila).toHaveLength(1);
+  });
+
+  it('sem nada repetido, devolve tudo na ordem do motor', () => {
+    const r = fatiarFila([pr('z/z#9'), pr('a/b#1')], [pr('c/d#4'), pr('a/a#2')], [], []);
+    expect(r.fila.map((p) => p.key)).toEqual(['z/z#9', 'a/b#1']);
+    expect(r.emEspera.map((p) => p.key)).toEqual(['c/d#4', 'a/a#2']);
   });
 });

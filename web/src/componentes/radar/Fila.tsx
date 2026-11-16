@@ -1,9 +1,11 @@
 'use client';
 
-// O bloco "Fila": o que foi pedido à conta e ainda não tem sessão, na ordem do motor, com
+// O bloco "Fila": os PRs pedidos à conta que o motor mantém na fila, na ordem dele, com
 // Revisar agora e Ignorar. Depois vêm os PRs que já saíram da fila e esperam vaga de
 // execução: esses não têm botão, porque um segundo disparo abriria duas revisões do mesmo
-// commit.
+// commit. Quem tira daqui o PR que já aparece em outro bloco (com sessão em curso, ou com
+// pendência) é fatiarFila (src/radar/fatias.ts), antes de a lista chegar.
+import { memo } from 'react';
 import type { DetalheDaEspera, EsperaConflito, Estacionado, InicioAutomatico, ItemDaFila, PrEmEspera } from '@/contratos/radar';
 import { dataHora, nomeDoPr, textoDaEspera, textoDoEstacionado } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
@@ -28,7 +30,7 @@ interface Props {
   controle: ControleDeAcoes;
 }
 
-export function Fila({ fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, vazio, controle }: Props) {
+export const Fila = memo(function Fila({ fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, vazio, controle }: Props) {
   return (
     <Bloco titulo="Fila" quantidade={fila.length + emEspera.length} vazio={vazio}>
       <ul className={estilos.lista}>
@@ -74,4 +76,4 @@ export function Fila({ fila, emEspera, detalhes, estacionados, inicioAutomatico,
       </ul>
     </Bloco>
   );
-}
+});

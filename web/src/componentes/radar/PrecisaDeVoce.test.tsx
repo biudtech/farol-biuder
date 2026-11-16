@@ -7,6 +7,9 @@ import { URL_DO_PR, controleFalso, nomes, pendencia } from './apoio-de-teste';
 afterEach(cleanup);
 
 const NOME = 'PR #12 de dono/repo';
+// a pendência de apoio tem parecer "approve", e a decisão leva o parecer junto
+const decidir = (decisao: string) => ({ tipo: 'decidir', id: 'd1', decisao, alvo: 'dono/repo#12', nome: NOME, parecer: 'approve' });
+const pergunta = () => screen.queryByRole('group', { name: /[?]$/ });
 
 describe('bloco Precisa de você', () => {
   it('lista vazia diz que está vazia numa linha', () => {
@@ -19,14 +22,33 @@ describe('bloco Precisa de você', () => {
 
   it('pendência normal mostra o PR, o parecer e os quatro botões, cada um com o alvo no nome', () => {
     const { controle } = controleFalso();
-    render(<PrecisaDeVoce pendencias={[pendencia({ reasons: [{ text: 'a política manda esperar', kind: 'gate' }], attention: [{ text: 'olhar o teste', kind: 'content' }] })]} controle={controle} />);
+    render(<PrecisaDeVoce pendencias={[pendencia({ card: 'BT-9', reasons: [{ text: 'a política manda esperar', kind: 'gate' }], attention: [{ text: 'olhar o teste', kind: 'content' }] })]} controle={controle} />);
     expect(screen.getByRole('heading', { level: 2, name: 'Precisa de você (1)' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3 }).textContent).toContain('dono/repo#12');
     expect(screen.getByText('Corrige o cálculo')).toBeTruthy();
-    expect(screen.getByText(/PR de ana · Parecer da revisão: aprovar/)).toBeTruthy();
+    expect(screen.getByText(/PR de ana · Parecer da revisão: aprovar · Card BT-9/)).toBeTruthy();
     expect(nomes(screen.getAllByRole('button'))).toEqual([`Aprovar ${NOME}`, `Pedir mudanças ${NOME}`, `Comentar ${NOME}`, `Pular ${NOME}`]);
     const motivos = within(screen.getByRole('list', { name: `Motivos de ${NOME}` })).getAllByRole('listitem');
     expect(motivos.map((m) => m.textContent)).toEqual(['Regra do motor: a política manda esperar', 'Ponto da revisão: olhar o teste']);
+  });
+
+  it('pendência só com id e chave (o resto ausente) aparece com o que há, e os botões', () => {
+    const { controle } = controleFalso();
+    render(<PrecisaDeVoce pendencias={[{ id: 'd1', key: 'dono/repo#12', reportMarkdown: '', reasons: [], attention: [] }]} controle={controle} />);
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('dono/repo#12');
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(4);
+  });
+
+  it('pendência que a tela não leu entra no título e vira aviso: o bloco não diz que está vazio', () => {
+    const { controle } = controleFalso();
+    const { rerender } = render(<PrecisaDeVoce pendencias={[]} ilegiveis={2} controle={controle} />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Precisa de você (0, e mais 2 que esta tela não lê)');
+    expect(screen.getByText('Atenção: 2 pendência(s) chegaram em formato que esta tela não lê; veja o log do navegador.')).toBeTruthy();
+    expect(screen.queryByText('Nenhuma revisão esperando a sua decisão.')).toBeNull();
+    rerender(<PrecisaDeVoce pendencias={[pendencia()]} ilegiveis={1} controle={controle} />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Precisa de você (1, e mais 1 que esta tela não lê)');
+    expect(screen.getAllByRole('button')).toHaveLength(4);
   });
 
   it('o link do PR só existe para URL do GitHub por HTTPS, e abre em outra aba sem referência', () => {
@@ -58,6 +80,12 @@ describe('bloco Precisa de você', () => {
     expect(pre?.children).toHaveLength(0);
   });
 
+  it('o texto mostrado é anunciado como o do parecer, não como o que cada botão publica', () => {
+    const { controle } = controleFalso();
+    const { container } = render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    expect(container.querySelector('summary')?.textContent).toBe(`Ver o texto do parecer da revisão de ${NOME}`);
+  });
+
   it('PR da própria conta não mostra Aprovar nem Pedir mudanças, e diz por quê', () => {
     const { controle } = controleFalso();
     render(<PrecisaDeVoce pendencias={[pendencia({ prProprio: true })]} controle={controle} />);
@@ -82,40 +110,73 @@ describe('bloco Precisa de você', () => {
     expect(disparar).toHaveBeenCalledWith({ tipo: 'revisar', url: URL_DO_PR, alvo: 'dono/repo#12', nome: NOME });
   });
 
-  it('Comentar e Pular vão direto ao motor', () => {
+  it('Pular vai direto ao motor: não publica nada', () => {
     const { controle, disparar } = controleFalso();
     render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
     fireEvent.click(screen.getByRole('button', { name: `Pular ${NOME}` }));
-    fireEvent.click(screen.getByRole('button', { name: `Comentar ${NOME}` }));
-    expect(disparar.mock.calls.map(([acao]) => acao)).toEqual([
-      { tipo: 'decidir', id: 'd1', decisao: 'skip', alvo: 'dono/repo#12', nome: NOME },
-      { tipo: 'decidir', id: 'd1', decisao: 'comment', alvo: 'dono/repo#12', nome: NOME },
-    ]);
+    expect(disparar.mock.calls.map(([acao]) => acao)).toEqual([decidir('skip')]);
+    expect(pergunta()).toBeNull();
   });
 
-  it('Aprovar pergunta antes, dizendo o que sai e em qual PR, e só envia na confirmação', () => {
+  it('Comentar publica no GitHub, então pergunta antes e só envia na confirmação', () => {
     const { controle, disparar } = controleFalso();
+    render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Comentar ${NOME}` }));
+    expect(disparar).not.toHaveBeenCalled();
+    const grupo = screen.getByRole('group', { name: `Comentar em ${NOME}?` });
+    expect(grupo.textContent).toMatch(/review de comentário \(COMMENT\) no GitHub, em PR #12 de dono\/repo/);
+    // comentar nunca é o parecer: o texto que sai não é o mostrado
+    expect(grupo.textContent).toMatch(/O texto que sai NÃO é o mostrado acima/);
+    fireEvent.click(screen.getByRole('button', { name: `Publicar o comentário: ${NOME}` }));
+    expect(disparar.mock.calls.map(([acao]) => acao)).toEqual([decidir('comment')]);
+  });
+
+  it('Aprovar com parecer de aprovar: a pergunta diz que sai o review mostrado, e só envia na confirmação', () => {
+    const { controle, disparar, focarResultado } = controleFalso();
     render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
     fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
     expect(disparar).not.toHaveBeenCalled();
-    const pergunta = screen.getByRole('group', { name: `Aprovar ${NOME}?` });
-    expect(pergunta.textContent).toMatch(/publica uma aprovação \(APPROVE\) no GitHub, em PR #12 de dono\/repo/);
+    const grupo = screen.getByRole('group', { name: `Aprovar ${NOME}?` });
+    expect(grupo.textContent).toMatch(/publica uma aprovação \(APPROVE\) no GitHub, em PR #12 de dono\/repo/);
+    expect(grupo.textContent).toMatch(/O texto é o do review mostrado acima/);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Voltar sem enviar' }));
     fireEvent.click(screen.getByRole('button', { name: `Publicar a aprovação: ${NOME}` }));
     expect(disparar).toHaveBeenCalledTimes(1);
-    expect(disparar).toHaveBeenCalledWith({ tipo: 'decidir', id: 'd1', decisao: 'approve', alvo: 'dono/repo#12', nome: NOME });
-    expect(screen.queryByRole('group', { name: /[?]$/ })).toBeNull();
+    expect(disparar).toHaveBeenCalledWith(decidir('approve'));
+    expect(pergunta()).toBeNull();
+    // o foco vai à região do resultado, não fica solto na página
+    expect(focarResultado).toHaveBeenCalledTimes(1);
+  });
+
+  it('Pedir mudanças com parecer de aprovar: a pergunta avisa que sai um texto que a tela não mostra', () => {
+    const { controle } = controleFalso();
+    render(<PrecisaDeVoce pendencias={[pendencia({ verdict: 'approve' })]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Pedir mudanças ${NOME}` }));
+    const texto = screen.getByRole('group', { name: `Pedir mudanças em ${NOME}?` }).textContent;
+    expect(texto).toMatch(/REQUEST CHANGES/);
+    expect(texto).toMatch(/O texto que sai NÃO é o mostrado acima: o motor publica o que ele preparou para esta ação/);
+    expect(texto).not.toMatch(/O texto é o do review mostrado acima/);
   });
 
   it('confirmação cancelada não envia nada, e o foco volta ao botão que perguntou', () => {
-    const { controle, disparar } = controleFalso();
+    const { controle, disparar, focarResultado } = controleFalso();
     render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
     fireEvent.click(screen.getByRole('button', { name: `Pedir mudanças ${NOME}` }));
-    expect(screen.getByRole('group', { name: `Pedir mudanças em ${NOME}?` }).textContent).toMatch(/REQUEST CHANGES/);
     fireEvent.click(screen.getByRole('button', { name: 'Voltar sem enviar' }));
     expect(disparar).not.toHaveBeenCalled();
-    expect(screen.queryByRole('group', { name: /[?]$/ })).toBeNull();
+    expect(pergunta()).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: `Pedir mudanças ${NOME}` }));
+    expect(focarResultado).not.toHaveBeenCalled();
+  });
+
+  it('Escape fecha a pergunta sem enviar e devolve o foco ao botão', () => {
+    const { controle, disparar } = controleFalso();
+    render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Voltar sem enviar' }), { key: 'Escape' });
+    expect(pergunta()).toBeNull();
+    expect(disparar).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
   });
 
   it('com uma ação do item no ar, todos os botões dele ficam desabilitados e o clicado diz Enviando', () => {
@@ -130,5 +191,66 @@ describe('bloco Precisa de você', () => {
     expect(disparar).not.toHaveBeenCalled();
     // o outro item segue livre
     expect((within(segundo as HTMLElement).getAllByRole('button') as HTMLButtonElement[]).every((b) => !b.disabled)).toBe(true);
+  });
+});
+
+describe('o item muda com a pergunta aberta', () => {
+  it.each([
+    ['chegou commit novo', { blockedKind: 'stale_head', blockedReason: 'o PR recebeu commit novo' }],
+    ['o PR passou a ser da própria conta', { prProprio: true as const }],
+  ])('a ação deixou de ser permitida (%s): a pergunta fecha sozinha, diz por quê e nada é enviado', (_caso, mudanca) => {
+    const { controle, disparar } = controleFalso();
+    const { rerender } = render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
+    expect(pergunta()).toBeTruthy();
+    rerender(<PrecisaDeVoce pendencias={[pendencia(mudanca)]} controle={controle} />);
+    expect(pergunta()).toBeNull();
+    expect(screen.queryByRole('button', { name: `Publicar a aprovação: ${NOME}` })).toBeNull();
+    const aviso = screen.getByText(/A pergunta foi fechada: o motor mudou este item e a ação não está mais disponível\. Nada foi enviado\./);
+    // o foco, que estava na pergunta, vai ao aviso e não fica solto
+    expect(document.activeElement).toBe(aviso);
+    expect(disparar).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: `Aprovar ${NOME}` })).toBeNull();
+    // o aviso sai no próximo clique
+    fireEvent.click(screen.getByRole('button', { name: `Pular ${NOME}` }));
+    expect(screen.queryByText(/A pergunta foi fechada/)).toBeNull();
+  });
+
+  it('o item muda sem tirar a ação: a pergunta continua, com o texto do item de agora', () => {
+    const { controle, disparar } = controleFalso();
+    const { rerender } = render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
+    expect(pergunta()?.textContent).toMatch(/O texto é o do review mostrado acima/);
+    rerender(<PrecisaDeVoce pendencias={[pendencia({ verdict: 'request_changes' })]} controle={controle} />);
+    expect(pergunta()?.textContent).toMatch(/O texto que sai NÃO é o mostrado acima/);
+    fireEvent.click(screen.getByRole('button', { name: `Publicar a aprovação: ${NOME}` }));
+    expect(disparar).toHaveBeenCalledWith({ ...decidir('approve'), parecer: 'request_changes' });
+  });
+
+  it('o item some com a pergunta aberta: a pergunta some junto e nada é enviado', () => {
+    const { controle, disparar } = controleFalso();
+    const { rerender } = render(<PrecisaDeVoce pendencias={[pendencia()]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
+    rerender(<PrecisaDeVoce pendencias={[]} controle={controle} />);
+    expect(pergunta()).toBeNull();
+    expect(screen.getByText('Nenhuma revisão esperando a sua decisão.')).toBeTruthy();
+    expect(disparar).not.toHaveBeenCalled();
+  });
+
+  it('a lista reordena com a pergunta aberta: a pergunta segue no mesmo PR, e a confirmação manda o id dele', () => {
+    const { controle, disparar } = controleFalso();
+    const a = pendencia();
+    const b = pendencia({ id: 'd2', key: 'dono/outro#3' });
+    const { rerender } = render(<PrecisaDeVoce pendencias={[a, b]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button', { name: `Aprovar ${NOME}` }));
+    rerender(<PrecisaDeVoce pendencias={[pendencia({ id: 'd0', key: 'novo/repo#1' }), b, a]} controle={controle} />);
+    const cartoes = screen.getAllByRole('listitem').filter((li) => li.querySelector('h3'));
+    expect(cartoes.map((c) => c.querySelector('h3')?.textContent)).toEqual(['novo/repo#1 (abre em nova aba)', 'dono/outro#3 (abre em nova aba)', 'dono/repo#12 (abre em nova aba)']);
+    // a pergunta está no cartão do PR #12, que agora é o terceiro, e só nele
+    expect(within(cartoes[2] as HTMLElement).getByRole('group', { name: `Aprovar ${NOME}?` })).toBeTruthy();
+    expect(screen.getAllByRole('group', { name: /[?]$/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: `Publicar a aprovação: ${NOME}` }));
+    expect(disparar).toHaveBeenCalledTimes(1);
+    expect(disparar).toHaveBeenCalledWith(decidir('approve'));
   });
 });

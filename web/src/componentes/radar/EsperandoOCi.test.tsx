@@ -27,12 +27,23 @@ describe('bloco Esperando o CI', () => {
     expect(screen.getByRole('link', { name: /dono\/repo#12/ })).toBeTruthy();
   });
 
-  it('não oferece decisão: a única ação é tirar da mesa', () => {
+  it('não oferece decisão: a única ação é tirar da mesa, e ela pergunta antes', () => {
     const { controle, disparar } = controleFalso();
     render(<EsperandoOCi pendencias={[pendencia({ esperaCi: { desde: DESDE, checks: [] } })]} controle={controle} />);
     expect(nomes(screen.getAllByRole('button'))).toEqual([`Pular ${NOME}`]);
     fireEvent.click(screen.getByRole('button'));
-    expect(disparar).toHaveBeenCalledWith({ tipo: 'decidir', id: 'd1', decisao: 'skip', alvo: 'dono/repo#12', nome: NOME });
+    expect(disparar).not.toHaveBeenCalled();
+    expect(screen.getByRole('group', { name: `Pular ${NOME}?` }).textContent).toMatch(/descarta a aprovação que sairia sozinha quando os checks fechassem/);
+    fireEvent.click(screen.getByRole('button', { name: `Pular e descartar a espera: ${NOME}` }));
+    expect(disparar).toHaveBeenCalledWith({ tipo: 'decidir', id: 'd1', decisao: 'skip', alvo: 'dono/repo#12', nome: NOME, espera: 'ci' });
+  });
+
+  it('desistir da pergunta não pula', () => {
+    const { controle, disparar } = controleFalso();
+    render(<EsperandoOCi pendencias={[pendencia({ esperaCi: { desde: DESDE, checks: [] } })]} controle={controle} />);
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar sem enviar' }));
+    expect(disparar).not.toHaveBeenCalled();
   });
 
   it('sem a lista de checks, diz que o motor não listou', () => {
@@ -53,5 +64,7 @@ describe('bloco Esperando o CI', () => {
     expect(screen.getByText(/recuperando a análise desde .*2 tentativa\(s\) concluída\(s\)\. Aguarda o CI antes de retomar\./)).toBeTruthy();
     expect(screen.getByText('a ferramenta de avaliação não está instalada')).toBeTruthy();
     expect(nomes(screen.getAllByRole('button'))).toEqual([`Pular ${NOME}`]);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByRole('group', { name: `Pular ${NOME}?` }).textContent).toMatch(/descarta a análise que o motor está recuperando/);
   });
 });

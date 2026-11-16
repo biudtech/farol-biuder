@@ -22,12 +22,17 @@ export function linkDoPr(url: string | undefined): string | null {
   return typeof url === 'string' && url.startsWith('https://github.com/') ? url : null;
 }
 
-const URL_DE_PR = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#]\S*)?$/;
+const URL_DE_PR = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:[/?#]\S*)?$/;
 
-// A URL que o campo de revisão sob demanda aceita. Devolve a chave do PR, ou null.
-export function chaveDaUrlDePr(texto: string): string | null {
+// O PR que o campo de revisão sob demanda aceita: a chave e a URL canônica dele, montada do
+// dono, do repositório e do número. O que vier depois (`/files`, query, fragmento) sai: o
+// motor recebe sempre `https://github.com/<dono>/<repo>/pull/<n>`. Devolve null quando o
+// texto não é a URL de um PR do GitHub.
+export function prDaUrl(texto: string): { chave: string; url: string } | null {
   const partes = URL_DE_PR.exec(texto.trim());
-  return partes ? `${partes[1]}#${partes[2]}` : null;
+  if (!partes) return null;
+  const [, dono, repo, numero] = partes;
+  return { chave: `${dono}/${repo}#${numero}`, url: `https://github.com/${dono}/${repo}/pull/${numero}` };
 }
 
 function instante(valor: number | string | null | undefined): number {
@@ -35,21 +40,50 @@ function instante(valor: number | string | null | undefined): number {
   return typeof valor === 'string' && valor ? Date.parse(valor) : Number.NaN;
 }
 
-function formatar(valor: number | string | null | undefined, opcoes: Intl.DateTimeFormatOptions, fuso?: string): string {
+// Um formatador por formato e fuso, criado uma vez: montar um Intl.DateTimeFormat custa caro,
+// e o feed pede um por linha.
+const FORMATADORES = new Map<string, Intl.DateTimeFormat>();
+
+function formatador(nome: string, opcoes: Intl.DateTimeFormatOptions, fuso: string | undefined): Intl.DateTimeFormat {
+  const chave = `${nome}|${fuso ?? ''}`;
+  let f = FORMATADORES.get(chave);
+  if (!f) {
+    f = new Intl.DateTimeFormat('pt-BR', { ...opcoes, timeZone: fuso });
+    FORMATADORES.set(chave, f);
+  }
+  return f;
+}
+
+const DIA_E_HORA: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+const SO_HORA: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+
+function formatar(valor: number | string | null | undefined, nome: string, opcoes: Intl.DateTimeFormatOptions, fuso?: string): string {
   const ms = instante(valor);
   // 0 é o que o motor grava quando não sabe a hora
   if (!Number.isFinite(ms) || ms <= 0) return '';
-  return new Intl.DateTimeFormat('pt-BR', { ...opcoes, timeZone: fuso }).format(ms);
+  return formatador(nome, opcoes, fuso).format(ms);
 }
 
 // Dia, mês, hora e minuto, no fuso do navegador (o `fuso` existe para o teste). Vazio quando
 // o motor não mandou a hora.
 export function dataHora(valor: number | string | null | undefined, fuso?: string): string {
-  return formatar(valor, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }, fuso);
+  return formatar(valor, 'dia', DIA_E_HORA, fuso);
 }
 
 export function hora(valor: number | string | null | undefined, fuso?: string): string {
-  return formatar(valor, { hour: '2-digit', minute: '2-digit', second: '2-digit' }, fuso);
+  return formatar(valor, 'hora', SO_HORA, fuso);
+}
+
+// A chave de cada linha do feed na lista da tela: a hora da linha e a ordem dela entre as
+// que têm a mesma hora. Não usa a posição no feed, que muda quando o motor corta as linhas
+// antigas: com ela, toda linha trocaria de chave a cada linha nova.
+export function chavesDoFeed(linhas: readonly { t: number }[]): string[] {
+  const vistas = new Map<number, number>();
+  return linhas.map((linha) => {
+    const ordem = vistas.get(linha.t) ?? 0;
+    vistas.set(linha.t, ordem + 1);
+    return `${linha.t}:${ordem}`;
+  });
 }
 
 // De quem é cada motivo de uma pendência (REASON_KINDS, lib/engine/public-review.js).
@@ -85,7 +119,8 @@ export function textoDaEspera(detalhe: DetalheDaEspera | undefined): string {
   if (!detalhe) return 'Na fila de execução.';
   const motivo = proprio(MOTIVO_DA_ESPERA, detalhe.motivo) ?? 'Motivo da espera ainda não confirmado pelo agendador';
   const vagas = detalhe.ocupadas !== undefined && detalhe.limite !== undefined ? ` (${detalhe.ocupadas}/${detalhe.limite})` : '';
-  return `Na fila de execução, posição ${detalhe.posicao} de ${detalhe.total}. ${motivo}${vagas}.`;
+  const posicao = detalhe.posicao !== undefined && detalhe.total !== undefined ? `, posição ${detalhe.posicao} de ${detalhe.total}` : '';
+  return `Na fila de execução${posicao}. ${motivo}${vagas}.`;
 }
 
 // Os tipos de parada que o motor grava (parkedParaUi, lib/engine/review.js). Tipo que este

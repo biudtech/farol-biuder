@@ -124,6 +124,42 @@ describe('sessão do front', () => {
     expect(t.app.store.ler().snapshot?.activity).toEqual({ a1: [{ t: 5, k: 'tool', text: 'lendo o diff' }] });
   });
 
+  it('o toast do motor vira recado na tela: no máximo três, o torto é descartado, e sair os apaga', async () => {
+    const t = montar();
+    let fluxo!: ReturnType<typeof fluxoFalso>;
+    t.rotas.set('/api/auth/pair', () => json({ ok: true, token: TOKEN }));
+    t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: false }));
+    t.rotas.set('/api/events', (p) => { fluxo = fluxoFalso(p.init); return fluxo.resposta; });
+    t.app.iniciar();
+    await t.app.parear('ABCDE23456', '');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().recados).toEqual([]);
+
+    const toast = (corpo: unknown) => fluxo.enviar(`event: toast\ndata: ${JSON.stringify(corpo)}\n\n`);
+    toast({ kind: 'info', text: 'a/b#1: já havia um APPROVE seu neste PR; não postei de novo.' });
+    toast({ kind: 'ok' });
+    toast({ kind: 'error', text: 'Falha ao postar em a/b#2: rede' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().recados).toEqual([
+      { n: 1, tom: 'info', texto: 'a/b#1: já havia um APPROVE seu neste PR; não postei de novo.' },
+      { n: 2, tom: 'erro', texto: 'Falha ao postar em a/b#2: rede' },
+    ]);
+    expect(t.avisos.some((a) => a.includes('toast'))).toBe(true);
+
+    toast({ kind: 'ok', text: 'três' });
+    toast({ kind: 'ok', text: 'quatro' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().recados.map((r) => r.n)).toEqual([2, 3, 4]);
+
+    t.app.dispensarRecados();
+    expect(t.app.store.ler().recados).toEqual([]);
+    toast({ kind: 'ok', text: 'cinco' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().recados).toHaveLength(1);
+    t.app.sair();
+    expect(t.app.store.ler().recados).toEqual([]);
+  });
+
   it('código recusado não guarda nada e continua no pareamento', async () => {
     const t = montar();
     t.rotas.set('/api/auth/pair', () => json({ ok: false, code: 'codigo_invalido' }));
@@ -187,7 +223,7 @@ describe('sessão do front', () => {
     t.app.iniciar();
     await vi.advanceTimersByTimeAsync(0);
     fluxo.enviar(`event: state\ndata: ${JSON.stringify({ app: APP })}\n\n`);
-    fluxo.enviar('event: state\ndata: {quebrado\n\nevent: toast\ndata: {"x":1}\n\n');
+    fluxo.enviar('event: state\ndata: {quebrado\n\nevent: needs-decision\ndata: {"x":1}\n\n');
     await vi.advanceTimersByTimeAsync(0);
     expect(t.app.store.ler().snapshot).toEqual({ app: APP });
     expect(t.avisos).toHaveLength(1);

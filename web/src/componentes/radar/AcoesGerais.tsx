@@ -2,17 +2,17 @@
 
 // As ações gerais do Radar: Checar agora, com o estado da checagem ao lado, e a revisão sob
 // demanda pela URL de um PR. A URL é conferida aqui antes do POST: o que não é URL de PR do
-// GitHub nem chega ao motor.
-import { useId, useState, type FormEvent } from 'react';
+// GitHub nem chega ao motor, e o que chega é a URL canônica do PR, não o que foi digitado.
+import { memo, useId, useState, type FormEvent } from 'react';
 import { CHECAR } from '@/radar/acoes';
-import { chaveDaUrlDePr, nomeDoPr } from '@/radar/formato';
+import { nomeDoPr, prDaUrl } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
 
 const ALVO = 'sob-demanda';
 
-export function AcoesGerais({ checagem, controle }: { checagem: string; controle: ControleDeAcoes }) {
+export const AcoesGerais = memo(function AcoesGerais({ checagem, controle }: { checagem: string; controle: ControleDeAcoes }) {
   const [url, setUrl] = useState('');
   const [formaErrada, setFormaErrada] = useState(false);
   const idDoCampo = useId();
@@ -22,11 +22,10 @@ export function AcoesGerais({ checagem, controle }: { checagem: string; controle
   async function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     if (enviando) return;
-    const limpa = url.trim();
-    const chave = chaveDaUrlDePr(limpa);
-    setFormaErrada(chave === null);
-    if (chave === null) return;
-    const aceito = await controle.disparar({ tipo: 'revisar', url: limpa, alvo: ALVO, nome: nomeDoPr(chave) });
+    const pr = prDaUrl(url);
+    setFormaErrada(pr === null);
+    if (pr === null) return;
+    const aceito = await controle.disparar({ tipo: 'revisar', url: pr.url, alvo: ALVO, nome: nomeDoPr(pr.chave) });
     if (aceito) setUrl('');
   }
 
@@ -65,4 +64,4 @@ export function AcoesGerais({ checagem, controle }: { checagem: string; controle
       </form>
     </section>
   );
-}
+});

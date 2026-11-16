@@ -2,7 +2,9 @@
 
 // O bloco "Precisa de você": as pendências que esperam um clique. Os botões de cada uma são
 // os que o motor permite (acoesDaPendencia), e o motivo de um bloqueio aparece como o motor
-// escreveu.
+// escreveu. O texto mostrado é o do PARECER da revisão; o que cada botão publica é o texto
+// que o motor guardou para aquela ação, e a pergunta de confirmação diz qual dos dois sai.
+import { memo } from 'react';
 import type { Pendencia } from '@/contratos/radar';
 import type { Acao, Decisao } from '@/radar/acoes';
 import { acoesDaPendencia } from '@/radar/fatias';
@@ -15,7 +17,7 @@ import estilos from './Radar.module.css';
 function botoesDa(p: Pendencia): BotaoDoItem[] {
   const pode = acoesDaPendencia(p);
   const base = { alvo: p.key, nome: nomeDoPr(p.key) };
-  const decidir = (decisao: Decisao): Acao => ({ ...base, tipo: 'decidir', id: p.id, decisao });
+  const decidir = (decisao: Decisao): Acao => ({ ...base, tipo: 'decidir', id: p.id, decisao, parecer: p.verdict });
   const botoes: BotaoDoItem[] = [];
   if (pode.revisar && p.pr?.url) botoes.push({ acao: { ...base, tipo: 'revisar', url: p.pr.url }, primario: true });
   if (pode.aprovar) botoes.push({ acao: decidir('approve'), primario: true });
@@ -56,7 +58,7 @@ function Cartao({ pendencia: p, controle }: { pendencia: Pendencia; controle: Co
 
       {p.reportMarkdown ? (
         <details className={estilos.review}>
-          <summary>Ver o texto do review de {nome}</summary>
+          <summary>Ver o texto do parecer da revisão de {nome}</summary>
           <pre className={estilos.textoDoReview}>{p.reportMarkdown}</pre>
         </details>
       ) : null}
@@ -66,12 +68,19 @@ function Cartao({ pendencia: p, controle }: { pendencia: Pendencia; controle: Co
   );
 }
 
-export function PrecisaDeVoce({ pendencias, controle }: { pendencias: readonly Pendencia[]; controle: ControleDeAcoes }) {
+interface Props {
+  pendencias: readonly Pendencia[];
+  // pendências que o motor mandou sem id ou sem chave, que a tela não consegue mostrar
+  ilegiveis?: number;
+  controle: ControleDeAcoes;
+}
+
+export const PrecisaDeVoce = memo(function PrecisaDeVoce({ pendencias, ilegiveis = 0, controle }: Props) {
   return (
-    <Bloco titulo="Precisa de você" quantidade={pendencias.length} vazio="Nenhuma revisão esperando a sua decisão.">
+    <Bloco titulo="Precisa de você" quantidade={pendencias.length} ilegiveis={ilegiveis} vazio="Nenhuma revisão esperando a sua decisão.">
       <ul className={estilos.lista}>
         {pendencias.map((p) => <Cartao key={p.id} pendencia={p} controle={controle} />)}
       </ul>
     </Bloco>
   );
-}
+});

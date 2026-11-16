@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chaveDaUrlDePr, dataHora, hora, linkDoPr, nomeDoPr, textoDaEspera, textoDaRetentativa, textoDoEstacionado,
+  chavesDoFeed, dataHora, hora, linkDoPr, nomeDoPr, prDaUrl, textoDaEspera, textoDaRetentativa, textoDoEstacionado,
   textoDoParecer,
 } from './formato';
 
@@ -26,12 +26,31 @@ describe('nome e link do PR', () => {
   });
 
   it('a URL da revisão sob demanda tem de ser a de um PR do GitHub', () => {
-    expect(chaveDaUrlDePr('https://github.com/dono/repo/pull/123')).toBe('dono/repo#123');
-    expect(chaveDaUrlDePr('  https://github.com/dono/repo.js/pull/9/files  ')).toBe('dono/repo.js#9');
-    expect(chaveDaUrlDePr('https://github.com/dono/repo/pull/9#issuecomment-1')).toBe('dono/repo#9');
+    expect(prDaUrl('https://github.com/dono/repo/pull/123')).toEqual({ chave: 'dono/repo#123', url: 'https://github.com/dono/repo/pull/123' });
     for (const torta of ['', 'dono/repo#9', 'https://github.com/dono/repo', 'https://github.com/dono/repo/issues/9', 'http://github.com/dono/repo/pull/9', 'https://gitlab.com/dono/repo/pull/9', 'https://github.com/dono/repo/pull/9x', 'https://github.com/dono/repo/pull/9 e mais']) {
-      expect(chaveDaUrlDePr(torta), torta).toBeNull();
+      expect(prDaUrl(torta), torta).toBeNull();
     }
+  });
+
+  it('o que vai ao motor é a URL canônica do PR: sufixo, query e fragmento saem', () => {
+    const canonica = 'https://github.com/dono/repo.js/pull/9';
+    for (const digitada of [`  ${canonica}  `, `${canonica}/files`, `${canonica}/`, `${canonica}?w=1&x=<y>`, `${canonica}#issuecomment-1`, `${canonica}/commits/abc?diff=split#L3`]) {
+      expect(prDaUrl(digitada), digitada).toEqual({ chave: 'dono/repo.js#9', url: canonica });
+    }
+  });
+});
+
+describe('chave das linhas do feed', () => {
+  it('é a hora da linha e a ordem entre as de mesma hora', () => {
+    expect(chavesDoFeed([{ t: 1 }, { t: 2 }, { t: 2 }, { t: 3 }])).toEqual(['1:0', '2:0', '2:1', '3:0']);
+    expect(chavesDoFeed([])).toEqual([]);
+  });
+
+  it('a linha mantém a chave quando o motor corta as antigas e chega uma nova', () => {
+    const antes = [{ t: 1 }, { t: 2 }, { t: 3 }];
+    const depois = [{ t: 2 }, { t: 3 }, { t: 4 }];
+    expect(chavesDoFeed(depois).slice(0, 2)).toEqual(chavesDoFeed(antes).slice(1));
+    expect(new Set(chavesDoFeed(depois)).size).toBe(3);
   });
 });
 
@@ -68,6 +87,8 @@ describe('frases', () => {
     expect(textoDaEspera({ posicao: 1, total: 1, motivo: 'aguardando-agendador' })).toMatch(/próxima passagem do agendador\.$/);
     expect(textoDaEspera({ posicao: 1, total: 1, motivo: 'novo-motivo' })).toMatch(/ainda não confirmado/);
     expect(textoDaEspera(undefined)).toBe('Na fila de execução.');
+    expect(textoDaEspera({})).toBe('Na fila de execução. Motivo da espera ainda não confirmado pelo agendador.');
+    expect(textoDaEspera({ motivo: 'limite-global', posicao: 2 })).toBe('Na fila de execução. Limite total de revisões simultâneas atingido.');
   });
 
   it('parada diz quando e por quê, com o motivo do motor só onde ele acrescenta', () => {

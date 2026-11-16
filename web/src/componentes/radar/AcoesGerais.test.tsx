@@ -37,6 +37,13 @@ describe('ações gerais', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('o que vai ao motor é a URL canônica do PR, não o que foi digitado', async () => {
+    const { controle, disparar } = controleFalso();
+    render(<AcoesGerais checagem="" controle={controle} />);
+    await pedir(`${URL_DO_PR}/files?w=1#diff-abc`);
+    expect(disparar).toHaveBeenCalledWith({ tipo: 'revisar', url: URL_DO_PR, alvo: 'sob-demanda', nome: 'PR #12 de dono/repo' });
+  });
+
   it('quando o motor recusa, o que foi digitado fica no campo', async () => {
     const { controle, disparar } = controleFalso();
     disparar.mockResolvedValueOnce(false);

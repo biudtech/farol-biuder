@@ -9,7 +9,7 @@
 // conhecida não derruba a tela, só é registrada e o valor anterior fica.
 import { CHAVES_DO_SNAPSHOT, LEITORES, type ChaveDoSnapshot, type Snapshot } from '@/contratos/snapshot';
 import { ehListaDeTextos, ehObjeto, ehTexto, type Objeto, type Registrar } from '@/contratos/formas';
-import { TETO_DO_FEED, ehLinhaDoFeed, type LinhaDoFeed } from '@/contratos/radar';
+import { TETO_DO_FEED, lerLinhaDoFeed, type LinhaDoFeed } from '@/contratos/radar';
 
 export type { Registrar };
 
@@ -75,11 +75,12 @@ export function aplicarPatch(anterior: Snapshot | null, bruto: unknown, registra
 // `state-patch` que trouxer `activity` substitui tudo.
 export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, registrar: Registrar): Snapshot | null {
   if (!anterior) return anterior;
-  if (!ehObjeto(bruto) || !ehTexto(bruto.id) || !ehLinhaDoFeed(bruto.item)) {
+  const item = ehObjeto(bruto) ? lerLinhaDoFeed(bruto.item) : undefined;
+  if (!ehObjeto(bruto) || !ehTexto(bruto.id) || !item) {
     registrar('snapshot: o evento activity chegou fora do formato e foi descartado');
     return anterior;
   }
-  const { id, item } = bruto;
+  const { id } = bruto;
   const feeds: Array<[string, LinhaDoFeed[]]> = Object.entries(anterior.activity ?? {});
   const feed = feeds.find(([sessao]) => sessao === id)?.[1] ?? [];
   const novo = [...feed, item].slice(-TETO_DO_FEED);

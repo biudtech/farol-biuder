@@ -10,8 +10,9 @@ export const URL_DO_PR = 'https://github.com/dono/repo/pull/12';
 // `noAr`: alvo para o id da ação que o teste quer ver "enviando".
 export function controleFalso(noAr: Record<string, string> = {}) {
   const disparar = vi.fn(async (acao: Acao) => { void acao; return true; });
-  const controle: ControleDeAcoes = { emCurso: (alvo) => noAr[alvo] ?? null, disparar };
-  return { controle, disparar };
+  const focarResultado = vi.fn();
+  const controle: ControleDeAcoes = { emCurso: (alvo) => noAr[alvo] ?? null, disparar, focarResultado };
+  return { controle, disparar, focarResultado };
 }
 
 export function pendencia(extra: Partial<Pendencia> = {}): Pendencia {

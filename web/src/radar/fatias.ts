@@ -1,6 +1,6 @@
 // Como o Radar fatia o snapshot nos blocos da tela. Nada aqui decide: cada corte lê um campo
 // que o motor já mandou pronto.
-import type { Pendencia } from '@/contratos/radar';
+import type { ItemDaFila, Pendencia, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Snapshot } from '@/contratos/snapshot';
 import { dataHora, linkDoPr } from './formato';
 
@@ -31,6 +31,31 @@ export function acoesDaPendencia(p: Pendencia): AcoesDaPendencia {
   }
   const decisivos = p.prProprio !== true;
   return { aprovar: decisivos, pedirMudancas: decisivos, comentar: true, pular: true, revisar: false };
+}
+
+// O que a Fila mostra, sem repetir PR que já aparece em outro lugar da tela. É só exibição:
+// - PR com sessão em curso está em "Analisando agora", e sai da fila e da espera;
+// - PR em espera de execução que ainda está na fila aparece uma vez, na fila;
+// - PR em espera que tem pendência está em "Precisa de você" ou em "Esperando o CI".
+// A ordem é a do motor, e a chave do PR é comparada sem diferenciar caixa.
+export function fatiarFila(
+  fila: readonly ItemDaFila[],
+  emEspera: readonly PrEmEspera[],
+  sessoes: readonly SessaoAtiva[],
+  pendentes: readonly Pendencia[],
+): { fila: ItemDaFila[]; emEspera: PrEmEspera[] } {
+  const igual = (chave: string): string => chave.toLowerCase();
+  const emSessao = new Set(sessoes.flatMap((s) => [...(s.keys ?? []), ...(s.pr?.key ? [s.pr.key] : [])]).map(igual));
+  const naFila = fila.filter((pr) => !emSessao.has(igual(pr.key)));
+  const jaNaTela = new Set([...emSessao, ...naFila.map((pr) => igual(pr.key)), ...pendentes.map((p) => igual(p.key))]);
+  const vistos = new Set<string>();
+  const esperando = emEspera.filter((pr) => {
+    const chave = igual(pr.key);
+    if (jaNaTela.has(chave) || vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
+  return { fila: naFila, emEspera: esperando };
 }
 
 export interface AvisoDoMotor {

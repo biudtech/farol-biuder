@@ -41,6 +41,12 @@ describe('bloco Analisando agora', () => {
     expect(screen.getByRole('button', { name: `Cancelar ${NOME}` })).toBeTruthy();
   });
 
+  it('linha de aviso do feed se diz em texto, não só no destaque', () => {
+    const { controle } = controleFalso();
+    render(<AnalisandoAgora sessoes={[sessao()]} feeds={{ a1: [{ t: 1, k: 'warn', text: 'instabilidade na conexão' }] }} controle={controle} />);
+    expect(screen.getByText('Aviso: instabilidade na conexão')).toBeTruthy();
+  });
+
   it('linha do feed é texto, nunca HTML', () => {
     const { controle } = controleFalso();
     const { container } = render(<AnalisandoAgora sessoes={[sessao()]} feeds={{ a1: [{ t: 1, k: 'tool', text: '<img src=x onerror=alert(1)>' }] }} controle={controle} />);
@@ -78,6 +84,24 @@ describe('bloco Analisando agora', () => {
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByText('Cancelamento aceito: a sessão está encerrando.')).toBeTruthy();
     expect(screen.getByText(/não pode mais ser cancelada/)).toBeTruthy();
+  });
+
+  it('sessão só com o id (o resto ausente) desenha, com um nome que diz qual é', () => {
+    const { controle } = controleFalso();
+    render(<AnalisandoAgora sessoes={[{ id: 'a9' }]} feeds={{}} controle={controle} />);
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('Sessão a9');
+    // sem cancellable o motor não disse que dá para cancelar: não há botão
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('as linhas que ficam no feed mantêm o elemento quando chega linha nova e a mais antiga é cortada', () => {
+    const { controle } = controleFalso();
+    const linha = (t: number) => ({ t, k: 'tool', text: `linha ${t}` });
+    const { rerender } = render(<AnalisandoAgora sessoes={[sessao()]} feeds={{ a1: [linha(1), linha(2), linha(3)] }} controle={controle} />);
+    const antes = screen.getByText('linha 3').closest('li');
+    rerender(<AnalisandoAgora sessoes={[sessao()]} feeds={{ a1: [linha(2), linha(3), linha(4)] }} controle={controle} />);
+    expect(screen.getByText('linha 3').closest('li')).toBe(antes);
+    expect(screen.queryByText('linha 1')).toBeNull();
   });
 
   it('sessão sem PR aparece pelo rótulo do motor, sem link', () => {

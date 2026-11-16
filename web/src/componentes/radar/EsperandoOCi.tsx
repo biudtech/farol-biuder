@@ -2,7 +2,9 @@
 
 // O bloco "Esperando o CI": as pendências que o motor resolve sozinho. Com `esperaCi`, a
 // aprovação sai quando os checks obrigatórios fecharem; com `esperaProva`, o motor retoma a
-// análise. O bloco diz desde quando e o que falta; a única ação é tirar da mesa (Pular).
+// análise. O bloco diz desde quando e o que falta; a única ação é tirar da mesa (Pular), que
+// pergunta antes: pular aqui descarta o que o motor faria sozinho.
+import { memo } from 'react';
 import type { Pendencia } from '@/contratos/radar';
 import { dataHora, nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
@@ -51,12 +53,12 @@ function Cartao({ pendencia: p, controle }: { pendencia: Pendencia; controle: Co
       {p.pr?.title ? <p className={estilos.tituloDoPr}>{p.pr.title}</p> : null}
       {p.esperaCi ? <EsperaDoCi espera={p.esperaCi} nome={nome} /> : null}
       {!p.esperaCi && p.esperaProva ? <EsperaDaProva espera={p.esperaProva} /> : null}
-      <AcoesDoItem botoes={[{ acao: { tipo: 'decidir', id: p.id, decisao: 'skip', alvo: p.key, nome } }]} controle={controle} />
+      <AcoesDoItem botoes={[{ acao: { tipo: 'decidir', id: p.id, decisao: 'skip', alvo: p.key, nome, espera: p.esperaCi ? 'ci' : 'prova' } }]} controle={controle} />
     </li>
   );
 }
 
-export function EsperandoOCi({ pendencias, controle }: { pendencias: readonly Pendencia[]; controle: ControleDeAcoes }) {
+export const EsperandoOCi = memo(function EsperandoOCi({ pendencias, controle }: { pendencias: readonly Pendencia[]; controle: ControleDeAcoes }) {
   return (
     <Bloco titulo="Esperando o CI" quantidade={pendencias.length} vazio="Nenhuma revisão esperando o CI.">
       <ul className={estilos.lista}>
@@ -64,4 +66,4 @@ export function EsperandoOCi({ pendencias, controle }: { pendencias: readonly Pe
       </ul>
     </Bloco>
   );
-}
+});

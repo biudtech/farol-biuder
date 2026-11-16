@@ -2,12 +2,13 @@
 
 // O bloco dos ignorados, com Restaurar. O snapshot não traz a lista dos PRs ignorados no
 // motor: o bloco mostra só o que foi ignorado nesta aba, e diz isso.
+import { memo } from 'react';
 import { AcoesDoItem } from './AcoesDoItem';
 import { Bloco } from './Bloco';
 import type { ControleDeAcoes, Ignorado } from './useAcoes';
 import estilos from './Radar.module.css';
 
-export function Ignorados({ ignorados, controle }: { ignorados: readonly Ignorado[]; controle: ControleDeAcoes }) {
+export const Ignorados = memo(function Ignorados({ ignorados, controle }: { ignorados: readonly Ignorado[]; controle: ControleDeAcoes }) {
   return (
     <Bloco
       titulo="Ignorados"
@@ -25,4 +26,4 @@ export function Ignorados({ ignorados, controle }: { ignorados: readonly Ignorad
       </ul>
     </Bloco>
   );
-}
+});

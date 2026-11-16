@@ -2,8 +2,8 @@
 
 // Os botões de um item do Radar. Enquanto uma ação do item está no ar, todos ficam
 // desabilitados e o que foi clicado diz "Enviando". A ação que publica (Aprovar, Pedir
-// mudanças) ou que joga trabalho fora (Cancelar) troca os botões por uma pergunta, no
-// próprio cartão, antes de enviar.
+// mudanças, Comentar) ou que joga trabalho fora (Cancelar, Pular uma espera) troca os botões
+// por uma pergunta, no próprio cartão, antes de enviar.
 import { useEffect, useId, useRef, useState } from 'react';
 import { confirmacaoDa, idDa, nomeDa, rotuloDa, type Acao } from '@/radar/acoes';
 import type { ControleDeAcoes } from './useAcoes';
@@ -21,8 +21,13 @@ interface Props {
 }
 
 export function AcoesDoItem({ botoes, controle }: Props) {
-  const [pergunta, setPergunta] = useState<Acao | null>(null);
+  // O id (idDa) da ação que está perguntando. A ação em si é lida dos botões a cada desenho:
+  // se o motor mudou o item com a pergunta aberta, vale o item de agora, não o do clique.
+  const [pergunta, setPergunta] = useState<string | null>(null);
+  // a pergunta fechou sozinha, porque a ação deixou de ser oferecida
+  const [fechouSozinha, setFechouSozinha] = useState(false);
   const voltar = useRef<HTMLButtonElement>(null);
+  const aviso = useRef<HTMLParagraphElement>(null);
   // A ação cujo botão abriu a pergunta: é para ele que o foco volta. Guarda o id, não o
   // elemento, porque os botões saem da tela enquanto a pergunta está aberta e voltam outros.
   const origem = useRef<string | null>(null);
@@ -30,23 +35,45 @@ export function AcoesDoItem({ botoes, controle }: Props) {
   const idDoTitulo = useId();
   const idDoTexto = useId();
 
+  const perguntando = pergunta === null ? undefined : botoes.find((b) => idDa(b.acao) === pergunta)?.acao;
+  const confirmacao = perguntando ? confirmacaoDa(perguntando) : null;
+  // A ação da pergunta não está mais entre as permitidas (chegou commit novo, o PR passou a
+  // ser da própria conta): a pergunta fecha, e a tela diz por quê. Ajuste de estado no
+  // desenho, como o React prevê para estado que depende de propriedade.
+  if (pergunta !== null && !confirmacao) {
+    setPergunta(null);
+    setFechouSozinha(true);
+  }
+
   useEffect(() => {
-    if (pergunta) {
+    if (pergunta !== null) {
       voltar.current?.focus();
       return;
     }
-    if (origem.current !== null) botoesNaTela.current.get(origem.current)?.focus();
+    // quem estava na pergunta perdeu o elemento com o foco: ele vai ao aviso, ou ao botão
+    if (fechouSozinha) {
+      // só quando o foco ficou solto: quem estava em outro lugar da página não é puxado
+      if (document.activeElement === null || document.activeElement === document.body) aviso.current?.focus();
+    } else if (origem.current !== null) botoesNaTela.current.get(origem.current)?.focus();
     origem.current = null;
-  }, [pergunta]);
+  }, [pergunta, fechouSozinha]);
 
   const alvo = botoes[0]?.acao.alvo;
-  if (alvo === undefined) return null;
-  const enviando = controle.emCurso(alvo);
-  const confirmacao = pergunta ? confirmacaoDa(pergunta) : null;
+  const enviando = alvo === undefined ? null : controle.emCurso(alvo);
 
-  if (pergunta && confirmacao) {
+  if (perguntando && confirmacao) {
     return (
-      <div className={estilos.confirmacao} role="group" aria-labelledby={idDoTitulo} aria-describedby={idDoTexto}>
+      <div
+        className={estilos.confirmacao}
+        role="group"
+        aria-labelledby={idDoTitulo}
+        aria-describedby={idDoTexto}
+        onKeyDown={(evento) => {
+          if (evento.key !== 'Escape') return;
+          evento.stopPropagation();
+          setPergunta(null);
+        }}
+      >
         <p id={idDoTitulo} className={estilos.confirmacaoTitulo}>{confirmacao.titulo}</p>
         <p id={idDoTexto}>{confirmacao.texto}</p>
         <div className={estilos.botoes}>
@@ -56,12 +83,14 @@ export function AcoesDoItem({ botoes, controle }: Props) {
           <button
             type="button"
             className={`${estilos.botao} ${estilos.primario}`}
-            aria-label={`${confirmacao.confirmar}: ${pergunta.nome}`}
+            aria-label={`${confirmacao.confirmar}: ${perguntando.nome}`}
             onClick={() => {
-              // enviou: o foco não volta ao botão, que vai estar desabilitado
+              // enviou: o botão de origem vai estar desabilitado, e o foco vai à região que
+              // diz o resultado (nunca fica solto na página)
               origem.current = null;
               setPergunta(null);
-              void controle.disparar(pergunta);
+              controle.focarResultado();
+              void controle.disparar(perguntando);
             }}
           >
             {confirmacao.confirmar}
@@ -72,33 +101,43 @@ export function AcoesDoItem({ botoes, controle }: Props) {
   }
 
   return (
-    <div className={estilos.botoes}>
-      {botoes.map(({ acao, primario }) => {
-        const esteEnvia = enviando === idDa(acao);
-        return (
-          <button
-            key={idDa(acao)}
-            ref={(elemento) => {
-              if (elemento) botoesNaTela.current.set(idDa(acao), elemento);
-              else botoesNaTela.current.delete(idDa(acao));
-            }}
-            type="button"
-            className={primario ? `${estilos.botao} ${estilos.primario}` : estilos.botao}
-            disabled={enviando !== null}
-            aria-label={esteEnvia ? `Enviando: ${nomeDa(acao)}` : nomeDa(acao)}
-            onClick={() => {
-              if (confirmacaoDa(acao)) {
-                origem.current = idDa(acao);
-                setPergunta(acao);
-                return;
-              }
-              void controle.disparar(acao);
-            }}
-          >
-            {esteEnvia ? 'Enviando…' : rotuloDa(acao)}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      {fechouSozinha ? (
+        <p ref={aviso} className={estilos.nota} role="status" tabIndex={-1}>
+          A pergunta foi fechada: o motor mudou este item e a ação não está mais disponível. Nada foi enviado.
+        </p>
+      ) : null}
+      {botoes.length ? (
+        <div className={estilos.botoes}>
+          {botoes.map(({ acao, primario }) => {
+            const esteEnvia = enviando === idDa(acao);
+            return (
+              <button
+                key={idDa(acao)}
+                ref={(elemento) => {
+                  if (elemento) botoesNaTela.current.set(idDa(acao), elemento);
+                  else botoesNaTela.current.delete(idDa(acao));
+                }}
+                type="button"
+                className={primario ? `${estilos.botao} ${estilos.primario}` : estilos.botao}
+                disabled={enviando !== null}
+                aria-label={esteEnvia ? `Enviando: ${nomeDa(acao)}` : nomeDa(acao)}
+                onClick={() => {
+                  setFechouSozinha(false);
+                  if (confirmacaoDa(acao)) {
+                    origem.current = idDa(acao);
+                    setPergunta(idDa(acao));
+                    return;
+                  }
+                  void controle.disparar(acao);
+                }}
+              >
+                {esteEnvia ? 'Enviando…' : rotuloDa(acao)}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
   );
 }

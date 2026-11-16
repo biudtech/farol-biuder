@@ -243,13 +243,14 @@
   position: sticky;
   bottom: 12px;
   z-index: 10;
-}
-.recado {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.resultado:empty { display: none; }
+.recado {
+  align-self: stretch;
   padding: 10px 14px;
   border: 1px solid var(--borda-campo);
   border-radius: 10px;
@@ -258,12 +259,16 @@
   box-shadow: var(--shadow);
   font-size: 13.5px;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.recado[data-tom="info"] {
+  background: linear-gradient(var(--info-soft), var(--info-soft)), var(--surface);
+  color: var(--info-texto);
 }
 .recado[data-tom="erro"] {
   background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--surface);
   color: var(--danger-texto);
 }
-.recado p { flex: 1 1 220px; min-width: 0; }
 
 .soLeitor {
   position: absolute;

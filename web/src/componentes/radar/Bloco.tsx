@@ -7,18 +7,30 @@ interface Props {
   quantidade: number;
   // a linha que o bloco mostra quando não tem item
   vazio: string;
+  // Itens que o motor mandou e esta tela não conseguiu ler. Entram no título e viram um
+  // aviso: o bloco não diz que está vazio com item escondido.
+  ilegiveis?: number;
   children?: ReactNode;
 }
 
 // Um bloco do Radar: título de segundo nível com a contagem, e a lista ou a linha de vazio.
-export function Bloco({ titulo, quantidade, vazio, children }: Props) {
+export function Bloco({ titulo, quantidade, vazio, ilegiveis = 0, children }: Props) {
   const id = useId();
   return (
     <section className={estilos.bloco} aria-labelledby={id}>
       <h2 id={id} className={estilos.tituloDoBloco}>
-        {titulo} <span className={estilos.contagem}>({quantidade})</span>
+        {titulo}{' '}
+        <span className={estilos.contagem}>
+          ({quantidade}{ilegiveis ? `, e mais ${ilegiveis} que esta tela não lê` : ''})
+        </span>
       </h2>
-      {quantidade === 0 ? <p className={estilos.vazio}>{vazio}</p> : children}
+      {ilegiveis ? (
+        <p className={`${estilos.nota} ${estilos.bloqueio}`}>
+          Atenção: {ilegiveis} pendência(s) chegaram em formato que esta tela não lê; veja o log do navegador.
+        </p>
+      ) : null}
+      {quantidade === 0 && !ilegiveis ? <p className={estilos.vazio}>{vazio}</p> : null}
+      {quantidade > 0 ? children : null}
     </section>
   );
 }
