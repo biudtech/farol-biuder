@@ -5,7 +5,7 @@ assertExternalNodeRuntime();
 // Porta a logica do antigo pr-reviewer.ps1: o polling do GitHub roda aqui
 // (so comandos gh, sem gastar tokens de IA); a revisao em si roda numa sessao
 // headless do Claude Code.
-// Zero dependencias externas: roda com Node puro (e dentro do Electron).
+// Zero dependencias externas: roda com Node puro.
 import fs from 'node:fs';
 import { politicaDeInicio, contaTemAutomatico } from './lib/engine/review-scope.js';
 import path from 'node:path';
@@ -1192,7 +1192,7 @@ class Engine extends EventEmitter {
 
   // Credencial do Jira: colaborador lib/jira/credentials.js, único lugar que lê ou
   // escreve o arquivo separado (o token nunca entra no config.json, que trafega
-  // inteiro pra UI). Nunca ecoe o retorno com o valor: as duas devolvem só booleano.
+  // pra UI). Nunca ecoe o retorno com o valor: as duas devolvem só booleano.
   //
   // O pushState não é enfeite: o selo "credencial cadastrada" sai do snapshot, e
   // sem empurrar o estado a tela só descobria a mudança no próximo ciclo de
@@ -1216,7 +1216,7 @@ class Engine extends EventEmitter {
 
   snapshot() {
     return {
-      // `app` é a IDENTIDADE do app, e o smoke do Electron confere o objeto inteiro: o
+      // `app` é a IDENTIDADE do app (nome, versão e plataforma), e só ela: o
       // catálogo de seleções (lib/modelos.js), de onde a tela monta os seletores, é outra coisa
       app: { name: APP_NAME, version: APP_VERSION, platform: process.platform },
       modelos: catalogoDeModelos(this.claudeVersao || null),
@@ -1495,8 +1495,8 @@ function start(onReady) {
   const engine = new Engine();
   let began = false;
   const server = startServer(engine, (url, err) => {
-    // O listen na porta é o lock de instância única (vale também no modo
-    // `node server.js`, sem Electron). Com a porta ocupada já existe um Farol
+    // O listen na porta é o lock de instância única do motor
+    // (`node server.js`). Com a porta ocupada já existe um Farol
     // usando este ~/.farol: um segundo engine com polling próprio revisaria PR
     // em dobro e escreveria seen/inflight/usage sem lock (A7). Por isso o
     // monitoramento só começa DEPOIS do listen dar certo.

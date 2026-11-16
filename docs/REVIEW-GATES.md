@@ -1,1961 +1,485 @@
-> Regra de repetição automática (29/10/2026): uma aprovação ou reprovação publicada
-> encerra aquele head para a conta revisora. Novo pedido de review, comentário ou
-> alteração de label não invalida a decisão; somente outro commit permite nova revisão
-> automática. Isso inclui reprovação por CI: reexecutar o CI sem outro commit não gera
-> uma segunda review automática de aprovação. Uma tentativa sem parecer publicado continua pendente.
-> A revisão manual explícita mantém seu caminho próprio. Tag residual da própria conta
-> observada num head já decidido entra na limpeza durável, que preserva sessões e leases vivos.
->
-> Política vigente: admissibilidade técnica e prova suficiente são obrigatórias antes
-> de qualquer APPROVE. Esta regra substitui os trechos históricos que tratavam lacunas
-> de leitura ou checkpoint como ressalvas
-> dispensáveis pela configuração. O CI obrigatório é a exceção declarada: desde 06/11/2026 ele
-> só entra na decisão com "CI obrigatório antes da aprovação" ligado (padrão desligado; ver "CI
-> obrigatório antes da aprovação é opt-in"). Clique e coassinatura também não dispensam prova.
-> Desde 17/10/2026 (v2.72.4) o card inteiro não comprovado e a dependência em aberto
-> voltaram a ser ressalva, e só a parte do card que cabe a ESTE PR bloqueia (ver
-> "Card só na parte deste PR e dependência aberta voltam a ser ressalva", abaixo).
-> Recuperação vigente (PR #253, 18/10/2026): a falta de evidência é responsabilidade do Farol.
-> Antes de reagendar por resultado incompleto, o Farol confere critérios e avaliação técnica,
-> devolvendo os erros específicos à mesma conversa em até duas continuações dirigidas, sem
-> repetir quando não há progresso. Mantém o material até o fechamento da sessão. Retoma na mesma
-> conversa quando há sessionId, sem nova admissão e sem publicação direta. O resultado volta
-> a todos os gates. A recuperação usa cinco minutos de inatividade, sem reduzir o teto com
-> progresso; o modelo escrevendo (eventos parciais do `--include-partial-messages`) conta como
-> progresso, porque a continuação reescreve o envelope inteiro e um envelope grande passa de
-> cinco minutos sem nenhum evento completo (biud-frontend#1627, 30/10/2026). Critérios
-> pendentes específicos acompanham a próxima rodada. O vigia da sessão também encerra a
-> continuação quando o PR é mergeado ou fechado. O Codex recebe
-> protocolo próprio e não precisa chamar outro provedor para cumprir o passo pr-reviewer.
-> Seus checkpoints são capturados pelo stream e gravados pelo engine. Uma continuação
-> reutiliza a posse viva da mesma operação e confere conta, alvo, perfil e modelo antes
-> de enviar o sessionId. Não readmite nem publica uma revisão por conta própria.
-> Duas revisões complementares são imediatas; as seguintes têm intervalo crescente, de 15
-> minutos até seis horas. Uma execução interrompida é reagendada e não vira uma decisão humana.
-> **Decisão do dono de 19/10/2026, que supera a regra do PR #250 (v2.72.8) e o "todas as provas
-> continuam obrigatórias" do PR #253, e decisão de 06/11/2026 ("decidir na 1ª rodada"):**
-> repositório sem declaração técnica e a lacuna que não é dura são ressalva já na rodada que as
-> encontrou, e a configuração da conta decide. A recuperação continua só para análise
-> incompleta, lacuna dura que não é defeito do PR e interrupção (ver "Repositório sem
-> declaração técnica é ressalva" e "A primeira rodada decide", abaixo).
-> Desde 18/10/2026 (v2.73.2) a conta em automático decide sem mesa: clique, admin, comando e
-> distribuição postam pela política, defeito do PR e CI vermelho viram REQUEST_CHANGES com a
-> conta reprovando sozinha, e PR da própria conta sai como COMMENT (ver "A decisão sem mesa").
-> Desde a v2.78.24, análise incompleta que já confirmou defeito do PR também reprova pela
-> política (`analiseSustentaReprovacao`): defeito não arma recuperação e incompleto não
-> reprovava, e o biblioteca-cnbb-api#143 parou na mesa com violação confirmada e a conta
-> reprovando sozinha. Aprovar continua exigindo análise completa.
-> O critério técnico aparece na caixa de revisão; resultado antigo sem avaliação pede
-> revisão atual, e não recebe selo de conformidade durante migração.
->
-> Runtime privado: `node lib/technical-review/setup.js` instala a versão fixada da
-> ferramenta, usando acesso autorizado à origem privada. A declaração por repositório
-> fica em `~/.farol/technical-review/repositories.json`, com a forma
-> `{"repositories":{"org/repo":{"declaration":{"scopes":["core"]}}}}`.
-> Declare diretórios e condições reais conforme o contrato do catálogo. Cadastro
-> corrompido deixa a avaliação pendente, sem alterar o repositório alvo; repositório
-> ausente do cadastro (ou cadastro inexistente) mantém a aprovação bloqueada e pede
-> corrigir a configuração do aparelho, sem solicitar uma decisão sobre o PR.
-> Baselines existentes podem ser fornecidos no perfil privado; o revisor não os cria.
-> Desde a v2.78.9 o Farol confere, antes da ferramenta, se cada pasta dos campos de diretório
-> (`testDirs`, `e2eDirs`, `sourceDirs`, `componentDirs`) existe no commit analisado. Pasta
-> ausente é a falha `declaration`: o card nomeia as pastas (até cinco), a lacuna é dura (nunca
-> vira ressalva), não é defeito do PR (nunca vira pedido de
-> mudanças) e a recuperação fica parada até a declaração do repositório mudar. Antes, a
-> ferramenta recusava a declaração inteira na primeira pasta ausente, o worker engolia o
-> motivo e a avaliação terminava "a ferramenta não concluiu": em 27/10/2026, um PR do
-> biud-frontend apagou duas das 1206 pastas de teste declaradas e toda avaliação daquele
-> repositório passou a falhar. Campo em `null` é resposta válida (o repositório não tem aquele
-> material, situação "ausente" da ferramenta) e não é conferido; só lista vazia é recusada. A
-> v2.78.9 acusava `null` como lista inválida e pausou PRs sem defeito (25 dos 27 repositórios do
-> cadastro respondem algum campo com `null`); desde a v2.78.11 a falha grava a versão da
-> conferência (`declarationCheck`), e só a falha da versão atual segura a recuperação, então os
-> PRs pausados pela anterior voltam a ser conferidos sozinhos. Declare as raízes, não cada pasta: os campos recortam por
-> prefixo (`src` já cobre `src/a/b`), e uma lista exaustiva quebra a cada pasta apagada.
-
 # Gates de revisão e postagem do Farol
 
-Novas sessões headless exigem `criteriaVersion: 1`, `productDecisions` e `findings`
-explícitos. Os achados canônicos do diário de rodadas carregam `criteria` com key
-estável do comportamento, criterion, source e scope. Bloqueio ativo exige evidence.
-O histórico local de decisões publicadas confirma os compromissos da revisão;
-tentativas não publicadas não redefinem o critério. A seleção atravessa os ancestrais
-intermediários para que uma resolução publicada não ressuscite apontamento antigo.
-Não há um segundo diário: os metadados acompanham findings. A confirmação de publicação
-é local nesta etapa; receber uma rodada de outro aparelho não comprova sua postagem.
-Entre PRs diferentes, só entram achados publicados da mesma conta e repositório
-com a mesma URL de card confirmada pelo Jira configurado. A URL inclui o site;
-a chave isolada não mistura tenants. A comparação usa a key do comportamento e
-não exige encerrar pontos de outro PR. O histórico próprio tem precedência. O
-vínculo do card é gravado pelo engine, sem aceitar um card alegado pelo modelo.
-
-Mudar critério ou classificação exige change com tipo, motivo, evidência nova e
-escopo. Apontamento publicado com critérios precisa receber destino; encerramento
-atualiza a prova. Legado continua contexto e não ganha classificação inventada.
-Essas inconsistências impedem publicar o resultado mesmo no modo de observação,
-pelo clique ou reenvio; exigem nova análise. Pular continua disponível.
-
-Recommendation distingue hipótese de solução validada no head atual. Validação
-exige dois casos distintos, defeito e preservação, com esperado, observado, prova
-e execução aprovada. Sem execução, o texto público deve dizer que é hipótese;
-a hipótese não remove defeito comprovado nem obriga um único remédio. O engine
-confere o contrato da prova, não sua suficiência semântica.
-
-ProductDecisions liga trechos às fontes primárias do Jira configurado: URL, hash,
-autoria registrada e data disponível. A descrição é relida sem cache e os comentários
-são paginados até cinco páginas; erros, repetição ou variação de total deixam leitura
-incompleta. Só requisito do card com leitura completa fundamenta automaticamente o
-veredito. Registro de comentário não prova autoridade de PO; alegação sem fonte e
-conflito determinante exigem decisão humana registrada no card e nova revisão.
-Identificar conflitos e alegações omitidos pelo modelo continua sendo julgamento.
-
-Extraído do `CLAUDE.md` na Fase 1.5 da reorganização. O `CLAUDE.md` da raiz é o sumário, e os
-invariantes continuam lá.
+O detalhe do invariante 4 do [`CLAUDE.md`](../CLAUDE.md): nada é postado no GitHub sem gate. Cada
+seção diz a regra e o arquivo em que ela mora.
 
 <!-- indice:inicio (gerado; test/guias-navegaveis.test.js reprova se divergir das seções) -->
-
 ## Índice
 
-- [Invariante 4, em detalhe](#invariante-4-em-detalhe)
-- [A decisão sem mesa (18/10/2026, v2.73.2)](#a-decisão-sem-mesa-18102026-v2732)
-- [Todos os caminhos que produzem parecer ou postagem (26/09/2026)](#todos-os-caminhos-que-produzem-parecer-ou-postagem-26092026)
-- [Conclusão da revisão](#conclusão-da-revisão)
-- [Motivo é OBJETO: o unwrap tem UM endereço (v2.51.1)](#motivo-é-objeto-o-unwrap-tem-um-endereço-v2511)
-- [A garantia mora no estrangulamento, não no chamador (v2.51.1)](#a-garantia-mora-no-estrangulamento-não-no-chamador-v2511)
-- [Justiça de fila entre orgs e contas (v2.58.0)](#justiça-de-fila-entre-orgs-e-contas-v2580)
-- [Aprovação não é fungível: o CODEOWNERS entra no gate (v2.51.0; SUPERADA em 28/08/2026)](#aprovação-não-é-fungível-o-codeowners-entra-no-gate-v2510-superada-em-28082026)
-- [Um Farol por PR (v2.50.1): a lição do marcador transitório](#um-farol-por-pr-v2501-a-lição-do-marcador-transitório)
-- [Dedup é por ROUND, não por "alguma vez" (v2.40.5)](#dedup-é-por-round-não-por-alguma-vez-v2405)
-- [Re-revisão automática pós-push (v2.41.0): o round 2 fecha sozinho](#re-revisão-automática-pós-push-v2410-o-round-2-fecha-sozinho)
-- [Dívida herdada da production não bloqueia (05/11/2026, v2.78.37)](#dívida-herdada-da-production-não-bloqueia-05112026-v27837)
-- [Achado técnico fora das linhas do PR não bloqueia (06/11/2026)](#achado-técnico-fora-das-linhas-do-pr-não-bloqueia-06112026)
-- [Conferência na boca da sessão (05/11/2026, v2.78.36)](#conferência-na-boca-da-sessão-05112026-v27836)
-- [O pedido de mudanças sai quando o problema foi resolvido (05/11/2026, v2.78.35)](#o-pedido-de-mudanças-sai-quando-o-problema-foi-resolvido-05112026-v27835)
-- [Autoanálise: parecer do modelo x decisão do app (P0a v2.54.8, P0b v2.55.0)](#autoanálise-parecer-do-modelo-x-decisão-do-app-p0a-v2548-p0b-v2550)
-- [Checkpoint de verificação (memória entre passadas da revisão, v2.36.0)](#checkpoint-de-verificação-memória-entre-passadas-da-revisão-v2360)
-
-- [Inventário único do diff](#inventário-único-do-diff)
-
-- [Memória de achados entre rodadas](#memória-de-achados-entre-rodadas)
-
+- [Como ler este guia](#como-ler-este-guia)
+- [A boca única de postagem](#a-boca-única-de-postagem)
+- [O gate automático](#o-gate-automático)
+- [Ressalva e lacuna](#ressalva-e-lacuna)
+- [A decisão sem mesa](#a-decisão-sem-mesa)
+- [CI obrigatório antes da aprovação](#ci-obrigatório-antes-da-aprovação)
+- [Dedup por head](#dedup-por-head)
+- [Head que anda](#head-que-anda)
+- [PR da própria conta](#pr-da-própria-conta)
+- [Texto público](#texto-público)
+- [Um Farol por PR](#um-farol-por-pr)
+- [Re-revisão automática](#re-revisão-automática)
+- [Retirada do pedido de mudanças](#retirada-do-pedido-de-mudanças)
+- [Checkpoint de verificação](#checkpoint-de-verificação)
+- [Arquivo de ambiente e caminho protegido](#arquivo-de-ambiente-e-caminho-protegido)
+- [Instância isolada](#instância-isolada)
 <!-- indice:fim -->
 
-## Invariante 4, em detalhe
+## Como ler este guia
 
-Desde a v2.77.10, coerência é uma lacuna obrigatória: o veredito precisa concordar
-com os achados estruturados e o texto da ação escolhida. Falha operacional não
-é defeito do PR. Uma revisão contraditória não publica APPROVE nem REQUEST_CHANGES:
-o agendador existente recupera a análise, com o mesmo limite de tentativas rápidas
-e recuo. A lacuna não vira ressalva por esgotamento. Se houver defeito real, ele
-continua bloqueante durante a recuperação do texto. A normalização de texto é
-compartilhada com a trava de linguagem; a defesa textual reconhece declarações
-globais conhecidas no resumo introdutório, sem tratar uma área limpa como ausência de defeitos no PR inteiro.
-Ausência de `findings` em registros legados é informação desconhecida, não zero
-blockers. Nenhuma dessas verificações converte automaticamente a decisão em aprovação.
+Este guia foi reescrito no fechamento da fase 1 (15/11/2026) e ficou só com o que foi conferido no
+código naquele dia, função a função. A versão anterior acumulava o histórico do aplicativo de mesa e
+afirmava regras de módulos que saíram; ela está no histórico do git.
 
-4. **Nada é postado no GitHub sem gate.** **Duas escritas vieram do "um Farol por PR" (v2.49.0/v2.50.1), e a que sobrou é a mais séria de todo o invariante.** (a) O **COMENTÁRIO de pulo** (`gh pr comment`) MORREU em 28/08/2026 (v2.53.9): era template fixo, a mesma frase saindo de contas diferentes minutos depois do sinal alheio subir, e denunciava a automação. A saída de cena continua durável (âncora `state/skip-comentado.json`, que agora nasce da DECISÃO, não mais de um comentário que saiu) e o aviso é toast no app; NADA é postado no PR. Hoje a única escrita fora do caminho de review é a seguinte. (b) A **CO-ASSINATURA** (`coAssinarReview`, opt-in, default false): um APPROVE postado em seu nome SEM sessão, SEM envelope e SEM passar por `shouldAutoApprove`, com base na aprovação de quem pegou o PR. É o único caminho em que o Farol aprova sem ter revisado, e por isso os gates são explícitos no próprio `coAssinar` em vez de herdados: chave ligada, aprovação comprovada NO HEAD ATUAL de alguém por quem eu saí de cena (desde 26/09/2026 relida NO MESMO SHA e postada com `commit_id` desse head também sem a coordenação entre aparelhos; antes o POST saía sem âncora e um commit novo entre a checagem e o POST era aprovado sem leitura), e dedup por head (`myReviewStates` null = não posta, porque postar review não é idempotente). Nunca ligue por padrão: quem liga assume que endossa revisão alheia sem saber o rigor nem o modelo que a produziu. Os dois passam pelas travas de identidade do resto (conta sem token não posta). O texto segue o `reviewFormatBlock`: sem citar automação/Farol/fila, sem travessão, e sem pronome de gênero pra quem o app não tem como saber. Auto-approve exige `requested === true` (revisão pedida a mim; revisão iniciada por clique no panorama nunca auto-posta; **desde 26/09/2026 o campo AUSENTE também não posta sozinho**: o gate testava `=== false`, e os comandos remotos repetir, tomar e transferir chegam sem ele), veredito `approve` e payload `APPROVE`. Com a conta em "com ressalvas: aprova" (`onCaveats: 'approve'`, opt-in por conta em Sistema > Contas; até 30/09/2026 havia também a chave geral `autoApproveAll`, que a migração de `lib/engine/contas-migracao.js` escreveu em cada conta e apagou) TODO PR aprovável é aprovado sozinho, sem depender do humano. **Desde 30/09/2026 isso é literal** (pedido do dono: "A configuração tem de cumprir o que promete, sem exceção: se é pra aprovar automaticamente, ele realmente aprova, sem desculpas pra passar por um approve humano"): para um resultado aprovável em PR com a revisão pedida a mim existem DUAS classes, limpo (nenhum ponto de atenção) e com ressalvas (um ou mais), e `approvePolicyFor(conta, limpo)` é a ÚNICA coisa que decide entre postar e esperar você. Ver "Duas classes e a espera do CI", abaixo. **O corpo do APPROVE vai LIMPO no PR (tem que parecer humano, ver "review humano" abaixo), nunca com carimbo de "automático". A ressalva TÉCNICA sobre o código entra no corpo, escrita como um revisor sênior mencionaria de passagem (desde a v2.26.1, ver o parágrafo "Ressalva vai pro PR" abaixo); a ressalva OPERACIONAL do nosso fluxo (`result.reasons` que sejam de processo + aviso se `cardMet === false`) fica SÓ no app, no campo `attention`, visível em Revisões recentes.** O DEFAULT é `false` (gate estrito de sempre: só auto-aprova o resultado LIMPO, isto é, sem nenhum ponto de atenção; até 30/09/2026 a régua era `decision === 'auto_approve'` E `cardMet === true`, e os dois viraram ponto de atenção explícito), por segurança, já que o app é público/multiusuário e cada um liga se quiser. A decisão fica isolada em `shouldAutoApprove(pr, result)` (devolve `{ ok, motivo }`; o `motivo` alimenta a transparência do runHeadlessReview, que só atribui a recusa à política da conta quando o motivo é `politica`); a composição dos pontos em `attentionPoints`. **Cada conta pode sobrescrever esses padrões globais** (painel Contas): `autoReview` (revisa sozinho / só põe na fila / herda), `onClean` (PR aprovável sem ressalva: `approve`/`wait`) e `onCaveats` (aprovável com ressalva: `approve`/`wait`). O engine resolve por conta em `autoReviewFor(user)` (gate da revisão automática, por `pr.account`) e `approvePolicyFor(user, clean)` (usado por `shouldAutoApprove`; `clean` = nenhum ponto de atenção, e só isso: desde 30/09/2026 a classe não olha mais `decision`). Campo ausente na conta = herda o global. `acctPolicy(user)` acha a conta. **Discordância com review de terceiro** (`contested` com prova) é SEMPRE ponto de atenção, desde 30/09/2026: cai em "com ressalvas" e a política da conta decide (`approvePolicyFor` com `clean === false`; PR com contestação nunca é limpo). Histórico: até a v2.47.0 ela segurava o auto-approve sem opção, e da v2.47.0 a 30/09/2026 havia a chave global `autoApproveContested` (Sistema > Automação, `contestedPolicy()`), desligada por padrão. A chave morreu inteira (tabela de preferências, tela, engine): com ela desligada, a conta em "aprova com ressalvas" mandava o PR para a mesa do mesmo jeito, que é exatamente a desculpa que o dono mandou acabar. O que NÃO mudou: a discordância nunca é escrita no texto do PR (fica no campo `attention`, com rótulo e prova), e, **desde 01/10/2026, `shouldAutoReject` também não barra mais contestação** (como no approve: o bloqueio escrito vale por si e o card registra a contestação). **Reprovar sozinho** era OPT-IN por conta (`onReject: 'request_changes'`, default `wait`, sem global): quando a revisão pede mudanças (`verdict === 'request_changes'` + payload REQUEST_CHANGES) num review PEDIDO a mim (clique nunca posta) e a conta optou, o app posta o REQUEST_CHANGES com os bloqueios (corpo LIMPO, sem carimbo de automático), dedup por `myReviewStates` (não re-pede se eu já pedi **para o head atual**, ver "Dedup é por round" abaixo). Gate isolado em `shouldAutoReject(pr, result)`/`rejectPolicyFor(user)`; reprova sozinho por default na conta NOVA desde 01/10/2026 (`onReject: request_changes`); conta que já existia segue com o que tinha. **A auto-revisão (headless) vale pra TODA a fila elegível da conta com `autoReview` ligado, não só os PRs que acabaram de chegar** (`check()` filtra `this.queue`, não só `fresh`): ligar "revisa na hora" passa a valer pro que já estava esperando. PRs que falharam sem ser rede, ou que você cancelou, ficam em `autoReviewParked` (aguardam ação manual, não relançam sozinhos); lançar de novo (manual) tira do estacionamento. **Desde a v2.57.4 o estacionamento é VISÍVEL no card da fila** (quando parou, por quê, e que o Revisar tenta de novo), porque até ali "nunca revisou" e "revisou, caiu e estacionou" eram idênticos na tela (biud-core#317, 03/09/2026); ver "Estacionamento persistido" em "Ciclo de vida e higiene". **A revisão headless roda até `config.parallelReviews` POR CONTA em paralelo** (default 1 = serial dentro da conta, o comportamento de sempre; contas diferentes revisam juntas desde sempre; opt-in em Sistema > Automação, 1..4, sanitizado por `sanitizeParallelReviews` no boot/updateSettings E clampado de novo em `parallelLimit` no escalonador, defesa em profundidade): `processHeadless` é um escalonador que puxa da `headlessQueue` revisões até o teto da conta, contando em `headlessBusyAccounts` (**Map conta -> contagem** desde a v2.41.0; era Set); `runOneHeadless(pr, acct)` roda cada uma e devolve o slot via `freeHeadlessSlot` (zera com delete, nunca set 0: o isBusy do update.js pergunta `.size`) + reprograma no fim. `headlessAcct(pr)` = conta dona (por `accountForPr`). **Perfil de review por pessoa** (`config.people` = {login: {papel?, dominios?{backend|frontend|dados|infra: nivel}}}, marcado à mão: papel no card do PR e na aba Time, matriz por domínio só na aba Time) molda o TOM e a POSTURA da revisão automática, NUNCA a decisão. `personProfileBlock(login)` injeta no prompt headless (`headlessPromptFor(url, author)`): PAPEL (estagio/junior/pleno/senior/techlead/arquiteto/especialista) dá o tom-base, a MATRIZ (basico/intermediario/avancado/autoridade por domínio) calibra a postura conforme a área que o PR mexe (autoridade→defere; básico→explica mais). A instrução trava: só TOM/POSTURA, nunca verdict/decision/cardMet/gate. Sem perfil = bloco vazio (neutro). Só no caminho headless, não no terminal. Migração: o `config.seniority` plano antigo vira `papel` (`migrateSeniorityToPeople` no load). `parsePeople` valida/normaliza. **Review humano/personalizado:** `reviewFormatBlock()` (injetado SEMPRE junto do perfil, PREVALECE sobre o formato do CLAUDE.md do workspace) manda escrever o corpo postado como uma PESSOA (o Wanderson), personalizado/objetivo/profissional: SEM caixas de alerta `> [!NOTE]`, SEM "Placar", SEM checklist `- [x]`, SEM prefixos de Conventional Comments no texto, SEM citar automação/Farol/"auto-aprovei" (o autor não pode saber que é bot), sem travessão, e o FORMATO adapta à senioridade (estágio/júnior = prosa de mentor; pleno/sênior/arquiteto = enxuto e direto). O protocolo de review (`CLAUDE.md`, `prompts/pr-review-auto.md`, `prompts/self-review.md`, `.claude/agents/pr-reviewer.md`) é RE-SINCRONIZADO da fonte a cada boot (`prepareHome`), pra mudanças de formato chegarem nas cópias já semeadas (nunca toca em `state/`). **Memória de pushback (automática):** quando o autor contesta um review meu, o Farol detecta e classifica sozinho. `scanPushbacks()` roda no `check()` (fire-and-forget, guarda `pushbackScanning`, best-effort): só entra no scan o PR cujo review MEU foi **bloqueio** (`request_changes`) ou **aprovação COM ressalva** (aprovação limpa não gera pushback; `reviewActions()` expõe `caveats` = mesmos pontos do `attentionPoints`, card não comprovado ou motivo listado, pra distinguir). Nesses, gatilho barato via gh (`detectAuthorPushback` = atividade do autor DEPOIS do meu último review; marcador em `state/pushback-scanned.json` evita reprocessar; `updatedAt` do PR é o gate) e, só nos candidatos novos, `classifyPushback` (1 sessão Claude LEITURA pura, nunca posta, `MAX_PER_CYCLE=2`) devolve `{isPushback, outcome, confidence, note}`. Confiança ALTA vira registro `confirmed` sozinho; BAIXA vira `pending` (aparece como "confirmar?" no controle de Revisões recentes, com o desfecho sugerido, você resolve num toque). Registros em `state/pushbacks.json` carregam `source`('auto'|'manual')/`status`('confirmed'|'pending')/`confidence`. `recordPushback` (marcação/correção à mão) é sempre `manual`+`confirmed` (override). `pushbacksFor` (injeção no `personProfileBlock`) usa SÓ confirmados, pra não calibrar em cima de palpite. Mesma trava: só tom/postura, nunca a decisão. Migração: registros antigos sem `source` viram manual+confirmed. **A autoanálise em si (Meus PRs) NUNCA posta nem escreve em `state/`** (é diagnóstico do autor sobre o próprio PR): o caminho `runSelfAnalysis` não passa pelo gate de postagem, o prompt `self-review.md` proíbe qualquer `gh`/`git` de escrita, e o resultado fica só em `self-analyses.json`, onde PERMANECE até o PR fechar. **As escritas no GitHub partindo de Meus PRs são só duas, ambas por clique explícito: o botão "Reviewers" e o botão Merge.** O botão **"👥 Reviewers"** (`setReviewers`) atribui o autor e pede review da lista efetiva do repo, resolvida por `reviewersForRepo(repo)`: a EXCEÇÃO do repo (`config.projectReviewers[repo]`) se houver, senão o PADRÃO da org (`config.defaultReviewers[org]`). Assim funciona em qualquer repo da org que tenha padrão, mesmo sem config própria. Aceita pessoas e times `org/slug`, sem confirmação (aplica na hora); não posta review nem mergeia, só ajusta assignee/reviewers, e filtra o próprio autor da lista. O botão **Merge** (`mergeSelfPR`), acionado por clique explícito com confirmação, e gateado: só o autor mergeia o próprio PR (`author === ghUser`), só quando a autoanálise marcou `approvable === true`, só em repo fora de `config.mergeBlockedRepos` (default `biudtech/biud-frontend`), e nunca em rascunho/PR com conflito. Faz merge commit (`gh pr merge --merge`, sem squash/rebase), atribui o autor se preciso, e deleta a branch de origem **só se for descartável** (`isPermanentBranch` protege develop/release*/main/master/hml*/staging/etc., que jamais são deletadas). Quando o merge normal esbarra na proteção de branch (`blocked: 'policy'`), a UI oferece duas saídas: **auto-merge** (`--auto`, mergeia quando os requisitos passarem, sem burlar nada) e **merge como admin** (`--admin`, bypassa a proteção agora, só se você for admin, com confirmação reforçada). Os dois modos passam pelos mesmos gates (autor/aprovável/lista bloqueada), então nem admin mergeia repo bloqueado como `biud-frontend`. **O botão só fica disponível quando dá pra mergear de verdade**: o engine lê a mergeabilidade real de cada PR aprovável (`refreshMergeStates` no fim do `check()` e após cada autoanálise aprovável, guardada em `mergeStates`) via `gh pr view --json mergeable,mergeStateStatus`. CLEAN/UNSTABLE = botão Merge ativo; BLOCKED = mostra auto/admin direto (sem tentativa que falha); DIRTY/BEHIND/DRAFT = botão desabilitado com o motivo. O Auto-merge só é oferecido quando o repo tem `allow_auto_merge` ligado (`fetchAutoMergeAllowed`); senão o botão fica desabilitado e sobra o Merge (admin). Se ainda assim o `gh` recusar o `--auto` (`enablePullRequestAutoMerge`), o merge devolve `blocked:'autoUnavailable'` com mensagem acionável, e a condição é logada como WARN (não ERROR), já que não é bug do Farol.
-   **Check obrigatório vermelho nunca sai como APPROVE sozinho, em nenhuma política (v2.57.3).** `checksVermelhos(result)` (`lib/engine/gate-espera.js`, PURA, reexportada pelo `decision.js`) lê `result.checksObrigatorios`, que o `runHeadlessReview` preenche na SAÍDA da sessão com o `faltando` do `bloqueadoPorChecks` (a mesma leitura do gate de lançamento), e `shouldAutoApprove` devolve `motivo: 'ci_vermelho'`. Desde 30/09/2026 esse motivo vem DEPOIS da política e não manda o card para a mesa: é espera automática (ver "Duas classes e a espera do CI", abaixo). O que não mudou é o título deste parágrafo. Caso medido (biud-frontend#896, 02/09/2026): a regra "CI vermelho = needs_decision" só existia no prompt, a política de ressalvas aprovou por cima com o `audit` obrigatório em FAILURE, e o PR foi mergeado por bypass de admin três minutos depois, com a aprovação assinada por você como cobertura. O gate de ENTRADA (v2.57.0) não bastava porque o clique no Revisar o atravessa por desenho; o de SAÍDA vale pros dois caminhos. Leitura que falha devolve `[]` (falta de dado não inventa CI vermelho), e `shouldAutoReject` não é afetado. Travado em `test/ci-vermelho-gate.test.js`.
+Três consequências para quem mantém:
 
-   **Duas classes e a espera do CI (30/09/2026).** Pedido do dono, depois de ver conta em "aprova sozinho" com PR aprovável parado na mesa: "A configuração tem de cumprir o que promete, sem exceção: se é pra aprovar automaticamente, ele realmente aprova, sem desculpas pra passar por um approve humano." Até ali `shouldAutoApprove` tinha cinco gates que mandavam um resultado aprovável para a mesa SEM consultar a política da conta (`contestacao`, `cobertura`, `checkpoint`, `dependencia`, `ci_vermelho`/`ci_em_andamento`), e uma terceira classe escondida (zero ponto de atenção com `decision !== 'auto_approve'` caía em "com ressalvas" sem mostrar nada no card). Agora, para um resultado aprovável (análise completa, veredito `approve`, payload `APPROVE` com texto) em PR com `requested === true`: (1) **a classe depende só dos pontos de atenção** (`attentionPoints`, `lib/engine/ressalvas.js`, PURO): limpo = nenhum, com ressalvas = um ou mais; (2) **tudo que rebaixava virou ponto com texto próprio**: card não comprovado (`cardMet === false`), lacuna de cobertura ou de alcance (`coverageGap`), checkpoint malformado ou com divergência (`checkpointGap`), discordância de outro review (`contestations`), dependência em aberto (`dependenciasAbertas`, que de 27 a 30/09/2026 era espera dura), as `reasons` da sessão, e, quando não há nenhum outro e a sessão não respondeu `auto_approve`, um ponto dizendo exatamente isso; (3) **só a política decide**: `approvePolicyFor(conta, limpo)` devolvendo `approve` posta, devolvendo `wait` manda para a mesa com `motivo: 'politica'`, e o card mostra a configuração que segurou seguida das ressalvas (e do estado do CI, se a pipe não estiver verde). Nenhum outro motivo manda um aprovável para a mesa. O vocabulário do `motivo` ficou: `analise_incompleta`, `nao_aprovavel`, `sem_texto`, `clique`, `politica`, `ci_vermelho`, `ci_em_andamento`. Os quatro primeiros não são "aprovável barrado por desculpa" e seguem como eram, assim como head que andou, identidade, dedup, saída de cena e gate de consciência. **Desde 01/10/2026 `shouldAutoReject` também deixou de recusar por contestação, lacuna de cobertura e problema no checkpoint**: o pedido de mudanças sai e o card registra a lacuna (`review.js`, nada vai ao corpo público). **CI obrigatório não é ressalva nem mesa: é ESPERA AUTOMÁTICA** (`lib/engine/espera-ci.js`). Aprovar com check obrigatório vermelho continua proibido em qualquer política (biud-frontend#896), e com a pipe em andamento também (biud-frontend#1187; a auditoria de 27/09/2026 achou APPROVE assinado pelo dono com o próprio relatório pedindo espera); o que mudou é quem age depois. O `runHeadlessReview` grava a pendência com a marca `esperaCi` (`{ desde, checks, pontos }`, no `decisions.json`, então sobrevive a reinício), o toast diz "esperando o CI obrigatório; aprovo sozinho", e NÃO sai o evento `needs-decision`. A cada ciclo do `check()`, depois do `reconcilePending` (que já tira PR fechado, mergeado ou revisado por fora) e antes do `retryFailedPosts`, `aprovarQuandoOCiFechar` faz UMA leitura `gh pr view --json state,headRefOid,baseRefName,statusCheckRollup` por PR em espera (a exigência da branch vem do cache de `checks-exigidos.js`) e: política da conta relida ANTES da leitura (mudou para esperar você = vai para a mesa com o motivo da política); head diferente do que a sessão leu = larga a espera e carimba `blockedKind: 'stale_head'`, que é o que devolve o PR ao round automático (nunca posta em head que não leu); "ainda pedida a mim" NÃO é conferido (a espera só arma com `requested === true`, e o GitHub tira a conta de `reviewRequests` quando ela posta um review, então no round 2 a lista vem sem ela); checks ainda vermelhos ou rodando = segue esperando, sem teto, atualizando o card só quando a lista muda; todos verdes no MESMO head = dedup por head (`myReviewStates`; `null` não libera) e `postReview` com `commit_id` do head lido e `via: 'espera-ci'`, pelo funil de sempre (conta, linguagem, PR aberto, fila por PR, arbitragem entre aparelhos). Postagem que falha por algo passageiro arma o `postRetry` e passa a ser do reenvio; falha permanente vai para a mesa dizendo qual foi. **Aqui a falta de dado SEGURA**, ao contrário do gate de lançamento: sem token, `gh` fora, rollup ilegível ou exigência desconhecida = espera o próximo ciclo, porque o pior caso deixou de ser uma revisão refeita e passou a ser um APPROVE por cima de CI que ninguém leu. Com a coordenação entre aparelhos ligada e fora do ar a varredura nem roda, como o reenvio. O clique em Aprovar continua valendo durante a espera (a pendência é uma pendência), e o card diz "ESPERANDO O CI" com "Aprovo sozinho quando ele fechar verde neste commit". **Antes do post atrasado o gate de consciência é consultado de novo** (`bloqueadoPorHistorico`, a MESMA função do lançamento automático, sem cópia da regra; `acrity` e demais ferramentas não contam): entre a revisão e o post passam minutos ou horas, e se uma pessoa pediu mudanças naquele commit, ou o PR juntou duas aprovações de gente, a espera é largada e o card vai para a mesa dizendo isso ("uma pessoa pediu mudanças neste commit enquanto eu esperava o CI"). Não é desculpa nova: com esse review já presente no lançamento, a revisão automática nem teria rodado. O custo é só nesse instante (CI verde e head igual), nunca por ciclo de espera; se a leitura do head ali não confirmar o head lido, não posta e o próximo ciclo decide. **Quem espera o CI não é "Precisa de você"**: a tela separa (`separarPendentes`, `ui/pure/review.js`) em duas seções, "Precisa de você" e "Esperando o CI (aprova sozinho)", e o item em espera fica fora do contador da seção, do contador da sub-aba, da contagem por conta, do lote "Aprovar as N pendentes" da paleta, do badge e do tooltip da bandeja (`updateBadge`, `main.js`); no Panorama o selo é "esperando o CI", não "aguardando você". O botão Aprovar continua no card. **Nos OUTROS aparelhos a espera também não pede ninguém (01/10/2026).** O fato viaja pelos dois caminhos que já publicavam a pendência, sempre como acréscimo que a versão anterior ignora: na linha do Panorama o estado segue `decidir` e ganha o `motivo` `espera-ci` (`lib/sync/fila.js`), e o nó da pendência ganha o campo `espera: 'ci'` (`lib/sync/pendencia.js`). Só o fato: a lista de checks não sobe (o texto da espera já ia como motivo `gate`, no orçamento de sempre). Quem lê na 2.67.0 mostra o item no grupo "Esperando o CI (aprova sozinho)" de Radar > Aparelhos, fora da contagem de "pedem você", e não dispara o aviso da D3 (`deveNotificar`); se a espera for largada, o mesmo item avisa nessa hora. O Decidir continua no item, e o comando remoto `decidir` chega ao `decide` de sempre. **Por que não é um estado novo:** cada leitor saneia com a allowlist DELE. Na 2.66.3, estado fora da lista devolve `null` (`filaSaneada`), a linha perde a fila e o PR some da tela do admin; motivo fora da lista vira vazio, e campo a mais na pendência é ignorado (`lerPendencias` espalha a projeção sem allowlist). Então aparelho ainda não atualizado mostra a pendência comum de antes, que é o limite que sobra até a frota convergir. No sentido contrário, nó de versão anterior (sem o campo) e campo com lixo leem como pendência comum. Travado em `test/gate-espera-revisao.test.js` (ponta a ponta, com o `gh` falso andando a pipe entre os ciclos), `test/ci-vermelho-gate.test.js`, `test/contested.test.js`, `test/checkpoint-gate.test.js`, `test/fanout.test.js`, `test/review-reasons.test.js` e `test/motivo-recusa-visivel.test.js` (que reprova se um dos motivos mortos voltar ao gate).
+- A fonte é o código. Cada arquivo de `lib/engine/` abre com um comentário que conta a regra e o
+  caso que a originou. Este guia aponta o lugar; na divergência, vale o código, e o guia é corrigido
+  no mesmo PR.
+- O que não está aqui não foi conferido, e não quer dizer que não exista. A lista do que tem regra
+  no código e ficou sem seção está logo abaixo.
+- Frase nova neste guia só entra depois de aberta a função que ela descreve.
 
-   **"CI obrigatório antes da aprovação" é opt-in (02/10/2026; obrigatório de 17/10 a 06/11/2026; opt-in de novo, desligado por padrão, desde 06/11/2026).** Pedido do dono em 02/10/2026, depois de duas pessoas do time verem a aprovação parada em "Esperando o CI" (uma com a pipe ainda rodando, outra com o `audit` obrigatório vermelho por um advisory que não vinha do diff, aprovada na mão): "deixar essa espera do CI desabilitada por padrão". De 17/10 a 06/11/2026 a chave ficou forçada em `true` (saneador fixo, linha sem chave na tela) e o CI vermelho ou pendente virou lacuna dura também na publicação e no clique. Em 06/11/2026 o dono pediu de volta, nas palavras dele: "isso aqui tem que ter como desativar no Farol, acredito que isso é a maior falha, e deve vir por default como desabilitado". O merge continua barrado pelo GitHub quando o check é obrigatório no ruleset, e desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho e nada barra o merge (a linha da chave em Sistema > Automação avisa). A chave é `config.aguardarCiParaAprovar` (padrão `false`, Sistema > Automação, "CI obrigatório antes da aprovação"; só o booleano `true` liga, saneado em `lib/settings.js` e lido por `aguardaCiParaAprovar` em `lib/engine/gate-espera.js`, lugar único, em TODA via que decide ou posta). Quem tinha o `true` forçado gravado no `config.json` passa pela migração única do esquema 2 (`migrarPadroes`, `lib/engine/contas-migracao.js`), que grava `false` e registra a mudança com origem "migração" no rastro da política. **Desligada**: (1) `shouldAutoApprove` devolve `ok` sem consultar `motivoDeEspera` nem `checksVerifiedHead`, então um resultado aprovável com a política mandando aprovar posta na hora, inclusive com check obrigatório vermelho, rodando ou sem leitura, e o estado da pipe entra nas ressalvas guardadas do item (`avisoDoCi` no desfecho), que ficam no app e nunca vão ao PR; a classe (limpo ou com ressalvas) é decidida ANTES desse acréscimo, então o CI não muda a política aplicada; (2) `lacunasDaRodada` (`busca-da-prova.js`) não exige as lacunas do CI (o `approvalGaps` continua apontando o estado da pipe, e só a chave decide se ele conta; por isso `VERSAO_DAS_REGRAS` não subiu: nenhuma prova gravada deixa de valer); (3) o gate de publicação (`approvalRefusal`, `lib/technical-review/publication.js`) não lê nem espera os checks, no APPROVE automático, no clique em Aprovar (Radar, paleta, lote), no reenvio e na co-assinatura; o resto da prova continua exigido; (4) não existe REQUEST_CHANGES pelo CI: o caminho 4 do desfecho (`ci_vermelho`) e o `reprovarPeloCi` da espera não rodam, o pedido de mudanças que só o CI vermelho sustenta (`reprovacaoSoPeloCi`, `review-consistency.js`) não sai sozinho (`shouldAutoReject`) e vai à mesa com o motivo dito, e o bloqueio declarado com causa `ci` não arma a espera do CI (o conflito declarado junto segue a regra dele); (5) a sessão recebe o bloco "CI obrigatório fora da decisão" (`ciForaDaDecisaoBlock`, `review-prompt.js`): não conclui `request_changes`, não declara bloqueio com causa `ci`, não rebaixa a `decision` nem escreve motivo só pelo estado da pipe (motivo da sessão vira ressalva e mudaria a classe do PR), e o diff que comprovadamente quebra o check continua defeito do código; (6) a retirada do pedido de mudanças resolvido não espera o CI (`provaDaRetirada` responde `sim`; a marca `rodada` armada antes sai sem o CI), mas o pedido feito PELO CI vermelho só sai com o check verde, porque o problema dele era o check; (7) espera já armada antes de desligar sai no próximo ciclo da varredura (`liberarSemCi`, `lib/engine/espera-ci.js`) sem olhar o CI, sem laço: política relida, head igual ao lido (commit novo larga a espera com `stale_head`), gate de consciência e dedup por head; a espera de um pedido de mudanças só pelo CI vai à mesa, porque o CI fora da decisão não vira o APPROVE que a revisão não concluiu; (8) o card da aprovação que saiu avisa quando o GitHub pode não segurar o merge (`avisoDaAprovacao`, `gate-espera.js`): "aprovado com check obrigatório vermelho (ou sem resultado) no head: o ruleset segura o merge até ele passar, salvo bypass" e, com a chave ligada ou desligada, "aprovado sem check de CI obrigatório no ruleset da branch de destino" (condicionado à proteção clássica, que o endpoint de rules não enxerga), citando até dez checks fora do verde que `anexarChecksObrigatorios` leu (`semCheckObrigatorio`, `checksNaoVerdes`, `checks-exigidos.js`); o aviso só entra depois que o APPROVE saiu (com a postagem falhando o motivo segue neutro), exigência que não deu para ler não gera aviso, e o aviso fica no app e nunca vai ao PR; (9) a tela não promete espera: o card "Esperando o CI" vira "Saindo da espera do CI" e não desliga o Aprovar por causa do CI, o título do Aprovar desligado deixa de citar o CI e os títulos dos seletores da conta dizem que o CI não segura (o título da caixa de revisão e o selo da fila de uma espera antiga seguem dizendo "esperando o CI" até o ciclo que a libera, no máximo um intervalo de checagem). A fila e a pendência que sobem para os outros aparelhos não mudam de forma: sem a marca `esperaCi`, o motivo `espera-ci` simplesmente não aparece. **Ligada**, tudo o que o parágrafo acima descreve vale como de 17/10 a 06/11/2026, inclusive a proibição de aprovar por cima de CI vermelho (biud-frontend#896) e de pipe em andamento (biud-frontend#1187), o REQUEST_CHANGES pelo CI vermelho com a conta reprovando sozinha e a recusa da publicação sem checks verdes no commit. Conta que manda esperar você não muda: vai para a mesa pela política, com o aviso do CI no card. Travado em `test/gate-espera-revisao.test.js` (o bloco "CI obrigatório antes da aprovação é opt-in"), `test/decisao-sem-mesa.test.js` e `test/retirada-de-pedido.test.js` (os blocos "desligado"), `test/technical-review.test.js`, `test/sem-declaracao-tecnica.test.js` e `test/ci-obrigatorio-opcional.test.js`; os casos da espera ligam a chave explicitamente.
+Sem seção neste guia, com o arquivo em que cada assunto mora (todos em `lib/engine/`, salvo
+indicação):
 
-   **Recuperação autônoma da análise técnica (18/10/2026).** Com revisão pedida à conta, `esperaProva` mantém a recuperação no `decisions.json`. Duas rodadas complementares saem imediatamente; as seguintes recuam por 15, 30, 60, 120, 240 e até 360 minutos entre tentativas. O limite é de frequência, não dispensa evidência e não transforma falha do Farol em defeito no PR. A marca, o prazo e as interrupções sobrevivem ao reinício.
-
-   O ciclo confere o PR, respeita a coordenação e só libera o recibo pendente do mesmo aparelho e commit. Fila, sessão ou retry existentes impedem recuperação concorrente. Rodada órfã ou falha transitória estacionada é reagendada; autenticação, orçamento, ferramenta indisponível e configuração ausente têm impedimento operacional explícito, sem pedir uma aprovação manual que continuaria recusada. Cancelamento explícito não é desfeito. Automação desligada ou conta silenciada pausam a execução. Mudança da política de publicação continua válida.
-
-   **Repositório sem declaração técnica é ressalva (17/10/2026, v2.72.5; de novo pela decisão do dono de 19/10/2026, v2.73.2, que supera o PR #250 e o PR #253).** Repositório sem declaração no cadastro privado não tem avaliação técnica configurada, e isso não é violação. A marca `technicalReview.semDeclaracao` nasce SÓ no runtime (`lib/technical-review/runtime.js`), nunca da saída do modelo; com ela `approvalGaps` pula a lacuna técnica, `attentionPoints` põe a ressalva "Este repositório não tem declaração técnica cadastrada, então a avaliação técnica automática não rodou." e a política de ressalvas da conta decide. A publicação (`publication.js`) aceita exigindo `commit_id`, nenhuma outra lacuna obrigatória na prova gravada, os checks obrigatórios verdes NESTE commit e o contexto da revisão ainda valendo (base e impressão das objeções, quando gravadas). Cadastro ilegível continua impedindo. Com declaração, ferramenta indisponível ou avaliação inconclusiva são lacunas que não são duras: viram ressalva já na rodada que as encontrou (abaixo).
-
-   **A primeira rodada decide (decisão do dono de 06/11/2026, "decidir na 1ª rodada"; antes, desde 17/10/2026, v2.72.6, e de novo desde 19/10/2026, v2.73.2, depois de duas revisões complementares no mesmo commit).** A rodada complementar no mesmo commit deixou de existir para a lacuna que não é dura: medido em 06/11/2026, cinco PRs (biudtech/biud-frontend#1852, #1843, #1842, #1841 e biudtech/backoffice#271) foram mergeados enquanto esperavam a segunda rodada, sem o Farol postar. Toda rodada carimba `provaEsgotada` (`lacunasDaRodada`, `lib/engine/busca-da-prova.js`): `lacunasExigidas` mantém só as lacunas duras e as do CI, e a que não é dura (cobertura da leitura, alcance, protocolo, checkpoint, falha de execução da ferramenta técnica, avaliação inconclusiva) vira ressalva com o próprio texto ("faltou prova nesta revisão, então segue como ressalva: ..."; a divergência entre passadas diz "outra tentativa não desfaz a divergência entre passadas, então segue como ressalva: ..."), e a política de ressalvas da conta decide entre aprovar com ressalvas e a mesa. Nenhuma espera da prova arma por ela e nenhuma segunda sessão roda no mesmo commit. O card mostra um único ponto de divergência: a ressalva técnica não repete o ponto do app. O resumo técnico da tela fica em `ressalva` e o botão Aprovar fica ligado. A publicação aceita com os mesmos requisitos do repositório sem declaração mais o contexto da revisão (base e objeções gravadas), e só para a lacuna que a própria rodada dispensou (`dispensadaPelaRodada`, `publication.js`): declaração técnica trocada depois da rodada, ferramenta atualizada (`TOOL.commit`) ou versão trocada pedem revisão nova (`needsReview`), na espera do CI e no Aprovar da mesa, porque a avaliação da rodada é da regra antiga. O relatório da falha de execução (`not-run`) grava o perfil, o commit e a versão da ferramenta desde a segunda revisão independente (`runtime.js`, `identidadeDaFalha`), e o gravado antes, sem eles, também pede revisão nova. PR com mais arquivos do que os 3000 que o GitHub lista (`inventarioNoLimite`, `pr-inventory.js`) é desfecho terminal: motivo `inventario_no_limite` ("a decisão é sua"), sem recuperação e sem o diff não medido entre as exigidas, para o clique da mesa não pedir uma revisão nova que daria o mesmo; o APPROVE automático continua impedido. Quem decide o que é ressalva é o engine, nunca o modelo: prova gravada por uma versão anterior das regras (`approvalEvidenceVersion` diferente de `VERSAO_DAS_REGRAS`, hoje 8) pede revisão nova (`legacyEvidenceGap`), e a espera armada por regras anteriores é reconferida na próxima tentativa permitida pelo recuo para decidir pelas regras de hoje.
-   - continuam IMPEDINDO, sempre (lacunas duras, `ehLacunaDura` e `relatorioComViolacao` em `verdict.js`): CI obrigatório vermelho ou pendente (só com "CI obrigatório antes da aprovação" ligado, desde 06/11/2026), violação técnica confirmada ou achado não resolvido (repositório com declaração), a parte do card deste PR dita não entregue, commit não confirmado, avaliação de outro commit ou repositório, análise incompleta, diff não medido independentemente, avaliação técnica atual ausente (com declaração cadastrada; sem declaração segue ressalva), texto incoerente com os achados, head que andou e PR da própria conta (que sai como COMMENT). A análise incompleta entrou na lista em 06/11/2026: com toda rodada decidindo, ela sairia da prova gravada e o Aprovar da mesa e a publicação deixariam de vê-la. O diff não medido e a avaliação ausente entraram no mesmo dia, pela revisão independente: sem o primeiro a cobertura volta a ser só o que o modelo declarou, e sem a segunda nada foi avaliado;
-   - a recuperação durável do PR #253 (logo acima) continua só para o que segue exigido: análise incompleta, lacuna dura que não é defeito do PR e interrupção. A pendência nasce com a marca `esperaProva` e o próximo ciclo relança NA HORA uma revisão do MESMO commit (stale_head no head lido, âncora e recibo da rodada liberados, sem o relógio de PR quieto em `relogioDoRound`); `MAX_TENTATIVAS` (2) conta essas rodadas rápidas antes do recuo. O prompt dessa rodada traz o bloco "Revisão complementar (tentativa N neste commit)" com as lacunas da anterior, como dado delimitado; diff e checks são medidos de novo pelo engine na própria rodada.
-
-   O prompt da recuperação recebe as lacunas e exige as avaliações estruturadas; achado confirmado deve gerar um pedido de mudanças fundamentado pelo revisor, publicado somente se a política permitir. Com análise suficiente, a aprovação passa pelos mesmos gates de identidade, commit, base, objeções, checks e deduplicação. Tentativa nenhuma dispensa lacuna dura. Pendências antigas sem prova voltam ao funil automaticamente; a origem é a do dono (`origemDoDono`), e PR da própria conta sai como COMMENT.
-
-   A atualização da versão das regras não antecipa o recuo já agendado em `esperaProva.proximaEm` (`umaEspera`, `lib/engine/espera-prova.js`). Quando chega a hora, a próxima rodada usa a regra atual e, como qualquer outra, só entra no contador quando conclui (`armar`, ver "A pendência tem saída" abaixo); a migração não concede uma sessão fora do recuo nem apaga o histórico de tentativas. A versão geral é 8, adotada pela mudança da primeira rodada na base integrada. A régua específica dos intervalos da dívida tem versão própria e exige reconferência apenas de relatórios que descontaram dívida com a versão anterior.
-
-   **Só objeção nova de pessoa invalida o APPROVE (05/11/2026, complemento de 06/11/2026).** A conferência das objeções na publicação (`objecoesMudaram`, `lib/technical-review/reviews.js`) não compara mais o hash do histórico inteiro: o relatório grava, junto da impressão, a lista das objeções de pessoa que a revisão leu (`humanObjections`), e a publicação só recusa quando aparece uma que não está nela. Não é objeção: review ou comentário de ferramenta (`ehFerramenta`, a régua do gate de consciência), review APPROVED e os comentários de linha que nasceram dentro dele, review DISMISSED, review sem texto e o que simplesmente sumiu. Resposta do autor do PR também fica fora quando a identidade dele foi confirmada; PR recebido somente por URL consulta essa identidade no GitHub. Sem confirmação, a classificação permanece conservadora. É objeção: pedido de mudanças, review comentado com texto e comentário de linha de outra pessoa fora de aprovação, inclusive da própria conta revisora, e corpo editado. Medido no estado real: das sete recusas "histórico de objeções mudou depois da revisão" gravadas até 05/11/2026, a impressão de cada relatório foi reconstruída byte a byte a partir dos reviews do GitHub, e seis vinham de ferramenta (acrity) ou de aprovação de pessoa; o biud-frontend#1803, por exemplo, só foi aprovado 2h27 depois, por outra sessão paga. Uma objeção publicada durante a sessão pode ser incorporada sem descartar a aprovação: a consulta somente de leitura em `lib/technical-review/query-objections.js` devolve os textos e os recibos de conteúdo. O envelope declara `objecoesLidas: [{tipo: "review"|"comment", id, impressao}]`; o engine valida o formato e a publicação reconfirma tipo, id e SHA-256 do conteúdo atual. Id sozinho, edição posterior ou comentário novo não coberto continuam recusando. O recibo vincula a declaração ao conteúdo consultado, sem provar a correção do julgamento semântico nem dispensar qualquer outro gate. Relatório gravado antes desta versão (sem a lista) segue comparando a impressão inteira, e a impressão continua calculada do mesmo jeito.
-
-   A interface mostra recuperação, próxima tentativa ou o impedimento do ambiente, fora de "Precisa de você" enquanto a recuperação anda sozinha. Falha de execução tem diagnóstico próprio, sem ser mascarada como avaliação ausente. CI mantém sua espera específica; PR fechado ou mergeado é reconciliado, e commit novo segue o caminho de re-revisão do head atual. `test/espera-prova.test.js` e `test/busca-da-prova.test.js` cobrem os desfechos e a preservação dos bloqueios.
-
-   **A pendência tem saída (06/11/2026).** Auditoria no motor instalado 2.78.39: cinco pendências presas, 12 de 32 PRs do dia terminados em recuperação pausada e US$ 48 gastos sem nenhuma postagem. Seis furos, cada um com teste em `test/saida-da-recuperacao-da-prova.test.js`:
-   - **a tentativa conta quando a rodada CONCLUI**, não no agendamento (`armar`, com o envelope na mão; `relancar` só agenda). Rodada barrada por regra, histórico, conflito ou CI e sessão interrompida não gastam tentativa, o que generaliza o que `inicio-com-ci.js` fazia só para o CI. `tentativas` passa a ser o número de rodadas complementares concluídas no commit; a que está sendo avaliada é a seguinte (com a decisão do dono de 06/11/2026 toda rodada já é a da prova esgotada, então o contador só pesa para a lacuna dura recuperável e o teto abaixo);
-   - **a revisão mandada pelo dono conta como qualquer rodada** (clique, Panorama, URL, "Revisar tudo"): com a revisão automática desligada para o PR (a conta em "só põe na fila" sem regra Automático na organização ou no autor, ou a regra Manual, desde 12/11/2026) a recuperação nasce pausada e nenhuma rodada automática sai, e antes a pendência não tinha saída (Aprovar desligado e recusado pela publicação, e a revisão manual rearmava com as mesmas tentativas). Agora cada revisão sua decide a lacuna que não é dura (vira ressalva e a política da conta decide, inclusive levando à mesa) e conta no teto da lacuna dura recuperável;
-   - **`recordDecision` substitui a pendência anterior do PR que tem `esperaProva`**, em qualquer head, em vez de deixar dois cards (a revisão manual sobre a pausada duplicava). Com a decisão na 1ª rodada toda pendência nova já carrega `provaEsgotada` e é substituída por ela; a condição própria fica para a pendência em recuperação gravada até a 2.78.39, sem essa marca;
-   - **teto total por commit** (`MAX_TENTATIVAS_POR_HEAD`, 6, em `busca-da-prova.js`): a lacuna dura recuperável (análise incompleta, veredito incoerente com o texto) seguia só com o recuo de 15 minutos até seis horas, sem fim. **Desde 08/11/2026 (ordem do dono) a rodada que chega ao teto decide pela política:** `lacunasDaRodada` reconhece o teto pela marca da recuperação (`rodadasNoTeto` e `marcaAnterior`, que saiu do `espera-prova.js` para `busca-da-prova.js`, a fonte única da contagem), grava `provaNoTeto` e o contador em `tentativasDaProva`, e `análise incompleta` deixa de ser exigida e vira ressalva (a `avaliação técnica atual ausente` segue exigida, porque a publicação a recusaria de novo e pediria reconferência a cada ciclo) ("depois de 6 revisões neste commit a análise não fechou, então segue como ressalva: ..."); `shouldAutoApprove` não recusa por `analise_incompleta` nesse caso. Violação, achado, parte do card, commit e diff não confirmados seguem exigidos, e sem texto de aprovação nada sai. Quando ainda sobra lacuna exigida, a pendência vai à mesa com o motivo dito ("depois de 6 revisões minhas neste commit a análise continua sem fechar..."), o contador fica gravado em `tentativasDaProva` e a varredura de pendências antigas não a rearma; revisar de novo por clique neste PR roda a rodada normalmente, sem ser recusada pelo teto (`cliqueDepoisDoTeto`, em `espera-prova.js`): como qualquer rodada, a lacuna que não é dura vira ressalva e a política decide; se ainda sobra lacuna dura recuperável, ela volta à mesa com "depois do teto de 6 revisões neste commit, só revisão por clique" e NÃO rearma a recuperação automática nesse commit, e cada clique seguinte faz o mesmo (o reinício é explícito, nunca mais tentativas automáticas). Rodada automática, varredura e "Revisar tudo" herdam o contador e voltam à mesa; o card do teto é substituído pelo da rodada nova (`recordDecision`, pela marca `provaEsgotada` que toda rodada carrega), sem duplicar, e commit novo recomeça tudo;
-   - **o que sessão nenhuma resolve não arma recuperação**: `armar` recusa quando há caminho protegido sem projeção (`arquivosProtegidosSemProjecao`, `lib/engine/ambiente-nao-lido.js`), porque outra sessão também não o leria. Desde 08/11/2026 nem ele nem o valor oculto de ambiente são motivo de recusa em `shouldAutoApprove`: os dois viraram ressalva (ver "Arquivo de ambiente e protegido não lido viram ressalva");
-   - **a pausa que só uma pessoa desfaz é "precisa de você"** (`pedeVoce` na marca, `pedePessoa` em `recuperacao-prova.js`: automação desligada, conta silenciada, login, ferramenta, cadastro, orçamento, cancelamento e label retirada; a espera pelos checks obrigatórios é a única pausa que passa sozinha). Ela conta no contador da seção e por conta, no ícone da bandeja e da casca (`avisos-nativos.js`), o card diz "Recuperação pausada: precisa de você" com o que destrava (resolver o impedimento, revisar de novo, ou pedir mudanças, comentar ou pular; aprovar segue exigindo a prova), o selo e a caixa deixam de dizer "sem decisão manual", e o aviso `needs-decision` sai UMA vez por pausa (a marca `avisada` cai quando a pausa passa). A pausa só conta como anotada quando o texto do impedimento E o `pedeVoce` batem (`pausaAnotada`, em `recuperacao-prova.js`): a marca gravada antes desta versão, com o impedimento e sem o campo, ganha o `pedeVoce` na varredura seguinte e avisa uma vez. Entre aparelhos ela viaja como pendência comum com o impedimento entre os motivos (`lib/sync/pendencia.js`, `espera` vazio) e como `decidir` sem motivo na fila (`sync-fila.js`): motivo, nunca estado novo, pelo mesmo leitor antigo que motivou o `espera-ci`.
-
-   **Espera armada antes de uma regra mudar é revista (17/10/2026, v2.72.6).** Medido no celular: biudtech/biud-messaging-waba#52 seguia mostrando lacunas que as regras atuais não produzem mais ("critérios necessários do card não comprovados", "dependência necessária ainda aberta"). A marca carrega a versão das regras do gate (`regras`, `VERSAO_DAS_REGRAS` em `lib/technical-review/evidence.js`, que SOBE a cada mudança no que `approvalGaps` produz); marca sem carimbo ou anterior relança pelo mesmo caminho sem gastar tentativa e sai carimbada, então não há laço.
-
-   **PR da própria conta que revisa nunca espera nem posta sozinho (17/10/2026, v2.72.6).** Medido no celular: biudtech/biud-frontend#1479 era da conta que revisava e ficou em "Aprova sozinho". O GitHub não aceita APPROVE nem REQUEST_CHANGES do autor, então nenhuma prova destrava. `shouldAutoApprove` devolve `pr_proprio` (antes de qualquer outro motivo, para veredito approve ou request_changes) e `shouldAutoReject` devolve false quando o autor é a conta que revisa, sem diferenciar caixa (`ehMeu`, `lib/engine/pr-proprio.js`). Nenhuma espera arma. Desde 18/10/2026 (v2.73.2), com a política da classe automática, a revisão sai como COMMENT e a pendência é resolvida como `commented_own_pr` (ver "A decisão sem mesa"); com a conta em "espera você", o card vai para a mesa com "o PR é da própria conta que revisa (@login); o GitHub não aceita APPROVE do autor, então outra pessoa precisa aprovar" (ou "pedido de mudanças ... outra pessoa precisa revisar"). Espera do CI ou da prova que já existia nesse caso é largada pela varredura (`lib/engine/espera-pr-proprio.js`), com o autor gravado ou, sem ele, o lido do GitHub, e o `needs-decision` sai uma vez; se ela estava na rodada complementar (`stale_head` no mesmo head), o estado de commit novo sai junto, para o round automático não mirar o PR. Revisão do PR #248: o portão de postagem (`postagem-portao.js`, chamado pelo `postReviewOnce`) recusa APPROVE e REQUEST_CHANGES em PR da própria conta por QUALQUER via (clique, reenvio, chat, espera do CI), com `blocked: 'pr_proprio'`; COMMENT continua saindo. A pendência grava `prProprio`, e a tela não oferece Aprovar nem Pedir mudanças (card, paleta e lote).
-
-   **Postagem que falhou por instabilidade tenta de novo sozinha (v2.48.0).** O gate acima decide SE pode postar; esta parte cuida de quando ele já disse que sim e só o POST morreu. Achado no `biud-frontend#774` (17/08/2026): a revisão decidiu `approve`, `shouldAutoApprove` devolveu `ok:true`, e o `gh` respondeu 503 num `major_outage` do GitHub. A falha entrava como mais uma string em `result.reasons` e o item caía pra `pending`, ou seja, uma pendência puramente mecânica esperando clique humano pra sempre, com a decisão e o payload já prontos em disco. Agora `runHeadlessReview` marca `result.postRetry = { event, attempts: 0 }` quando (e SÓ quando) `classify(post.error).kind === 'transitorio'` (mesma tabela de `lib/log-taxonomy.js`, invariante 3: uma fonte só pro que é transitório; a classe `github-indisponivel` nasceu deste incidente). `retryFailedPosts(engine)` roda no `check()` **depois** do `reconcilePending` (pra nunca reenviar em cima de pendência já atendida por fora) e reenvia o payload GRAVADO, sem reabrir sessão nem gastar token. **A trava que mantém isso seguro é o dedup por head** (`myReviewStates`, o mesmo do caminho normal): postar review não é idempotente, então se a 1ª tentativa tinha ido pro ar e só a resposta se perdeu, o retry vira no-op e a pendência resolve sem duplicar review no PR. Teto de `MAX_POST_RETRY_ATTEMPTS` (3), cada ciclo de polling servindo de backoff natural (180s-3600s); esgotado, marca `exhausted` e a pendência volta a ser sua, sem mais tentativa. Falha PERMANENTE (credencial recusada, payload inválido, bloqueio de `internal_language`) nunca entra no sweep: insistir não resolveria e esconderia de você o único problema que exige ação humana. O gate do invariante 4 NÃO afrouxou: só entra no sweep item que o gate já tinha liberado, e `postRetry: null` (a maioria: gate barrou por regra ou conteúdo) jamais é tocado.
-
-   **Credencial no texto público não sai por via nenhuma (03/11/2026).** `postReviewOnce` é a boca única: revisão automática, clique, reenvio, espera do CI, chat, co-assinatura e o recuo do 422 passam por lá. Antes da trava de linguagem, `recusaPorCredencial` (`lib/engine/credencial-no-texto.js`) recusa corpo ou comentário inline com credencial reconhecida (`blocked: 'credencial_no_texto'`), sem token, sem arquivo e sem `gh`. Não há reconstrução automática nem reenvio: a pendência fica com a pessoa e a saída é o chat do PR ou a próxima revisão. O motivo cita o campo, nunca o trecho, e `recordDecision` troca o valor no item por `[credencial retirada]`, marca que a trava também recusa, para a espera do CI não publicar um texto recortado. Só valem os formatos com prefixo de emissor com cara de valor emitido (`hasCredential`, `lib/sensitive-text.js`): a variável, a URL e o Bearer da máscara de log casam com review normal e ficam de fora. `test/credencial-no-texto.test.js` prende as vias e o texto que tem de passar.
-
-   **Firebase ligado mas fora do ar (v2.62.1).** A coordenação conta como ativa pela CONFIGURAÇÃO, não pela conexão, então sem conexão (rede, login vencido, sem credencial) a arbitragem recusava tudo: medido numa matriz de cinco modos, o clique em Aprovar era recusado (`coordenacao-indisponivel`) e a revisão disparada com "sem coordenação" rodava, gastava a sessão e morria na postagem (`registro-indisponivel`). Agora `contornoComFirebaseFora` (`lib/engine/postagem-arbitragem.js`) deixa o ato EXPLÍCITO seguir pelo caminho sem Firebase: vias `clique` e `sessao`, e `revisao` com o handle noop, que com a coordenação ligada só nasce do clique em revisar sem coordenação. Antes de postar, `conferirNoGithub` faz o papel da arbitragem: veredito igual naquele commit já no GitHub é dedup, e sem conseguir conferir não posta (`estado-desconhecido`). O automático (`reenvio`, `coassinatura`, `revisao` com lease) continua esperando a conexão, e o `retryFailedPosts` nem roda enquanto `coordenacaoForaDoAr`, em vez de gastar duas chamadas ao GitHub por pendência a cada ciclo. Risco aceito pelo dono: dois aparelhos postando o mesmo veredito no mesmo instante com o Firebase fora do ar para os dois.
-
-   **Recusa passageira da coordenação (18/09/2026).** Com a coordenação entre aparelhos ligada, a revisão automática grava a intenção de postar em `receipts/.../$fp/postagens` ANTES de o recibo do head existir, e a regra publicada do banco exigia os campos do recibo em qualquer escrita abaixo de `$fp`: a intenção era recusada, o PR caía em "falha técnica ao postar", e o `postRetry` nem armava, porque "não deu para gravar a intenção de postar" não casa classe transitória nenhuma da taxonomia. O clique depois passava, porque o recibo já estava lá (medido no `postagens.json` real: 3 de 3 falhas pela via `revisao`, 6 de 6 sucessos por clique). Três camadas: a regra aceita o `$fp` só com `postagens` e recusa recibo pela metade (`firebase/database.rules.template.json`, publicação manual pelo dono); `postarComRetentativas` tenta de novo até 3 vezes, com `TEMPOS.POSTAGEM_RETENTATIVA_MS` (2 s) entre elas e o lease reconferido antes de cada uma; e `postRetryFor` arma o reenvio dos ciclos também para `falhaPassageira(post)`. Passageira é só `nao_enviada` com `attempted: false` e motivo em `registro-indisponivel`, `coordenacao-indisponivel`, `estado-desconhecido` ou `head-desconhecido` (`lib/engine/postagem-arbitragem.js`): posse de outro aparelho, commit novo e resultado incerto nunca repetem.
-
-   **Motivo tem EIXO, não é lista plana (v2.48.0).** Cada entrada de `reasons`/`attention` é `{ text, kind }` com `kind` em `gate` | `content` | `infra`. Antes era string solta e os três se confundiam na tela: no print do #774 apareciam "7 motivos de ter vindo pra você" misturando 6 achados da revisão com 1 erro 503, o que fazia o gate parecer quebrado quando o que houve foi a rede cair. `gate` = regra deliberada do app (cobertura incompleta, discordância com outro review, política da conta, revisão por clique); `content` = o que a revisão apontou sobre o código; `infra` = a postagem em si falhou. Quem etiqueta é quem cria o motivo (`runHeadlessReview` e `attentionPoints`), uma vez só. **Retrocompatível por construção**: entrada antiga do `decisions.json` (string pura, sem etiqueta) é lida como `content`, a leitura conservadora, nunca inventando um gate ou uma falha de infra que não houve. `uniqueHumanTexts` preserva o par (dedup segue pelo texto normalizado) e `decisionForUi` projeta `postRetry` com allowlist (só `attempts`/`exhausted`: `lastError` é stderr do `gh` e não vai pra tela). A UI agrupa em `reasonGroups`/`reasonGroupsHtml` (`ui/pure.js`), na ordem infra → gate → content.
-
-   **Fronteira do review humano (v2.40.7).** `reportMarkdown`, `reasons`, `attention`, memória, cobertura e gate são diagnóstico interno persistido; `reviewMarkdown`, `payloads.*.body` e cada `comments[].body` são texto de review. `postReview` normaliza o schema e roda `publicReviewLanguageIssues` antes de credencial, arquivo temporário ou `gh`; o fallback de inline é validado de novo. Qualquer vazamento de processo, origem da revisão ou template robótico falha fechado nos fluxos mediados pelo app. O protocolo de terminal e chat manda usar `/api/review/post` com capability efêmera limitada às keys e à conta da sessão, e o writer comum aplica o mesmo gate. Essas sessões ainda recebem uma credencial GitHub para investigar PRs privados, então a capability evita bypass acidental, mas não é uma fronteira contra um processo deliberadamente malicioso que ignore o protocolo e use a credencial diretamente. A UI recebe `decisionForUi`, uma allowlist com o review humanizado e diagnósticos reescritos, nunca o relatório bruto nem os payloads. O protocolo sincronizado inclui também `.claude/commands/pr-review.md`.
-
-   **Ressalva vai pro PR (mudança de 29/07/2026, decisão do Wanderson; valia o contrário até a v2.26.0).** Aprovável COM ressalva **aprova** (ressalva nunca bloqueia) e a ressalva **aparece no corpo do PR**, escrita como um revisor sênior mencionaria de passagem, sem checklist e sem seção rotulada. **Filtro obrigatório** (em `reviewFormatBlock`): ressalva TÉCNICA sobre o código entra no corpo; ressalva OPERACIONAL do nosso fluxo NÃO entra e fica só em `reasons`/`attention` (card não confirmado por falha de acesso ao Jira, review que não era pedido a mim, discordância com outro review, política de conta, cobertura incompleta), porque é assunto interno e citar vazaria a automação.
-
-   **Cobertura da leitura é gate (v2.26.0).** **Desde 30/09/2026, no APPROVE a lacuna é ressalva e não gate**: entra em `attentionPoints` com a lista concreta e a política de ressalvas da conta decide (ver "Duas classes e a espera do CI", acima). No REQUEST_CHANGES ela deixou de ser gate em 01/10/2026: o pedido de mudanças sai e a lacuna fica registrada no card. O resto deste parágrafo conta por que a cobertura é medida e como. Motivo medido em 29/07/2026 sobre 44 reviews reais: o tamanho do PR varia 4359x no histórico e o esforço visível do review varia 3x; a correlação entre linhas do diff e âncoras `arquivo:linha` é **r = -0,08**, ou seja, nenhuma. Nos PRs acima de 2000 linhas, 3 de 5 saíram sem uma única âncora, e o #688 (74 arquivos, 8717 linhas) auto-aprovou com relatório de tamanho médio, zero âncora e zero achado. Conclusão: "nenhum achado" era indistinguível de "li 20% e não vi nada". Agora o envelope carrega `coverage: {total, reviewed[], missing[]}` e `coverageGap(result)` segura a postagem automática (approve E reject) quando falta arquivo, mandando pra decisão humana com a lista. **Dois eixos separados, não confunda:** ressalva é o que a revisão ENCONTROU (não bloqueia), cobertura é o que ela conseguiu LER (bloqueia a postagem sozinha, porque sem leitura completa não há prova). A rede de segurança também pega `reviewed.length < total` mesmo com `missing` vazio. **Desde 26/09/2026 a cobertura é conferida contra o diff MEDIDO, e envelope sem `coverage` é lacuna.** O `runHeadlessReview` anexa a lista de arquivos que ele mesmo mediu no head (`result.diffMedido`, preparada junto com a herança em `prepararCoberturaParaOGate`), e `coverageGap` (que mora em `lib/engine/file-proof.js`, a casa da prova de leitura; o `decision.js` só aplica) compara conjunto com conjunto: arquivo medido fora de `reviewed` é lacuna, e caminho declarado que não está no diff também (contar `reviewed.length` contra um `total` informado pelo próprio modelo não pegava caminho inventado, duplicado nem total errado). Sem a medição, vale a conta declarada. Envelope sem `coverage` aprovava sozinho até ali ("passe único"), apesar de o prompt exigir o campo desde o PR pequeno; medido antes de fechar, 0 das 249 sessões desde 10/09/2026 veio sem cobertura. Travado em `test/fanout.test.js` (gate) e `test/cobertura-contra-diff.test.js` (fiação, com contraprova). **Desde 27/09/2026 a cobertura inclui o USO FORA do diff** (`lib/engine/alcance.js`). Duas auditorias seguidas (Haiku e Sonnet em 26/09; uma amostra sorteada de 16 aprovações do próprio Opus em 27/09, com 1 erro e 5 lacunas importantes) acharam o que escapou sempre fora do diff: quem chama a função alterada, o estado que chega de outra tela, o script que a documentação cita. A regra de prompt "siga quem chama" existia e não bastou. Agora o envelope traz `alcance`: para cada arquivo de código de produção do diff, onde ele é usado fora do diff (arquivo, linha, símbolo) ou por que não há uso a conferir. O engine lê cada arquivo citado NO HEAD revisado e confere que o símbolo aparece perto da linha declarada, antes do gate e no mesmo desenho dos checks obrigatórios. Arquivo de código sem entrada, chamador inventado, conferência que não deu para fazer ou mais de 60 arquivos citados viram pendência do `coverageGap`, e a decisão volta para a pessoa. Isso prova que a revisão abriu o arquivo certo no lugar certo, não que entendeu o chamador. Travado em `test/alcance.test.js`, com contraprova da fiação.
-
-   **Herança da ausência de uso (06/11/2026):** antes do prompt, `alcance-contexto.js` calcula a identidade da árvore completa do head, com caminhos, blobs, modos, tipos, base e identidade do repositório/conta. Inclui arquivos do próprio diff, pois um alias ou consumidor alterado ali também pode criar uso externo. A ausência só é herdada se essa identidade continuar igual; a cobertura do blob inalterado permanece aproveitada. Árvore parcial, head errado ou registro antigo/corrompido apenas retiram a herança do alcance, sem abrir sessão adicional. Se o mapa já habilitado mostrar import estático exato que contradiz a ausência, a declaração fica pendente e não é gravada como prova herdável. O app não liga o mapa quando a configuração o mantém desligado. A identidade comprova frescor do contexto, não a verdade semântica da declaração inicial.
-
-   **Fan-out em PR grande (v2.26.0).** Acima de **1000 linhas OU 20 arquivos** (limiar medido: pega 28% dos PRs do histórico, 7 de 25), o engine mede o PR com uma chamada `gh pr view --json additions,deletions,changedFiles,files`, monta 2 a 4 **lotes** por afinidade de caminho (`planLotes`) e injeta o instrutivo. A sessão principal então dispara **um subagente `pr-reviewer` por lote, em paralelo** (ela já disparava um; agora dispara N), cada um lendo por completo só os arquivos do seu lote e **ciente dos caminhos dos outros lotes** (pra sinalizar dependência cross-lote sem afirmar defeito em arquivo que não leu). A consolidação é na própria sessão: dedup por `arquivo:linha`, resolução das suspeitas cross-lote e **o gate dos 8 blockers aplicado UMA vez** sobre o conjunto (a decisão continua num lugar só). Falha na medição degrada pro passe único de sempre, que é sempre seguro. **`planLotes` DESCE por profundidade de caminho, nunca sobe pro pai:** a 1ª versão fundia o menor grupo no diretório pai e a validação com o #688 real reprovou (cascateava até a raiz e um lote ficava com 53 dos 74 arquivos, recriando o problema). Fundir os dois menores entre si mantém o equilíbrio. **Aritmética conhecida:** com teto de 4 lotes, um PR de 8717 linhas ainda dá ~2200 linhas por lote; subir o teto custa quase nada em tokens (o total de linhas lidas é o mesmo, muda só o overhead por subagente), então se a cauda de PRs gigantes incomodar, o caminho é `MAX_LOTES`.
-   **ATENÇÃO, e é a parte mais importante deste parágrafo: até a v2.27.0 nada disso rodou.** A fachada `Engine.headlessPromptFor` declarava `(url, author)` enquanto a implementação em `lib/engine/review.js` recebe `(engine, url, author, lotes, metrics)` e o chamador em `runHeadlessReview` passava os quatro. Os dois últimos eram engolidos pela fachada, chegavam `undefined`, e `fanOutBlock` nunca era concatenado: o Farol media o PR, montava os lotes e **jogava o plano fora**, seguindo no passe único. Todo o módulo `fanout.js` e a bateria de testes dele estavam verdes porque testavam as funções puras, não o caminho até o prompt. Corrigido na **v2.28.0**, com os dois lados travados em teste: o comportamento (o bloco chega no prompt) segue em `test/review-prompt.test.js`, e a **aridade das fachadas** MUDOU DE CASA na onda 3. Hoje ela vive em `test/facades.test.js`, que **deriva do fonte** em vez de manter tabela curada: faz parse do `server.js` como texto, casa cada fachada de uma linha e compara o `Function.length` dela com o da implementação, descontando o slot do `engine`. Fachada nova passa a ser coberta sozinha, sem ninguém precisar cadastrar. Os dois casos que o cálculo não alcança (parâmetro desestruturado com default, que zera o `Function.length`, e a fachada que liga `this.usage` como segundo argumento) estão no mapa `EXCECOES` daquele arquivo, e o teste reprova se um deles sumir. Consequência prática de ter corrigido: PR grande passou a custar bem mais tokens, porque agora ele é de fato lido inteiro. Fachada nova que carregue argumento de comportamento entra naquela tabela.
-
-## A decisão sem mesa (18/10/2026, v2.73.2)
-
-Regra do dono, literal: "Se foi configurado pra aprovar sozinho ele aprova sozinho, se foi
-configurado pra reprovar sozinho ele reprova sozinho, sem depender da minha ação. Não quero
-desculpas pra entregar a decisão pra mim." A política da conta tem três campos que decidem a
-publicação (`onClean` e `onCaveats`: `approve` ou `wait`; `onReject`: `request_changes` ou
-`wait`). Um campo em `wait` é a escolha do dono, e a mesa ("Precisa de você") continua certa
-ali. Em qualquer outro caso o Farol decide e posta sozinho. A segurança do invariante 4 não
-muda: APPROVE nunca sai com CI obrigatório vermelho ou pendente (com "CI obrigatório antes da
-aprovação" ligado; desligado, que é o padrão desde 06/11/2026, o CI não decide), violação técnica confirmada
-ou achado não resolvido, avaliação necessária ausente ou inconclusiva, commit não confirmado ou
-head que andou.
-
-Onde mora: `lib/engine/desfecho-da-revisao.js` (o desfecho do `runHeadlessReview`, que saiu do
-`review.js` nesta entrega), `lib/engine/desfecho-automatico.js` (PURO: origem, defeito, textos
-públicos montados pelo app, reconstrução depois da trava de linguagem e os mapas de evento),
-`lib/engine/espera-ci.js`, `lib/engine/espera-pr-proprio.js`, `lib/engine/espera-prova.js`,
-`lib/engine/approval-policy.js` e `lib/engine/skip-review.js`. Travado em
-`test/decisao-sem-mesa.test.js`, `test/invariante-4-clique.test.js`,
-`test/espera-regras-e-pr-proprio.test.js`, `test/gate-espera-revisao.test.js` e
-`test/consciencia-historico.test.js`.
-
-**Decisão de gente durante a recuperação da análise (06/11/2026).** Medido em
-biudtech/biud-frontend#1841: a pendência com `esperaProva` foi relançada no mesmo head, a rodada
-relançada foi segurada pela aprovação de uma pessoa naquele head (`bloqueiaAutomatico`) e o cartão
-"Recuperando a análise" ficou sete horas na tela até o merge. Agora `launchReReviews` chama
-`resolverSeGenteDecidiu` (`lib/engine/espera-prova-decidida.js`) antes do `bloqueiaAutomatico`:
-só para PR com `esperaProva` naquele head ele consulta o histórico, e com `hist.bloqueado` no
-MESMO head da espera resolve a pendência como `approval_not_needed`/`skip`, sem postar e sem mesa,
-no molde da espera do CI ("outra pessoa já decidiu este commit (@x) enquanto eu concluía a análise:
-a revisão automática não é necessária, nada foi publicado"), com log INFO, um aviso e o recibo de
-coordenação publicado. Com o meu pedido automático aberto (`pedidoMeuAberto`) o histórico não
-bloqueia e a rodada roda, como antes; decisão em outro head não resolve nada (commit novo tem
-caminho próprio). Travado em `test/espera-prova-decidida.test.js`.
-
-**Inventário dos caminhos que terminavam na mesa (até a v2.72.11) e o que fazem agora**, com a conta
-em automático na classe do resultado:
-
-| caminho | condição | até a v2.72.11 | v2.73.2 |
-|---|---|---|---|
-| origem (`approval-policy.js`, desfecho) | revisão não pedida a mim (`requested !== true`): clique no Panorama, URL colada, "Revisar agora" do admin (`viaAdmin`), comandos repetir, tomar e transferir (`viaComando`), distribuição (`viaDistribuicao`) | mesa, "revisão iniciada por você" | posta pela política: são todos o dono mandando revisar (`origemDoDono`). Só o objeto sem marca nenhuma é origem desconhecida e segue sem postar sozinho (nenhum caminho de hoje o produz; a guarda falha fechado) |
-| defeito do PR (desfecho) | veredito aprovar com violação técnica confirmada, achado técnico não resolvido ou `cardParteDestePr === false` | mesa (ou busca da prova, que acabava na mesa) | com `onReject: request_changes`, REQUEST_CHANGES na hora: a seção do defeito (com as regras reprovadas pela causa e os achados por arquivo e linha) e, depois, o pedido que a própria sessão escreveu (`payloads.request_changes`), tudo pela trava de linguagem; status `auto_rejected`. Com `wait`, mesa |
-| CI vermelho (desfecho e `espera-ci.js`; só com "CI obrigatório antes da aprovação" ligado) | resultado aprovável com check obrigatório em FAILURE no commit revisado | espera do CI para sempre | com `onReject: request_changes`, REQUEST_CHANGES citando os checks, uma vez por head (marca `esperaCi.rcHead`), e a espera continua: com a pipe verde no MESMO commit o APPROVE sai por cima. CI só rodando nunca vira pedido de mudanças. Com `wait`, só espera, como antes |
-| gate de consciência (`skip-review.js`, `espera-ci.js`) | pessoa aprovou ou pediu mudanças no head enquanto a aprovação esperava o CI, ou numa rodada liberada só para retirar o meu pedido | espera largada, mesa | decisão de gente no head: resolve como `approval_not_needed`, sem postar (`bloqueadoPorHistorico`, campo `decidido`). |
-| PR da própria conta (desfecho e `espera-pr-proprio.js`) | autor é a conta que revisa (o GitHub recusa APPROVE e REQUEST_CHANGES do autor) | mesa, "outra pessoa precisa aprovar" | a revisão sai como COMMENT (`payloads.comment`, ou o texto do veredito), ancorada no commit lido, e a pendência é resolvida como `commented_own_pr`. Vale também para as esperas que já existiam. Falha passageira arma o reenvio do evento `comment` |
-| resultado incompleto (`espera-prova.js`, `recuperacao-prova.js`) | `analise_incompleta`, `sem_texto`, `nao_aprovavel` (aprovar sem o APPROVE pronto, ou pedir mudanças sem texto) | mesa | a recuperação durável do PR #253 relança a revisão no MESMO commit: duas tentativas rápidas e depois recuo de 15 minutos até seis horas, com o motivo da pausa (login, ferramenta, orçamento, cancelamento) no card, quando a origem é do dono |
-| trava de linguagem (desfecho e `espera-ci.js`) | o texto público foi barrado (`internal_language`) | mesa como falha ao postar | reconstrução UMA vez (`reconstruirPayload`: sai cada parágrafo e cada comentário de linha barrado) e nova postagem; sem texto sobrando, mesa com o motivo de infra |
-| reconferência técnica (`recheck.js`) | base mudou ou apareceu objeção nova de pessoa depois da revisão | relançava só com `requested === true` | relança para qualquer origem do dono (a pendência grava `pr.origemDono`) |
-
-**A mesa que sobra, e por quê** (cada uma diz o motivo no card):
-- a política da conta em `wait` para a classe do resultado, inclusive quando muda durante uma espera (`politicaAindaAprova`): é a escolha do dono;
-- lacuna dura que não é defeito do PR (commit não confirmado, avaliação de outro commit ou repositório): o invariante 4 proíbe o APPROVE e pedir mudanças seria afirmar algo falso ao autor. A prova que falta sem ser dura deixou de ser mesa: ela é ressalva já na rodada que a encontrou e a política decide (decisões do dono de 18/10/2026 e 06/11/2026);
-- a recuperação pausada por impedimento do ambiente (login, ferramenta indisponível, orçamento, cadastro ilegível, cancelamento seu, automação desligada): a recuperação retoma sozinha quando ele passa (PR #253), mas desde 06/11/2026 ela É "precisa de você" enquanto dura, porque só uma pessoa desfaz o impedimento; o card diz o impedimento e o que destrava, e o card diz o que destrava (seção "A pendência tem saída");
-- o teto de rodadas por commit (`MAX_TENTATIVAS_POR_HEAD`): depois de seis rodadas no mesmo commit, o Farol não gasta outra sessão sozinho; desde 08/11/2026 a análise que não fechou vira ressalva e a política decide, e só a lacuna que nunca sai como APPROVE leva à mesa, dita no card;
-- falha permanente ao postar (credencial, texto todo barrado, PR de org que nenhuma conta cobre, a `reserva` do `atribuicaoDoPr`), e o reenvio que esgotou as tentativas: infra, dita no card;
-- pendência gravada sem o commit lido ou sem o payload (dado corrompido): o Farol não posta sem saber de que código o texto fala;
-- PR da própria conta com a conta em `wait`, ou sem texto para comentar;
-- conta silenciada não inicia novos trabalhos; a revisão já iniciada pode concluir e postar pela conta original. A conclusão adiada pelo CI ou por falha de envio exige o mesmo commit e uma decisão persistida dessa sessão. Silenciar não cancela sessões nem remove credenciais. Sem token ou fora do orçamento, o impedimento continua aparecendo onde sempre apareceu.
-
-### Bloqueio de estado não reprova (05/11/2026)
-
-Medido no dia, três REQUEST_CHANGES automáticos postados sem defeito do código: tenant-company#293
-(conflito com a base e CI que não rodou), biud-frontend#1784 (seletores de e2e em arquivos fora do
-diff) e engine-ai#880 (critério do card e SQL duplicado). O modelo marcava `blocking` e a conta,
-em `onReject: request_changes`, reprovava em público pelo estado do PR.
-
-Desde então todo achado `blocking` vigente do envelope declara `causa`, de lista fechada
-(`CAUSAS` em `lib/engine/review-findings-contract.js`, reexportada por `review-findings.js`):
-
-| causa | significa | efeito no desfecho automático |
-|---|---|---|
-| `defeito_codigo` | regressão, regra de negócio quebrada, segurança, contrato de API, teste que falha pelo diff | pode reprovar sozinho |
-| `card` | a parte do card que cabe a este PR não foi entregue | pode reprovar sozinho |
-| `ci` | check obrigatório vermelho ou sem resultado no head | com "CI obrigatório antes da aprovação" ligado, espera do CI (`espera-ci.js`); o pedido pelo CI vermelho segue a regra de 18/10/2026, e o CI verde não vira APPROVE: a decisão volta para a mesa. Desligado (padrão desde 06/11/2026), o bloqueio vira sugestão e a aprovação sai pela política da conta (desde 08/11/2026, ver abaixo) |
-| `conflito` | PR em conflito com a base, checks não rodaram por isso | espera do conflito (`espera-conflito.js`, `blockedKind: 'conflito'`), que o commit novo destrava; com o GitHub dizendo `MERGEABLE`, o bloqueio vira sugestão e a aprovação sai pela política da conta (desde 08/11/2026) |
-| `dependencia` | depende de PR ou card em aberto | mesa, com o texto da revisão no card |
-| `fora_do_diff` | o problema está em arquivo que este PR não toca (base, outra branch) | mesa, com o texto da revisão no card |
-
-Regras, PURAS, em `lib/engine/desfecho-automatico.js`: `bloqueiosSoDeEstado` (há bloqueio e nenhum
-com causa em `CAUSAS_QUE_REPROVAM`), `reprovacaoSoDeEstado` (o mesmo com o veredito
-`request_changes` e sem `defeitosDoPr`) e `causaDaEspera` (`ci`, senão `conflito`, senão `mesa`).
-`shouldAutoReject` recusa a reprovação só de estado e o `registrarPendencia`
-(`desfecho-da-revisao.js`) a leva à espera ou à mesa com o motivo `bloqueio_de_estado` no card.
-O que a avaliação técnica provou (`defeitosDoPr`: violação confirmada, achado não resolvido, a
-parte do card) reprova sem olhar a causa. O texto da revisão barrado por causa de estado fica no card, nunca no PR.
-
-**Estado desmentido não sustenta o pedido (08/11/2026).** Ordem do dono: a conta que aprova ou
-reprova sozinha decide sozinha. Quando o pedido de mudanças só se apoia em estado que não vale, o
-CI obrigatório com "CI obrigatório antes da aprovação" desligado (bloqueio de causa `ci` ou
-`reprovacaoSoPeloCi`) ou um conflito que o GitHub desmente (`MERGEABLE`), sem defeito provado e com
-a análise completa e coerente, `aplicarEstadoDesmentido` (`lib/engine/estado-desmentido.js`, chamado
-no `runHeadlessReview` logo depois de ler os checks, antes da memória de rodadas e das lacunas da
-rodada) rebaixa esses bloqueios a sugestão (o de rodada anterior sai como `retirado`), vira o
-veredito para aprovar e põe a ressalva com o motivo; a política de ressalvas da conta decide. Sem
-texto de aprovação escrito pela revisão, o app escreve um curto (`aprovacaoDoApp`), sujeito à trava
-de linguagem do `postReview`. Leitura do `mergeable` que falha ou `UNKNOWN` não desmente nada. Antes
-os dois iam à mesa com "a decisão é sua". A espera do CI armada antes de desligar a chave segue
-indo à mesa (`liberarSemCi`), e com a chave ligada a espera do CI decide como antes. Bloqueio sem
-causa, ou com causa fora da lista, é envelope fora do contrato (`review_inconsistent`) e vai à
-recuperação durável. Envelope legado, sem `findings`, segue a regra de antes. A memória de rodadas
-gravada antes da causa continua legível (`review-round-store.js` não exige a causa). Vale só para a
-decisão automática: no clique e no chat a pessoa escolhe o que posta. Travado em
-`test/decisao-sem-mesa.test.js`, `test/review-rounds.test.js` e `test/motivo-recusa-visivel.test.js`.
-
-## Todos os caminhos que produzem parecer ou postagem (26/09/2026)
-
-"Qualidade do review" só tem sentido se for dita por caminho, porque nem todo caminho que escreve no GitHub passou por uma revisão do Farol. O inventário abaixo foi levantado lendo o código em 26/09/2026. **Só o caminho 1 (e os que desembocam nele) produz review qualificado automaticamente**; os outros são decisão humana consciente, endosso, ou nem são review, e a régua de cada um está dita. Todo review que o Farol posta sai por UM funil, `postReview` (`lib/engine/decision.js`): conta dona, schema, linguagem pública, token, PR aberto, e a arbitragem entre aparelhos quando ligada.
-
-| caminho | quem dispara | régua de qualidade antes de escrever |
-|---|---|---|
-| 1. Revisão automática da fila (e re-revisão por rodada, distribuição, retentativa do POST) | automático | sessão com o modelo da configuração (o Auto nunca abaixo do Opus fixo, ver lib/modelos.js) e `shouldAutoApprove`/`shouldAutoReject` inteiros. No approve (desde 30/09/2026): `requested === true`, a política da conta sobre a classe (limpo ou com ressalvas; cobertura contra o diff medido, checkpoint, contestação, dependência e card entram como ressalva visível), CI obrigatório (só com `aguardarCiParaAprovar` ligado, opt-in desde 02/10/2026: vermelho ou rodando ESPERA e posta sozinho quando fecha verde no mesmo head, `lib/engine/espera-ci.js`; desligado, posta na hora e o estado do CI vira ressalva no app), head que andou, dedup por round. No reject: cobertura, checkpoint e contestação seguem recusando. A retentativa reenvia o payload que o gate já liberou |
-| 2. Revisão por clique ("Revisar") | você | a mesma sessão e o mesmo gate de saída; desde 18/10/2026 o clique (fila, Panorama ou URL avulsa, marca `manual`) posta sozinho pela política da conta, como a fila (ver "A decisão sem mesa") |
-| 3. Comandos remotos repetir, tomar e transferir, "Revisar agora" do admin e distribuição | admin ou outro aparelho seu | a mesma sessão e o mesmo gate; chegam sem `requested` (CT-FIO) mas com `viaComando`, `viaAdmin` ou `viaDistribuicao`, e desde 18/10/2026 postam pela política da conta (de 26/09 a 18/10/2026 viravam decisão sua) |
-| 4. Decisão manual na pendência, e o comando remoto "decidir" que a chama | você (ou o admin) | NENHUM gate de qualidade, por desenho (invariante 4: clique não é bloqueado). É decisão humana consciente sobre o payload que a sessão deixou pronto, com as lacunas visíveis no card (`attentionPoints`: cobertura, checkpoint, card, contestação, dependência); não conta como review qualificado automaticamente |
-| 5. Chat do PR e sessão de terminal (`/pr-review`) | você pede na conversa | sem gate de qualidade: capability efêmera por PR e conta, uma postagem por sessão, e o funil. "Só posta se pedido" e o critério do terminal são do prompt e de quem está na sessão |
-| 6. Co-assinatura (opt-in, desligada por padrão) | automático | sem sessão nem envelope: endosso de quem pegou o PR, no mesmo SHA, postado ancorado nele, nunca onde eu sou autoridade (CODEOWNERS), dedup por head. É o único caminho automático que aprova sem ter revisado, e por isso nunca liga sozinho |
-| 7. Autoanálise de Meus PRs e pushback | você / automático | não escrevem no GitHub (parecer local e memória local) |
-| 8. Merge e Reviewers de Meus PRs | você | não são review: o merge tem o gate próprio (autoanálise aprovável no mesmo head, autor, repo não bloqueado); Reviewers só ajusta assignee e reviewers |
-
-**Riscos conhecidos que ficam registrados, sem correção nesta entrega:**
-- as sessões de IA (revisão, chat, pushback, autoanálise, terminal) recebem a credencial do GitHub para ler PR privado, e a proibição de escrever por fora do funil é regra de prompt; a capability protege de bypass acidental, não de um processo que ignore o protocolo (o mesmo que "Fronteira do review humano" já diz);
-- o REQUEST_CHANGES automático da sessão não consulta CI vermelho, de propósito (pedir mudança com CI vermelho não é o risco que aquele gate existe para segurar); desde 18/10/2026 o CI vermelho num resultado aprovável vira ele mesmo um REQUEST_CHANGES quando a conta reprova sozinha;
-- o modo rápido (`reviewFast`, opt-in, fora do Auto desde 26/09/2026) troca verificação empírica por `needs_decision` quando a prova exigiria tempo, e essa troca é do prompt, não verificada pelo gate.
-
-**Como a qualidade se mede, e o que não é critério de aceite.** O gate decide ANTES de postar, com evidência: escopo e critérios avaliados, cobertura contra o diff, afirmações materiais verificadas (checkpoint) e limitações declaradas. Não existe prova de que um PR não tem defeito, e o gate não finge isso. O que aconteceu DEPOIS (autor contestou, bug no mesmo arquivo) mede o sistema ao longo do tempo e corrige o protocolo, nunca aprova ou reprova um review já concluído. A auditoria de 26/09/2026 (14 aprovações do Haiku e do Sonnet re-revisadas pelo Opus no mesmo head, amostra escolhida pelo risco) é o exemplo do método: uma aprovação era REQUEST_CHANGES, e foi ela que tirou os modelos menores do Auto.
-
-## Conclusão da revisão
-
-O parser de revisão aceita JSON bruto ou um único bloco explicitamente `json`, sem confundir chaves de templates na prosa com o início do objeto. Blocos ambíguos ou inválidos continuam recusados. Uma resposta só de progresso não é uma decisão: sem resultado estruturado a revisão permanece não concluída e não pode postar nem ser retomada automaticamente para repetir uma ferramenta recusada. O protocolo exige o envelope com `analysisStatus: "incomplete"` quando alguma verificação necessária não puder terminar.
-
-## Motivo é OBJETO: o unwrap tem UM endereço (v2.51.1)
-
-Desde a v2.48.0 `reasons`/`attention` viajam como `{ text, kind }`. Interpolar o
-objeto cru numa string escreve **"[object Object]"** na cara do usuário, e isso
-já saiu em produção DUAS vezes:
-
-| onde | versão | corrigido |
-|---|---|---|
-| card "Precisa de você" | v2.48.0 | v2.48.3 |
-| as TRÊS notificações do sistema (`main.js`) | v2.48.0 | **v2.51.1** |
-
-O agravante: **o CHANGELOG da v2.48.3 afirmava que a notificação tinha sido
-corrigida** ("A notificação do Windows dizia a mesma coisa"). Não tinha. O
-`main.js` nunca teve teste nenhum, então nada denunciou.
-
-`reasonText` mora em **`lib/format.js`** e é a fonte única pro engine e pro shell.
-`ui/pure.js` mantém a própria cópia **de propósito**: ele é servido ao NAVEGADOR
-como módulo ES e não pode importar de `lib/`, que o servidor não expõe.
-
-`test/motivo-nunca-vira-objeto.test.js` trava as duas metades: o unwrap, e a
-AUSÊNCIA de interpolação crua no `main.js` (lê o fonte e proíbe `${x[0]}` que não
-passe por `reasonText`, mesma técnica do `ui-pure.test.js` contra menção de pessoa
-escrita à mão). Consumidor sem teste é onde o mesmo bug volta.
-
-**Foco da janela no Windows, no mesmo pacote:** `win.focus()` sozinho NÃO traz a
-janela pra frente. O SO só deixa quem já é o processo em primeiro plano roubar o
-foco (foreground lock), e clicar numa notificação não conta, então o clique não
-fazia nada visível. `showWindow` faz o pulo do `setAlwaysOnTop(true)`/`(false)`
-antes do `focus()`, só no ramo não-mac.
-
-## A garantia mora no estrangulamento, não no chamador (v2.51.1)
-
-Terceiro tropeço da mesma feature, e o mais instrutivo. A saída de cena foi
-implementada como um filtro no `toReview`, e existem **três** caminhos automáticos
-que enfileiram revisão:
-
-| caminho | via label viva | via saída registrada |
-|---|---|---|
-| `toReview` | sim | sim |
-| `reReviewTargets` | sim | **não** (até a v2.51.0) |
-| `retryTargets` | **não** | **não** (até a v2.51.0) |
-
-Medido no `biudtech/engine-ai#68` (20/08/2026): o Farol comentou às 19:55:52 e a
-label dele subiu às **19:57:45**, com a label do colega ainda no ar (ela só saiu às
-20:00:01). Ou seja, entrou por um caminho que nem olhava a label. Diferente do #60,
-aqui não foi o marcador transitório: foi gate no lugar errado.
-
-**A regra que sai daqui:** garantia que precisa valer sempre mora no PONTO DE
-ESTRANGULAMENTO, nunca em cada chamador. `enqueueHeadless` é por onde toda revisão
-headless passa (`launchReview` e `launchReReviews`), então é lá que a saída de cena
-é honrada. Os filtros em `retryTargets`/`reReviewTargets` continuam, mas agora são
-economia (não ficar repescando em silêncio), não a garantia.
-
-O CLAUDE.md **já avisava** disso no parágrafo do `reReviewTargets` ("as MESMAS
-travas do toReview: quem mexer lá, mexe aqui") e eu acrescentei uma trava nova sem
-espelhar. Aviso em prosa não substitui invariante no código.
-
-## Justiça de fila entre orgs e contas (v2.58.0)
-
-Com compartilhamento ligado, a presença começa a ser anunciada na inicialização, sem esperar a busca no GitHub. O relógio da sincronização mantém a cadência de cinco minutos para renovar essa confirmação, antes de retomar itens que estavam aguardando. Somente uma resposta bem-sucedida do banco atualiza a presença; falha de rede não dispensa a admissão nem os gates da distribuição.
-
-Itens aguardando ficam na fila. A seção **Analisando agora** só aparece quando há uma sessão para mostrar; uma fila bloqueada por presença não significa que a revisão já começou.
-
-Spec: `docs/superpowers/specs/2026-09-10-justica-de-fila-entre-orgs-design.md`.
-
-**O invariante que manda nas três políticas: elas são WORK-CONSERVING.** Se existe PR
-elegível esperando e existe slot ou cota disponível, alguma revisão dispara. Nenhuma
-política pode deixar recurso ocioso pra "guardar a vez" de quem não chegou. É a regra
-do Wanderson (10/09/2026) escrita como invariante: *com fila, divide; sem fila, o que
-chegar é atendido.* Quem mexer aqui e sentir vontade de segurar uma vaga vazia está
-quebrando a feature, não melhorando ela.
-
-**Segundo invariante: justiça mexe em ORDEM e ADMISSÃO, nunca em VEREDITO.** Nada deste
-bloco toca `verdict`, `decision`, `cardMet`, `shouldAutoApprove`, `shouldAutoReject` ou
-o corpo postado. Um PR atendido mais cedo ou mais tarde recebe exatamente a mesma
-revisão. É o que mantém o invariante 4 ("nada é postado no GitHub sem gate") intacto.
-
-**Política 1, rodízio por org** (`proximoHeadless`/`headlessOrg` em `lib/engine/review.js`).
-O escalonador já isolava por CONTA (`headlessBusyAccounts`), então contas diferentes
-NUNCA disputaram slot entre si; o que não existia era divisão entre as ORGS de uma mesma
-conta, e ali a escolha era FIFO puro. Agora, entre os ELEGÍVEIS (conta abaixo de
-`parallelReviews`), ganha a org de menor `seq` em `engine.orgLastStart`; org ausente do
-Map (nunca atendida) vale `-Infinity` e ganha de todas; empate resolve por ordem de
-chegada, o que faz uma org só se comportar exatamente como antes da feature.
-
-A ordem é por CONTADOR MONOTÔNICO (`engine.headlessSeq`) e **não por relógio**:
-`Date.now()` tem granularidade de milissegundo e o escalonador dispara várias revisões
-no mesmo tick, então o empate de relógio apagaria a alternância justamente no lote que a
-feature existe pra resolver. O `at` guardado junto é só pra tela dizer "atendida há 12
-min"; ele nunca decide a vez. `orgLastStart` é EFÊMERO como o `headlessBusyAccounts`:
-persistir a última org atendida faria o primeiro PR depois de um restart herdar uma
-dívida de ontem, e o app abriria já devendo a vez pra alguém.
-
-**Política 2, cota de conta dentro do perfil** (`quotaStatusFor`/`accountSpendInProfile`
-em `lib/engine/usage.js`, `quotaBlockedFor`/`contasDoPerfil` em `server.js`). O teto de
-orçamento sempre foi do PERFIL: duas contas no mesmo `claudeProfileId` dividiam um teto
-único, a de alto volume queimava a cota do dia sozinha, e a outra era barrada no gate de
-enfileiramento sem NUNCA ter tido uma revisão. Pior, o toast falava do perfil, então nem
-dava pra ver quem consumiu.
-
-A cota é o teto do dia rateado por peso (`accounts[].budgetWeight`, default 1) entre as
-contas ATIVAS (não silenciadas, que revisam sozinhas: `accounts[].autoReview`) daquele perfil. **A cláusula
-que faz a feature ser o que é: a cota só barra quando existe OUTRA conta do mesmo perfil
-esperando na fila E que ainda cabe na cota dela.** Sem disputa, quem chegou é atendido
-até o teto duro, como sempre. Ceder pra quem também estourou não devolveria a vez a
-ninguém, só deixaria o teto sem gastar, que é exatamente o que o invariante proíbe.
-
-O teto DURO do perfil (`profileBudgetStatus`) continua valendo por cima e é avaliado
-ANTES: perfil estourado barra todo mundo, e essa é a mensagem certa. A cota é um segundo
-motivo, mais cedo e mais seletivo. **Nada aqui fura o teto.**
-
-`waiting` (quem está esperando) sai da fila VIVA e de propósito NÃO reconsulta o gate de
-orçamento: isso recursaria, porque o gate é justamente quem chama `contasDoPerfil`. Os
-filtros ali são os baratos e síncronos do `toReview`.
-
-`budgetWarned` guarda DOIS formatos desde aqui: `idDoPerfil` (teto duro) e
-`idDoPerfil|conta` (cota). A reconciliação no topo do `check()` trata os dois no mesmo
-laço; tratar a chave composta como id de perfil não acharia perfil nenhum, o aviso sairia
-do Set todo ciclo e o toast repetiria sem parar, que é o barulho que o Set existe pra
-impedir.
-
-**Política 3, teto total do aparelho** (`globalParallelLimit`, `config.globalParallelReviews`;
-na tela, "Teto total deste aparelho"). Limita o TOTAL somando todas as contas, e desde
-30/09/2026 é também o lado local do teto da admissão (antes era `parallelReviews`, ver
-"Uma decisão, uma configuração" em [`CONFIGURATION.md`](CONFIGURATION.md#uma-decisão-uma-configuração-30092026)).
-**Default 0 = sem teto total**, o comportamento de sempre. Clampa 1..8 no consumidor além do saneamento (defesa em profundidade, padrão do
-`parallelLimit`), e negativo vira 0 e não 1: config torta não pode LIGAR uma trava que
-ninguém pediu. **Só é seguro porque a Política 1 existe:** teto global sozinho concentra,
-porque quem tem mais PR na fila ocupa o teto inteiro; com o rodízio decidindo quem ocupa
-cada vaga liberada, ele vira distribuição de vazão em vez de corrida.
-
-**Visibilidade é parte da feature, não enfeite** (`filaJusta()` no snapshot,
-`filaJustaHtml` em `ui/pure.js`, painel na aba Consumo). Mesma lição do estacionamento
-visível (v2.57.4) e do rastro durável do gate de orçamento: uma automação que CEDE A VEZ,
-vista de fora, é idêntica a uma automação QUEBRADA. Nos dois casos o PR fica parado e
-nada explica. O aviso de cota nomeia os dois lados (quem cedeu, pra quem, quanto falta) e
-tem rastro no log, não só toast. O painel decide a própria vaziez: uma org e um perfil só
-não têm rodízio a explicar, e o card some inteiro.
-
-**Clique explícito atravessa e DESFAZ** (`pr.manual`, `origem: 'clique'` na rota):
-quem mandou revisar foi você, sabendo que outra pessoa está lá, e a partir daí o
-app volta a agir no PR. Mesmo espírito do estacionamento (lançar tira de lá).
-Travado em `test/saida-de-cena-estrangulamento.test.js`.
-
-## Aprovação não é fungível: o CODEOWNERS entra no gate (v2.51.0; SUPERADA em 28/08/2026)
-
-**Nota de 28/08/2026: a cobertura de exigência foi SUPERADA pela regra plana**
-(ver "As duas decisões de 28/08" abaixo): ver alguém revisando sempre segura o
-automático e o PR espera ação manual, então `cobreMinhaExigencia` saiu do
-código. O que sobreviveu desta seção: `souAutoridade` e o guarda "nunca
-co-assino onde sou autoridade". O texto abaixo fica como registro da motivação.
-
-A v2.50.1 consertou o marcador transitório mas manteve um pressuposto errado:
-que "outra pessoa está revisando" bastava. **Não basta, importa QUEM.** Dados
-medidos em 20/08/2026:
-
-As duas formas encontradas nos repos da empresa (logins trocados por letras: este
-arquivo viaja no pacote de distribuição, que é auditado e não aceita conta de
-ninguém, ver invariante 7):
-
-| forma | CODEOWNERS | gate |
-|---|---|---|
-| dono único | `* @dona-do-repo` | ruleset com codeowners |
-| dupla de guardiãs + exceção por caminho | `* @dona-A @dona-B` + `/package.json @dona-C` | ruleset com `require_code_owner_review: true` |
-
-Na segunda o gate é EXIGIDO de verdade, então aprovação da dona-C não libera nada
-fora do `package.json`. Com o comportamento da v2.50.1, se o Farol dela pegasse um
-PR primeiro, os Farols das donas A e B saíam de cena e o PR travava sem a aprovação
-exigida. E com a co-assinatura ligada era **pior**: o gate de codeowner seria
-satisfeito sem nenhum codeowner ter revisado, que é o oposto do que ele existe pra
-fazer ("filtrar o que sobe ou não").
-
-`cobreMinhaExigencia(regras, caminhos, eu, outro)` é a pergunta que decide: só
-saio de cena se, pra TODO arquivo em que eu sou dono, `outro` também é. Os quatro
-casos reais estão travados em `test/codeowners.test.js` (lá os logins são os de
-verdade: o diretório `test/` NÃO viaja no pacote). **CODEOWNERS é OU dentro da
-linha e a ÚLTIMA regra que casa vence por arquivo** (não acumula), então a dona-B
-cobre a dona-A mas nenhuma das duas cobre o `package.json`.
-
-Duas travas que vêm junto: **nunca co-assino onde sou autoridade** (registrado em
-`skipComentado[key].autoridade` na hora de sair de cena) e **falta de dado nunca
-libera** (CODEOWNERS ilegível, diff não medido ou dono de time = reviso). O cache
-do CODEOWNERS é por repo, em memória, TTL de 1h.
-
-## Um Farol por PR (v2.50.1): a lição do marcador transitório
-
-A v2.49.0 estreou o "pulo por label" e ele estava errado de origem. Vale registrar
-porque a classe do erro se repete: **decidir de forma permanente olhando um sinal
-transitório.**
-
-A label `<conta>:revisando` é posta no início da sessão e removida no `finally`.
-Ela responde "tem alguém revisando NESTE SEGUNDO", e essa resposta volta a ser
-"não" em minutos. O gate lia isso e o Farol comentava no PR que não ia duplicar a
-revisão. Medido no `biudtech/engine-ai#60` (20/08/2026):
-
-| hora | evento |
+| assunto | onde ler |
 |---|---|
-| 18:48:42 | label `thiagocarvalho-dev:revisando` entra |
-| 18:50:29 | Farol do Alexpraxedes comenta "não vou duplicar a revisão" |
-| 18:52:15 | label do thiago SAI (a revisão dele terminou) |
-| 18:55:46 | label `Alexpraxedes:revisando` entra |
-| 18:59:09 | Alexpraxedes APROVA |
+| Prova por arquivo, cobertura da leitura e herança entre PRs | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `prova-do-repositorio.js` |
+| Alcance: uso do código alterado fora do diff | `alcance.js`, `alcance-contexto.js` |
+| Inventário do diff | `pr-inventory.js` |
+| Fan-out de PR grande | `fanout.js` |
+| Memória de achados entre rodadas e critérios | `review-rounds.js`, `review-round-store.js`, `review-findings.js`, `review-criteria.js` |
+| Recuperação durável da prova e teto de rodadas por commit | `espera-prova.js`, `recuperacao-prova.js`, `busca-da-prova.js`, `recuperacao-head.js` |
+| Retomada de sessão e retry depois de falha | `retomada-duravel.js`, `retomada-varredura.js`, `review-retry.js`, `retry-da-revisao.js` |
+| Dívida herdada da production | `heranca-de-producao.js` |
+| Achado técnico fora das linhas do PR | `lib/technical-review/divida-fora-das-linhas.js` |
+| Pedido de mudanças apoiado em estado que não vale | `estado-desmentido.js` |
+| Estacionamento e destrava por estado novo | `review.js`, `destrava.js`, `pendencia-commit-novo.js`, `head-novo.js` |
+| Espera do conflito com a base | `espera-conflito.js` |
+| Vigia da sessão e pedido de revisão retirado | `vigia-sessao.js`, `pedido-de-revisao.js` |
+| Label própria órfã e limpeza de labels | `label-propria-orfa.js`, `labels-a-tirar.js`, `relogio-da-label.js` |
+| Cancelamento da revisão | `cancelamento-revisao.js` |
+| Tempo por etapa e estimativa | `etapas-revisao.js`, `estimativa-sessao.js` |
+| Runtime privado da avaliação técnica e declaração por repositório | `lib/technical-review/setup.js`, `toolchain.js`, `profiles.js`, `declaracao.js`, na mesma pasta |
+| Limite do plano, orçamento e cota | `limite-plano.js`, `usage.js`, `quota.js` |
+| Contestação do autor | `pushback.js` |
+| Card do Jira no prompt | `jira.js` |
+| Classificação de falha e retry | `lib/log-taxonomy.js` |
 
-Ou seja: adiamento de cinco minutos com promessa pública quebrada em cima. E o
-agravante que o Thiago apontou na mesma conversa: **quem se calou era o CODEOWNERS
-do repo** (`* @Alexpraxedes`), então, se o pulo tivesse funcionado como escrito, o
-PR ficaria sem a aprovação estruturalmente exigida, com um comentário público
-explicando por quê.
+## A boca única de postagem
 
-Duas perguntas diferentes que estavam sendo confundidas:
+Toda escrita de review passa por `postReview` (`lib/engine/decision.js`): o desfecho da revisão
+automática (`via: 'revisao'`), o clique na mesa (`via: 'clique'`), o reenvio (`via: 'reenvio'`) e a
+espera do CI (`via: 'espera-ci'`). As postagens do mesmo PR entram numa fila e saem uma por vez
+(`enfileirarPostagem`).
 
-| pergunta | natureza | efeito correto |
-|---|---|---|
-| "alguém está revisando agora?" | transitória (minutos) | esperar, e esperar não precisa de comentário |
-| "alguém já assumiu esta rodada?" | durável (por head) | sair de cena, e aí o comentário é verdade |
+Há uma escrita no GitHub que não passa por `postReview`: a retirada do pedido de mudanças
+(`enviarRetirada`, `lib/engine/retirada-de-pedido.js`, um PUT em `/dismissals`). Ela passa por
+`recusaDaConta`, por `recusaPorEstado` e pela trava de linguagem, e não passa pela fila por PR,
+pela memória de rodadas nem pela trava de credencial. O texto dela é fixo, montado pelo app.
 
-O que vale agora (decisão do Wanderson, 20/08/2026, "só um Farol pode aprovar por
-PR"): ver a label de outra pessoa faz o Farol **sair de cena naquele head**, de
-forma durável, gravada em `state/skip-comentado.json` com o `head` junto. Ele não
-revisa depois, e é isso que o comentário descreve.
+Dentro da fila, `postReviewOnce` faz as recusas nesta ordem. As sete primeiras não chamam o `gh`:
 
-**A label como contrato (05/11/2026).** A label `<conta>:revisando` passou a dizer só a verdade, em três frentes:
-(1) ela espera a sessão provar vida: entra no primeiro evento do provedor ou 15 s depois da admissão
-(`lib/engine/label-tardia.js`), então sessão que morre no spawn não pisca a label no PR;
-(2) retirá-la pelo GitHub ou pela tela encerra a sessão em andamento pelo vigia e estaciona a revisão com
-o motivo `label-retirada`, sem relançar sozinha (quem tirou pediu para parar);
-(3) label própria sem sessão viva aqui, sem pendência de remoção e sem lease vivo de outro aparelho some
-depois de 3 h de observação contínua deste aparelho (`lib/engine/label-propria-orfa.js`; intervalo longo sem
-olhar, como notebook fechado ou reinício, recomeça a contagem), removida sob o mesmo CAS de lease da
-pendência comum, e a pendência de remoção que não sai desiste em 7 dias
-com um aviso. Nada disso muda os gates do invariante 4: é higiene do sinal público.
+1. **Memória de rodadas** (`publicationRefusal`, `lib/engine/review-rounds.js`): só com
+   `reviewRoundsMode: "enforce"` e fora do clique. Responde `round_memory`. O padrão da chave é
+   `observe` (`lib/settings.js`), então numa instância sem essa escolha a recusa não acontece.
+2. **Instância isolada** (`recusaDaConta`, `lib/engine/postagem-portao.js`): `instancia_isolada`.
+3. **PR da própria conta**, na mesma função: APPROVE e REQUEST_CHANGES respondem `pr_proprio`.
+4. **Formato do payload** (`normalizeReviewPayload`): `invalid_payload`.
+5. **Credencial no texto** (`recusaPorCredencial`, `lib/engine/credencial-no-texto.js`):
+   `credencial_no_texto`.
+6. **Critérios inconsistentes** (`criteriaPublicationRefusal`, `lib/engine/review-criteria.js`).
+7. **Linguagem interna no texto público** (`publicReviewLanguageIssues`,
+   `lib/engine/public-review.js`): `internal_language`.
+8. **Conta sem token no `gh`** (o token é lido aqui, se ainda não foi): não posta, para o review não sair assinado por outra identidade.
+9. **Avaliação técnica** (`approvalRefusal`, `lib/technical-review/publication.js`): só para
+   APPROVE. Responde `technical_review`. A prova vem de `publicationEvidence`
+   (`lib/technical-review/registry.js`): a guardada em memória pela revisão que acabou de rodar
+   (`engine.technicalApprovals`) ou, sem ela, a gravada na pendência do PR. Sem nenhuma das duas
+   não há prova, e o APPROVE é recusado.
+10. **Estado do PR** (`recusaPorEstado`, `lib/engine/postagem-portao.js`): PR mergeado ou fechado
+    não recebe APPROVE nem REQUEST_CHANGES; COMMENT sai. Estado que não pôde ser lido não cancela.
+    Para item que chegou sem autor, o autor é lido aqui e a recusa de PR próprio é conferida de novo.
+11. **Dedup por head**, na revisão automática: ver [Dedup por head](#dedup-por-head).
 
-Três peças que a decisão exige, e nenhuma é opcional:
+Só então o review é enviado (`gh api repos/<repo>/pulls/<n>/reviews`). Se o GitHub recusar o
+conteúdo com 422, há um recuo de um degrau: com comentários inline, os pontos voltam para o corpo;
+sem inline, sai sem a âncora do commit. Os dois degraus saem sem `commit_id`, e por isso o recuo
+tem conferência própria: `recusaDoRecuo` (`lib/engine/postagem-recuo.js`) relê o head logo antes
+e recusa com `head_mudou` ou `head_desconhecido`. O texto recuado passa de novo pela credencial e
+pela linguagem.
 
-1. **`coAssinarReview`** (opt-in, default false). Sem ela, "só um Farol aprova"
-   deixa o PR do codeowner esperando clique humano, porque o Farol sai de cena e
-   ninguém aprova no lugar. Com ela ligada, a aprovação de quem pegou o PR vira um
-   APPROVE em seu nome, sem sessão e sem token. **É o único caminho do app que
-   aprova sem ter revisado**, então os gates moram no próprio `coAssinar` (ver
-   invariante 4) e a chave nunca nasce ligada: quem liga assume que endossa
-   revisão alheia sem saber o rigor nem o modelo que a produziu (objeção do
-   próprio Wanderson na conversa, e ela não tem solução técnica: o Farol não tem
-   como descobrir o modelo que rodou na máquina do colega). **Desde 29/09/2026
-   ela segue a política da conta dona do PR:** conta com "aprovável sem
-   ressalvas: espera você aprovar" não co-assina, porque co-assinar é aprovar em
-   seu nome. Antes a chave geral passava por cima da conta.
-2. **`standDownCaducou`** (PURA). Se a label do colega sumiu e ele NÃO deixou
-   review naquele head, a sessão dele morreu no meio: a saída de cena caduca e o
-   Farol assume de volta. Sem isso, um crash na máquina alheia deixaria o PR órfão
-   pra sempre. Sem a lista de reviews (rede fora) **nunca** caduca: na dúvida fico
-   de fora, que é o lado seguro desta política.
-3. **Poda por head.** A âncora guarda o `head`, e o `_headSeguro` degrada pra head
-   vazio quando o `gh` falha (âncora vale pro PR inteiro, de novo o lado seguro).
+O clique na mesa (`decide`, no mesmo arquivo) não é atalho: ele confere antes os critérios, o dedup
+no head atual e se o head andou, e depois entra pela mesma `postReview`. O que o clique pula é a
+memória de rodadas (item 1) e o dedup automático (item 11), porque a decisão é de uma pessoa.
 
-**Limite conhecido e declarado:** dois Farols que começam no mesmo segundo não se
-veem (nenhum tem sinal ainda) e os dois revisam. O sinal reduz duplicata, não é
-trava distribuída. Fingir o contrário no código ou na tela seria mentira.
+## O gate automático
 
-### As duas decisões de 28/08/2026 (v2.53.9 e v2.54.0): o que é vazamento e o que não é
+`shouldAutoApprove` e `shouldAutoReject` (`lib/engine/approval-policy.js`) dizem se o resultado de
+uma sessão pode sair sozinho. A admissibilidade vem antes da política da conta.
 
-O dia teve DUAS rodadas de decisão do Wanderson, e só a segunda vale. De manhã,
-ao ver a label `thiagocarvalho-dev:revisando` no biud-frontend#845, a leitura
-foi "nenhum rastro de automação em público" e a v2.53.9 trocou a label por uma
-ref git invisível e matou o comentário de pulo. À tarde ele corrigiu o rumo:
-**a label visível é DESEJADA** ("deixa os demais membros cientes da revisão");
-o que é proibido é **TEXTO público não-humanizado** (template, contexto interno,
-coisa irrelevante ao trabalho revisado). Estado final (v2.54.0):
+`shouldAutoApprove` devolve `{ ok, motivo }`. Os motivos de recusa, na ordem em que são conferidos:
 
-- **A label `<conta>:revisando` é o sinal ESCRITO**, de volta como sempre foi
-  (aplicada no início da revisão headless, removida no finally, criada no repo
-  quando falta). `lib/engine/review-signal.js` ficou só como LEITURA DE
-  TRANSIÇÃO das refs que a v2.53.9 escreveu por algumas horas.
-  **Ela CADUCA desde a v2.54.3, e isso não é detalhe:** o finally não roda
-  quando o processo morre (queda de renderer, kill, reinício do auto-update), e
-  label presa não tinha relógio nenhum, então um Farol morto calava a frota
-  inteira naquele PR para sempre (as refs da v2.53.9 já caducavam em 1h; a label
-  não). Duas frentes: quem LÊ usa `labelVistaDesde` (relógio LOCAL de há quanto
-  tempo ESTA cópia vê a mesma label, carimbado uma vez por ciclo em
-  `marcarLabelsVistas`, com validade de `SINAL_REVISAO_TTL_MS`; sem carimbo a
-  label VALE, porque falta de dado nunca libera revisão sozinha), e quem ESCREVE
-  limpa no boot as próprias labels presas (`limparLabelsOrfas`, sobre a lista
-  que o `recoverInflight` recuperou).
-- **O comentário de pulo segue MORTO** (esse era texto público não-humanizado de
-  verdade: a mesma frase, de contas diferentes, minutos depois do sinal alheio).
-  A saída de cena é silenciosa no GitHub: âncora local + toast no app.
-- **Gate de consciência do review automático** (formulação dele: "se alguém já
-  aprovou, se alguém tá revisando e se alguém já reprovou que não seja o acrity,
-  não fazemos review a menos que haja ação manual"): antes de gastar sessão, o
-  caminho automático consulta o head ATIVO (`bloqueadoPorHistorico`,
-  no máximo 2 chamadas gh e SÓ na boca do lançamento, nunca por ciclo em todo
-  PR). Segura, desde 05/11/2026, QUALQUER aprovação ou recusa de gente no head:
-  medido, 81 de 225 revisões rodavam em head já decidido. Substitui o teto de duas
-  aprovações da v2.54.1 e a decisão sem mesa de 18/10/2026. A exceção é o meu pedido de
-  mudanças aberto em commit anterior, sem recusa de gente: só a rodada consegue retirá-lo, e
-  sem ela ele prenderia um PR já aprovado. Decisão só do Acrity não segura.
-  Cada pessoa conta pelo ÚLTIMO estado decisivo dela no head (pediu mudanças e
-  depois aprovou = aprovação); DISMISSED/COMMENTED não contam e FERRAMENTA nunca
-  conta. **Quem decide se é ferramenta é `ehFerramenta`, e não a lista crua**
-  (v2.54.2, incidente do biudtech/engine-ai#108): `NAO_SAO_PESSOAS` guarda o
-  prefixo da LABEL (`acrity`), mas a API de reviews devolve
-  `acrity-advesarial-code-review[bot]`, então o `has()` cru dava falso e a
-  reprovação do bot segurou a automática de um PR inteiro em silêncio. As
-  fixtures da suíte usavam o prefixo curto e ficaram verdes o tempo todo:
-  **fixture de login tem que ser o login REAL da API.** As três provas de
-  `ehFerramenta` são `user.type === 'Bot'`, sufixo `[bot]` no login e o nome
-  da lista (exato ou como prefixo antes de um hífen). Bloqueado = o PR fica na fila esperando clique, com toast único por
-  PR+head. **INVARIANTE (v2.54.3, bug de campo): bloqueio NÃO grava a âncora
-  do `reReviewLaunched`.** Até a v2.54.2 o `launchReReviews` gravava a âncora de
-  todos os alvos ANTES do gate, pra não reconsultar o mesmo head a cada ciclo;
-  como a âncora é o que o `classificaReRound` lê pra dizer "esse head já teve o
-  round dele", um bloqueio momentâneo matava o relançamento automático PARA
-  SEMPRE naquele head e o PR passava a depender de clique. Mesma classe do G7 do
-  `recoverInflight`, que já tinha fechado o caminho do crash. A âncora agora só é
-  gravada por round CONSUMIDO (relançado, ou pulado pelo `pushTrivial`), e o
-  custo de gh fica em `bloqueioConsultado`: memória em processo, janela de
-  `HEAD_QUIETO_MS`, que adia a reconsulta e nunca mata o round.
-  **Regra geral: âncora que impede repetição só se grava depois de o trabalho
-  acontecer; antes disso ela não é dedup, é cancelamento silencioso.** Head novo zera o histórico e a automação volta. Falta de dado
-  NUNCA bloqueia (o pior caso é revisão redundante, nunca post errado). A boca
-  única é `bloqueiaAutomatico`, aguardada nos TRÊS caminhos automáticos:
-  `launchReview` (toReview do check), `launchReReviews` (antes até do
-  pushTrivial) e `_repescarRetry` (server.js; retry bloqueado também sai do
-  `retryAfterNet`, senão reconsultaria o mesmo head pra sempre). Clique manual
-  (`pr.manual`) atravessa sem nenhuma chamada.
-  **A metade "checks obrigatórios verdes antes de começar" é opt-in desde 01/10/2026**
-  (`config.aguardarCiParaRevisar`, padrão `false`, Sistema > Automação): sem a chave, o
-  `bloqueiaAutomatico` e a trava `checks_pendentes` do comando `revisar` vindo de outro aparelho
-  nem consultam os checks, e a revisão começa na hora. A chave só liga o gate de ENTRADA
-  (`aguardaChecksParaRevisar` em `lib/engine/checks-exigidos.js`). O gate de SAÍDA não depende
-  dela: `anexarChecksObrigatorios` continua lendo o CI no head antes de postar. Se o CI
-  segura a aprovação é a OUTRA chave, `aguardarCiParaAprovar` (ver "CI obrigatório antes da
-  aprovação é opt-in", logo abaixo do parágrafo das duas classes).
-- **Texto público e registro auditável (03/10/2026)**: resposta a uma análise externa que
-  apontou dois problemas confirmados nos dados. (1) Num PR de infraestrutura, a revisão escreveu
-  "é uma decisão de segurança e produto" só no relatório interno; o APPROVE público dizia que
-  nenhum ponto segurava o merge, e o PR foi mergeado dois minutos depois. O envelope ganhou
-  `paraQuemMergeia` e o engine anexa a lista ao corpo do APPROVE (`lib/engine/para-quem-mergeia.js`,
-  via `conferirEnvelope` em `lib/engine/envelope-revisao.js`), sem dizer que é automático e
-  pelo firewall de linguagem; a política da conta segue decidindo. (2) O `recordDecision`
-  descartava `decision`, cobertura, alcance e checks (0 de 60 aprovações automáticas desde 30/09
-  tinham esses campos); agora grava `provas` (`lib/engine/provas-da-decisao.js`), com o
-  `protocolo.prReviewer` declarado pela sessão. O prompt deixou de prometer três travas que a
-  configuração pode ter desligado (espera do CI, APPROVE com obrigatório vermelho e cobertura
-  incompleta indo para decisão humana). Travado em `test/revisao-auditavel.test.js`.
-- **Reanalisar sem clique (02/10/2026)**: pedido do dono depois de notar "uma deficiência
-  muito grande em reanalisar PRs necessários". Medição de uma semana (123 PRs de colegas com
-  review meu) achou três buracos, todos fechados sem afrouxar gate nenhum. (1) **Aprovação
-  dispensada pelo push**: em repositório que dispensa aprovação velha, a minha vira
-  `DISMISSED` no commit seguinte, e o `staleForReview` (`selfpr.js`) só lia `APPROVED` e
-  `CHANGES_REQUESTED`: caía em indeterminado e o gatilho A nunca armava, justamente no PR que
-  tinha perdido a minha aprovação (cinco PRs na semana, um deles mergeado com o pedido de
-  revisão aberto). Agora `DISMISSED` entra no filtro e no `explicaReRound`; dispensada sem
-  commit novo (mesmo head) continua sem relançar. (2) **Pendência na mesa + commit novo**:
-  `marcarCommitNovo` (`lib/engine/pendencia-commit-novo.js`, no fim do `reconcilePending`)
-  faz o que só o clique fazia, marcando `stale_head`, e o gatilho B relança depois do PR
-  quieto. (3) **Saída de cena por commit**: `largarSeHeadMudou` (`lib/engine/head-novo.js`)
-  libera o registro quando o head muda; se a pessoa continuar revisando, a label dela volta
-  a segurar no ciclo seguinte. Corrida de merge (PR mergeado poucos minutos depois do push) e
-  limite do plano ficaram de fora de propósito: o primeiro é o debounce que evita revisar
-  commit que ainda vai mudar, o segundo já tem aviso no card. Travado em
-  `test/rerevisao-sem-clique.test.js`, com cada correção provada por mutação.
-- **Revisar junto (opt-in, 02/10/2026)**: pedido do dono, "se caso tiver alguém já com a
-  label de revisando no GitHub, precisamos indicar pra quem vê a fila que já tem alguém
-  revisando". Duas partes. (1) O card de Pra mim, a linha do Panorama e o card de sessão dizem
-  quem está revisando (`outrosRevisando`, a MESMA leitura do gate, anotada em cada PR por
-  `lerSinaisDoCiclo` em `lib/engine/skip-review.js`), e o botão vira "Revisar junto"; com a
-  label já sumida e o registro de saída de cena vivo, o card diz que a pessoa revisou e que a
-  decisão é sua. (2) A chave `config.revisarComOutrosRevisando` (padrão desligado, Sistema >
-  Automação): ligada, os gates (`_registraPulo`, a trava do round em `review.js` e o comando
-  remoto `revisar`) leem `outrosQueSeguram`, que devolve vazio, então não há saída de cena e,
-  por decisão do dono, nem co-assinatura; as saídas de cena gravadas antes caem no ciclo, menos
-  as co-assinadas. Desligada, vale a regra plana abaixo. No mesmo dia o card passou a dizer
-  quando a revisão automática espera o **limite do plano do Claude** (`limitePlanoAte` em cada
-  conta do snapshot): o PR que motivou entrou na fila com a assinatura no limite até 21:00 e o
-  card ficou idêntico a qualquer outro. Precedência das notas e textos no handoff do Claude
-  Design (`docs/superpowers/specs/2026-10-02-revisando-junto-anexos/HANDOFF.md`); travado em
-  `test/revisar-junto.test.js` e `test/revisando-tela.test.js`.
-- **Regra plana na saída de cena**: ver alguém revisando SEMPRE segura o
-  automático. Caiu a exceção da v2.51.0 (`cobreMinhaExigencia`, removida de
-  `codeowners.js`): PR cuja exigência de codeowner é minha agora ESPERA meu
-  clique em vez de revisar por cima. O guarda "nunca co-assino onde sou
-  autoridade" permanece (`autoridadeNaSaida`, via `souAutoridade`).
-- Regra pra feature futura: TEXTO público novo (comentário, corpo, descrição)
-  passa pelo crivo de humanização antes de existir; sinal de ESTADO visível
-  (label) é aceitável e desejado.
-
-## Dedup é por ROUND, não por "alguma vez" (v2.40.5)
-
-O gate de postagem tem um dedup pra não postar o mesmo review duas vezes
-(incidentes reais: biud-frontend#635 no approve, biud-core#215 no clique). Até a
-v2.40.4 ele perguntava a coisa errada:
-
-| pergunta | resultado |
+| motivo | quando |
 |---|---|
-| "eu já pedi mudanças neste PR alguma vez?" (até v2.40.4) | round 2 em diante nunca postava |
-| "eu já me manifestei sobre ESTE head?" (v2.40.5) | round anterior não silencia o atual |
-
-O caso que motivou (biud-frontend#742, 11/08/2026): o Farol postou
-CHANGES_REQUESTED por um open redirect, o autor empurrou a correção, e as duas
-revisões seguintes concluíram que a correção não tinha fechado o buraco (achado
-NOVO, sobre o head novo). As duas foram resolvidas como `already_reviewed` e
-nada saiu. O achado ficou só no `decisions.json` enquanto o PR seguia com
-aprovação de terceiro em cima do head vulnerável.
-
-A âncora é o **`commit_id` do review** (que a API de reviews do GitHub já
-devolve, e o `myReviewsWithTime` descartava no `jq`) comparado com o
-**`headRefOid`** do PR, agora em `ghMod.headSha`. Não use horário: `submitted_at`
-contra data de commit mente em rebase e amend, e `updatedAt` de PR muda com
-comentário. Sem sha conhecido (rede, token), degrada pro comportamento antigo em
-vez de repostar às cegas: falta de dado não inventa rodada nova.
-
-Vale pros TRÊS pontos de dedup, e quem mexer num tem que mexer nos três:
-`review.js` (ramo canAuto e ramo canReject) e `decision.js` (`decide()`, o
-caminho do clique). Travado em `test/dedup-round.test.js`, que também trava os
-guarda-corpos: mesmo head segue sem repostar.
-
-Regra geral que sai daqui, e que já valia em dois outros eixos (`reconcilePending`
-compara horário OU mesmo head com estado decisivo, desde a v2.41.3: review seu
-APPROVED/CHANGES_REQUESTED no head que a sessão leu resolve o card mesmo
-anterior à pendência, e COMMENTED anterior não resolve nada; `hidden-prs`
-guarda `updatedAt` e se desfaz sozinho): decisão
-sobre um PR que consulta o passado precisa dizer **de qual estado do PR** está
-falando. E o corolário de UI: status que significa "não postei" é o único lugar
-onde o achado existe, então ele nunca pode esconder as reasons na linha
-(`resolvedRow`, "achados que ficaram só aqui").
-
-### A pergunta é sobre o passado; o POST é sobre o presente (v2.52.2)
-
-Caso medido (biud-esg#230, 23/08/2026): **dois APPROVE meus no mesmo PR, com 10
-segundos de diferença** (02:04:33Z e 02:04:43Z). O log fecha a história: às
-22:10:53 -03 a postagem morreu por rede, e às 23:04:42 -03 saiu `decide
-biud-esg#230: pendência já resolvida durante o post, histórico preservado`,
-exatamente ENTRE os dois reviews. O reenvio automático e o clique postaram nos
-dois lados da mesma janela.
-
-Não faltava dedup: as CINCO vias que postam (revisão automática, `retryFailedPosts`,
-`decide`, chat e co-assinatura) consultam `myReviewStates` antes, e as duas
-consultaram. O problema é que **a consulta responde sobre o passado**: entre o
-"ainda não há review meu" e o POST cabe outro POST, e quem perguntou primeiro não
-tem como ver o review que ainda está no ar.
-
-A trava mora no **funil** (`postReview`, `lib/engine/decision.js`), pela mesma
-regra da seção "A garantia mora no estrangulamento": postagens do mesmo PR pela
-mesma conta entram em FILA (`postLanes`), e quem chega depois não repete o veredito
-que acabou de sair para o MESMO head (`postedReviews`, janela de 5 min em
-`TEMPOS.POSTAGEM_MEMORIA_MS`).
-
-**A janela é curta de propósito, e a primeira versão errou nisso** (nasceu com 6h,
-corrigido na v2.52.5 na auditoria da própria entrega): esta memória sabe só
-`veredito + head`, enquanto o dedup remoto sabe o que ela não sabe. Review
-**DISMISSED** pelo autor deixou de valer (`DECISIVE_REVIEW_STATES`), então aprovar
-de novo no MESMO head depois de um dismiss é LEGÍTIMO e o `myReviewStates` deixa
-passar. Com janela longa, a memória vetaria essa repostagem devolvendo `ok`, e a
-pendência seria resolvida com o PR sem aprovação nenhuma. A corrida que ela existe
-pra resolver dura segundos (10, no #230); o resto é com quem pergunta ao GitHub. O retorno é
-`{ ok: true, deduped: true }`, nunca erro: o review que aquele chamador queria ver
-no PR está lá, e devolver falha faria a pendência voltar pra mesa.
-
-O que **continua passando**, de propósito: round novo (head diferente é outra
-manifestação; o engine-ai#51 tem dois APPROVE legítimos, de 18/08 e 23/08),
-`COMMENT` (o chat conversa, travar isso o emudeceria), outro PR, outra conta, e o
-repost depois de uma tentativa que FALHOU (falha não é entrega). O sha da
-assinatura passa pela MESMA régua do `normalizeReviewPayload` (7 a 40 hex, caixa
-ignorada): sha torto é descartado lá e o review sai sem âncora, então ele não pode
-inventar rodada nova aqui.
-
-Limite honesto: a fila é por PROCESSO. Duas instâncias do Farol (ou o app
-reiniciado no meio) continuam contando com o dedup remoto de cada via, que é o
-que sempre existiu e cobre o caso sem corrida.
-
-### Head que anda DURANTE a sessão: não posta (v2.51.2)
-
-Caso medido (biud-esg#224, 21/08/2026): a sessão leu o head `3cf42b3`, o autor
-empurrou `b8722a3` dois minutos antes do POST, e o APPROVE saiu ancorado no sha
-lido. O GitHub recusou com um `422` genérico ("Unprocessable Entity"), o card
-caiu em "Precisa de você" com essa frase de oito palavras como único motivo, e o
-clique em Aprovar reenviava o MESMO payload, ou seja, falhava idêntico pra sempre.
-
-A regra do G1 não mudou (a âncora é sempre o head que a sessão LEU). O que mudou
-é o desfecho quando esse head já não é o do PR, porque aí as duas saídas eram
-erradas: com a âncora velha o GitHub recusa; sem ela o review sairia carimbado num
-código que ninguém leu E o `staleForReview` passaria a ver review meu no head novo,
-desarmando o round 2 (o buraco do #742). Então **não posta**, nos DOIS pontos, e
-quem mexer num tem que mexer no outro:
-
-- `review.js`, logo antes dos ramos `canAuto`/`canReject`: relê o head (`engine.headSha`,
-  exceção e vazio degradam pro comportamento antigo, como no dedup) e, se andou,
-  derruba os dois gates e prepende uma `gateReason`. O achado vira pendência.
-- `decision.js` (`decide()`): reusa o `head` que o dedup já buscou, grava
-  `blockedReason` no item (mesmo mecanismo do bloqueio de linguagem, G13) e devolve
-  `blocked: 'stale_head'`. A pendência FICA na mesa, com o motivo no card.
-
-A frase é uma só, em `lib/format.js` (`staleHeadText`), com os dois shas curtos.
-
-Duas correções irmãs, no `postReview`:
-
-- **A mensagem de erro do `gh`**: ele fala por dois canais quando o GitHub recusa,
-  a linha curta no stderr e o corpo JSON inteiro no stdout, e é no `errors[]` do
-  stdout que mora o campo recusado. O código fazia `r.stderr || r.stdout`, então o
-  stderr sempre vencia e o detalhe ia pro lixo: era por isso que o 422 não dizia nada.
-  `ghErrorMessage` junta as duas metades (teto de 300, `errors[]` de string ou objeto).
-- **Degrau de recuo sem inline**: o fallback de 422 era gateado em `comments.length`,
-  então review sem comentário de linha (o APPROVE, quase sempre) não tinha saída
-  nenhuma. `semAncoraPayload` recua a âncora uma vez. Só chega aí payload cujo head
-  JÁ foi conferido acima, então largar a âncora não muda de que código o texto fala.
-
-**Desde a v2.53.0 essa pendência não fica presa esperando clique pra sempre.** Ela
-carrega `blockedKind: 'stale_head'` e `blockedHead: <head observado>` nos DOIS
-pontos que a criam (`review.js`, fim de `runHeadlessReview`, e `decision.js`,
-`decide()`; quem mexer num tem que mexer no outro), e é esse par que o round
-automático pós-push lê pra se destravar sozinho quando a conta é autônoma (ver
-"Autonomia completa do round automático" logo abaixo). Motivação medida:
-engine-ai#90, 25/08/2026, 14 commits em rajada com as rodadas de correção
-dependendo de clique, porque até aqui o próprio bloqueio impedia o mecanismo que
-o resolveria. Ela é superseded em QUALQUER desfecho do round novo (`recordDecision`
-em `decision.js`): postou, virou outra pendência ou falhou de outro jeito, o card
-velho sai da mesa e vira `superseded` no histórico, nunca fica duplicado.
-
-## Re-revisão automática pós-push (v2.41.0): o round 2 fecha sozinho
-
-O caso medido que motivou (biud-frontend#756, 15/08/2026): CHANGES_REQUESTED
-postado às 00:51, o autor corrigiu às 00:57, e a correção ficou parada 24
-minutos até o Wanderson pedir a re-análise à mão. O app era rápido pra abrir o
-round e passivo pra fechar. Agora o `check()` chama `launchReReviews()`
-imediatamente depois do `refreshStaleStates()` (a ordem IMPORTA: o gate lê o
-`staleInfo` que essa função acabou de preencher).
-
-Peças e contratos:
-
-- **`staleForReview` devolve `{ stale, head, lastState }`** (era booleano), da
-  MESMA chamada gh de antes: zero IO extra. `refreshStaleStates` preenche DOIS
-  mapas do mesmo passe: `staleStates` segue booleano (contrato da UI, o chip
-  Re-revisar) e `staleInfo` fica interno, fora do snapshot. Não funda os dois.
-- **`reReviewTargets(engine, inflightKeys)`** (`lib/engine/review.js`) é o gate:
-  SÍNCRONO e sem IO, como retryTargets/pushbackTargets, porque decide gastar
-  sessão Claude. **Desde a v2.53.0 não é mais só `CHANGES_REQUESTED`**: dois
-  gatilhos armam (review meu que ficou stale, OU pendência bloqueada por head
-  velho), com debounce e teto diário próprios; ver a seção "Autonomia completa
-  do round automático" logo abaixo pro mecanismo inteiro. **Draft NÃO arma round
-  automático** (v2.41.3, G10: WIP geraria sessão e, com onReject, um review por
-  push; o chip manual segue cobrindo). Pendência na mesa segura o relançamento
-  (um card por PR), **exceto a pendência `blockedKind === 'stale_head'`**: essa
-  é ignorada por esta trava de propósito, porque ela é o SINTOMA que o gatilho B
-  existe pra resolver, não um julgamento humano esperando. E repete as MESMAS
-  travas do toReview: quem mexer lá, mexe aqui.
-- **Âncora por head** (`state/rereview-launched.json`, `reReviewLaunched`):
-  cada estado do PR relança NO MÁXIMO uma vez, gravada ANTES de enfileirar.
-  Falha da revisão cai no retry/estacionamento de sempre; head mais novo reabre,
-  e desde a v2.41.3 o REINÍCIO também (G7: `recoverInflight` poda a âncora das
-  keys que estavam inflight, senão app morto entre a âncora e a sessão matava o
-  round pra sempre naquele head). O relançamento carrega `knownHead` (G8): se o
-  fetch do headSha falhar no início da sessão, o head da âncora vale como
-  fallback, então a EXCEÇÃO à regra "sem sha degrada pro comportamento antigo" é
-  a re-revisão, que sempre tem head provado. A poda (PR fora do panorama) aceita
-  o mesmo compromisso do reconcileHiddenPRs: busca parcialmente falha pode
-  custar UMA sessão repetida, nunca postagem duplicada (o dedup por head cobre).
-- **`requested: true` no relançamento**: round 2 é continuação de um review meu,
-  não clique avulso. A POSTAGEM continua atrás de shouldAutoApprove/
-  shouldAutoReject (política da conta sobre a classe, CI obrigatório, e no reject
-  contestação e cobertura) e do dedup
-  por round. O gate do invariante 4 não afrouxou.
-
-Junto na v2.41.0, e relacionados: **rascunhos entram no radar** (caiu o
-`.filter(p => !p.isDraft)` do `searchPRs`; `isDraft` viaja no objeto pro selo
-"rascunho" em fila/panorama; o `mergeSelfPR` segue recusando draft, revalidado
-na hora do clique) e o **paralelismo por conta** documentado no invariante 4.
-
-### Autonomia completa do round automático: dois gatilhos, debounce e teto diário (v2.53.0)
-
-Motivação medida: engine-ai#90, 25/08/2026, 14 commits em rajada com as rodadas de
-correção dependendo de clique. Duas causas raiz, e as duas eram falta de respeito
-à autonomia que a conta já tinha configurado: (1) o gate só armava com
-`CHANGES_REQUESTED`, então round iterativo que já tinha recebido um APPROVE stale
-travava no primeiro e nunca mais fechava sozinho; (2) quando o head andava NO MEIO
-da sessão anterior (ver "Head que anda DURANTE a sessão" acima), a pendência que
-isso gerava travava o próprio mecanismo que a resolveria. Decisão do Wanderson: "se
-configurei pra ser autônomo, quero que seja respeitado". **Nenhum toggle novo**:
-tudo continua governado por `autoReviewFor` da conta, do jeito que já era.
-
-O que mudou de fundo:
-
-1. **APPROVE stale também relança** (antes só `CHANGES_REQUESTED` armava; aprovação
-   stale ficava só no botão, por clique).
-2. **Pendência bloqueada por `stale_head` deixa de segurar o round e passa a ARMAR
-   um segundo gatilho**, em vez de impedir o mecanismo que a resolveria.
-
-`classificaReRound` (`lib/engine/review.js`) escolhe entre dois gatilhos
-independentes pro mesmo `headRound`:
-
-- **Gatilho A (staleInfo)**: meu último review postado (APPROVE ou
-  CHANGES_REQUESTED) ficou stale contra o head atual, com prova completa
-  (`stale` true, `head` conhecido). Debounce lido de `engine.headQuietoDesde[key]`,
-  carimbado no `refreshStaleStates` toda vez que o head observado muda.
-- **Gatilho B (pendência)**: o resultado nunca chegou a postar porque o head andou
-  durante a sessão anterior. Lê `blockedHead` da pendência `stale_head` (os dois
-  pontos que a criam, `review.js` e `decision.js`, ver a seção acima). Debounce
-  pelo `createdAt` da própria pendência. O candidato pode estar FORA do panorama
-  (a fila mine não filtra por owner): `candidatosReRound` o reconstrói a partir da
-  pendência, sem labels e com o `isDraft` real gravado na pendência (desde a
-  v2.53.1), e a CONTA junto (`recordDecision`
-  passou a incluir `account` na allowlist de `item.pr`, sem ela o relançamento e a
-  postagem cairiam na conta primária errada).
-
-Os dois convergem nas MESMAS travas do `toReview` (conta muda, sem token,
-orçamento estourado, `outrosRevisando`, `skipComentado`, draft). A trava de
-"pendência na mesa segura" continua valendo pra julgamento humano pendente, e por
-isso a pendência `stale_head` é a ÚNICA exceção: ela não segura porque é o sintoma
-que este gate existe pra resolver, não uma decisão esperando o Wanderson.
-
-**Debounce** (`TEMPOS.HEAD_QUIETO_MS`, 5 minutos): os dois gatilhos só armam com o
-head QUIETO por esse tempo, proteção contra rajada de pushes. Carimbo ausente
-nunca dispara.
-
-**Teto diário local: REMOVIDO na v2.59.3** (existia desde a v2.53.0 como
-`MAX_RODADAS_AUTO_DIA`, 3 por PR por dia, com `reReviewEsgotados`/`avisoRodadasDia`).
-Pedido do Wanderson, 15/09/2026: o 4º push do dia virava clique obrigatório até
-amanhã, anunciado por um toast de 5 segundos. No lugar entrou a contagem de
-**rodadas presas em sequência** (seção "Card que se explica" abaixo). A âncora
-`reReviewLaunched` segue `{ head, dia, rodadas, at }` (`at` novo na v2.59.3, quando o
-round saiu); `dia`/`rodadas` continuam gravados por compatibilidade com a âncora do
-reinício, mas nenhum gate lê mais o contador. **O teto COMPARTILHADO entre aparelhos
-(`SYNC.DAILY_ROUNDS_MAX`, D13) também caiu, em 17/10/2026 (v2.72.5)**, por decisão do
-dono: três rodadas por PR e por dia, somadas entre os aparelhos, viravam "volta amanhã"
-num PR que precisava de revisão hoje. O coordenador (`reservarRodada` em
-`lib/sync/coordinator.js`) segue reservando a rodada no nó do dia, porque a reserva é que
-amarra a rodada ao lease. A reserva não aceita teto diário e a constante antiga foi
-removida; esperas legadas por quantidade esgotada não seguram a fila. Contra laço
-valem o dedup por head e a espera de PR quieto (com a espera longa
-depois de rodadas presas em sequência).
-
-**Gatilho B NUNCA entra no pulo de push trivial** (`pushTrivial`, mesmo arquivo): a
-prova salva que o pulo compara é do head ANTERIOR ao bloqueio, e o payload da
-pendência já está ancorado nesse head velho. Pular ali recriaria o deadlock que
-esta feature existe pra matar: um toast de "a revisão anterior segue valendo" sem
-NENHUMA revisão de fato postada, com a âncora já queimada pro head novo. Só a
-sessão relançada produz payload postável no head atual.
-
-`explicaReRound`, `classificaReRound` e `reReviewTargets` continuam SÍNCRONAS e
-sem IO, mesmo contrato de sempre; `reReviewTargets` devolve CÓPIAS RASAS (nunca o
-objeto do panorama, que `_headRound` mutaria em compartilhado).
-
-**Dívidas conscientes que ficam por decisão** (as três de orçamento/reinício da
-leva original foram resolvidas na v2.53.1: `headQuietoDesde` (e o `avisoRodadasDia`, que saiu na v2.59.3)
-agora podam a cada `launchReReviews`, o candidato do gatilho B carrega o
-`isDraft` real da pendência, e `recoverInflight` só libera o `head` da âncora
-objeto, preservando `dia`/`rodadas`; as duas abaixo continuam por decisão):
-
-- O candidato do gatilho B fora do panorama não carrega labels (janela estreita:
-  `candidatosReRound` reconstrói do que a pendência guardou, não do panorama de
-  verdade; label é sinal transitório e dado velho seria pior que nenhum).
-  `enqueueHeadless` segue honrando `skipComentado` normalmente nesse caminho,
-  então "um Farol por PR" não afrouxa.
-- O debounce do gatilho B usa `createdAt` FIXO: não reinicia se chegar um push novo
-  durante a espera. A sessão relançada relê o head real no início como sempre, então
-  o pior caso é relançar um pouco cedo, nunca com head errado. (Desde a v2.59.3 o
-  destrave carimba `headQuietoDesde` na pendência PRESA quando vê commit novo, e o
-  relógio usa o mais novo dos dois; a pendência que ainda não rodou segue no `createdAt`.)
-
-### Card que se explica e estado novo que destrava (v2.59.3)
-
-**Rodada que acabou sem review meu (08/11/2026, `candidatoDispensado`, `lib/engine/destrava.js`).** O gatilho de commit novo exige review meu postado ou pendência viva. Com a rodada encerrada como `approval_not_needed`, não há nenhum dos dois: em biudtech/commercial-governance#13 o autor subiu três commits e o PR seguiu visto, sem ninguém relançar. Commit novo ou pedido novo depois do fim da rodada devolve o PR à fila, e o gate de consciência continua decidindo se alguém já resolveu o commit novo. A marca `destravados` guarda o head consumido, para o mesmo push não virar sinal de novo a cada comentário, e o PR só com atividade sem estado novo não custa outra consulta até o `updatedAt` andar.
-
-Caso de campo: Edicoes-CNBB/biblioteca-cnbb-api#22, 09/09/2026. Force-push às 19:39
-com a sessão lendo o PR, card `stale_head` às 19:42 pedindo "Peça uma revisão nova", e
-às 19:44 a pergunta "Farol travou aí?". Não tinha travado: o gatilho B só podia armar às
-19:47, e o review no head novo saiu às 19:54. O defeito era a tela pedir ação humana no
-caso em que o app ia agir sozinho. A pergunta seguinte ("se eu pedir revisão de novo, o
-outro Farol executa ou trava?") levou a três travas REAIS, reproduzidas em teste antes do
-conserto (`test/rereview-estado-novo.test.js`): (1) rodada relançada que não conclui
-deixa a âncora == `blockedHead` pra sempre, e o `blockedHead` nunca acompanha o head;
-(2) estacionamento só saía por clique; (3) Pular nunca volta, porque o `markReRequests`
-não conta Pular como revisado (isso continua certo lá: nada foi postado).
-
-Peças:
-
-- **`explicaReRound`** (`review.js`) substitui o miolo do `classificaReRound`, que virou
-  fachada do contrato antigo ('relanca' | null). Cada uma das saídas silenciosas tem nome:
-  `sem_gatilho` | `revisando` | `parado` com `motivo` (rascunho, auto_desligado,
-  conta_silenciada, sem_token, orcamento, estacionado, outros_revisando, saiu_de_cena, conflito,
-  coordenacao, pendencia_viva, ancora) | `aguardando`/`espera_longa` com `aPartirDe` |
-  `relanca`. A ordem das travas não muda desfecho (todas seguram), só qual motivo a tela
-  vê primeiro.
-- **PR em conflito com a base não abre sessão automática** (C2, 05/11/2026,
-  `lib/engine/espera-conflito.js`): `seguraPorConflito` lê `mergeable` (`gh pr view --json
-  mergeable`) antes de o caminho automático abrir a sessão (lançamento e re-round), uma vez
-  por `key` + `updatedAt`. Só `CONFLICTING` segura: `UNKNOWN` e falta de dado nunca seguram,
-  `MERGEABLE` apaga a marca, e o clique manual atravessa. A marca `esperaConflito[key] =
-  { at, head }` vai ao snapshot, vira o motivo `conflito` e a nota do card; sem sessão, sem
-  label e sem texto no PR (toast uma vez por PR e head). Desliga com
-  `aguardarMergeavelParaRevisar: false` (ligado por padrão).
-- **`reRoundParaUi`** vai no snapshot como `reRounds` (mesmo padrão do `parkedParaUi`):
-  só pendências `stale_head`. `relanca` vira `aguardando` com `nextCheckAt` (quem dispara
-  é o ciclo), ou `parado`/`consciencia` quando o `bloqueioConsultado` barrou este head.
-- **Rodadas presas**: `recordDecision` grava `rodadasPresas` na pendência `stale_head` que
-  nasce de sessão (herda a da pendência que substitui, +1; outro desfecho não carrega e a
-  sequência recomeça). Com `rodadasPresas >= MAX_RODADAS_PRESAS` (3) a espera do gatilho B
-  passa a `TEMPOS.HEAD_QUIETO_LONGO_MS` (30 min). Nunca vira clique.
-- **`lib/engine/destrava.js`** roda no `check()` ANTES do `_dispararAutomacoes` (o toReview
-  do mesmo ciclo já vê o PR de volta). Ver a linha dele no [mapa de arquivos](../CLAUDE.md#mapa-de-arquivos). Pra pendência
-  presa: tira do estacionamento (se não foi cancelamento), solta o `head` da âncora (mesmo
-  movimento do G7 do reinício), leva o `blockedHead` pro head do push e carimba
-  `headQuietoDesde`. `estacionar` passou a gravar o `head` lido (quinto argumento), que é o
-  que prova commit novo depois de uma parada.
-- **Card** (`staleCardMeta`/`reRoundStatus` em `ui/pure.js`): barra azul (`working`) quando o
-  Farol vai agir, âmbar quando precisa de você; selo "COMMIT NOVO"; sai Aprovar/Pedir
-  mudanças/Só comentar (payload ancorado no head velho, o GitHub recusaria); a "regra do
-  app" (motivo `gate`) sai porque repetia a caixa; **Revisar agora** é secundário quando o
-  Farol já vai agir, primário quando parou, e some com a revisão rodando. Desenho no Claude
-  Design: https://claude.ai/artifact/1c2yxcUa3BtGEycq5Q695w. O toast de pendência nova
-  deixou de dizer "precisa da sua atenção" quando o motivo é commit novo.
-- **FAQ no README** ("Perguntas frequentes: commit novo durante a revisão") descreve cada
-  cenário pra quem usa. Mexeu num motivo ou num tempo daqui, atualize a FAQ junto.
-
-Dívidas conscientes: PR fora do panorama não tem `updatedAt` e fica fora do destrave (a
-fila mine entra no panorama, então o caso real é coberto); o marcador `destravados` só
-poda quando o PR sai do panorama e da mesa.
-
-### Prova por arquivo: round incremental, pulo de push trivial e retomada de sessão (17/08/2026, ainda não publicado)
-
-Motivação medida: o round 2 pós-push relia o PR INTEIRO mesmo quando o dev corrigiu 3 arquivos
-de 40, e um "update branch" (merge da base que não toca o diff) custava uma sessão completa pra
-chegar na mesma conclusão. Três peças, todas com a régua de sempre (falta de dado NUNCA vira
-herança; degradação é sempre pra revisão cheia, que é segura):
-
-- **`lib/engine/file-proof.js`** é o módulo novo. A cada revisão headless o engine tira um
-  retrato do diff efetivo via `pulls/{n}/files` (`fetchPrFiles`, fachada `Engine.fetchPrFiles`;
-  é esse endpoint porque ele devolve o **blob SHA por arquivo**, que o `gh pr view --json files`
-  não dá) e, no fim da sessão, grava a prova em `state/file-proof/<encodeURIComponent(key)>.json`:
-  `{head, files: [{path, sha, status, lines}], reviewed}` com `reviewed` vindo do
-  `coverage.reviewed` do envelope (envelope sem coverage grava `reviewed: []`: sem declaração não
-  há prova de leitura, mesma régua do coverageGap; a prova ainda serve pro pulo de push trivial).
-  Poda por idade de 30 dias (`pruneFileProofs` no boot, `TEMPOS.PROVA_ARQUIVO_MAX_AGE_MS`,
-  best-effort padrão G20).
-- **Pulo de push trivial** (`launchReReviews`, que virou **async**; o `check()` aguarda): antes
-  de relançar o round 2 automático, se existe prova salva, UMA chamada `pulls/files` compara o
-  diff atual com o que a última sessão leu (`sameEffectiveDiff`: mesmos caminhos, mesmo blob,
-  mesmo status em TODOS; sha vazio nunca prova igualdade). Idêntico = rebase limpo ou merge da
-  base: nenhuma sessão abre, toast avisa (nunca silencioso) e a âncora `reReviewLaunched` já
-  gravada segura até o próximo push DE VERDADE. Sem prova salva o gh nem é consultado (zero
-  custo no caso comum) e qualquer falha de medição relança como sempre. Edge conhecido e aceito:
-  conflito resolvido "descartando" a mudança da base mantém o blob do head idêntico e pula, mas
-  o código resultante é byte a byte o que a revisão anterior avaliou.
-- **Round incremental (herança de cobertura por blob)**: no round 2 com head DIFERENTE do da
-  prova (mesmo head é retomada de falha, e aí quem cobre é o checkpoint; herdar tudo no mesmo
-  head faria a sessão "se confirmar" sem ler nada; a exceção é a rodada complementar da busca da
-  prova, no item seguinte), `splitByProof` separa o diff em INALTERADOS
-  (blob + status idênticos E leitura declarada na prova) e ALTERADOS. O prompt ganha o
-  `fileProofBlock` (leia os alterados + reverifique os achados; inalterado só se interagir; e
-  declare em `coverage.reviewed` SÓ o que leu NESTA sessão), o fan-out passa a medir e fatiar
-  **só o que precisa ser lido** (`metricsIncrementais`), e depois da sessão
-  `reconcileInheritedCoverage` move o inalterado de `missing` pra `reviewed` com a origem
-  separada em `coverage.inherited` (leitura desta sessão e prova herdada nunca se confundem).
-  O `coverageGap` continua PURO e intocado: a reconciliação acontece antes, em review.js. A
-  prova nova gravada no fim carrega o reviewed já reconciliado, então o round 3 herda o acumulado.
-  O checkpoint de verificação também sobrevive ao push por blob: cada entrada ganha `blobSha`
-  (carimbado em session.js via `activeReviews.get(id).fileBlobs`) e `relevantEntries` (fonte
-  única em verification-checkpoint.js, usada pelo resumeBlock E pelo summarizeCheckpoint) aceita
-  entrada de head antigo cujo arquivo não mudou.
-- **Alcance herdado e rodada complementar no mesmo head (05/11/2026)**: medido no estado real,
-  a cobertura do inalterado era herdada, mas o `alcance` não, e o arquivo de código que não
-  mudou voltava como "sem uso fora do diff e sem o motivo" (biud-frontend#1826:
-  `renovacaoDaZona.ts` conferido em ccbcf9b, pendência em cc101dd sem mudar uma linha). Agora a
-  prova por arquivo guarda, por arquivo, a declaração de alcance que FECHOU na rodada
-  (`alcanceConferido`: todo chamador fora do diff conferido no head, ou o motivo de não haver
-  uso), presa ao blob e com a origem (head e sessão que declararam); por isso
-  `salvarProvaDaSessao` (em `file-proof.js`) roda depois do `verificarAlcance`. Na rodada
-  seguinte, arquivo inalterado (mesmo critério de `splitByProof`, e com o blob medido agora
-  igual ao da declaração) cuja declaração atual falta ou não fecha recebe a guardada
-  (`herdarAlcance`, marcada em `herdado` e listada em `result.alcanceHerdado`, que vai às
-  provas como `alcance.herdados`); declaração nova com chamador fora do diff é mantida e
-  conferida. O chamador herdado é conferido DE NOVO no head atual, então arquivo citado que
-  mudou fora do diff volta a ser pendência. Inalterado sem declaração conferida antes continua
-  pendência: nada é dispensado sem prova, e o `fileProofBlock` passa a listar os inalterados de
-  código que ainda pedem a declaração (biud-frontend#1818 tinha 47 assim desde a primeira
-  rodada, que declarou alcance para 2 arquivos). **No mesmo head**, a herança vale só para a
-  rodada complementar da busca da prova (pendência com `esperaProva` deste head): a rodada
-  anterior concluiu e gravou a prova, e reler o que já tinha prova por blob fazia a complementar
-  perder cobertura (biud-esg#522, 91a151c: as duas specs lidas às 19:38 viraram pendência às
-  19:46). O clique ou relançamento no mesmo head fora da busca da prova segue cheio, pelo motivo
-  do parágrafo acima. Travado em `test/heranca-de-alcance.test.js`.
-- **Leitura herdada entre PRs do mesmo repositório, por conteúdo (06/11/2026)**: medido no
-  estado real, biudtech/biud-frontend#1852 (promoção para homologation) trazia os 21 arquivos
-  com o MESMO caminho, blob e status do #1843, revisado uma hora antes, e gastou uma sessão de
-  ~10 min relendo os 21; as réplicas do GitFlow (task para develop, release_hmg e release_prd)
-  trazem os mesmos blobs. A prova por arquivo era só do PR. Agora
-  `lib/engine/prova-do-repositorio.js` guarda um índice por repositório em
-  `state/file-proof-blobs/<encodeURIComponent(repo em minúsculas)>.json` (`{repo, entradas}`; o
-  Windows não diferencia caixa, e o `repo` gravado é conferido sem caixa), com chave (caminho,
-  blob SHA, hash do patch) e, em cada entrada, o PR e o head da leitura, quando, a sessão, o status e
-  o alcance conferido para aquele blob. **Gravado** por `registrarLeituraEntrePrs`, depois da
-  prova da rodada (`lacunasDaRodada`) e da conferência do cancelamento, só quando a análise
-  sustenta decisão (`podeEntrarNoIndice`: completa, sem cancelamento e sem lacuna exigida além do
-  CI; texto incoerente, commit não confirmado e as outras lacunas duras ficam de fora; revisão
-  independente de 06/11/2026; desde a segunda, também sem lacuna dispensada sobre a qualidade da
-  leitura, como protocolo não comprovado, verificação de afirmações ausente ou divergência no
-  checkpoint, tolerada só a pendência de cobertura; desde a thread do PR #351, também sem bloqueio
-  em aberto: achado bloqueante vigente, pedido de mudanças ou bloqueio de rodada anterior que a
-  memória ainda conta, porque o índice guarda só a leitura e a memória de rodadas é por PR, e o PR
-  seguinte com o patch idêntico herdaria o arquivo sem reavaliar o defeito conhecido), e só com o que a sessão LEU: arquivo do diff medido, com blob,
-  em `coverage.reviewed`, fora de `missing` e fora de `inherited` (o herdado mantém a origem de
-  quem leu primeiro); o alcance é o mesmo `alcanceDaProva` da prova do PR (só o que fechou).
-  Teto de 4000 entradas por repositório (ficam as leituras mais recentes) e poda pela idade da
-  prova por arquivo (30 dias), na gravação e no boot (`pruneFileProofs` também apaga o índice
-  sem gravação há mais que isso). Gravações paralelas no mesmo repositório podem perder uma
-  entrada; perder só custa reler o arquivo. **Lido** em `prepareReviewReading`, depois da prova
-  própria do PR, que vence: o índice só cobre o arquivo que ela não herda, e entrada gravada
-  pelo próprio PR nunca serve (o PR responde pela prova dele, inclusive pela regra do mesmo
-  head: relançamento no mesmo head fora da rodada complementar segue cheio, sem índice).
-  Herda o arquivo com o MESMO caminho, o MESMO blob (vazio nunca prova), o MESMO patch e o
-  MESMO status. O patch entra na chave desde a revisão independente de 06/11/2026: o que se
-  revisa é o patch contra o merge-base, e ele muda entre PRs com o mesmo blob (réplica do
-  GitFlow, promoção que leva linhas de outras tasks na base); com só o blob, o PR B herdava como
-  lido um arquivo cujo patch contra a base dele trazia linhas que ninguém leu. Arquivo sem o
-  patch completo (`patchStatus` diferente de `available`: o GitHub omite em arquivo grande ou
-  binário, ou corta) não herda nem entra no índice, e o inventário de reserva (`pr-inventory.js`,
-  sem patch) também não herda. Conferido no dado real com a chave nova: o #1852 herda os 21
-  arquivos do #1843 (mesma base b7940a68, mesmos patches). A leitura herdada de outro PR guarda a
-  origem real na prova do próprio PR (`origens`): a rodada seguinte desse PR continua dizendo
-  "lido em org/repo#N" em vez de "sua revisão anterior deste PR leu", e no salto seguinte essa
-  leitura só segue herdada com o mesmo patch (`splitByProof`), como o índice exige. O herdado entra na mesma lista do `fileProofBlock`, num grupo próprio com a
-  origem por arquivo ("lido em org/repo#N, commit abc1234"), a reconciliação o põe em
-  `coverage.inherited`, o `coverageGap` o aceita como coberto e a origem vai às provas da
-  decisão em `cobertura.entrePrs` (contagem e amostra), a partir de `result.coberturaEntrePrs`,
-  que só o engine escreve. **O que não herda entre PRs**, para não perder qualidade: (a) o
-  alcance com chamador é conferido no head NOVO antes da sessão (`verificarAlcance` e
-  `alcanceConferido` contra o diff do PR novo); não fechou, o arquivo perde a herança e volta à
-  leitura; (b) o alcance "sem uso fora do diff" depende da base e do head do PR novo e não tem
-  como ser conferido pelo engine: a leitura herda e a sessão declara o alcance de novo (o
-  arquivo cai na lista "SEM alcance conferido"); (c) a avaliação técnica e o veredito são do PR
-  novo: herança é só da LEITURA; (d) caminho diferente (renomeado) não herda. Qualquer falha de
-  leitura do índice ou da conferência devolve a herança à da prova do PR. Travado em
-  `test/prova-entre-prs.test.js`.
-- **Retomada de sessão no round 2** (`config.reReviewResume`, default **false**, opt-in;
-  toggle em Sistema > Automação, `#setReReviewResume`): o relançamento automático carrega o
-  `sessionId` da última decisão do PR (`lastReviewSessionId`, lido das decisões CRUAS porque o
-  `decisionByKey` projeta allowlist sem sessionId) e `rodarSessao` roda `claude --resume <sid>`,
-  com a MESMA allowlist de formato do chat antes de entrar na linha de shell. Falha de retomada
-  (sessão expirada/limpa, mesma heurística de erro do chat.js) degrada pra sessão nova sozinha;
-  cancelamento e falha real sobem pro retry de sempre. Por que opt-in: sessão retomada carrega o
-  contexto do round anterior (premissas velhas podem contaminar), e quem prefere round do zero
-  não paga isso sem pedir.
-
-O que NÃO mudou: o gate de postagem (invariante 4) está intacto, o dedup por head também, e a
-autoanálise/chat/pushback não gravam nem leem prova. Testes: `test/file-proof.test.js` (puras +
-roundtrip + poda + relevância por blob no checkpoint) e `test/rereview.test.js` (pulo de push
-trivial, medição falhando relança, sem prova não consulta gh, sid viaja no enfileiramento).
-
-Na mesma leva, dois complementos (motivados pelo caso real biud-frontend#774, 17/08/2026: PR de
-3 arquivos de CI levou 30 min porque as 9 verificações empíricas rodaram em SÉRIE):
-
-- **Verificação empírica em paralelo**: agente novo `claim-verifier`
-  (`workspace-template/.claude/agents/claim-verifier.md`, leitura pura: Bash/Read/Grep/Glob, sem
-  Write) e a seção "Verificações empíricas em PARALELO" em `prompts/pr-review-auto.md`: com 2+
-  verificações INDEPENDENTES pendentes, a sessão dispara um `claim-verifier` por afirmação, em
-  paralelo, e depois **REEMITE** cada veredito como marcador `FAROL_CHECKPOINT` na própria sessão.
-  A reemissão não é opcional: desde esta leva `registrarCheckpointDeBash` captura SÓ blocos da
-  sessão principal (evento com `parent_tool_use_id` é ignorado de propósito, senão a captura
-  duplicaria quando o CLI streama o subagente). O agente novo está na lista `synced` do
-  `prepareHome` (server.js), senão workspace já semeado nunca o receberia, a mesma classe do bug
-  de fachada da v2.28.0. Travado em `test/review-prompt.test.js`.
-- **Subagentes visíveis na UI** (pedido do Thiago, 17/08/2026): o stream marca evento de dentro
-  de subagente com `parent_tool_use_id`, e o `session.js` passou a rastrear: `tool_use` de `Task`
-  na sessão principal registra o agente (`registrarAgenteDeTask`, rótulo `tipo N` em
-  `activeReviews.get(id).agents`), o `tool_result` correspondente o conclui
-  (`concluirAgentesDoEvento`), e cada linha do feed vinda de subagente carrega o rótulo
-  (`item.a`, via `pushActivity(id, kind, text, agent)`, fachada com aridade nova). O snapshot
-  entrega a projeção compacta via `projectSessions` (PURA, e é ela que também tira `fileBlobs` do
-  payload). Na UI: badge `👥 vivos/total` no card "Analisando agora" (title lista quem faz o quê,
-  `agentsTitle` em `ui/pure.js`) e etiqueta `👤 rótulo` nas linhas do feed (`feedLine`). Testes:
-  `test/session-agents.test.js` e os de `feedLine`/`agentsTitle` em `test/ui-pure.test.js`.
-
-### Tempo por etapa e modo rápido (17/08/2026, ainda não publicado)
-
-Motivação medida (#775): "por que a revisão demorou 10 minutos?" era impossível de responder
-depois do fim, porque o feed de atividade (único traço com timestamp por linha) morre no
-finally da sessão. Duas peças:
-
-- **Tempo por etapa** (`stageSummaryFrom` em review.js, PURA): calculado do feed IMEDIATAMENTE
-  após a sessão (antes do finally apagar) e persistido na decisão (`item.stages`, projetado
-  saneado pelo `decisionForUi`). Heurística determinística: o intervalo entre linhas pertence à
-  etapa da linha que o ENCERRA, e a fatia final é a redação do envelope. Etapas: preparo,
-  leitura, card, verificação (FAROL_CHECKPOINT + linhas de `claim-verifier`), raciocínio,
-  redação. A UI mostra em Revisões recentes ("Tempo por etapa: ...", `stagesLine`/`fmtDur` em
-  ui/pure.js). É aproximação de traço, não cronômetro; não muda decisão nenhuma.
-- **Modo rápido** (`config.reviewFast`, default false, opt-in; toggle em Sistema > Automação,
-  `#setReviewFast`): injeta `fastModeBlock()` no prompt headless E derruba o `--effort` da
-  linha de comando pra `medium` (salvo `low` explícito, que fica; regra em `buildModelFlags`
-  via `opts.fast`, que SÓ o caminho de revisão passa). A segunda metade nasceu de medição
-  (#776, 17/08/2026): com fast só no prompt, a "leitura" ainda levava 6m28s, quase tudo
-  raciocínio pré-comando, que instrução nenhuma alcança; a flag alcança. O que corta:
-  leitura orientada a diff (arquivo inteiro só quando o hunk não se explica), verificação
-  empírica SÓ do que muda verdict/decision, experimento longo vira `needs_decision` com reason
-  de não-verificado, e pula o dossiê do autor. O que NUNCA muda: schema do envelope, cobertura
-  completa, gates de postagem e formato humano. A troca honesta é velocidade por autonomia
-  (mais PRs caem pra decisão humana), nunca velocidade por afirmação sem prova. Testes:
-  `test/review-stages.test.js` + `fmtDur`/`stagesLine`/`resolvedRow` em `test/ui-pure.test.js`.
-- **Esteira de etapas AO VIVO no card** (pedido do Thiago, estilo n8n): cada linha do feed sai
-  do engine ESTAMPADA com a etapa (`item.s`, decidido por `stageOfLine` no `onEvent` da revisão;
-  `stageOfLine` prefere a estampa quando presente, então a esteira ao vivo e o resumo final
-  nunca divergem sobre a mesma linha). A UI desenha nós ligados (`stageFlowFrom`/`stageFlowHtml`
-  em ui/pure.js, ordem canônica preparo→leitura→card→verificação→raciocínio→redação): feito
-  marcado, ATIVO pulsando com o tempo correndo (o `tickElapsed` atualiza entre eventos),
-  pendente apagado. Linha sem estampa (info do app) herda a etapa corrente. A esteira só
-  aparece com traço real e morre com o card; o que persiste é o resumo (`stages` na decisão).
-  A etapa pode REATIVAR (leitura↔verificação intercalam de verdade): a esteira mostra o estado
-  corrente, não uma máquina de estados linear fictícia.
-
-### Ciclo de vida e higiene (onda 3 dos gaps da auditoria de 15/08/2026)
-
-Quatro estados que existiam só em memória (ou não existiam) e agora têm dono e regra
-de poda. Todos seguem o mesmo princípio das outras duas ondas: **falta de dado nunca
-vira ação**, e poda errada não pode custar sessão paga.
-
-- **Estacionamento persistido** em `state/auto-review-parked.json` (G15, padrão do
-  `pushbackScanned`: load no boot, save a cada mutação; o load é blindado com
-  `Array.isArray`, porque `{}` é JSON válido e `new Set({})` derrubaria o boot
-  inteiro). Era memória pura, e cada reinício, inclusive o do próprio auto-update,
-  relançava sessões fadadas à mesma falha conhecida. **A regra da poda tem duas
-  metades, e a segunda foi paga com um bug reaberto:** (1) só se poda a key de um
-  owner que RESPONDEU à busca neste ciclo (`ownersOk`, mesmo padrão do G5: busca que
-  caiu não prova PR fechado); (2) owner que saiu de TODA a config nunca mais vai
-  responder, então ele dispensa o gate (1), **mas nunca a prova de que o PR sumiu do
-  panorama**. A primeira versão podava esse caso INCONDICIONALMENTE, e a fila mine
-  (`--review-requested=@me`) não filtra por owner: PR de org não monitorada entra na
-  fila normalmente, era des-estacionado todo ciclo, relançado, falhava de novo e
-  estacionava de novo, um loop pago de 30 em 30 segundos. Quem lança (manual ou auto)
-  tira do estacionamento, e a gravação do lote é UMA (fora do laço do `launchReview`).
-  **Desde a v2.57.4 o estacionamento tem MOTIVO, HORA e uma terceira metade na poda.**
-  Caso medido (biud-core#317, 03/09/2026, no Farol de um colega): a sessão abriu às
-  13:14:55 (label `<conta>:revisando`), morreu às 13:21:56 sem postar, o PR voltou pra
-  "Sua fila" com o botão Revisar e NADA na tela dizia o que tinha acontecido; o toast
-  morre em cinco segundos, o `snapshot` não carregava o estacionamento e o card era
-  idêntico ao de um PR nunca revisado. Duas horas parado enquanto o mesmo Farol
-  revisava os vizinhos. Agora: (a) os QUATRO pontos de estacionamento passam por
-  `estacionar(engine, key, motivo, tipo)` em `review.js` (tipo em `cancelado` |
-  `esgotado` | `falha` | `orcamento`), que grava `parkedMotivos[key] = { at, motivo,
-  tipo }` no MESMO arquivo (`{ keys, motivos }`; a lista crua antiga continua lida, sem
-  motivo, e motivo órfão de key que não está no Set morre no boot); (b) `desestacionar`
-  é o único caminho de saída e apaga o motivo junto (launchReview e a poda); (c) o
-  `snapshot` leva `parked` (allowlist `at`/`motivo` cortado em 200/`tipo`, só das keys
-  no Set, via `parkedParaUi`; desde a v2.57.5 key sem motivo, estacionada pelo arquivo
-  antigo, sai como tipo `legado`, senão o estoque anterior seguia invisível) e
-  `queueCardHtml` desenha `parkedNoteHtml` embaixo do título; (d) a poda exige `PARKED_PRUNE_STRIKES` (2) ausências SEGUIDAS do panorama,
-  pela mesma razão da `SELF_PRUNE_STRIKES`: o `gh search` é índice e índice atrasado
-  responde `ok` sem o PR aberto, e aqui a poda errada relança sessão paga (leitura mais
-  provável das 7 linhas ERROR do biud-esg#268 em 83 minutos no mesmo dia, sem commit
-  novo). Contagem em memória; reinício zera e a key sobrevive dois ciclos a mais, o lado
-  seguro. Junto entrou a classe `provedor-indisponivel` em `lib/log-taxonomy.js` (5xx da
-  API de IA, "Overloaded"): era `desconhecido` -> permanente -> estacionava; o próprio
-  texto do provedor diz "usually temporary". Travado em
-  `test/estacionamento-visivel.test.js`.
-- **Dedup do `mineMap` por conta capaz** (G18): o mesmo PR chega pelas duas contas
-  quando você está nos dois times; a conta capaz de agir (não silenciada e com token)
-  vence a incapaz, empate mantém a primeira. Antes, a primeira vencia sempre e o PR
-  ficava mudo, preso numa identidade que nunca dispara aviso nem auto-revisão.
-  Desde 06/10/2026 o mesmo critério vale no dedup do panorama e na conta de uma org
-  (`accountForOwner`, `atribuicaoDoPr`), e a conta silenciada não inicia ações nem pelo clique:
-  revisão, terminal, chat, postagem, reviewers e merge recusam com o motivo na tela
-  (`lib/engine/conta-que-age.js`, travado em `test/conta-silenciada-nao-age.test.js`).
-- **Guarda `mergeInFlight`** (G19, `lib/engine/selfpr.js`): Set por key, segunda
-  chamada devolve `{ ok: false, error: 'merge já em andamento' }` sem tocar no `gh`.
-  Vale pros três botões (normal, auto, admin), que passam pela mesma função. Na UI,
-  essa recusa sai como toast **info**, não vermelho: nada falhou ali, é a segunda
-  metade de um clique duplo, e o merge de verdade seguiu em frente (a cor sai de
-  `mergeToastKind`, em `ui/pure.js`, um lugar só pros três handlers).
-- **Poda dos `update-dl-*`** (G20): cada tentativa de update criava
-  `sessions/update-dl-<ts>` e nada apagava. Toda tentativa começa apagando os que têm
-  mais de 24h, best-effort com try/catch por entrada (lixo que não sai hoje sai
-  amanhã; falhar o update por causa de um diretório travado seria pior).
-
-## Dívida herdada da production não bloqueia (05/11/2026, v2.78.37)
-
-O caso medido: biud-frontend#1822, backmerge da production na development, reprovado pela falta de um teste em `aviso.test.tsx`. O arquivo era idêntico ao da production, e a lacuna estava em produção desde 31/10. Segurar o backmerge não melhorava nada no que roda e travava a development. A primeira reprovação do mesmo PR, pelo hash do manifest que a resolução de conflito deixou errado, procedia, e continua valendo.
-
-`heranca-de-producao.js` roda antes da memória de rodadas e do desfecho. A sessão produz a evidência e o app decide; o rebaixamento exige as duas metades:
-
-- **A sessão declara:** o achado vem com `herdadoDaProducao: true` e fundamentação não vazia de que o ponto já estava na production. Só causa `defeito_codigo` ou `card` é candidata. Interação causada pela base ou resolução do merge continua sendo defeito do PR: a sessão deve citar arquivos/commits e, quando aplicável, `introduzidoPor`.
-- **O app fixa as três pontas:** lê P (production), B (base) e H (head), confere B/H contra o inventário da revisão e compara pelos SHAs. Nome de base com barra não entra na URL da comparação. A base não pode ser production; `behind` deve ser zero e o merge-base de P...H deve ser P.
-- **O app confere o arquivo:** precisa ser idêntico à ponta P e não ter mudança própria na base desde o ancestral comum. A lista de três pontos do GitHub é merge-base → head; ela só representa P → H porque a ancestralidade foi comprovada. Renomes consideram caminho antigo e novo. A evidência em texto ou `introduzidoPor` que aponta arquivo alterado pela base/merge impede o rebaixamento, mesmo com o blob do achado idêntico. A citação vale pelo caminho inteiro (`citaCaminho`): `src/aviso.ts` dentro de `apps/web/src/aviso.ts`, o próprio arquivo do achado, ou o `package.json` da raiz dentro de `apps/web/package.json` não contam, e valem `./caminho`, o link do GitHub (`.../blob/<ref>/caminho`) e o cabeçalho de diff (`--- a/caminho`, `+++ b/caminho`, `diff --git a/caminho b/caminho`). O `a/` e o `b/` só saem nesse cabeçalho: solto no texto, `a/package.json` é o arquivo da pasta `a`. A barra invertida do estilo Windows (`apps\web\package.json`) é lida como `/` antes da busca, porque os caminhos do inventário usam sempre `/`. A primeira versão (PR #352) comparava por pedaço de texto: a evidência que só citava o próprio arquivo segurava o rebaixamento sempre que a base tinha mexido num arquivo cujo caminho terminava o dele (`src/aviso.ts` contra `apps/web/src/aviso.ts`).
-- **Efeito:** o achado vira sugestão; referência histórica sai como retirada, sem ser contada como "resolvida em arquivo inalterado". Sem bloqueio próprio, o veredito usa o texto de aprovação escrito pela sessão e a política da conta decide, com ressalva. Sem esse texto, nada é rebaixado.
-- **Falta de dado não rebaixa nada:** inventário parcial, pontas divergentes, comparação no teto de 300 arquivos ou leitura que falha conservam o resultado. Somente 404 ao consultar a ref production registra sua ausência; 404 de uma comparação não desliga a regra no repositório.
-
-**Limite:** o app recusa a herança quando a evidência observada demonstra a interação. Não detecta semanticamente uma dependência que a sessão omitiu por completo; mesmo blob não demonstra mesmo comportamento. O prompt exige conferir dependências, consumidores e configuração antes de declarar dívida.
-
-## Achado técnico fora das linhas do PR não bloqueia (06/11/2026)
-
-O caso medido: biud-frontend#1818, heads e8b2f02 e d50ee37. A sessão aprovou, e a avaliação técnica virou o desfecho em pedido de mudanças automático por supressor sem motivo (`index.test.ts` 1973 e 2394) e unidade fixa (`RegisterFlow.tsx` 403), todos em linhas que o PR não tocou, só porque o arquivo estava no diff.
-
-`lib/technical-review/divida-fora-das-linhas.js` roda dentro de `finishTechnicalReview`, com todos os achados da ferramenta e o inventário do mesmo commit, antes do corte de dez achados do relatório:
-
-- **A linha vem do verificador mecânico:** a expressão "na linha N" é lida depois de retirar o código entre aspas. Mensagem de avaliação escrita pela sessão não serve de medição.
-- **O intervalo cobre a construção inteira:** o worker usa o parser já distribuído, dentro de seus limites de tempo/cancelamento, e registra início/fim e hash do blob lido. Mudança no fim de chamada, template, declaração ou reexport longo continua no escopo. Supressor alcança a construção associada, inclusive com comentários/linhas vazias intermediárias; diretiva de arquivo e supressão ampla não recebem desconto local. Não existe margem arbitrária de três linhas.
-- **O patch inclui contexto:** toda a construção precisa estar fora dos trechos medidos, inclusive das linhas de contexto. Supressor intacto cujo motivo próximo foi apagado continua bloqueando.
-- **Falta de prova não autoriza desconto:** inventário parcial ou de outro head, blob divergente, patch ausente/reescrito/oculto, sintaxe não suportada ou regra sem intervalo conservam o bloqueio. Isso inclui, de propósito, o que o parser do app não delimita: arquivo que não é JavaScript/TypeScript (CSS, SCSS) e ponto que não abre um nó sintático (um valor no meio de um template literal). Até a régua anterior esses casos ganhavam desconto pela linha inicial; sem o intervalo medido não há como provar que a construção inteira fica fora da mudança, e o bloqueio volta a valer. Regra sem linha, como duplicação de regra de negócio, não ganha localização inventada.
-- **O relatório preserva a dívida:** `foraDasLinhas` marca o achado, `dividaForaDasLinhas` só marca a regra se todos os seus achados forem dívida, e o resumo mostra contagem/amostra. Dívida agravada continua bloqueando. A classificação é versionada em `foraDasLinhas.versao: 2`; não houve nova subida de `VERSAO_DAS_REGRAS`.
-
-A sessão também passa pela conferência. `dividasRelacionadas` correlaciona arquivo e linha dentro do intervalo mecânico antes do corte de dez. Um bloqueio que repete a mesma regra precisa declarar `technicalRule` (ou o identificador correspondente em `criteria.source`) e tratar a dívida como sugestão. Se for uma regressão distinta, deve fornecer `introduzidoPor: {file, line, side: "head"|"base", evidence}`: a âncora precisa estar em linha realmente acrescentada/removida do patch, não somente no contexto. A âncora prova localização; a causalidade continua exigindo evidência do cenário.
-
-A correção usa as até duas continuações da conversa existente. O app não fabrica aprovação nem reaproveita texto antigo de aprovação para encerrar uma reprovação: a sessão precisa devolver envelope e texto coerentes. A marca `dividaForaDasLinhasConfirmada` nasce apenas no engine, e permite retirar a referência histórica da mesma dívida sem ressuscitá-la na memória. Depois da correção, a política da conta continua decidindo entre aprovar com ressalvas, reprovar pelos outros defeitos ou esperar.
-
-Pausa de admissão/coordenação ou falta de identificador da conversa grava `escopoSessaoPendente`, conserva a recuperação e impede publicar texto ainda pendente, inclusive se houver outro defeito real. Falhas de rede continuam pelo caminho recuperável existente. Resposta malformada não reutiliza o resultado local reclassificado como se fosse um envelope novo. Só correção efetivamente concluída sem progresso, resposta malformada ou esgotamento das continuações grava `escopoSessaoInconclusivo`: mantém o motivo visível, impede publicação contraditória e evita relançar automaticamente a mesma tentativa. Clique explícito ou nova rodada podem retomar. As marcas pertencem ao relatório produzido pelo engine; o modelo não as escolhe.
-
-Um envelope novo válido ainda requer julgamento da sessão sobre o texto público. O app não usa igualdade literal com o texto anterior como prova de erro, pois aquele texto pode já cobrar somente outro defeito real. Os gates estruturais e de coerência permanecem obrigatórios; não há garantia automática de compreensão semântica de cada frase.
-
-**Limite:** linha não alterada, sozinha, não prova dívida anterior. Sem achado mecânico correspondente e intervalo confirmado, o app não rebaixa automaticamente o achado da sessão; outro arquivo pode ter introduzido a regressão. A duplicação de regra de negócio em arquivo criado pelo PR continua bloqueando.
-
-## Conferência na boca da sessão (05/11/2026, v2.78.36)
-
-O PR muda enquanto espera a vez. As duas perguntas valem em `bloqueiaAutomatico` (fila, re-revisão, retentativa) e de novo em `runOneHeadless` (`recusaNaBoca`), por onde passa todo caminho automático, antes de abrir a sessão:
-
-- **O pedido à conta ainda vale?** (`pedido-de-revisao.js`.) Medido: 15 de 225 revisões rodaram com o pedido já removido pelo autor; em tenant-company#276 ele saiu às 23:56 e a aprovação às 00:33. Pedido só a um time não é a conta marcada; o do CODEOWNERS é, por decisão do dono. Revisão decisiva anterior da conta é continuação, porque o GitHub tira o pedido quando ela revisa, e pendência viva é rodada já admitida. Clique, admin e comando atravessam; leitura que falha não recusa.
-- **O head já foi decidido?** (`bloqueadoPorHistorico`.) `decidido` é o fato, `bloqueado` é se a rodada não roda. A única diferença entre os dois é o meu pedido AUTOMÁTICO aberto em commit anterior, sem recusa de gente: a rodada roda para poder retirá-lo, e o desfecho e a espera do CI leem `decidido`, então ela não aprova por cima (`approval_not_needed`).
-
-**Revisar tudo não é clique por PR** (05/11/2026, v2.78.37): às 19:20 o botão relançou três PRs com head já decidido, porque mandava a fila inteira como clique, e clique atravessa o gate. Agora ele vai com `lote: true`: atravessa a política da conta como o clique, mas o head decidido e o pedido removido seguram, no lançamento (`seguraNoLote`) e na boca, porque `origemExplicita` não conta o lote. Também não desestaciona, não desfaz a saída de cena e não atravessa limite do plano, orçamento nem a revisão já resolvida no mesmo head: só o clique num PR específico faz isso.
-
-**O mesmo PR não abre duas sessões locais:** `revisao-em-curso.js` usa a chave canônica e verifica fila headless, `headlessIniciando`, revisão automática e terminal ativos. O lançamento aplica a guarda após as preparações assíncronas e antes de remover a fila/abrir a sessão, inclusive em lote e em dois pedidos simultâneos. Terminal fechado libera o PR; login sem PR não ocupa a trava. Se o aviso de fim da janela se perde, o cartão do terminal oferece **Liberar PR**, que faz o que o fim da sessão faria: solta o PR e revoga a permissão de a janela publicar pelo Farol, sem fechá-la (a pergunta de confirmação diz as duas coisas). A autoanálise segue a régua de antes: recusada com revisão comum do mesmo PR enfileirada ou automática ativa, e não segurada pelo terminal (a primeira versão desta guarda tinha perdido o caso da fila; corrigido na v2.78.42). A sessão de terminal mantém a exceção humana existente para coordenação entre aparelhos: esta guarda não cria lease remoto nem altera configurações da conta.
-
-Quem segura na boca solta a âncora e mata a retentativa. PR segurado na fila não paga `gh` a cada ciclo enquanto o `updatedAt` não muda.
-
-**Limites:** decisão que chega com a sessão já aberta numa rodada comum não a interrompe, e a postagem segue pelos gates de sempre. O pedido de mudanças pelo CI vermelho (`reprovarPeloCi`) não consulta a decisão de gente. Pendência em espera da prova segue em espera até commit novo ou clique, mesmo com decisão de gente.
-
-## O pedido de mudanças sai quando o problema foi resolvido (05/11/2026, v2.78.35)
-
-O caso medido (biud-frontend#1779): o Farol postou CHANGES_REQUESTED com dois blockers, o autor corrigiu os dois, e o pedido ficou lá. O GitHub não ajuda: `dismiss_stale_reviews_on_push` só derruba aprovação, e o Farol não tinha nenhuma escrita em `/dismissals`, então a única saída de uma rodada era postar um veredito novo. No PR irmão (#1778) essa saída foi um APPROVE, o que misturava duas decisões. A regra do dono: resolvido o problema, o pedido sai sozinho, e **isso não quer dizer aprovação automática**.
-
-`lib/engine/retirada-de-pedido.js` é a peça, e a ordem no `concluirRevisao` é: retira, e o desfecho segue igual (aprova só se os gates e a política da conta mandarem; com a conta em "espera você", sai só a retirada).
-
-- **O que é "resolvido" é evidência, não texto da sessão** (`provaDaRetirada`, pura): análise completa concluindo aprovar, memória de rodadas com rodada anterior e sem blocker nem inconsistência (a régua do `enforce` em QUALQUER modo: sem memória não há como afirmar que o pedido foi respondido), nenhum defeito do PR, e o gate da aprovação sem outra recusa além da política da conta e do CI. Prova esgotada segura quando dispensou alguma lacuna não dura diferente de divergência histórica (`lacunasDispensadas`): a marca diz apenas que foi a última tentativa no commit, e a rodada que fechou tudo nela prova como qualquer outra (biud-esg#522, 05/11/2026, v2.78.38). Divergência de passadas sozinha é ressalva sobre uma afirmação, não evidência de defeito nem motivo para manter o pedido resolvido, exceto quando cai no ponto de um pedido que a rodada diz resolvido ou retirado (mesmo arquivo e mesma linha, ou sem linha num dos lados; `divergenciaNoPedido`): aí a dúvida é sobre a própria resolução, e o pedido fica. A prova da rodada, referências respondidas, cobertura e demais gates continuam exigidos; o cálculo não depende dos textos exibidos no card. Commit que chegou durante a sessão (`headAndou`) também segura, e head que não dá para confirmar adia a retirada para a varredura.
-- **O que sai é só o pedido AUTOMÁTICO desta conta** (`status: auto_rejected`, mesma conta, no commit do review): o feito à mão é decisão de uma pessoa e o de outro revisor não é nosso. Mais de um review meu no mesmo commit, contando o já dispensado, é indistinguível pelo histórico e segura; pedido meu sem decisão automática ou sem rodada gravada também. Pela rodada, saem todos os automáticos ativos; pela marca do CI, só o do próprio commit, a não ser que a rodada daquele head também tenha provado os antigos (`comRodada`).
-- **O que fica para depois** (`retiradaPendente` na decisão, varrido por `varrerRetiradas` em todo ciclo, com qualquer política da conta e antes da aprovação): CI que ainda não fechou verde ao fim da rodada, falha passageira de leitura ou de envio (até 5 tentativas), e o pedido feito pelo CI vermelho, que sai se o check fechar verde no MESMO commit, sem commit novo. Commit novo ou PR fora do estado aberto limpam a marca.
-- **Falha ao retirar não segura o desfecho:** vai para o log e para a marca, e a aprovação que os gates liberaram substitui o pedido do mesmo jeito.
-- **Rastro:** `pedidoRetirado` na decisão, fora de `reasons`, porque motivo em aprovação limpa viraria ressalva e alvo de pushback.
-- **Limites conhecidos:** o histórico de decisões é local, então pedido postado por outro aparelho não é reconhecido como automático aqui e fica até sair aprovação ou até o aparelho dono retirar. Pedido sem rodada gravada (análise incompleta, ou anterior a 23/10/2026) também fica. A varredura não confere a posse do PR entre aparelhos, só a coordenação fora do ar: o caso que sobra é um pedido do próprio head saindo enquanto outro aparelho revisa o mesmo commit.
-
-## Autoanálise: parecer do modelo x decisão do app (P0a v2.54.8, P0b v2.55.0)
-
-**Pedido por um agente (issue #346).** Um agente pode pedir, ler e listar autoanálises
-dos PRs do próprio usuário pelo comando `tools/farol-autoanalise.js`, com credencial de
-escopo próprio. O pedido sempre usa o modo restrito abaixo e nada escreve no GitHub nem no
-git; revisar PR alheio, aprovar, comentar, mergear e mudar configuração continuam só na
-tela. Contrato e limites em `docs/CONFIGURATION.md` (credenciais de escopo único).
-
-**Execução restrita, opt-in por requisição.** Use `POST /api/self-review/restricted`
-com a URL do PR. A resposta confirma `isolation: "restricted-read"`; versões antigas
-recusam essa rota, sem iniciar uma sessão irrestrita por ignorar um campo novo.
-O endpoint original também aceita `isolation`, mas clientes que exigem isolamento
-devem usar a rota específica, sem fallback. O modo fica no item da fila, não na configuração
-da conta. Suporta Claude de assinatura com `--restricted` e Codex autenticado
-pelo plano ChatGPT; provedor incompatível ou fontes incompletas recusam a execução,
-sem fallback. A sessão recebe material exclusivo de head, base e merge-base fixados, representações por arquivo e
-manifesto de exclusões. Caminhos protegidos e links não são copiados. Valores reconhecidos
-são ocultos antes da entrega e da persistência; fontes não verificadas impedem iniciar. Os materiais são preservados para
-diagnóstico, sem limpeza de diretórios compartilhados ou retomada de sessão.
-
-Para selecionar Codex somente naquela execução, use `POST /api/self-review/restricted/codex`
-com `url` e `profileId` de um perfil Codex existente. A resposta deve confirmar o mesmo
-`codexProfileId` e o modo restrito. A rota separada impede que uma instalação anterior
-ignore o perfil e inicie o provedor associado. Perfil ausente, de outro tipo ou removido
-antes do executor é recusado, sem fallback. O item da fila conserva a seleção; conta,
-cadeia e configuração global permanecem iguais. A reserva de cota e o orçamento consultam
-o perfil escolhido; Codex mantém sua classificação existente sem custo em dólar para o teto
-de grupo. O lease da análise e todos os controles do sandbox continuam obrigatórios.
-
-A observação `sourceTools` registra contagens de chamadas, respostas e erros, além do código
-de saída e sinais booleanos de MCP no stderr; nunca o texto do stderr. Zero respostas ou
-um sinal de falha não provam indisponibilidade: a cobertura observada continua sendo o gate.
-Codex com saída diferente de zero ou sem código confirmado é falha mesmo após `turn.completed`;
-o consumo medido é preservado.
-
-**Projeção de fontes (`source-redaction-v1`).** O fluxo normal continua recusando patches
-sensíveis. Somente a execução restrita solicita representações: mantém contexto e linhas,
-com marcadores opacos por execução. Marcadores iguais comprovam igualdade do texto oculto
-reconhecido, não formato, tamanho ou validade da credencial.
-Valores não citados são ocultados até o fim da faixa reconhecida, inclusive pontuação
-ambígua; a projeção pode perder sintaxe e não serve para executar ou validar parsing.
-O manifesto registra H/B/M, caminhos, OIDs já verificados, regiões ocultadas, versão da transformação e SHA-256 da
-representação entregue, sem gravar valor de credencial, sua versão base64 ou hash individual.
-Quando o patch falta ou é parcial, compara projeções verificadas M/H, distinguindo ausência
-confirmada de erro de leitura e usando o caminho anterior nas renomeações; não as chama de
-diff GitHub. Binários, links, árvores incompletas e caminhos protegidos continuam recusados.
-Somente `.env.example` e `.env.sample` regulares têm opt-in fechado: mostram chaves
-convencionais, ocultando valores, comentários e continuações multilinha. Outros `.env*`
-continuam excluídos. Templates sem o esquema suportado são recusados.
-
-**Arquivo de ambiente no fluxo normal (03/11/2026).** Um PR que só altera `.env.dev` nunca
-fechava a cobertura, porque o patch de `.env*` era recusado. Liberar o patch não serve: as linhas
-de contexto e o título do hunk podem trazer segredos versionados. `lib/review-source/env-changes.js`
-entrega só as linhas alteradas, sem contexto e sem o texto de seção do hunk, e mostra o valor
-apenas quando ele é vazio, booleano, número curto em chave de medida (`_PORT`, `_TIMEOUT`) ou a
-origem de uma URL http(s), sem caminho, credencial, query ou fragmento; chave com nome de segredo
-sempre oculta. Comentário nunca aparece: é texto livre, e nenhuma régua fechou (três rodadas de
-revisão adversarial acharam senha em comentário e em caminho de URL). Desde 07/11/2026
-(biud-core#548, decisão do dono) o comentário só conta como oculto quando tem forma de credencial:
-par com nome de segredo em qualquer ponto do comentário (`DB_PASSWORD=x`, `senha: x`,
-`"AUTH_SECRET": "x"`) cujo valor não é palavra simples nem marcador de exemplo, URL ou autoridade
-com usuário e senha (inclusive usuário vazio e sem esquema), JWT, ou o que a máscara de segredo
-reconhece. Marcador de documentação (`TODO:`, `NOTE:`) não tem nome de segredo e não segura. Antes contava todo comentário que
-não parecesse prosa, e o comentário que só explicava um token, com a variável vazia, mandava o PR à
-mesa. Chave fora da convenção esconde a linha inteira. Ler esse patch conta como
-cobertura. O arquivo inteiro continua recusado pelo leitor, e os demais caminhos protegidos seguem
-sem patch. **Arquivo de ambiente e protegido não lido viram ressalva (08/11/2026).** Ordem do dono,
-diante do biudtech/biud-core#544 parado em "Precisa de você" com a conta configurada para aprovar
-sozinha: "se eu deixei pra aprovar sozinho ele deve aprovar sozinho". Valor oculto de ambiente, patch
-de ambiente truncado pelo GitHub e caminho protegido sem projeção deixaram de ser motivo de recusa
-(`valor_oculto_de_ambiente` e `protegido_sem_leitura` saíram de `shouldAutoApprove`) e viraram
-ponto de atenção com o caminho do arquivo (`pontosDoNaoLido`, `lib/engine/ambiente-nao-lido.js`,
-somado em `ressalvas.js`), seja quem for o autor; a política de ressalvas da conta (`onCaveats`)
-decide entre aprovar e a mesa. Supera a regra de 03/11/2026 (só o autor Tech Lead saía sozinho) e a
-de 06/11/2026 (protegido sem projeção ia para a pessoa). O protegido sem projeção continua sem armar a
-recuperação da prova. Limite
-conhecido: comentário com senha solta, sem nome de segredo antes nem forma de URL
-(`# senha antiga xyz`), ou com valor de uma palavra só (`# password: hunter`), passa sem ser visto
-por ninguém; ele não chega à sessão, mas também não segura a aprovação.
-
-### Projeção legível sob o deny do usuário e a leitura do protegido como prova (06/11/2026)
-
-Auditoria no motor instalado 2.78.39: o `~/.claude/settings.json` do dono traz
-`deny: ["Read(.env)", "Read(.env.*)", "Read(.secrets)"]`, a sessão headless herda as settings do
-usuário (o `--dangerously-skip-permissions` não desliga `deny`), e a regra casa pelo nome-base em
-qualquer profundidade, inclusive em caminho absoluto fora do projeto. A projeção do `.env.example`
-era materializada em `state/pr-scope/<pr>@<sessão>/.env.example`, então quatro de quatro PRs com
-esse arquivo deram `erro-do-read` em `medicoes-leitura.jsonl` e viraram lacuna de cobertura. Pior:
-barradas, duas sessões buscaram o patch CRU no GitHub (`gh api repos/<o>/<r>/pulls/N/files`, que o
-`Bash(gh:*)` do workspace permitia), contornando a redação; numa delas o arquivo ainda foi declarado
-em `coverage.reviewed`. Um subagente baixou o tarball do repositório para o `/tmp`.
-
-Três decisões, uma por buraco, todas em `lib/review-source/caminho-protegido.js` e nos módulos que
-o consultam:
-
-- **O nome da projeção não casa o `deny`.** Das três opções (nome novo, projeção inline no prompt,
-  isolar o headless das settings com `--setting-sources`), ficou o nome novo:
-  `_farol_redigido_/_<caminho achatado>.redigido` (`nomeMaterializado`), um componente só abaixo da
-  pasta redigida, com `/` escrito `%2F` e `%` escrito `%25`. O `_` na frente tira o nome das regras que
-  ancoram no início (`.env`, `.env.*`, `.env*`, `**/.env*`), o sufixo das que ancoram no fim (`*.env`),
-  e o achatamento tira o diretório: a regra do `deny` segue o gitignore e casa também um DIRETÓRIO do
-  caminho, então manter `.env.d/` de `.env.d/prod.env` (ou `.envs/.production/`, `config/.env/`) no
-  disco deixaria a projeção recusada mesmo com o nome-base trocado. `caminhoDoPr` só aceita o nome que
-  o próprio `nomeMaterializado` escreveria; medido no CLI 2.1.308: `Read(.env.*)` recusou `.../.env.example` e aceitou
-  `_.env.example.redigido`. A projeção inline perderia a prova de leitura (nada a observar no stream),
-  e `--setting-sources` tiraria da sessão TODAS as settings do usuário (hooks, modelo, `env`), não só o
-  `deny`, e deixaria a projeção presa em quem tivesse a regra no settings do projeto. O caminho do PR
-  continua sendo o que a sessão declara: `prPathFromRead` desfaz o nome (`caminhoDoPr`), o prompt
-  lista cada protegido com o nome a ler (`redigidos`, `blocoDosRedigidos`), e o caminho protegido lido
-  no lugar comum, onde nada foi escrito, não vira cobertura nem pela regra do Read.
-- **Protegido só conta coberto com a leitura OBSERVADA da projeção.** `prepararCoberturaParaOGate`
-  recebe `leiturasProvadas` (os caminhos cuja entrega inteira o `read-evidence.js` conferiu contra o
-  arquivo materializado, em qualquer modo) e grava `result.protegidosSemLeitura`; o `coverageGap`
-  o lê como lacuna (`caminho protegido sem leitura observada da projeção redigida: ...`), mesmo com
-  o caminho em `coverage.reviewed`. A prova por arquivo guarda `observados`, e `splitByProof` só herda
-  um protegido quando ele está lá: prova gravada antes dessa regra não tem a lista e o protegido é
-  relido (é pequeno). Sem a medição do diff nada é conferido, e o protegido sem projeção vira
-  ressalva com o caminho do arquivo (desde 08/11/2026; antes era o gate `protegido_sem_leitura`). A dispensa da leitura vale só para a herança
-  COMPROVADA pelo engine (`heranca.ativa`, `heranca.unchanged`): `coverage.inherited` escrito pelo
-  modelo numa rodada sem herança ativa não dispensa nada. O índice de leitura entre PRs do mesmo repositório
-  (`prova-do-repositorio.js`) não registra nem herda caminho protegido: a declaração de outro PR não
-  é observação desta revisão, e o protegido é relido. A autoanálise passa pela mesma régua:
-  `lidosComProtegidoProvado` (`read-evidence.js`) tira do `observed.scope.reviewed` o protegido cuja
-  entrega não foi conferida, ainda que a regra do Read tenha visto o pedido. Protegido quer dizer
-  protegido de um lado ou do outro do rename (`arquivoProtegido`): `.env.example` renomeado para
-  `config.txt` traz no patch o conteúdo de antes, então os metadados do diff (`previousPath`) seguem
-  até cada filtro da prova: o inventário medido pelo `gh` (`pr-inventory.js`), o escopo materializado
-  (`arquivos` em `pr-scope.js`), a autoanálise, a prova por arquivo e o índice entre PRs.
-  **Protegido SEM projeção não tem arquivo nenhum no escopo** (review do PR #350, 06/11/2026): o
-  caminho comum sem patch recebe um marcador de indisponibilidade, e no protegido esse marcador
-  seria uma entrega inteira conferível, creditada em `provados` por um conteúdo que a sessão nunca
-  viu. `materializeScope` não grava nada para ele (fica no total, em `semProjecao`, e o prompt manda
-  declará-lo em `coverage.missing`), e a disponibilidade viaja até o crédito: `arquivos[].projecao`
-  é `false` e `lidosComProtegidoProvado` o tira dos lidos mesmo com uma entrega conferida.
-- **Marcador não é conteúdo.** Arquivo cuja representação no escopo não tem o conteúdo integral (patch
-  ausente ou binário, protegido sem projeção, patch truncado pelo GitHub) é gravado como marcador ou
-  fragmento e entra em `semConteudoIntegral` (`pr-scope.js`, guardado no registro da sessão). Lê-lo inteiro
-  não credita nada: `read-evidence.js` recusa a prova do retorno (`sem-conteudo-integral`) e a regra do
-  Read, então ele não entra em `provados` nem em `filesRead`, e a autoanálise o deixa em `missing`. Na
-  revisão, `prepararCoberturaParaOGate` recebe a lista e grava `result.semConteudoIntegral`, que o
-  `coverageGap` lê como lacuna (`arquivo sem conteúdo integral no escopo (patch ausente, binário ou
-  truncado): ...`) mesmo declarado ou herdado; o protegido nessa situação já sai como protegido sem
-  leitura. A prova por arquivo e o índice entre PRs não o guardam como lido. O escopo do terminal grava o
-  mesmo marcador, dizendo que lê-lo não cobre nada. A exceção é a renomeação pura (`renamed` sem nenhuma
-  linha alterada): não há conteúdo novo a ler, e o marcador dela conta. Consequência: PR com arquivo
-  binário ou grande demais para a API tem essa lacuna, e ela segue o caminho de toda lacuna de cobertura.
-
-  **Limitação conhecida, de propósito:** a leitura observada vive em memória, no stream do Claude
-  desta sessão. Codex e Antigravity não emitem evento de leitura de arquivo, e a sessão retomada depois
-  de reiniciar o Farol começa sem as observações da anterior; nos três casos o protegido do diff fica em
-  lacuna (ressalva visível, `protegidosSemLeitura`) até uma sessão do Claude lê-lo de novo. Falta de
-  dado não vira cobertura. Na autoanálise pelo Codex ou Antigravity a cobertura inteira já é
-  `COVERAGE_UNOBSERVABLE`, então o protegido não muda o desfecho dali.
-- **As rotas do patch cru medidas nos transcripts são recusadas por mecanismo.** A sessão de revisão e
-  a autoanálise recebem `--settings workspace-template/.claude/guardas.json`
-  (`lib/engine/guardas-da-sessao.js`), só com `deny`: `gh pr diff*`, `gh api *pulls/*/files*`, o
-  diff pedido por cabeçalho (`gh api *vnd.github*.diff*` e `*vnd.github*.patch*`, que cobrem
-  `Accept: application/vnd.github.diff`, `.patch` e `application/vnd.github.v3.diff` em qualquer
-  endpoint), tarball, zipball, `gh repo clone` e `git clone`. Por linha de comando porque o `prepareHome` nunca
-  regrava o `settings.json` semeado, então a regra chega a toda instalação no mesmo boot; o
-  `settings.json` do template leva a mesma lista para instalação nova. O curinga no meio do padrão
-  de Bash foi medido no 2.1.308. `compare`, `commits/<sha>` e `contents/<caminho>` ficam na proibição
-  do protocolo (são rotas legítimas da procedência do sync e das regras do repositório), e por isso a
-  regra do crédito, acima, é o gate de verdade: o que a sessão vir por fora não credita nada. O
-  `pr-reviewer` deixou de baixar o patch único no passo 3; sem raiz de escopo ele lê cada arquivo não
-  protegido pelo `contents` e declara os protegidos em `coverage.missing`.
-- **A revisão no terminal tem o mesmo desenho.** O botão "Revisar no terminal" abre
-  `claude "/pr-review <urls>"`, e o `pr-reviewer.md` que o `prepareHome` regrava em toda instalação
-  vale ali também. Por isso a sessão de terminal recebe o mesmo `--settings` das guardas
-  (`buildSessionScript`/`buildSessionScriptMac` em `session.js`), e o engine grava o escopo antes de
-  abrir a janela (`lib/engine/escopo-do-terminal.js`): o patch de cada arquivo pela mesma régua da
-  headless, numa raiz `state/pr-scope/terminal-<ms>-<i>`, passada como `escopo=<raiz>` logo depois da
-  URL, relativa ao workspace (o cwd da sessão) e sem `%` (o `.cmd` do Windows leria `%2F` como
-  parâmetro). O `pr-reviewer` lê o diff de lá, com os trechos `@@` que o comentário inline precisa.
-  Falha ao ler os patches não segura a janela: a URL vai sem `escopo=` e vale o caminho sem raiz de
-  escopo, que nunca lê o protegido cru. O patch que a API entrega pela metade (contagem de `+` e `-`
-  abaixo de `additions` e `deletions`, a régua de `upstreamPatchStatus` em `github.js`, que o
-  `parsePatchPages` passou a usar também na queda da autoanálise) vira `partial`, e no terminal, que
-  não tem o gate de cobertura, o fragmento é gravado com um aviso antes do primeiro `@@`. Durante a
-  preparação o terminal reserva as chaves em `headlessIniciando` e, no fim, solta só as que ele
-  mesmo pôs: a reserva que a fila headless já tinha continua com ela.
-
-Medido nos 41 transcripts de `~/.claude/projects/-Users-alex--farol-workspace/` antes de fechar:
-38 com "Fontes e patches preparados" e 3 com o escopo medido (nenhum sem raiz de escopo), 3 com
-`pulls/N/files`, 1 com `gh pr diff` (só `--name-only`), 7 com `contents?ref=` (regras do repositório),
-8 que citam tarball. A recusa não tira da sessão nada que o protocolo precise.
-
-Na execução restrita, blobs novos não são persistidos no cache compartilhado; entradas
-já existentes podem ser lidas e verificadas. O reader conserva somente texto projetado,
-digest e metadados em cache efêmero por execução, com orçamento de 32 MiB de payload
-serializado (não é limite de RSS). A chave distingue blob e política efetiva de template;
-caminho, commit e modo vêm sempre da referência atual. O mapa de igualdade retém no
-máximo 4.096 valores e 8 MiB de texto oculto; ao atingir o limite, recusa novos valores sem
-apagar identidades anteriores. O fluxo normal e a contabilidade persistente não mudam.
-
-O índice sintático compartilhado não é reutilizado na projeção, para não misturar fatos de
-texto original e ocultado; isso não altera a configuração de contexto. A evidência do host
-distingue leitura integral da representação de leitura dos valores originais, e conserva
-as limitações mesmo que o modelo as omita. Qualquer contraprova em arquivo com partes
-ocultas é marcada inconclusiva pelo host. Isso não dispensa CI, aprovação humana ou QA.
-
-O filho inicia diretamente, sem shell do sistema ou tokens GitHub herdados.
-Temporários pertencem à execução; associação de conta, perfil e provedor não muda.
-Claude usa Read/Grep/Glob, MCP vazio e confere as ferramentas no evento inicial.
-Codex usa sessão efêmera, ignora configuração e regras do usuário, desliga hooks,
-shell, apps, navegador, plugins, subagentes, imagens e memórias. Seu sandbox é read-only;
-com leitura dos diretórios mínimos da plataforma e do snapshot, sem escrita nem
-rede para ferramentas. O único MCP configurado é um servidor local de leitura/listagem do snapshot.
-Eventos de comando ou MCP fora desse contrato recusam a sessão. O host de ferramentas
-do Codex permanece ligado porque também transporta o MCP; isso não habilita shell.
-As páginas de leitura têm até 60 linhas e 2.048 caracteres de conteúdo; o limite
-explícito de saída é 32.768 tokens, acima da resposta serializada máxima. O manifesto
-e suas exclusões entram no prompt. Cobertura exige conferir conteúdo e intervalos
-de cada resposta com a representação local, mesmo quando o observador global é o antigo.
-Ela comprova conteúdo disponibilizado, não compreensão ou persistência após compactação.
-Checkpoints de leitura usam `FAROL_CHECKPOINT` em texto principal, com `method:
-"read"`, depois da entrega da representação; o registro explicita que não houve execução
-de teste. Entradas de outra sessão ou head não contam e ausência fica desconhecida.
-Testes locais, CI, aprovação humana e QA continuam provas separadas. Esse modo
-não concede capacidade de publicar no GitHub nem permissão de integrar.
-
-**O defeito de origem, e ele era de AUTORIDADE, não de qualidade da análise.** Até a
-v2.54.7 o único gate de qualidade de todo o caminho do `mergeSelfPR` era
-`analysis.approvable !== true`, um booleano produzido pela sessão de IA, e o MESMO gate
-servia o `--admin`, que bypassa branch protection: a proteção do repositório deixava de
-ser a segunda barreira justamente onde a decisão de qualidade era a mais fraca. A regra
-vivia copiada em QUATRO sítios (gate do merge, filtro de alvos do `refreshMergeStates`,
-fetch pós-análise e o `canMerge` da UI), e foi essa duplicação que criou porta lateral:
-fechar só a porta do merge deixaria as derivadas de pé. **Antes de mexer num gate,
-mapeie todos os consumidores do campo**; corrigir só a porta que você achou não fecha
-nada.
-
-**A regra que substituiu.** O `self-review.md` produz PARECER; o Farol produz a DECISÃO
-operacional. `evaluateQualityEligibility(analysis, observed)` é a fonte única, e as duas
-entradas têm autoridades diferentes:
-
-| ENGINE (`observed`) | MODELO (`analysis`) |
-|---|---|
-| `headSha` analisado | `blockers`, findings |
-| `sessionOutcome` (fluxo de controle real) | `cardMet` (interpretação do requisito) |
-| `scope.total` (escopo medido) | `verdict`/`approvable` (parecer) |
-| `scope.reviewed` (leitura OBSERVADA) | `coverageLimitations` |
-| `verification` (checkpoint da loja `self`) | |
-
-**O modelo só REDUZ cobertura, nunca amplia.** `coverageLimitations` subtrai do que o
-engine observou. Não existe campo que some, e é por isso que `coverageClaimed` (se vier
-no envelope) não é lido em lugar nenhum: a direção da autoridade é estrutural, não uma
-regra que alguém precisa lembrar de respeitar.
-
-**Álgebra.** Acumula razões e decide no fim, nunca retorna no primeiro `if`:
-`ineligible` (evidência CONTRA) > `inconclusive` (evidência FALTANDO) > `eligible`.
-Quatro valores por dimensão (`satisfied`/`unsatisfied`/`unknown`/`not_applicable`),
-porque sobrecarregar `inconclusive` apagaria a diferença entre requisito REPROVADO e
-requisito NÃO LIDO. `reasons` é `{code, detail}`, contrato de máquina; quem escreve a
-frase é `ui/pure.js` (`qualityReasonLabel`/`qualityBlockTitle`). Engine não escreve copy.
-
-**`quality` é DERIVADO e NUNCA persistido** (`projectSelfAnalyses` calcula a cada
-snapshot). Gravado em disco, um registro carimbado `eligible` sobreviveria à evidência
-que o justificava. O disco guarda parecer bruto + `observed` bruto.
-
-**Como a cobertura virou observável (achado do preflight do P0b).** O protocolo lia um
-`.patch` ÚNICO, então `Read` por arquivo nunca acontecia e observar "Read · caminho" não
-cobriria nada. Agora o engine ESCREVE o patch de cada arquivo sob
-`state/pr-scope/<enc(key)>` (`lib/engine/pr-scope.js`) e o prompt manda ler dali:
-`Read` por arquivo passa a ser o mecanismo real e o mapeamento caminho-lido ->
-caminho-do-PR é `path.relative`, não heurística. `observarLeitura` (session.js) conta
-também leitura de SUBAGENTE (o fan-out lê nos subagentes; exigir a sessão principal
-zeraria a cobertura de PR grande) e o Set deduplica sozinho.
-
-**LIMITE HONESTO, declarado e não resolvido:** `Read` observado prova que o conteúdo foi
-ENTREGUE ao agente, nunca que ele raciocinou bem sobre aquilo. O que isto elimina é a
-classe "o modelo afirmou ter coberto o que o engine nunca observou". A classe "abriu e
-raciocinou mal" continua viva e não tem solução por instrumento.
-
-**Freshness são DUAS provas diferentes, e nenhuma substitui a outra.** `EVIDENCE_STALE`
-(em `evaluateQualityEligibility`) prova que a evidência pertence ao conteúdo analisado
-(`observed.headSha === analysis.headSha`, ausência de qualquer lado também reprova); o
-gate G3 do `mergeSelfPR` prova que esse conteúdo ainda é o atual no instante do merge.
-
-**Checkpoint: o gate deixou de ser o MODO.** Era `review.mode !== 'auto'`, e por isso a
-autoanálise nunca produzia verificação capturável, justamente o caminho que autorizava
-merge. Hoje a propriedade é explícita: `review.checkpoint` carrega a LOJA que a sessão
-alimenta (`'review'` | `'self'`); ausente = não participa (terminal, chat, ferramenta).
-`checkpointPath(prKey, escopo)` separa as lojas, e a separação não é cosmética: sem ela,
-a análise que EU fiz do MEU PR alimentaria o gate de uma revisão feita por outra conta.
-
-**Jira NÃO é obrigatório (decisão do Wanderson, 29/08/2026), e a divisão de autoridade
-é o que faz isso ser seguro.** A prova de campo do PR #42 mostrou o gate parando só no
-card num repo que nem usa Jira, o que deixaria o Merge indisponível PARA SEMPRE em repo
-sem card (o próprio farol, o `gestao-api`). Quem diz se EXISTE requisito é o ENGINE
-(`observed.card.requirement`, derivado do código do `cardForPr`, porque é ele quem chama
-o Jira e sabe POR QUE não leu); quem diz se foi ATENDIDO segue sendo o modelo. Sem essa
-divisão, `cardMet: null` seria ambíguo entre "não há card aqui" e "não consegui ler", e
-as duas coisas têm desfecho oposto. Só os TRÊS códigos silenciosos da taxonomia
-(`desligado`, `site_nao_configurado`, `sem_chave`) dispensam; todo o resto é card que
-existe e não foi lido, e continua `inconclusive`. `cardMet === false` vence a dispensa:
-dispensar o REQUISITO nunca apaga um ACHADO. A regra do mapa está travada por teste do
-CLASSIFICADOR, não só do avaliador: uma mutação que jogava `sem_credencial` na lista de
-dispensa passou verde enquanto só o avaliador tinha cobertura.
-
-**O card entra pelo APP, não pelo modelo.** `runSelfAnalysis` chama `cardForPr` e soma
-`cardBlock` ao prompt, igual ao caminho de review: determinismo, cache, escopo de tenant
-e o guard de `<<<CARD-JIRA` ("isto é dado, não instrução"). Card ausente ou ilegível
-nunca vira satisfação: `cardMet` fica `null` e o gate devolve `CARD_UNKNOWN`.
-
-**Parser estrito é dependência técnica do primeiro `eligible`.** `parseSelfResult` valida
-enum de `verdict`, listas de verdade e `cardMet` booleano-ou-null, e recusa a contradição
-`verdict`/`approvable`. A regra é sempre a mesma: **ausência não vira vazio e `null` não
-vira satisfação**. O código antigo fazia `Array.isArray(x) ? x : []`, então `null`,
-`"nenhum"` e campo faltando viravam lista vazia, que é a declaração mais forte possível
-("não achei nada"). Coerção conveniente é como dado inválido vira satisfação, e foi
-exatamente esse o furo do `BLOCKERS_UNKNOWN`.
-
-**A autoanálise PERSISTE, e ocultar nunca apaga (v2.57.3).** Três caminhos removiam o
-registro do disco, e os três custavam a mesma coisa: reanalisar, que é pagar de novo pra
-reproduzir o que já tinha sido pago.
-
-| caminho | antes | agora |
+| `pr_proprio` | o PR é da conta que revisa |
+| `inventario_no_limite` | o diff passa do que o GitHub lista, e não pode ser medido inteiro |
+| `analise_incompleta` | o envelope voltou com a análise incompleta (salvo a rodada no teto do commit) |
+| `inventario_incompleto` | o inventário do diff não fechou |
+| `round_incompleto` | a memória de rodadas tem pendência (só com `reviewRoundsMode: "enforce"`; o padrão é `observe`) |
+| `review_inconsistent` | veredito, achados e texto público discordam |
+| `nao_aprovavel` | o veredito não é aprovar, ou o APPROVE não veio pronto |
+| `sem_texto` | aprovação sem corpo e sem comentário |
+| `origem_desconhecida` | o PR não traz nenhuma marca de origem (ver [A decisão sem mesa](#a-decisão-sem-mesa)) |
+| `prova_tecnica_incompleta` | sobrou lacuna exigida (ver [Ressalva e lacuna](#ressalva-e-lacuna)) |
+| `politica` | a política da conta manda esperar |
+| `ci_vermelho`, `ci_em_andamento` | só com a espera do CI ligada |
+
+`shouldAutoReject` devolve verdadeiro ou falso. Não reprova sozinho quando: o resultado é
+incoerente; a avaliação técnica falhou pela declaração do repositório; a análise não sustenta a
+reprovação (`analiseSustentaReprovacao`); o bloqueio é só de estado do PR (CI, conflito,
+dependência, fora do diff: `reprovacaoSoDeEstado`); a espera do CI está desligada e só o CI vermelho
+sustenta o pedido; o inventário tem pendência, ou a memória de rodadas (esta só em `enforce`); o
+REQUEST_CHANGES não veio
+pronto e com texto; a origem é desconhecida; o PR é da própria conta; ou a política da conta não é
+`request_changes`.
+
+A reprovação automática não consulta cobertura da leitura, checkpoint nem contestação de outro
+review: ela sai, e o card registra a nota (`notasDaReprovacao`, `lib/engine/ressalvas.js`). A nota é
+do app, nunca do texto público.
+
+## Ressalva e lacuna
+
+Duas listas diferentes, e é o motor que decide em qual cada coisa cai, nunca o modelo.
+
+- **Ressalva** (`attentionPoints`, `lib/engine/ressalvas.js`) é a única coisa que separa um
+  resultado limpo de um com ressalvas. Nenhuma ressalva: vale `onClean`. Uma ou mais: vale
+  `onCaveats`. Nada dessa lista é escrito no PR, salvo o que é dirigido a quem decide o merge.
+- **Lacuna** (`approvalGaps`, `lib/technical-review/evidence.js`) é o que falta de prova para
+  aprovar. `lacunasExigidas` (`lib/engine/busca-da-prova.js`) fica só com as duras (`ehLacunaDura`,
+  `lib/technical-review/verdict.js`) e as do CI; as outras viram ressalva na rodada que as
+  encontrou. Lacuna exigida impede APPROVE, também no clique: a conferência se repete na publicação
+  (`lib/technical-review/publication.js`).
+
+Prova antiga, em dois lugares que fazem coisas diferentes:
+
+- na publicação, `legacyEvidenceGap` (`lib/technical-review/verdict.js`) recusa o APPROVE cuja
+  prova dispensou lacunas e foi gravada sem carimbo de versão, ou com carimbo menor que 2, e pede
+  revisão nova;
+- na espera da prova (`lib/engine/espera-prova.js`), a pendência armada com regras anteriores a
+  `VERSAO_DAS_REGRAS` é relançada.
+
+## A decisão sem mesa
+
+Regra do dono de 18/10/2026: a conta configurada para aprovar sozinha aprova sozinha, e a
+configurada para reprovar sozinha reprova sozinha. O desfecho de uma revisão headless está em
+`concluirRevisao` (`lib/engine/desfecho-da-revisao.js`).
+
+A política é da conta (`config.conta`, lida em `lib/engine/contas-config.js`):
+
+| campo | valores | o que decide |
 |---|---|---|
-| botão "Ocultar análise" | `delete` no registro, com title prometendo que só sumia da tela | `observed`/relatório ficam; `hidden: true` no registro e o botão vira "Mostrar análise" |
-| head andou (`enrichMyPRBranches`) | `delete` + `marcarDesfecho('descartada')` | `observed.stale = true` + `marcarDesfecho('parcial')`; o relatório fica, o veredito não vale |
-| PR saiu da busca (`check`) | `delete` SEM log, SEM carimbo de consumo, SEM limpar `mergeStates` | duas ausências seguidas (`SELF_PRUNE_STRIKES`) e um WARN nomeando o PR |
+| `autoReview` | `true`, `false` | se o PR pedido à conta é revisado sem clique |
+| `onClean` | `approve`, `wait` | resultado aprovável sem ressalva |
+| `onCaveats` | `approve`, `wait` | resultado aprovável com ressalva; nunca mais permissivo que `onClean` |
+| `onReject` | `request_changes`, `wait` | resultado que pede mudanças |
 
-**Reanalisar no mesmo commit.** O clique explícito em Meus PRs permite outra
-sessão mesmo com recibo anterior, inclusive quando o ambiente foi corrigido depois
-de uma análise inconclusiva. A aquisição do lease entre aparelhos continua obrigatória,
-e a fila local recusa duplicatas. Isso não altera a deduplicação das revisões automáticas.
-Ao salvar um novo relatório, os anteriores ficam em `history` no mesmo registro
-persistido; uma falha antes de salvar conserva o relatório atual. Somente o resultado
-atual participa dos gates, com o head e a cobertura observados pela nova sessão.
-O histórico não entra no snapshot da tela. Merge adquire o mesmo lease das análises
-e o mantém até o GitHub responder; análise local pendente ou posse indisponível
-bloqueiam a operação, inclusive em modos auto/admin.
+O padrão de uma conta nova é agir em tudo: `autoReview: true`, `approve`, `approve` e
+`request_changes` (`PADRAO`). Para um `config.json` de versão anterior vale outra regra, a de
+`normalizarConfig` (`lib/settings.js`): o campo que a conta não tinha escolhido não ganha o
+padrão novo, e com ressalvas e reprovação ficam em `wait` salvo a chave antiga de aprovar tudo.
+O detalhe está em [`CONFIGURATION.md`](CONFIGURATION.md). Em `wait`, o PR vai à mesa ("Precisa
+de você") com o motivo no card.
 
-**Persistir vencido EXIGIU um código de gate novo, e essa é a parte que não pode ser
-esquecida por quem mexer aqui.** `EVIDENCE_STALE` NÃO cobre o caso: ele compara
-`analysis.headSha` com `observed.headSha`, os dois carimbados pela mesma sessão no mesmo
-sha, então ele prova coerência DENTRO do registro e nunca dispara quando o PR anda. Sem
-`ANALYSIS_STALE`, o registro que agora sobrevive continuaria `eligible` e o botão Merge
-apareceria sobre análise vencida. Ele é evidência CONTRA (`ineligible`), não faltando: o
-engine não deixou de medir, ele mediu o head mudar. E o carimbo mora em `observed` porque
-é medição do ENGINE, que é o lado do gate; campo solto no registro seria o modelo e o
-engine escrevendo no mesmo lugar.
+**Origem.** A revisão posta sozinha quando o PR traz uma marca de origem (`origemDoDono`,
+`lib/engine/desfecho-automatico.js`). A função aceita seis marcas. Três têm quem as escreva hoje:
+`requested` (o PR pedido à conta, vindo da fila), `manual` (o clique) e `origemDono`, que a
+pendência grava e é o que faz o reenvio e a espera do CI passarem. As outras três (`viaAdmin`,
+`viaComando`, `viaDistribuicao`) são lidas e não têm escritor. Só a revisão sem marca nenhuma não
+posta sozinha, e o card diz isso.
 
-**`hidden` é preferência de leitura e não entra em gate nenhum**, de propósito e travado
-por teste: recolher um parecer da tela não muda o que ele comprova, e ligar as duas coisas
-daria a uma escolha visual autoridade sobre merge.
+**Os caminhos do desfecho**, todos atrás da conferência de head e do dedup:
 
-**O WARN sai UMA vez** (`marcarDesatualizada` devolve false se já carimbado): o
-`farol.log` é de falha, não de estado (invariante 3), e reescrever a mesma linha a cada
-ciclo de polling inundaria o Diagnóstico.
+1. APPROVE da sessão, quando `shouldAutoApprove` aceita.
+2. REQUEST_CHANGES da sessão, quando `shouldAutoReject` aceita.
+3. REQUEST_CHANGES montado pelo app (`caminhoNovo`), quando a sessão aprovou, a conta reprova
+   sozinha e há defeito do PR (`defeitosDoPr`: violação técnica confirmada, achado não resolvido, a
+   parte do card deste PR não entregue).
+4. REQUEST_CHANGES pelo CI obrigatório vermelho, só com a espera do CI ligada.
+5. COMMENT em PR da própria conta.
 
-**As duas ausências da poda não são zelo, são medição.** `gh search prs` é ÍNDICE, não
-estado: ele responde `ok` com resultado incompleto quando o índice está atrasado, e a
-trava de "só poda conta que respondeu" (G5) passa nesse caso. Uma ausência não distingue
-"o PR fechou" de "o índice piscou"; duas custam um ciclo de polling e cobrem a flutuação
-observada. A contagem é em memória: reinício zera e a chave sobrevive dois ciclos a mais,
-que é o lado seguro.
+O que não sai por nenhum deles vira pendência (`registrarPendencia`): espera automática, quando há
+uma armada, ou mesa.
 
-**Fan-out NÃO é requisito.** A invariante é cobertura demonstrável: PR grande que o
-mecanismo não cobrir devolve `COVERAGE_INCOMPLETE` e o merge simplesmente não fica
-disponível. O sistema está correto sem fan-out.
+**Cancelamento.** Cada postagem do desfecho é cercada: `conferirCancelamento` antes de montar o
+envio, e `iniciarPublicacao` logo antes de enviar, que confere de novo e marca a sessão como não
+cancelável (`lib/engine/cancelamento-revisao.js`). Depois de iniciado o envio, não há garantia de
+interromper o efeito no GitHub.
 
-## Checkpoint de verificação (memória entre passadas da revisão, v2.36.0)
+**Falha ao postar.** Na hora, o desfecho repete até 3 vezes, com 2 segundos entre elas, só a
+recusa passageira de não ter conseguido ler os reviews do commit
+(`lib/engine/postagem-retentativa.js`). Falha transitória deixa a pendência marcada para o
+reenvio: `retryFailedPosts` (`lib/engine/decision.js`) tenta a cada ciclo, até 3 tentativas, e
+antes de cada uma relê o head e os reviews da conta. Head que mudou desarma o reenvio; leitura
+que falha segura até o ciclo seguinte.
 
-Motivado por um incidente real (05/08/2026, PR biudtech/internal-auth#43): a sessão de
-revisão caiu em `529 Overloaded` no meio da verificação de afirmações factuais de um
-documento e, ao retomar, refez do zero exatamente as mesmas checagens que já tinha
-concluído minutos antes. Custo pago duas vezes e risco silencioso: nada garantia que a
-segunda passada chegasse ao mesmo veredito da primeira (a última simplesmente vencia).
+**Pendência atendida por fora.** A cada ciclo, `reconcilePending` tira a pendência sem postar
+quando o PR foi mergeado ou fechado, ou quando a conta já tem review que a atende.
 
-As peças (`lib/engine/verification-checkpoint.js` + costuras em `session.js`,
-`review.js`, `decision.js` e `ui/pure.js`):
+**Gente já decidiu o commit.** Se a rodada só rodou para retirar um pedido automático anterior e
+outra pessoa já aprovou ou reprovou aquele commit, a aprovação automática é dispensada sem postar
+(`dispensarAprovacaoEmHeadDecidido`).
 
-- **Arquivo por PR**, `state/verification/<encodeURIComponent(key)>.json`,
-  **append-only**: entrada nova nunca sobrescreve a anterior; veredito revisado vira
-  entrada NOVA e a divergência é detectada, nunca escondida. `encodeURIComponent` porque
-  trocar `/`/`#` por `__` colidiria (`a__b/c` vs `a/b__c` dariam o mesmo arquivo).
-- **Quem escreve é o ENGINE, nunca a sessão** (regra 2 do prompt: sessão não escreve em
-  `state/`). A sessão sinaliza o veredito no campo `description` de um Bash que ela já
-  rodaria de qualquer forma (`FAROL_CHECKPOINT: {"claim","file","line","verdict","evidence"}`;
-  sem comando real pra rodar, usa `true`), e `session.js` (branch `tool_use` de
-  `handleEvent`) intercepta e grava via `appendCheckpointEntry`. Guardas da captura: só
-  `Bash.description`; só sessão `mode === 'auto'` (autoanálise NUNCA escreve, é o
-  invariante 4); payload tem que ser objeto (array não vira entrada vazia); JSON inválido
-  é ignorado sem derrubar a sessão. O engine carimba `sessionId`, `headSha` e `at`
-  (horário de Brasília, nunca UTC cru).
-- **Leitura**: `runHeadlessReview` lê o arquivo em DOIS pontos com propósitos distintos
-  (antes da sessão, pra decidir se injeta o `resumeBlock` de retomada no prompt; depois
-  dela, pra montar `result.verificationCheckpoint` via `summarizeCheckpoint`). O disco é
-  lido ali, onde a sessão já faz IO; NUNCA em `decision.js`, que continua 100% puro.
-- **Gate**: `checkpointGap(result)` (`lib/engine/ressalvas.js` desde 30/09/2026, reexportada
-  pelo `decision.js`; mesmo padrão do `coverageGap`: função pura que só olha o envelope)
-  trava `shouldAutoReject` quando o checkpoint está malformado ou tem divergência entre
-  passadas. No `shouldAutoApprove` deixou de ser gate em 30/09/2026 (era
-  `{ok:false, motivo:'checkpoint'}`): vira ressalva em `attentionPoints`, e a política de
-  ressalvas da conta decide, como a cobertura. O clique manual nunca é bloqueado. A mensagem cita `arquivo:linha` e a claim; o agrupamento de
-  conflito usa a claim NORMALIZADA (trim, espaços colapsados, minúsculas), senão fraseado
-  ligeiramente diferente esconderia divergência real.
-- **Ciclo de vida por SHA do head**: cada entrada carrega o `headSha` do PR no momento da
-  verificação, e `summarizeCheckpoint(entries, shaAtual)` só considera entradas do head
-  atual (entrada SEM sha sempre conta: falta de dado nunca descarta). PR que ganha commit
-  novo "reseta" o gate na prática, sem apagar nada do histórico. Sem isso, um conflito
-  antigo travava approve E reject pra sempre.
-- **Retomada**: com checkpoint não-vazio relevante ao head atual, `resumeBlock` é
-  concatenado ao prompt mandando ler o arquivo antes de reverificar. Vale igual pro
-  retry, porque relançamento passa pelo MESMO `runHeadlessReview` (premissa travada em
-  `test/checkpoint-retry-same-path.test.js`).
-- **UI**: `resolvedRow` (`ui/pure.js`) mostra "Verificação de afirmações: N confirmadas
-  de M" e o selo de divergência em Revisões recentes; o texto do problema também entra em
-  `result.reasons`.
-- Divergência NUNCA é reconciliada sozinha (decisão humana sempre). Chat, autoanálise e
-  pushback não gravam checkpoint (o formato é genérico pra adoção futura, decisão
-  consciente). A captura só enxerga `tool_use` da sessão principal, não o que roda DENTRO
-  de subagente do fan-out (limitação documentada; o incidente real era do orquestrador).
-- Testes: `test/verification-checkpoint.test.js`, `test/session-checkpoint-capture.test.js`,
-  `test/checkpoint-gate.test.js`, `test/checkpoint-review-wiring.test.js` e
-  `test/checkpoint-retry-same-path.test.js`.
+## CI obrigatório antes da aprovação
 
-### Sessão presa com a label de revisando (v2.78.23)
+A chave é `aguardarCiParaAprovar`, lida num lugar só (`aguardaCiParaAprovar`,
+`lib/engine/gate-espera.js`). O padrão é desligada.
 
-Medido em 30/10/2026 em biblioteca-cnbb-api#144: a sessão ficou 75 minutos aberta,
-cancelada, sem processo do Codex vivo, com a label `<conta>:revisando` no PR e a
-atualização recusada por "análise em andamento". O vigia pedia o encerramento a cada três
-minutos e nada acontecia. A cadeia:
+**Desligada**, o estado do CI não segura nem adia a decisão em via nenhuma, e fica só como nota no
+app. O merge só fica barrado pelo GitHub onde o check é obrigatório no ruleset do repositório, e
+desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho,
+e nada barra o merge. O pedido de mudanças sustentado só pelo CI vermelho não sai
+sozinho.
 
-- a sessão roda `lib/review-context/query.js` pelo `process.execPath`, que é o `Farol.exe`.
-  Sem `ELECTRON_RUN_AS_NODE=1` ele abre como app Electron e não sai quando o script acaba.
-  O prompt só pedia a variável ao modelo, e no PowerShell do Codex a forma `VAR=1 comando`
-  não existe;
-- os quatro `query.js` herdaram o pipe da sessão e ficaram órfãos quando o Codex saiu;
-- o `close` do processo da sessão só chega quando os pipes fecham, então o desfecho nunca
-  rodava, e o cancelamento não alcança neto que já perdeu o pai.
+**Ligada**, o resultado aprovável com check obrigatório vermelho ou rodando fica como pendência com
+a marca `esperaCi`, gravada no `decisions.json` (`lib/engine/espera-ci.js`). A cada ciclo,
+`aprovarQuandoOCiFechar` faz uma leitura por PR em espera:
 
-Duas camadas, cada uma suficiente para este caso: o `query.js` encerra o processo depois de
-entregar a saída, nos dois modos, com teto `TEMPOS.CONSULTA_FONTES_MS`; e `fecharSaidaPresa`
-(`lib/session-deadline.js`), ligado nas sessões de Claude, Codex e Antigravity, fecha os pipes do
-lado do Farol quando o processo da sessão já saiu e o `close` não veio em
-`TEMPOS.SAIDA_SEM_FECHAMENTO_MS`. Travado em `test/saida-presa.test.js`, com processos reais.
-`ELECTRON_RUN_AS_NODE` NÃO entra no ambiente da sessão de propósito: ela também roda
-ferramentas do repositório revisado, e um `electron .` ou um smoke de app Electron rodaria
-como Node e daria resultado enganoso.
+- checks verdes no mesmo head que a sessão leu: confere a política da conta de novo, consulta se
+  gente já decidiu o commit e posta pelo `postReview`;
+- head diferente: larga a espera e marca a pendência como commit novo; nunca posta em head que a
+  sessão não leu;
+- CI vermelho ou rodando: segue esperando, sem pedir clique;
+- CI vermelho com a conta reprovando sozinha: `reprovarPeloCi` posta o REQUEST_CHANGES citando os
+  checks e resolve a pendência como reprovada. A espera acaba ali; só outro commit abre análise
+  nova.
 
-Complemento de 05/11/2026: quando a label é retirada de propósito (por outra pessoa, por ferramenta ou pela tela de tags), o vigia encerra a sessão e a
-revisão estaciona com o motivo `label-retirada` (ver "Um Farol por PR"); a sessão presa por defeito do ambiente
-continua sendo tratada pelas duas camadas acima.
+Na hora de postar a aprovação, decisão de gente naquele commit resolve a pendência como
+`approval_not_needed`, sem postar (`consciencia` e `dispensar`).
 
-### Retomada após falha transitória (v2.57.3)
+A espera também é armada para um resultado que pede mudanças só por estado do PR com causa de CI,
+quando a conta reprova sozinha e a origem é conhecida (`esperaDeEstado`,
+`lib/engine/desfecho-da-revisao.js`). Para essa pendência, CI verde no mesmo head leva à mesa e
+nunca vira APPROVE; CI vermelho segue o `reprovarPeloCi`.
 
-Sessão que cai no meio da revisão (rede ou tempo esgotado) já leu o PR, e relançar do
-zero pagava de novo o que já tinha sido lido. Peças:
+Leitura que falha (sem token, `gh` fora, exigência da branch desconhecida) espera o próximo ciclo:
+aqui a falta de dado segura. Uma espera armada antes de a chave ser desligada é liberada no ciclo
+seguinte sem olhar o CI, com o head ainda conferido (`liberarSemCi`).
 
-- `lib/log-taxonomy.js` ganhou a classe `tempo-esgotado` (transitória, teto de 30 min),
-  e a classe `rede` passa a casar também o sufixo "após N tentativa(s) de reconexão com a
-  API" que `session.js` (`runClaudeStream`) anexa à mensagem quando a sessão emitiu
-  eventos `api_retry` antes de morrer. Esse sufixo é o que liga a morte pós-retry à classe
-  `rede`. Todo caminho de erro do `runClaudeStream` também anexa `err.sessionId`.
-  **O sufixo só cobre a morte que veio DEPOIS de reconexão visível.** O `result` com
-  `is_error` ("sessão retornou erro: API Error: 529 Overloaded...") chega sem sufixo e
-  caía em `desconhecido` -> permanente -> estacionamento; desde a v2.57.4 a classe
-  `provedor-indisponivel` (5xx e "Overloaded", transitória) fecha esse caso, e a
-  retomada por sid vale igual. `JSON da sessão fora do contrato` continua permanente
-  de propósito: uma sessão que TERMINOU bem e devolveu envelope inválido não é
-  instabilidade, e relançar três vezes pagaria três sessões pra reproduzir o mesmo
-  defeito de prompt; o que mudou é que agora o card mostra que ela estacionou e por quê.
-- O sid é capturado no início da sessão (`opts.onSession`, primeiro `session_id` do
-  stream), gravado no registro da revisão ativa e gravado em `state/inflight.json`
-  assim que nasce (o `onSession` dispara uma vez, no primeiro evento que traz
-  `session_id`), não só no fim. Desde a A5 a referência mora em `engine.retomadas`
-  (ver "Retomada durável" logo abaixo): o boot restaura e regrava, e `enqueueHeadless`
-  só LÊ, carimbando `retomarSid` e `knownHead` no PR quando ele reaparece na fila. Falha
-  transitória em pleno voo grava a mesma referência, além do `retryAfterNet`.
-- `sidDeRetomada` (`lib/engine/review.js`) decide o sid do `--resume`: `retomarSid` tem
-  precedência sobre `resumeSid` e não depende de `config.reReviewResume` (é a mesma
-  revisão retomando, não o opt-in do round incremental), sempre validado por
-  `RESUME_SID_RE`. Desde a A5 quem decide é `validarRetomada`: head salvo ausente
-  descarta, head atual não confirmado espera, e head diferente descarta. O `knownHead` que alimenta essa
-  guarda existe em todo caminho, não só no relançamento da re-revisão: o
-  `runHeadlessReview` estampa `pr.headLido` assim que resolve o head da rodada, o
-  `prComRetomada` copia isso pro `knownHead` da entrada do `retryAfterNet`, e o boot
-  guarda o head junto do sid (`headSha` e `knownHead` no `inflight.json` e na entrada de
-  `engine.retomadas`), com o `enqueueHeadless` carimbando os dois. Campo próprio e não
-  `knownHead` direto porque o objeto do PR atravessa rounds, e escrever `knownHead` ali
-  contaminaria o fallback G8 do head da rodada seguinte.
-- O bloco de prompt da retomada NÃO entra no prompt base: ele é passado à parte pro
-  `rodarSessao` e somado só na tentativa com `--resume`. Quando o CLI recusa a retomada
-  e a sessão degrada pra nova, o prompt sai sem o bloco (senão a sessão nova receberia
-  ordem de não reler o que ninguém leu). A retomada vale pras revisões feitas pelo
-  Claude, e não porque falte `--resume` ao Codex (o `codexArgs` aceita, virando `exec
-  resume`): é que `opts.onSession` só é chamado no stream do Claude e o stream do Codex
-  não estampa `err.sessionId`, então `retomarSid` nunca nasce nesse caminho.
-- Sem sid recuperável, ou com o resume falhando, `rodarSessao` degrada pra sessão nova
-  (comportamento de sempre), nunca vira erro.
+Começar a revisão só com os checks obrigatórios verdes é outra chave, `aguardarCiParaRevisar`,
+também desligada por padrão (`bloqueiaAutomatico`, `lib/engine/skip-review.js`).
 
-### Retomada durável (A5 da operação multidispositivo)
+## Dedup por head
 
-Contrato: CT-RET da spec `docs/superpowers/specs/2026-09-15-operacao-multidispositivo-design.md`.
+Nas vias automáticas, uma aprovação ou reprovação publicada encerra aquele commit para a conta.
+Só commit novo abre rodada automática nova. A revisão por clique fica fora dessa regra (abaixo).
 
-- **Uma fonte só:** `engine.retomadas` (`lib/engine/retomada-duravel.js`), key do PR para `{ key, url, title, author, kind: 'auto', estado, retomarSid, knownHead, provedor, perfilId, sessionId, headSha, atualizadoEm }`. O `inflight.json` é o espelho (`montarInflight`): execução vence fila, fila vence pendente, e a referência que não está em nenhuma das duas sai como `pendente`. O `retomadaPendente` em memória e o `inflight.json` esvaziado no boot deixaram de existir: o boot restaura e **regrava**, então dois reinícios seguidos não perdem a referência.
-- **Só desfecho consome:** resultado da sessão, `--resume` recusado pelo CLI, descarte comprovado, recibo de outro aparelho, cancelamento, falha permanente, PR mergeado ou fechado. Enfileirar, esperar vaga, lease alheio, coordenação fora, orçamento e head não confirmado **mantêm**.
-- **Validar antes de reutilizar** (`validarRetomada`): mesmo PR, contexto local igual (`provedor` = kind do auth resolvido, `perfilId`), nenhuma decisão do mesmo head criada depois da referência, head salvo presente, head atual **confirmado pelo GitHub** e igual. O head salvo e o `knownHead` do G8 são evidência da tentativa anterior, nunca confirmação: sem head confirmado a revisão espera no `retryAfterNet` sem gastar tentativa e sem abrir sessão. Descarte segue em sessão nova sem o bloco "não releia" e sem confirmação humana. Inflight legado da v2.57.3 não tem contexto e por isso não retoma.
-- **Diagnóstico:** `resumeOutcome` em `'retomada' | 'recusada' | 'nova' | 'nenhuma'` no registro ativo, no `opts` do `runClaudeStream` e no `result` do `recordDecision`. O desfecho não vai pro `farol.log` (invariante 3); persistir em uso e decisão é da A1.
-- **Escopo:** só o `retomarSid`. O `resumeSid` do round incremental segue opt-in e sem mudança.
+A regra é `decisaoAutomaticaJaPublicada` (`lib/engine/review-head-policy.js`): existe review
+`APPROVED` ou `CHANGES_REQUESTED` da conta naquele `commit_id`. Quem lê é `myReviewStates`.
 
+- **Na postagem automática** (`postReviewOnce`, vias `revisao`, `reenvio` e `espera-ci`): já
+  decidido responde `ok` com `alreadyReviewed`, sem postar. Se a leitura falha, o review não é
+  enviado.
+- **Na mesma fila do PR**: duas vias que chegam juntas ao mesmo veredito no mesmo head postam uma
+  vez. `postReviewSerial` guarda a assinatura (conta, PR, evento e head) do APPROVE ou
+  REQUEST_CHANGES que acabou de sair, por `TEMPOS.POSTAGEM_MEMORIA_MS` (5 minutos), e responde
+  `{ ok: true, deduped: true }` sem postar. Vale para toda via, clique incluso, e o `decide`
+  grava essa resposta como postado.
+- **No clique** (`decide`): se já existe review da conta com o mesmo estado no head atual, a
+  pendência é resolvida como `already_reviewed` sem postar de novo.
+- **COMMENT de PR próprio** deduplica pelo texto, não pelo estado: já saiu quando existe um
+  comentário da conta, naquele commit, com o mesmo corpo (`lib/engine/comentario-proprio.js`).
 
-## Inventário único do diff
+**Revisão por clique fica fora do dedup por head.** Para o PR marcado `manual`,
+`decisaoAutomaticaJaPublicada` e `postagemAutomatica` devolvem falso, então a leitura de reviews
+da boca não roda, e `myReviewStates` descarta os reviews anteriores ao pedido de revisão. Quem
+clica em Revisar num commit já decidido pela conta recebe revisão e postagem novas.
 
-A revisão headless coleta uma lista paginada de arquivos, compartilhada entre os lotes,
-a cobertura declarada e a herança por blob. Antes e depois da paginação, confere o head,
-a base e a quantidade de arquivos do PR. A medição só é completa quando as duas leituras
-concordam, o head corresponde ao da sessão e a lista contém a quantidade esperada de
-caminhos distintos. Paginar não elimina o limite do endpoint: lista curta é incompleta.
+O mesmo `myReviewStates` é lido também no desfecho (`lib/engine/desfecho-da-revisao.js`) e na espera
+do CI (`lib/engine/espera-ci.js`), antes de cada um montar o próprio pedido. Para saber todos os
+pontos de hoje: `git grep -n "myReviewStates(" lib server.js`.
 
-Inventário incompleto ou indisponível permite continuar a análise em passe único, sem
-herança de leitura e sem prometer cobertura integral. O diagnóstico fica no log e no
-registro interno da decisão. Nenhuma postagem automática sai nesse estado, inclusive
-reprovação, comentário em PR próprio ou caminhos alternativos por defeito e CI. Esgotar
-tentativas de buscar prova não transforma inventário desconhecido em verificado. A
-intervenção manual continua sujeita às autorizações e guardas de publicação existentes.
+Travado em `test/postagem-dedup.test.js` e `test/postagem-coordenacao-desligada.test.js`.
 
-O prompt recebe os caminhos também em passe único. A sessão declara somente a leitura
-que fez; a reconciliação da cobertura herdada continua no engine. A lista do modelo não
-substitui a medição. Caminhos exatos prevalecem, preservando caixa e espaços legítimos;
-atalhos só são reconciliados quando identificam um único caminho. A conferência de usos
-fora do diff continua obrigatória. Declaração de cobertura não prova compreensão do código.
+## Head que anda
 
+O review fala do commit que a sessão leu, e não sai em outro.
 
-## Memória de achados entre rodadas
+- **No desfecho automático**: antes de postar, `headAndou` (`lib/engine/desfecho-da-revisao.js`)
+  relê o head. Se mudou durante a sessão, nada é postado e a pendência fica marcada `stale_head`.
+- **No clique**: se o head de agora difere do que a sessão leu, `decide` não posta, grava na
+  pendência `blockedKind: 'stale_head'` com o head novo e responde `blocked: 'stale_head'`.
+- **Na espera do CI**: head diferente larga a espera.
+- **A cada ciclo**: `marcarCommitNovo` (`lib/engine/pendencia-commit-novo.js`) converte em
+  `stale_head` a pendência viva cujo head no GitHub não é mais o lido.
 
-Cada análise concluída conserva achados estruturados e o inventário do head e da base,
-num diário local isolado por conta e PR. IDs são únicos; a numeração da tela é só um
-rótulo. Rodadas concorrentes formam ramos e a análise seguinte recebe todas as pontas,
-inclusive blockers que outra rodada deixou sem resposta. Escritas são imutáveis e
-idempotentes. Corrupção ou formato incompatível fica preservado e explícito, nunca vira
-histórico vazio. Ausência no Panorama não apaga a memória; nesta etapa não há poda automática.
+O review postado leva o `commit_id` do head lido, salvo no recuo do 422, em que os dois degraus
+saem sem ele depois da conferência de head do próprio recuo.
 
-A análise e o desfecho de publicação têm registros separados. Uma análise registrada não
-prova postagem. Resultado incompleto não cria rodada concluída. Envelope sem findings é
-legado; lista vazia é uma declaração explícita. Severidade inválida, referências desconhecidas
-ou repetidas e resoluções sem evidência são inconclusivas. Blockers não desaparecem por
-limites de quantidade ou por downgrade: retirada precisa de referência e justificativa.
+**Ponto de atenção: head que não deu para ler.** `headAndou` devolve falso quando não consegue
+ler o head, ou quando a sessão não confirmou o que leu: falta de dado não vira `stale_head`. O
+APPROVE continua barrado nesse caso, pela lacuna de commit não confirmado. `shouldAutoReject` não
+confere `headSha`, então o REQUEST_CHANGES da sessão pode sair sem âncora de commit. O reenvio e
+o recuo fazem o oposto: sem ler o head, seguram.
 
-O compartilhamento, quando já habilitado, usa o transporte cifrado e write-once do histórico,
-com domínio e esquema próprios, sem registrar essas rodadas no índice público de revisões.
-O marco de compartilhamento existente é respeitado: memória anterior não é exportada automaticamente.
-Registros grandes são fragmentados; o manifesto só é confirmado depois de todos os fragmentos.
-Arquivo, fragmento ou ancestral ausente impede afirmar completude. A transferência confirma
-o envio da memória antes de encerrar a origem. Outro executor sem suporte é informado como
-incompatível; com a comparação ativa, transferência para ele é recusada. A frota deve ser
-atualizada antes de ativar a política em todos os aparelhos: versões antigas não executam
-os novos gates. Não há migração da sessão do CLI.
+A marca `stale_head` é gravada em vários arquivos. Para a lista de hoje:
+`git grep -ln "stale_head" lib server.js`.
 
-`reviewRoundsMode` começa em `observe`: coleta, compara e mostra os diagnósticos, mantendo
-as políticas anteriores. Em `enforce`, memória inconclusiva, blocker sem resposta, referência
-inválida e suspeitas de achado tardio ou resolução em arquivo inalterado impedem postagem
-automática. A política vigente é conferida também na fronteira de postagem, cobrindo reenvio
-e espera de CI. Registros antigos exigem nova análise nesse modo. A decisão manual explícita
-continua sujeita às outras autorizações e aos gates existentes.
+## PR da própria conta
 
-Blob igual é somente um indício: mudança de base torna a comparação de contexto desconhecida;
-renomeação, mudança de consumidor ou correção em outro arquivo exigem reavaliação. A interface
-mostra contagens e estado da memória, sem entregar findings brutos ou texto interno ao review
-público. O prompt recebe todas as pendências; se o modelo não conseguir concluir a leitura,
-deve devolver análise incompleta.
+O GitHub recusa a revisão decisiva do autor. Aqui a regra tem quatro pontas:
 
-A preparação comum de fontes fixa H, B e M, sem depender de checkout pessoal ou perfil
-técnico. Cache, mapa estrutural e busca textual não concedem cobertura nem aprovação.
-Uma aquisição Git interrompida mantém objetos, materiais e reserva protegidos enquanto
-o término dos processos não é comprovado. Na próxima aquisição, o cache pode recuperar
-uma operação anterior ao último boot confirmado pelo sistema operacional: exige material
-liberado, sem consumidores e com referência íntegra ao mesmo escopo e lease. A recuperação
-reconcilia os marcadores e a reserva sob as travas de escrita e de quota global, sem apagar
-os arquivos parciais. No mesmo boot, a recuperação exige outra prova: o processo do Farol que
-abriu a operação terminou (PID ausente ou reaproveitado, conferido pela data de criação) e
-nenhum processo da família Git iniciado antes da interrupção continua em execução. Desde a
-v2.78.6, o dono pode ser o próprio processo que recupera, quando a operação já acabou (git morto
-por timeout, material liberado e sem consumidores), sob a mesma exigência sobre o Git. Dono ativo
-em outro processo, identidade desconhecida ou consulta indisponível mantêm o bloqueio.
-As leituras, verificações técnicas e gates de publicação continuam obrigatórios após a retomada.
-Fontes indisponíveis, consumidor candidato e limite atingido continuam limitações.
-As consultas adicionais revalidam autorização e leem a versão fixada. A seleção nova é
-controlada por `reviewContextMode` (off/observe/assist), conforme `CONFIGURATION.md`.
-Memória de rodadas mantém uma evidência por identificador e referencia todos os blockers;
-compactação não remove pendências, restrições ou evidência necessária.
+- `ehPrProprio` (`lib/engine/pr-proprio.js`) compara o autor do PR com a conta revisora, sem
+  diferenciar caixa.
+- O gate responde `pr_proprio` para o APPROVE, e `shouldAutoReject` devolve falso.
+- O portão de postagem recusa APPROVE e REQUEST_CHANGES por qualquer via, inclusive o clique.
+- O desfecho posta a revisão como COMMENT (`payloadDoPrProprio`), quando a política da conta para
+  aquele veredito é automática; com a conta em `wait`, vai à mesa.
+
+Uma pendência de PR próprio que estava em espera é largada por `lib/engine/espera-pr-proprio.js`.
+Travado em `test/pr-proprio.test.js`.
+
+## Texto público
+
+Duas travas determinísticas, as duas antes de qualquer `gh`, valendo para corpo e para cada
+comentário inline, em APPROVE, REQUEST_CHANGES e COMMENT.
+
+**Credencial** (`lib/engine/credencial-no-texto.js`): texto com credencial não sai. A recusa cita
+só os campos, nunca o valor. A régua é `hasCredential` (`lib/sensitive-text.js`).
+
+**Linguagem** (`lib/engine/public-review.js`): o review é texto de uma pessoa revisando o PR de um
+colega. Não cita ferramenta, modelo, automação nem o processo da revisão, e não cita a própria
+conta que assina em terceira pessoa (a conta dentro de crase, bloco de código ou URL é literal
+técnico e não conta). A recusa é `internal_language`.
+
+No desfecho automático, o texto barrado pela linguagem é reconstruído uma vez
+(`postarReconstruindo`, `lib/engine/desfecho-da-revisao.js`) e passa de novo pelas travas. No
+clique não há reconstrução: a pendência fica com o motivo dito.
+
+O prompt da sessão pede o texto certo; estas travas são a garantia, porque não dependem do modelo.
+
+## Um Farol por PR
+
+Outras pessoas do time rodam o próprio Farol. O sinal de "estou revisando" é a label
+`<conta>:revisando` no PR.
+
+**A label própria** entra no primeiro evento da sessão ou 15 segundos depois da admissão, o que
+vier primeiro (`armarLabelTardia`, `lib/engine/label-tardia.js`, com `TEMPOS.LABEL_APOS_SPAWN_MS`),
+e sai no fim da sessão. A sessão que morre nos primeiros segundos não chega a marcar o PR. A
+remoção que falha é tentada de novo a cada ciclo (`lib/engine/labels-a-tirar.js`).
+
+**Saída de cena** (`lib/engine/skip-review.js`): ver a label de outra conta tira o PR do caminho
+automático naquele head, de forma durável, sem postar nada no PR. A saída caduca quando a outra
+pessoa ficou sem a label e sem review naquele head (`standDownCaducou`), e é largada em commit
+novo. Sem a lista de reviews, não caduca.
+
+**Gente já decidiu o head** (`bloqueadoPorHistorico`, na mesma `bloqueiaAutomatico`): aprovação ou
+pedido de mudanças de uma pessoa no head ativo segura a rodada automática. Conta de ferramenta não
+é pessoa. A exceção é o pedido automático desta conta aberto em commit anterior, quando só há
+aprovações: a rodada roda para retirá-lo. Falta de dado não bloqueia.
+
+O clique em Revisar atravessa os dois (`pr.manual`).
+
+**Limite conhecido:** dois Faróis que começam no mesmo instante não se veem, e os dois revisam. A
+label reduz duplicata; não é trava distribuída.
+
+## Re-revisão automática
+
+Depois de um review da conta, commit novo no PR abre rodada nova sem clique. Há dois gatilhos
+(`explicaReRound`, `lib/engine/review.js`):
+
+- **A**: o review postado pela conta ficou em head antigo;
+- **B**: há uma pendência marcada `stale_head`.
+
+As travas que seguram qualquer rodada automática estão em `travaDoRound`, e cada uma tem motivo
+nomeado para o card: PR em rascunho; revisão automática desligada para aquele PR (a conta, ou a
+regra por organização e autor); conta sem token; orçamento estourado; revisão estacionada; outra
+pessoa revisando; saída de cena registrada; PR em conflito com a base.
+
+Entre as travas e o relógio, `explicaReRound` ainda segura em três casos: retry pós-falha
+pendente para o PR (quem relança é o retry); pendência viva na mesa que não é `stale_head`; e a
+âncora por head, pela qual cada head relança no máximo uma vez.
+
+Depois disso vale o relógio: a rodada espera o head ficar quieto por
+`TEMPOS.HEAD_QUIETO_MS` (5 minutos), contra rajada de pushes, e depois de três rodadas presas
+seguidas a espera passa a `TEMPOS.HEAD_QUIETO_LONGO_MS` (30 minutos). Carimbo ausente espera um
+ciclo: falta de dado não dispara.
+
+A rodada relançada passa por tudo de novo: gate, dedup por head, política da conta.
+
+## Retirada do pedido de mudanças
+
+Regra do dono de 05/11/2026: se o problema que gerou o pedido de mudanças foi resolvido, o pedido
+sai sozinho, e isso não é aprovação (`lib/engine/retirada-de-pedido.js`).
+
+- Só sai o pedido automático desta conta. O feito à mão e o de outro revisor não são tocados.
+- "Resolvido" é evidência, nunca o texto da sessão (`provaDaRetirada`): veredito de aprovar,
+  análise completa, commit confirmado, nenhuma lacuna dispensada além de divergência entre
+  passadas, rodada anterior na memória e sem pendência nela, nenhum defeito do PR, e o gate da
+  aprovação sem recusa (política e CI não contam como recusa aqui).
+- Com a espera do CI ligada e o CI ainda não verde naquele head, a retirada fica marcada e a
+  varredura a conclui quando ele fechar. Com a espera desligada, o CI não adia a retirada.
+- Retirar não aprova: o desfecho segue atrás dos gates e da política da conta.
+
+A retirada passa pelas mesmas recusas de conta e de estado do PR do portão de postagem.
+
+## Checkpoint de verificação
+
+Memória, por PR, do que a revisão já conferiu contra o código: afirmação, arquivo, linha, veredito
+e evidência (`lib/engine/verification-checkpoint.js`).
+
+- **Só o motor escreve.** A sessão sinaliza com o marcador `FAROL_CHECKPOINT:` e o motor grava a
+  entrada (`registrarCheckpoint`, `lib/engine/checkpoint-da-sessao.js`). Sessão que o motor não
+  lançou com o protocolo de checkpoint não registra nada.
+- **Só acrescenta.** Uma passada que discorda da anterior gera entrada nova. A divergência entre
+  passadas vira ressalva.
+- **O que conta para o PR de agora** (`relevantEntries`): a entrada do mesmo head, a entrada sem
+  head gravado e a de outro head cujo arquivo citado tem o mesmo blob hoje.
+- **Dentro de uma sessão vale o último veredito** de cada afirmação: refinar a própria resposta não
+  é divergência (`porPassada`).
+
+O arquivo fica em `state/verification/`, no workspace.
+
+## Arquivo de ambiente e caminho protegido
+
+Caminho protegido (`.env*`, `.ssh`, credencial, chave) nunca chega cru à sessão. A régua única é
+`lib/review-source/caminho-protegido.js`:
+
+- o arquivo de ambiente chega como projeção das linhas alteradas, só com o que comprovadamente
+  não é credencial (`lib/review-source/env-changes.js`);
+- a projeção é gravada com outro nome, `_farol_redigido_/_<caminho achatado>.redigido`, para não
+  casar com regra de `deny` de leitura de `.env` que a sessão herde;
+- o resto do que é protegido não chega.
+
+O que a sessão não leu por isso vira ressalva com o caminho do arquivo
+(`lib/engine/ambiente-nao-lido.js`), e a política da conta decide.
+
+A sessão de revisão recebe por `--settings` o arquivo `workspace-template/.claude/guardas.json`
+(`lib/engine/guardas-da-sessao.js`), lido direto do template. Ele só nega:
+
+- `gh pr diff`;
+- `gh api` em `pulls/<n>/files`, tarball, zipball e diff ou patch por cabeçalho;
+- `gh repo clone` e `git clone`;
+- `Read` de `.credentials.json` em qualquer pasta, e comando de shell cujo texto contém
+  `.credentials.json`.
+
+As duas últimas protegem a credencial do perfil de assinatura do Claude só contra a leitura que
+escreve o nome do arquivo. Ver "Para hospedar" em [`CONFIGURATION.md`](CONFIGURATION.md).
+
+## Instância isolada
+
+Com `FAROL_HOME` fora de `~/.farol`, a instância é isolada (`instanciaIsolada`, `lib/paths.js`) e não
+escreve no GitHub: review, adição e remoção de label são recusados com
+`blocked: 'instancia_isolada'` (`recusaDeIsolada`, `lib/engine/instancia-isolada.js`).
+
+Três exceções:
+
+- `"instanciaIsoladaPosta": true` no `config.json` da instância (só por arquivo);
+- a variável `FAROL_UPDATE_MANAGER=external`, com que a instância deixa de contar como isolada;
+- a variável `NODE_TEST_CONTEXT` (o executor de testes): com ela a instância nunca conta como
+  isolada.
+
+A recusa grava uma linha de log por boot, não uma por tentativa. O que foi recusado volta ao reenvio
+se a instância deixar de ser isolada (`lib/engine/postagem-recusada.js`).
+
+Travado em `test/instancia-isolada.test.js`.

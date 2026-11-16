@@ -5,26 +5,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Antes de abrir: confirme que está na **última release** (Sistema > Versão e atualização).
-        Falha de segurança **não** vem por aqui, siga o [SECURITY.md](https://github.com/wandersonaadsantos/farol/security/policy).
+        Falha de segurança **não** vem por aqui, siga o [SECURITY.md](https://github.com/biudtech/farol-biuder/blob/main/.github/SECURITY.md).
 
   - type: input
-    id: versao
+    id: commit
     attributes:
-      label: Versão do Farol
-      description: Aparece ao lado do logo e em Sistema > Versão e atualização.
-      placeholder: "2.47.0"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: so
-    attributes:
-      label: Sistema operacional
-      options:
-        - Windows
-        - macOS
-        - Linux (experimental)
+      label: Commit do motor
+      description: A saída de `git rev-parse --short HEAD` no clone que roda o `node server.js`.
+      placeholder: "c16cb47c"
     validations:
       required: true
 
@@ -33,16 +21,12 @@ body:
     attributes:
       label: Onde acontece
       options:
-        - Radar (fila e panorama)
+        - Radar (fila de PRs)
         - Revisão automática (headless)
-        - Meus PRs (autoanálise, reviewers, merge)
-        - Conversar com o Claude (chat por PR)
-        - Terminal interativo
-        - Destaques
+        - Postagem no GitHub (aprovar, pedir mudanças, comentar)
         - Time (memória por autor)
-        - Sistema (diagnóstico, contas, configurações)
-        - Atualização automática
-        - Instalação ou desinstalação
+        - Consumo
+        - Sistema (diagnóstico, conta, configurações)
         - Outro
     validations:
       required: true
@@ -66,7 +50,7 @@ body:
     attributes:
       label: Passo a passo para reproduzir
       placeholder: |
-        1. Abrir o Farol
+        1. Subir o motor com `node server.js`
         2. ...
         3. ...
     validations:
@@ -76,7 +60,7 @@ body:
     id: log
     attributes:
       label: Trecho do log de falhas
-      description: Sistema > log de falhas, ou o arquivo `~/.farol/state/farol.log`. Cole só as linhas do episódio.
+      description: Sistema > log de falhas, ou o arquivo `~/.farol/workspace/state/farol.log`. Cole só as linhas do episódio.
       render: text
     validations:
       required: false
@@ -95,6 +79,4 @@ body:
       label: Confirmação
       options:
         - label: Conferi que não colei token, credencial nem conteúdo de repositório privado.
-          required: true
-        - label: Estou na última release publicada.
           required: true

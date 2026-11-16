@@ -5,9 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        O Farol tem invariantes que não se negociam (zero dependências além do Electron,
+        O Farol tem invariantes que não se negociam (sem dependência npm de runtime,
         nada postado no GitHub sem gate, dados em `~/.farol`, texto em português sem travessão).
-        Estão no [CLAUDE.md](https://github.com/wandersonaadsantos/farol/blob/main/CLAUDE.md).
+        Estão no [CLAUDE.md](https://github.com/biudtech/farol-biuder/blob/main/CLAUDE.md).
         Ideia que precisa violar um deles não entra, por melhor que seja.
 
   - type: textarea
@@ -30,15 +30,13 @@ body:
     attributes:
       label: Área afetada
       options:
-        - Radar (fila e panorama)
+        - Radar (fila de PRs)
         - Revisão automática (headless)
-        - Meus PRs (autoanálise, reviewers, merge)
-        - Conversar com o Claude (chat por PR)
-        - Destaques
-        - Time (memória por autor)
-        - Sistema (diagnóstico, contas, configurações)
-        - Atualização e distribuição
+        - Postagem no GitHub (aprovar, pedir mudanças, comentar)
         - Protocolo de review (qualidade do que é postado)
+        - Time (memória por autor)
+        - Consumo
+        - Sistema (diagnóstico, conta, configurações)
         - Outro
     validations:
       required: true

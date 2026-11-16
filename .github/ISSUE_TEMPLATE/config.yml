@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Falha de segurança
-    url: https://github.com/wandersonaadsantos/farol/security/policy
-    about: Não abra issue pública. O relato é privado, pelo canal da aba Security.
+    url: https://github.com/biudtech/farol-biuder/security/advisories/new
+    about: Não abra issue. O relato é privado, por advisory do próprio repositório.
   - name: Como contribuir
-    url: https://github.com/wandersonaadsantos/farol/blob/main/.github/CONTRIBUTING.md
-    about: Invariantes do projeto, gate de qualidade e padrão de PR.
+    url: https://github.com/biudtech/farol-biuder/blob/main/.github/CONTRIBUTING.md
+    about: Invariantes do projeto, gate de qualidade e fluxo de PR.
   - name: Guia do mantenedor
-    url: https://github.com/wandersonaadsantos/farol/blob/main/CLAUDE.md
-    about: Sumário, invariantes e mapa de arquivos, com ponteiros para os guias.
+    url: https://github.com/biudtech/farol-biuder/blob/main/CLAUDE.md
+    about: Invariantes e mapa de arquivos, com ponteiros para os guias.

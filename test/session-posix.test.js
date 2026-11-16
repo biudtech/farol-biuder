@@ -82,8 +82,8 @@ test('spawn headless posix: /bin/sh -lc, detached e cwd no WORKSPACE', async () 
 
 // --- G21: env de auth da máquina não sobrevive ao login shell posix ----------
 // O defeito: applyClaudeAuthEnv limpa as vars de auth do env, mas no posix o profile do
-// usuário é sourceado DEPOIS disso (o -l do `/bin/sh -lc` no headless; o login shell do
-// terminal antes de executar o .command). Um `export ANTHROPIC_API_KEY` perdido no
+// usuário é sourceado DEPOIS disso (o -l do `/bin/sh -lc` do headless).
+// Um `export ANTHROPIC_API_KEY` perdido no
 // ~/.profile re-injeta a chave POR CIMA do perfil resolvido, e a precedência oficial do
 // claude CLI põe a chave acima do login OAuth: o perfil de assinatura do Farol seria anulado
 // em silêncio. Por isso o unset é emitido DENTRO do shell, depois de qualquer sourcing e

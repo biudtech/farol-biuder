@@ -1,195 +1,102 @@
-# Farol
+# Farol BIUD
 
-[![CI](https://github.com/wandersonaadsantos/farol/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wandersonaadsantos/farol/actions/workflows/ci.yml)
-[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-informational)](LICENSE)
+Revisor autônomo de pull requests da BIUD.
 
-Radar de Pull Requests para Windows e macOS. O Farol monitora o GitHub em segundo plano (só comandos `gh`, zero tokens de IA), mostra um painel com os PRs abertos da organização, avisa quando pedem sua revisão e executa o protocolo de triagem e auto-approve seguro com Claude Code ou Codex CLI.
+O Farol é um motor: um processo Node que monitora os PRs pedidos a uma conta revisora do GitHub,
+revisa cada um numa sessão headless do Claude Code (com o card do Jira lido e o diff em disco), passa
+o resultado pelos gates e posta aprovação, pedido de mudanças ou comentário. O que a política da
+conta não decide sozinha fica na mesa, esperando uma pessoa.
 
-O Farol nasceu de uma iniciativa do Thiago ([@thiagopcdev](https://github.com/thiagopcdev)), o "PR Reviewer (Windows)" em PowerShell: um revisor de PRs que rodava numa janela de terminal e dependia de ação manual. O app atual capturou essa essência e reconstruiu o sistema do zero como app de desktop com interface, bandeja do sistema e instalador.
+Uma instância, uma conta revisora, só Linux, sem dependência npm de runtime.
 
-## Rodar
+## Como rodar
 
-O Farol roda como `node server.js` (ou `npm run server`) em Linux, e serve a interface em `http://127.0.0.1:47170`. Não há instalador, janela nem pacote de distribuição: o código sai do clone.
+Requisitos, no usuário que roda o motor:
 
-Pré-requisitos: Node.js 24 LTS (24.22.1 até antes de 25), GitHub CLI (`gh auth login`) e pelo menos um provedor de IA no PATH: **Claude Code** (`claude`) ou **Codex CLI** (`codex`, autenticado pelo ChatGPT).
+- Linux e Node `>=24.22.1 <25` (o `.nvmrc` fixa 24.22.1);
+- `gh` logado na conta revisora (`gh auth login`);
+- `claude` (Claude Code) no PATH;
+- usuário comum, nunca root: o Claude Code recusa o modo headless com uid 0.
 
-Na primeira execução o Farol detecta a conta ativa do seu `gh` e usa ela; se você tiver mais de uma, ajuste em **Sistema → Contas**. Nenhuma conta ou token viaja com o app: o token é pedido ao `gh` da sua máquina em tempo de execução.
+```sh
+node server.js
+```
 
-## Runtime suportado
+O motor escuta em `http://127.0.0.1:47170`, serve a tela nesse endereço e guarda tudo em `~/.farol`.
 
-Desenvolvimento, testes e motor externo (`node server.js`) usam **Node 24 LTS,
-`>=24.22.1 <25`**. A CI valida o piso 24.22.1 em Linux.
-Use `nvm install 24.22.1` e `nvm use` neste projeto, confira `node --version`,
-depois execute `node lib/node-runtime.js`, `npm install` e os comandos usuais.
-Com outro gerenciador, selecione a mesma versão somente no ambiente do Farol.
-Não é necessário mudar o Node dos demais projetos.
+**Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada nasce
+revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
+`~/.farol/config.json` antes do primeiro boot:
 
-Node 22 deixou de fazer parte do suporte. O crash observado em 22.12 permanece
-como **“Ocorrência sem causa determinada em runtime que deixou de fazer parte do
-contrato de suporte.”** Os logs e o reproduzidor históricos foram preservados;
-esta decisão não corrige nem explica o crash.
+```json
+{ "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" } }
+```
+
+Na primeira checagem, os PRs que já pediam revisão ficam fora da fila: o motor só revisa o que chegar
+depois.
+
+## Configuração mínima
+
+Tudo mora em `~/.farol/config.json`; a tela (Sistema) edita a maior parte. O detalhe está em
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+| O quê | Onde | Leia |
+|---|---|---|
+| A conta revisora: login, organizações monitoradas (`owners`) e a política (`autoReview`, `onClean`, `onCaveats`, `onReject`) | `conta`, pela tela ou pelo arquivo | [A conta revisora e a política](docs/CONFIGURATION.md#a-conta-revisora-e-a-política) |
+| O perfil do Claude: por assinatura (login feito pela própria tela) ou por chave de API (a chave entra e não sai mais do motor) | `claudeProfiles`, pela tela | [Perfis do Claude](docs/CONFIGURATION.md#perfis-do-claude) |
+| O Jira de cada organização, para a revisão ler o card | `jiraSites`, pela tela | [Jira](docs/CONFIGURATION.md#jira) |
+| Autenticação da API: `"localAuth": "exigir"`, obrigatório em qualquer instância que não seja só da própria máquina | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
+
+Com a autenticação exigida, a tela pede um código de pareamento. Gere um no servidor com
+`node tools/farol-parear.js`.
+
+## Como testar
+
+```sh
+npm run check && npm run lint && npm test
+```
+
+É o gate do repositório e o mesmo que o CI roda (check obrigatório `ci`). A suíte usa o runner nativo
+do Node e sobe o motor contra pastas temporárias. Fora de Linux, rode num container:
+
+```sh
+docker run --rm -v "$PWD:/src:ro" node:24.22.1-bookworm bash -c \
+  'cp -r /src /work && cd /work && npm run check && npm run lint && npm test'
+```
+
+Para olhar a tela sem tocar nos dados reais: `FAROL_HOME=/tmp/farol-teste node server.js`. Uma
+instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, salvo com
+`"instanciaIsoladaPosta": true` no `config.json` dela ou com a variável
+`FAROL_UPDATE_MANAGER=external`.
 
 ## Mapa do código
 
-A entrada do Farol é o `server.js`: o engine puro, sem janela, com polling do GitHub, fila, sessões de IA e o servidor HTTP + SSE que serve a interface. Roda com `npm run server` (que é `node server.js`).
-
-Por onde começar a ler, dependendo do que você quer mexer:
-
-| quero mexer em | comece por |
+| Caminho | O que é |
 |---|---|
-| o que o app decide (revisar, aprovar, esperar) | `lib/engine/` |
-| o que aparece na tela | `ui/pure/` (funções puras, com teste), `ui/telas/` (as telas, uma por assunto, com o `ui/telas/README.md` como porta de entrada) e `ui/app.js` (o bootstrap) |
-| como o app fala com o GitHub | `lib/io.js` e `lib/engine/gh-queries.js` |
-| as regras de qualidade e o gate | `docs/QUALITY.md` e `tools/quality/` |
+| `server.js` | A entrada do motor: `node server.js`, ou `npm run server`, que antes confere Node e plataforma |
+| `lib/engine/` | O ciclo de revisão: fila, sessão, gates, postagem, re-revisão, consumo |
+| `lib/http-server.js` | A API (`/api`) e o SSE |
+| `lib/local-auth/` | Autenticação e pareamento da API |
+| `lib/settings.js` | A tabela das preferências e a leitura do `config.json` |
+| `lib/jira/` | Leitura do card do Jira |
+| `lib/review-source/` | Aquisição e cache do código do PR |
+| `lib/technical-review/` | A avaliação técnica do PR revisado |
+| `workspace-template/` | O protocolo que a sessão de IA lê |
+| `ui/` | A tela, servida pelo motor |
+| `test/` | A suíte: `npm test` |
+| `tools/quality/` | O gate de qualidade: `npm run lint` |
+| `tools/check-syntax.js` | O gate de sintaxe: `npm run check` |
+| `tools/farol-parear.js` | Gera o código de pareamento da API |
 
-O guia do mantenedor começa no [`CLAUDE.md`](CLAUDE.md): um sumário com o mapa de arquivos
-e os invariantes que reprovam um PR. O detalhe mora em dois guias:
-[`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) e
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+O mapa por assunto, os invariantes e as regras de quem mexe no código estão no
+[`CLAUDE.md`](CLAUDE.md).
 
-## Como funciona
+## Guias
 
-```
-%USERPROFILE%\.farol\
-├─ app\               código do app (Electron + engine Node, sem outras dependências)
-├─ workspace\         diretório de trabalho das sessões de IA
-│  ├─ CLAUDE.md       protocolo de review (triagem, auto-approve, memória do time)
-│  ├─ .claude\        comandos /pr-review, /pr-health, /pr-kudos + agente pr-reviewer
-│  └─ state\          seen, autores, destaques, farol.log
-└─ config.json        configurações do app
-```
-
-- **Radar**: sua fila de revisão + panorama de todos os PRs abertos das orgs monitoradas. Automático, só o que pediram a sua revisão; qualquer outro PR do panorama tem o botão **Revisar** pra rodar sob demanda, e nesses o resultado sempre cai em "Precisa de você" (nada é postado sem o seu clique).
-- **Aparelhos**: em Radar, o admin pode [coletar um diagnóstico remoto](docs/DIAGNOSTICO-REMOTO.md) das contas, da fila e das retomadas de um executor conectado, pelo canal cifrado existente. A coleta não envia credenciais nem permite acesso ao terminal.
-- **Meus PRs (autoanálise)**: a seção lista os PRs abertos de autoria sua (inclusive rascunhos). O botão **Analisar** roda o provedor do perfil associado sobre o seu próprio PR e devolve, só pra você, um veredito (**aprovável** ou **precisa de ajuste**), o que ajustar antes de pedir review e dicas de melhoria não-bloqueantes. É diagnóstico puro: **nenhuma ação no git ou no GitHub**, nada é postado, o resultado fica na tela (e some sozinho quando o PR fecha, ou no botão **Descartar**).
-- **Destaques**: os momentos exemplares registrados nos reviews, com o botão que compila internamente o resumo de kudos (resultado na tela, com copiar). O Diagnóstico em Sistema roda interno do mesmo jeito.
-- **Time**: a memória por autor (recorrências e ganhos observados a cada review).
-- **Sistema**: saúde do ambiente, versão e atualização, configurações e o log de falhas (`/pr-health` usa esse log pra corrigir o próprio Farol).
-
-### Versão e atualização
-
-A versão instalada aparece ao lado do logo e em **Sistema → Versão e atualização**. Quando há uma versão mais nova, aparece o botão **Atualizar agora**: o app encerra as instâncias, troca os arquivos sem duplicar a instalação (estado, memória do time e configurações ficam intactos, os atalhos são recriados no mesmo lugar) e reabre sozinho.
-
-A **fonte de verdade do update é a release do GitHub** (`updateRepo`, por padrão `wandersonaadsantos/farol`): o app instalado checa a última release via o `gh` que você já usa e **se atualiza sozinho**. O download é leve (só os arquivos do app; o Electron já está instalado). Ou seja, o app instalado só sobe pra código que já está no git (mergeado e publicado), nunca pra trabalho local em andamento: uma fonte de verdade só.
-
-Opt-in de desenvolvimento: se você quiser que o app instalado atualize a partir de uma **pasta-fonte local** (pra testar um build antes de publicar), defina o caminho em `updateSource` no config.json. Vazio (padrão) = usa só as releases.
-
-### Revisão autônoma (padrão)
-
-Quando chega PR, o Farol roda o review **internamente** com o provedor do perfil associado à conta (Claude Code ou Codex CLI, sem janela) e decide pelo protocolo. Sem blocker e com o card atendido, ele **posta o APPROVE sozinho**, registra a memória do time e te notifica ("aprovado sem você"). Nos casos especiais (blocker, card não-verificável, CI vermelho), nada é postado: o PR entra na seção **Precisa de você**, com o relatório completo e botões Aprovar / Pedir mudanças / Comentar / Pular, esperando você voltar.
-
-Enquanto a análise roda, a seção **Analisando agora** mostra o passo a passo em tempo real (comandos, leitura do card, triagem), com o tempo decorrido e um botão **Cancelar** que mata a sessão e devolve o PR pra fila. Se a análise cair no meio (queda de internet, por exemplo), o PR volta visível pra fila na hora e o Farol relança sozinho quando a conexão volta (até 2 tentativas); se o app for fechado com análise em andamento, ela é retomada na próxima abertura em vez de sumir em silêncio.
-
-### Conversar com a IA (por PR)
-
-Todo PR tem um botão 💬 **Conversar** (no card da fila, no card de decisão e nas revisões recentes). Abre um chat lateral onde o provedor retoma a **própria sessão da revisão** (ele chega sabendo o diff, o card e o relatório) e pode examinar o PR com `gh`. Dá pra pedir esclarecimento sobre um achado, pedir um rascunho de resposta e mandar postar ("posta esse comentário no PR"); ele só posta no GitHub o que for pedido explicitamente na conversa. A conversa fica salva por PR e sobrevive a reinício do app.
-
-O terminal interativo continua disponível como opção secundária (ícone de terminal no card da fila). O app cuida do ambiente nos dois modos (`GH_TOKEN` da conta de trabalho, Git Bash e pager desligado) e abre o CLI do perfil associado.
-
-Tema escuro por padrão; o sol/lua no topo alterna pro claro.
-
-## Perguntas frequentes: commit novo durante a revisão
-
-### Por que o card aparece com o selo "COMMIT NOVO"?
-
-O autor empurrou commit enquanto o Farol lia o PR. O texto da revisão fala do código anterior, então o Farol **não posta**: postar ancorado no commit antigo o GitHub recusa, e postar sem âncora deixaria um review falando de código que ninguém leu. Por isso o card de commit novo não tem Aprovar, Pedir mudanças nem Só comentar. O que vale é a revisão do commit atual.
-
-### O Farol revisa de novo sozinho? Quanto tempo leva?
-
-Sim, em conta com revisão automática ligada. A caixa azul do card diz a hora: "Reviso de novo sozinho a partir de 19:47". A conta é:
-
-1. **5 minutos sem push novo** no PR (proteção contra rajada de commits);
-2. mais **o próximo ciclo de verificação** (no mínimo 3 minutos, o intervalo configurado em Sistema);
-3. mais **o tempo da própria revisão**.
-
-Na prática o card fica de 10 a 25 minutos na mesa antes de ser substituído pela revisão nova. Enquanto a caixa estiver azul, não há nada pra fazer. **Revisar agora** é só um atalho: roda a revisão já, no commit atual, e a postagem segue as mesmas regras de sempre.
-
-### Pedi revisão de novo no GitHub. O Farol do revisor pega?
-
-Depende de onde o PR está no Farol de quem revisa:
-
-| situação no Farol do revisor | o que o seu pedido faz |
-|---|---|
-| card de commit novo na mesa (caixa azul) | nada a mais, e não precisa: a revisão nova já sai sozinha |
-| card de commit novo parado (caixa âmbar, "já tentei neste commit") | destrava: o Farol volta a tentar sozinho |
-| revisão estacionada por falha | destrava: sai do estacionamento e volta pra fila automática |
-| alguém clicou **Pular** e o PR segue pedindo a revisão dessa pessoa | destrava: o PR volta pra fila |
-| revisão cancelada por quem revisa, ou PR **ignorado** | nada: foi decisão da pessoa, e só ela reabre |
-| revisão estacionada antes da v2.57.4 (sem motivo gravado) | nada: sem o motivo não dá pra saber se foi cancelamento, então fica com o botão Revisar |
-
-Commit novo tem o mesmo efeito do pedido nas três linhas que destravam. O Farol só aceita commit ou pedido **posterior** à parada, e o mesmo sinal nunca destrava duas vezes. O pedido precisa ser pra conta que o Farol usa naquela org.
-
-### Quando o Farol NÃO revisa de novo sozinho?
-
-A caixa fica âmbar e diz o motivo. As saídas:
-
-| o card diz | o que fazer |
-|---|---|
-| a revisão automática está desligada na conta | ligue em Sistema > Contas, ou use Revisar agora |
-| a conta está silenciada | tire o silêncio: conta silenciada é só monitorada e não age, nem pelo Revisar agora |
-| a conta está sem login no gh | rode `gh auth login` com essa conta |
-| o orçamento do perfil desta conta estourou | espere liberar ou ajuste o teto em Consumo |
-| o PR está como rascunho | o Farol volta a revisar quando o PR sair de rascunho |
-| outra pessoa já está revisando este PR | espere a label `<conta>:revisando` sair |
-| saí de cena porque outra pessoa pegou este PR | use Revisar agora se quiser revisar mesmo assim |
-| outra pessoa já deu um review decisivo neste commit | o Farol confere de novo a cada 5 minutos e volta sozinho se o review sair |
-| outro aparelho seu está cuidando deste PR | nada: a sincronização entre aparelhos evita revisão dobrada |
-| a última tentativa falhou e ficou estacionada | volta sozinho com commit novo ou pedido de revisão; ou use Revisar agora |
-| já tentei neste commit e a revisão não terminou | idem: commit novo ou pedido de revisão destrava |
-| há outra decisão deste PR esperando você | decida o outro card primeiro |
-
-### O autor continua empurrando commit durante cada revisão. O Farol fica gastando sessão?
-
-Não indefinidamente. Depois de **3 revisões seguidas** que pegaram commit novo no meio, o Farol passa a esperar **30 minutos sem push** (em vez de 5) antes de tentar de novo, e a caixa diz "Próxima tentativa a partir de...". Ele volta sozinho depois disso, sem clique. A contagem zera quando uma revisão termina normalmente.
-
-Até a v2.59.2 havia um teto de 3 revisões automáticas por PR por dia, e o 4º push do dia só era revisado com clique ou no dia seguinte. Esse teto local caiu. **Com a sincronização entre aparelhos ligada**, o teto compartilhado de 3 revisões automáticas por PR por dia continua valendo entre os seus aparelhos, e o card mostra esse caso como "outro aparelho seu está cuidando deste PR".
-
-### Cliquei Pular por engano. E agora?
-
-Se o PR ainda pede a sua revisão, ele volta sozinho pra fila quando chegar commit novo ou quando o autor pedir revisão de novo. Pra trazer na hora, abra o PR no Panorama e clique em Revisar.
-
-## Compartilhando com o time
-
-Cada pessoa do time roda o próprio Farol, a partir do clone, e nunca compartilha `~/.farol` (que contém o estado e a memória de reviews).
-
-Cada pessoa do time precisa, na própria máquina:
-
-1. **Node.js 24 LTS**, de 24.22.1 até antes de 25, para rodar o motor.
-2. **GitHub CLI** autenticado na conta corporativa dela: `gh auth login`.
-3. **Claude Code** ou **Codex CLI** logado na conta dela (o CLI escolhido precisa estar no PATH).
-4. Opcional, recomendado para perfis Claude: o conector do **Jira/Atlassian** configurado no Claude Code dela, pro review ler os cards BT. Sem ele o fluxo continua funcionando, só trata todo card como "não-verificável" (não faz auto-approve sozinho).
-
-A revisão autônoma vem **ligada** de fábrica (é o propósito do app): ao chegar PR, o provedor associado à conta roda o review internamente e posta APPROVE quando o protocolo permite, na conta dela. Quem preferir só ser notificado desliga em **Sistema → Revisar automaticamente**. O modo terminal sem prompts (`--dangerously-skip-permissions`, no Claude) segue desligado por padrão.
-
-O registro de tokens, a contabilidade de retomadas e a avaliação da saída pública estão descritos em [Consumo e saída dos reviews](https://github.com/wandersonaadsantos/farol/blob/main/docs/CONSUMO-REVIEWS.md).
-
-## Privacidade e responsabilidade
-
-O Farol **não coleta nem envia nenhum dado ao mantenedor**. Não existe telemetria, analytics nem servidor do projeto: tudo o que o app registra fica na sua máquina, em `~/.farol` (log de falhas, consumo das automações de IA, decisões de review, configurações). O app inclusive desliga a telemetria do próprio GitHub CLI nas sessões que dispara (`GH_TELEMETRY=false`).
-
-O tráfego de rede que existe é todo em seu nome, com as suas credenciais:
-
-- **GitHub**, via o `gh` da sua máquina (polling de PRs, postagem de reviews, checagem de release pro auto-update);
-- **Anthropic**, quando o perfil usa Claude Code (assinatura ou chave de API suas);
-- **OpenAI**, quando o perfil usa Codex CLI autenticado pelo seu plano ChatGPT.
-
-Sobre responsabilidade: os reviews que o Farol posta saem **na sua conta do GitHub**, e as sessões de análise consomem **o plano ou os créditos do provedor configurado**. As automações de postagem (auto-approve e reprovação automática) vêm ligadas na conta nova e podem ser desligadas por conta, e quem as deixa ligadas responde pelo que é postado. O software é distribuído "no estado em que se encontra", sem garantia, nos termos da licença MIT (arquivo `LICENSE`).
-
-Nunca compartilhe a sua pasta `~/.farol`: ela contém o seu estado, as suas configurações e a sua memória de reviews.
-
-## Contribuindo
-
-Leia o [guia de contribuição](.github/CONTRIBUTING.md): invariantes do projeto, ambiente, gate de qualidade e padrão de PR. Todo push e todo PR passam pelo CI (`npm run check`, `npm run lint`, `npm test`) em Linux, Windows e macOS.
-
-Encontrou uma falha de segurança? Não abra issue. Siga a [política de segurança](.github/SECURITY.md), que descreve o canal privado, o modelo de ameaça do app e o que está fora de escopo.
-
-Quem participa do projeto segue o [Código de Conduta](.github/CODE_OF_CONDUCT.md).
-
-## Licença
-
-[MIT](LICENSE).
-
-## Desenvolvimento
-
-- `node server.js` sobe o engine + UI em `http://127.0.0.1:47170`.
-- Variáveis úteis: `FAROL_HOME` (muda a pasta de dados) e `FAROL_REVIEW_CMD` (substitui o `claude` por um stub em testes).
+- [`CLAUDE.md`](CLAUDE.md): guia do mantenedor.
+- [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md): as regras de postagem, uma a uma.
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md): configuração e hospedagem.
+- [`docs/QUALITY.md`](docs/QUALITY.md): o gate e o ratchet de qualidade.
+- [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md): como contribuir.
+- [`.github/SECURITY.md`](.github/SECURITY.md): como reportar falha de segurança.
+- [`CHANGELOG.md`](CHANGELOG.md): histórico.
