@@ -196,9 +196,9 @@ Ainda sem versão publicada.
   mostra o botão Atualizar quando há revisão resolvida nova. Nada do Time fica no navegador.
   A tela antiga continua servida pelo motor, sem mudança.
 - **Tela Consumo no front novo (fase 3, lote 5):** a aba Consumo de `web/` deixa de ser "Em
-  construção". No topo fica o teto de gasto de cada perfil do Claude, lido do snapshot: quanto
-  foi gasto hoje e desde o corte, o teto, o que resta e, em texto, se a revisão automática
-  está pausada por causa dele e o que o motor deixa de fazer enquanto dura. O período vem de
+  construção". No topo fica a auditoria do registro inteiro de sessões, lida do snapshot:
+  quanto do custo não virou resultado, quanto o motor calculou e quanto ficou desconhecido. A
+  tela não tem teto de gasto nem pausa por gasto (ver "Sem teto de gasto"). O período vem de
   `GET /api/usage`, onde quem soma, filtra e pagina é o motor: o resumo (custo, execuções,
   tokens de entrada, de saída e de cache), o gasto por dia num gráfico de barras e na tabela
   abaixo, a quebra por tipo de sessão e por modelo, com a participação de cada linha, e o
@@ -210,10 +210,9 @@ Ainda sem versão publicada.
   de assinatura não é cobrança, e a tela diz quantas execuções rodaram por assinatura, quanto
   foi por chave de API e quantas não têm modalidade registrada, quanto o motor calculou para
   sessão que morreu antes de informar e quantas ficaram com custo desconhecido. O período e o
-  diário são em dia de Brasília; o teto, no dia local do processo do motor, e a tela diz os
-  dois. O motor não recusa período inválido com código nem campo (responde 200 com uma
-  frase), não manda custo por modelo no período, nem o total de uma operação com retomada,
-  nem o que falta para o teto na conta do gate: a tela mostra o que vem e diz o que não vem.
+  diário são em dia de Brasília. O motor não recusa período inválido com código nem campo
+  (responde 200 com uma frase), não manda custo por modelo no período nem o total de uma
+  operação com retomada: a tela mostra o que vem e diz o que não vem.
   A tela antiga continua servida pelo motor, sem mudança.
 - **Tela Sistema no front novo (fase 3, lote 6):** a aba Sistema de `web/` deixa de ser "Em
   construção", e com ela o front novo tem as cinco telas. São sete seções. Saúde mostra o que
@@ -233,9 +232,7 @@ Ainda sem versão publicada.
   atual marcado, e revoga um por vez; revogar o atual leva este navegador ao pareamento.
   Rede e acesso mostra `bind`, `hostPublico` e `origensPermitidas`, que só mudam pelo arquivo.
   A tela não tem teto de gasto, por decisão de 16/11/2026: o revisor é autônomo e não trava
-  por gasto. O gate de orçamento ainda existe no motor e sai dele em mudança própria; enquanto
-  isso, o perfil que traz teto no arquivo ganha um aviso de que ele ainda pode pausar revisões
-  automáticas. Nenhum segredo passa pela tela: ela não tem campo para token, chave nem
+  por gasto (ver "Sem teto de gasto"). Nenhum segredo passa pela tela: ela não tem campo para token, chave nem
   credencial. O que chegar do motor em campo de segredo, ou em formato de credencial, é
   descartado antes de entrar na tela, e num texto para ler (review, erro, aviso, relatório) só
   o trecho é trocado por "[segredo omitido]". Cada salvar leva só o que a pessoa alterou
@@ -257,6 +254,19 @@ Ainda sem versão publicada.
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
   `npm test` deixam a pasta de fora, também quando o `npm test` recebe uma flag com o valor
   separado por espaço (`--test-name-pattern x`).
+- **Sem teto de gasto (decisão de 16/11/2026):** o revisor é autônomo e não trava por
+  dinheiro. Sai do motor o orçamento em dólar por perfil do Claude (`budgetDaily`,
+  `budgetTotal`, `budgetSince`, `budgetByWeekday` e `budgetDates`) e tudo o que ele acionava:
+  a pausa da revisão automática, da nova rodada, da retentativa, da recuperação de prova, da
+  busca de contestação e do lote; a cota de cada conta dentro do perfil; o PR estacionado por
+  orçamento; o toast e a linha de aviso no log; a reserva por sessão de custo desconhecido, a
+  mediana do custo de uma revisão e a sugestão de teto. O consumo continua medido como antes:
+  o registro de sessões, o custo (sempre dito estimado), a auditoria, as séries e
+  `GET /api/usage`. O estado enviado à tela deixa de levar `usage.budgets` e a cota por
+  perfil de `filaJusta`. No front novo, o Consumo perde o bloco "Teto de gasto" e ganha
+  "Auditoria do registro", e o Sistema perde o aviso de perfil com teto. Na tela antiga saem o
+  cartão "Orçamento por perfil", o editor de teto dos perfis, o selo de orçamento estourado, a
+  fila vazia de "Revisão automática pausada" e a cota por conta do painel da fila.
 
 ### Correções
 
@@ -278,6 +288,9 @@ Ainda sem versão publicada.
 - Hospedada com `hostPublico` ou `origensPermitidas` no `config.json`, a instância já exige
   autenticação. Sem nenhuma das duas (motor em loopback atrás de um proxy que reescreve o Host),
   ela continua precisando de `"localAuth": "exigir"`.
+- Um `config.json` que ainda traga teto de gasto num perfil sobe sem erro: os campos são
+  ignorados e somem do arquivo na próxima gravação da configuração. O PR que estava parado por
+  orçamento volta à fila automática no primeiro boot. Nada mais pausa por gasto.
 
 ## v2.80.1
 

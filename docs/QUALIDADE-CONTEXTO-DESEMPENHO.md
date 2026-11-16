@@ -16,7 +16,7 @@ com licença e hashes; o pin npm é usado apenas para reproduzir o artefato dist
 - UI aplica o estado imediatamente e agenda somente a pintura. Abas ocultas ficam dirty;
   foco, seleção, rascunho e FileList precisam sobreviver às atualizações.
 - Dados históricos de consumo podem ser reutilizados com invalidação explícita.
-  Orçamentos e falhas continuam vivos; gravações mantêm fsync e confirmação síncrona.
+  As falhas continuam vivas; gravações mantêm fsync e confirmação síncrona.
 - O mapa é navegação candidata. A bateria frontend demonstrou a lacuna do parser nativo;
   o parser distribuído cobre JS/TS/JSX/TSX, com limites declarados.
 - O contrato externo vigente é Node 24 LTS, `>=24.22.1 <25`. O suporte a Node 22

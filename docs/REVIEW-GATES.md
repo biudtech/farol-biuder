@@ -61,7 +61,7 @@ indicação):
 | Cancelamento da revisão | `cancelamento-revisao.js` |
 | Tempo por etapa e estimativa | `etapas-revisao.js`, `estimativa-sessao.js` |
 | Runtime privado da avaliação técnica e declaração por repositório | `lib/technical-review/setup.js`, `toolchain.js`, `profiles.js`, `declaracao.js`, na mesma pasta |
-| Limite do plano, orçamento e cota | `limite-plano.js`, `usage.js`, `quota.js` |
+| Limite do plano e registro de consumo (o consumo não barra revisão: não há teto de gasto) | `limite-plano.js`, `usage.js` |
 | Contestação do autor | `pushback.js` |
 | Card do Jira no prompt | `jira.js` |
 | Classificação de falha e retry | `lib/log-taxonomy.js` |
@@ -393,7 +393,7 @@ Depois de um review da conta, commit novo no PR abre rodada nova sem clique. Há
 
 As travas que seguram qualquer rodada automática estão em `travaDoRound`, e cada uma tem motivo
 nomeado para o card: PR em rascunho; revisão automática desligada para aquele PR (a conta, ou a
-regra por organização e autor); conta sem token; orçamento estourado; revisão estacionada; outra
+regra por organização e autor); conta sem token; revisão estacionada; outra
 pessoa revisando; saída de cena registrada; PR em conflito com a base.
 
 Entre as travas e o relógio, `explicaReRound` ainda segura em três casos: retry pós-falha
