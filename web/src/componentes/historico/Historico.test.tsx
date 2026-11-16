@@ -409,6 +409,22 @@ describe('Histórico: detalhe da revisão', () => {
     expect(texto.textContent).toContain('<script>alert(1)</script>');
   });
 
+  it('quando o publicado difere do parecer, a tela avisa que o texto pode não ser o que saiu', async () => {
+    montar({ responder: comRica });
+    await assentar();
+    await abrir();
+    expect(screen.getByText(/O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR\./)).toBeTruthy();
+    await clicar('Voltar à lista');
+    // publicado igual ao parecer, e parecer que não foi publicado: sem o aviso
+    await clicar(/^Ver a revisão de PR #7 de dono\/repo/);
+    expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
+    cleanup();
+    montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'skipped', action: 'skip' })])) });
+    await assentar();
+    expect(screen.getByRole('region', { name: 'Texto do parecer' })).toBeTruthy();
+    expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
+  });
+
   it('revisão sem texto gravado diz isso', async () => {
     montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { reportMarkdown: '' })])) });
     await assentar();

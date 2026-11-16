@@ -118,6 +118,11 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
 
       <section className={estilos.secao} aria-labelledby={idDoTexto}>
         <h3 id={idDoTexto} className={estilos.tituloDaSecao}>Texto do parecer</h3>
+        {r.reportMarkdown && parecer && r.action !== undefined && r.action !== 'skip' ? (
+          <p className={comuns.nota}>
+            O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
+          </p>
+        ) : null}
         {r.reportMarkdown ? (
           <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} /></div>
         ) : (
