@@ -51,7 +51,7 @@ alcança.
 
 | Variável | O que é |
 |---|---|
-| `NEXT_PUBLIC_FAROL_API` | A origem do motor, sem caminho: `http://127.0.0.1:47170` em desenvolvimento, `https://...` hospedado. É lida no build e fica pública no bundle. Entra também no `connect-src` da CSP |
+| `NEXT_PUBLIC_FAROL_API` | A origem do motor, sem caminho: `http://127.0.0.1:47170` em desenvolvimento, `https://...` hospedado. É lida no build e fica pública no bundle. Entra também no `connect-src` da CSP. Só `http` ou `https`, com nome de host, IPv4 ou IPv6 entre colchetes e porta opcional; valor com curinga, espaço, usuário, caminho, query ou fragmento é recusado, e a tela avisa que falta o endereço |
 
 É a única. Nenhuma variável deste pacote guarda segredo, e nenhuma deve guardar: o que tem
 prefixo `NEXT_PUBLIC_` vai para o navegador.
@@ -82,15 +82,15 @@ corrigida sozinho, o `overrides` sai.
 
 | Pasta | O que mora nela |
 |---|---|
-| `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz e o `globals.css` com as cores dos dois temas |
+| `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
 | `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado |
 | `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
 | `src/navegacao/` | A lista das abas |
 | `src/tema/` | A troca de tema e o teste de contraste das cores |
-| `src/seguranca/` | A regra da Content-Security-Policy |
-| `src/proxy.ts` | Gera o nonce e o cabeçalho da CSP a cada pedido |
+| `src/seguranca/` | A regra da Content-Security-Policy e os cabeçalhos fixos que o `next.config.ts` devolve |
+| `src/proxy.ts` | Gera o nonce e o cabeçalho da CSP a cada pedido; o `matcher` dele diz o que fica de fora |
 
 ## Convenções para os próximos lotes
 
@@ -111,8 +111,15 @@ o motor emite, nunca inventado:
 **Como chamar o motor.** Sempre pelo cliente (`app.cliente`, de `src/estado/instancia.ts`):
 `get(caminho, leitor)` e `post(caminho, corpo, leitor)`. Os dois devolvem um `Resultado` e
 nunca lançam, e o corpo só chega depois de passar pelo leitor. Não use `fetch` direto numa
-tela: é o cliente que manda o Bearer e o `x-farol`, e que trata o 401 (apaga o token e volta ao
-pareamento).
+tela: é o cliente que manda o Bearer e o `x-farol`, e que trata o 401. O 401 apaga só o token
+que foi no pedido; se a aba ficou sem token ela volta ao pareamento, e se outra aba já guardou
+um token novo a sessão segue com ele.
+
+Os dois aceitam um último argumento `{ sinal }`, com um `AbortSignal`, para a tela abortar a
+chamada que não interessa mais (a busca que o usuário trocou, por exemplo). Chamada abortada
+devolve a falha `cancelado`, que não é erro do motor: quem recebe não mostra mensagem nem grava
+nada. Sair, perder a sessão ou desmontar a página aborta todas as chamadas em curso do mesmo
+jeito.
 
 **Como ler o estado.** `useApp((e) => e.snapshot?.chave)`. O seletor devolve um primitivo ou
 uma referência que já está no store, nunca um objeto montado na hora. A definição do dado é do
@@ -121,7 +128,13 @@ anterior e deixa um aviso no console; a tela precisa saber desenhar sem a chave.
 
 **Eventos do motor.** O fluxo entrega hoje só `state` e `state-patch` ao store. Os outros
 (`toast`, `activity`, `needs-decision` e afins) passam por `aoEvento`, em `src/estado/app.ts`,
-e ainda não têm quem os leia: é ali que entram.
+e ainda não têm quem os leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
+evento é descartado, o fluxo segue e o console recebe um aviso, uma vez.
+
+O fluxo se cuida sozinho: 90 s sem nada do motor (contados desde o pedido, antes mesmo dos
+cabeçalhos) derrubam a conexão, e a reconexão espera de 3 a 30 s, dobrando a cada falha. A
+espera só volta a 3 s quando o fluxo entrega um evento, não quando o motor aceita a conexão.
+Um evento que passa de 8 MiB sem terminar também derruba a conexão.
 
 **Como testar.** O teste mora ao lado do arquivo, com nome `*.test.ts` ou `*.test.tsx`. Lógica
 (transporte, contrato, estado) testa sem React, com `fetch` e relógio de mentira; escreva o
@@ -130,7 +143,8 @@ nova que vira texto entra em `src/tema/contraste.test.ts`.
 
 **Estilo.** CSS Modules e as variáveis de `globals.css`. Sem atributo `style` e sem biblioteca
 de componentes: a CSP de produção não aceita estilo em linha. Para texto sobre fundo de estado
-use as variáveis terminadas em `-texto`, e `--foco` para o anel de foco.
+use as variáveis terminadas em `-texto`, `--foco` para o anel de foco, `--borda-campo` para o
+contorno de campo e `--borda-botao` para o de botão sem preenchimento.
 
 **API do Next.** A versão fixada traz a própria documentação em `node_modules/next/dist/docs/`.
 Consulte-a antes de usar uma API do Next: ela mudou entre versões (o antigo `middleware` aqui é
@@ -141,19 +155,36 @@ prompt).
 
 ## Segurança
 
-A Content-Security-Policy sai em toda página, montada por `src/seguranca/csp.ts`. Em produção:
+A Content-Security-Policy sai em toda resposta que passa pelo `src/proxy.ts`, montada por
+`src/seguranca/csp.ts`. Passa por ele tudo o que pode ser HTML: as abas, a página não
+encontrada (inclusive a de um caminho que só parece arquivo estático, como `/icon.svgx`) e os
+pedidos de pré-carregamento. Ficam de fora só os arquivos de `/_next/static/`, o otimizador de
+imagem (`/_next/image`) e o `/icon.svg`, cada um no caminho exato, e o redirecionamento da
+raiz, que não tem corpo. `src/proxy.test.ts` prova o que casa e o que não casa. Em produção:
 
 - `script-src 'self' 'nonce-...' 'strict-dynamic'` e `style-src 'self' 'nonce-...'`: sem
   `unsafe-inline` e sem `unsafe-eval`. O nonce muda a cada pedido, e por isso toda página é
   desenhada no servidor a cada pedido (nenhuma é estática);
-- `connect-src 'self'` mais a origem de `NEXT_PUBLIC_FAROL_API`;
+- `connect-src 'self'` mais a origem de `NEXT_PUBLIC_FAROL_API`. Endereço recusado (veja
+  "Variáveis") não entra: o `connect-src` fica só `'self'`;
 - `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
 
 Só no `npm run dev` entram `'unsafe-eval'` em `script-src` e `'unsafe-inline'` em `style-src`,
 que as ferramentas de desenvolvimento do Next exigem.
 
-`X-Content-Type-Options`, `Referrer-Policy` e `X-Frame-Options` saem do `next.config.ts`.
+`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options` e `Permissions-Policy` (que nega
+câmera, microfone, geolocalização e os outros recursos do aparelho) saem do `next.config.ts`,
+em toda resposta; a lista está em `src/seguranca/cabecalhos.ts`.
 
-O token da sessão fica no `localStorage` da origem do front. "Sair" apaga o token deste
-navegador; não revoga a sessão no motor (`node tools/farol-parear.js --revogar-todas` revoga
-todas).
+As páginas de aviso (`not-found.tsx`, `error.tsx` e `global-error.tsx`) são do front porque as
+embutidas do Next usam o atributo `style`, que esta CSP bloqueia.
+
+O token da sessão fica no `localStorage` da origem do front, que é um só para todas as abas:
+
+- "Sair" aborta as chamadas em curso e apaga o token deste navegador. As outras abas abertas
+  vão ao pareamento junto, e parear numa aba conecta as outras;
+- "Sair" não revoga a sessão no motor: o token apagado continua valendo lá até expirar. O
+  motor revoga uma sessão pelo identificador dela (`POST /api/auth/revoke`, com o `id` que
+  `POST /api/auth/sessions` lista), e a tela que usa isso ainda não existe. Para derrubar
+  todas de uma vez, `node tools/farol-parear.js --revogar-todas`;
+- um 401 apaga só o token que foi recusado, nunca o que outra aba acabou de guardar.
