@@ -3,7 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Relatorio } from '@/contratos/consumo';
 import {
-  CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoRelatorio, comPeriodo, enderecoDa, lerEndereco, marcaDoConsumo, periodoPronto, temFiltro, temPeriodo,
+  CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoRelatorio, comPeriodo, ehRecusaDeCampo, enderecoDa, lerEndereco, marcaDoConsumo, mensagemDaFalha, periodoPronto, temFiltro,
+  temPeriodo,
   textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
 } from './consulta';
 
@@ -108,7 +109,8 @@ describe('as frases', () => {
 
   it('sem execução, o anúncio diz isso', () => {
     expect(textoDoResultado({ ...base, totals: { attempts: 0 } })).toBe('Período de 18/10/2026 a 16/11/2026 (30 dias): nenhuma execução de IA.');
-    expect(textoDoResultado({ ...base, totals: {} })).toBe('Período de 18/10/2026 a 16/11/2026 (30 dias): nenhuma execução de IA.');
+    // contagem que não veio não vira "nenhuma"
+    expect(textoDoResultado({ ...base, totals: {} })).toBe('Período de 18/10/2026 a 16/11/2026 (30 dias): o motor não disse quantas execuções de IA, custo não informado. Diário: 9 operações, página 2 de 2.');
   });
 
   it('vazio com e sem filtro dizem coisas diferentes', () => {
@@ -124,5 +126,27 @@ describe('as frases', () => {
     expect(marcaDoConsumo(undefined)).toBeNull();
     expect(marcaDoConsumo(0)).toBe('0');
     expect(marcaDoConsumo(42)).toBe('42');
+  });
+});
+
+describe('a leitura que falhou', () => {
+  it('cada falha tem a sua frase, e o cancelamento não tem nenhuma', () => {
+    expect(mensagemDaFalha({ ok: false, falha: 'cancelado', status: 0 })).toBe('');
+    expect(mensagemDaFalha({ ok: false, falha: 'rede', status: 0 })).toBe('Não deu para falar com o motor (falha de rede).');
+    expect(mensagemDaFalha({ ok: false, falha: 'nao_autenticado', status: 401 })).toBe('A sessão deste navegador não vale mais no motor. Pareie de novo.');
+    expect(mensagemDaFalha({ ok: false, falha: 'resposta_invalida', status: 200 })).toBe('O motor respondeu fora do formato esperado.');
+    expect(mensagemDaFalha({ ok: false, falha: 'recusado', status: 500 })).toBe('O motor recusou o pedido (HTTP 500).');
+    expect(mensagemDaFalha({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido' } })).toBe('O motor recusou o pedido (HTTP 400, parametro_invalido).');
+  });
+
+  it('a recusa com campo diz qual, com o nome que a tela usa', () => {
+    const recusa = (campo: string) => ({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo } }) as const;
+    expect(mensagemDaFalha(recusa('start'))).toBe('O motor recusou o início do período (campo "start").');
+    expect(mensagemDaFalha(recusa('search'))).toBe('O motor recusou a busca do diário (campo "search").');
+    expect(mensagemDaFalha(recusa('novo'))).toBe('O motor recusou o campo "novo".');
+    expect(mensagemDaFalha(recusa('constructor'))).toBe('O motor recusou o campo "constructor".');
+    expect(ehRecusaDeCampo(recusa('end'))).toBe(true);
+    expect(ehRecusaDeCampo({ ok: false, falha: 'recusado', status: 500 })).toBe(false);
+    expect(ehRecusaDeCampo({ ok: false, falha: 'rede', status: 0 })).toBe(false);
   });
 });

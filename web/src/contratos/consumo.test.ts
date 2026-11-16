@@ -200,6 +200,8 @@ describe('a chave usage do snapshot', () => {
     for (const nome of ['at', 'kind', 'ref', 'model', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'costUsd', 'costSource', 'status']) {
       expect(projecao, nome).toContain(`'${nome}'`);
     }
+    // a tela diz que o motor manda no máximo as 100 sessões mais recentes
+    expect(fonte('lib/engine/usage.js')).toContain('function recentSessionsFrom(engine, limit = 100) {');
     const resumo = fonte('lib/engine/usage.js');
     for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: auditoriaDeConsumo(sessions)', 'sessionsSince:', 'budgets: budgetsFrom(']) expect(resumo, nome).toContain(nome);
   });

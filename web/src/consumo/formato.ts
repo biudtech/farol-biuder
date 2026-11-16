@@ -22,6 +22,14 @@ export function dolar(valor: number | undefined): string {
   return `US$ ${DUAS_CASAS.format(valor)}`;
 }
 
+const QUATRO_CASAS = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+// A marca do eixo do gráfico: com passo menor que um centavo, quatro casas, para as marcas não
+// saírem todas iguais.
+export function dolarDoEixo(valor: number, passo: number): string {
+  return passo > 0 && passo < 0.01 ? `US$ ${QUATRO_CASAS.format(valor)}` : `US$ ${DUAS_CASAS.format(valor)}`;
+}
+
 export function tokens(valor: number | undefined): string {
   if (valor === undefined) return SEM_DADO;
   return `${INTEIRO.format(valor)} ${valor === 1 ? 'token' : 'tokens'}`;

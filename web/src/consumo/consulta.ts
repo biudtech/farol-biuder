@@ -4,6 +4,7 @@
 // Quem recorta, filtra, soma e pagina é o motor (lib/usage/report.js, na raiz). Valor do
 // endereço que a tela não conhece segue como veio; o motor responde com o que achar.
 import type { Relatorio } from '@/contratos/consumo';
+import type { Resultado } from '@/transporte/cliente';
 import { diaPorExtenso, dolar, inteiro } from './formato';
 import { diaMenos, diasNoPeriodo } from './grafico';
 
@@ -105,12 +106,15 @@ export function textoDoPeriodo(range: { start: string; end: string }): string {
 export function textoDoResultado(relatorio: Relatorio): string {
   const { totals, history, range } = relatorio;
   const periodo = `Período de ${textoDoPeriodo(range)}`;
-  if (!totals.attempts) return `${periodo}: nenhuma execução de IA.`;
-  const execucoes = `${inteiro(totals.attempts)} ${totals.attempts === 1 ? 'execução' : 'execuções'} de IA`;
+  if (totals.attempts === 0) return `${periodo}: nenhuma execução de IA.`;
+  const execucoes = totals.attempts === undefined
+    ? 'o motor não disse quantas execuções de IA'
+    : `${inteiro(totals.attempts)} ${totals.attempts === 1 ? 'execução' : 'execuções'} de IA`;
   const diario = history.total === 0
     ? 'Diário: nenhuma operação.'
     : `Diário: ${inteiro(history.total)} ${history.total === 1 ? 'operação' : 'operações'}, página ${history.page + 1} de ${history.pages}.`;
-  return `${periodo}: ${execucoes}, custo estimado de ${dolar(totals.costUsd)}. ${diario}`;
+  const custo = totals.costUsd === undefined ? 'custo não informado' : `custo estimado de ${dolar(totals.costUsd)}`;
+  return `${periodo}: ${execucoes}, ${custo}. ${diario}`;
 }
 
 export function textoDoVazio(consulta: Consulta): string {
@@ -130,4 +134,40 @@ export function textoDoDiarioVazio(consulta: Consulta): string {
 // enquanto o snapshot não trouxe a contagem.
 export function marcaDoConsumo(sessoesContadas: number | undefined): string | null {
   return sessoesContadas === undefined ? null : String(sessoesContadas);
+}
+
+// Como a tela chama cada parâmetro da rota, caso o motor passe a recusar um deles pelo nome.
+// Hoje ele não recusa assim: período inválido volta como 200 com `ok: false` e uma frase.
+const CAMPO_RECUSADO: Record<string, string> = {
+  start: 'o início do período',
+  end: 'o fim do período',
+  kind: 'o filtro de tipo',
+  model: 'o filtro de modelo',
+  repo: 'o filtro de repositório',
+  search: 'a busca do diário',
+  page: 'a página do diário',
+};
+
+type Falha = Extract<Resultado<never>, { ok: false }>;
+
+// A frase de uma leitura que falhou. Vazia no cancelamento, que não é erro.
+export function mensagemDaFalha(falha: Falha): string {
+  switch (falha.falha) {
+    case 'cancelado': return '';
+    case 'rede': return 'Não deu para falar com o motor (falha de rede).';
+    case 'nao_autenticado': return 'A sessão deste navegador não vale mais no motor. Pareie de novo.';
+    case 'resposta_invalida': return 'O motor respondeu fora do formato esperado.';
+    case 'recusado': {
+      const detalhe = falha.detalhe;
+      if (!detalhe) return `O motor recusou o pedido (HTTP ${falha.status}).`;
+      if (detalhe.campo === undefined) return `O motor recusou o pedido (HTTP ${falha.status}, ${detalhe.codigo}).`;
+      const nome = Object.hasOwn(CAMPO_RECUSADO, detalhe.campo) ? CAMPO_RECUSADO[detalhe.campo] : undefined;
+      return nome ? `O motor recusou ${nome} (campo "${detalhe.campo}").` : `O motor recusou o campo "${detalhe.campo}".`;
+    }
+  }
+}
+
+// A recusa nomeia um campo: mudar o período ou os filtros resolve, tentar de novo não.
+export function ehRecusaDeCampo(falha: Falha): boolean {
+  return falha.falha === 'recusado' && falha.detalhe?.campo !== undefined;
 }

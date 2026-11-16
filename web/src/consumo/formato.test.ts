@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  diaCurto, diaPorExtenso, dolar, inteiro, participacao, rotuloDoDesfecho, rotuloDoModelo, rotuloDoTipo, textoDoCusto, tokens, urlDoPr,
+  diaCurto, diaPorExtenso, dolar, dolarDoEixo, inteiro, participacao, rotuloDoDesfecho, rotuloDoModelo, rotuloDoTipo, textoDoCusto, tokens, urlDoPr,
 } from './formato';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
@@ -22,6 +22,13 @@ describe('números em pt-BR, com a unidade dita', () => {
     expect(dolar(0.004)).toBe('menos de US$ 0,01');
     expect(dolar(0.005)).toBe('US$ 0,01');
     expect(dolar(undefined)).toBe('sem dado');
+  });
+
+  it('a marca do eixo ganha casas quando o passo é menor que um centavo', () => {
+    expect(dolarDoEixo(2.5, 2.5)).toBe('US$ 2,50');
+    expect(dolarDoEixo(0, 0.001)).toBe('US$ 0,0000');
+    expect(dolarDoEixo(0.003, 0.001)).toBe('US$ 0,0030');
+    expect(dolarDoEixo(1500, 500)).toBe('US$ 1.500,00');
   });
 
   it('tokens no singular e no plural', () => {
