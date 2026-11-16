@@ -195,6 +195,26 @@ Ainda sem versão publicada.
   perfil (a tela tem uma cópia conferida por teste) e não avisa quando a lista muda: a tela
   mostra o botão Atualizar quando há revisão resolvida nova. Nada do Time fica no navegador.
   A tela antiga continua servida pelo motor, sem mudança.
+- **Tela Consumo no front novo (fase 3, lote 5):** a aba Consumo de `web/` deixa de ser "Em
+  construção". No topo fica o teto de gasto de cada perfil do Claude, lido do snapshot: quanto
+  foi gasto hoje e desde o corte, o teto, o que resta e, em texto, se a revisão automática
+  está pausada por causa dele e o que o motor deixa de fazer enquanto dura. O período vem de
+  `GET /api/usage`, onde quem soma, filtra e pagina é o motor: o resumo (custo, execuções,
+  tokens de entrada, de saída e de cache), o gasto por dia num gráfico de barras e na tabela
+  abaixo, a quebra por tipo de sessão e por modelo, com a participação de cada linha, e o
+  diário de execuções, 8 operações por página, com cada tentativa na sua linha e a de fora do
+  período marcada. Período (7, 30 ou 90 dias, ou duas datas), tipo, modelo, repositório, busca
+  e página ficam no endereço. As sessões recentes vêm do snapshot e andam sozinhas; o
+  relatório mostra o botão Atualizar quando o motor registra sessão nova. O custo aparece
+  sempre como estimado: é o valor em dólar que a sessão do Claude Code informa, que em perfil
+  de assinatura não é cobrança, e a tela diz quantas execuções rodaram por assinatura, quanto
+  foi por chave de API e quantas não têm modalidade registrada, quanto o motor calculou para
+  sessão que morreu antes de informar e quantas ficaram com custo desconhecido. O período e o
+  diário são em dia de Brasília; o teto, no dia local do processo do motor, e a tela diz os
+  dois. O motor não recusa período inválido com código nem campo (responde 200 com uma
+  frase), não manda custo por modelo no período, nem o total de uma operação com retomada,
+  nem o que falta para o teto na conta do gate: a tela mostra o que vem e diz o que não vem.
+  A tela antiga continua servida pelo motor, sem mudança.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do

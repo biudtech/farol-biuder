@@ -1,0 +1,181 @@
+/* A tela Consumo. Botão, cartão, nota e campo de texto vêm de Radar.module.css; aqui fica só o
+   que é desta tela. Só as variáveis de globals.css, nos pares que src/tema/contraste.test.ts
+   confere: a barra do gráfico é --accent, os rótulos do eixo são --muted e o texto das tabelas
+   é --text, sobre --surface. */
+.consumo {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.filtros {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.periodo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.periodo legend { padding: 0; margin-bottom: 6px; }
+/* o período pronto que está na tela: o contorno mais grosso acompanha o aria-pressed */
+.periodo button[aria-pressed="true"] {
+  border-color: var(--foco);
+  box-shadow: inset 0 0 0 1px var(--foco);
+  font-weight: 700;
+}
+.datas, .seletores {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px 20px;
+  align-self: stretch;
+  min-width: 0;
+}
+.campo {
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.datas .campo { flex: 0 1 180px; }
+.seletores .campo:last-child { flex: 2 1 260px; }
+.campo input, .campo select { flex: none; width: 100%; }
+
+.novas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--info-soft);
+  color: var(--info-texto);
+  font-size: 13px;
+}
+
+.erro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger-texto);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.relatorio {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  transition: opacity .15s;
+}
+/* o relatório anterior fica na tela, esmaecido, enquanto o novo não chega */
+.relatorio[data-esmaecida] { opacity: .55; }
+
+.situacao { font-size: 13.5px; font-weight: 600; }
+.linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.pares {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.par { min-width: 0; overflow-wrap: anywhere; }
+.par dt { color: var(--muted); font-size: 12px; font-weight: 600; }
+.par dd { margin: 0; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* Tabela e gráfico largos rolam aqui dentro, nunca a página. O contêiner recebe foco, para
+   rolar pelo teclado, e tem nome. */
+.rolagem {
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.grafico {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+  max-width: 820px;
+  height: auto;
+  margin: 0 auto;
+}
+.barra { fill: var(--accent); }
+.grade { stroke: var(--border); stroke-width: 1; }
+.eixo { stroke: var(--borda-campo); stroke-width: 1; }
+.rotuloDoEixo { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.tabela caption {
+  caption-side: top;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: left;
+  text-wrap: pretty;
+}
+.tabela th, .tabela td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.tabela thead th { color: var(--muted); font-size: 12px; font-weight: 600; }
+/* a primeira coluna nomeia a linha: fica à esquerda */
+.tabela th:first-child, .tabela td:first-child { text-align: left; }
+.tabela tbody th { font-weight: 600; }
+.observacao { color: var(--muted); font-weight: 500; }
+
+.paginacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.onde { color: var(--muted); font-size: 13px; text-align: center; }
+
+@media (max-width: 760px) {
+  .filtros { padding: 12px; }
+  .pares { grid-template-columns: 1fr 1fr; padding: 12px; }
+  .paginacao { justify-content: center; }
+}

@@ -6,8 +6,9 @@
 //
 // Cada lote de tela tipa as chaves que usa: troca o `unknown` da chave em FormasDoSnapshot
 // pelo tipo lido do que o motor emite, e o `qualquer` dela em LEITORES pelo leitor. As do
-// Radar estão em ./radar, a do Histórico (`pushbacks`) em ./historico e a do Time (`config`,
-// só com os perfis) em ./time.
+// Radar estão em ./radar, a do Histórico (`pushbacks`) em ./historico, a do Time (`config`,
+// só com os perfis) em ./time e a do Consumo (`usage`) em ./consumo.
+import { lerConsumoDoSnapshot, type ConsumoDoSnapshot } from './consumo';
 import { deGuarda, ehObjeto, ehTexto, type Leitor } from './formas';
 import { lerContestacoes, type Contestacao } from './historico';
 import {
@@ -65,7 +66,7 @@ export interface FormasDoSnapshot {
   filaJusta: unknown;
   decisions: Decisoes;
   reviewActions: unknown;
-  usage: unknown;
+  usage: ConsumoDoSnapshot;
   doctor: unknown;
   paths: unknown;
 }
@@ -112,7 +113,7 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   filaJusta: qualquer,
   decisions: lerDecisoes,
   reviewActions: qualquer,
-  usage: qualquer,
+  usage: lerConsumoDoSnapshot,
   doctor: qualquer,
   paths: qualquer,
 };

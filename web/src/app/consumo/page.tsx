@@ -1,8 +1,15 @@
 import type { Metadata } from 'next';
-import { EmConstrucao } from '@/componentes/EmConstrucao';
+import { Suspense } from 'react';
+import { Consumo } from '@/componentes/consumo/Consumo';
 
 export const metadata: Metadata = { title: 'Consumo' };
 
-export default function Consumo() {
-  return <EmConstrucao titulo="Consumo" />;
+// A tela lê a consulta do endereço (useSearchParams), e o Next pede um limite de Suspense em
+// volta de quem faz isso.
+export default function PaginaDoConsumo() {
+  return (
+    <Suspense fallback={null}>
+      <Consumo />
+    </Suspense>
+  );
 }
