@@ -513,8 +513,11 @@ O contrato, lido do motor:
   inclusivos; sem eles, os 30 dias que terminam no hoje do motor), `kind`, `model`, `repo`,
   `account`, `provider` e `device` (igualdade exata; ausente ou `all` não filtra), `search`
   (até 200 caracteres, na referência, no tipo e no modelo), `focus` (`review` ou `pr`) e
-  `page` (a partir de zero, 8 operações por página). `kind`, `model` e `repo` recortam o
-  relatório inteiro; `search`, `focus` e `page`, só o diário. Responde sempre 200:
+  `page` (a partir de zero, 8 operações por página). `kind`, `model` e `repo` recortam as
+  somas, a série e as quebras; `search`, `focus` e `page`, só o diário. `model` compara com o
+  modelo principal da execução: `models` ainda pode trazer outros, que são partes das mesmas
+  execuções. Cada operação do diário vem com todas as tentativas dela, inclusive as de fora
+  do período ou do filtro. Responde sempre 200:
   `{ ok: true, range, options, totals, byKind, completed, retries, unidentified, since,
   sinceDay, series, models, history, incomplete }`, ou `{ ok: false, motivo }` com uma frase.
   A tela manda `start`, `end`, `kind`, `model`, `repo`, `search` e `page`.
@@ -529,24 +532,39 @@ Regras que valem para quem mexer nela:
   o gasto, dois números do motor).
 - **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
   informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
-  esse valor, e a tela diz isso junto do resumo, com quantas execuções do período rodaram
-  por assinatura (`totals.subscription`). Cada execução mostra a origem do custo
+  esse valor, e a tela diz isso junto do resumo. A modalidade aparece nas três parcelas em
+  que o motor a separa, sem "N de M": as execuções por assinatura (`subscription`), o dólar
+  das de chave de API (`apiUsd`, `apiEstimatedUsd`, `apiUnknown`) e as sem modalidade
+  registrada (`unknownBilling`). Cada execução mostra a origem do custo
   (`costSource`): informado pela sessão, "calculado pelo motor" (a sessão morreu antes de
   informar, e o motor usa a mediana do custo por token de saída das sessões concluídas do
   mesmo modelo) ou "Desconhecido", que não mostra o zero gravado.
-- **O dia é o do motor.** O diário agrupa por dia de Brasília (`FUSO_DO_DIA`,
-  `lib/constants.js`). A tela escreve o dia trocando a ordem do texto, sem `Date`, e diz o
-  fuso. A hora de cada execução (`at`) sai no fuso do navegador, como nas outras telas.
+- **Dois relógios, cada um com o seu nome.** O período e o diário são em "dia de Brasília"
+  (`FUSO_DO_DIA`, `lib/constants.js`). O teto é no "dia local do processo do motor"
+  (`localDay`), e a tela avisa que, com o motor em UTC, ele vira às 21h de Brasília. A tela
+  escreve o dia trocando a ordem do texto, sem `Date`. A hora de cada execução (`at`) sai no
+  fuso do navegador, como nas outras telas.
 - **O teto em texto.** `estadoDoTeto` (`src/consumo/teto.ts`) escreve a situação ("Dentro do
   teto", "Pausado: ...", "Sem teto definido"), o gasto contra cada teto e o que o motor deixa
-  de fazer com o perfil pausado: revisão automática, retentativa e busca de contestação; a
-  revisão pedida à mão continua (`budgetBlockedFor`). A cor acompanha, não substitui.
+  de fazer com o perfil pausado (`budgetBlockedFor`): a fila automática, a nova rodada
+  automática de um PR já revisado (`travaDoRound`), a retentativa, a recuperação de prova, a
+  busca de contestação e a revisão em lote, mesmo pedida à mão. Só a revisão manual de um PR
+  fora de lote continua (`lib/engine/review.js`). A cor acompanha, não substitui.
 - **A consulta mora no endereço.** `inicio`, `fim`, `tipo`, `modelo`, `repo`, `q` e `pagina`
   (`src/consumo/consulta.ts`), no molde do Histórico: filtro, período pronto e página
   empilham; busca, datas e página corrigida trocam a entrada. A busca espera 300 ms, e cada
   pedido novo aborta o anterior. Valor que a tela não conhece vai ao motor como veio.
 - **O hoje é o do motor.** Os períodos prontos (7, 30 e 90 dias) terminam no `range.end` do
-  relatório na tela; antes da primeira resposta ficam desabilitados. A tela não lê o relógio.
+  relatório na tela e gravam as duas datas no endereço; antes da primeira resposta ficam
+  desabilitados. A tela não lê o relógio. O atalho só fica marcado quando as duas datas do
+  endereço são as do relatório, ou quando não há data nenhuma (o padrão do motor, sempre 30
+  dias). Com uma data só, a dica diz o que o motor faz: só "De" cresce a cada dia; só "Até"
+  começa 30 dias antes do hoje do motor, e com data mais antiga ele não entrega o relatório.
+- **Data digitada só vira pedido quando serve.** O campo guarda o que se digita e só manda ao
+  endereço um dia que existe, de 1970 em diante (`dataAceita`): enquanto se digita o ano, o
+  navegador entrega 0002, 0020, 0202. Data do endereço não é julgada aqui: vai ao motor.
+- **O diário mostra as tentativas de fora.** As de fora do período saem marcadas com "fora
+  do período" na coluna Quando, e a tela diz por que as linhas não fecham com o total.
 - **O gráfico é complemento.** SVG próprio, sem biblioteca, com `role="img"` e um nome que
   resume o período, o maior dia e o total do motor. A mesma informação está na tabela logo
   abaixo. A geometria é função pura (`src/consumo/grafico.ts`): escala de passo redondo, até
@@ -555,13 +573,19 @@ Regras que valem para quem mexer nela:
 - **Tabela larga rola no próprio contêiner,** que tem nome e recebe foco. A página não rola
   para o lado em 375 px.
 - **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda,
-  aparece "Há sessão nova" com o botão Atualizar. O teto e as sessões recentes vêm do
-  snapshot e andam sozinhos.
+  aparece o aviso de sessão nova com o botão Atualizar, dizendo que ela pode não entrar no
+  recorte (o aviso não olha período nem filtro). O teto e as sessões recentes vêm do snapshot
+  e andam sozinhos.
 - **Estados.** Durante uma carga o relatório anterior fica na tela, esmaecido e com
   `aria-busy`. Sem execução no período, a tela diz isso (com filtro a frase muda) e não
   desenha gráfico nem quebras. Falha de rede tem Tentar de novo. `{ ok: false, motivo }`
   mostra a frase do motor e oferece voltar ao período padrão. Item sem o que o identifica é
   descartado, contado e avisado; número que não veio aparece como "sem dado", não como zero.
+- **Número torto não vira "US$ NaN".** Negativo, infinito ou que não é número aparece como
+  "valor inválido"; fracionário onde se espera inteiro aparece com as casas que tem;
+  participação acima de 100% aparece como veio. O rótulo do eixo do gráfico tem as casas que
+  o passo pede (0,025 pede três), para a marca não ser arredondada. As funções puras não
+  lançam com valor denormal, enorme ou `NaN`.
 
 ### Lacunas do contrato
 
@@ -572,8 +596,12 @@ Regras que valem para quem mexer nela:
   e `campo` de um 400, se a rota passar a responder assim.
 - **Dois dias diferentes.** O diário e `GET /api/usage` usam o dia de Brasília; o agregado
   (`usage.series`) e o teto (`today`) usam o dia local do processo do motor (`localDay`), que
-  só é o de Brasília se o processo rodar nesse fuso. O snapshot não diz qual é o dia do teto:
-  a tela escreve "hoje, no dia do motor".
+  só é o de Brasília se o processo rodar nesse fuso. O snapshot não diz qual é o dia do teto
+  nem o fuso do processo: a tela escreve "hoje, no dia local do processo do motor".
+- **As execuções por chave de API não são contadas.** O motor soma o dólar delas e conta só
+  as de custo desconhecido. A tela não tira a contagem por diferença.
+- **A tentativa de fora do filtro não vem marcada.** A tela marca a de fora do período
+  comparando o dia dela com `range`; para o filtro teria de repetir a regra do motor.
 - **O que resta para o teto não vem.** O gate compara com o teto o gasto mais uma reserva
   (uma revisão típica por sessão de custo desconhecido), e esse número não está no snapshot,
   só o sinal `parcialmenteEstimado`. O "Resta" da tela é o teto menos o gasto, e a nota avisa
