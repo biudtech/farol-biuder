@@ -9,6 +9,7 @@ import {
   campo, deGuarda, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, itemDe, lerItens, lerLista, lerRegistro,
   semAusentes, type Leitor, type LeitorDeItem, type Objeto,
 } from './formas';
+import { semSegredos } from './segredos';
 
 // `status`: o estado do ciclo de checagem (constructor e setStatus, server.js).
 export const STATUS_DO_MOTOR = ['starting', 'checking', 'idle', 'error'] as const;
@@ -366,11 +367,16 @@ export const lerDecisoes: Leitor<Decisoes> = (valor, registrar) => {
 export const lerStatus = deGuarda(ehStatus);
 export const lerErro = deGuarda(ehErro);
 export const lerInstante = deGuarda(ehInstanteOuNulo);
-export const lerConta = deGuarda(ehConta);
+// montada campo a campo: o que mais vier junto da conta não entra no store
+export const lerConta: Leitor<ContaDoMotor> = (valor) => (ehConta(valor) ? { user: valor.user, tokenOk: valor.tokenOk } : undefined);
 export const lerBuscasPausadas = lerLista('buscasPausadas', lerBuscaPausada);
 export const lerFila = lerLista('queue', lerItemDaFila);
 export const lerInicioAutomatico = lerRegistro('inicioAutomatico', itemDe(ehBooleano));
-export const lerEsperaConflito = lerRegistro('esperaConflito', itemDe(ehObjeto));
+// a tela só usa a presença da chave do PR: o registro entra sem o que tiver cara de segredo
+export const lerEsperaConflito = lerRegistro('esperaConflito', (valor): Objeto | undefined => {
+  const limpo = ehObjeto(valor) ? semSegredos(valor).limpo : undefined;
+  return ehObjeto(limpo) ? limpo : undefined;
+});
 export const lerEstacionados = lerRegistro('parked', lerEstacionado);
 export const lerSessoes = lerLista('activeSessions', lerSessaoAtiva);
 export const lerChavesEmEspera = deGuarda(ehListaDeTextos);
