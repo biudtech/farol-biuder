@@ -190,8 +190,9 @@ não abre sessão automática, `lib/engine/espera-conflito.js`).
 **CI obrigatório antes da aprovação** (`aguardarCiParaAprovar`, lida só por
 `aguardaCiParaAprovar` em `lib/engine/gate-espera.js`). Ligada, a aprovação espera os checks
 obrigatórios verdes no commit revisado. Desligada (padrão), o estado do CI não segura nem
-adia a decisão. **Só é seguro desligar onde o check é obrigatório no ruleset**: sem isso, o Farol
-pode aprovar com o CI vermelho e o GitHub não barra o merge. Detalhe em
+adia a decisão.
+**Só é seguro desligar onde o check é obrigatório no ruleset**: sem isso, o Farol pode aprovar com o CI vermelho
+e o GitHub não barra o merge. Detalhe em
 [`REVIEW-GATES.md`](REVIEW-GATES.md).
 
 **Paralelismo.** `parallelReviews` é o limite de revisões simultâneas da conta;
