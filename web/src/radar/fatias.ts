@@ -61,6 +61,14 @@ export function avisosDoMotor(s: Snapshot, fuso?: string): AvisoDoMotor[] {
   return avisos;
 }
 
+// As chaves de que os blocos dependem e que o estado não trouxe (ou trouxe com forma errada,
+// sem valor anterior para manter). O bloco aparece vazio, e a tela diz por quê.
+const BLOCOS = [['decisions', 'as pendências'], ['activeSessions', 'as sessões em curso'], ['queue', 'a fila']] as const;
+
+export function chavesAusentes(s: Snapshot): string[] {
+  return BLOCOS.filter(([chave]) => s[chave] === undefined).map(([, nome]) => nome);
+}
+
 // O estado da checagem, numa linha.
 export function textoDaChecagem(s: Snapshot, fuso?: string): string {
   if (s.status === 'starting') return 'O motor está iniciando.';

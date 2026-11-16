@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pendencia } from '@/contratos/radar';
-import { acoesDaPendencia, avisosDoMotor, fatiarPendencias, textoDaChecagem, textoDaFilaVazia } from './fatias';
+import { acoesDaPendencia, avisosDoMotor, chavesAusentes, fatiarPendencias, textoDaChecagem, textoDaFilaVazia } from './fatias';
 
 function pendencia(extra: Partial<Pendencia> = {}): Pendencia {
   return { id: 'd1', key: 'dono/repo#1', reportMarkdown: '', reasons: [], attention: [], ...extra };
@@ -99,5 +99,12 @@ describe('estado da checagem e fila vazia', () => {
     expect(textoDaFilaVazia({ lastCheckAt: INSTANTE, status: 'idle' })).toBe('Nenhum PR na fila.');
     expect(textoDaFilaVazia({ lastCheckAt: null, status: 'checking' })).toMatch(/ainda não terminou/);
     expect(textoDaFilaVazia({ lastCheckAt: null, status: 'error' })).toMatch(/primeira checagem falhou/);
+  });
+});
+
+describe('chaves de que os blocos dependem', () => {
+  it('diz quais o estado não trouxe', () => {
+    expect(chavesAusentes({ decisions: { pending: [], resolved: [] }, activeSessions: [], queue: [] })).toEqual([]);
+    expect(chavesAusentes({ activeSessions: [] })).toEqual(['as pendências', 'a fila']);
   });
 });
