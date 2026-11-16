@@ -151,6 +151,29 @@ Ainda sem versão publicada.
   dá para ler vira aviso no bloco, em vez de sumir. O motor não manda a lista dos PRs
   ignorados, então o bloco dos ignorados mostra só o que foi ignorado naquela aba. A tela
   antiga continua servida pelo motor, sem mudança.
+- **Tela Histórico no front novo (fase 3, lote 3):** a aba Histórico de `web/` deixa de ser
+  "Em construção". Ela lista as revisões que o motor já resolveu, uma página de 30 por vez,
+  lidas de `GET /api/decisions` (e não das 30 do snapshot), com busca, filtro pelo que foi
+  publicado (Aprovados, Mudanças pedidas, Comentados, Não publicados) e por repositório, e
+  paginação. A busca, os filtros, a página e a revisão aberta ficam no endereço: dá para
+  copiar o link, e o voltar do navegador desfaz a última troca. A busca espera a pessoa parar
+  de digitar e aborta o pedido anterior. Cada linha diz o PR, o título, o autor, o card, o
+  que foi publicado, o parecer da revisão quando ele difere, a situação em português
+  (publicado automaticamente, publicado por você, já havia review seu, substituído por rodada
+  nova, PR já mesclado ou fechado, pulado) e quando; valor que a tela não conhece aparece
+  cru. O detalhe abre na própria página, com os motivos, o resumo técnico, as rodadas, as
+  etapas e o texto do parecer. Dele saem duas ações: Revisar de novo, que abre uma análise
+  nova do PR (o clique não publica; a análise termina pela política da conta), e o desfecho
+  da contestação do autor, quando o motor tem registro para o PR (gravar não publica nada;
+  apagar o registro pergunta antes). A lista não se refaz sozinha: quando o motor resolve
+  revisão nova, aparece um aviso com o botão Atualizar. Parâmetro que o motor recusa (400)
+  aparece com o nome do campo, e página além do fim volta para a última. O texto do review
+  passa a ser desenhado de markdown por um leitor próprio, sem dependência e sem HTML
+  (títulos, listas, citação, código, negrito, itálico e link só `https`), com teto de tamanho
+  e de profundidade; o Radar usa o mesmo desenho no lugar do texto pré-formatado. O motor só
+  entrega uma revisão pela chave do PR, e a mais recente: o link para uma revisão antiga de
+  um PR com várias só abre quando ela está na página carregada. A tela antiga continua
+  servida pelo motor, sem mudança.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
