@@ -14,10 +14,16 @@ function instanteDoDia(dia: string): number {
   return new Date(ms).toISOString().slice(0, 10) === dia ? ms : Number.NaN;
 }
 
-// O dia que fica `n` dias antes. Vazio quando o texto não é um dia.
+// o que um Date aguenta, para um lado e para o outro
+const LIMITE_DO_DATE_MS = 8.64e15;
+
+// O dia que fica `n` dias antes. Vazio quando o texto não é um dia, quando `n` não é número ou
+// quando a conta sai do que o calendário representa com quatro dígitos de ano.
 export function diaMenos(dia: string, n: number): string {
-  const ms = instanteDoDia(dia);
-  return Number.isFinite(ms) ? new Date(ms - n * DIA_MS).toISOString().slice(0, 10) : '';
+  const ms = instanteDoDia(dia) - n * DIA_MS;
+  if (!Number.isFinite(ms) || Math.abs(ms) > LIMITE_DO_DATE_MS) return '';
+  const texto = new Date(ms).toISOString().slice(0, 10);
+  return DIA.test(texto) ? texto : '';
 }
 
 // Quantos dias o período tem, contando as duas pontas. 0 quando não dá para contar.
@@ -33,7 +39,8 @@ export const TETO_DE_BARRAS = 120;
 // e o gráfico mostra os outros com a barra vazia. null quando o período não cabe no gráfico.
 export function diasDoPeriodo(inicio: string, fim: string, teto: number = TETO_DE_BARRAS): string[] | null {
   const quantos = diasNoPeriodo(inicio, fim);
-  if (quantos === 0 || quantos > teto) return null;
+  // a comparação é escrita assim para um teto que não é número também recusar
+  if (quantos === 0 || !(quantos <= teto)) return null;
   const primeiro = instanteDoDia(inicio);
   return Array.from({ length: quantos }, (_, i) => new Date(primeiro + i * DIA_MS).toISOString().slice(0, 10));
 }
@@ -48,10 +55,18 @@ export interface Escala {
 // tira a poeira de ponto flutuante de uma conta com passo decimal (0,1 + 0,2)
 const limpo = (valor: number): number => Number(valor.toPrecision(12));
 
+// A faixa em que a escala faz conta. Abaixo do piso (um milionésimo de dólar) o eixo fica no
+// piso, e acima do teto fica no teto, com a barra encostada no topo: fora dela a potência de
+// dez do passo vira zero ou infinito, e custo desse tamanho não existe.
+const PISO_DA_ESCALA = 1e-6;
+const TETO_DA_ESCALA = 1e15;
+
 // A escala do eixo vertical: passo "redondo" (1, 2, 2,5 ou 5 vezes uma potência de dez), com
 // perto de `alvo` intervalos. Sem valor acima de zero, o eixo vai de 0 a 1.
-export function escalaDoEixo(maximo: number, alvo = 4): Escala {
-  if (!Number.isFinite(maximo) || maximo <= 0) return { teto: 1, marcas: [0, 1] };
+export function escalaDoEixo(maximoPedido: number, alvoPedido = 4): Escala {
+  if (!Number.isFinite(maximoPedido) || maximoPedido <= 0) return { teto: 1, marcas: [0, 1] };
+  const maximo = Math.min(TETO_DA_ESCALA, Math.max(PISO_DA_ESCALA, maximoPedido));
+  const alvo = Number.isFinite(alvoPedido) && alvoPedido >= 1 ? Math.min(10, Math.floor(alvoPedido)) : 4;
   const bruto = maximo / alvo;
   const potencia = 10 ** Math.floor(Math.log10(bruto));
   const fracao = bruto / potencia;
@@ -63,8 +78,11 @@ export function escalaDoEixo(maximo: number, alvo = 4): Escala {
 
 // Quais barras ganham rótulo no eixo horizontal: a primeira, a última e as que cabem entre
 // elas, espaçadas por igual. Com poucas barras, todas.
-export function indicesDosRotulos(quantas: number, maximo = 6): number[] {
-  if (quantas <= 0) return [];
+export function indicesDosRotulos(quantasPedidas: number, maximoPedido = 6): number[] {
+  if (!Number.isFinite(quantasPedidas) || quantasPedidas < 1) return [];
+  const quantas = Math.floor(quantasPedidas);
+  // com menos de dois rótulos não há primeira e última
+  const maximo = Number.isFinite(maximoPedido) && maximoPedido >= 2 ? Math.floor(maximoPedido) : 2;
   if (quantas <= maximo) return Array.from({ length: quantas }, (_, i) => i);
   const passo = Math.ceil((quantas - 1) / (maximo - 1));
   const indices: number[] = [];

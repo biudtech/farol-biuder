@@ -3,42 +3,75 @@
 // ou classificação é daqui.
 import type { Execucao } from '@/contratos/consumo';
 
-const INTEIRO = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
+// Contagem: sem casas quando o valor é inteiro, e com as casas que ele tiver quando não é. Um
+// valor fracionário onde se espera inteiro aparece como veio, em vez de ser arredondado calado.
+const CONTAGEM = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 6 });
 const DUAS_CASAS = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const PERCENTUAL = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
 
 // o que a tela escreve quando o motor não mandou o número
 export const SEM_DADO = 'sem dado';
+// e quando o número não serve: negativo, infinito ou que não é número
+export const VALOR_INVALIDO = 'valor inválido';
+
+// quantia e contagem do consumo nunca são negativas nem infinitas
+function serve(valor: number): boolean {
+  return Number.isFinite(valor) && valor >= 0;
+}
 
 export function inteiro(valor: number | undefined): string {
-  return valor === undefined ? SEM_DADO : INTEIRO.format(valor);
+  if (valor === undefined) return SEM_DADO;
+  return serve(valor) ? CONTAGEM.format(valor) : VALOR_INVALIDO;
 }
 
 // Dólar com duas casas. O valor que existe e arredondaria para zero diz que é menor que um
 // centavo, em vez de aparecer como "US$ 0,00".
 export function dolar(valor: number | undefined): string {
   if (valor === undefined) return SEM_DADO;
+  if (!serve(valor)) return VALOR_INVALIDO;
   if (valor > 0 && valor < 0.005) return 'menos de US$ 0,01';
   return `US$ ${DUAS_CASAS.format(valor)}`;
 }
 
-const QUATRO_CASAS = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+// até onde se procura a casa que representa o passo; além disso o passo é poeira
+const TETO_DE_CASAS = 12;
+const POR_CASAS = new Map<number, Intl.NumberFormat>();
 
-// A marca do eixo do gráfico: com passo menor que um centavo, quatro casas, para as marcas não
-// saírem todas iguais.
+// Quantas casas decimais o passo do eixo pede para ser escrito sem arredondar: 2 para 0,25,
+// 3 para 0,025. Nunca menos de duas, que é como se escreve dinheiro.
+export function casasDoPasso(passo: number): number {
+  if (!Number.isFinite(passo) || passo <= 0) return 2;
+  for (let casas = 2; casas < TETO_DE_CASAS; casas += 1) {
+    if (Number(passo.toFixed(casas)) === passo) return casas;
+  }
+  return TETO_DE_CASAS;
+}
+
+// A marca do eixo do gráfico, com as casas que o passo pede: toda marca é múltiplo do passo,
+// então o rótulo, lido de volta, é o valor da marca (com passo 0,025 a marca 0,075 não vira
+// "0,08").
 export function dolarDoEixo(valor: number, passo: number): string {
-  return passo > 0 && passo < 0.01 ? `US$ ${QUATRO_CASAS.format(valor)}` : `US$ ${DUAS_CASAS.format(valor)}`;
+  if (!serve(valor)) return VALOR_INVALIDO;
+  const casas = casasDoPasso(passo);
+  let formatador = POR_CASAS.get(casas);
+  if (!formatador) {
+    formatador = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+    POR_CASAS.set(casas, formatador);
+  }
+  return `US$ ${formatador.format(valor)}`;
 }
 
 export function tokens(valor: number | undefined): string {
   if (valor === undefined) return SEM_DADO;
-  return `${INTEIRO.format(valor)} ${valor === 1 ? 'token' : 'tokens'}`;
+  if (!serve(valor)) return VALOR_INVALIDO;
+  return `${CONTAGEM.format(valor)} ${valor === 1 ? 'token' : 'tokens'}`;
 }
 
 // A fatia de uma parte no todo, só para exibir. Vazio quando não dá para dizer (falta um dos
-// dois, ou o todo é zero).
+// dois, o todo é zero, ou um deles não serve). Parte maior que o todo aparece como veio, acima
+// de 100%: a tela não esconde a incoerência do dado.
 export function participacao(parte: number | undefined, todo: number | undefined): string {
-  if (parte === undefined || todo === undefined || !(todo > 0)) return '';
+  if (parte === undefined || todo === undefined || !serve(parte) || !serve(todo) || todo === 0) return '';
   return PERCENTUAL.format(parte / todo);
 }
 

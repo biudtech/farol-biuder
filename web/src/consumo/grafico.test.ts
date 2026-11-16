@@ -135,6 +135,64 @@ describe('as barras', () => {
   });
 });
 
+describe('bordas que não lançam', () => {
+  it('diaMenos com quantidade que não é número, ou que sai do calendário, devolve vazio', () => {
+    for (const n of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1e12, -1e12]) expect(diaMenos('2026-11-16', n), String(n)).toBe('');
+    // sai dos quatro dígitos de ano
+    expect(diaMenos('0001-01-01', 400)).toBe('');
+    expect(diaMenos('9999-12-31', -1)).toBe('');
+  });
+
+  it('anos de 0000 a 0099 não viram outro século: o texto não é aceito como dia', () => {
+    for (const dia of ['0000-01-01', '0002-11-16', '0099-12-31']) {
+      expect(diaMenos(dia, 1), dia).toBe('');
+      expect(diasNoPeriodo(dia, '2026-11-16'), dia).toBe(0);
+      expect(diasDoPeriodo(dia, dia), dia).toBeNull();
+    }
+    // a partir do ano 100 a conta é a do calendário
+    expect(diaMenos('0100-03-01', 1)).toBe('0100-02-28');
+  });
+
+  it('diasDoPeriodo com teto que não é número não monta lista', () => {
+    expect(diasDoPeriodo('2026-11-01', '2026-11-16', Number.NaN)).toBeNull();
+    expect(diasDoPeriodo('0100-01-01', '9999-12-31')).toBeNull();
+  });
+
+  it('escala com valor denormal fica no piso, com marcas finitas e crescentes', () => {
+    for (const minimo of [Number.MIN_VALUE, 1e-300, 1e-9]) {
+      const { teto, marcas } = escalaDoEixo(minimo);
+      expect(teto, String(minimo)).toBe(1e-6);
+      expect(marcas.every((m) => Number.isFinite(m))).toBe(true);
+      expect(marcas.every((m, i) => i === 0 || m > (marcas[i - 1] as number))).toBe(true);
+    }
+  });
+
+  it('escala com valor enorme fica no teto, sem marca infinita, e a barra encosta no topo', () => {
+    for (const enorme of [1e16, 1e300, Number.MAX_VALUE]) {
+      const { teto, marcas } = escalaDoEixo(enorme);
+      expect(teto, String(enorme)).toBe(1e15);
+      expect(marcas).toEqual([0, 2.5e14, 5e14, 7.5e14, 1e15]);
+      const area = { largura: 100, altura: 110, esquerda: 0, direita: 0, topo: 10, base: 0 };
+      expect(barrasDoGrafico(['a'], () => enorme, teto, area)[0]?.altura).toBe(100);
+    }
+  });
+
+  it('quantidade de intervalos pedida que não serve cai no padrão', () => {
+    for (const alvo of [0, -3, Number.NaN, Number.POSITIVE_INFINITY, 0.5]) expect(escalaDoEixo(100, alvo), String(alvo)).toEqual(escalaDoEixo(100));
+    expect(escalaDoEixo(100, 1e9).marcas.length).toBeLessThanOrEqual(12);
+  });
+
+  it('rótulos e barras com quantidade torta não lançam', () => {
+    expect(indicesDosRotulos(-5)).toEqual([]);
+    expect(indicesDosRotulos(Number.NaN)).toEqual([]);
+    expect(indicesDosRotulos(10, 1)).toEqual([0, 9]);
+    // sem teto que sirva, o valor acima de zero fica com a altura mínima, e nada vira NaN
+    const semTeto = barrasDoGrafico(['a'], () => 1, Number.NaN)[0];
+    expect([semTeto?.altura, Number.isFinite(semTeto?.y)]).toEqual([1, true]);
+    expect(alturaDaMarca(1, Number.NaN)).toBe(AREA_DO_GRAFICO.altura - AREA_DO_GRAFICO.base);
+  });
+});
+
 describe('o maior dia', () => {
   it('o de maior valor, o primeiro no empate, e null sem valor acima de zero', () => {
     const serie = [{ name: 'a', v: 1 }, { name: 'b', v: 5 }, { name: 'c', v: 5 }, { name: 'd' }];

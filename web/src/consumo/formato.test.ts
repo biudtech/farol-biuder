@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  diaCurto, diaPorExtenso, dolar, dolarDoEixo, inteiro, participacao, rotuloDoDesfecho, rotuloDoModelo, rotuloDoTipo, textoDoCusto, tokens, urlDoPr,
+  casasDoPasso, diaCurto, diaPorExtenso, dolar, dolarDoEixo, inteiro, participacao, rotuloDoDesfecho, rotuloDoModelo, rotuloDoTipo, textoDoCusto, tokens, urlDoPr,
 } from './formato';
+import { escalaDoEixo } from './grafico';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 const fonte = (arquivo: string): string => fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
@@ -24,11 +25,67 @@ describe('números em pt-BR, com a unidade dita', () => {
     expect(dolar(undefined)).toBe('sem dado');
   });
 
-  it('a marca do eixo ganha casas quando o passo é menor que um centavo', () => {
+  it('a marca do eixo tem as casas que o passo pede, e nunca menos de duas', () => {
     expect(dolarDoEixo(2.5, 2.5)).toBe('US$ 2,50');
-    expect(dolarDoEixo(0, 0.001)).toBe('US$ 0,0000');
-    expect(dolarDoEixo(0.003, 0.001)).toBe('US$ 0,0030');
     expect(dolarDoEixo(1500, 500)).toBe('US$ 1.500,00');
+    expect(dolarDoEixo(0, 0.001)).toBe('US$ 0,000');
+    expect(dolarDoEixo(0.003, 0.001)).toBe('US$ 0,003');
+    expect(casasDoPasso(500)).toBe(2);
+    expect(casasDoPasso(0.25)).toBe(2);
+    expect(casasDoPasso(0.025)).toBe(3);
+    expect(casasDoPasso(0.00025)).toBe(5);
+  });
+
+  it('passo 0,025: o rótulo não arredonda a marca (0,075 não vira 0,08)', () => {
+    const { marcas } = escalaDoEixo(0.09);
+    expect(marcas).toEqual([0, 0.025, 0.05, 0.075, 0.1]);
+    expect(marcas.map((marca) => dolarDoEixo(marca, 0.025))).toEqual(['US$ 0,000', 'US$ 0,025', 'US$ 0,050', 'US$ 0,075', 'US$ 0,100']);
+  });
+
+  it('em toda escala, cada rótulo lido de volta é a marca, e não há dois rótulos iguais', () => {
+    const lido = (rotulo: string): number => Number(rotulo.replace('US$ ', '').replaceAll('.', '').replace(',', '.'));
+    let escalas = 0;
+    // de um milésimo de dólar a dez mil, em passos multiplicativos, com três mantissas
+    for (let base = 0.001; base <= 10000; base *= 1.07) {
+      for (const maximo of [base, base * 1.31, Number(base.toPrecision(2))]) {
+        const { marcas } = escalaDoEixo(maximo);
+        const passo = marcas[1] as number;
+        const rotulos = marcas.map((marca) => dolarDoEixo(marca, passo));
+        expect(rotulos.map(lido), `máximo ${maximo}`).toEqual(marcas);
+        expect(new Set(rotulos).size, `máximo ${maximo}`).toBe(rotulos.length);
+        escalas += 1;
+      }
+    }
+    expect(escalas).toBeGreaterThan(600);
+  });
+
+  it('passo que não é número positivo cai em duas casas, e passo de poeira não lança', () => {
+    for (const passo of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) expect(dolarDoEixo(1, passo), String(passo)).toBe('US$ 1,00');
+    expect(casasDoPasso(Number.MIN_VALUE)).toBe(12);
+    expect(dolarDoEixo(0, Number.MIN_VALUE)).toBe('US$ 0,000000000000');
+    expect(dolarDoEixo(Number.NaN, 1)).toBe('valor inválido');
+  });
+
+  it('valor negativo, infinito ou que não é número diz que é inválido, em vez de virar "US$ NaN"', () => {
+    for (const torto of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, -0.001]) {
+      expect(dolar(torto), String(torto)).toBe('valor inválido');
+      expect(tokens(torto), String(torto)).toBe('valor inválido');
+      expect(inteiro(torto), String(torto)).toBe('valor inválido');
+    }
+    expect(textoDoCusto({ costUsd: Number.NaN })).toBe('valor inválido');
+  });
+
+  it('valor fracionário onde se espera inteiro aparece como veio, sem arredondar calado', () => {
+    expect(tokens(1.5)).toBe('1,5 tokens');
+    expect(tokens(1234.25)).toBe('1.234,25 tokens');
+    expect(inteiro(2.5)).toBe('2,5');
+    expect(inteiro(0.4)).toBe('0,4');
+  });
+
+  it('valor enorme não lança', () => {
+    expect(dolar(1e21)).toMatch(/^US\$ 1\.000\./);
+    expect(tokens(Number.MAX_SAFE_INTEGER)).toBe('9.007.199.254.740.991 tokens');
+    expect(dolar(Number.MAX_VALUE)).toMatch(/^US\$ /);
   });
 
   it('tokens no singular e no plural', () => {
@@ -44,6 +101,14 @@ describe('números em pt-BR, com a unidade dita', () => {
     expect(participacao(1, 0)).toBe('');
     expect(participacao(undefined, 3)).toBe('');
     expect(participacao(1, undefined)).toBe('');
+  });
+
+  it('participação acima de 100% aparece como veio, e valor que não serve não vira percentual', () => {
+    expect(participacao(3, 2)).toBe('150%');
+    expect(participacao(10, 1)).toBe('1.000%');
+    for (const [parte, todo] of [[Number.NaN, 1], [1, Number.NaN], [-1, 2], [1, -2], [Number.POSITIVE_INFINITY, 1], [1, Number.POSITIVE_INFINITY]] as const) {
+      expect(participacao(parte, todo), `${parte}/${todo}`).toBe('');
+    }
   });
 });
 
