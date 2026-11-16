@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { EmConstrucao } from '@/componentes/EmConstrucao';
+import { Sistema } from '@/componentes/sistema/Sistema';
 
 export const metadata: Metadata = { title: 'Sistema' };
 
-export default function Sistema() {
-  return <EmConstrucao titulo="Sistema" />;
+export default function PaginaDoSistema() {
+  return <Sistema />;
 }

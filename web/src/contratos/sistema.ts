@@ -473,8 +473,9 @@ export function lerTesteDoJira(bruto: unknown): TesteDoJira | null {
 }
 
 // A resposta de GET /api/diagnostics: o relatório em markdown, que o motor já entrega com os
-// segredos mascarados e sem caminho de pasta (lib/engine/diagnostico.js), e as falhas
-// registradas, de que a tela só usa a contagem.
+// segredos mascarados (lib/engine/diagnostico.js), e as falhas registradas, de que a tela só
+// usa a contagem. É texto livre: a borda não tem como conferir campo a campo, e a tela o
+// desenha como markdown, sem HTML.
 export interface Diagnostico {
   markdown: string;
   falhas: number;
