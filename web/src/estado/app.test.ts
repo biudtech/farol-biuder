@@ -30,7 +30,12 @@ function fluxoFalso(init: RequestInit) {
   init.signal?.addEventListener('abort', () => {
     try { controle.error(new DOMException('abortado', 'AbortError')); } catch { /* já encerrado */ }
   });
-  return { resposta: new Response(corpo, { status: 200 }), enviar: (texto: string) => controle.enqueue(codificador.encode(texto)) };
+  return {
+    resposta: new Response(corpo, { status: 200 }),
+    enviar: (texto: string) => controle.enqueue(codificador.encode(texto)),
+    // o motor fechou a conexão
+    cair: () => controle.close(),
+  };
 }
 
 interface Montagem { token?: string; base?: string; guardado?: Map<string, string>; aoGravar?: () => void }
@@ -462,5 +467,61 @@ describe('sessão do front', () => {
     expect(t.avisos[0]).toMatch(/^fluxo de eventos:/);
     expect(t.app.store.ler().conexao).toBe('conectado');
     expect(t.pedidos.filter((p) => p.url.endsWith('/api/events'))).toHaveLength(1);
+  });
+});
+
+describe('o estado desta conexão já chegou', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const estado = (valor: object) => `event: state\ndata: ${JSON.stringify(valor)}\n\n`;
+
+  it('só vale depois do primeiro state de cada conexão, e cai junto com ela', async () => {
+    const t = montar({ token: TOKEN });
+    const fluxos: Array<ReturnType<typeof fluxoFalso>> = [];
+    t.rotas.set('/api/events', (p) => { const f = fluxoFalso(p.init); fluxos.push(f); return f.resposta; });
+    const encerrar = t.app.iniciar();
+    expect(t.app.store.ler().estadoEmDia).toBe(false);
+    await vi.advanceTimersByTimeAsync(0);
+    // o motor aceitou a conexão, mas o estado ainda não veio
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'conectado', estadoEmDia: false });
+
+    fluxos[0]?.enviar(estado({ app: APP, status: 'idle' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'conectado', estadoEmDia: true });
+
+    fluxos[0]?.cair();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'reconectando', estadoEmDia: false });
+
+    // a conexão nova abre com o snapshot velho na tela: conectado, e o estado ainda não é o dela
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(fluxos).toHaveLength(2);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'conectado', estadoEmDia: false });
+    expect(t.app.store.ler().snapshot?.status).toBe('idle');
+
+    // um patch não é o estado inteiro
+    fluxos[1]?.enviar(`event: state-patch\ndata: ${JSON.stringify({ set: {}, del: [] })}\n\n`);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().estadoEmDia).toBe(false);
+
+    fluxos[1]?.enviar(estado({ app: APP, status: 'checking' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'conectado', estadoEmDia: true });
+    encerrar();
+  });
+
+  it('sair leva o sinal embora com o snapshot', async () => {
+    const t = montar({ token: TOKEN });
+    let fluxo!: ReturnType<typeof fluxoFalso>;
+    t.rotas.set('/api/events', (p) => { fluxo = fluxoFalso(p.init); return fluxo.resposta; });
+    const encerrar = t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    fluxo.enviar(estado({ app: APP }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().estadoEmDia).toBe(true);
+    t.app.sair();
+    expect(t.app.store.ler()).toMatchObject({ snapshot: null, estadoEmDia: false });
+    encerrar();
   });
 });
