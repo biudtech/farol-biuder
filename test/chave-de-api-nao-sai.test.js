@@ -18,7 +18,7 @@ const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 const { CONFIG_FILE } = await import('../lib/paths.js');
 const { todasAsRotas } = await import('../lib/local-auth/inventario.js');
-const { configParaFora, comChaveGuardada } = await import('../lib/engine/chave-do-perfil.js');
+const { configParaFora, comChaveGuardada, recusaDoEndereco } = await import('../lib/engine/chave-do-perfil.js');
 
 const CHAVE = 'sk-ant-CHAVEFALSA-nao-pode-sair-0123456789';
 const CHAVE_NOVA = 'sk-ant-CHAVENOVA-tambem-nao-sai-9876543210';
@@ -248,6 +248,86 @@ test('perfil novo de chave sem chave é recusado como perfil incompleto, e não 
   // perfil de assinatura com o id de um perfil de chave não recebe a chave dele
   const patch = comChaveGuardada({ claudeProfiles: [{ id: 'k1', label: 'Virou plano', kind: 'dir', dir: '' }] }, engine.config);
   assert.equal('apiKey' in patch.claudeProfiles[0], false);
+});
+
+// O endereço (URL base) decide PARA ONDE a chave guardada é enviada. Mudar o endereço sem
+// redigitar a chave seria um jeito de tirar a chave do motor com uma sessão válida: a próxima
+// revisão a mandaria para o endereço novo. Então endereço novo exige a chave no mesmo salvar.
+const comK1 = (mudanca) => perfisDaTela().map((p) => (p.id === 'k1' ? { ...p, ...mudanca } : p));
+const ENDERECO = 'https://proxy.exemplo.com/v1';
+
+test('mudar o endereço sem redigitar a chave é recusado, e nada do salvar é gravado', async () => {
+  const antes = fs.readFileSync(CONFIG_FILE, 'utf8');
+  const tema = engine.config.theme;
+  const lista = comK1({ baseUrl: ENDERECO, label: 'Rótulo que não entra' }).map((p) => (p.id === 's1' ? { ...p, label: 'Plano que não entra' } : p));
+  const r = await pedir('POST', '/api/settings', { claudeProfiles: lista, theme: tema === 'dark' ? 'light' : 'dark' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, false);
+  assert.equal(r.json.code, 'chave_exigida');
+  assert.deepEqual(r.json.perfis, ['k1']);
+  assert.match(r.json.erro, /digite a chave de novo/);
+  semChave(r.corpo, 'a resposta da recusa');
+  assert.equal(r.json.config.claudeProfiles.find((p) => p.id === 'k1').baseUrl, '', 'a resposta devolve a config que continua valendo');
+  assert.equal(perfil('k1').baseUrl, '');
+  assert.equal(perfil('k1').apiKey, CHAVE);
+  assert.equal(perfil('k1').label, 'Chave renomeada');
+  assert.equal(perfil('s1').label, 'Plano', 'o outro perfil do mesmo salvar também não entra');
+  assert.equal(engine.config.theme, tema, 'nem o outro campo do mesmo salvar');
+  assert.equal(fs.readFileSync(CONFIG_FILE, 'utf8'), antes, 'o config.json não foi tocado');
+});
+
+test('com a chave redigitada no mesmo salvar, o endereço troca', async () => {
+  const r = await pedir('POST', '/api/settings', { claudeProfiles: comK1({ baseUrl: ENDERECO, apiKey: CHAVE }) });
+  assert.equal(r.json.ok, true);
+  semChave(r.corpo, 'a resposta');
+  assert.equal(perfil('k1').baseUrl, ENDERECO);
+  assert.equal(perfilNoDisco('k1').baseUrl, ENDERECO);
+  assert.equal(perfilNoDisco('k1').apiKey, CHAVE);
+});
+
+test('com o endereço igual, rótulo e orçamento mudam sem pedir a chave; espaço e barra final não são mudança', async () => {
+  for (const [baseUrl, label] of [[ENDERECO, 'Um'], [`  ${ENDERECO}  `, 'Dois'], [`${ENDERECO}/`, 'Três'], [`"${ENDERECO}"`, 'Quatro']]) {
+    const r = await pedir('POST', '/api/settings', { claudeProfiles: comK1({ baseUrl, label, budgetDaily: 7 }) });
+    assert.equal(r.json.ok, true, `endereço ${JSON.stringify(baseUrl)}`);
+    assert.equal(perfil('k1').label, label);
+    assert.equal(perfil('k1').apiKey, CHAVE);
+    assert.equal(perfilNoDisco('k1').budgetDaily, 7);
+  }
+});
+
+test('endereço esvaziado, ausente ou trocado por outro, sem a chave, é recusado; a barra final não serve de desvio', async () => {
+  // a rodada anterior pode ter gravado outra grafia do mesmo endereço: a comparação é a mesma nos dois lados
+  const guardado = perfil('k1').baseUrl;
+  const antes = fs.readFileSync(CONFIG_FILE, 'utf8');
+  const semEndereco = perfisDaTela().map((p) => (p.id === 'k1' ? Object.fromEntries(Object.entries(p).filter(([c]) => c !== 'baseUrl')) : p));
+  const tentativas = [comK1({ baseUrl: '' }), semEndereco, comK1({ baseUrl: 'https://outro.exemplo.com' }),
+    comK1({ baseUrl: `${ENDERECO}/../roubo` }), comK1({ baseUrl: 'https://proxy.exemplo.com.atacante.net/v1/' }),
+    comK1({ baseUrl: 'https://outro.exemplo.com/', apiKey: '   ' }), comK1({ baseUrl: 42 })];
+  for (const lista of tentativas) {
+    const r = await pedir('POST', '/api/settings', { claudeProfiles: lista });
+    assert.equal(r.json.ok, false);
+    assert.equal(r.json.code, 'chave_exigida');
+    assert.equal(perfil('k1').baseUrl, guardado);
+  }
+  assert.equal(fs.readFileSync(CONFIG_FILE, 'utf8'), antes);
+});
+
+test('a regra do endereço é pura: só perfil de chave que já existe, com endereço diferente e sem chave', () => {
+  const config = { claudeProfiles: [
+    { id: 'a', label: 'A', kind: 'apikey', apiKey: CHAVE, baseUrl: '' },
+    { id: 'b', label: 'B', kind: 'apikey', apiKey: CHAVE, baseUrl: 'https://b.exemplo.com' },
+  ] };
+  const patch = (...perfis) => ({ claudeProfiles: perfis });
+  assert.equal(recusaDoEndereco({ theme: 'dark' }, config), null);
+  assert.equal(recusaDoEndereco(null, config), null);
+  assert.equal(recusaDoEndereco(patch({ id: 'a', kind: 'apikey', baseUrl: '' }, { id: 'b', kind: 'apikey', baseUrl: 'https://b.exemplo.com//' }), config), null);
+  assert.equal(recusaDoEndereco(patch({ id: 'novo', kind: 'apikey', baseUrl: 'https://x.exemplo.com' }), config), null, 'perfil novo não tem chave guardada para desviar');
+  assert.equal(recusaDoEndereco(patch({ id: 'a', kind: 'dir', dir: '' }), config), null, 'virar assinatura larga a chave, não a envia');
+  assert.equal(recusaDoEndereco(patch({ id: 'a', kind: 'apikey', baseUrl: 'https://x.exemplo.com', apiKey: 'sk-outra' }), config), null);
+  const r = recusaDoEndereco(patch({ id: ' a ', kind: 'apikey', baseUrl: 'https://x.exemplo.com' }, { id: 'b', kind: 'apikey', baseUrl: '', temChave: true }, { id: 'b', kind: 'apikey', baseUrl: 'https://b.exemplo.com' }), config);
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.perfis, ['a', 'b']);
+  semChave(JSON.stringify(r), 'a recusa');
 });
 
 test('chave digitada troca a guardada, e a nova também não volta na resposta', async () => {

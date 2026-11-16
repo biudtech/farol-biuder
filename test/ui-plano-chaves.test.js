@@ -51,6 +51,21 @@ test('o campo da chave nasce vazio: diz que há chave guardada e nunca escreve o
   assert.match(semChave, /Sem chave guardada/);
 });
 
+// Mudar o endereço sem redigitar a chave é recusado pelo motor: o motivo aparece junto do
+// perfil, e a tela manda a chave e o endereço no mesmo salvar quando os dois estão digitados.
+test('a recusa do endereço aparece junto do perfil, e chave e endereço vão no mesmo salvar', () => {
+  const config = { claudeProfiles: [{ id: 'k1', label: 'Chave', kind: 'apikey', temChave: true, baseUrl: '' }, { id: 'k2', label: 'Outra', kind: 'apikey', temChave: true }], claudeProfileId: 'k1' };
+  const motivo = 'Para mudar o endereço <deste> perfil, digite a chave de novo.';
+  const html = claudeProfilesHtml({ config, usage: {}, doctor: {}, recusas: { k1: motivo } });
+  assert.match(html, /<div class="cp-teste-erro" data-recusa="k1" role="alert">Para mudar o endereço &lt;deste&gt; perfil, digite a chave de novo\.<\/div>/);
+  assert.match(html, /<div class="cp-teste-erro" data-recusa="k2" role="alert"><\/div>/, 'perfil sem recusa tem o lugar vazio');
+  assert.doesNotMatch(claudeProfilesHtml({ config, usage: {}, doctor: {} }), /undefined/);
+  assert.match(TELA, /r\?\.code === 'chave_exigida'/);
+  assert.match(TELA, /estado\(\)\.config\.claudeProfiles = r\.config\.claudeProfiles/, 'a tela volta ao que o motor guarda');
+  assert.match(TELA, /recusas: Object\.fromEntries\(recusas\)/);
+  assert.match(TELA, /\.cp-baseurl\[data-id=/, 'o salvar da chave lê o endereço digitado, e o do endereço lê a chave');
+});
+
 test('a tela só manda a chave quando ela foi digitada', () => {
   assert.doesNotMatch(TELA, /next\.apiKey = t\.value\.trim\(\);/, 'campo vazio não vira chave vazia no perfil');
   assert.match(TELA, /if \(chave\) next\.apiKey = chave;/);
