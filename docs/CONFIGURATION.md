@@ -367,11 +367,20 @@ Um `config.json` antigo pode trazer teto num perfil: `budgetDaily`, `budgetTotal
 continua valendo. A carga não reescreve o arquivo por causa deles: eles somem na próxima
 gravação da configuração (qualquer salvar pela tela). E o PR que estava estacionado por
 orçamento num estado gravado antes volta a ser elegível no boot (`estacionamentoDoBoot`,
-`lib/engine/estado-do-boot.js`). Travado em `test/sem-teto-de-gasto.test.js`.
+`lib/engine/estado-do-boot.js`): o motor regrava o `auto-review-parked.json` sem ele e grava
+uma linha INFO no `farol.log` com quantos voltaram e quais, uma vez. Travado em
+`test/sem-teto-de-gasto.test.js`.
 
-O que continua segurando revisão automática não é gasto: o limite de uso da assinatura do
-Claude (acima), a pausa das buscas pelo limite de requisições do GitHub e o teto de revisões
-simultâneas (`parallelReviews` e `globalParallelReviews`).
+O que continua segurando revisão automática não é gasto medido pelo motor: o limite de uso
+da assinatura do Claude (acima), o teto de uso que a organização põe no Claude
+(`limite-da-organizacao`, `lib/log-taxonomy.js`: falha permanente, que estaciona o PR até
+alguém subir o teto lá ou trocar o perfil), a pausa das buscas pelo limite de requisições do
+GitHub e o teto de revisões simultâneas (`parallelReviews` e `globalParallelReviews`).
+
+Efeito para quem opera: a nova rodada por commit não tem contagem diária nem limite de gasto.
+O que a segura é a espera de 5 minutos com o head quieto (`HEAD_QUIETO_MS`) e, depois de 3
+rodadas presas seguidas (`MAX_RODADAS_PRESAS`, `lib/engine/review.js`), a espera de 30 minutos
+(`HEAD_QUIETO_LONGO_MS`). Um autor que empurra commit o dia todo gera rodadas o dia todo.
 
 ## Avaliação técnica dos PRs revisados
 

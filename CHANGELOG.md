@@ -290,7 +290,15 @@ Ainda sem versão publicada.
   ela continua precisando de `"localAuth": "exigir"`.
 - Um `config.json` que ainda traga teto de gasto num perfil sobe sem erro: os campos são
   ignorados e somem do arquivo na próxima gravação da configuração. O PR que estava parado por
-  orçamento volta à fila automática no primeiro boot. Nada mais pausa por gasto.
+  orçamento volta à fila automática no primeiro boot, com uma linha no `farol.log` dizendo
+  quantos voltaram e quais. O motor não pausa mais por gasto que ele mede. Continuam segurando
+  revisão automática: o limite de uso da assinatura do Claude, o teto de uso que a organização
+  põe no Claude (falha permanente, que estaciona o PR até alguém subir o teto lá ou trocar o
+  perfil), a pausa das buscas pelo limite do GitHub e o teto de revisões simultâneas.
+- Sem teto de gasto, a nova rodada por commit não tem contagem diária nem limite de dinheiro:
+  o que a segura é a espera de 5 minutos com o PR quieto e, depois de 3 rodadas presas
+  seguidas, a espera de 30 minutos. Um autor que empurra commit o dia todo gera rodadas o dia
+  todo.
 
 ## v2.80.1
 
