@@ -75,9 +75,23 @@ describe('bloco Precisa de você', () => {
     );
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
-    const pre = container.querySelector('pre');
-    expect(pre?.textContent).toBe(`# Título\n${marcado}`);
-    expect(pre?.children).toHaveLength(0);
+    // o review é desenhado de markdown: o título vira título, e a marcação crua fica como texto
+    const review = container.querySelector('details');
+    expect(review?.querySelector('h4')?.textContent).toBe('Título');
+    expect(review?.querySelector('p')?.textContent).toBe(marcado);
+    expect(review?.querySelector('pre')).toBeNull();
+  });
+
+  it('o review em markdown aparece desenhado, com link só https', () => {
+    const { controle } = controleFalso();
+    const { container } = render(
+      <PrecisaDeVoce pendencias={[pendencia({ reportMarkdown: '## Review\n\n- **um** [doc](https://exemplo.com/a)\n- [x](javascript:alert(1))' })]} controle={controle} />,
+    );
+    const review = container.querySelector('details');
+    expect(review?.querySelector('h5')?.textContent).toBe('Review');
+    expect(review?.querySelector('strong')?.textContent).toBe('um');
+    expect([...(review?.querySelectorAll('a') ?? [])].map((a) => a.getAttribute('href'))).toEqual(['https://exemplo.com/a']);
+    expect(review?.textContent).toContain('[x](javascript:alert(1))');
   });
 
   it('o texto mostrado é anunciado como o do parecer, não como o que cada botão publica', () => {

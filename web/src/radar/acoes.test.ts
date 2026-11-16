@@ -25,8 +25,69 @@ describe('rota e corpo de cada ação, como lib/http-server.js espera', () => {
     [{ ...base, tipo: 'decidir', id: 'd1', decisao: 'skip' }, '/api/decide', { id: 'd1', action: 'skip' }],
     [{ ...base, tipo: 'ignorar', chave: 'dono/repo#12' }, '/api/ignore', { key: 'dono/repo#12' }],
     [{ ...base, tipo: 'restaurar', chave: 'dono/repo#12' }, '/api/restore', { key: 'dono/repo#12' }],
+    [{ ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', deNovo: true }, '/api/review', { urls: ['https://github.com/dono/repo/pull/12'] }],
+    [{ ...base, tipo: 'contestacao', chave: 'dono/repo#12', autor: 'ana', desfecho: 'author_right', nota: 'era intencional' }, '/api/pushback', { key: 'dono/repo#12', author: 'ana', outcome: 'author_right', note: 'era intencional' }],
+    // apagar o registro: desfecho vazio, e a nota não vai
+    [{ ...base, tipo: 'contestacao', chave: 'dono/repo#12', autor: 'ana', desfecho: '', nota: 'sobra' }, '/api/pushback', { key: 'dono/repo#12', author: 'ana', outcome: '', note: '' }],
   ])('%o', (acao, rota, corpo) => {
     expect(pedidoDa(acao)).toEqual({ rota, corpo });
+  });
+});
+
+describe('ações do Histórico: revisar de novo e contestação', () => {
+  const gravar: Acao = { ...base, tipo: 'contestacao', chave: 'dono/repo#12', autor: 'ana', desfecho: 'mixed', nota: '' };
+  const apagar: Acao = { ...gravar, desfecho: '' };
+
+  it('revisar de novo muda o rótulo, e não pede confirmação', () => {
+    const deNovo: Acao = { ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', deNovo: true };
+    expect(rotuloDa(deNovo)).toBe('Revisar de novo');
+    expect(nomeDa(deNovo)).toBe('Revisar de novo PR #12 de dono/repo');
+    expect(confirmacaoDa(deNovo)).toBeNull();
+    expect(idDa(deNovo)).toBe('revisar');
+  });
+
+  // lib/engine/pushback.js: recordPushback grava confirmado e manual; pushbacksFor leva o
+  // registro ao prompt das revisões do autor; licoesDoRepo leva author_right e mixed ao das
+  // revisões de outros autores do repositório; pushbackTargets pula o PR com registro manual.
+  it('gravar o desfecho pede confirmação, dizendo onde o registro entra e que nada é publicado', () => {
+    expect(rotuloDa(gravar)).toBe('Gravar o desfecho');
+    expect(nomeDa(gravar)).toBe('Gravar o desfecho da contestação de PR #12 de dono/repo');
+    expect(idDa(gravar)).toBe('contestacao:gravar');
+    const c = confirmacaoDa(gravar);
+    expect(c?.titulo).toBe('Gravar o desfecho da contestação de PR #12 de dono/repo?');
+    expect(c?.confirmar).toBe('Gravar o desfecho');
+    expect(c?.texto).toMatch(/confirmado e registrado à mão/);
+    expect(c?.texto).toMatch(/entra no prompt das próximas revisões dos PRs do autor/);
+    expect(c?.texto).toMatch(/o motor deixa de procurar contestação neste PR sozinho/);
+    expect(c?.texto).toMatch(/Nada é publicado no GitHub[.]$/);
+  });
+
+  it('só o desfecho em que a revisão errou vai ao prompt das revisões de outros autores do repositório', () => {
+    const outros = /também no das revisões de PRs de outros autores neste repositório/;
+    expect(confirmacaoDa({ ...gravar, desfecho: 'mixed' })?.texto).toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'author_right' })?.texto).toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'we_right' })?.texto).not.toMatch(outros);
+    expect(confirmacaoDa({ ...gravar, desfecho: 'we_right' })?.texto).toMatch(/entra no prompt das próximas revisões dos PRs do autor/);
+  });
+
+  it('apagar o registro pede confirmação, dizendo o que se perde e que nada é publicado', () => {
+    expect(rotuloDa(apagar)).toBe('Apagar a contestação');
+    expect(nomeDa(apagar)).toBe('Apagar a contestação de PR #12 de dono/repo');
+    expect(idDa(apagar)).toBe('contestacao:apagar');
+    const c = confirmacaoDa(apagar);
+    expect(c?.titulo).toBe('Apagar a contestação de PR #12 de dono/repo?');
+    expect(c?.texto).toMatch(/sai da memória do motor, com a nota/);
+    expect(c?.texto).toMatch(/o motor volta a poder detectar contestação neste PR sozinho/);
+    expect(c?.texto).toMatch(/Nada é publicado no GitHub\./);
+    expect(c?.confirmar).toBe('Apagar o registro');
+  });
+
+  it('o aceite e a recusa do motor viram frase', async () => {
+    const aceito = clienteQueResponde({ ok: true, dados: { ok: true } });
+    expect(await executar(aceito.cliente, gravar)).toEqual({ tipo: 'ok', texto: 'O motor aceitou o pedido: gravar o desfecho da contestação de PR #12 de dono/repo.' });
+    expect(aceito.post).toHaveBeenCalledWith('/api/pushback', { key: 'dono/repo#12', author: 'ana', outcome: 'mixed', note: '' }, lerRespostaDeAcao);
+    const recusado = clienteQueResponde({ ok: true, dados: { ok: false, error: 'desfecho inválido' } });
+    expect(await executar(recusado.cliente, gravar)).toEqual({ tipo: 'erro', texto: 'O motor recusou: desfecho inválido' });
   });
 });
 

@@ -1,0 +1,141 @@
+/* A tela Histórico. Botão, cartão, nota e campo de texto vêm de Radar.module.css; aqui fica
+   só o que é desta tela. Só as variáveis de globals.css, nos pares que
+   src/tema/contraste.test.ts confere. */
+.historico {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.listagem {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.listagem[hidden] { display: none; }
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px 20px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.campo {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.campo:first-child { flex: 2 1 280px; }
+.campo input, .campo select { flex: none; width: 100%; }
+.filtros > button { align-self: center; }
+
+.novas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--info-soft);
+  color: var(--info-texto);
+  font-size: 13px;
+}
+
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  transition: opacity .15s;
+}
+/* a página anterior fica na tela, esmaecida, enquanto a nova não chega */
+.pagina[data-esmaecida] { opacity: .55; }
+
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 13px;
+}
+.par { min-width: 0; overflow-wrap: anywhere; }
+.par dt { color: var(--muted); font-size: 12px; font-weight: 600; }
+.par dd { margin: 0; }
+
+.paginacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.onde { color: var(--muted); font-size: 13px; text-align: center; }
+
+.erro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger-texto);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13.5px;
+}
+.topoDoDetalhe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.tituloDoDetalhe { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+
+.secao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.tituloDaSecao { font-size: 14px; font-weight: 650; }
+
+.parecer {
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.formulario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+@media (max-width: 760px) {
+  .filtros, .detalhe { padding: 12px; }
+  .campos { grid-template-columns: 1fr; }
+  .paginacao { justify-content: center; }
+}

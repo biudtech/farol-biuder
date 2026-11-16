@@ -1,0 +1,63 @@
+/* O texto de um review, desenhado a partir do markdown. Só as variáveis de globals.css. */
+.markdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown pre { margin: 0; }
+.markdown ul, .markdown ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 22px;
+}
+.markdown li > ul, .markdown li > ol { margin-top: 4px; }
+.markdown a { color: var(--info-texto); text-decoration: underline; }
+
+.titulo { margin: 4px 0 0; font-size: 14px; font-weight: 650; }
+
+.citacao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--borda-campo);
+  color: var(--muted);
+}
+
+.codigo, .bloco {
+  background: var(--surface-2);
+  border-radius: 6px;
+  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+}
+.codigo { padding: 1px 5px; }
+.bloco {
+  padding: 10px 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.regua { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--border); }
+
+.corte {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--info-soft);
+  color: var(--info-texto);
+  font-size: 13px;
+}
+
+.soLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

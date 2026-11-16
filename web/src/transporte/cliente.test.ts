@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { criarCliente, type Conexao } from './cliente';
+import { PRAZO_DO_CORPO_DA_RECUSA_MS, TETO_DO_CORPO_DA_RECUSA, criarCliente, type Conexao } from './cliente';
 import { LIMITE_DO_EVENTO } from './sse';
 import { criarCofreDoToken } from './token';
 
@@ -205,6 +205,101 @@ describe('get e post', () => {
     const t = montar();
     t.respostas.push(() => json({ error: 'forbidden' }, 403));
     expect(await t.cliente.post('/api/check', {}, objeto)).toEqual({ ok: false, falha: 'recusado', status: 403 });
+  });
+
+  it('a recusa com código no corpo entrega o código e o campo, e só eles', async () => {
+    const t = montar();
+    t.respostas.push(() => json({ ok: false, code: 'parametro_invalido', campo: 'veredito', sobra: 'x' }, 400));
+    expect(await t.cliente.get('/api/decisions?veredito=x', objeto)).toEqual({
+      ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo: 'veredito' },
+    });
+    // código sem campo, e campo de forma errada, que conta como ausente
+    t.respostas.push(() => json({ code: 'modo_invalido' }, 400));
+    t.respostas.push(() => json({ code: 'parametro_invalido', campo: 7 }, 400));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'modo_invalido' } });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido' } });
+  });
+
+  it('recusa sem código, com corpo que não é JSON ou com texto longo demais não leva detalhe', async () => {
+    const t = montar();
+    t.respostas.push(() => new Response('<html>', { status: 502 }));
+    t.respostas.push(() => json({ code: 'c'.repeat(81), campo: 'q' }, 400));
+    t.respostas.push(() => json({ code: 'parametro_invalido', campo: 'c'.repeat(81) }, 400));
+    t.respostas.push(() => json(['parametro_invalido'], 400));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 502 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido' } });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+  });
+
+  it('código e campo só valem com a forma de identificador que o motor usa', async () => {
+    const t = montar();
+    const recusa = async (corpo: unknown) => {
+      t.respostas.push(() => json(corpo, 400));
+      return t.cliente.get('/api/x', objeto);
+    };
+    const semDetalhe = { ok: false, falha: 'recusado', status: 400 };
+    // os campos do motor (CAMPOS, lib/engine/historico-paginado.js) e um código com hífen
+    expect(await recusa({ code: 'parametro_invalido', campo: 'pageSize' })).toEqual({ ...semDetalhe, detalhe: { codigo: 'parametro_invalido', campo: 'pageSize' } });
+    expect(await recusa({ code: 'codigo-invalido' })).toEqual({ ...semDetalhe, detalhe: { codigo: 'codigo-invalido' } });
+    for (const torto of ['Parâmetro inválido', 'tem espaco', '<b>x</b>', '9comeca_com_digito', '_x', 'a.b', 'a\u202eb', '']) {
+      expect(await recusa({ code: torto, campo: 'q' }), torto).toEqual(semDetalhe);
+      expect(await recusa({ code: 'parametro_invalido', campo: torto }), torto).toEqual({ ...semDetalhe, detalhe: { codigo: 'parametro_invalido' } });
+    }
+  });
+
+  it('corpo de recusa que não se declara JSON não é lido', async () => {
+    const t = montar();
+    const corpo = JSON.stringify({ code: 'parametro_invalido', campo: 'q' });
+    t.respostas.push(() => new Response(corpo, { status: 400, headers: { 'Content-Type': 'text/html' } }));
+    t.respostas.push(() => new Response(corpo, { status: 400 }));
+    t.respostas.push(() => new Response(corpo, { status: 400, headers: { 'Content-Type': 'application/problem+json; charset=utf-8' } }));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo: 'q' } });
+  });
+
+  it('corpo de recusa acima do teto é largado, sem detalhe', async () => {
+    const t = montar();
+    t.respostas.push(() => json({ code: 'parametro_invalido', campo: 'q', sobra: 'x'.repeat(TETO_DO_CORPO_DA_RECUSA) }, 400));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+  });
+
+  it('corpo de recusa sem fim não prende a chamada: a leitura para no teto e o corpo é cancelado', async () => {
+    const t = montar();
+    let puxadas = 0;
+    let cancelado = false;
+    const semFim = new ReadableStream<Uint8Array>({
+      pull(controle) {
+        puxadas += 1;
+        controle.enqueue(new Uint8Array(4096).fill(0x20));
+      },
+      cancel() { cancelado = true; },
+    });
+    t.respostas.push(() => new Response(semFim, { status: 502, headers: { 'Content-Type': 'application/json' } }));
+    expect(await t.cliente.post('/api/review', {}, objeto)).toEqual({ ok: false, falha: 'recusado', status: 502 });
+    expect(puxadas).toBeLessThan(10);
+    expect(cancelado).toBe(true);
+  });
+
+  it('corpo de recusa que abre e não manda nada é largado no prazo', async () => {
+    vi.useFakeTimers();
+    const t = montar();
+    let cancelado = false;
+    const parado = new ReadableStream<Uint8Array>({ cancel() { cancelado = true; } });
+    t.respostas.push(() => new Response(parado, { status: 502, headers: { 'Content-Type': 'application/json' } }));
+    try {
+      const chamada = t.cliente.post('/api/review', {}, objeto);
+      let resolvida = false;
+      void chamada.then(() => { resolvida = true; });
+      await vi.advanceTimersByTimeAsync(PRAZO_DO_CORPO_DA_RECUSA_MS - 1);
+      expect(resolvida).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await chamada).toEqual({ ok: false, falha: 'recusado', status: 502 });
+      expect(cancelado).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('corpo que não é JSON, ou que o leitor da borda recusa, não chega a quem chamou', async () => {

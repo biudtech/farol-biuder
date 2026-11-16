@@ -264,7 +264,7 @@ const TIPOS_DE_MOTIVO: readonly string[] = ['gate', 'content', 'infra'];
 
 // Motivo sem texto sai; tipo que este front não conhece vale como ponto da revisão, que é
 // o padrão do motor (REASON_KINDS, lib/engine/public-review.js).
-function lerMotivos(valor: unknown): Motivo[] {
+export function lerMotivos(valor: unknown): Motivo[] {
   if (!Array.isArray(valor)) return [];
   const motivos: Motivo[] = [];
   for (const m of valor) {
@@ -274,7 +274,7 @@ function lerMotivos(valor: unknown): Motivo[] {
   return motivos;
 }
 
-function lerPrDaPendencia(v: unknown): PrDaPendencia | undefined {
+export function lerPrDaPendencia(v: unknown): PrDaPendencia | undefined {
   if (!ehObjeto(v)) return undefined;
   return semAusentes({
     repo: campo(v.repo, ehTexto), number: campo(v.number, ehNumero), url: campo(v.url, ehTexto),
@@ -284,7 +284,7 @@ function lerPrDaPendencia(v: unknown): PrDaPendencia | undefined {
 
 // A chave do card chega como texto ou, em registro antigo, como objeto com `key` (cardDe,
 // lib/engine/historico-paginado.js). null é "sem card".
-function lerCard(v: unknown): string | undefined {
+export function lerCard(v: unknown): string | undefined {
   if (ehTexto(v)) return v || undefined;
   return ehObjeto(v) && ehTexto(v.key) && v.key ? v.key : undefined;
 }
@@ -315,7 +315,7 @@ function lerEsperaProva(v: unknown): EsperaDaProva | undefined {
   };
 }
 
-function lerTecnica(v: unknown): Pendencia['technical'] {
+export function lerTecnica(v: unknown): Pendencia['technical'] {
   return ehObjeto(v) && ehTexto(v.message) && v.message ? semAusentes({ state: campo(v.state, ehTexto), message: v.message }) : undefined;
 }
 

@@ -7,8 +7,8 @@ rota de API, cookie nem segredo.
 Este pacote é independente do motor: tem `package.json`, `package-lock.json` e gate próprios.
 Na Vercel, o diretório raiz do projeto é `web/`.
 
-Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e a
-tela Radar. Histórico, Time, Consumo e Sistema ainda estão em construção.
+Hoje ele entrega a fundação (transporte, contratos, pareamento e a casca das cinco abas) e as
+telas Radar e Histórico. Time, Consumo e Sistema ainda estão em construção.
 
 ## Rodar contra um motor local
 
@@ -83,9 +83,11 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`), com um CSS Module só |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa |
-| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks` |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das duas telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
+| `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
 | `src/navegacao/` | A lista das abas |
@@ -125,6 +127,14 @@ chamada que não interessa mais (a busca que o usuário trocou, por exemplo). Ch
 devolve a falha `cancelado`, que não é erro do motor: quem recebe não mostra mensagem nem grava
 nada. Sair, perder a sessão ou desmontar a página aborta todas as chamadas em curso do mesmo
 jeito.
+
+Resposta fora de 2xx vira a falha `recusado`, com o status. Quando o corpo da recusa traz um
+código (`code`), a falha leva `detalhe: { codigo, campo? }`: é assim que a tela sabe qual
+parâmetro o motor recusou no 400 de `GET /api/decisions`. Só esses dois saem do corpo de uma
+recusa, e só com forma de identificador (letra, depois letras, dígitos, sublinhado ou hífen,
+até 80). Quem responde fora de 2xx pode não ser o motor (um proxy no caminho), então o corpo
+só é lido quando se declara JSON, até 16 kB e em até 2 s: corpo maior, sem fim ou parado é
+largado, e a recusa segue só com o status.
 
 **Como ler o estado.** `useApp((e) => e.snapshot?.chave)`. O seletor devolve um primitivo ou
 uma referência que já está no store, nunca um objeto montado na hora. A definição do dado é do
@@ -212,7 +222,7 @@ Regras que valem para quem mexer nela:
   avisa que sai um texto que a tela não mostra.
 - **Texto de fora é texto.** Título, autor, motivo, feed, aviso do motor e review entram como
   filho de texto do React, nunca por `dangerouslySetInnerHTML`. O review vem em markdown e
-  aparece pré-formatado; a renderização de markdown fica para o Histórico. O link do PR passa
+  é desenhado pelo componente `Markdown` (veja "O renderizador de markdown"). O link do PR passa
   por `linkDoPr`: só `https://github.com/`, com `rel="noreferrer noopener"` e
   `target="_blank"`. A revisão sob demanda manda a URL canônica do PR (`prDaUrl`), não o que
   foi digitado.
@@ -242,6 +252,143 @@ do motor, não com regra na tela:
   na aba aberta.
 - **O bloco de cada pendência.** Não há campo que diga se a pendência espera clique ou se
   resolve sozinha: a tela corta pela presença de `esperaCi` e de `esperaProva` sem `pedeVoce`.
+
+## A tela Histórico
+
+A aba `/historico` é `src/componentes/historico/Historico.tsx`. Ela mostra as revisões que o
+motor já resolveu (até 3.000), uma página de 30 por vez, lidas de `GET /api/decisions`. Não
+lê a lista do snapshot, que só leva as 30 mais recentes.
+
+| Parte | Componente | De onde vem |
+|---|---|---|
+| Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
+| Lista e paginação | `Lista.tsx`, `Paginacao.tsx` | `items`, `page`, `pages` e `total` da resposta |
+| Detalhe da revisão | `Detalhe.tsx` | o item da página; fora dela, `GET /api/decision?key=` |
+| Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
+
+Regras que valem para quem mexer nela:
+
+- **Quem busca e filtra é o motor.** A tela manda o que a pessoa escolheu e mostra o que
+  voltou; não filtra nem ordena nada. O filtro de desfecho olha o que foi publicado (`action`),
+  e por isso os rótulos dele dizem isso: Aprovados, Mudanças pedidas, Comentados, Não
+  publicados.
+- **A consulta mora no endereço.** `q`, `veredito`, `repo`, `pagina` e a revisão aberta (`id`
+  e `pr`, a chave do PR) ficam na query string (`src/historico/consulta.ts`), lidos por
+  `useSearchParams` e escritos pela History API, que o Next integra ao roteador (o endereço
+  muda sem pedir a página ao servidor do front). Filtro, página e abrir ou fechar a revisão
+  empilham uma entrada; a busca digitada e a correção de página trocam a entrada atual.
+- **Busca com espera, pedido anterior abortado.** O campo espera 300 ms depois da última tecla
+  (`ESPERA_DA_BUSCA_MS`); Enter manda na hora. Cada pedido novo aborta o anterior pelo
+  `AbortSignal` do cliente, e resposta de pedido abortado não entra na tela.
+- **Valor do endereço que a tela não conhece vai ao motor como veio.** Quem recusa é ele, com
+  400 e o nome do campo, e a tela diz qual campo foi recusado. Só a página é saneada aqui
+  (inteiro a partir de 1). Página além do fim (200 com `items` vazio e `pages` maior que zero)
+  volta para a última.
+- **Rótulos numa tabela só.** `src/historico/rotulos.ts` traduz `status` e `action`. O teste
+  ao lado varre `lib/engine/*.js`, pega todo arquivo que chama `resolveIntoHistory` ou
+  `recordDecision` e reprova se um literal escrito num `status:` desses arquivos não tiver
+  rótulo. É uma leitura de texto: status montado de outro jeito escapa dela, e na tela
+  aparece cru. O parecer da sessão (`verdict`) só aparece quando difere do que foi publicado.
+- **Publicado é o que o motor conta como publicado.** Só `approve`, `request_changes` e
+  `comment` (`PUBLICADOS`, em `lib/engine/historico-paginado.js`). `action` ausente ou de
+  valor desconhecido aparece como "Nada publicado" (o desconhecido, com o valor cru ao lado),
+  que é como o filtro do motor o trata. A pendência da mesa, que só chega pelo detalhe por
+  chave, mostra "Nada publicado ainda".
+- **A lista não se refaz sozinha.** Quando o snapshot passa a ter revisão resolvida mais nova
+  que a da última carga (`marcaDasResolvidas`: o id e a hora do topo de `decisions.resolved`),
+  aparece o aviso "Há revisões novas" com o botão Atualizar, que pede a mesma página de novo.
+- **Estados.** Durante uma carga a página anterior fica na tela, esmaecida e com `aria-busy`.
+  Vazio sem filtro e vazio com filtro têm textos diferentes. Falha de rede tem Tentar de
+  novo; recusa de parâmetro tem Limpar busca e filtros. Item sem `id` ou sem `key` é
+  descartado, contado e avisado. O resultado ("61 revisões, página 2 de 3") sai numa região
+  viva educada.
+- **Detalhe.** Abre na própria página, no lugar da lista (que continua montada), com o foco
+  no título; Escape ou "Voltar à lista" fecham, e o foco volta ao botão que abriu. Escape
+  dentro de um campo de texto ou de um seletor é do campo, e não fecha o detalhe. Mostra o
+  que foi publicado, os motivos (`reasons`), os pontos de atenção (`attention`), o resumo
+  técnico (`technical`), as rodadas (`rounds`), as etapas (`stages`), a conferência de
+  afirmações e o texto do parecer, desenhado de markdown.
+- **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo" manda
+  `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o clique não
+  publica, mas a análise que ele abre termina pela política da conta, que pode publicar
+  sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR, e as
+  duas ações dela (`POST /api/pushback`) perguntam antes. Nenhuma publica no GitHub, mas
+  gravar um desfecho tem efeito além da tela (`lib/engine/pushback.js`): o registro fica
+  confirmado e marcado como manual, entra no prompt das próximas revisões dos PRs do autor
+  e, com o desfecho `author_right` ou `mixed`, no das revisões de outros autores do mesmo
+  repositório; e o motor deixa de procurar contestação naquele PR sozinho. Apagar o registro
+  (desfecho vazio) desfaz isso. A pergunta diz o que vale para o desfecho escolhido.
+
+### Lacunas do contrato
+
+- **Revisão por id.** O motor só busca uma revisão pela chave do PR (`GET /api/decision?key=`),
+  e devolve a pendência do PR ou, sem ela, a resolvida mais recente. Um endereço que aponta
+  para uma revisão antiga de um PR com várias só abre se ela estiver na página carregada;
+  fora disso a tela mostra a que o motor devolveu e avisa que não é a pedida.
+- **A contestação não vem na projeção.** `decisionForUi` não traz nada sobre contestação: o
+  registro vem na chave `pushbacks` do snapshot, por PR. Não dá para dizer a qual rodada do PR
+  ele se refere, e a tela o mostra em toda revisão daquele PR, dizendo que é do PR.
+- **O texto publicado.** `reportMarkdown` é o review que o motor escolheu mostrar, e a
+  projeção não diz se ele é o da ação publicada ou o do parecer. Quando os dois diferem, a
+  tela avisa que o texto pode não ser o que saiu no PR.
+- **Novidade sem filtro.** O aviso de revisões novas olha o topo das resolvidas do snapshot,
+  que não sabe dos filtros: ele aparece mesmo quando a revisão nova não passa pela consulta
+  aberta.
+- **Sessão em curso por revisão.** O item não diz se o PR já está sendo revisado de novo. A
+  tela oferece "Revisar de novo" e mostra a resposta do motor.
+- **O aviso do motor cita uma tela que não existe aqui.** Quando o motor suspeita de
+  contestação, o aviso dele (evento `toast`, texto de `lib/engine/pushback.js`) manda
+  confirmar o desfecho em "Revisões recentes", que é da tela antiga. A tela nova mostra o
+  aviso como o motor escreveu; o desfecho se confirma no detalhe da revisão, no Histórico.
+
+## O renderizador de markdown
+
+`src/markdown/markdown.ts` lê o texto de um review e devolve uma árvore de blocos e trechos;
+`src/componentes/Markdown.tsx` desenha a árvore com elementos do React. Não há dependência,
+`dangerouslySetInnerHTML` nem HTML montado por texto: todo conteúdo é filho de texto. Três
+atributos levam valor que sai do review, cada um filtrado: o `href` do link (só o que passa
+em `linkSeguro`), o `data-linguagem` do bloco de código (a palavra depois da cerca, só
+letras, dígitos e `_ + # . -`, até 40) e o `start` da lista numerada (um número de até nove
+dígitos).
+
+O que ele lê: títulos (`#` a `######`), parágrafos (a quebra de linha fica, como no GitHub),
+listas com marcador e numeradas (uma dentro da outra), citação, bloco de código com cerca
+(crases ou tis), régua, negrito, itálico, código em linha, link `[texto](https://...)` e
+endereço `https://` solto.
+
+O que ele não lê, e aparece como o texto que é: HTML (`<script>`, `<img>`), tabela, nota de
+rodapé, bloco de código por recuo e imagem (`![texto](endereço)` aparece inteira, e o
+endereço dela não vira link).
+
+O link (`linkSeguro`) só existe para endereço `https` com host. Não vira link, e fica como
+texto: outro esquema (`javascript:`, `data:`, `http:`, caminho relativo), arroba na
+autoridade (usuário e senha, mesmo vazios, como em `https://@host`), espaço, caractere de
+controle ou controle de direção do texto (U+202A a U+202E, U+2066 a U+2069) no endereço. No
+endereço solto o texto visível é o endereço normalizado, que é para onde o link vai (um host
+escrito com ponto ideográfico aparece com o ponto comum). O link sai com
+`rel="noreferrer noopener"` e `target="_blank"`. Destino local ou de rede interna
+(`https://localhost`, por exemplo) passa: é `https`, o endereço fica à vista e quem abre é a
+pessoa.
+
+Tetos, porque o texto vem de fora:
+
+- 100.000 caracteres, contados depois de a tabulação virar quatro espaços. O que passar é
+  cortado, sem partir par substituto, e a tela diz. O motor limita em 60.000 o corpo do
+  payload que publica (`MAX_REVIEW_BODY`), mas o texto que a projeção entrega pode vir de
+  outra fonte (o relatório da sessão saneado), que não tem esse teto;
+- 2.048 caracteres de endereço. Endereço solto que não terminou antes disso, ou que encosta
+  no fim de um texto cortado, fica texto inteiro: não vira link para um pedaço dele;
+- 6 níveis de citação e lista e 6 níveis de ênfase. Além deles o conteúdo vira texto.
+
+O custo da leitura é limitado, não estritamente linear: não há expressão regular com
+retrocesso sobre a linha, e a busca de fecho que falha é lembrada, mas cada `[texto](`
+procura o `)` em até 2.348 caracteres. O pior caso é o texto de 100.000 caracteres feito só
+de `[a](`, que custa perto de 60 milhões de passos (entre 0,1 e 0,2 s onde foi medido).
+`markdown.test.ts` mede as entradas que travariam um leitor ingênuo, com 100.000 caracteres
+cada, e exige menos de 1,5 s por entrada.
+
+O título do texto começa no nível 4 (`nivelBase`), porque o review aparece dentro de um
+cartão ou de uma seção que já tem título.
 
 ## Segurança
 

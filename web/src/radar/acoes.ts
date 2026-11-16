@@ -1,7 +1,7 @@
-// As ações do Radar: a rota e o corpo de cada POST, a leitura da resposta e a frase que a
+// As ações do Radar e do Histórico: a rota e o corpo de cada POST, a leitura da resposta e a frase que a
 // tela mostra depois. Sem React: quem liga isto aos botões é o gancho useAcoes.
 //
-// As seis rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
+// As sete rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
 // vem como `{ ok: false, blocked?, error? }`: `blocked` é o código do portão que recusou
 // (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor.
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
@@ -20,7 +20,8 @@ interface Base {
 
 export type Acao =
   | (Base & { tipo: 'checar' })
-  | (Base & { tipo: 'revisar'; url: string })
+  // `deNovo`: o PR já tem revisão (o botão do Histórico); muda só o rótulo
+  | (Base & { tipo: 'revisar'; url: string; deNovo?: true })
   | (Base & { tipo: 'cancelar'; id: string })
   | (Base & {
     tipo: 'decidir';
@@ -33,7 +34,14 @@ export type Acao =
     espera?: 'ci' | 'prova';
   })
   | (Base & { tipo: 'ignorar'; chave: string })
-  | (Base & { tipo: 'restaurar'; chave: string });
+  | (Base & { tipo: 'restaurar'; chave: string })
+  // O desfecho da contestação de um PR (recordPushback, lib/engine/pushback.js). `desfecho`
+  // vazio apaga o registro. Nada é publicado: é memória do motor, que entra no prompt de
+  // revisões futuras.
+  | (Base & { tipo: 'contestacao'; chave: string; autor: string; desfecho: DesfechoDaContestacao | ''; nota: string });
+
+// PUSHBACK_OUTCOMES, lib/taxonomy.js
+export type DesfechoDaContestacao = 'author_right' | 'we_right' | 'mixed';
 
 export const CHECAR: Acao = Object.freeze({ tipo: 'checar', alvo: 'checar', nome: '' });
 
@@ -46,6 +54,8 @@ export function pedidoDa(acao: Acao): { rota: string; corpo: Objeto } {
     case 'decidir': return { rota: '/api/decide', corpo: { id: acao.id, action: acao.decisao } };
     case 'ignorar': return { rota: '/api/ignore', corpo: { key: acao.chave } };
     case 'restaurar': return { rota: '/api/restore', corpo: { key: acao.chave } };
+    // a nota só acompanha um desfecho: apagar o registro apaga a nota junto
+    case 'contestacao': return { rota: '/api/pushback', corpo: { key: acao.chave, author: acao.autor, outcome: acao.desfecho, note: acao.desfecho ? acao.nota : '' } };
   }
 }
 
@@ -60,21 +70,24 @@ const ROTULO_DA_DECISAO: Record<Decisao, string> = {
 export function rotuloDa(acao: Acao): string {
   switch (acao.tipo) {
     case 'checar': return 'Checar agora';
-    case 'revisar': return 'Revisar agora';
+    case 'revisar': return acao.deNovo ? 'Revisar de novo' : 'Revisar agora';
     case 'cancelar': return 'Cancelar';
     case 'decidir': return ROTULO_DA_DECISAO[acao.decisao];
     case 'ignorar': return 'Ignorar';
     case 'restaurar': return 'Restaurar';
+    case 'contestacao': return acao.desfecho ? 'Gravar o desfecho' : 'Apagar a contestação';
   }
 }
 
 // O nome acessível do botão: a ação e o alvo ("Aprovar PR #12 de dono/repo").
 export function nomeDa(acao: Acao): string {
+  if (acao.tipo === 'contestacao') return acao.desfecho ? `Gravar o desfecho da contestação de ${acao.nome}` : `Apagar a contestação de ${acao.nome}`;
   return acao.nome ? `${rotuloDa(acao)} ${acao.nome}` : rotuloDa(acao);
 }
 
 // Identifica a ação dentro do alvo, para a tela saber qual botão está enviando.
 export function idDa(acao: Acao): string {
+  if (acao.tipo === 'contestacao') return acao.desfecho ? 'contestacao:gravar' : 'contestacao:apagar';
   return acao.tipo === 'decidir' ? `decidir:${acao.decisao}` : acao.tipo;
 }
 
@@ -117,14 +130,36 @@ function textoQueSai(acao: Extract<Acao, { tipo: 'decidir' }>): string {
 }
 
 // Ação que pede confirmação antes do POST: as três que publicam no GitHub (Aprovar, Pedir
-// mudanças e Comentar), o Pular de uma pendência que o motor resolveria sozinho, e o
-// cancelamento, que joga fora a sessão em curso. A pergunta diz o que sai e em qual PR.
+// mudanças e Comentar), o Pular de uma pendência que o motor resolveria sozinho, o
+// cancelamento, que joga fora a sessão em curso, e a contestação: gravar o desfecho muda o
+// prompt de revisões futuras (do autor e, conforme o desfecho, do repositório), e apagar joga
+// o registro fora. A pergunta diz o que sai e em qual PR.
 export function confirmacaoDa(acao: Acao): Confirmacao | null {
   if (acao.tipo === 'cancelar') {
     return {
       titulo: `Cancelar ${acao.nome}?`,
       texto: 'A análise em andamento é interrompida. O que já foi enviado ao GitHub não é desfeito, e se o envio do review já começou o motor recusa o cancelamento.',
       confirmar: 'Cancelar a sessão',
+    };
+  }
+  if (acao.tipo === 'contestacao') {
+    if (!acao.desfecho) {
+      return {
+        titulo: `Apagar a contestação de ${acao.nome}?`,
+        texto: `O registro de contestação de ${acao.nome} sai da memória do motor, com a nota: deixa de entrar no prompt das próximas revisões, e o motor volta a poder detectar contestação neste PR sozinho. Nada é publicado no GitHub.`,
+        confirmar: 'Apagar o registro',
+      };
+    }
+    // O que recordPushback faz, e quem lê o registro depois (lib/engine/pushback.js, na raiz):
+    // pushbacksFor (as revisões do autor), licoesDoRepo (as de outros autores do repositório,
+    // só quando a revisão errou) e pushbackTargets (a detecção automática, que pula o manual).
+    const outros = acao.desfecho === 'we_right'
+      ? ''
+      : ' e, por ser um desfecho em que a revisão errou, também no das revisões de PRs de outros autores neste repositório';
+    return {
+      titulo: `Gravar o desfecho da contestação de ${acao.nome}?`,
+      texto: `O desfecho de ${acao.nome} fica na memória do motor como confirmado e registrado à mão. Com a nota, ele entra no prompt das próximas revisões dos PRs do autor${outros}. Com o registro à mão o motor deixa de procurar contestação neste PR sozinho. Nada é publicado no GitHub.`,
+      confirmar: 'Gravar o desfecho',
     };
   }
   if (acao.tipo !== 'decidir') return null;

@@ -55,6 +55,7 @@ function formatador(nome: string, opcoes: Intl.DateTimeFormatOptions, fuso: stri
 }
 
 const DIA_E_HORA: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+const COM_ANO: Intl.DateTimeFormatOptions = { ...DIA_E_HORA, year: 'numeric' };
 const SO_HORA: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
 
 function formatar(valor: number | string | null | undefined, nome: string, opcoes: Intl.DateTimeFormatOptions, fuso?: string): string {
@@ -68,6 +69,11 @@ function formatar(valor: number | string | null | undefined, nome: string, opcoe
 // o motor não mandou a hora.
 export function dataHora(valor: number | string | null | undefined, fuso?: string): string {
   return formatar(valor, 'dia', DIA_E_HORA, fuso);
+}
+
+// Com o ano: o Histórico guarda até 3.000 revisões e atravessa a virada do ano.
+export function dataComAno(valor: number | string | null | undefined, fuso?: string): string {
+  return formatar(valor, 'ano', COM_ANO, fuso);
 }
 
 export function hora(valor: number | string | null | undefined, fuso?: string): string {

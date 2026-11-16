@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chavesDoFeed, dataHora, hora, linkDoPr, nomeDoPr, prDaUrl, textoDaEspera, textoDaRetentativa, textoDoEstacionado,
+  chavesDoFeed, dataComAno, dataHora, hora, linkDoPr, nomeDoPr, prDaUrl, textoDaEspera, textoDaRetentativa, textoDoEstacionado,
   textoDoParecer,
 } from './formato';
 
@@ -57,6 +57,8 @@ describe('chave das linhas do feed', () => {
 describe('datas', () => {
   it('escreve dia, mês, hora e minuto, de epoch ou de data ISO', () => {
     expect(dataHora(INSTANTE, 'UTC')).toBe('16/11, 14:32');
+    expect(dataComAno(INSTANTE, 'UTC')).toBe('16/11/2026, 14:32');
+    expect(dataComAno(0, 'UTC')).toBe('');
     expect(dataHora('2026-11-16T14:32:05.000Z', 'UTC')).toBe('16/11, 14:32');
     expect(dataHora(INSTANTE, 'America/Sao_Paulo')).toBe('16/11, 11:32');
     expect(hora(INSTANTE, 'UTC')).toBe('14:32:05');
