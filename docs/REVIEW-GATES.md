@@ -30,6 +30,11 @@ Este guia foi reescrito no fechamento da fase 1 (15/11/2026) e ficou só com o q
 código naquele dia, função a função. A versão anterior acumulava o histórico do aplicativo de mesa e
 afirmava regras de módulos que saíram; ela está no histórico do git.
 
+No fechamento da fase 4 (16/11/2026), depois da saída do teto de gasto e da tela antiga, os
+nomes de arquivo, função e chave citados aqui foram conferidos de novo contra o código, e a
+ordem das recusas da boca, os motivos do gate e as travas da nova rodada foram relidos nas
+funções.
+
 Três consequências para quem mantém:
 
 - A fonte é o código. Cada arquivo de `lib/engine/` abre com um comentário que conta a regra e o

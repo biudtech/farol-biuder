@@ -96,19 +96,24 @@ aprovado sozinho (limpo ou com ressalvas) e reprovado sozinho.
 Uma regra de review por organização ou autor marcada Automático revisa sozinha mesmo com
 `autoReview: false` (ver abaixo). A receita parte de `reviewRules` vazio.
 
-### A tela edita por operação
+### A conta se edita por operação
 
-Em Sistema > Contas, a tela manda `POST /api/accounts/edit` dizendo qual campo mudou
-(`tipo: "editar"`, com `campos`) ou qual regra de review mudou (`tipo: "regra-review"`), e o
-motor aplica sobre a config atual (`aplicarEdicao` e `editarConta` em
-`lib/engine/contas-config.js`). Campos editáveis: `owners`, os quatro da política e
-`padroesRevisao` (`CAMPOS_EDITAVEIS`). Campo desconhecido ou valor fora do domínio volta em
-`ignorados`, sem virar o padrão. Mudar as organizações dispara uma checagem na hora.
+`POST /api/accounts/edit` diz qual campo mudou (`tipo: "editar"`, com `campos`) ou qual regra
+de review mudou (`tipo: "regra-review"`), e o motor aplica sobre a config atual
+(`aplicarEdicao` e `editarConta` em `lib/engine/contas-config.js`). Campos editáveis:
+`owners`, os quatro da política e `padroesRevisao` (`CAMPOS_EDITAVEIS`). Campo desconhecido ou
+valor fora do domínio volta em `ignorados`, sem virar o padrão. Mudar as organizações dispara
+uma checagem na hora.
+
+No front, a seção Conta revisora e política da tela Sistema edita as organizações e os quatro
+campos da política. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API
+([como chamar](#chamar-a-api-sem-tela)) ou pelo arquivo.
 
 Toda mudança de política vai a `state/politica-historico.json` (dentro do workspace), com
-data e origem (`janela do Farol`, `navegador`, `migração` ou `detecção do gh`), até 200
-entradas. O motivo "a política manda aguardar" no card diz quando e de onde veio a
-configuração que segurou (`motivoDaPolitica`), e o Diagnóstico lista as mudanças recentes.
+data e origem (`navegador`, `migração` ou `detecção do gh`; registro antigo pode trazer
+`janela do Farol`), até 200 entradas. O motivo "a política manda aguardar" no card diz quando
+e de onde veio a configuração que segurou (`motivoDaPolitica`), e o diagnóstico
+(`GET /api/diagnostics`) lista as mudanças recentes.
 
 ### `config.json` antigo
 
@@ -143,7 +148,7 @@ organização inteira ou para um autor dentro dela, por exemplo
   `politicaDeInicio`). Sem regra para a organização, vale `autoReview` da conta.
 - A regra vale nos dois sentidos: com a conta em "só põe na fila", uma organização ou um
   autor em Automático revisa sozinho.
-- Manual permite o clique Revisar e impede a revisão automática, inclusive a retentativa
+- Manual permite a revisão pedida por clique e impede a revisão automática, inclusive a retentativa
   automática (`bloqueioDeInicio`).
 - PR sem organização ou sem autor conhecido, quando há regra que dependeria dele, conta como
   manual.
@@ -164,8 +169,8 @@ no padrão.
 | chave | padrão | onde se muda |
 |---|---|---|
 | `conta` | `null` | Sistema (política e organizações, por `POST /api/accounts/edit`) e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
-| `aguardarCiParaAprovar` | `false` | Sistema, "CI antes de aprovar" |
-| `parallelReviews` | `1` (1 a 4) | Sistema, "revisões ao mesmo tempo" |
+| `aguardarCiParaAprovar` | `false` | Sistema, "CI obrigatório antes de aprovar" |
+| `parallelReviews` | `1` (1 a 4) | Sistema, "Revisões ao mesmo tempo" |
 | `reviewModel`, `reviewEffort` | `""` | Sistema ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
 | `people` | `{}` | Time |
 | `jiraSites` | `[]` | API ou arquivo; Sistema só mostra ([Jira](#jira)) |
@@ -176,7 +181,6 @@ no padrão.
 | `reviewFast` | `false` (modo rápido da revisão) | API ou arquivo |
 | `aguardarCiParaRevisar` | `false` (espera o CI antes de revisar) | API ou arquivo |
 | `autoPushback`, `debugSpawns` | `true`, `false` | API ou arquivo |
-| `soundEnabled`, `theme`, `autostart` | `true`, `"dark"`, `false` | resto da tela antiga: a API ainda aceita e grava, e nada no motor lê |
 | `reviewSingleOutput` | `false` | arquivo |
 | `reviewRoundsMode` | `"observe"` (`"enforce"` liga os gates de rodada) | arquivo |
 | `reviewContextMode`, `reviewContextTokens`, `reviewContextLimits` | `"off"`, `3000`, `{}` | arquivo ([fontes](#fontes-versionadas-e-contexto-controlado)) |
@@ -198,9 +202,11 @@ curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-f
   -d '{"intervalSeconds":600,"aguardarCiParaRevisar":true}'
 ```
 
-`soundEnabled`, `theme` e `autostart` eram da tela antiga (som, tema e abrir com o sistema):
-continuam na tabela e no `config.json`, mas nenhum módulo do motor as lê. São resto, e a
-remoção fica para o fechamento da fase 4.
+`soundEnabled`, `theme` e `autostart` eram da tela antiga (som, tema e abrir com o sistema) e
+saíram da tabela em 16/11/2026, porque nada no motor as lia. Num `config.json` antigo elas são
+descartadas na carga, sem erro e sem regravar o arquivo, e somem na próxima gravação;
+`POST /api/settings` as devolve em `ignoradas` (`test/preferencias-sem-leitor.test.js`). O tema
+do front fica no navegador.
 
 Lidas só do arquivo e fora da tabela (`CHAVES_SO_DE_ARQUIVO`): `instanciaIsoladaPosta` e
 `aguardarMergeavelParaRevisar` (ligada salvo `false` explícito: PR em conflito com a base
@@ -280,8 +286,8 @@ e tenta de novo (`aposLimite` em `lib/engine/limite-plano.js`, registro em
 `state/limite-plano.json`). Uma sessão que dá certo libera o perfil antes. O clique manual
 atravessa a espera.
 
-`problemasDePerfil` aponta o `claudeProfileId` que não existe ou não resolve, e a tela e o
-Diagnóstico mostram.
+`problemasDePerfil` aponta o `claudeProfileId` que não existe ou não resolve; a seção Saúde
+da tela Sistema e o diagnóstico (`GET /api/diagnostics`) mostram.
 
 ### Onde a pasta do perfil de assinatura mora
 
@@ -462,7 +468,7 @@ Um `config.json` antigo pode trazer teto num perfil: `budgetDaily`, `budgetTotal
 `budgetSince`, `budgetByWeekday` e `budgetDates`. O motor sobe normalmente,
 `normalizeClaudeProfiles` (`lib/parse.js`) descarta os cinco campos na carga e o perfil
 continua valendo. A carga não reescreve o arquivo por causa deles: eles somem na próxima
-gravação da configuração (qualquer salvar pela tela). E o PR que estava estacionado por
+gravação da configuração (qualquer salvar de preferência ou de conta). E o PR que estava estacionado por
 orçamento num estado gravado antes volta a ser elegível no boot (`estacionamentoDoBoot`,
 `lib/engine/estado-do-boot.js`): o motor regrava o `auto-review-parked.json` sem ele e grava
 uma linha INFO no `farol.log` com quantos voltaram e quais, uma vez. Travado em
@@ -577,7 +583,6 @@ Erro cru do fetch chega como `indisponivel` (`comoJiraError` em `lib/jira/client
 - O namespace do cache (`lib/jira/cache.js`) leva o tamanho do id na frente, porque o
   saneamento achata ponto em underscore e dois pares id e host diferentes cairiam na mesma
   pasta. O namespace é id e host juntos.
-- A tela recusa site inválido; o servidor não o descarta em silêncio.
 - A config de "sem site" usa um nome que id nenhum produz (`sem.site.json`).
 - `fields` como lista não é card: o Jira responde 200 com envelope de erro.
 - O protocolo do workspace instrui o caso da seção de card ausente e não promete escopo em
@@ -585,7 +590,8 @@ Erro cru do fetch chega como `indisponivel` (`comoJiraError` em `lib/jira/client
 
 ## Padrões do time na revisão
 
-O campo `padroesRevisao` da conta, editado em Sistema > Contas, entra na revisão como critério
+O campo `padroesRevisao` da conta (editado por `POST /api/accounts/edit` ou no arquivo; o
+front não tem campo para ele) entra na revisão como critério
 de leitura: padrões de projeto preferidos, camadas, nomes, o que evitar. Quando o código se
 afasta de um deles, o apontamento sai como sugestão citando o padrão; desvio de padrão só
 bloqueia quando também é defeito pelo protocolo (`lib/engine/padroes-do-time.js`, teste em
@@ -608,23 +614,15 @@ comparações; `enforce` liga os gates de rodada (`roundGap` em
 
 ## Fontes versionadas e contexto controlado
 
-A revisão pode preparar fontes autorizadas pelo GitHub sem checkout pessoal ou declaração de
-perfil técnico. O manifesto separa H (head analisado), B (ponta da base)
-e M (merge-base). Paginação, quantidade e estabilidade do PR são conferidas; ausência de
-patch não retira o arquivo do escopo. Consulta adicional de árvore, texto ou arquivo usa
-o mesmo manifesto e revalida a conta e o acesso ao repositório. Nunca substitui um SHA
-indisponível pela branch atual. O caminho anterior continua disponível quando a aquisição
-falha, com cobertura e limitações próprias, sem inventar leitura.
+Antes de abrir a sessão, o motor prepara as fontes do PR (`prepareSources`,
+`lib/review-source/index.js`) num manifesto com três commits: H (o head analisado), B (a ponta
+da base) e M (o merge-base). O cache fica em `~/.farol/source-cache/`, um diretório por host,
+conta e repositório; limites, travas e manutenção estão em
+[`SOURCE-STORAGE.md`](SOURCE-STORAGE.md).
 
-O cache fica em `~/.farol/source-cache/`, separado do material temporário. O isolamento
-inclui host, conta e identidade do repositório. Objetos Git são compartilhados somente
-nesse escopo, com leases e referências por consumidor; materializações continuam separadas.
-Binários e segredos reconhecidos não entram no cache textual. Nenhum filtro garante
-reconhecer todos os segredos possíveis em código; fontes continuam dados não confiáveis.
-
-As opções avançadas abaixo pertencem ao `config.json`, com os valores padrão do código
-(`DEFAULT_LIMITS` em `lib/review-context/map.js`, `DEFAULTS` em `lib/review-source/contract.js`).
-Mescle os campos, sem substituir o arquivo, e reinicie o motor.
+As chaves abaixo são só de arquivo, com os padrões do código (`DEFAULT_LIMITS` em
+`lib/review-context/map.js`, `DEFAULTS` em `lib/review-source/contract.js`). Mescle os campos,
+sem substituir o arquivo, e reinicie o motor.
 
 ```json
 {
@@ -635,48 +633,15 @@ Mescle os campos, sem substituir o arquivo, e reinicie o motor.
 }
 ```
 
-`off` preserva a seleção anterior e não cria o mapa. `observe` levanta o mapa e registra
-métricas sem injetar a seleção no prompt. `assist` permite a seleção adicional, com orçamento
-estimado em caracteres/4, sem afirmar tokens faturados ou qualidade da decisão do modelo.
-Regras e blockers obrigatórios ficam fora desse orçamento e não são retirados para caber.
-Se o mapa falhar ou ficar incompleto em assist, não se herda validade de análise apenas
-porque o blob não mudou. Conteúdo disponível, leitura observada e análise válida são fatos
-distintos. Nenhum desses modos muda os gates ou a política de publicação da conta.
+- `reviewContextMode`: `off` não cria o mapa sintático; `observe` levanta o mapa e a seleção
+  só para medir, sem injetar nada no prompt; `assist` injeta a seleção, com orçamento estimado
+  em caracteres/4 (`reviewContextTokens`, de 256 a 12.000). Nenhum dos modos muda os gates nem
+  a política da conta. O que o mapa prova e não prova está em
+  [`CONTEXTO-FRONTEND.md`](CONTEXTO-FRONTEND.md).
+- `reviewContextLimits`: cada campo aceita número positivo, até quatro vezes o padrão.
+- `sourceCacheLimits`: cada campo aceita inteiro positivo; `concurrency` vai no máximo a 2.
 
-O parser `@babel/parser` 7.28.5 roda em worker limitado, sem ligar ou executar
-o código do projeto. O artefato oficial autocontido, a licença e os hashes ficam em
-`assets/third-party/babel-parser/`, sem depender de `node_modules`.
-JS, TS, JSX, TSX, imports de tipos e reexports têm relações sintáticas. Isso não constitui
-resolução semântica de props, bindings ou chamadas. CommonJS, aliases e dependências
-dinâmicas conservam confiança e limitações explícitas. Sintaxe não suportada amplia a
-investigação textual, sem excluir silenciosamente arquivos. JSONC/extends e resoluções
-não suportadas nunca provam ausência de uso. O cache de 4 MiB contabiliza apenas a
-serialização das análises retidas, não a memória total do worker ou do processo.
-Relações são reconstruídas para H/M e configuração.
-O orçamento de tempo do levantamento é verificado entre leituras; cada consulta de rede
-também tem seu timeout próprio. Não representa prazo máximo rígido de ponta a ponta.
-
-O limite de 2 GiB por escopo é coordenado com orçamento global lógico de 4 GiB e piso
-global livre de 1 GiB. Reservas duráveis coordenam admissões simultâneas; aquisição
-desconhecida é monitorada e interrompida quando o orçamento deixa de ser atendido.
-Objetos, Git, temporários, metadados e materiais ativos ou pendentes entram na medição.
-Legados são observados separadamente, sem remoção nem inclusão retroativa no teto de
-4 GiB. O limite é lógico e amostrado; não promete overshoot físico zero. Material ativo
-nunca é eliminado para cumprir quota. Estado incerto adia o trabalho. Veja
-`docs/SOURCE-STORAGE.md` para contabilização, precisão e exclusões. Os dados de capacidade não
-fazem uma varredura global por atualização da interface.
-
-Materiais técnicos novos têm manifesto de propriedade e consumidores. A coleta é
-assíncrona, limitada e independente da próxima review. Falha de remoção tem retry;
-abort sem confirmação de término preserva o material. Diretórios legados sem manifesto
-permanecem pendentes de diagnóstico. Evidências e resultados duráveis não são cache.
-Após reinício, coleta de preparação interrompida exige decisão final correspondente
-ao PR/head/conta e prova de término dos processos, sem referência ativa, fila ou
-retomada. Sem desfecho comprovado, o material permanece preservado para diagnóstico.
-
-Para desfazer a seleção, volte `reviewContextMode` para `off`. Voltar o motor a uma versão
-anterior deve esperar os consumidores terminarem e não apagar estado, checkpoints, resultados
-ou diretórios novos desconhecidos.
+Para desfazer a seleção, volte `reviewContextMode` para `off`.
 
 ## Para hospedar
 
