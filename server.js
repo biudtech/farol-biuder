@@ -69,7 +69,7 @@ import tentativasMod from './lib/engine/usage-tentativas.js';
 import quotaMod from './lib/engine/quota.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
-import { sanearSoDeArquivo, subirOuRecusar } from './lib/fronteira-hospedada.js';
+import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
 import { parseJiraSites, maskJiraSites } from './lib/jira/sites.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
@@ -128,7 +128,8 @@ class Engine extends EventEmitter {
     super();
     const warn = (m) => this.log('WARN', m); // corrupção de estado precisa aparecer no farol.log
     // config.json antigo (várias contas, modo simples, chaves do que saiu) vira o formato de hoje sem lançar
-    this.configCrua = readJson(CONFIG_FILE, {}, warn); // o arquivo como veio, para o rastro da carga (contas-config.js)
+    // o arquivo como veio, para o rastro da carga (contas-config.js). Presente e ilegível, LANÇA: o motor não sobe com os padrões no lugar dele
+    this.configCrua = lerConfigOuRecusar((m) => this.log('ERROR', m));
     this.config = { ...DEFAULTS, ...normalizarConfig(this.configCrua) };
     // bind, hostPublico e origensPermitidas são só de arquivo e chegam ao listen, à allowlist e ao
     // porteiro: saneia aqui, uma vez, para todo leitor. Valor inválido nas duas da fronteira LANÇA,
