@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # O projeto tem uma dependência só (Electron, invariante 1). Cadência mensal
-  # porque bump de Electron exige abrir o app nos três sistemas antes de mergear.
+  # O motor não tem dependência de runtime (invariante 1); a única de desenvolvimento é o
+  # @babel/parser, fixado. Cadência mensal.
   - package-ecosystem: npm
     directory: /
     schedule:
