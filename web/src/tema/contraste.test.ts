@@ -51,7 +51,7 @@ const TEMAS: Array<[string, Map<string, string>]> = [
   ['claro', new Map([...variaveis(':root'), ...variaveis(':root[data-theme="light"]')])],
 ];
 
-describe.each(TEMAS)('contraste AA no tema %s', (_nome, v) => {
+describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
   const de = (nome: string) => cor(v.get(nome) as string);
   const fundos = ['--bg', '--surface', '--surface-2'];
 
@@ -66,6 +66,19 @@ describe.each(TEMAS)('contraste AA no tema %s', (_nome, v) => {
     expect(contraste(de('--accent-ink'), de('--accent'))).toBeGreaterThanOrEqual(4.5);
   });
 
+  // O botão primário é um bloco de --accent: o que o separa do fundo vizinho (o cartão do
+  // pareamento, a página) é a cor dele, e componente de interface pede 3:1 (WCAG 1.4.11).
+  it('botão primário contra os três fundos: 3:1, também com o realce do ponteiro', () => {
+    // .primario:hover aplica filter: brightness(1.08), que multiplica cada canal
+    const realcado = de('--accent').map((v, i) => (i < 3 ? Math.min(255, Math.round(v * 1.08)) : v)) as Cor;
+    for (const fundo of fundos) {
+      expect(contraste(de('--accent'), de(fundo)), `--accent sobre ${fundo}`).toBeGreaterThanOrEqual(3);
+    }
+    // com o realce, contra o cartão em que o botão mora
+    expect(contraste(realcado, de('--surface')), '--accent realçado sobre --surface').toBeGreaterThanOrEqual(3);
+    expect(contraste(de('--accent-ink'), realcado), '--accent-ink sobre --accent realçado').toBeGreaterThanOrEqual(4.5);
+  });
+
   it('texto de estado sobre o fundo suave dele, em cima de cada fundo: 4,5:1', () => {
     for (const estado of ['ok', 'danger', 'info']) {
       for (const fundo of fundos) {
@@ -77,6 +90,19 @@ describe.each(TEMAS)('contraste AA no tema %s', (_nome, v) => {
 
   it('link sobre os fundos: 4,5:1', () => {
     for (const fundo of fundos) expect(contraste(de('--info-texto'), de(fundo)), fundo).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // O contorno é o que desenha o botão sem preenchimento (Sair, troca de tema). No tema
+  // escuro ele fica com o tom da tela antiga, abaixo de 3:1, por decisão de identidade: a
+  // exigência aqui é só do claro.
+  it.runIf(nome === 'claro')('contorno de botão sem preenchimento: 3:1', () => {
+    for (const fundo of fundos) {
+      expect(contraste(de('--borda-botao'), de(fundo)), `--borda-botao sobre ${fundo}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('o contorno de botão existe nos dois temas', () => {
+    expect(v.has('--borda-botao')).toBe(true);
   });
 
   it('anel de foco e contorno de campo: 3:1', () => {

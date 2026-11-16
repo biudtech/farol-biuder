@@ -1,6 +1,8 @@
 /* Identidade do Farol: tema escuro por padrão, claro como alternativa. As cores vêm da tela
-   antiga (ui/app.css, na raiz). As variáveis terminadas em -texto, --foco e --borda-campo são
-   daqui: existem para o contraste AA nos dois temas, e src/tema/contraste.test.ts confere. */
+   antiga (ui/app.css, na raiz). As variáveis terminadas em -texto, --foco, --borda-campo e
+   --borda-botao são daqui: existem para o contraste AA nos dois temas, e
+   src/tema/contraste.test.ts confere. No claro o --accent é mais escuro que o da tela antiga
+   (#e08700 dava 2,75:1 sobre o cartão branco): o botão primário pede 3:1 contra o fundo. */
 :root {
   --bg: #0b0e14;
   --surface: #121722;
@@ -28,6 +30,8 @@
   --foco: #ffb454;
   /* contorno de campo de formulário: 3:1 contra a superfície */
   --borda-campo: #6b7a94;
+  /* contorno de botão sem preenchimento (Sair, troca de tema); no escuro é o tom de --border */
+  --borda-botao: #232c3d;
   color-scheme: dark;
 }
 
@@ -38,8 +42,8 @@
   --border: #dfe5ee;
   --text: #1c2536;
   --muted: #56637a;
-  --accent: #e08700;
-  --accent-soft: rgba(224, 135, 0, .12);
+  --accent: #c47500;
+  --accent-soft: rgba(196, 117, 0, .12);
   --accent-ink: #201302;
   --ok: #1f9d63;
   --ok-soft: rgba(31, 157, 99, .12);
@@ -54,6 +58,7 @@
   --info-texto: #2459b3;
   --foco: #a35f00;
   --borda-campo: #77849a;
+  --borda-botao: #77849a;
   color-scheme: light;
 }
 

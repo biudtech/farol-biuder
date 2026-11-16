@@ -61,7 +61,7 @@
   justify-content: center;
   min-height: 34px;
   padding: 5px 11px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--borda-botao);
   border-radius: 8px;
   background: transparent;
   color: var(--text);
