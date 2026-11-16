@@ -1048,7 +1048,7 @@ class Engine extends EventEmitter {
   async staleForReview(pr) { return staleMod.staleForReview(this, pr); }
 
   // --- pushback automático: detecta e classifica a contestação do autor ------
-  // Best-effort (como o staleStates): qualquer incerteza não registra nada. O
+  // Best-effort: qualquer incerteza não registra nada. O
   // gatilho barato via gh evita acender IA à toa; a classificação é 1 sessão
   // Claude por candidato novo, LEITURA pura (nunca posta), limitada por ciclo.
   async scanPushbacks() { return pushbackMod.scanPushbacks(this); }
@@ -1229,7 +1229,7 @@ class Engine extends EventEmitter {
       // lista de UM: a conta revisora como a tela a vê (lib/engine/contas-config.js)
       accounts: contasConfig.contasParaTela(this),
       pushbacks: this.pushbacks,
-      config: { ...this.config },
+      config: perfilMod.configParaFora(this.config), // sem a chave de API: só `temChave` (lib/engine/chave-do-perfil.js)
       // lista mascarada dos sites do Jira: mesmos campos do config, mais só a
       // EXISTÊNCIA da credencial (hasCredential), nunca o valor (ver lib/jira/sites.js).
       jiraSites: maskJiraSites(this.config.jiraSites || [], credMod.hasCredential),

@@ -17,15 +17,43 @@ import { renderLoginWeb, tratouLoginWeb } from './login-claude.js';
 // o login entra pela tela, telas/login-claude.js) ou {id,label,kind:'apikey',apiKey,baseUrl},
 // com o selo do estado de cada um (badge, via doctor).
 
+// A chave digitada vai ao motor e não fica na memória da tela: o perfil guarda só `temChave`,
+// que é como o motor o devolve (lib/engine/chave-do-perfil.js).
+function semChaveNaTela(p) {
+  if (!p || !p.apiKey) return p;
+  const resto = { ...p, temChave: true };
+  delete resto.apiKey;
+  return resto;
+}
+
 function saveClaudeProfiles(profiles, defaultId) {
-  estado().config.claudeProfiles = profiles;
+  estado().config.claudeProfiles = profiles.map(semChaveNaTela);
   const patch = { claudeProfiles: profiles };
   // defaultId opcional: seta o perfil como o padrão global no MESMO patch.
   if (defaultId !== undefined) { estado().config.claudeProfileId = defaultId; patch.claudeProfileId = defaultId; }
   api('/api/settings', patch).then(r => {
-    if (r?.ok) toast('ok', '✓ Configurações salvas', 2000);
-    else toast('error', 'Erro ao salvar configurações');
+    recusas.clear();
+    if (r?.ok) return toast('ok', '✓ Configurações salvas', 2000);
+    if (r?.code === 'chave_exigida') return mostrarRecusa(r);
+    toast('error', 'Erro ao salvar configurações');
   });
+}
+
+/* Recusa do motor por perfil (mudar o endereço sem redigitar a chave). Fica na tela, por id, e
+   some no próximo salvar. Nada foi gravado, então a tela volta ao que o motor guarda. */
+const recusas = new Map();
+
+// Não redesenha nem tira o foco: o endereço digitado continua no campo, e ao digitar a chave os
+// dois vão no mesmo salvar. Tirar o foco dispararia o `change` de um campo de chave pela metade.
+function mostrarRecusa(r) {
+  const motivo = r.erro || 'O motor recusou esta mudança.';
+  if (r.config && Array.isArray(r.config.claudeProfiles)) estado().config.claudeProfiles = r.config.claudeProfiles;
+  for (const id of r.perfis || []) {
+    recusas.set(id, motivo);
+    const lugar = document.querySelector(`.cp-teste-erro[data-recusa="${CSS.escape(id)}"]`);
+    if (lugar) lugar.textContent = motivo;
+  }
+  toast('error', motivo, 5000);
 }
 
 /* Resultado do último teste de cada perfil, por id. Fica na tela, nunca na configuração:
@@ -45,7 +73,7 @@ export function renderClaudeProfiles() {
   // guarda de foco: não reconstrói enquanto você digita num campo deste bloco
   if (document.activeElement && box.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   box.innerHTML = perfilProblemasHtml((estado().claudePerfis || {}).problemas)
-    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor, claudePerfis: estado().claudePerfis });
+    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor, claudePerfis: estado().claudePerfis, recusas: Object.fromEntries(recusas) });
   renderTestes();
   renderLoginWeb();
 }
@@ -161,7 +189,9 @@ $('#claudeProfilesManager').addEventListener('click', (e) => {
       patch.claudeProfileId = '';
     }
     renderClaudeProfiles(); renderAccountsManager();
-    api('/api/settings', patch);
+    // a remoção também pode ser recusada (outro perfil do mesmo salvar com endereço pendente):
+    // a tela volta ao que o motor guarda em vez de mostrar removido o que continua lá
+    api('/api/settings', patch).then((r) => { if (r?.code === 'chave_exigida') { mostrarRecusa(r); renderClaudeProfiles(); } });
     return;
   }
   // A2: testar é explícito e não altera nada (confere a forma do perfil, sem chamada paga)
@@ -194,6 +224,9 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
   const camposEditaveis = ['cp-label', 'cp-apikey', 'cp-baseurl', 'cp-budget-daily', 'cp-budget-total', 'cp-budget-since'];
   if (camposEditaveis.some(cls => t.classList.contains(cls))) {
     const id = t.dataset.id;
+    // campo de chave vazio não salva nada: a guardada continua, e para apagar remove-se o perfil
+    const chave = t.classList.contains('cp-apikey') ? t.value.trim() : '';
+    if (t.classList.contains('cp-apikey') && !chave) return;
     if ((t.classList.contains('cp-apikey') || t.classList.contains('cp-baseurl'))
         && /["\r\n]/.test(t.value.replace(/^"(.*)"$/s, '$1').trim())) {
       toast('error', 'Esse valor tem aspas ou quebra de linha no meio, não pode ser usado.', 4500);
@@ -203,8 +236,16 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
       if (p.id !== id) return p;
       const next = { ...p };
       if (t.classList.contains('cp-label')) next.label = t.value.trim() || p.label;
-      if (t.classList.contains('cp-apikey')) next.apiKey = t.value.trim();
-      if (t.classList.contains('cp-baseurl')) next.baseUrl = t.value.trim();
+      // chave e endereço viajam no mesmo salvar quando os dois estão digitados: o motor só aceita
+      // endereço novo com a chave junto
+      const digitado = (seletor) => ((document.querySelector(seletor) || {}).value || '').trim();
+      if (chave) next.apiKey = chave;
+      if (chave) next.baseUrl = digitado(`.cp-baseurl[data-id="${CSS.escape(id)}"]`);
+      if (t.classList.contains('cp-baseurl')) {
+        next.baseUrl = t.value.trim();
+        const chaveDigitada = digitado(`.cp-apikey[data-id="${CSS.escape(id)}"]`);
+        if (chaveDigitada) next.apiKey = chaveDigitada;
+      }
       if (t.classList.contains('cp-budget-daily')) {
         const v = t.value.trim();
         if (v === '') delete next.budgetDaily; else next.budgetDaily = Number(v);

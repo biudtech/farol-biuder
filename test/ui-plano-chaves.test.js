@@ -34,6 +34,43 @@ test('cada perfil ganha o botão de testar e o lugar do resultado', () => {
   assert.match(resultado, /preenchida/);
 });
 
+// A chave não sai do motor (15/11/2026): a tela recebe o perfil só com `temChave`, o campo
+// nasce vazio e diz que há uma chave guardada. Mesmo que um perfil chegue com a chave (estado
+// antigo na memória da aba), ela não é escrita no HTML.
+test('o campo da chave nasce vazio: diz que há chave guardada e nunca escreve o valor', () => {
+  const guardada = claudeProfilesHtml({ config: { claudeProfiles: [{ id: 'k1', label: 'Chave', kind: 'apikey', temChave: true, baseUrl: '' }], claudeProfileId: 'k1' }, usage: {}, doctor: {} });
+  const campo = guardada.match(/<input class="cp-apikey"[^>]*>/)[0];
+  assert.doesNotMatch(campo, / value="[^"]/, 'o campo não nasce preenchido');
+  assert.match(guardada, /Há uma chave guardada/);
+  assert.match(guardada, /digitar outra aqui substitui/);
+  assert.doesNotMatch(guardada, /undefined/);
+  const antiga = claudeProfilesHtml({ config: CONFIG, usage: {}, doctor: {} });
+  assert.equal(antiga.includes('sk-ant-nao-e-real'), false, 'chave que veio no estado não vai para o HTML');
+  const semChave = claudeProfilesHtml({ config: { claudeProfiles: [{ id: 'k2', label: 'Vazio', kind: 'apikey' }], claudeProfileId: '' }, usage: {}, doctor: {} });
+  assert.doesNotMatch(semChave, /Há uma chave guardada/);
+  assert.match(semChave, /Sem chave guardada/);
+});
+
+// Mudar o endereço sem redigitar a chave é recusado pelo motor: o motivo aparece junto do
+// perfil, e a tela manda a chave e o endereço no mesmo salvar quando os dois estão digitados.
+test('a recusa do endereço aparece junto do perfil, e chave e endereço vão no mesmo salvar', () => {
+  const config = { claudeProfiles: [{ id: 'k1', label: 'Chave', kind: 'apikey', temChave: true, baseUrl: '' }, { id: 'k2', label: 'Outra', kind: 'apikey', temChave: true }], claudeProfileId: 'k1' };
+  const motivo = 'Para mudar o endereço <deste> perfil, digite a chave de novo.';
+  const html = claudeProfilesHtml({ config, usage: {}, doctor: {}, recusas: { k1: motivo } });
+  assert.match(html, /<div class="cp-teste-erro" data-recusa="k1" role="alert">Para mudar o endereço &lt;deste&gt; perfil, digite a chave de novo\.<\/div>/);
+  assert.match(html, /<div class="cp-teste-erro" data-recusa="k2" role="alert"><\/div>/, 'perfil sem recusa tem o lugar vazio');
+  assert.doesNotMatch(claudeProfilesHtml({ config, usage: {}, doctor: {} }), /undefined/);
+  assert.match(TELA, /r\?\.code === 'chave_exigida'/);
+  assert.match(TELA, /estado\(\)\.config\.claudeProfiles = r\.config\.claudeProfiles/, 'a tela volta ao que o motor guarda');
+  assert.match(TELA, /recusas: Object\.fromEntries\(recusas\)/);
+  assert.match(TELA, /\.cp-baseurl\[data-id=/, 'o salvar da chave lê o endereço digitado, e o do endereço lê a chave');
+});
+
+test('a tela só manda a chave quando ela foi digitada', () => {
+  assert.doesNotMatch(TELA, /next\.apiKey = t\.value\.trim\(\);/, 'campo vazio não vira chave vazia no perfil');
+  assert.match(TELA, /if \(chave\) next\.apiKey = chave;/);
+});
+
 // Em 15/11/2026 a assinatura do Claude voltou (decisão do dono): a tela oferece os dois tipos
 // de perfil, e o de assinatura entra pelo login na própria tela. Continuam fora a pasta
 // digitada à mão, o login pelo terminal, a adoção do login da máquina e os outros provedores.

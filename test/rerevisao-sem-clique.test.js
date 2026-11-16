@@ -38,7 +38,6 @@ function engineBase() {
   const e = Object.create(Engine.prototype);
   e.panorama = [{ ...PR, reviewedByMe: true }];
   e.staleInfo = {};
-  e.staleStates = {};
   e.headQuietoDesde = {};
   e.reReviewLaunched = {};
   e.decisions = { pending: [], resolved: [] };

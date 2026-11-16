@@ -55,9 +55,8 @@ const ESTADO = {
   // desenhado no smoke test, e ele é justamente um render de DADO — o lugar onde
   // objeto interpolado passa despercebido.
   activeSessions: [{ id: 'sess-1', mode: 'auto', label: 'acme/repo#42', startedAt: 1755600000000, cancellable: true, pr: { url: 'https://github.com/acme/repo/pull/42', user: 'alice' } }],
-  headlessWaiting: ['acme/repo#43'], reviewActions: {}, staleStates: {},
-  usage: {}, usageSessions: [], pushbacks: {}, team: [],
-  update: { state: 'idle' }, doctor: null,
+  headlessWaiting: ['acme/repo#43'], reviewActions: {},
+  usage: {}, pushbacks: {}, doctor: null,
   // o painel Sistema le daqui; sem isto o renderDoctor quebra, e foi o proprio teste
   // que apontou o fixture incompleto
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
