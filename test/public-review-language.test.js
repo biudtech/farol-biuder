@@ -791,7 +791,7 @@ test('decisionForUi preserva a conta já projetada no topo (decisões antigas se
 // motivo que o app escreve (qual conta mandou esperar, quando e de onde veio a configuração)
 // nunca chegava à tela. O filtro é para o texto da SESSÃO; o texto do APP passa inteiro.
 test('motivo do app (gate) chega inteiro ao card; o mesmo texto vindo da sessão continua filtrado', () => {
-  const texto = 'aprovável com ressalvas, e a política da conta Trabalho é aguardar você (definido em 30/09 21:10, pela janela do Farol) (mude pra "aprova (as ressalvas ficam no app)" em Sistema > Contas se quiser que aprove sozinho)';
+  const texto = 'aprovável com ressalvas, e a política da conta Trabalho é aguardar você (definido em 30/09 21:10, pelo navegador) (mude "Quando a revisão sai com ressalvas" para "Publicar a aprovação sozinho" em Sistema > Conta revisora e política se quiser que aprove sozinho)';
   const doApp = publicReview.decisionForUi({ id: 'd1', key: 'acme/app#1', reasons: [{ text: texto, kind: 'gate' }] });
   assert.equal(doApp.reasons[0].text, texto);
   assert.equal(doApp.reasons[0].kind, 'gate');

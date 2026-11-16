@@ -514,7 +514,7 @@ class Engine extends EventEmitter {
     if (login) {
       contasConfig.contaDetectada(this, login); // herda a política gravada antes do login (contas-config.js)
       this.saveConfig();
-      this.emit('toast', { kind: 'info', text: `Conta do GitHub detectada: @${login}. Ajuste em Sistema se usar outra.` });
+      this.emit('toast', { kind: 'info', text: `Conta do GitHub detectada: @${login}. Para revisar com outra, grave a conta no config.json e reinicie o motor (docs/CONFIGURATION.md).` });
     }
   }
 
