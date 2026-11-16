@@ -46,8 +46,14 @@ test('parâmetros válidos são lidos, e o que a rota não conhece é ignorado',
   assert.deepEqual(lido, { ok: true, page: 3, pageSize: 100, q: 'Login', veredito: 'request_changes', repo: 'Acme/App' });
 });
 
-test('os vereditos aceitos são os três que o motor grava', () => {
-  assert.deepEqual([...VEREDITOS], ['approve', 'request_changes', 'comment']);
+test('repo com espaço nas pontas é aparado, e só espaço conta como ausente', () => {
+  assert.equal(lerParametros(consulta('repo=%20acme/app%20%20')).repo, 'acme/app');
+  assert.equal(lerParametros(consulta('repo=%20%20')).repo, '');
+  assert.equal(lerParametros(consulta(`repo=%20${'a'.repeat(200)}%20`)).ok, true, 'o teto conta depois de aparar');
+});
+
+test('os vereditos aceitos são os quatro desfechos que o motor grava em `action`', () => {
+  assert.deepEqual([...VEREDITOS], ['approve', 'request_changes', 'comment', 'skip']);
   for (const v of VEREDITOS) assert.equal(lerParametros(consulta(`veredito=${v}`)).veredito, v);
 });
 
@@ -148,20 +154,33 @@ test('página muito além do fim responde 200 vazio, com o total verdadeiro', ()
 
 /* ---------- filtros ---------- */
 
+// `verdict` é o parecer da sessão e `action` é o que foi publicado: os dois divergem de
+// propósito em d3 (parecer de aprovar que não foi postado) e em d1 (parecer de aprovar que
+// saiu como pedido de mudanças). O item substituído (d2) mantém o `verdict` e ganha
+// `action: 'skip'`, como recordDecision grava.
 const MISTO = [
-  item(6, { verdict: 'comment', action: 'comment', card: 'PROJ-3100', pr: { repo: 'Acme/Api', title: 'Migração do módulo de cobrança', author: 'joao-silva' } }),
-  item(5, { verdict: 'request_changes', action: 'request_changes', card: 'PROJ-2546', pr: { repo: 'acme/app', title: 'Autenticação por código', author: 'Márcia' } }),
+  item(6, { verdict: 'request_changes', status: 'commented_own_pr', action: 'comment', card: 'PROJ-3100', pr: { repo: 'Acme/Api', title: 'Migração do módulo de cobrança', author: 'joao-silva' } }),
+  item(5, { verdict: 'request_changes', status: 'auto_rejected', action: 'request_changes', card: 'PROJ-2546', pr: { repo: 'acme/app', title: 'Autenticação por código', author: 'Márcia' } }),
   item(4, { verdict: 'approve', card: 'LOJA-72', pr: { repo: 'outra/app', title: 'Filtro de edições', author: 'ana' } }),
-  item(3, { verdict: 'approve', card: null, pr: { repo: 'acme/app', title: 'Correção de typo', author: 'ana' } }),
-  item(2, { verdict: undefined, status: 'superseded', action: 'skip', pr: { repo: 'acme/api', title: 'Sem veredito', author: 'bia' } }),
-  item(1, { verdict: 'request_changes', card: { key: 'PROJ-9' }, pr: { repo: 'acme/app', number: 412, title: 'Login quebrado', author: 'bia' } }),
+  item(3, { verdict: 'approve', status: 'approval_not_needed', action: 'skip', card: null, pr: { repo: 'acme/app', title: 'Correção de typo', author: 'ana' } }),
+  item(2, { verdict: 'approve', status: 'superseded', action: 'skip', pr: { repo: 'acme/api', title: 'Rodada substituída', author: 'bia' } }),
+  item(1, { verdict: 'approve', status: 'auto_rejected', action: 'request_changes', card: { key: 'PROJ-9' }, pr: { repo: 'acme/app', number: 412, title: 'Login quebrado', author: 'bia' } }),
 ];
 
-test('filtro por veredito, um de cada vez', () => {
-  assert.deepEqual(ids(pedir(MISTO, 'veredito=approve')), ['d4', 'd3']);
+test('veredito filtra pelo que foi publicado (action), não pelo parecer da sessão (verdict)', () => {
+  assert.deepEqual(ids(pedir(MISTO, 'veredito=approve')), ['d4'], 'parecer de aprovar que não saiu como aprovação fica fora');
   assert.deepEqual(ids(pedir(MISTO, 'veredito=request_changes')), ['d5', 'd1']);
   assert.deepEqual(ids(pedir(MISTO, 'veredito=comment')), ['d6']);
+  assert.deepEqual(ids(pedir(MISTO, 'veredito=skip')), ['d3', 'd2'], 'o que não foi postado');
   assert.equal(pedir(MISTO, 'veredito=comment').body.total, 1);
+});
+
+test('todo item é alcançado por algum filtro: sem action, ou com action desconhecida, entra em skip', () => {
+  const legado = [item(4, { action: undefined }), item(3, { action: 'merge' }), item(2, { action: null }), item(1, { action: { toString: 1 } })];
+  assert.deepEqual(ids(pedir(legado, 'veredito=skip')), ['d4', 'd3', 'd2', 'd1']);
+  for (const v of ['approve', 'request_changes', 'comment']) assert.equal(pedir(legado, `veredito=${v}`).body.total, 0);
+  const soma = VEREDITOS.reduce((n, v) => n + pedir([...MISTO, ...legado], `veredito=${v}`).body.total, 0);
+  assert.equal(soma, MISTO.length + legado.length, 'os quatro filtros repartem o histórico sem sobra');
 });
 
 test('filtro por repo é igualdade exata, sem caixa', () => {
@@ -169,6 +188,8 @@ test('filtro por repo é igualdade exata, sem caixa', () => {
   assert.deepEqual(ids(pedir(MISTO, 'repo=ACME/API')), ['d6', 'd2']);
   assert.deepEqual(ids(pedir(MISTO, 'repo=acme/ap')), [], 'prefixo não casa');
   assert.deepEqual(ids(pedir(MISTO, 'repo=app')), [], 'só o nome não casa');
+  assert.deepEqual(ids(pedir(MISTO, 'repo=%20Acme/App%20')), ['d5', 'd3', 'd1'], 'espaço nas pontas é aparado');
+  assert.equal(pedir(MISTO, 'repo=%20%20').body.total, 6, 'só espaço não filtra');
 });
 
 test('q busca em repo, número, título, autor e chave do card', () => {
@@ -194,7 +215,31 @@ test('q ignora caixa e acento, dos dois lados', () => {
 test('q com várias palavras exige todas, em qualquer campo', () => {
   assert.deepEqual(ids(pedir(MISTO, 'q=bia+login')), ['d1']);
   assert.deepEqual(ids(pedir(MISTO, 'q=login+ana')), []);
-  assert.deepEqual(ids(pedir(MISTO, 'q=%20%20')), ['d6', 'd5', 'd4', 'd3', 'd2', 'd1'], 'só espaço não filtra');
+  assert.deepEqual(ids(pedir(MISTO, 'q=joao+silva')), ['d6']);
+});
+
+test('termo com hífen ou sublinhado casa inteiro, nunca como duas palavras soltas', () => {
+  const lista = [
+    item(9, { card: null, pr: { title: 'proj novo de cobrança' } }),
+    item(8, { card: 'PROJ-9', pr: { title: 'Outro assunto' } }),
+    item(7, { card: null, pr: { title: 'ajuste em user_id', author: 'joao-silva' } }),
+    item(6, { card: null, pr: { title: 'user novo com id 6', author: 'joao' } }),
+  ];
+  assert.deepEqual(ids(pedir(lista, 'q=proj-9')), ['d8'], 'proj no título e 9 no número não casam com proj-9');
+  assert.deepEqual(ids(pedir(lista, 'q=PROJ-9')), ['d8']);
+  assert.deepEqual(ids(pedir(lista, 'q=proj+9')), ['d9', 'd8'], 'duas palavras continuam valendo como duas');
+  assert.deepEqual(ids(pedir(lista, 'q=user_id')), ['d7']);
+  assert.deepEqual(ids(pedir(lista, 'q=joao-silva')), ['d7']);
+  assert.deepEqual(ids(pedir(lista, 'q=joao_silva')), [], 'sublinhado não é hífen');
+  assert.deepEqual(ids(pedir(lista, `q=${encodeURIComponent('proj\u20119')}`)), ['d8'], 'hífen tipográfico vale como hífen');
+});
+
+test('q que fica sem termo depois de normalizado responde como sem busca', () => {
+  for (const q of [' ', '   ', '-', '_', '- _', '--', '\u200b', ' \u200b-\u200b ', '#', '/']) {
+    const r = pedir(MISTO, `q=${encodeURIComponent(q)}`);
+    assert.equal(r.status, 200, JSON.stringify(q));
+    assert.deepEqual(ids(r), ['d6', 'd5', 'd4', 'd3', 'd2', 'd1'], JSON.stringify(q));
+  }
 });
 
 test('q não procura no relatório nem nos motivos', () => {
@@ -210,13 +255,45 @@ test('filtros combinados se somam, e o total é o de depois dos filtros', () => 
   assert.deepEqual([paginado.body.total, paginado.body.pages, ids(paginado)], [3, 2, ['d1']]);
 });
 
-test('repos lista os repositórios distintos de todo o histórico, em ordem, com ou sem filtro', () => {
-  const esperado = ['Acme/Api', 'acme/api', 'acme/app', 'outra/app'];
+test('repos lista os repositórios de todo o histórico, em ordem, com ou sem filtro', () => {
+  const esperado = ['Acme/Api', 'acme/app', 'outra/app'];
   assert.deepEqual(pedir(MISTO).body.repos, esperado);
   assert.deepEqual(pedir(MISTO, 'veredito=comment&q=cobranca').body.repos, esperado);
   assert.deepEqual(pedir(MISTO, 'page=50').body.repos, esperado);
   const sujo = [item(2, { pr: { repo: '' } }), { id: 'sem-pr', key: 'x/y#1' }, null, item(1)];
   assert.deepEqual(pedir(sujo).body.repos, ['acme/app']);
+});
+
+test('repos tem uma entrada por repositório, com a grafia do item mais recente', () => {
+  const lista = [
+    item(5, { pr: { repo: 'BiudTech/Core' } }), item(4, { pr: { repo: 'biudtech/core' } }), item(3, { pr: { repo: 'BIUDTECH/CORE' } }),
+    item(2, { pr: { repo: 'acme/zeta' } }), item(1, { pr: { repo: 'Acme/Zeta' } }), item(0, { pr: { repo: ' acme/zeta ' } }),
+  ];
+  assert.deepEqual(pedir(lista).body.repos, ['acme/zeta', 'BiudTech/Core']);
+  assert.equal(pedir(lista, 'repo=biudtech/core').body.total, 3, 'o filtro continua pegando todas as grafias');
+});
+
+test('campo torto conta como vazio na busca e nunca vira 500', () => {
+  const torto = { toString: 1 };
+  const semProto = Object.create(null);
+  const lista = [
+    item(7, { card: torto, pr: { repo: torto, number: torto, title: torto, author: torto } }),
+    item(6, { card: { key: torto }, pr: { title: semProto, author: ['ana'], number: {} } }),
+    item(5, { card: { key: 7 }, pr: { title: null, author: undefined, number: NaN, repo: 12 } }),
+    item(4, { card: 99, pr: { title: true, author: Symbol('x'), number: '41' } }),
+    item(3, { pr: { title: 'Título são', author: 'ana' } }),
+  ];
+  for (const texto of ['q=ana', 'q=object', 'q=titulo&veredito=approve', 'q=x&repo=acme/app', 'repo=12', '']) {
+    assert.equal(pedir(lista, texto).status, 200, texto);
+  }
+  assert.deepEqual(ids(pedir(lista, 'q=titulo')), ['d3']);
+  assert.deepEqual(ids(pedir(lista, 'q=object')), [], 'objeto não vira texto');
+  assert.deepEqual(ids(pedir(lista, 'q=true')), [], 'booleano não vira texto');
+  assert.deepEqual(ids(pedir(lista, 'q=ana')), ['d3'], 'lista não vira texto');
+  assert.deepEqual(ids(pedir(lista, 'q=41')), ['d4'], 'número em texto continua valendo');
+  assert.deepEqual(ids(pedir(lista, 'q=99')), ['d4'], 'card numérico vale como texto');
+  assert.deepEqual(ids(pedir(lista, 'q=%237')), [], 'card.key numérico não é o número do PR');
+  assert.deepEqual(pedir(lista).body.repos, ['acme/app'], 'repo que não é texto fica fora da lista');
 });
 
 test('item torto no histórico não derruba a consulta', () => {
@@ -236,29 +313,51 @@ test('pendentes não entram: a rota lê só as resolvidas', () => {
 /* ---------- projeção segura ---------- */
 
 test('cada item sai por decisionForUi, e nenhum campo bruto vai junto', () => {
+  // os campos com o nome que recordDecision grava (lib/engine/decision.js), mais os inventados
   const cru = item(1, {
     sessionId: 'SESSAO-INTERNA-1',
+    analysisStatus: 'ANALISE-INTERNA',
     reportMarkdown: 'RELATORIO-BRUTO com diagnóstico interno',
-    reportRaw: 'RELATORIO-RAW',
     payloads: { approve: { event: 'APPROVE', body: 'CORPO-DO-PAYLOAD', comments: [{ path: 'a.js', line: 1, body: 'COMENTARIO-DO-PAYLOAD' }] } },
     memory: { author: 'ana', notes: 'MEMORIA-DO-TIME' },
-    criteriaEvidence: { bruto: 'EVIDENCIA-BRUTA' },
+    verificationCheckpoint: { total: 3, confirmedCount: 2, conflicts: [{ claim: 'CONFLITO-BRUTO' }], entries: [{ text: 'ENTRADA-DO-CHECKPOINT' }] },
+    criteriaEvidence: { ok: true, bruto: 'EVIDENCIA-DE-CRITERIO' },
     inventarioDiff: { arquivos: ['INVENTARIO-BRUTO'] },
+    roundId: 'r-1',
+    roundReview: { schema: 1, ordinal: 2, mode: 'observe', parentIds: ['PAI-DA-RODADA'], integrity: ['INTEGRIDADE-BRUTA'], findings: [{ text: 'ACHADO-DA-RODADA' }] },
+    technicalReview: { verdict: 'pass', rules: [{ rule: 'R1', verdict: 'pass', saida: 'SAIDA-DA-FERRAMENTA' }], stdout: 'STDOUT-DA-FERRAMENTA', workdir: '/CAMINHO-INTERNO' },
+    approvalEvidence: [],
+    approvalEvidenceVersion: 1,
+    contextEvidence: { arquivos: ['CONTEXTO-BRUTO'] },
+    technicalRecheck: false,
+    tentativasDaProva: 4,
+    pedidoRetirado: { em: 1, motivo: 'PEDIDO-RETIRADO-BRUTO' },
+    retiradaPendente: { marca: 'RETIRADA-PENDENTE-BRUTA' },
     provas: { resumo: 'PROVAS-BRUTAS' },
-    postRetry: { attempts: 2, exhausted: false, lastError: 'STDERR-DO-GH', payload: { body: 'PAYLOAD-DO-REENVIO' } },
+    postRetry: { attempts: 2, exhausted: false, lastError: 'STDERR-DO-GH', atencaoAoPublicar: ['ATENCAO-GUARDADA'], payload: { body: 'PAYLOAD-DO-REENVIO' } },
+    reportRaw: 'RELATORIO-RAW',
     campoFuturo: 'CAMPO-QUE-AINDA-NAO-EXISTE',
   });
   const r = pedir([cru]);
   assert.deepEqual(r.body.items, [decisionForUi(cru)]);
   const texto = JSON.stringify(r.body);
-  for (const marca of ['SESSAO-INTERNA-1', 'RELATORIO-BRUTO', 'RELATORIO-RAW', 'CORPO-DO-PAYLOAD', 'COMENTARIO-DO-PAYLOAD',
-    'MEMORIA-DO-TIME', 'EVIDENCIA-BRUTA', 'INVENTARIO-BRUTO', 'PROVAS-BRUTAS', 'STDERR-DO-GH', 'PAYLOAD-DO-REENVIO', 'CAMPO-QUE-AINDA-NAO-EXISTE']) {
+  for (const marca of ['SESSAO-INTERNA-1', 'ANALISE-INTERNA', 'RELATORIO-BRUTO', 'CORPO-DO-PAYLOAD', 'COMENTARIO-DO-PAYLOAD', 'MEMORIA-DO-TIME',
+    'CONFLITO-BRUTO', 'ENTRADA-DO-CHECKPOINT', 'EVIDENCIA-DE-CRITERIO', 'INVENTARIO-BRUTO', 'PAI-DA-RODADA', 'INTEGRIDADE-BRUTA', 'ACHADO-DA-RODADA',
+    'SAIDA-DA-FERRAMENTA', 'STDOUT-DA-FERRAMENTA', 'CAMINHO-INTERNO', 'CONTEXTO-BRUTO', 'PEDIDO-RETIRADO-BRUTO', 'RETIRADA-PENDENTE-BRUTA',
+    'PROVAS-BRUTAS', 'STDERR-DO-GH', 'ATENCAO-GUARDADA', 'PAYLOAD-DO-REENVIO', 'RELATORIO-RAW', 'CAMPO-QUE-AINDA-NAO-EXISTE']) {
     assert.ok(!texto.includes(marca), `${marca} saiu na resposta`);
   }
   const saida = r.body.items[0];
-  for (const chave of ['payloads', 'memory', 'reportRaw', 'reviewMarkdown', 'sessionId', 'criteriaEvidence', 'inventarioDiff', 'provas', 'campoFuturo']) {
+  for (const chave of ['payloads', 'memory', 'reviewMarkdown', 'sessionId', 'analysisStatus', 'criteriaEvidence', 'inventarioDiff', 'roundId', 'roundReview',
+    'technicalReview', 'approvalEvidence', 'approvalEvidenceVersion', 'contextEvidence', 'technicalRecheck', 'tentativasDaProva', 'pedidoRetirado',
+    'retiradaPendente', 'provas', 'reportRaw', 'campoFuturo']) {
     assert.ok(!Object.hasOwn(saida, chave), `a chave ${chave} saiu na resposta`);
   }
+  // o que sai no lugar do bruto são os resumos da projeção, nunca o objeto de origem
+  assert.equal(typeof saida.technical.state, 'string');
+  assert.ok(!Object.hasOwn(saida.technical, 'rules') && !Object.hasOwn(saida.technical, 'stdout'));
+  assert.deepEqual(saida.verificationCheckpoint, { total: 3, confirmedCount: 2, conflictCount: 1 });
+  assert.equal(saida.rounds.parentCount, 1);
   assert.deepEqual(saida.postRetry, { attempts: 2, exhausted: false });
   assert.equal(saida.reportMarkdown, 'Revisão 1', 'o relatório que sai é o texto público da revisão');
 });

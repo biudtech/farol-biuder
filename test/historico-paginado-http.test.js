@@ -49,7 +49,7 @@ function item(i, extra = {}) {
   return {
     id: `d${i}`, createdAt: 1000 + i, resolvedAt: 2000 + i, key: `acme/app#${i}`,
     pr: { repo: i % 2 ? 'acme/app' : 'acme/api', number: i, url: `https://github.com/acme/app/pull/${i}`, title: `Correção ${i}`, author: 'ana', account: 'revisora' },
-    card: `PROJ-${i}`, verdict: i % 3 ? 'approve' : 'request_changes', status: 'auto_approved', action: 'approve',
+    card: `PROJ-${i}`, verdict: 'approve', status: i % 3 ? 'auto_approved' : 'auto_rejected', action: i % 3 ? 'approve' : 'request_changes',
     reasons: [], reviewMarkdown: `Revisão ${i}`, reportMarkdown: `RELATORIO-BRUTO ${i}`,
     payloads: { approve: { event: 'APPROVE', body: `CORPO-DO-PAYLOAD ${i}`, comments: [] } },
     memory: { notes: `MEMORIA-DO-TIME ${i}` },
@@ -101,7 +101,9 @@ test('filtros e busca pela URL, com acento codificado', async () => {
   assert.ok(porRepo.json.items.every(d => d.pr.repo === 'acme/api'));
   const porVeredito = await pedir('?veredito=request_changes&pageSize=100');
   assert.equal(porVeredito.json.total, 21);
-  assert.ok(porVeredito.json.items.every(d => d.verdict === 'request_changes'));
+  assert.ok(porVeredito.json.items.every(d => d.action === 'request_changes' && d.verdict === 'approve'), 'o filtro é pelo que foi publicado');
+  assert.equal((await pedir('?veredito=skip')).json.total, 0);
+  assert.equal((await pedir(`?repo=${encodeURIComponent(' acme/api ')}`)).json.total, 32);
   const porBusca = await pedir(`?q=${encodeURIComponent('CORRECAO 41')}`);
   assert.deepEqual(porBusca.json.items.map(d => d.id), ['d41']);
   const porCard = await pedir('?q=proj-17&repo=acme/app&veredito=approve');
@@ -129,7 +131,7 @@ test('parâmetro inválido responde 400 com o campo, e nunca 500', async () => {
     ['?page=0', 'page'], ['?page=-3', 'page'], ['?page=abc', 'page'], ['?page=1&page=2', 'page'],
     ['?pageSize=101', 'pageSize'], ['?pageSize=0', 'pageSize'], ['?pageSize=x', 'pageSize'],
     [`?q=${'a'.repeat(201)}`, 'q'], ['?q=a&q=b', 'q'],
-    ['?veredito=aprovado', 'veredito'], ['?veredito=approve&veredito=approve', 'veredito'],
+    ['?veredito=aprovado', 'veredito'], ['?veredito=merge', 'veredito'], ['?veredito=approve&veredito=approve', 'veredito'],
     ['?repo=a/b&repo=c/d', 'repo'],
   ];
   for (const [consulta, campo] of casos) {
@@ -137,6 +139,17 @@ test('parâmetro inválido responde 400 com o campo, e nunca 500', async () => {
     assert.equal(r.status, 400, consulta);
     assert.deepEqual(r.json, { ok: false, code: 'parametro_invalido', campo }, consulta);
   }
+});
+
+test('campo torto num item do histórico não vira 500, com busca presente', async () => {
+  semear(3);
+  const torto = { toString: 1 };
+  engine.decisions.resolved.unshift(item(77, { card: { key: torto }, pr: { repo: torto, number: torto, title: torto, author: torto } }));
+  for (const consulta of ['?q=ana', '?q=proj-2', '?repo=acme/app', '?q=a&veredito=approve&repo=acme/api', '']) {
+    const r = await pedir(consulta);
+    assert.equal(r.status, 200, consulta);
+  }
+  assert.deepEqual((await pedir('?q=proj-2')).json.items.map(d => d.id), ['d2']);
 });
 
 test('consulta estranha na URL não derruba a rota', async () => {
