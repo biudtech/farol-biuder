@@ -21,7 +21,6 @@ import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const falhasMod = (await import('../lib/engine/falhas.js')).default;
 const diag = (await import('../lib/engine/diagnostico.js')).default;
-const P = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -82,58 +81,4 @@ test('a projeção da tela herda a fusão', () => {
   const tela = diag.falhasParaTela(e);
   assert.equal(tela.length, 1);
   assert.equal(tela[0].ocorrencias, 15);
-});
-
-/* ---------- 2) o cartão nasce fechado ---------- */
-
-const cartao = (f) => P.falhasSecaoHtml({ estado: 'pronto', falhas: [f], lidoEm: Date.now() });
-
-test('falha que passa sozinha nasce FECHADA, com uma linha de resumo', () => {
-  const html = cartao({
-    id: 'x', at: BASE, classe: 'limite-plano', rotulo: 'Limite do plano Claude',
-    acao: 'Espere o reset do plano.', gravidade: 'espera-reset', ref: 'o/r#1050',
-    ocorrencias: 15, primeiraAt: BASE - 9e5, markdown: 'texto cru da falha',
-  });
-  assert.match(html, /<details/, 'o corpo fica atrás de um clique');
-  assert.doesNotMatch(html, /<details[^>]*\sopen/, 'e não nasce aberto');
-  assert.match(html, /<summary/);
-  assert.match(html, /Limite do plano Claude/, 'o resumo diz o que é');
-  assert.match(html, /o\/r#1050/, 'e sobre qual PR');
-  assert.match(html, /15×/, 'e que repetiu');
-  assert.match(html, /texto cru da falha/, 'o texto continua lá dentro, só não na cara');
-});
-
-test('falha que PRECISA DE VOCÊ nasce ABERTA: esconder o que pede ação seria o defeito', () => {
-  const html = cartao({
-    id: 'y', at: BASE, classe: 'resultado-invalido', rotulo: 'Sessão sem resultado estruturado válido',
-    acao: 'Tente revisar de novo.', gravidade: 'permanente', precisaDeVoce: true,
-    ref: 'o/r#126', ocorrencias: 1, primeiraAt: BASE, markdown: 'o texto da falha',
-  });
-  assert.match(html, /<details[^>]*\sopen/);
-});
-
-test('o botão de copiar continua um por falha, e dentro dela', () => {
-  const html = cartao({
-    id: 'z', at: BASE, classe: 'limite-plano', rotulo: 'Limite', acao: 'Espere.',
-    gravidade: 'espera-reset', ref: 'o/r#1', ocorrencias: 1, primeiraAt: BASE, markdown: 'texto',
-  });
-  assert.equal((html.match(/data-copiar-falha="z"/g) || []).length, 1);
-  assert.ok(html.indexOf('data-copiar-falha') > html.indexOf('<details'), 'o botão está no corpo, não no resumo');
-});
-
-test('o resumo não repete o identificador de sessão que já está no corpo', () => {
-  const html = cartao({
-    id: 'w', at: BASE, classe: 'resultado-invalido', rotulo: 'Sessão sem resultado',
-    acao: 'Tente de novo.', gravidade: 'permanente', precisaDeVoce: true, ref: 'o/r#126',
-    sessionId: 'a-21b64dbd-2fb0-4e4f-b92d-da78c7c9e775', ocorrencias: 1, primeiraAt: BASE,
-    markdown: 'Sessão: a-21b64dbd-2fb0-4e4f-b92d-da78c7c9e775',
-  });
-  const resumo = html.slice(html.indexOf('<summary'), html.indexOf('</summary>'));
-  assert.doesNotMatch(resumo, /a-21b64dbd/, '36 caracteres de id não ajudam a escolher o que abrir');
-});
-
-test('os três estados da seção continuam distintos', () => {
-  assert.match(P.falhasSecaoHtml({ estado: 'carregando', falhas: [] }), /Lendo as falhas/);
-  assert.match(P.falhasSecaoHtml({ estado: 'pronto', falhas: [] }), /Nenhuma falha de sessão de IA registrada/);
-  assert.match(P.falhasSecaoHtml({ estado: 'erro', falhas: [] }), /Não deu para ler/);
 });

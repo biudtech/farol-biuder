@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activityReport } from '../lib/usage/report.js';
 import { usageActivity } from '../lib/engine/usage-activity.js';
-import { activityBodyHtml, activityHistoryHtml } from '../ui/pure/consumo-atividade.js';
 
 const NOW = Date.parse('2026-10-26T16:00:00Z');
 const query = { start: '2026-10-01', end: '2026-10-26' };
@@ -107,7 +106,6 @@ test('custo e modalidade desconhecidos não viram fatura nem economia', () => {
   assert.equal(r.totals.apiEstimatedUsd, 2);
   assert.equal(r.totals.apiUnknown, 1);
   assert.equal(r.totals.unknownBilling, 1);
-  assert.match(activityBodyHtml(r), /sem modalidade histórica/);
   const kinds = report([row({ billingKind: 'dir' }), row({ id: 'machine', billingKind: 'maquina' }), row({ id: 'router', billingKind: 'openrouter' })]);
   assert.equal(kinds.totals.subscription, 2);
   assert.equal(kinds.totals.apiUsd, 1);
@@ -116,7 +114,6 @@ test('custo e modalidade desconhecidos não viram fatura nem economia', () => {
 test('intervalos inválidos são recusados e vazio conhecido é zero', () => {
   for (const start of ['', '2026-99-99', '2026-02-30', '2027-01-01']) assert.equal(report([], { start }).ok, false);
   assert.equal(report([]).totals.attempts, 0);
-  assert.match(activityBodyHtml({ ok: false }), /indisponíveis/);
 });
 
 test('diário ausente com agregado positivo não é apresentado como consumo zero', async () => {
@@ -134,10 +131,8 @@ test('o recorte usa o diário completo, não só as 100 sessões mais recentes',
   assert.equal(report(rows, { repo: 'other/repo' }).totals.attempts, 0);
 });
 
-test('a projeção pública não expõe cursores, snapshots ou campos extras e escapa HTML', () => {
+test('a projeção pública não expõe cursores, snapshots ou campos extras', () => {
   const r = report([row({ ref: '<img src=x onerror=alert(1)>', accounting: { secret: 'private' }, apiKey: 'private' })]);
   assert.equal(r.history.rows[0].accounting, undefined);
   assert.equal(r.history.rows[0].apiKey, undefined);
-  assert.doesNotMatch(activityHistoryHtml(r), /<img/);
-  assert.match(activityHistoryHtml(r), /&lt;img/);
 });

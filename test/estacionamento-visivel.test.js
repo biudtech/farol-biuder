@@ -23,7 +23,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const { STATE_DIR } = await import('../lib/paths.js');
-const P = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
 
@@ -131,10 +130,6 @@ test('arquivo legado (lista de keys) continua lido, só que sem motivo', () => {
   // sobrou da v2.57.4: o #317 (estacionado antes dela) seguia sem aviso no card.
   const parked = e.snapshot().parked['legado/repo#1'];
   assert.deepEqual(parked, { at: '', motivo: '', tipo: 'legado' }, 'key sem motivo vai pra UI como legado');
-  const html = P.queueCardHtml({ ...PR, key: 'legado/repo#1' }, { people: {}, mark: MARK, parked: { 'legado/repo#1': parked } });
-  assert.match(html, /pr-parked/);
-  assert.match(html, /antes desta versão/);
-  assert.doesNotMatch(html, /<span title=/, 'sem hora não desenha hora');
   fs.unlinkSync(arquivo);
 });
 
@@ -185,38 +180,4 @@ test('529 Overloaded NÃO estaciona: entra no retry transitório e o PR relança
   await e.runOneHeadless(prDe('o/r#8'), 'eu');
   assert.equal(e.autoReviewParked.has('o/r#8'), false, 'era o caso do #317: estacionava em silêncio');
   assert.equal(e.retryAfterNet.get('o/r#8').tries, 1);
-});
-
-/* ---------- 3) o card da fila mostra o estacionamento ---------- */
-
-const MARK = { style: '', varStyle: '', dim: '', chip: '', dot: '', acct: { label: 'acme' } };
-const PR = { key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7', title: 'Corrige o gate', author: 'alice', updatedAt: '2026-09-03T16:00:00Z' };
-
-test('queueCardHtml: PR estacionado mostra quando parou, por que, e que o Revisar tenta de novo', () => {
-  const parked = { 'acme/api#7': { at: '2026-09-03T16:21:56Z', motivo: 'sessão retornou erro: API Error: 529', tipo: 'falha' } };
-  const html = P.queueCardHtml(PR, { people: {}, mark: MARK, parked });
-  assert.match(html, /pr-parked/, 'tem o bloco de estacionamento');
-  assert.match(html, /Revisão automática parada/);
-  assert.match(html, /API Error: 529/, 'o motivo aparece');
-  assert.match(html, /Revisar/, 'diz que o botão tenta de novo');
-  assert.doesNotMatch(html, /—/, 'sem travessão');
-});
-
-test('queueCardHtml: cada tipo de estacionamento tem a própria frase', () => {
-  const de = (tipo) => P.queueCardHtml(PR, { people: {}, mark: MARK, parked: { 'acme/api#7': { at: '2026-09-03T16:21:56Z', motivo: 'm', tipo } } });
-  assert.match(de('cancelado'), /cancelada por você/);
-  assert.match(de('esgotado'), /várias vezes/);
-  assert.match(de('falha'), /falhou/);
-});
-
-test('queueCardHtml: sem estacionamento não há bloco, e ctx sem parked não quebra', () => {
-  assert.doesNotMatch(P.queueCardHtml(PR, { people: {}, mark: MARK, parked: {} }), /pr-parked/);
-  assert.doesNotMatch(P.queueCardHtml(PR, { people: {}, mark: MARK }), /pr-parked/);
-});
-
-test('queueCardHtml: o motivo sai escapado', () => {
-  const parked = { 'acme/api#7': { at: '2026-09-03T16:21:56Z', motivo: '<img src=x onerror=1>', tipo: 'falha' } };
-  const html = P.queueCardHtml(PR, { people: {}, mark: MARK, parked });
-  assert.ok(!html.includes('<img src=x'), 'a carga não aparece crua');
-  assert.match(html, /&lt;img/);
 });

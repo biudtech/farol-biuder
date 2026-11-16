@@ -1,7 +1,6 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { processHeadless, esperaParaTela } from '../lib/engine/headless-fila.js';
-import { queueWaitingCardHtml } from '../ui/pure/radar.js';
 
 beforeEach(t => {
   // A bancada mede memória e vagas de um usuário comum, sem herdar o UID do CI.
@@ -54,22 +53,4 @@ test('ao liberar a conta, o motivo anterior desaparece e as posições são atua
   assert.deepEqual(detalhes(e)['acme/app#2'], {
     posicao: 1, total: 1, motivo: 'limite-conta', ocupadas: 1, limite: 1,
   });
-});
-
-const mark = { dot: '', chip: '', style: '' };
-test('card mostra posição e motivo recebido do agendador', () => {
-  const e = motor();
-  e.headlessBusyAccounts.set('alice', 1);
-  processHeadless(e);
-  const html = queueWaitingCardHtml(pr(2), { mark, espera: detalhes(e)['acme/app#2'] });
-  assert.match(html, /Posição 2 de 2 na fila local \(ordem de entrada\)/);
-  assert.match(html, /Limite de revisões simultâneas desta conta atingido \(1\/1\)/);
-  assert.match(html, /alterna organizações/);
-  assert.doesNotMatch(html, /act-review|act-ignore/);
-});
-
-test('falta de diagnóstico não inventa uma causa nem uma posição', () => {
-  const html = queueWaitingCardHtml(pr(1), { mark });
-  assert.match(html, /Motivo da espera ainda não confirmado/);
-  assert.doesNotMatch(html, /Posição|Limite de revisões simultâneas/);
 });

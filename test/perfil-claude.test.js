@@ -17,7 +17,6 @@ const { Engine } = await import('../server.js');
 const { problemasDePerfil, authFromProfile } = await import('../lib/engine/perfil-claude.js');
 const { HOME, WORKSPACE, CLAUDE_PERFIS_DIR } = await import('../lib/paths.js');
 const { default: io } = await import('../lib/io.js');
-const { runtimeChecks } = await import('../ui/pure.js');
 const { startServer } = await import('../lib/http-server.js');
 
 after(() => {
@@ -75,22 +74,13 @@ test('configuração saudável não tem problema, e sem id nenhum também não',
   assert.deepEqual(problemasDePerfil({ claudeProfiles: [], claudeProfileId: '', accounts: [{ user: 'c' }] }), []);
 });
 
-test('o snapshot leva os problemas, e o Diagnóstico mostra um check por problema', () => {
+test('o snapshot leva os problemas do perfil apontado que não existe', () => {
   const e = engineCom({ claudeProfiles: [CHAVE_A], claudeProfileId: 'sumiu', accounts: [] });
   const s = e.snapshot();
   assert.equal(s.claudePerfis.problemas.length, 1);
-  const checks = runtimeChecks({}, {}, s.claudePerfis);
-  const alvo = checks.find((c) => c.label === 'Perfil do Claude');
-  assert.ok(alvo, 'check presente');
-  assert.equal(alvo.ok, false);
-  assert.match(alvo.detail, /não existe/);
-  assert.doesNotMatch(alvo.detail, /usa o padrão/i);
-  assert.equal(alvo.goto, 'sys:plans:#claudeProfilesManager');
-});
-
-test('sem problema, nenhum check de perfil aparece', () => {
-  assert.equal(runtimeChecks({}, {}, { problemas: [] }).some((c) => c.label === 'Perfil do Claude'), false);
-  assert.equal(runtimeChecks({}, {}).some((c) => c.label === 'Perfil do Claude'), false);
+  const [problema] = s.claudePerfis.problemas;
+  assert.deepEqual([problema.escopo, problema.profileId], ['padrao', 'sumiu']);
+  assert.equal(problema.code, 'perfil-inexistente');
 });
 
 test('a resolução real usa a mesma regra de perfil utilizável', () => {

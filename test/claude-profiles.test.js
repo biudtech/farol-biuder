@@ -220,7 +220,7 @@ test('updateSettings: recalcula allClaudeAuthInfo quando claudeProfiles muda', a
 });
 
 // Fix 3: remover um perfil com 2+ contas referenciando ele podia deixar referência
-// órfã, porque o listener cp-remove (ui/app.js) disparava N PATCHes fire-and-forget
+// órfã, porque o listener cp-remove da tela antiga disparava N PATCHes fire-and-forget
 // separados (accounts por conta afetada + claudeProfileId + claudeProfiles), sem
 // garantia de ordem de chegada — o PATCH mais antigo/parcial podia processar por
 // último e sobrescrever o array accounts inteiro, restaurando o id removido. O fix

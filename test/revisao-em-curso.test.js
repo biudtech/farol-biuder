@@ -11,7 +11,6 @@ import assert from 'node:assert/strict';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-revisao-em-curso-'));
 process.env.FAROL_HOME = root;
 const { Engine } = await import('../server.js');
-const { sessionCardHtml, temCancelamento, textoDoCancelamento } = await import('../ui/pure/sessao.js');
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const pr = numero => ({ key: `org/repo#${numero}`, url: `https://github.com/org/repo/pull/${numero}`,
@@ -95,17 +94,6 @@ test('regra manual mantém a recusa', async () => {
   e.config.conta.reviewRules = { org: { mode: 'manual' } };
   assert.equal((await e.launchReview([pr(1).url], 'auto', 'auto')).ok, false);
   assert.equal((await e.launchReview([pr(1).url], 'auto', 'clique')).ok, true);
-});
-
-test('o cartão só oferece Cancelar para a sessão cancelável', () => {
-  const sessao = { id: 'a1', mode: 'auto', keys: ['org/repo#1'] };
-  assert.equal(temCancelamento(sessao), false);
-  assert.doesNotMatch(sessionCardHtml(sessao), /act-cancel/);
-  const cancelavel = { ...sessao, id: 'a2', cancellable: true };
-  assert.equal(temCancelamento(cancelavel), true);
-  assert.equal(textoDoCancelamento(cancelavel), 'Cancelar');
-  assert.match(sessionCardHtml(cancelavel), /act-cancel" data-id="a2">Cancelar</);
-  assert.equal(textoDoCancelamento({ ...cancelavel, cancelled: true }), 'Cancelando…');
 });
 
 test('cancelar sessão que não existe ou não é cancelável é recusado, sem soltar o PR', () => {

@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 const { TEMPOS } = await import('../lib/constants.js');
 const uso = await import('../lib/engine/uso-do-plano.js');
 const { perfisParaTela } = await import('../lib/engine/perfil-claude.js');
-const { usoDoPlanoHtml, validadeDoLoginHtml, claudeProfilesHtml } = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -184,7 +183,6 @@ test('falha de passagem mantém a última leitura boa, marcada; depois de uma ho
   assert.equal(l.erro, 'o Claude Code não respondeu a tempo');
   const tela = uso.usoParaTela(engine, PERFIL, AGORA);
   assert.deepEqual([tela.desatualizado, tela.lidaEm], [true, boa.em]);
-  assert.match(usoDoPlanoHtml(tela, AGORA), /uso-pct">29%[\s\S]*Não foi possível atualizar agora\. Uso lido /);
 
   const velha = { ...boa, em: boa.em - TEMPOS.HORA_MS - 1 };
   const nova = { ok: false, respondeu: false, erro: 'x', semLogin: false, janelas: [], venceEm: 0, em: boa.em };
@@ -290,47 +288,4 @@ test('perfisParaTela: todo perfil de assinatura leva o uso; o de chave de API n�
   assert.deepEqual(tela.uso.p1, { lido: false });
   assert.equal(tela.uso.p2.janelas.length, 3);
   assert.equal(JSON.stringify(tela).includes(process.env.FAROL_HOME), false, 'a pasta não vai para a tela');
-});
-
-test('tela: barra por janela, cor por faixa de uso e a hora em que volta', () => {
-  const html = usoDoPlanoHtml({ lido: true, ok: true, venceEm: AGORA + 22 * TEMPOS.DIA_MS, faixaDoLogin: '', janelas: [
-    { id: 'sessao', nome: 'Sessão', usado: 0.29, reset: AGORA + TEMPOS.HORA_MS },
-    { id: 'semana', nome: 'Semana', usado: 0.81, reset: AGORA + 3 * TEMPOS.DIA_MS },
-    { id: 'semana:fable', nome: 'Semana Fable', usado: 0.94, reset: 0, resetTexto: 'Nov 15, 5am (Marte/Olimpo)' },
-  ] }, AGORA);
-  assert.match(html, /uso-janela">\s*<span class="uso-topo"><span class="uso-nome">Sessão<\/span><span class="uso-pct">29%/);
-  assert.match(html, /uso-janela uso-alto">[\s\S]*81%/);
-  assert.match(html, /uso-janela uso-critico">[\s\S]*94%/);
-  assert.match(html, /aria-label="Semana: 81% usados"/);
-  assert.match(html, /volta hoje \d\d:\d\d/);
-  assert.match(html, /volta \d\d\/\d\d \d\d:\d\d/);
-  assert.match(html, /volta Nov 15, 5am \(Marte\/Olimpo\)/);
-  assert.match(html, /Login vence \d\d\/\d\d \d\d:\d\d \(faltam 22 dias\)/);
-});
-
-test('tela: sem leitura, leitura com erro e perfil de outro provedor', () => {
-  assert.equal(usoDoPlanoHtml(null), '');
-  assert.match(usoDoPlanoHtml({ lido: false }), /ainda não lido/);
-  const erro = usoDoPlanoHtml({ lido: true, ok: false, erro: 'sem login válido nesta pasta', janelas: [], venceEm: 0 }, AGORA);
-  assert.match(erro, /Uso do plano não lido: sem login válido nesta pasta\./);
-  assert.equal(erro.includes('uso-login'), false);
-  assert.match(usoDoPlanoHtml({ lido: true, ok: false, erro: '<b>x</b>', janelas: [] }, AGORA), /&lt;b&gt;x&lt;\/b&gt;/);
-});
-
-test('tela: a validade do login muda de tom perto do vencimento e depois dele', () => {
-  const vence = AGORA + 2 * TEMPOS.DIA_MS + TEMPOS.HORA_MS;
-  assert.match(validadeDoLoginHtml({ venceEm: vence, faixaDoLogin: 'perto' }, AGORA), /pill session">Login vence em 2 dias<[\s\S]*Renove pelo botão Entrar com a assinatura/);
-  assert.match(validadeDoLoginHtml({ venceEm: AGORA + 5 * TEMPOS.HORA_MS, faixaDoLogin: 'ultimo-dia' }, AGORA), /pill err">Login vence em 5 h</);
-  assert.match(validadeDoLoginHtml({ venceEm: AGORA - TEMPOS.HORA_MS, faixaDoLogin: 'vencido' }, AGORA), /pill err">Login vencido<[\s\S]*Desde (hoje|ontem) \d\d:\d\d\./);
-  assert.match(validadeDoLoginHtml({ venceEm: AGORA + TEMPOS.DIA_MS * 1.5, faixaDoLogin: '' }, AGORA), /faltam 1 dia\)/);
-  assert.equal(validadeDoLoginHtml({ venceEm: 0 }, AGORA), '');
-});
-
-test('tela: o cartão do perfil de assinatura leva o uso, e o de chave de API não', () => {
-  const html = claudeProfilesHtml({
-    config: { claudeProfiles: [{ id: 'p1', label: 'BIUD-EX-5X', kind: 'dir' }, { id: 'k', label: 'Chave', kind: 'apikey', apiKey: 'sk-x' }] },
-    claudePerfis: { problemas: [], uso: { p1: { lido: true, ok: true, venceEm: AGORA + 22 * TEMPOS.DIA_MS, faixaDoLogin: '', janelas: [{ id: 'sessao', nome: 'Sessão', usado: 0.24, reset: AGORA + TEMPOS.HORA_MS }] } } },
-  });
-  assert.equal(html.split('class="uso-plano"').length - 1, 1);
-  assert.match(html, /BIUD-EX-5X[^]*uso-pct">24%/);
 });

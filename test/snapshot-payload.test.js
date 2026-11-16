@@ -10,7 +10,6 @@ const { Engine } = await import('../server.js');
 const usage = await import('../lib/engine/usage.js');
 const { snapshotUsage } = await import('../lib/engine/snapshot-usage.js');
 const { snapshotReviewActions } = await import('../lib/engine/snapshot-decisions.js');
-const { usageKpisHtml, usageMatrixHtml, usageSessionsHtml, usageMetricVal } = await import('../ui/pure/consumo.js');
 after(() => fs.rmSync(home, { recursive: true, force: true }));
 
 function consumoSintetico() {
@@ -29,6 +28,15 @@ function consumoSintetico() {
   return e;
 }
 
+// o valor de uma métrica num item da série, como o front o lê
+function usageMetricVal(b, m) {
+  if (m === 'custo') return b.costUsd || 0;
+  if (m === 'input') return b.inputTokens || 0;
+  if (m === 'output') return b.outputTokens || 0;
+  if (m === 'cache') return (b.cacheReadTokens || 0) + (b.cacheCreationTokens || 0);
+  return (b.inputTokens || 0) + (b.outputTokens || 0);
+}
+
 test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diário', t => {
   const e = consumoSintetico();
   const antes = structuredClone({ usage: e.usage, sessions: e.usageSessions });
@@ -41,13 +49,6 @@ test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diá
   assert.equal(compacto.series.length, 120);
   assert.equal('modelUsage' in compacto.recentSessions[0], false);
   assert.equal('accounting' in compacto.recentSessions[0], false);
-  for (const window of [1, 7, 30, 90]) {
-    assert.equal(usageKpisHtml(compacto, window), usageKpisHtml(completo, window));
-    for (const metric of ['input', 'output', 'total', 'cache', 'custo']) {
-      assert.deepEqual(usageMatrixHtml(compacto, metric, window), usageMatrixHtml(completo, metric, window));
-    }
-  }
-  assert.equal(usageSessionsHtml(compacto), usageSessionsHtml(completo));
   for (const [dimension, series] of Object.entries(completo.stackedSeries)) {
     assert.deepEqual(compacto.stackedSeries[dimension].map(d => d.items.map(i => [i.name, i.label])),
       series.map(d => d.items.map(i => [i.name, i.label])), 'cores e índices continuam associados');
@@ -60,7 +61,7 @@ test('snapshot conserva gráficos e sessões, com menos bytes e sem podar o diá
   const bytesAntes = Buffer.byteLength(JSON.stringify(completo));
   const bytesDepois = Buffer.byteLength(JSON.stringify(compacto));
   assert.ok(bytesDepois < bytesAntes * .5, `${bytesAntes} -> ${bytesDepois}`);
-  t.diagnostic(`Consumo sintético, 120 dias: ${bytesAntes} -> ${bytesDepois} bytes; diário e renderização preservados.`);
+  t.diagnostic(`Consumo sintético, 120 dias: ${bytesAntes} -> ${bytesDepois} bytes; diário e séries preservados.`);
 });
 
 test('cache compacto reutiliza séries, mas atualiza falhas e novos registros', () => {

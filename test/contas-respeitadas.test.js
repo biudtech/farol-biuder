@@ -30,11 +30,9 @@ import assert from 'node:assert/strict';
 const C = (await import('../lib/engine/contas-config.js')).default;
 const { Engine } = await import('../server.js');
 const { POLITICA_HISTORICO_FILE } = await import('../lib/paths.js');
-const P = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
-const RAIZ = path.join(import.meta.dirname, '..');
 const BASE = { user: 'trabalho', owners: ['org1'], onReject: 'request_changes', padroesRevisao: 'sem any' };
 const configGravada = () => JSON.parse(fs.readFileSync(path.join(process.env.FAROL_HOME, 'config.json'), 'utf8'));
 
@@ -261,21 +259,4 @@ test('o rastro tem teto e não cresce para sempre', () => {
   const lista = Array.from({ length: C.TETO_DO_HISTORICO + 30 }, (_, i) => ({ at: i, conta: null, campo: 'autoReview', de: true, para: false }));
   assert.equal(C.aparar(lista).length, C.TETO_DO_HISTORICO);
   assert.equal(C.aparar(lista)[0].at, 30, 'sai o mais antigo');
-});
-
-/* ---------- a tela não salva a conta inteira ---------- */
-
-test('tirar o valor de um campo viaja como null, porque undefined some do JSON', () => {
-  const campos = P.camposDaEdicao({ onClean: undefined, owners: ['a'] });
-  assert.deepEqual(JSON.parse(JSON.stringify(campos)), { onClean: null, owners: ['a'] });
-  assert.deepEqual(P.camposDaEdicao(null), {});
-});
-
-test('a tela edita a conta por operação, só com editar e regra de review', () => {
-  const contas = fs.readFileSync(path.join(RAIZ, 'ui', 'telas', 'sistema-contas.js'), 'utf8');
-  assert.doesNotMatch(contas, /\/api\/settings/, 'editar conta mandando o objeto inteiro volta o defeito');
-  assert.match(contas, /\/api\/accounts\/edit/);
-  assert.doesNotMatch(contas, /tipo: '(adicionar|remover)'/);
-  const perfis = fs.readFileSync(path.join(RAIZ, 'ui', 'telas', 'sistema-perfis.js'), 'utf8');
-  assert.doesNotMatch(perfis, /patch\.(accounts|conta)\s*=/, 'a tela de perfis não manda a conta');
 });

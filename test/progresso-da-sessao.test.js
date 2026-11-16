@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempoTipico, faixaDe, MIN_AMOSTRAS, etapasComTamanho, anotarEstimativa } from '../lib/engine/estimativa-sessao.js';
-import { progressoDaSessao, conclusaoDaSessao, sessionCardHtml, SEM_SINAL_MS } from '../ui/pure/sessao.js';
 import { materializarNaSessao } from '../lib/engine/pr-scope.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -69,51 +68,4 @@ test('autoanálise: o escopo materializado carimba o total de arquivos na sessã
   materializarNaSessao(rec, raiz, [{ path: 'a.js', patch: '+x' }, { path: 'b/c.js', patch: '+y' }]);
   assert.equal(rec.totalArquivos, 2);
   fs.rmSync(raiz, { recursive: true, force: true });
-});
-
-const t0 = 1000;
-const viva = (min, extra = {}) => ({ startedAt: t0, fase: 'modelo', ultimoSinalEm: t0 + min * MIN, ...extra });
-const est = { tipicoMs: 6 * MIN, amostras: 32, base: 'tamanho' };
-
-test('tempo, histórico e etapas não produzem percentual de conclusão', () => {
-  for (const minutos of [0, 3, 6, 20]) {
-    const p = progressoDaSessao(viva(minutos, { estimativa: est }), [{ id: 'verificacao', label: 'verificação', state: 'active' }], t0 + minutos * MIN);
-    assert.equal(p.pct, null);
-    assert.equal(p.texto, 'verificação');
-    assert.match(p.base, /típico: 6,0 min/);
-    assert.doesNotMatch(p.texto + p.aria, /%|restante/);
-  }
-});
-test('sem histórico ou evento, preparação e andamento permanecem explícitos', () => {
-  assert.equal(progressoDaSessao({ startedAt: t0 }).texto, 'preparando');
-  const p = progressoDaSessao(viva(1), [], t0 + MIN);
-  assert.equal(p.pct, null); assert.match(p.base, /sem histórico/);
-});
-test('fração de leitura usa só denominador observado, sem confundir com conclusão', () => {
-  const p = progressoDaSessao(viva(1, { lidos: 12, totalArquivos: 20 }), [], t0 + MIN);
-  assert.equal(p.pct, 60); assert.match(p.texto, /12 de 20 arquivos declarados lidos/);
-  assert.match(p.base, /não de conclusão/);
-  assert.equal(progressoDaSessao(viva(1, { lidos: 100, totalArquivos: 20 }), [], t0 + MIN).pct, 100);
-  assert.equal(progressoDaSessao(viva(1, { totalArquivos: -1 }), [], t0 + MIN).pct, null);
-});
-test('fechamento sem total não promete porcentagem; conclusão real tem estado separado', () => {
-  const p = progressoDaSessao({ fase: 'fechando' }); assert.equal(p.pct, null); assert.match(p.texto, /verificando e decidindo/);
-  assert.deepEqual(conclusaoDaSessao({ startedAt: t0 }, t0 + 6 * MIN + 12000), { pct: null, estado: 'encerrada', texto: 'sessão encerrada', base: 'em 6min 12s · consulte o resultado da revisão', aria: 'sessão encerrada, consulte o resultado da revisão' });
-});
-test('fechamento mantém a barra da leitura declarada, sem virar conclusão', () => {
-  const p = progressoDaSessao({ fase: 'fechando', lidos: 73, totalArquivos: 184 });
-  assert.equal(p.pct, 39); assert.match(p.texto, /verificando e decidindo/);
-  assert.match(p.base, /73 de 184 arquivos declarados lidos/); assert.match(p.base, /não de conclusão/);
-  assert.equal(p.rotuloPct, '39% lidos', 'o número diz leitura, para 100% não parecer conclusão');
-  assert.equal(progressoDaSessao({ fase: 'fechando' }).rotuloPct, '');
-});
-test('silêncio não inventa progresso e informa duração', () => {
-  const p = progressoDaSessao(viva(1), [], t0 + MIN + SEM_SINAL_MS + 5000);
-  assert.equal(p.estado, 'muda'); assert.equal(p.pct, null); assert.equal(p.texto, 'sem sinal há 50s');
-  assert.match(p.aria, /conclusão não medida/);
-});
-test('cartão nasce sem percentual determinado e tem equipe acessível', () => {
-  const html = sessionCardHtml({ id: 'a1', label: 'Revisão', startedAt: t0 });
-  assert.match(html, /role="progressbar"/); assert.doesNotMatch(html, /aria-valuenow=/);
-  assert.match(html, /Conclusão não medida/); assert.match(html, /Equipe da sessão/);
 });

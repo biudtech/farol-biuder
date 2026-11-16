@@ -6,8 +6,6 @@ import io from '../lib/io.js';
 import { ultimoPedidoDeRevisao } from '../lib/engine/gh-queries.js';
 import { registrarPedidoDaSessao } from '../lib/engine/pedido-de-revisao.js';
 import { provasDaDecisao } from '../lib/engine/provas-da-decisao.js';
-import { sessionCardHtml } from '../ui/pure/sessao.js';
-import { fmtClock } from '../ui/pure/comum.js';
 
 const PR = { key: 'o/r#7', repo: 'o/r', number: 7, url: 'https://github.com/o/r/pull/7' };
 const engineDe = () => ({ accountForPr: () => 'Eu', tokenFor: () => 'tok', ghEnv: () => ({}) });
@@ -58,15 +56,3 @@ test('provasDaDecisao carrega pedido quando o result tem, e null quando não tem
   assert.equal(provasDaDecisao({}).pedido, null);
   assert.equal(provasDaDecisao({ pedido: { por: 1 } }).pedido, null);
 });
-
-test('sessionCardHtml mostra "pedida por" com menção navegável e hora quando há pedido', () => {
-  const em = '2026-11-05T10:00:00Z';
-  const html = sessionCardHtml({ id: 'a1', label: 'x', pedido: { por: 'ana', em, time: false } }, '');
-  assert.match(html, /session-requested/);
-  assert.match(html, /pedida por .*github\.com\/ana/s);
-  assert.ok(html.includes(fmtClock(Date.parse(em))));
-  assert.match(sessionCardHtml({ id: 'a1', label: 'x', pedido: { por: 'eqp', em, time: true } }, ''), /pedida por um time/);
-  assert.doesNotMatch(sessionCardHtml({ id: 'a1', label: 'x' }, ''), /pedida por|não identificado/);
-  assert.match(sessionCardHtml({ id: 'a1', label: 'x', pedido: null }, ''), /pedido não identificado/);
-});
-

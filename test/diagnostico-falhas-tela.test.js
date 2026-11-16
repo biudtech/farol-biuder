@@ -12,14 +12,11 @@ process.env.FAROL_HOME = BASE;
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { instalarDom } from './helpers/dom-stub.js';
 
-instalarDom();
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 const { CLASSES, DESCONHECIDO, classify, triage } = await import('../lib/log-taxonomy.js');
 const { falhasParaTela } = await import('../lib/engine/diagnostico.js');
-const { falhasSecaoHtml, diagnosticoHtml } = await import('../ui/pure.js');
 
 const TOKEN = 'ghp_' + 'Z9y8X7w6'.repeat(4);
 let engine;
@@ -89,25 +86,6 @@ test('a rota do diagnóstico leva o Markdown inteiro e as falhas estruturadas', 
   assert.equal(JSON.stringify(corpo).includes(TOKEN), false);
 });
 
-test('o cartão de falha diz o que é, o que fazer, e mostra o texto inerte', () => {
-  const html = falhasSecaoHtml({ estado: 'pronto', falhas: falhasParaTela(engine) });
-  assert.match(html, /O que fazer:/);
-  assert.match(html, /data-copiar-falha="/);
-  assert.match(html, /precisa de você/);
-  assert.doesNotMatch(html, /<script/i);
-  assert.equal(html.includes(TOKEN), false);
-  assert.match(html, /&lt;script&gt;x&lt;\/script&gt;/, 'o texto hostil aparece como texto');
-  assert.equal(typeof diagnosticoHtml, 'function');
-});
-
-test('os estados do painel são distintos: carregando, vazio, falha de leitura', () => {
-  assert.match(falhasSecaoHtml({ estado: 'carregando' }), /lendo as falhas/i);
-  assert.match(falhasSecaoHtml({ estado: 'pronto', falhas: [] }), /Nenhuma falha de sessão de IA registrada/);
-  const erro = falhasSecaoHtml({ estado: 'erro', falhas: [], lidoEm: 0 });
-  assert.match(erro, /não deu para ler/i);
-  assert.doesNotMatch(erro, /Nenhuma falha registrada/, 'falha não se disfarça de vazio');
-});
-
 test('a configuração entra em número e em sim ou não, sem login de conta nem caminho', () => {
   engine.config.conta = { user: 'ana-exemplo', owners: ['acme-exemplo'], autoReview: false };
   engine.config.intervalSeconds = 300;
@@ -120,17 +98,4 @@ test('a configuração entra em número e em sim ou não, sem login de conta nem
   const secao = md.slice(md.indexOf('## Configuração'), md.indexOf('## Falhas registradas'));
   assert.doesNotMatch(secao, /ana-exemplo|acme-exemplo/, 'login e organização ficam de fora da configuração');
   engine.config.conta = null;
-});
-
-test('a tela usa o Markdown único na cópia, e o export antigo saiu da tela', () => {
-  const tela = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'diagnostico.js'), 'utf8');
-  assert.match(tela, /\/api\/diagnostics/);
-  assert.doesNotMatch(tela, /diagnosticsText/);
-  const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
-  assert.match(html, /id="diagFalhas"/);
-  assert.match(html, />Copiar diagnóstico</);
-  // a ida à aba atualiza log e falhas juntos: sem isto o painel fica preso em "lendo".
-  // A asserção olha DENTRO do loadLog: a chamada do botão também casaria o nome solto.
-  const corpoDoLoadLog = tela.slice(tela.indexOf('async function loadLog()'), tela.indexOf('/* ---------- diagnóstico unificado'));
-  assert.match(corpoDoLoadLog, /carregarDiagnostico\(\)/);
 });

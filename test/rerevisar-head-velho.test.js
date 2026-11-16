@@ -8,7 +8,8 @@
 // com pendência do PR na mesa, de propósito, pra não empilhar dois cards do mesmo PR.
 //
 // Este arquivo trava a saída: o TIPO do bloqueio vira dado (blockedKind), a tela recebe
-// esse dado, e o round novo SUBSTITUI o card morto em vez de empilhar.
+// esse dado, e o round novo SUBSTITUI o card morto em vez de empilhar. O botão que usa o dado
+// é do front (`web/`); aqui fica o lado do motor.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -18,7 +19,6 @@ process.env.FAROL_HOME = FAROL_HOME;
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { fonteDasTelas } from './helpers/fontes-ui.js';
 
 const io = (await import('../lib/io.js')).default;
 const runReal = io.run;
@@ -139,34 +139,4 @@ test('decisão que já nasce resolvida TAMBÉM supersede a pendência bloqueada 
   engine.recordDecision(PR, resultado(), { status: 'auto_approved', action: 'approve' });
   assert.equal(engine.decisions.pending.length, 0, 'o card morto some, o round novo já resolveu sozinho');
   assert.ok(engine.decisions.resolved.some(d => d.id === 'd-velha' && d.status === 'superseded'));
-});
-
-/* ---------- 3. a tela oferece a saída ---------- */
-
-const appJs = fonteDasTelas();
-
-test('o card de pendência oferece Revisar agora, e SÓ no bloqueio por head velho', () => {
-  const i = appJs.indexOf('<div class="dec-actions">');
-  assert.ok(i > 0, 'o bloco de ações do card tem que existir');
-  const bloco = appJs.slice(i, i + 1200);
-  assert.match(bloco, /act-review/, 'sem o botão, o card de commit novo parado não teria saída');
-  // desde a v2.59.3 o gate do botão mora no staleCardMeta (ui/pure.js), testável sem DOM:
-  // reviewBtn vazio fora do stale_head (test/ui-rerodada.test.js prova os valores)
-  assert.match(bloco, /meta\.reviewBtn[\s\S]{0,200}act-review/, 'e ele é gateado pelo tipo do card de commit novo');
-});
-
-test('o clique em Revisar de novo é escutado pela seção de decisões', () => {
-  // desde 30/09/2026 o handler tem nome, porque o mesmo card aparece em duas seções
-  // (Precisa de você e Esperando o CI) e as duas escutam o mesmo clique
-  const i = appJs.indexOf('const cliqueNoCardDeDecisao = async (e) => {');
-  assert.ok(i > 0, 'a seção precisa ter listener próprio');
-  assert.ok(appJs.includes("$('#decisions').addEventListener('click', cliqueNoCardDeDecisao);"), 'ligado em Precisa de você');
-  assert.ok(appJs.includes("$('#esperaCi').addEventListener('click', cliqueNoCardDeDecisao);"), 'e em Esperando o CI');
-  const listener = appJs.slice(i, i + 900);
-  assert.match(listener, /act-review/, 'o .act-review não tem listener global: cada seção escuta o seu');
-  // desde a seção de sincronização, TODO clique passa pela boca única `revisarUrls`,
-  // a boca única do clique. Chamar /api/review
-  // direto aqui puliria essa confirmação em silêncio, que é o defeito que a boca única
-  // existe pra impedir (mesma doutrina do enqueueHeadless no engine).
-  assert.match(listener, /revisarUrls\(/, 'e usa a MESMA boca do Revisar da fila');
 });
