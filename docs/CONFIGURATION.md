@@ -570,9 +570,24 @@ ele já existir), sai com código 1 e não altera o `config.json`
 É assim porque vazio quer dizer "não hospedado": se um erro de digitação virasse vazio em
 silêncio, o motor em loopback atrás de um proxy que reescreve o Host ficaria com a API inteira
 sem autenticação. Chave ausente, `null`, `""` e `[]` continuam valendo como "não hospedado",
-sem erro. Um `config.json` que nem é JSON é outro caso, anterior a esta regra: o motor sobe
-com os padrões, em loopback puro, e registra o aviso no `farol.log`. Depois de subir, confira:
-`GET /api/auth/status` tem de responder `"exigida": true`.
+sem erro.
+
+**`config.json` presente e ilegível também não sobe.** Se o arquivo existe e não dá para ler,
+está vazio (zero bytes ou só espaço), não é JSON ou é JSON que não é um objeto (`[]`,
+`"texto"`), o motor não inicia, pelo mesmo caminho: motivo no stderr e no `farol.log`, código
+1, e o arquivo fica como estava, sem cópia ao lado. Subir com os padrões no lugar dele seria
+uma instância em loopback puro, sem autenticação e com a conta padrão, que age sozinha.
+
+```
+[farol] config.json ilegível, o motor não sobe: não é JSON válido (linha 1, coluna 64). Arquivo: /home/farol/.farol/config.json. Corrija o arquivo: ele não foi alterado nem renomeado, e o motor não sobe com os padrões no lugar dele.
+```
+
+A mensagem traz a linha e a coluna quando o erro as tem, e nunca um trecho do arquivo: a chave
+de API do perfil do Claude mora nele. Arquivo **ausente** é outra coisa, a instalação nova, e
+sobe. Valor torto dentro de um JSON válido, fora das duas chaves da fronteira, continua sendo
+saneado sem derrubar o boot.
+
+Depois de subir, confira: `GET /api/auth/status` tem de responder `"exigida": true`.
 
 Com a autenticação exigida, todo `/api/*` pede `Authorization: Bearer <token>`, exceto
 `POST /api/auth/pair`, `GET /api/auth/status` (`lib/local-auth/acesso.js`) e

@@ -73,6 +73,12 @@ Ainda sem versão publicada.
   e não altera o arquivo. Vazio significaria "não hospedado", e um erro de digitação deixaria a
   API sem autenticação atrás de um proxy que reescreve o Host. Chave ausente ou vazia segue sem
   erro.
+- **`config.json` presente e ilegível impede o boot:** arquivo que não dá para ler, vazio, que não
+  é JSON ou que é JSON mas não é um objeto. Antes o motor subia com os padrões (loopback puro, sem
+  autenticação, conta padrão agindo sozinha) e deixava uma cópia `.bad` ao lado. Agora diz o
+  motivo e o caminho no stderr, sai com código 1 e não toca no arquivo. A mensagem não cita
+  trecho do arquivo, porque a chave de API mora nele. Arquivo ausente continua sendo instalação
+  nova e sobe.
 - **Rota de saúde:** `GET /api/health` responde `{"ok":true}` sem autenticação, para o probe do
   orquestrador. Não leva dado nenhum do motor.
 - **Pareamento sem pista para quem está de fora:** código que não vale recebe sempre a mesma
