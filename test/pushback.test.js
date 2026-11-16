@@ -286,7 +286,7 @@ test('scan não reclassifica quando a única novidade é de terceiro (updatedAt 
   // marcador do ciclo anterior = último comentário do autor (10h); updatedAt do PR
   // avançou pra 11h (comentário de um colega); os comentários do autor devolvidos
   // pelo gh são todos <= 10h (nenhum é novidade de verdade).
-  const pr = { key: 'acme/app#7', repo: 'acme/app', number: 7, account: 'wanderson', author: 'alice', updatedAt: '2026-08-15T11:00:00Z' };
+  const pr = { key: 'acme/app#7', repo: 'acme/app', number: 7, account: 'revisora', author: 'alice', updatedAt: '2026-08-15T11:00:00Z' };
   const marcador = '2026-08-15T10:00:00Z';
   ghImpl = stubGhPushback(pr, '2026-08-15T08:00:00Z', ['2026-08-15T09:00:00Z', '2026-08-15T10:00:00Z']);
   const e = engineParaG4(pr, marcador);
@@ -302,7 +302,7 @@ test('scan não reclassifica quando a única novidade é de terceiro (updatedAt 
 
 test('comentário novo do autor depois do marcador reclassifica normalmente', async () => {
   // mesmo setup, mas o gh devolve um comentário do autor às 12h (depois do marcador)
-  const pr = { key: 'acme/app#8', repo: 'acme/app', number: 8, account: 'wanderson', author: 'alice', updatedAt: '2026-08-15T12:00:00Z' };
+  const pr = { key: 'acme/app#8', repo: 'acme/app', number: 8, account: 'revisora', author: 'alice', updatedAt: '2026-08-15T12:00:00Z' };
   const marcador = '2026-08-15T10:00:00Z';
   ghImpl = stubGhPushback(pr, '2026-08-15T08:00:00Z', ['2026-08-15T09:00:00Z', '2026-08-15T10:00:00Z', '2026-08-15T12:00:00Z']);
   const e = engineParaG4(pr, marcador);

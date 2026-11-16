@@ -237,7 +237,7 @@ test('ressalva de conteúdo não entra na conta de cobertura', () => {
     reasons: ['vale olhar a validação de tipo no upload quando passar por ali'],
     coverage: { total: 2, reviewed: ['a.ts', 'b.ts'], missing: [] }
   });
-  assert.equal(e.shouldAutoApprove(PR, comRessalva).ok, true, 'ressalva não bloqueia (decisão do Wanderson)');
+  assert.equal(e.shouldAutoApprove(PR, comRessalva).ok, true, 'ressalva não bloqueia (decisão do dono)');
   assert.equal(e.attentionPoints(comRessalva).length, 1, 'mas continua visível como ponto de atenção');
 });
 
@@ -282,7 +282,7 @@ test('a lacuna aparece nos pontos de atenção, com amostra dos arquivos', () =>
 });
 
 /* ---------- limiares: são decisão MEDIDA, não número redondo ----------
-   O docs/REVIEW-GATES.md registra que 1000 linhas OU 20 arquivos foi calibrado sobre o histórico
+   O cabeçalho de lib/engine/fanout.js registra que 1000 linhas OU 20 arquivos foi calibrado sobre o histórico
    real (pega 28% dos PRs, 7 de 25) e que MAX_LOTES é o knob pra cauda de PRs gigantes.
    Sem teste, esses valores eram três constantes exportadas que ninguém lia: mudar 1000
    pra 100 triplicaria o custo de review sem nada reclamar. Isto não impede a mudança,

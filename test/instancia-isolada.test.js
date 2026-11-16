@@ -98,7 +98,7 @@ test('FAROL_HOME igual ao ~/.farol (com barra final) não é isolada', () => {
   assert.equal(saida.trim(), 'false');
 });
 
-// 08/11/2026: a Hostinger usa pasta própria e atualização administrada por fora; a trava recusava
+// 08/11/2026: a instalação hospedada usa pasta própria e atualização administrada por fora; a trava recusava
 // toda postagem dela (18 das 30 últimas revisões) e o PR caía na mesa com a conta decidindo sozinha.
 test('FAROL_HOME próprio com atualização administrada por fora é hospedagem, não instância isolada', () => {
   const script = `const p = await import('${RAIZ_URL}/lib/paths.js'); console.log(String(p.instanciaIsolada));`;

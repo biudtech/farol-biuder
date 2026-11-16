@@ -95,7 +95,7 @@ test('fastModeBlock: corta tempo sem afrouxar gate (as promessas que importam es
   assert.doesNotMatch(b, /—/, 'sem travessão (invariante 6)');
 });
 
-/* Ajustes de 18/08/2026, depois de o Wanderson perguntar se as etapas refletem a
+/* Ajustes de 18/08/2026, depois de o dono perguntar se as etapas refletem a
    realidade. Duas mudanças, e uma NÃO-mudança que vale registrar.
 
    NÃO mudou a atribuição: o intervalo continua indo pra etapa da linha que o ENCERRA.

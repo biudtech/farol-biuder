@@ -769,7 +769,7 @@ test('parseHeadlessResult rejeita analysisStatus ausente ou fora do contrato', (
 
 /* ---------- conta na projeção: o filtro por conta da UI depende dela ---------- */
 
-// Medido no Edicoes-CNBB/biblioteca-cnbb-ai-engine#13 (10/09/2026): a conta dona da
+// Medido no acme/ai-engine#13 (10/09/2026): a conta dona da
 // decisão mora em `pr.account`, e a allowlist do `pr` aninhado não a listava. A UI
 // recebia a decisão sem conta em campo nenhum, caía no mapa org->conta e, para uma org
 // FORA do config, resolvia vazio: o card existia em "Todas" e sumia em qualquer filtro
@@ -791,7 +791,7 @@ test('decisionForUi preserva a conta já projetada no topo (decisões antigas se
 // motivo que o app escreve (qual conta mandou esperar, quando e de onde veio a configuração)
 // nunca chegava à tela. O filtro é para o texto da SESSÃO; o texto do APP passa inteiro.
 test('motivo do app (gate) chega inteiro ao card; o mesmo texto vindo da sessão continua filtrado', () => {
-  const texto = 'aprovável com ressalvas, e a política da conta Trabalho é aguardar você (definido em 30/09 21:10, pelo navegador) (mude "Quando a revisão sai com ressalvas" para "Publicar a aprovação sozinho" em Sistema > Conta revisora e política se quiser que aprove sozinho)';
+  const texto = 'aprovável com ressalvas, e a política da conta Trabalho é aguardar você (definido em 30/09 21:10, pelo navegador) (para aprovar sozinho, mude o desfecho da revisão com ressalvas para publicar a aprovação, em Sistema > Conta revisora e política)';
   const doApp = publicReview.decisionForUi({ id: 'd1', key: 'acme/app#1', reasons: [{ text: texto, kind: 'gate' }] });
   assert.equal(doApp.reasons[0].text, texto);
   assert.equal(doApp.reasons[0].kind, 'gate');

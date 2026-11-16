@@ -57,36 +57,36 @@ test('autor tem precedência na organização, e a exceção automática vale co
   assert.equal(politicaDeInicio(e, pr('maria', 'outra-org')).automatic, false);
 });
 
-// O caso que motivou (12/11/2026): uma conta do gh atende a BIUD e a CNBB, e só a CNBB deve revisar
-// sozinha. Com a conta em "só põe na fila" e a CNBB Automático, nada iniciava.
-const CNBB = (autor = 'wanderson') => ({ ...pr(autor, 'edicoes-cnbb'), key: 'edicoes-cnbb/api#7', url: 'https://github.com/edicoes-cnbb/api/pull/7' });
-const SO_CNBB = { 'edicoes-cnbb': { mode: 'auto' } };
+// O caso que motivou (12/11/2026): uma conta do gh atende duas organizações, e só uma delas deve revisar
+// sozinha. Com a conta em "só põe na fila" e essa organização em Automático, nada iniciava.
+const OUTRA = (autor = 'autora') => ({ ...pr(autor, 'outra-org'), key: 'outra-org/api#7', url: 'https://github.com/outra-org/api/pull/7' });
+const SO_OUTRA = { 'outra-org': { mode: 'auto' } };
 
 test('conta só na fila com uma organização Automático revisa sozinha só ela', () => {
-  const e = engine(SO_CNBB, false);
-  assert.deepEqual(politicaDeInicio(e, CNBB()), { automatic: true, mode: 'auto', source: 'organizacao', organization: 'edicoes-cnbb' });
+  const e = engine(SO_OUTRA, false);
+  assert.deepEqual(politicaDeInicio(e, OUTRA()), { automatic: true, mode: 'auto', source: 'organizacao', organization: 'outra-org' });
   assert.equal(politicaDeInicio(e, pr()).automatic, false, 'a organização sem regra segue a conta');
   assert.equal(politicaDeInicio(e, pr(), { retry: true }).automatic, true, 'o contrato anterior da retentativa sem regra fica');
-  e.config.conta.reviewRules = { 'edicoes-cnbb': { mode: 'auto', authors: { estagiario: 'manual' } } };
-  assert.equal(politicaDeInicio(e, CNBB('estagiario')).automatic, false, 'autor Manual vence a organização Automático');
+  e.config.conta.reviewRules = { 'outra-org': { mode: 'auto', authors: { estagiario: 'manual' } } };
+  assert.equal(politicaDeInicio(e, OUTRA('estagiario')).automatic, false, 'autor Manual vence a organização Automático');
 });
 
 test('disparo inicial com a conta só na fila lança a organização Automático e mais nada', async () => {
-  const e = engine(SO_CNBB, false);
-  e.queue = [pr(), CNBB()];
+  const e = engine(SO_OUTRA, false);
+  e.queue = [pr(), OUTRA()];
   e._registraPulo = () => false;
   let lancados;
   e.launchReview = async urls => { lancados = urls; };
   await e._dispararAutomacoes(e.queue);
-  assert.deepEqual(lancados, [CNBB().url]);
+  assert.deepEqual(lancados, [OUTRA().url]);
 });
 
 test('nova rodada por push com a conta só na fila segue a regra da organização', () => {
-  for (const [regras, esperado] of [[SO_CNBB, 1], [undefined, 0]]) {
+  for (const [regras, esperado] of [[SO_OUTRA, 1], [undefined, 0]]) {
     const e = engine(regras, false);
-    e.panorama = [CNBB()];
-    e.headQuietoDesde = { [CNBB().key]: { head: 'novo', at: 1 } };
-    e.staleInfo = { [CNBB().key]: { stale: true, head: 'novo', lastState: 'CHANGES_REQUESTED' } };
+    e.panorama = [OUTRA()];
+    e.headQuietoDesde = { [OUTRA().key]: { head: 'novo', at: 1 } };
+    e.staleInfo = { [OUTRA().key]: { stale: true, head: 'novo', lastState: 'CHANGES_REQUESTED' } };
     assert.equal(e.reReviewTargets(new Set()).length, esperado);
   }
 });
@@ -96,7 +96,7 @@ test('reconferência técnica e recuperação da prova seguem a regra, nos dois 
   const { pausaDaRecuperacao, AUTOMACAO_DESLIGADA } = await import('../lib/engine/recuperacao-prova.js');
   const casos = [
     { regras: manual, conta: true, alvo: pr(), relanca: false },
-    { regras: SO_CNBB, conta: false, alvo: CNBB(), relanca: true },
+    { regras: SO_OUTRA, conta: false, alvo: OUTRA(), relanca: true },
     { regras: undefined, conta: false, alvo: pr(), relanca: false },
   ];
   for (const c of casos) {
@@ -320,7 +320,7 @@ test('mudança durante consulta libera apenas a vaga original e preserva a próx
 });
 
 test('o motor manda para a tela, por PR, se a revisão inicia sozinha', () => {
-  const e = engine(SO_CNBB, false);
-  e.queue = [pr(), CNBB()];
-  assert.deepEqual(e.inicioAutomaticoDaFila(), { [pr().key]: false, [CNBB().key]: true });
+  const e = engine(SO_OUTRA, false);
+  e.queue = [pr(), OUTRA()];
+  assert.deepEqual(e.inicioAutomaticoDaFila(), { [pr().key]: false, [OUTRA().key]: true });
 });

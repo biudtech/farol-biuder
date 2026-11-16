@@ -8,7 +8,7 @@
 # vermelho.
 #
 # O QUE ELE NÃO FAZ, e é importante não confundir: ele NÃO substitui o CI. Parte
-# da suíte pula fora do POSIX (o instalador do macOS, o spawn headless posix, o
+# da suíte pula fora do POSIX (o spawn headless posix, o
 # killTree por grupo de processo, o chmod da credencial), e isso depende do
 # SISTEMA, não do shell: Git Bash no Windows não recupera nenhum deles. Quem
 # cobre o Linux é o .github/workflows/ci.yml, que é a plataforma do motor. Aqui o contrato é mais modesto e honesto: o que roda nesta máquina tem
@@ -34,7 +34,7 @@ falhou() {
   exit 1
 }
 
-# --- push direto na main: PROIBIDO (decisao do Wanderson, 29/08/2026) ----------
+# --- push direto na main: PROIBIDO (decisao do dono, 29/08/2026) ----------
 # O ruleset "main protegida" exige pull request e o check `ci`, e o Repository
 # admin tem bypass. Ate hoje TODO push da main passou por cima da propria regra:
 # o proprio git responde "Bypassed rule violations for refs/heads/main".

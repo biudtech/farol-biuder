@@ -22,7 +22,7 @@ import {
   INFLIGHT_FILE, TEMPLATE_DIR, CLAUDE_JSON_DA_CONFIANCA,
 } from './lib/paths.js';
 
-// Helpers puros e utilitários movidos pra lib/ (Onda 1 do refactor, ver docs/QUALITY.md).
+// Helpers puros e utilitários movidos pra lib/ (ver docs/QUALITY.md).
 // A Engine abaixo compõe estes módulos; a decomposição por responsabilidade segue nas ondas 2+.
 import { DEFAULT_PORT, TEMPOS } from './lib/constants.js';
 import env from './lib/env.js';
@@ -149,7 +149,7 @@ class Engine extends EventEmitter {
     // o boot engolia config.json editado à mão. Não numérico virava Math.max(180, NaN)
     // = NaN no schedule(), e setTimeout(fn, NaN) dispara em ~1ms: polling contínuo
     // contra o GitHub até o rate limit. Mesma expressão do updateSettings, de propósito.
-    // Piso de 180s (decisão do Wanderson, 16/08/2026): 1 e 2 minutos eram curtos
+    // Piso de 180s (decisão do dono, 16/08/2026): 1 e 2 minutos eram curtos
     // demais; config antiga com 60/120 é clampada pra 180 aqui mesmo.
     this.config.intervalSeconds = Math.min(3600, Math.max(180, parseInt(this.config.intervalSeconds, 10) || DEFAULTS.intervalSeconds));
     // paralelismo por conta: mesmo tratamento (boot engole config.json editado à mão);
@@ -571,7 +571,7 @@ class Engine extends EventEmitter {
     return env;
   }
 
-  // Consultas ao GitHub (leitura, zero IA): colaborador lib/engine/gh-queries.js (Onda 2).
+  // Consultas ao GitHub (leitura, zero IA): colaborador lib/engine/gh-queries.js.
   async searchPRs(extraArgs, user, agora = Date.now()) { return ghMod.searchPRs(this, extraArgs, user, agora); }
   async prState(pr) { return ghMod.prState(this, pr); }
   async prEstadoELabels(pr) { return ghMod.prEstadoELabels(this, pr); }
@@ -909,7 +909,7 @@ class Engine extends EventEmitter {
     return reReq;
   }
 
-  // Pipeline de revisão headless: colaborador lib/engine/review.js (gate intacto, Onda 2).
+  // Pipeline de revisão headless: colaborador lib/engine/review.js (gate intacto).
   prFromUrl(url) { return reviewMod.prFromUrl(this, url); }
   async launchReview(urls, mode = 'auto', origem = 'auto', extras = {}) { return reviewMod.launchReview(this, urls, mode, origem, extras); }
   enqueueHeadless(pr) { return reviewMod.enqueueHeadless(this, pr); }
@@ -981,7 +981,7 @@ class Engine extends EventEmitter {
   retryTargets(freshKeys, inflightKeys, agora = Date.now()) { return reviewMod.retryTargets(this, freshKeys, inflightKeys, agora); }
 
   // perfil marcado pra uma pessoa (por login); {} quando não marcada
-  // Pushback (memória de contestação do autor): colaborador lib/engine/pushback.js (Onda 2).
+  // Pushback (memória de contestação do autor): colaborador lib/engine/pushback.js.
   personProfile(login) { return pushbackMod.personProfile(this, login); }
   pushbacksFor(login) { return pushbackMod.pushbacksFor(this, login); }
   recordPushback(body) { return pushbackMod.recordPushback(this, body); }
@@ -1004,7 +1004,7 @@ class Engine extends EventEmitter {
   // qual agente esta rodando. O id cru vem do evento system/init da sessao.
   setSessionModel(id, rawModel) { return sessionMod.setSessionModel(this, id, rawModel); }
   // fachada com argumento de comportamento (agent, o rótulo do subagente na linha
-  // do feed): a aridade importa, ver a lição da v2.28.0 no docs/REVIEW-GATES.md
+  // do feed): a aridade importa
   pushActivity(id, kind, text, agent, stage) { return sessionMod.pushActivity(this, id, kind, text, agent, stage); }
   toolSummary(name, input) { return sessionMod.toolSummary(this, name, input); }
   killTree(pid) { return sessionMod.killTree(this, pid); }
@@ -1026,7 +1026,7 @@ class Engine extends EventEmitter {
   async detectAuthorPushback(pr, seen) { return pushbackMod.detectAuthorPushback(this, pr, seen); }
   async classifyPushback(pr, marker) { return pushbackMod.classifyPushback(this, pr, marker); }
 
-  // Decisão + postagem no GitHub: colaborador lib/engine/decision.js (gate intacto, Onda 2).
+  // Decisão + postagem no GitHub: colaborador lib/engine/decision.js (gate intacto).
   recordDecision(pr, result, extra) { return decisionMod.recordDecision(this, pr, result, extra); }
   resolveIntoHistory(item) { return decisionMod.resolveIntoHistory(this, item); }
   decisionByKey(key) { return decisionMod.decisionByKey(this, key); }

@@ -43,11 +43,11 @@ test('credencial válida devolve quem ela representa, e nada do segredo', async 
   let urlPedida = '';
   const fetchFalso = async (url) => {
     urlPedida = url;
-    return { ok: true, status: 200, text: async () => '{"displayName":"Wanderson","emailAddress":"eu@empresa.com"}' };
+    return { ok: true, status: 200, text: async () => '{"displayName":"Pessoa","emailAddress":"eu@empresa.com"}' };
   };
   const r = await jira.testarSite(engine, 's1', fetchFalso);
   assert.equal(r.ok, true);
-  assert.equal(r.quem, 'Wanderson');
+  assert.equal(r.quem, 'Pessoa');
   assert.match(urlPedida, /\/rest\/api\/2\/myself$/, 'myself não depende de existir card nem de permissão em projeto');
   assert.equal(JSON.stringify(r).includes('segredo-que-nao-pode-vazar'), false, 'a resposta nunca leva o token');
 });

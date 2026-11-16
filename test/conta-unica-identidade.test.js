@@ -141,11 +141,11 @@ test('sem token é estado: uma linha quando começa, e só volta a avisar depois
   const gh = (await import('../lib/engine/gh-queries.js')).default;
   const linhas = [];
   const e = { log: (nivel, msg) => linhas.push(msg) };
-  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), true);
-  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), false);
-  assert.equal(gh.avisarSemToken(e, 'Alex', 'alex sem token no gh'), false, 'login do GitHub não distingue caixa');
-  gh.tokenVoltou(e, 'alex');
-  assert.equal(gh.avisarSemToken(e, 'alex', 'alex sem token no gh'), true);
+  assert.equal(gh.avisarSemToken(e, 'maria', 'maria sem token no gh'), true);
+  assert.equal(gh.avisarSemToken(e, 'maria', 'maria sem token no gh'), false);
+  assert.equal(gh.avisarSemToken(e, 'Maria', 'maria sem token no gh'), false, 'login do GitHub não distingue caixa');
+  gh.tokenVoltou(e, 'maria');
+  assert.equal(gh.avisarSemToken(e, 'maria', 'maria sem token no gh'), true);
   assert.equal(linhas.length, 2);
 });
 

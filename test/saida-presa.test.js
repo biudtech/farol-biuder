@@ -1,6 +1,6 @@
 // Processo da sessão que saiu com o pipe preso por um neto (30/10/2026).
 //
-// biblioteca-cnbb-api#144: o Codex saiu, mas quatro query.js abertos como app Electron
+// acme/api#144: o Codex saiu, mas quatro query.js abertos como app Electron
 // seguravam o stdout herdado, o 'close' nunca chegou e a sessão ficou 75 minutos viva,
 // cancelada, com a label `<conta>:revisando` no PR. Aqui o neto é um node que dorme.
 import cp from 'node:child_process';

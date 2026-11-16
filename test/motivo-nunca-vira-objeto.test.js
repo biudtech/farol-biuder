@@ -4,7 +4,7 @@
    interpolar o objeto cru numa string escreve "[object Object]". Já aconteceu:
 
      v2.48.0  card "Precisa de você"        (corrigido na v2.48.3)
-     v2.51.1  as TRÊS notificações do sistema (achado pelo Wanderson em 20/08/2026,
+     v2.51.1  as TRÊS notificações do sistema (achado pelo dono em 20/08/2026,
               e o CHANGELOG da v2.48.3 AFIRMAVA que a notificação estava corrigida)
 
    Este arquivo trava o unwrap em si e a fonte única dele nas notificações. */

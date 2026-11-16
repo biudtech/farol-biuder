@@ -5,7 +5,7 @@
 //
 // O invariante que manda em tudo é work-conserving: se há elegível na fila e slot
 // livre, alguma revisão SEMPRE dispara. A política escolhe QUAL, nunca SE. É a regra
-// do Wanderson: com fila, divide; sem fila, o que chegar é atendido.
+// do dono: com fila, divide; sem fila, o que chegar é atendido.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';

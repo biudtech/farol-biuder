@@ -57,17 +57,17 @@ const URL_314 = 'https://github.com/biudtech/engine-ai/pull/314';
 const prDo = (author) => ({ key: 'biudtech/engine-ai#314', url: URL_314, repo: 'biudtech/engine-ai', number: 314, author });
 
 test('ehPrProprio: mesma conta sem diferenciar caixa; dado faltando nunca prova', () => {
-  assert.equal(ehPrProprio('wandersonbiuder', 'wandersonbiuder'), true);
-  assert.equal(ehPrProprio('WandersonBiuder', 'wandersonbiuder'), true);
-  assert.equal(ehPrProprio('Alexpraxedes', 'wandersonbiuder'), false);
-  assert.equal(ehPrProprio('', 'wandersonbiuder'), false);
-  assert.equal(ehPrProprio('wandersonbiuder', ''), false);
+  assert.equal(ehPrProprio('contabiuder', 'contabiuder'), true);
+  assert.equal(ehPrProprio('ContaBiuder', 'contabiuder'), true);
+  assert.equal(ehPrProprio('Alexpraxedes', 'contabiuder'), false);
+  assert.equal(ehPrProprio('', 'contabiuder'), false);
+  assert.equal(ehPrProprio('contabiuder', ''), false);
   assert.equal(ehPrProprio(undefined, undefined), false);
 });
 
 test('launchReview: PR do panorama cujo autor é a conta não enfileira e avisa', async () => {
-  const e = engineDe('wandersonbiuder');
-  e.panorama = [prDo('wandersonbiuder')];
+  const e = engineDe('contabiuder');
+  e.panorama = [prDo('contabiuder')];
   const enfileirados = [];
   const toasts = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
@@ -87,8 +87,8 @@ const autorNoGh = (login) => (cmd, args) => {
 };
 
 test('launchReview: URL avulsa de PR da própria conta é barrada pelo autor lido do GitHub', async () => {
-  const e = engineDe('wandersonbiuder');
-  runImpl = autorNoGh('WandersonBiuder');
+  const e = engineDe('contabiuder');
+  runImpl = autorNoGh('ContaBiuder');
   const enfileirados = [];
   const toasts = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
@@ -101,7 +101,7 @@ test('launchReview: URL avulsa de PR da própria conta é barrada pelo autor lid
 });
 
 test('launchReview: URL avulsa de PR de outra pessoa segue, com o autor lido no item', async () => {
-  const e = engineDe('wandersonbiuder');
+  const e = engineDe('contabiuder');
   runImpl = autorNoGh('Alexpraxedes');
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
@@ -113,7 +113,7 @@ test('launchReview: URL avulsa de PR de outra pessoa segue, com o autor lido no 
 });
 
 test('launchReview: URL avulsa com a leitura do autor falhando segue (falta de dado nunca bloqueia)', async () => {
-  const e = engineDe('wandersonbiuder');
+  const e = engineDe('contabiuder');
   runImpl = () => Promise.resolve({ ok: false, code: 1, stdout: '', stderr: 'rede' });
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
@@ -126,8 +126,8 @@ test('launchReview: URL avulsa com a leitura do autor falhando segue (falta de d
 
 test('portão de postagem: decisivo em item sem autor lê o autor antes de enviar e recusa o PR próprio', async () => {
   const { recusaPorEstado } = await import('../lib/engine/postagem-portao.js');
-  const e = engineDe('wandersonbiuder');
-  runImpl = autorNoGh('wandersonbiuder');
+  const e = engineDe('contabiuder');
+  runImpl = autorNoGh('contabiuder');
   const proprio = await recusaPorEstado(e, prDo(''), { event: 'APPROVE', body: 'ok' });
   assert.equal(proprio.blocked, 'pr_proprio');
   assert.equal(proprio.attempted, false);
@@ -142,7 +142,7 @@ test('portão de postagem: decisivo em item sem autor lê o autor antes de envia
 });
 
 test('launchReview: PR de outra pessoa segue normalmente', async () => {
-  const e = engineDe('wandersonbiuder');
+  const e = engineDe('contabiuder');
   e.panorama = [prDo('Alexpraxedes')];
   const enfileirados = [];
   e.enqueueHeadless = (pr) => { enfileirados.push(pr); };
@@ -154,39 +154,39 @@ test('launchReview: PR de outra pessoa segue normalmente', async () => {
 });
 
 test('enqueueHeadless: re-revisão, comando e distribuição também não entram com PR próprio', () => {
-  const e = engineDe('wandersonbiuder');
-  const r = e.enqueueHeadless({ ...prDo('wandersonbiuder'), viaComando: true });
+  const e = engineDe('contabiuder');
+  const r = e.enqueueHeadless({ ...prDo('contabiuder'), viaComando: true });
   assert.deepEqual(r, { ok: false, code: 'pr-proprio' });
   assert.equal(e.headlessQueue.length, 0);
-  assert.equal(porta.motivoParaNaoExecutar(e, prDo('wandersonbiuder')), 'pr-proprio', 'a regra mora na porta de execução');
-  assert.deepEqual(porta.executaveis(e, [prDo('wandersonbiuder')]), []);
+  assert.equal(porta.motivoParaNaoExecutar(e, prDo('contabiuder')), 'pr-proprio', 'a regra mora na porta de execução');
+  assert.deepEqual(porta.executaveis(e, [prDo('contabiuder')]), []);
 });
 
 test('ehMeu: decide só pelo autor do item; a lista Meus PRs não existe mais e não prova nada', () => {
-  const e = engineDe('wandersonbiuder');
-  e.myPRs = [prDo('wandersonbiuder')];
+  const e = engineDe('contabiuder');
+  e.myPRs = [prDo('contabiuder')];
   assert.equal(ehMeu(e, prDo('Alexpraxedes')), false);
   assert.equal(ehMeu(e, prDo('')), false, 'sem autor no item, a lista (que o motor não lê mais) não decide');
-  assert.equal(ehMeu(e, prDo('WandersonBiuder')), true, 'autor igual à conta, sem diferenciar caixa');
+  assert.equal(ehMeu(e, prDo('ContaBiuder')), true, 'autor igual à conta, sem diferenciar caixa');
 });
 
 // Review Focus 2: o gate de PR próprio não pode depender de engine.myPRs.
 const aprovavel = () => ({ ...criteriaFixture('approve'), analysisStatus: 'complete', verdict: 'approve', payloads: { approve: { event: 'APPROVE', body: 'ok' } } });
 
 test('gate sem engine.myPRs: autor igual à conta em caixa diferente nunca sai como APPROVE nem REQUEST_CHANGES', () => {
-  const e = engineDe('wandersonbiuder');
+  const e = engineDe('contabiuder');
   delete e.myPRs;
-  const pr = { ...prDo('WandersonBiuder'), requested: true };
+  const pr = { ...prDo('ContaBiuder'), requested: true };
   assert.deepEqual(shouldAutoApprove(e, pr, aprovavel()), { ok: false, motivo: 'pr_proprio' });
   const rc = { ...criteriaFixture('request_changes'), analysisStatus: 'complete', verdict: 'request_changes', payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'x' } } };
   assert.equal(shouldAutoReject(e, pr, rc), false);
 });
 
 test('gate sem engine.myPRs: o desfecho do PR próprio posta COMMENT', () => {
-  const e = engineDe('wandersonbiuder');
+  const e = engineDe('contabiuder');
   delete e.myPRs;
   e.config.conta.onClean = 'approve';
-  const pr = { ...prDo('WandersonBiuder'), requested: true };
+  const pr = { ...prDo('ContaBiuder'), requested: true };
   const resultado = { ...aprovavel(), headSha: 'abc123', payloads: { approve: { event: 'APPROVE', body: 'ok' }, comment: { event: 'COMMENT', body: 'Leitura completa.' } } };
   const novo = caminhoNovo(e, pr, resultado, { ok: false, motivo: 'pr_proprio' }, false);
   assert.equal(novo && novo.tipo, 'pr_proprio');

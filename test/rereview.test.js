@@ -76,7 +76,7 @@ test('reReviewTargets: pedi mudanças + head novo + gates ok = alvo', () => {
 /* ---------- o que NUNCA pode relançar ---------- */
 
 // Até a v2.52.x, aprovação stale NÃO relançava round nenhum (só pedido de
-// mudanças fechava). Invertido na v2.53.0 (decisão do Wanderson, 25/08/2026,
+// mudanças fechava). Invertido na v2.53.0 (decisão do dono, 25/08/2026,
 // medida no engine-ai#90): PR iterativo travava no primeiro APPROVE, porque
 // nada reabria o gate pro round seguinte. Autonomia de verdade cobre os dois
 // vereditos; ver classificaReRound em lib/engine/review.js.

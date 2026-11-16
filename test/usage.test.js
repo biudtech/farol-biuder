@@ -323,7 +323,7 @@ test('recordUsage sem ref grava null (nunca quebra)', () => {
   assert.equal(engine.usageSessions.sessions[0].ref, null);
 });
 
-// pedido do Wanderson: cada sessao registrada carrega a versao do Farol que a
+// pedido do dono: cada sessao registrada carrega a versao do Farol que a
 // produziu, pra aparecer na tabela "Sessoes recentes" da aba Consumo. O campo
 // nasce em recordUsage (pos-sessao, nunca entra em prompt) com o APP_VERSION
 // do momento do registro, nao da sessao em si (nao ha como saber com qual

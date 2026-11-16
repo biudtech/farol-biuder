@@ -1,6 +1,6 @@
 // A lista de falhas do Diagnostico estava ilegivel (23/09/2026).
 //
-// Medido na máquina do Wanderson: 19 registros, dos quais 15 sao o MESMO limite de plano
+// Medido na máquina do dono: 19 registros, dos quais 15 sao o MESMO limite de plano
 // no MESMO PR (biud-frontend#1050), um por tentativa entre 17:12 e 18:02. Cada um vira um
 // cartao inteiro e ABERTO na tela (titulo, chip, "o que fazer", bloco com hora, sessao,
 // referencia e o texto cru, mais o botao de copiar), entao quatro falhas ocupam a tela
@@ -30,11 +30,11 @@ const MOTIVO_LIMITE = 'sessão retornou erro: You' + "'" + 've hit your weekly l
 // o registro real que repetiu 15 vezes
 const limite = (i) => ({
   id: 'f' + i, at: BASE + i * 60000, kind: 'pushback', classe: 'limite-plano',
-  ref: 'biudtech/biud-frontend#1050', account: 'wandersonbiuder', motivo: MOTIVO_LIMITE,
+  ref: 'biudtech/biud-frontend#1050', account: 'contabiuder', motivo: MOTIVO_LIMITE,
 });
 const invalido = (i) => ({
   id: 'r' + i, at: BASE + i * 60000, kind: 'review', classe: 'resultado-invalido',
-  ref: 'biudtech/tenant-company#126', account: 'wandersonbiuder',
+  ref: 'biudtech/tenant-company#126', account: 'contabiuder',
   motivo: 'revisão não concluída: a sessão terminou sem entregar o resultado estruturado',
   sessionId: 'a-21b64dbd-2fb0-4e4f-b92d-da78c7c9e775',
 });

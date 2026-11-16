@@ -1,7 +1,7 @@
 // O Farol sabe QUE CONTA ele e, e escreve na primeira pessoa (23/09/2026).
 //
-// Caso medido em biudtech/biud-frontend#1150: o Farol, rodando na conta @Gabrielk5,
-// postou um comentario que dizia "@Gabrielk5 ja deixou isso registrado na review de
+// Caso medido em biudtech/biud-frontend#1150: o Farol, rodando na conta @RevisorK5,
+// postou um comentario que dizia "@RevisorK5 ja deixou isso registrado na review de
 // aprovacao, com a mesma evidencia". Quem escreveu e quem foi citado sao a MESMA conta:
 // o texto fala de si mesmo em terceira pessoa, como se a aprovacao anterior fosse de
 // outra pessoa. E a assinatura mais clara possivel de que nao foi uma pessoa que
@@ -24,15 +24,15 @@ const pub = (await import('../lib/engine/public-review.js')).default;
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
 
-const LOGIN = 'Gabrielk5';
+const LOGIN = 'RevisorK5';
 // o texto REAL postado em biud-frontend#1150
-const CORPO_DO_CASO = '@Gabrielk5 já deixou isso registrado na review de aprovação, com a mesma evidência.';
+const CORPO_DO_CASO = '@RevisorK5 já deixou isso registrado na review de aprovação, com a mesma evidência.';
 
 /* ---------- 1) a sessão sabe quem ela é ---------- */
 
 test('o bloco de identidade diz a conta e manda falar na primeira pessoa', () => {
   const b = prompt.identidadeBlock(LOGIN);
-  assert.match(b, /@Gabrielk5/, 'a conta que vai postar é nomeada');
+  assert.match(b, /@RevisorK5/, 'a conta que vai postar é nomeada');
   assert.match(b, /primeira pessoa/i);
   assert.match(b, /sã?o (os )?seus|suas?\b/i, 'review e comentário daquela conta são DELE');
   assert.match(b, /terceira pessoa/i, 'e o erro a evitar está nomeado');
@@ -49,7 +49,7 @@ test('o prompt da revisão carrega a identidade da conta que vai postar', () => 
   e.personProfileBlock = () => '';
   e.reviewFormatBlock = () => '';
   const p = e.headlessPromptFor('https://github.com/o/r/pull/1', 'outro');
-  assert.match(p, /@Gabrielk5/);
+  assert.match(p, /@RevisorK5/);
   assert.match(p, /primeira pessoa/i);
 });
 
@@ -62,16 +62,16 @@ test('corpo que menciona a PRÓPRIA conta é recusado', () => {
 
 test('terceira pessoa sem arroba também conta', () => {
   const issues = pub.publicReviewLanguageIssues(
-    { event: 'COMMENT', body: 'Gabrielk5 já apontou isso na aprovação anterior.' }, LOGIN);
+    { event: 'COMMENT', body: 'RevisorK5 já apontou isso na aprovação anterior.' }, LOGIN);
   assert.ok(issues.some(i => i.code === 'self_third_person'));
 });
 
 test('a arroba na própria conta conta mesmo sem verbo de revisão junto', () => {
-  // "cc @Gabrielk5", "marquei @Gabrielk5": ninguém se marca num comentário que está
+  // "cc @RevisorK5", "marquei @RevisorK5": ninguém se marca num comentário que está
   // escrevendo. Este caso existe para a regra da arroba ter valor PRÓPRIO: sem ele, ela
   // seria redundante com a de terceira pessoa (que já pega "@X já deixou").
   const issues = pub.publicReviewLanguageIssues(
-    { event: 'COMMENT', body: 'Marquei @Gabrielk5 para acompanhar o ajuste.' }, LOGIN);
+    { event: 'COMMENT', body: 'Marquei @RevisorK5 para acompanhar o ajuste.' }, LOGIN);
   assert.ok(issues.some(i => i.code === 'self_third_person'));
 });
 
@@ -84,7 +84,7 @@ test('mencionar OUTRA pessoa continua livre', () => {
 test('a própria conta como literal técnico (código, URL) não é menção', () => {
   const issues = pub.publicReviewLanguageIssues({
     event: 'COMMENT',
-    body: 'O job falhou com `run-as: Gabrielk5` e o log está em https://github.com/Gabrielk5/x/runs/1.'
+    body: 'O job falhou com `run-as: RevisorK5` e o log está em https://github.com/RevisorK5/x/runs/1.'
   }, LOGIN);
   assert.deepEqual(issues, [], 'crase e URL já são mascaradas antes da leitura');
 });

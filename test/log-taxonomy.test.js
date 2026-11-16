@@ -33,7 +33,7 @@ const MSG = {
   // e estacionava o PR em silêncio, que foi o caso do biud-core#317 no Farol de um colega
   provedor: 'sessão retornou erro: API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.',
   provedor500: 'sessão retornou erro: API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}',
-  token: 'revisao biudtech/biud-esg#193: sem token no gh pra wandersonbiuder',
+  token: 'revisao biudtech/biud-esg#193: sem token no gh pra contabiuder',
   skipRoot: 'revisao biudtech/engine-ai#97 (transitório, tenta de novo): claude saiu com código 1: --dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons',
   binario: "claude saiu com código 1: '\"C:\\nvm4w\\nodejs\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe\"' não é reconhecido como um comando interno",
   stream: 'claude saiu com código 4294967295: stream interrompido antes do evento result',
@@ -78,7 +78,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
 
 /* ---------- classify: mensagens reais ---------- */
 
-// 31/10/2026: sete autoanálises do biblioteca-cnbb-web caíam em desconhecido, e o Diagnóstico
+// 31/10/2026: sete autoanálises do acme/web caíam em desconhecido, e o Diagnóstico
 // mandava avisar quem mantém o Farol por uma recusa do classificador do modelo.
 test('recusa da política de uso do modelo tem classe própria, de ambiente e sem retry', () => {
   const c = classify("sessão retornou erro: API Error: Opus 5.5's safeguards flagged this message (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations.");
@@ -164,7 +164,7 @@ test('classify: OAuth expirado exige ação na credencial, mesmo após reconexõ
   // 11/09/2026: a variante que o CLI cospe quando o refresh do OAuth falha
   // ("OAuth session expired and could not be refreshed") nao casava com nada e caia
   // em desconhecido/app, ou seja, o Diagnostico culpava o Farol em vez da credencial.
-  // Caso real: Edicoes-CNBB/biblioteca-cnbb-ai-engine#13, com os quatro lotes mortos
+  // Caso real: acme/ai-engine#13, com os quatro lotes mortos
   // na largada e um card mudo de "precisa de voce".
   for (const msg of [MSG.oauthExpirado, 'authentication_error: OAuth access token has expired', 'OAUTH ACCESS TOKEN HAS EXPIRED',
     MSG.oauthSemRefresh, 'OAuth session expired and could not be refreshed']) {
@@ -571,7 +571,7 @@ test('triage: aceita CRLF nas linhas', () => {
 /* ---------- triage contra o log REAL de produção ---------- */
 
 // Contagens MEDIDAS no farol.log real (159 linhas, 03 a 07/08/2026, máquina do
-// Wanderson). O fixture abaixo é montado INLINE a partir das mensagens reais, com
+// dono). O fixture abaixo é montado INLINE a partir das mensagens reais, com
 // exatamente as mesmas contagens, pra provar que o triage reproduz o incidente
 // como ele aconteceu. Não lemos o arquivo do usuário no teste, de propósito:
 // teste não pode depender de estado de máquina.
@@ -664,8 +664,8 @@ for (const [msg, oque] of REDE_REAL) {
 }
 
 /* ---------- root + skip-permissions: a falha que fingia ser transitória ----------
-   Caso real (biudtech/engine-ai#97, 25/08/2026, Farol rodando em Android via Termux
-   + proot Debian): o login padrão do proot é root, o Claude Code recusa
+   Caso real (biudtech/engine-ai#97, 25/08/2026, Farol rodando sob
+   proot Debian): o login padrão do proot é root, o Claude Code recusa
    `--dangerously-skip-permissions` com uid 0, e a mensagem termina em "saiu com
    código 1". O catch-all de 'ferramenta' casava com isso e devolvia TRANSITÓRIO,
    então o Farol relançou a mesma revisão a cada ciclo, indefinidamente, sem nunca
@@ -704,7 +704,7 @@ test('rate limit do GitHub é transitório', () => {
 });
 
 test('busca sem mensagem tem classe própria e transitória', () => {
-  const busca = classify('gh search falhou (wandersonaadsantos: --reviewed-by=@me): ');
+  const busca = classify('gh search falhou (conta-revisora: --reviewed-by=@me): ');
   assert.equal(busca.id, 'busca-sem-mensagem');
   assert.equal(busca.kind, 'transitorio');
   assert.notEqual(classify('gh search falhou (alex: --owner x): Invalid search query "user:x"').id, 'busca-sem-mensagem', 'busca com mensagem segue a classe da mensagem');

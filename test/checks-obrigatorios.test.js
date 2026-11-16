@@ -1,9 +1,9 @@
 // A revisão automática só começa com 100% dos checks OBRIGATÓRIOS verdes.
 //
-// PEDIDO DO GUILHERME (31/08/2026), com dois desperdícios medidos por ele em campo:
+// PEDIDO DE UM COLEGA (31/08/2026), com dois desperdícios medidos por ele em campo:
 // (1) o Farol começa a revisar, alguém clica em "Update branch", entra commit novo e a
 // sessão inteira vira lixo; (2) o Farol aprova e a pipe quebra depois, e o ciclo de
-// correção custa outra revisão. Decisão do Wanderson: a régua é 100% dos obrigatórios
+// correção custa outra revisão. Decisão do dono: a régua é 100% dos obrigatórios
 // verdes, e quem tem pressa continua tendo o botão Revisar, que atravessa sem esperar.
 //
 // OBRIGATÓRIOS, e não todos: o `sonar` do engine-ai é cronicamente vermelho e não é
@@ -119,7 +119,7 @@ test('obrigatório faltando segura o automático e avisa que o botão vale', asy
   assert.equal(await skip.bloqueiaAutomatico(e, { ...PR }), true);
   assert.match(e.toasts[0].text, /esperando os checks obrigatórios/);
   assert.match(e.toasts[0].text, /test \(ainda rodando\)/);
-  assert.match(e.toasts[0].text, /botão Revisar continua valendo/);
+  assert.match(e.toasts[0].text, /Revisar agora continua valendo/);
 });
 
 test('desligado (padrão), o automático nem consulta os checks e revisa na hora', async () => {

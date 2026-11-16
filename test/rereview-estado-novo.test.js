@@ -1,6 +1,6 @@
 // Card de commit novo que se explica e estado novo que destrava (v2.59.3).
 //
-// Caso de campo (Edicoes-CNBB/biblioteca-cnbb-api#22, 09/09/2026): o autor empurrou
+// Caso de campo (acme/api#22, 09/09/2026): o autor empurrou
 // commit durante a revisão, o card stale_head foi pra mesa pedindo "Peça uma revisão
 // nova", e quem olhou no minuto 2 concluiu que o Farol tinha travado. O round
 // automático já ia agir sozinho, só não dizia. A investigação achou ainda duas

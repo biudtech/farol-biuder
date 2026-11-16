@@ -1,6 +1,6 @@
 // As configurações da conta precisam ser respeitadas (25/09/2026).
 //
-// Pedido do Wanderson, ao ver quatro PRs aprováveis sem ressalva esperando clique numa conta
+// Pedido do dono, ao ver quatro PRs aprováveis sem ressalva esperando clique numa conta
 // que estava em "aprova sozinho": "Essas configurações precisam serem respeitadas". A
 // investigação achou a classe do defeito: a tela salvava a conta INTEIRA a cada edição, com o
 // que ela tinha na memória, e o servidor gravava como veio. Qualquer campo que a tela não

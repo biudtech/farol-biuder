@@ -437,11 +437,11 @@ describe('Sistema: conta revisora e política', () => {
     // ela só mexe na reprovada
     mudar(campo(/revisão reprova/), 'wait');
     // nesse meio outra pessoa desliga a revisão automática e acrescenta uma organização
-    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, owners: ['biudtech', 'cnbb'] }] });
+    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, owners: ['biudtech', 'outra'] }] });
     expect(na(CONTA_E_POLITICA).getByText(/a conta e a política mudou no motor enquanto você editava.*o salvar leva só o que você alterou: o que a outra pessoa mudou não é desfeito/)).toBeTruthy();
     // os campos que ela não tocou mostram o que o motor tem agora
     expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(false);
-    expect(within(na(CONTA_E_POLITICA).getByRole('list', { name: 'Organizações monitoradas' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['biudtechTirar', 'cnbbTirar']);
+    expect(within(na(CONTA_E_POLITICA).getByRole('list', { name: 'Organizações monitoradas' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['biudtechTirar', 'outraTirar']);
     expect(campo(/revisão reprova/).value).toBe('wait');
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await assentar();
@@ -498,11 +498,11 @@ describe('Sistema: conta revisora e política', () => {
     await assentar();
     mudar(na(CONTA_E_POLITICA).getByLabelText('Organização a adicionar'), 'acme');
     await clicarEm(na(CONTA_E_POLITICA), 'Adicionar à lista');
-    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, owners: ['biudtech', 'cnbb'] }] });
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, owners: ['biudtech', 'outra'] }] });
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
     await assentar();
-    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { owners: ['biudtech', 'cnbb', 'acme'] } }]]);
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { owners: ['biudtech', 'outra', 'acme'] } }]]);
   });
 
   it('cada seletor e o checkbox têm o efeito ligado por aria-describedby', async () => {

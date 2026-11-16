@@ -120,6 +120,8 @@ test('diário ausente com agregado positivo não é apresentado como consumo zer
   const r = await usageActivity({ usage: { totals: { sessions: 10 } }, usageSessions: { sessions: [] } }, new URLSearchParams());
   assert.equal(r.ok, false);
   assert.match(r.motivo, /diário detalhado não está disponível/);
+  // o bloco que o front continua desenhando quando o relatório falha (web/, AuditoriaDoRegistro)
+  assert.match(r.motivo, /Auditoria do registro, no Consumo/);
 });
 
 test('o recorte usa o diário completo, não só as 100 sessões mais recentes', () => {
