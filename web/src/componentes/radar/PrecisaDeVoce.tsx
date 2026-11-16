@@ -9,6 +9,7 @@ import type { Pendencia } from '@/contratos/radar';
 import type { Acao, Decisao } from '@/radar/acoes';
 import { acoesDaPendencia } from '@/radar/fatias';
 import { ROTULO_DO_MOTIVO, dataHora, nomeDoPr, textoDaRetentativa, textoDoParecer } from '@/radar/formato';
+import { Markdown } from '../Markdown';
 import { AcoesDoItem, type BotaoDoItem } from './AcoesDoItem';
 import { Bloco, ReferenciaDoPr } from './Bloco';
 import type { ControleDeAcoes } from './useAcoes';
@@ -59,7 +60,7 @@ function Cartao({ pendencia: p, controle }: { pendencia: Pendencia; controle: Co
       {p.reportMarkdown ? (
         <details className={estilos.review}>
           <summary>Ver o texto do parecer da revisão de {nome}</summary>
-          <pre className={estilos.textoDoReview}>{p.reportMarkdown}</pre>
+          <div className={estilos.textoDoReview}><Markdown texto={p.reportMarkdown} /></div>
         </details>
       ) : null}
 
