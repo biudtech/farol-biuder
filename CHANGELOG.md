@@ -54,12 +54,31 @@ Ainda sem versão publicada.
 - **Avaliação técnica pela cópia da BIUD:** a ferramenta fixada vem de `biudtech/eng-behaviour`.
 - **Boot provado em máquina vazia:** o motor sobe sem `gh` logado, responde a API, não escreve fora
   do HOME e sai com 0 no SIGTERM.
+- **Fronteira do motor hospedado (fase 2a):** duas chaves novas, só de arquivo. `hostPublico` é o
+  nome com que o proxy com TLS chega ao motor, aceito no Host sem porta, então o proxy não precisa
+  reescrever o Host. `origensPermitidas` é a lista das origens exatas de onde o front chama a API:
+  elas ganham cabeçalhos CORS em toda resposta, com a origem exata, nunca `*` e sem credenciais, e
+  o preflight responde 204 antes da autenticação. Com qualquer uma das duas preenchida a
+  autenticação é exigida sempre, sem configuração que desligue.
+- **Rota de saúde:** `GET /api/health` responde `{"ok":true}` sem autenticação, para o probe do
+  orquestrador. Não leva dado nenhum do motor.
+
+### Correções
+
+- **Pedido malformado derrubava o motor:** um alvo que não é URL (`GET //`) lançava fora do
+  tratamento de erro do servidor e encerrava o processo. Agora responde 400.
+- **Dois cabeçalhos `Host`:** o pedido era aceito pelo primeiro e o segundo era ignorado. Agora é
+  recusado.
+- **`OPTIONS` executava a rota:** um `OPTIONS /api/state` devolvia o estado. Todo `OPTIONS` em
+  `/api/` agora responde 204 sem executar nada.
 
 ### Para quem sobe uma instância
 
 - Uma instância nova, com a pasta de dados vazia e o `gh` logado, nasce revisando, aprovando e
   reprovando sozinha. A receita para subir sem agir está em `docs/CONFIGURATION.md`.
-- Hospedada, a instância precisa de `"localAuth": "exigir"` no `config.json`.
+- Hospedada com `hostPublico` ou `origensPermitidas` no `config.json`, a instância já exige
+  autenticação. Sem nenhuma das duas (motor em loopback atrás de um proxy que reescreve o Host),
+  ela continua precisando de `"localAuth": "exigir"`.
 
 ## v2.80.1
 

@@ -183,6 +183,8 @@ no padrão.
 | `port` | `47170` | arquivo |
 | `bind` | `"127.0.0.1"` | arquivo ([Para hospedar](#para-hospedar)) |
 | `localAuth` | `""` (`"exigir"` liga a autenticação) | arquivo |
+| `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
+| `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |
 
 Lidas só do arquivo e fora da tabela (`CHAVES_SO_DE_ARQUIVO`): `instanciaIsoladaPosta` e
 `aguardarMergeavelParaRevisar` (ligada salvo `false` explícito: PR em conflito com a base
@@ -524,22 +526,44 @@ ou diretórios novos desconhecidos.
 
 ## Para hospedar
 
-O motor hospedado roda num container Linux atrás de um proxy. Seis pontos, cada um conferido
-no código.
+O motor hospedado roda num container Linux atrás de um proxy com TLS, e o front fala com a API
+dele de outra origem. Sete pontos, cada um conferido no código. O `config.json` mínimo da
+fronteira:
 
-### 1. `localAuth: "exigir"` é obrigatório
+```json
+{
+  "hostPublico": "farol.exemplo.com",
+  "origensPermitidas": ["https://painel.exemplo.com"]
+}
+```
 
-`exigeAutenticacao` (`lib/local-auth/modo.js`) só exige autenticação em dois casos:
-`localAuth: "exigir"` no `config.json`, ou `bind` fora do loopback (`loopback` em
-`lib/http-guard.js`: ausente, `127.0.0.1`, `localhost` e `[::1]` contam como loopback). **Com
-o motor em loopback atrás de um proxy na mesma máquina, a autenticação não é exigida por
-padrão**, e quem alcança o proxy alcança a API inteira. Grave `"localAuth": "exigir"`; a
-chave é só de arquivo, porque uma página sem credencial não pode ligar nem desligar a própria
-proteção.
+As duas chaves são só de arquivo e valem depois de reiniciar: `POST /api/settings` as devolve
+em `ignoradas` e `POST /api/accounts/edit` não as alcança, porque quem chama a API não pode
+abrir a própria porta.
+
+### 1. `hostPublico` ou `origensPermitidas` já exigem autenticação
+
+`exigeAutenticacao` (`lib/local-auth/modo.js`) exige autenticação em três casos:
+
+- **modo hospedado**: `hostPublico` ou `origensPermitidas` preenchidos. A pergunta é feita
+  antes de o `localAuth` ser lido, então não existe valor de configuração que desligue;
+- `localAuth: "exigir"` no `config.json`;
+- `bind` fora do loopback (`loopback` em `lib/http-guard.js`: ausente, `127.0.0.1`, `localhost`
+  e `[::1]` contam como loopback).
+
+Com qualquer uma das duas chaves da fronteira você não precisa gravar `localAuth`. **O caso
+que continua sem autenticação por padrão é o motor em loopback, sem nenhuma das duas chaves,
+atrás de um proxy que reescreve o Host para `127.0.0.1:<porta>`**: ali quem alcança o proxy
+alcança a API inteira, e é preciso gravar `"localAuth": "exigir"`. Prefira `hostPublico`, que
+dispensa a reescrita (item 2).
+
+Valor inválido nas duas chaves vira vazio (item 2), e vazio não liga o modo hospedado. O nome
+e a origem de fora continuam recusados pela allowlist nesse caso, mas confira depois de subir:
+`GET /api/auth/status` tem de responder `"exigida": true`.
 
 Com a autenticação exigida, todo `/api/*` pede `Authorization: Bearer <token>`, exceto
-`POST /api/auth/pair` e `GET /api/auth/status` (`lib/local-auth/acesso.js`). Para obter o
-token:
+`POST /api/auth/pair`, `GET /api/auth/status` (`lib/local-auth/acesso.js`) e
+`GET /api/health` (item 7). Para obter o token:
 
 1. No próprio container, com o mesmo `FAROL_HOME` do motor: `node tools/farol-parear.js`. Ele
    imprime no terminal um código de uso único, válido por dez minutos.
@@ -551,23 +575,77 @@ token:
 `node tools/farol-parear.js --revogar-todas` revoga todas as sessões e códigos. Um stream SSE
 aberto é cortado quando a credencial dele é revogada.
 
-### 2. O que o proxy manda no Host e no Origin
+### 2. O Host, o Origin e o CORS
 
-A allowlist de `lib/http-guard.js` (`validarHostEOrigem`) roda antes de qualquer rota, com a
-porta efetiva do socket. Com o `bind` em loopback, o Host aceito é só `127.0.0.1:<porta>` ou
-`localhost:<porta>`, por igualdade exata (com `bind: "[::1]"`, também `[::1]:<porta>`, e a
-origem `http://[::1]:<porta>`). O `Origin` ausente passa; presente, precisa ser
-`http://127.0.0.1:<porta>` ou `http://localhost:<porta>`. Recusa é
-`403 { error: "forbidden", motivo: "host" | "origin" }`.
+A allowlist de `lib/http-guard.js` (`validarHostEOrigem`) roda antes de qualquer rota (só a
+de saúde responde antes, item 7), com a porta efetiva do socket. Recusa é
+`403 { error: "forbidden", motivo: "host" | "origin" }`, sem cabeçalho CORS. Host permitido
+não é autenticação: por isso o item 1.
 
-Então o proxy precisa reescrever o Host para `127.0.0.1:<porta>` e retirar (ou reescrever) o
-`Origin` que o navegador manda com o domínio público, senão os `POST` da tela voltam 403. Host
-permitido não é autenticação: por isso o item 1.
+**Host.** O motor aceita, por igualdade exata de texto:
 
-Com `bind` fora do loopback, o Host `<bind>:<porta>` e as origens `http://<bind>:<porta>` e
-`https://<bind>` também passam, e a autenticação passa a ser exigida sozinha. `sanearBind`
-(`lib/parse.js`) aceita IPv4, IPv6 entre colchetes ou nome de host em caixa baixa; o resto
-volta para `127.0.0.1`. `bind` e `port` são só de arquivo e valem depois de reiniciar.
+- `127.0.0.1:<porta>` e `localhost:<porta>`, sempre (com `bind: "[::1]"`, também
+  `[::1]:<porta>`);
+- o `hostPublico`, **sem porta**: `farol.exemplo.com`. É o que chega pelo proxy com TLS na
+  porta 443, então o proxy não precisa reescrever o Host.
+
+`farol.exemplo.com:443` é recusado, como qualquer outra porta: navegador, curl e o cliente HTTP
+do Node tiram a porta padrão do esquema antes de montar o Host, e o motor não aceita uma
+segunda forma do mesmo nome. Se o endereço público usa uma porta que não é a padrão (`:8443`),
+o Host chega com ela e é recusado; nesse caso o proxy tem de reescrever o Host. Também são
+recusados o nome em maiúsculas, com ponto final, com usuário (`x@farol.exemplo.com`), o
+subdomínio e o nome que só começa ou termina igual. Pedido com dois cabeçalhos `Host` é
+recusado, em qualquer ordem (`hostDoPedido`).
+
+`sanearHostPublico` (`lib/parse.js`) aceita um nome de host ou um IPv4, e passa para caixa
+baixa. Esquema, caminho, porta, espaço, curinga ou IPv6 entre colchetes fazem o valor inteiro
+virar vazio, sem erro no boot.
+
+**Origin.** Ausente, passa (curl, o probe, a navegação direta). Presente, precisa ser uma
+destas, também por igualdade exata:
+
+- `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`: a tela antiga, servida pelo próprio
+  motor. Não leva cabeçalho CORS, porque página e API são a mesma origem;
+- um item de `origensPermitidas`.
+
+O `hostPublico` não vira origem sozinho. Para abrir a tela antiga pelo endereço público
+(`https://farol.exemplo.com`), escreva essa origem em `origensPermitidas`; sem isso todo `POST`
+dela volta 403, a começar pelo pareamento.
+
+`sanearOrigensPermitidas` (`lib/parse.js`) mantém só o item que é uma origem exata
+`https://host` ou `https://host:porta`, em caixa baixa: sem caminho, sem barra final, sem
+curinga, sem usuário. Item inválido é descartado, repetido conta uma vez, e o que não é lista
+vira lista vazia. Dois detalhes:
+
+- a porta padrão do esquema não se escreve (`https://painel.exemplo.com:443` é descartado): o
+  navegador nunca a manda no `Origin`, e o item ficaria na lista sem casar com nada;
+- `http://` só é aceito para `localhost` e `127.0.0.1` (por exemplo `http://localhost:3000`),
+  para o front em desenvolvimento. Qualquer outro `http://` é descartado. Lembre que uma
+  origem dessas na lista também liga a exigência de autenticação.
+
+**CORS** (`lib/http-cors.js`). Quando o `Origin` é um item de `origensPermitidas`, toda
+resposta leva, inclusive 401, 403 do `x-farol`, 404, 500 e o stream de `/api/events`:
+
+```
+Access-Control-Allow-Origin: <a origem, como está na lista>
+Vary: Origin
+Access-Control-Allow-Headers: Authorization, Content-Type, x-farol
+Access-Control-Allow-Methods: GET, POST
+```
+
+Nunca `*`, e nunca `Access-Control-Allow-Credentials`: não há cookie, o token vai no
+`Authorization`. Todo `OPTIONS` em `/api/` responde `204` sem executar rota, depois da allowlist
+e antes do `x-farol` e da autenticação; quando a origem é uma das permitidas, com os cabeçalhos
+acima e `Access-Control-Max-Age: 600`. As listas de método e de cabeçalho são fixas: o que o
+preflight pede não é lido. O `x-farol: 1` continua exigido em todo `POST`, e está entre os
+cabeçalhos anunciados para o `fetch` do front poder mandá-lo.
+
+**Sem `hostPublico`**, com o motor em loopback, o proxy precisa reescrever o Host para
+`127.0.0.1:<porta>`. Com `bind` fora do loopback, o Host `<bind>:<porta>` e as origens
+`http://<bind>:<porta>` e `https://<bind>` também passam, e a autenticação passa a ser exigida
+sozinha. `sanearBind` (`lib/parse.js`) aceita IPv4, IPv6 entre colchetes ou nome de host em
+caixa baixa; o resto volta para `127.0.0.1`. `bind` e `port` são só de arquivo e valem depois
+de reiniciar.
 
 ### 3. A sessão de revisão alcança a credencial da assinatura
 
@@ -615,3 +693,16 @@ template que faltar em `prompts/`, sem sobrescrever o que existe. O `.claude/set
 uma vez, quando o workspace nasce, e nunca mais: mudança nele numa imagem nova não chega a um
 volume que já existe, e precisa ser aplicada à mão no volume. O `.claude/guardas.json` não tem
 esse problema, porque a sessão o lê direto da imagem.
+
+### 7. Saúde: `GET /api/health`
+
+Para o probe do orquestrador. Responde `200 {"ok":true}` e mais nada: o corpo é fixo e não
+leva versão, caminho, conta, fila nem estado de credencial. Diz só que o processo atende HTTP;
+não diz se o `gh` está logado nem se há perfil do Claude (isso está em `GET /api/doctor`, com
+autenticação).
+
+É a única rota que responde **antes** da allowlist de Host, sem autenticação e sem `x-farol`,
+porque o probe chega pelo IP do pod (`Host: 10.0.0.7:47170`), que não está em lista nenhuma.
+Só o `GET` no caminho exato escapa (a query string é ignorada): `POST /api/health`,
+`/api/health/` e qualquer outro método ou caminho passam pelas defesas de sempre. A resposta
+não leva cabeçalho CORS, então uma página de outro site não consegue lê-la.
