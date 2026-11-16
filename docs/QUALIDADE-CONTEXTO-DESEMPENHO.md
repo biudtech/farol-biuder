@@ -25,9 +25,9 @@ com licença e hashes; o pin npm é usado apenas para reproduzir o artefato dist
 
 ## Comparação reproduzível
 
-`tools/benchmark-ui-pintura.js --root <checkout> --output <json>` executa o mesmo replay
-de 100 deltas em cada versão. A fixture compara operações DOM, preservação de estado e
-cauda de atividade; não é perfil de CPU em produção.
+O replay de 100 deltas da tela antiga (`tools/benchmark-ui-pintura.js`) saiu com ela em
+16/11/2026. Ele comparava operações DOM, preservação de estado e cauda de atividade; não era
+perfil de CPU em produção.
 
 Com `FAROL_HOME` temporário e `GH_CONFIG_DIR` vazio, execute:
 
@@ -47,8 +47,8 @@ O fechamento também compara os engines completos, nos dois fluxos, com fontes
 congeladas e reinícios: [método e resultados](COMPARACAO-CONTEXTO-ENGINE.md).
 Nesses casos, `assist` recupera evidência adicional e aumenta o prompt completo;
 redução da memória de rodadas não demonstra economia total de tokens.
-`tools/benchmark-ui-native.js` complementa o lote com cadências espaçadas, Electron
-real e preservação de estado/ações, sem converter contagens DOM em economia de CPU.
+O `tools/benchmark-ui-native.js`, que complementava o lote com Electron real, também não
+existe mais.
 
 O smoke nativo usa `tools/electron-smoke.js --allow-desktop --output <pasta>` e runtime
 isolado compatível. Dados, contas, rede e processos externos são controlados pela

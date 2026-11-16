@@ -162,7 +162,7 @@ no padrão.
 | chave | padrão | quem edita |
 |---|---|---|
 | `conta` | `null` | `POST /api/accounts/edit` e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
-| `jiraSites` | `[]` | tela (Sistema > Jira) |
+| `jiraSites` | `[]` | `POST /api/settings` ou o arquivo (a tela só lê) |
 | `intervalSeconds` | `300` (180 a 3600) | tela |
 | `parallelReviews` | `1` (1 a 4) | tela, "Revisões paralelas por conta" |
 | `globalParallelReviews` | `0` (0 a 8; 0 = sem teto total) | tela, "Teto total desta instalação" |
@@ -271,12 +271,37 @@ Diagnóstico mostram.
 ### Onde a pasta do perfil de assinatura mora
 
 Dentro do HOME do Farol, porque no container só esse volume persiste. Com `dir` vazio, que é
-como a tela cria o perfil, a pasta é `~/.farol/claude/<id>` (`CLAUDE_PERFIS_DIR` em
+como o perfil criado pela API nasce, a pasta é `~/.farol/claude/<id>` (`CLAUDE_PERFIS_DIR` em
 `lib/paths.js`), e o id precisa caber em `[A-Za-z0-9_-]`, até 64 caracteres. Pasta informada
 só vale pelo arquivo, absoluta, dentro do HOME do Farol e fora do workspace das sessões
 (`pastaDoPerfil` em `lib/engine/pasta-do-perfil.js`); fora disso o perfil não resolve e
-aparece como inválido. A pasta que chega pela tela é descartada: `POST /api/settings` mantém
+aparece como inválido. A pasta que chega pela API é descartada: `POST /api/settings` mantém
 a que já está no arquivo (`semPastaDaTela`). O login cria a pasta com modo 0700.
+
+### Criar, trocar e remover perfil
+
+A tela mostra os perfis e testa cada um, mas não cria, não edita e não remove (ela não tem
+campo para segredo). Isso se faz por `POST /api/settings`, com o Bearer do pareamento e o
+cabeçalho `x-farol: 1`, ou pelo `config.json` com o motor parado. `claudeProfiles` é sempre a
+lista inteira: o que não vier na lista é removido.
+
+```sh
+# perfil de assinatura (a pasta é do motor; o login vem depois, veja abaixo)
+curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" \
+  -H "Content-Type: application/json" \
+  -d '{"claudeProfiles":[{"id":"plano","label":"Plano","kind":"dir"}],"claudeProfileId":"plano"}'
+
+# perfil de chave de API (a chave vem de um arquivo, para não ficar no histórico do shell)
+jq -n --rawfile chave chave.txt \
+  '{claudeProfiles:[{id:"chave",label:"Chave",kind:"apikey",apiKey:($chave|rtrimstr("\n"))}],claudeProfileId:"chave"}' \
+  | curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" \
+      -H "Content-Type: application/json" -d @-
+```
+
+A resposta traz `ok`, as `ignoradas` e a `config` como sai do motor (o perfil de chave só com
+`temChave`). Perfil que o saneamento recusa (sem `id`, de chave sem chave, com chave ou
+endereço fora da forma) some da lista sem erro: confira `config.claudeProfiles` na resposta.
+Remover é mandar a lista sem o perfil.
 
 ### A chave de API nunca sai do motor
 
@@ -284,7 +309,7 @@ a que já está no arquivo (`semPastaDaTela`). O login cria a pasta com modo 070
 
 - Para fora (snapshot, SSE e resposta de `POST /api/settings`), o perfil de chave leva só
   `temChave`, um booleano, nunca o valor nem um pedaço (`configParaFora`).
-- Salvar pela tela sem redigitar a chave, ou com a chave vazia, mantém a guardada
+- Salvar sem redigitar a chave, ou com a chave vazia, mantém a guardada
   (`comChaveGuardada`). `temChave` que venha no corpo não é gravado.
 - Mudar o endereço (`baseUrl`) de um perfil que já tem chave exige digitar a chave de novo no
   mesmo salvar: sem ela, o salvar inteiro é recusado com `chave_exigida` e a lista dos perfis
@@ -292,15 +317,26 @@ a que já está no arquivo (`semPastaDaTela`). O login cria a pasta com modo 070
 - Perfil novo de chave sem chave é descartado como incompleto.
 - Para apagar a chave, remove-se o perfil.
 
-### Login pela tela
+### Login da assinatura pela API
 
-O motor não tem terminal. Em Sistema > Plano e chaves, o botão Entrar com a assinatura do
-cartão do perfil chama `POST /api/claude/login-web/start`: o motor roda `claude auth login`
-na pasta do perfil e devolve o link de autorização. A pessoa abre o link em qualquer máquina,
-entra com a conta do plano e cola na tela o código que a página da Anthropic mostra;
-`POST /api/claude/login-web/code` entrega o código à entrada padrão do Claude Code, e saída 0
-é login feito. `POST /api/claude/login-web/cancel` encerra, pelo `loginId` ou pelo
-`profileId`.
+O motor não tem terminal, e a tela não tem o botão de login (a tela antiga tinha; ela saiu em
+16/11/2026). O login se faz com três chamadas à API, de qualquer máquina que alcance o motor,
+com o Bearer do pareamento e `x-farol: 1`:
+
+1. `POST /api/claude/login-web/start` com `{ "profileId": "<id do perfil de assinatura>" }`.
+   O motor roda `claude auth login` na pasta do perfil e responde
+   `{ "ok": true, "loginId": "...", "url": "https://..." }`.
+2. Abra a `url` num navegador qualquer, entre com a conta do plano e copie o código que a
+   página da Anthropic mostra (`<código>#<estado>`).
+3. `POST /api/claude/login-web/code` com `{ "loginId": "...", "code": "<o código inteiro>" }`.
+   O motor entrega o código à entrada padrão do Claude Code; saída 0 é login feito, e a
+   resposta é `{ "ok": true }`.
+
+`POST /api/claude/login-web/cancel` encerra, com `{ "loginId": "..." }` ou
+`{ "profileId": "..." }`. Para conferir, `POST /api/claude/profile-test` com
+`{ "profileId": "..." }`, ou o teste do perfil na tela Sistema. As recusas voltam com
+`ok: false`, um `code` (`sem-login`, `login-em-curso`, `sem-link`, `expirou`,
+`codigo-invalido`, `sem-resposta`, `recusado`) e o `motivo`.
 
 - Um login por vez no motor, aberto por no máximo dez minutos. O segundo pedido é recusado com
   `login-em-curso` e diz de qual perfil é o login aberto.
@@ -337,15 +373,15 @@ do plano nunca é informado.
 
 Cada perfil de assinatura mostra no cartão quanto de cada janela do plano já foi usado
 (sessão, semana e semana por modelo), quando cada uma volta e quando o login deixa de se
-renovar sozinho (`lib/engine/uso-do-plano.js`, tela em `ui/pure/uso-do-plano.js`, teste em
-`test/uso-do-plano.test.js`). Perfil de chave de API não entra.
+renovar sozinho (`lib/engine/uso-do-plano.js`, teste em `test/uso-do-plano.test.js`). Perfil
+de chave de API não entra.
 
 - A fonte é `claude -p "/usage" --output-format json`, que não chama modelo. O motor lê com
   cache de cinco minutos, uma leitura por vez, contra a cópia efêmera da configuração.
 - A validade vem do campo `credential_expires_at`. Renovar o token de acesso não a estende:
   a data mostrada é a de refazer o login.
 - Toast quando faltam três dias e de novo no último dia, uma vez por faixa; login vencido
-  aparece em vermelho. Renovar é entrar de novo pelo botão do perfil.
+  aparece em vermelho. Renovar é fazer o login de novo ([acima](#login-da-assinatura-pela-api)).
 - Quando o CLI não responde, a última leitura boa fica na tela por até uma hora, marcada como
   desatualizada.
 - O percentual é informação, não gate: a fila só espera quando o plano chega ao limite. O
@@ -429,9 +465,14 @@ outros (`mcpArgsFor` em `lib/engine/jira.js`). O modelo chama `getJiraIssue` e
 9. **O conteúdo do card é dado, não instrução.** O texto entra delimitado e rotulado, e as
    marcas do delimitador são removidas do conteúdo antes.
 
-**A tela.** Jira é seção própria de Sistema (`sys-jira`, `ui/telas/sistema-jira.js`): o
-mapeamento organização para host no topo, a credencial em bloco próprio e o aviso de que o
-primeiro site muda os MCPs da sessão.
+**A tela.** Jira é seção própria de Sistema, só de leitura: mostra os sites, se cada um tem
+credencial, e testa a conexão. Os sites entram por `POST /api/settings` com `jiraSites` (a
+lista inteira) ou pelo arquivo. A credencial entra por `POST /api/jira/credential` com
+`{ "siteId": "...", "email": "...", "token": "..." }` (responde `{ "ok": true }`, ou
+`{ "ok": false, "error": "dados incompletos" }`) e sai por
+`POST /api/jira/credential/remove` com `{ "siteId": "..." }`; ela fica em
+`~/.farol/jira-credentials.json`, fora do `config.json`. O primeiro site muda os MCPs da
+sessão.
 
 **Testar o site** (`POST /api/jira/test`, `testarSite` em `lib/engine/jira.js`, testes em
 `test/jira-teste-site.test.js`) prova o site sem esperar PR, por `/rest/api/2/myself`:
@@ -678,13 +719,14 @@ inválido, e com valor inválido o motor não sobe (item 1).
 **Origin.** Ausente, passa (curl, o probe, a navegação direta). Presente, precisa ser uma
 destas, também por igualdade exata:
 
-- `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`: a tela antiga, servida pelo próprio
-  motor. Não leva cabeçalho CORS, porque página e API são a mesma origem;
+- `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`: a origem do próprio motor. Não
+  leva cabeçalho CORS. O motor não serve página, então só chega assim quem manda esse
+  `Origin` à mão;
 - um item de `origensPermitidas`.
 
-O `hostPublico` não vira origem sozinho. Para abrir a tela antiga pelo endereço público
-(`https://farol.exemplo.com`), escreva essa origem em `origensPermitidas`; sem isso todo `POST`
-dela volta 403, a começar pelo pareamento.
+O `hostPublico` não vira origem sozinho. A origem do front (`https://farol.exemplo.com`) tem
+de estar em `origensPermitidas`; sem isso todo pedido dela volta 403, a começar pelo
+pareamento.
 
 `sanearOrigensPermitidas` (`lib/parse.js`) aceita só o item que é uma origem exata
 `https://host` ou `https://host:porta`: sem caminho, sem barra final, sem curinga, sem usuário.

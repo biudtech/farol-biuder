@@ -38,11 +38,11 @@ O débito original era o `server.js`: uma classe `Engine` de 3122 linhas fazendo
 - **Onda 1 (feita):** funções puras sem estado pra `lib/` (`format`, `io`, `parse`, `taxonomy`), com teste.
 - **Onda 2 (feita):** camadas base `lib/paths.js` (versão, plataforma, caminhos), `lib/workspace.js` (leitura dos artefatos do workspace) e `lib/http-server.js` (adapter HTTP+SSE), e a `Engine` separada por responsabilidade em `lib/engine/` (colaboradores que recebem o `engine` como ctx; a `Engine` mantém fachadas finas que delegam), como `pushback`, `decision`, `gh-queries`, `session` e `review` (pipeline headless + gate). O que ficou na `Engine` é o núcleo legítimo (composição, ciclo de vida, política da conta, polling, settings e snapshot).
 - **Onda 3 (feita):** cobertura e gate. Havia módulos de produção sem nenhum teste, e o teste do `pushback.js` era uma cópia manual do gate, ou seja, testava o teste. O `npm run check` validava três arquivos escolhidos a dedo e ignorava os de `lib/`. Corrigido: `tools/check-syntax.js` descobre todo `.js` do projeto, e `test/facades.test.js` deriva do fonte a aridade esperada de cada fachada, no lugar de uma tabela curada.
-- **Onda 4 (feita, e depois migrada pra ESM):** o `ui/app.js` não tinha **nenhum** teste, porque é um script de navegador que toca `document` no top-level (o que também viola o princípio 6). As funções puras saíram para `ui/pure.js`, que usa `export` nativo; `ui/index.html` carrega um `<script type="module">` só, e o `node --test` importa o mesmo arquivo (`import * as P from '../ui/pure.js'`, ou `await import()` quando precisa vir depois de fixar `process.env`, como `TZ`).
+- **Onda 4 (feita, e depois migrada pra ESM; a `ui/` de que ela trata saiu em 16/11/2026):** o `ui/app.js` não tinha **nenhum** teste, porque é um script de navegador que toca `document` no top-level (o que também viola o princípio 6). As funções puras saíram para `ui/pure.js`, que usa `export` nativo; `ui/index.html` carrega um `<script type="module">` só, e o `node --test` importa o mesmo arquivo (`import * as P from '../ui/pure.js'`, ou `await import()` quando precisa vir depois de fixar `process.env`, como `TZ`).
 
   **Regra do arquivo puro:** só entra o que for puro. Função que precise de estado global ou de `document` fica nas telas; para trazer, primeiro passe o que ela lê como parâmetro.
 
-- **Onda 5 (feita em passos, de 17/08 a 16/09/2026):** o render, o estado e a fiação que sobravam no `ui/app.js` foram saindo aos poucos. Hoje o `ui/pure.js` é só uma fachada que reexporta os módulos de `ui/pure/` (um por assunto, em camadas sem ciclo; contrato em `ui/pure/README.md`), e o `ui/app.js` é o bootstrap da página: liga o SSE ao estado, comanda a troca de aba e o `data-goto` e inicializa as telas, que moram em `ui/telas/` e se registram em `ui/telas/registro.js` (contrato em `ui/telas/README.md`).
+- **Onda 5 (feita em passos, de 17/08 a 16/09/2026; a `ui/` saiu em 16/11/2026):** o render, o estado e a fiação que sobravam no `ui/app.js` foram saindo aos poucos. No fim o `ui/pure.js` era só uma fachada que reexporta os módulos de `ui/pure/` (um por assunto, em camadas sem ciclo; contrato em `ui/pure/README.md`), e o `ui/app.js` é o bootstrap da página: liga o SSE ao estado, comanda a troca de aba e o `data-goto` e inicializa as telas, que moram em `ui/telas/` e se registram em `ui/telas/registro.js` (contrato em `ui/telas/README.md`).
 
   O que os passos ensinaram, e vale pra qualquer extração:
 
@@ -60,9 +60,8 @@ O débito original era o `server.js`: uma classe `Engine` de 3122 linhas fazendo
 | `server.js` | 1522 | 871 |
 | `lib/engine/review.js` (maior módulo de `lib/`) | 1484 | 851 |
 | `lib/engine/decision.js` | 898 | 562 |
-| `ui/app.js` | 429 | dentro do teto |
 
-Mais: `ui/pure/` tem 28 módulos `.js` e a fachada `ui/pure.js` tem 26 linhas; `ui/telas/` tem 37 módulos; a suíte tem 374 arquivos `test/*.test.js`.
+A `ui/` (a tela antiga, que entrava nestes números) saiu em 16/11/2026, com os testes dela. Os números da tabela são os de 15/11/2026 e não foram medidos de novo depois disso.
 
 Medidos em 15/11/2026, no commit `c16cb47c` (versão `3.0.0-dev`): linhas no arquivo por `wc -l`; linhas úteis por `scanFile` de `tools/quality/rules.js` (linhas não vazias depois de tirar comentários e strings), e os três arquivos da tabela são os únicos acima do teto de 400 segundo o `scanRepo` de `tools/quality/gate.js`; módulos por `git ls-files 'ui/pure/*.js' | wc -l` e `git ls-files 'ui/telas/*.js' | wc -l`; testes por `git ls-files 'test/*.test.js' | wc -l`.
 
@@ -73,6 +72,10 @@ Padrão do colaborador: funções `(engine, ...args)`, todo `this.` vira `engine
 Regra de cada onda: extrai um pedaço → `grep this.` no módulo novo deve dar zero → `npm run check && npm run lint && npm test` verde → só então segue. Sem regressão; refactor é movimentação, não reescrita.
 
 ## O ui/app.js virou executável em teste (18/08/2026)
+
+> Registro histórico: a `ui/`, o `test/app-carrega.test.js` e o DOM de mentira
+> (`test/helpers/dom-stub.js`) saíram em 16/11/2026, com a tela antiga. O front de `web/` tem
+> gate próprio.
 
 A onda 5 carregava um custo declarado: **nenhum teste executava o `ui/app.js`**. Os
 arquivos que o "testavam" liam o fonte como texto e casavam regex, e num único dia isso
@@ -176,8 +179,8 @@ Regras medidas (chaves do `rules.js`):
 1. `maxLines`: arquivo não pode exceder 400 linhas de código útil. A contagem é o EXCESSO (linhas úteis menos 400, zero quando está dentro do teto), então crescer um arquivo que já está acima reprova.
 2. `emptyCatch`: blocos `catch` vazios sem comentário de intenção reprovam.
 3. `varUse`: uso de `var` é reprovado; use `const`/`let`.
-4. `jsonParseCru`: chamadas diretas a `JSON.parse` fora de `lib/io.js` e `ui/pure/comum.js` reprovam.
-5. `jsonStringifyCru`: chamadas diretas a `JSON.stringify` fora de `lib/io.js` e `ui/pure/comum.js` reprovam.
+4. `jsonParseCru`: chamadas diretas a `JSON.parse` fora de `lib/io.js` reprovam.
+5. `jsonStringifyCru`: chamadas diretas a `JSON.stringify` fora de `lib/io.js` reprovam.
 6. `processEnvDireto`: acesso direto a `process.env` fora de `lib/paths.js` e `lib/env.js` reprova.
 7. `ternarioAninhado`: dois ou mais ternários no mesmo statement reprovam.
 8. `tempoMagico`: números mágicos de tempo (milissegundos, segundos) em propriedades ou cálculos reprovam.
