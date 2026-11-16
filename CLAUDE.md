@@ -49,8 +49,10 @@ telas; não acrescente tela nela.
 
 ## Mapa de arquivos
 
-Só o que existe. Cada arquivo de `lib/` abre com um comentário que diz o que ele faz e por quê: o
-mapa aponta o lugar, o cabeçalho é a fonte.
+Só cita o que existe, e não é completo: lista os arquivos principais de cada assunto (em
+`lib/engine/`, cerca de um terço dos arquivos fica sem linha aqui). Cada arquivo de `lib/` abre
+com um comentário que diz o que ele faz e por quê: o mapa aponta o lugar, o cabeçalho é a fonte.
+Para a lista inteira, `git ls-files lib`.
 
 ### Raiz
 
@@ -58,7 +60,7 @@ mapa aponta o lugar, o cabeçalho é a fonte.
 |---|---|
 | `server.js` | A classe `Engine` (estado, ciclo de checagem, fila, snapshot) e as fachadas que delegam para `lib/engine/`. `start()` sobe o HTTP e só então começa a monitorar: o listen na porta é o lock de instância única |
 | `package.json` | Scripts e o contrato de Node (`engines.node`). Sem `dependencies` |
-| `workspace-template/` | O protocolo que a sessão de IA lê, copiado para `~/.farol/workspace` e regravado a cada boot: `CLAUDE.md`, `prompts/pr-review-auto.md` (o contrato da revisão headless), os agentes `pr-reviewer` e `claim-verifier`, `.claude/guardas.json` (o que a sessão não pode rodar). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
+| `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos: `CLAUDE.md`, `prompts/pr-review-auto.md` (o contrato da revisão headless), os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`. O `.claude/settings.json` é semeado uma vez e nunca atualizado. O `.claude/guardas.json` (o que a sessão não pode rodar) não é copiado: a sessão o lê direto do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
 | `ui/` | A tela antiga, sem framework: `index.html`, `app.js`, `transporte.js`, `pure/` (funções puras, com teste) e `telas/` |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
@@ -71,7 +73,7 @@ mapa aponta o lugar, o cabeçalho é a fonte.
 | `lib/paths.js` | Caminhos (`HOME`, `WORKSPACE`, `STATE_DIR`, `CONFIG_FILE`), `instanciaIsolada`, `rodandoComoRoot`, `executadoDireto` |
 | `lib/node-runtime.js` | Recusa plataforma que não é Linux e Node fora do contrato do `package.json` |
 | `lib/constants.js` | Fonte única dos literais de infra: porta padrão, `TEMPOS`, limites |
-| `lib/env.js` | Única leitura de `process.env` fora de `lib/paths.js` |
+| `lib/env.js` | A leitura de `process.env` dos módulos de `lib/` (stubs de teste, depuração, cópia do ambiente sem certas variáveis). `lib/paths.js` lê as de caminho, e o `server.js` lê e ajusta o `PATH` e monta o ambiente do `gh` |
 | `lib/io.js` | `run` e `runShell` (todo `gh` passa aqui; nunca lançam, devolvem `{ ok, code, stdout, stderr }`), `readJson`, escrita atômica |
 | `lib/settings.js` | A tabela única das preferências (`SETTINGS`) e `normalizarConfig`, que lê `config.json` antigo sem lançar |
 | `lib/parse.js` | Normalizadores de config: perfis do Claude, pessoas, `bind`, e o saneamento de modelo e esforço (os valores que entram numa linha de comando) |
@@ -128,11 +130,14 @@ Não se negociam. Mudar um deles é decisão do dono, com teste junto.
 
 1. **O motor roda em Node puro, sem dependência npm de runtime.** `npm ls --omit=dev` não lista nada.
    A única exceção é o parser sintático `@babel/parser`, que não é resolvido em `node_modules`: o
-   artefato autocontido mora em `assets/third-party/babel-parser/`, conferido por manifesto e hash; o
-   pin em `devDependencies` serve só para reproduzir esse artefato. Não adicione pacote.
-2. **Dados em `~/.farol`, e só lá.** O motor não escreve fora do HOME do usuário que o roda: nem na
-   pasta do código, nem no diretório de trabalho, nem na pasta temporária no boot
-   (`test/boot-vazio.test.js`). No container, `~/.farol` é o volume que persiste.
+   artefato que o motor usa é o de `assets/third-party/babel-parser/`, na versão do `manifest.json`
+   de lá (7.28.5), conferido por hash (`lib/parser-runtime.js`). O pino em `devDependencies` existia
+   para reproduzir esse artefato e hoje diverge dele (8.0.10, por um bump automático): é pendência
+   aberta, e não muda o que roda. Não adicione pacote.
+2. **Dados em `~/.farol`.** O estado do motor mora todo lá, e no container é o volume que
+   persiste. O motor não escreve na pasta do código nem no diretório de trabalho, e no boot não
+   escreve na pasta temporária (`test/boot-vazio.test.js`). As duas escritas fora de `~/.farol`
+   estão em "Onde mora o dado".
 3. **Log só de falhas.** `farol.log` não recebe ruído operacional, e é a fonte do diagnóstico. A
    classificação de falha mora só em `lib/log-taxonomy.js`: falha nova se cadastra lá e passa a
    valer no retry e no diagnóstico de uma vez. Não escreva regex de erro em outro lugar.
@@ -149,8 +154,10 @@ de origem estão em [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md).
 
 **Uma boca só.** Toda escrita de review passa por `postReview` (`lib/engine/decision.js`): revisão
 automática, clique na mesa, reenvio e esperas. As postagens do mesmo PR entram em fila, uma por vez.
-Dentro dela, `postReviewOnce` recusa, nesta ordem, antes de qualquer `gh`:
+Dentro dela, `postReviewOnce` recusa, nesta ordem:
 
+- pendência na memória de rodadas, só com `reviewRoundsMode: "enforce"` e fora do clique
+  (`lib/engine/review-rounds.js`);
 - instância isolada e PR da própria conta (`lib/engine/postagem-portao.js`);
 - payload fora do formato;
 - credencial no texto (`lib/engine/credencial-no-texto.js`): responde `credencial_no_texto` citando
@@ -161,11 +168,13 @@ Dentro dela, `postReviewOnce` recusa, nesta ordem, antes de qualquer `gh`:
   (`lib/engine/desfecho-da-revisao.js`);
 - conta sem token no `gh`: não posta, para o review nunca sair assinado por outra identidade.
 
-E, já lendo o GitHub, logo antes do envio:
+Entre a credencial e a linguagem entra a recusa por critérios inconsistentes
+(`lib/engine/review-criteria.js`). E, já lendo o GitHub, logo antes do envio:
 
 - a avaliação técnica na hora de aprovar (`lib/technical-review/publication.js`);
 - PR mergeado ou fechado: APPROVE e REQUEST_CHANGES não saem; COMMENT sai. Estado desconhecido não
-  cancela;
+  cancela. Para item que chegou sem autor, o autor é lido aqui e a recusa de PR próprio é
+  conferida de novo;
 - dedup por head, abaixo.
 
 **Admissibilidade antes da política.** `shouldAutoApprove` e `shouldAutoReject`
@@ -208,7 +217,8 @@ espera os checks obrigatórios verdes no commit revisado e sai sozinha quando fe
 
 **Instância isolada não escreve no GitHub.** Com `FAROL_HOME` fora de `~/.farol`, postagem e label
 são recusadas (`blocked: 'instancia_isolada'`, `lib/engine/instancia-isolada.js`), a menos que o
-`config.json` dela traga `"instanciaIsoladaPosta": true` (só por arquivo). Travado em
+`config.json` dela traga `"instanciaIsoladaPosta": true` (só por arquivo). Com a variável
+`FAROL_UPDATE_MANAGER=external` a instância não conta como isolada (`lib/paths.js`). Travado em
 `test/instancia-isolada.test.js`.
 
 **Nunca apague nem afrouxe teste de gate.** Os de postagem, dedup por head, espera do CI, PR
@@ -217,18 +227,27 @@ decisão do dono.
 
 ## Onde mora o dado
 
-Tudo em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
+O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 
 | Caminho | O que é |
 |---|---|
 | `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`) |
-| `workspace/` | O diretório de trabalho de toda sessão de IA. O protocolo é regravado a cada boot |
+| `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot (ver o mapa); o `.claude/settings.json` não |
 | `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/` |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
 | `claude/<id>/` | A pasta de configuração de cada perfil de assinatura do Claude, com o login |
 | `jira-credentials.json` | A credencial do Jira, fora do `config.json` |
 | `source-cache/` | O cache das fontes de revisão |
 | `technical-review/repositories.json`, `toolchains/` | O cadastro por repositório e a ferramenta da avaliação técnica |
+
+Fora de `~/.farol` o motor grava em dois lugares:
+
+- `~/.claude.json`, no HOME do usuário: a confiança do Claude Code no workspace, para a sessão não
+  parar no diálogo de "confiar nesta pasta". Antes de alterar, o arquivo que já existia é copiado
+  para `~/.claude.json.farol-bak` (`ensureWorkspaceTrusted`, `server.js`).
+- uma cópia efêmera da configuração do perfil de assinatura, na pasta temporária do sistema
+  (`os.tmpdir()`), quando o motor testa o perfil ou lê o uso do plano. A credencial não é copiada,
+  e a cópia é apagada no fim (`lib/engine/perfil-assinatura.js`).
 
 Credencial fica fora do workspace de propósito: o workspace é o que a sessão de IA lê. A chave de
 API do perfil do Claude mora no `config.json` e não sai do motor por resposta nenhuma: para fora o

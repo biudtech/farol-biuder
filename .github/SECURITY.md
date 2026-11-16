@@ -21,7 +21,7 @@ repositório privado no relato.
 
 - **Escapar de um gate de postagem.** Qualquer caminho que faça o motor aprovar, reprovar ou
   comentar no GitHub sem o gate correspondente (`shouldAutoApprove`, `shouldAutoReject`,
-  cobertura da leitura, trava de linguagem pública, dedup por head).
+  credencial no texto, trava de linguagem pública, dedup por head, PR da própria conta).
 - **Vazamento de credencial.** Token do `gh`, chave do Claude ou conteúdo de repositório
   privado indo parar em log, em arquivo de estado, no corpo de um review postado ou em
   qualquer tráfego que não seja GitHub e Anthropic.
@@ -46,6 +46,10 @@ repositório privado no relato.
   malicioso, inclusive a sessão sequestrada por injeção no conteúdo do PR que chama o `gh`
   por conta própria: o limite ali é o que a credencial da sessão permite. Detalhe em
   [`docs/REVIEW-GATES.md`](../docs/REVIEW-GATES.md).
+- **A sessão alcança a credencial da assinatura do Claude.** Ela roda como o mesmo usuário do
+  motor, com a pasta do perfil de assinatura ao alcance por comando de shell. As guardas da sessão
+  negam só a leitura que escreve o nome do arquivo da credencial. Detalhe em
+  [`docs/CONFIGURATION.md`](../docs/CONFIGURATION.md), "Para hospedar".
 - **Quem liga a automação responde por ela.** A política da conta (`onClean`, `onCaveats`,
   `onReject`) decide o que sai sozinho, e o que sai é postado na conta revisora.
 - **Acesso local à máquina.** Quem já tem sessão de usuário no host lê `~/.farol` e fala com

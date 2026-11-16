@@ -1,6 +1,10 @@
 // Boot do motor numa máquina vazia (fechamento da fase 1, Review Focus 5): `node server.js`
-// sobe como processo filho de verdade, com o HOME numa pasta temporária vazia, sem `gh` logado
-// e sem rede, responde `GET /api/state`, não escreve fora do HOME e sai com 0 no SIGTERM.
+// sobe como processo filho de verdade, com o HOME numa pasta temporária vazia e sem `gh` logado,
+// responde `GET /api/state`, não escreve fora do HOME e sai com 0 no SIGTERM.
+//
+// A rede não é cortada: o teste não depende dela, mas o motor tenta, por exemplo, ler a última
+// versão do Claude Code no registro (lib/engine/versao-claude.js). O que se prova é que essa
+// busca pode falhar (ou dar certo) sem derrubar o boot, não que o motor não toque a rede.
 //
 // O filho NÃO herda o ambiente do teste, de propósito: com NODE_TEST_CONTEXT o lib/paths.js
 // desvia os dados para uma pasta provisória, e com FAROL_HOME a instância conta como isolada.
@@ -75,11 +79,37 @@ function esperar(condicao, limiteMs, oQue) {
   });
 }
 
-test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOME e sai com 0 no SIGTERM', async () => {
+// Uma tentativa de subir o motor numa porta. A única coisa posta no HOME antes do boot é a
+// porta, para o teste não disputar a 47170.
+async function tentarSubir(env) {
   const porta = await portaLivre();
-  // a única coisa posta no HOME antes do boot: a porta, para o teste não disputar a 47170
-  fs.mkdirSync(path.join(CASA, '.farol'));
+  fs.mkdirSync(path.join(CASA, '.farol'), { recursive: true });
   fs.writeFileSync(path.join(CASA, '.farol', 'config.json'), JSON.stringify({ port: porta }));
+  const t = { porta, saida: '', erros: '' };
+  filho = spawn(process.execPath, [path.join(REPO, 'server.js')], { cwd: CWD, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const processo = filho;
+  processo.stdout.on('data', (d) => { t.saida += d; });
+  processo.stderr.on('data', (d) => { t.erros += d; });
+  t.fimDoFilho = new Promise((resolve) => processo.on('exit', (code, signal) => resolve({ code, signal })));
+  await esperar(() => t.saida.includes('[farol] monitorando') || processo.exitCode !== null, 30000, 'o motor escutar')
+    .catch((err) => { throw new Error(`${err.message}\nstdout: ${t.saida}\nstderr: ${t.erros}`); });
+  t.subiu = processo.exitCode === null;
+  return t;
+}
+
+// A porta é escolhida e solta antes de o filho escutar, e outro arquivo da suíte pode pegá-la
+// nesse intervalo. Só ESSA falha (o motor dizendo que a porta está em uso) ganha outra tentativa,
+// com outra porta; qualquer outra saída antes de escutar é falha de boot e reprova na hora.
+async function subir(env) {
+  for (let tentativa = 1; ; tentativa++) {
+    const t = await tentarSubir(env);
+    if (t.subiu) return t;
+    const portaOcupada = /EADDRINUSE/.test(t.erros);
+    assert.ok(portaOcupada && tentativa < 3, `o motor saiu antes de escutar\nstdout: ${t.saida}\nstderr: ${t.erros}`);
+  }
+}
+
+test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOME e sai com 0 no SIGTERM', async () => {
   escreverExecutavel('gh', 'echo "You are not logged into any GitHub hosts." >&2\nexit 1');
   const claudeFalso = escreverExecutavel('claude-falso', 'echo \'{"result":"{}"}\'');
 
@@ -90,16 +120,7 @@ test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOM
     PATH: [BIN, path.dirname(process.execPath), '/usr/bin', '/bin'].join(':'),
     FAROL_HEADLESS_CMD: claudeFalso,
   };
-  let saida = '';
-  let erros = '';
-  filho = spawn(process.execPath, [path.join(REPO, 'server.js')], { cwd: CWD, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  filho.stdout.on('data', (d) => { saida += d; });
-  filho.stderr.on('data', (d) => { erros += d; });
-  const fimDoFilho = new Promise((resolve) => filho.on('exit', (code, signal) => resolve({ code, signal })));
-
-  await esperar(() => saida.includes('[farol] monitorando') || filho.exitCode !== null, 30000, 'o motor escutar')
-    .catch((err) => { throw new Error(`${err.message}\nstdout: ${saida}\nstderr: ${erros}`); });
-  assert.equal(filho.exitCode, null, `o motor saiu antes de escutar\nstdout: ${saida}\nstderr: ${erros}`);
+  const { porta, fimDoFilho } = await subir(env);
 
   const url = `http://127.0.0.1:${porta}/api/state`;
   const resposta = await fetch(url);

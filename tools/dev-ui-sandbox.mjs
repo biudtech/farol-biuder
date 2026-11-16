@@ -24,7 +24,7 @@ fs.mkdirSync(path.join(HOME, 'workspace', 'state'), { recursive: true, mode: 0o7
 // do materializeScope em lib/engine/pr-scope.js.
 const cfg = path.join(HOME, 'config.json');
 try {
-  fs.writeFileSync(cfg, JSON.stringify({ port: 47192, autoReview: false }, null, 2),
+  fs.writeFileSync(cfg, JSON.stringify({ port: 47192, conta: { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' } }, null, 2),
     { encoding: 'utf8', mode: 0o600, flag: 'wx' });
 } catch (err) {
   if (err.code !== 'EEXIST') throw err;

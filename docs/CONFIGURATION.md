@@ -90,7 +90,8 @@ A instância monitora, põe os PRs na fila e não posta nada sozinha. A escolha 
 primeiro `check()`, à detecção da conta pelo `gh` e ao reinício, e a conta detectada fica
 gravada com esses quatro valores (travado em `test/conta-detectada.test.js`, caso "receita da
 instância que sobe sem agir"). Só `"autoReview": false` não basta: a revisão automática
-desliga, mas um PR revisado por clique ainda é aprovado sozinho quando sai limpo.
+desliga, mas os outros três campos caem no padrão, então um PR revisado por clique ainda é
+aprovado sozinho (limpo ou com ressalvas) e reprovado sozinho.
 
 Uma regra de review por organização ou autor marcada Automático revisa sozinha mesmo com
 `autoReview: false` (ver abaixo). A receita parte de `reviewRules` vazio.
@@ -495,8 +496,7 @@ dinâmicas conservam confiança e limitações explícitas. Sintaxe não suporta
 investigação textual, sem excluir silenciosamente arquivos. JSONC/extends e resoluções
 não suportadas nunca provam ausência de uso. O cache de 4 MiB contabiliza apenas a
 serialização das análises retidas, não a memória total do worker ou do processo.
-Relações são reconstruídas para H/M e configuração. A bateria e os detalhes dos modos
-estão em `docs/CONTEXTO-FRONTEND.md`.
+Relações são reconstruídas para H/M e configuração.
 O orçamento de tempo do levantamento é verificado entre leituras; cada consulta de rede
 também tem seu timeout próprio. Não representa prazo máximo rígido de ponta a ponta.
 
@@ -524,7 +524,7 @@ ou diretórios novos desconhecidos.
 
 ## Para hospedar
 
-O motor hospedado roda num container Linux atrás de um proxy. Cinco pontos, cada um conferido
+O motor hospedado roda num container Linux atrás de um proxy. Seis pontos, cada um conferido
 no código.
 
 ### 1. `localAuth: "exigir"` é obrigatório
@@ -604,3 +604,12 @@ instância da condição de isolada.
 Não rode o motor como root: o Claude Code recusa `--dangerously-skip-permissions` com uid 0,
 e a revisão headless sempre passa essa flag (classe permanente `skip-permissions-root` em
 `lib/log-taxonomy.js`).
+
+### 6. Imagem nova com volume antigo
+
+O workspace mora no volume (`~/.farol/workspace`), e o boot só regrava nele cinco arquivos do
+protocolo: `CLAUDE.md`, `prompts/pr-review-auto.md`, os dois agentes e
+`.claude/commands/pr-review.md` (`prepareHome`, `server.js`). O `.claude/settings.json` é copiado
+uma vez, quando o workspace nasce, e nunca mais: mudança nele numa imagem nova não chega a um
+volume que já existe, e precisa ser aplicada à mão no volume. O `.claude/guardas.json` não tem
+esse problema, porque a sessão o lê direto da imagem.

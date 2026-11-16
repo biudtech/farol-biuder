@@ -1,7 +1,8 @@
 version: 2
 updates:
   # O motor não tem dependência de runtime (invariante 1); a única de desenvolvimento é o
-  # @babel/parser, fixado. Cadência mensal.
+  # @babel/parser. O artefato que o motor usa é o de assets/third-party/babel-parser, e um bump
+  # daqui não o troca. Cadência mensal.
   - package-ecosystem: npm
     directory: /
     schedule:

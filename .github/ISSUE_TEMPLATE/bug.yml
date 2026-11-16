@@ -60,7 +60,7 @@ body:
     id: log
     attributes:
       label: Trecho do log de falhas
-      description: Sistema > log de falhas, ou o arquivo `~/.farol/state/farol.log`. Cole só as linhas do episódio.
+      description: Sistema > log de falhas, ou o arquivo `~/.farol/workspace/state/farol.log`. Cole só as linhas do episódio.
       render: text
     validations:
       required: false

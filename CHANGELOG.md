@@ -24,8 +24,8 @@ Ainda sem versão publicada.
 5. **Cascas nativas** de macOS e Windows.
 6. **Windows e macOS no motor:** o código passa a ter um caminho só, o de Linux, e recusa outra
    plataforma na largada.
-7. **Intervenções, Entregas, Destaques e ferramentas.** O log e a limpeza dele passam a morar no
-   diagnóstico.
+7. **Intervenções, Entregas, Destaques e ferramentas,** com a limpeza do log pela tela. A leitura
+   do log passa a morar no diagnóstico.
 8. **Especialistas por repositório e reserva de capacidade.**
 9. **Outros provedores de IA e a cadeia de perfis:** só o Claude Code roda revisão.
 10. **Panorama, faixa de prontidão, co-assinatura e "revisar junto".** A fila é o que foi pedido à
@@ -40,8 +40,9 @@ Ainda sem versão publicada.
     lido sem erro e nunca deixa a conta mais permissiva do que era.
 15. **Estado e rotas em lista fechada:** as chaves do snapshot e as rotas da API são as do motor, e
     só elas.
-16. **Guias reescritos** para o que existe (`CLAUDE.md`, `README.md`, `docs/`), o protocolo do
-    workspace sem a sessão de terminal, e um teste de boot com a pasta de dados vazia.
+16. **Guias reescritos** para o que existe (`CLAUDE.md`, `README.md`, `docs/`), e um teste de boot
+    com a pasta de dados vazia. Do protocolo do workspace saem a sessão de terminal, o caminho de
+    postagem pela sessão e a seção "Destaques do time".
 
 ### O que voltou ou entrou
 

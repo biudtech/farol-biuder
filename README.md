@@ -61,11 +61,13 @@ do Node e sobe o motor contra pastas temporárias. Fora de Linux, rode num conta
 
 ```sh
 docker run --rm -v "$PWD:/src:ro" node:24.22.1-bookworm bash -c \
-  'cp -r /src /work && cd /work && npm ci && npm run check && npm run lint && npm test'
+  'cp -r /src /work && cd /work && npm run check && npm run lint && npm test'
 ```
 
 Para olhar a tela sem tocar nos dados reais: `FAROL_HOME=/tmp/farol-teste node server.js`. Uma
-instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub.
+instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, salvo com
+`"instanciaIsoladaPosta": true` no `config.json` dela ou com a variável
+`FAROL_UPDATE_MANAGER=external`.
 
 ## Mapa do código
 
@@ -86,7 +88,7 @@ instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub.
 | `tools/check-syntax.js` | O gate de sintaxe: `npm run check` |
 | `tools/farol-parear.js` | Gera o código de pareamento da API |
 
-O mapa completo, os invariantes e as regras de quem mexe no código estão no
+O mapa por assunto, os invariantes e as regras de quem mexe no código estão no
 [`CLAUDE.md`](CLAUDE.md).
 
 ## Guias

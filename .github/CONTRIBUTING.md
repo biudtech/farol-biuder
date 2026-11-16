@@ -15,7 +15,8 @@ Estão detalhados no `CLAUDE.md`. Resumo do que reprova um PR na hora:
 2. **Dados em `~/.farol`.**
 3. **`farol.log` só recebe falha**, e a classificação delas mora só em `lib/log-taxonomy.js`.
 4. **Nada é postado no GitHub sem gate.** Não afrouxe `shouldAutoApprove` / `shouldAutoReject` nem os gates de postagem.
-5. **Texto e comentário em português, sem travessão.** Use vírgula, parênteses ou dois pontos.
+5. **Só Linux.** Não crie ramo de sistema operacional no código.
+6. **Texto e comentário em português, sem travessão.** Use vírgula, parênteses ou dois pontos.
 
 ## Ambiente
 
@@ -33,7 +34,8 @@ FAROL_HOME=/tmp/farol-teste node server.js
 ```
 
 Instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, a menos que o
-`config.json` dela traga `"instanciaIsoladaPosta": true`. `FAROL_HEADLESS_CMD`
+`config.json` dela traga `"instanciaIsoladaPosta": true` ou que a variável
+`FAROL_UPDATE_MANAGER=external` esteja definida. `FAROL_HEADLESS_CMD`
 substitui o `claude` da revisão por um stub.
 
 ## Fluxo
