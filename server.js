@@ -68,7 +68,7 @@ import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
 import quotaMod from './lib/engine/quota.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
-import { EDITAVEIS, OWNERS_PADRAO, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
+import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { parseJiraSites, maskJiraSites } from './lib/jira/sites.js';
 import credMod from './lib/jira/credentials.js';
 import jiraMod from './lib/engine/jira.js';
@@ -127,8 +127,8 @@ class Engine extends EventEmitter {
     super();
     const warn = (m) => this.log('WARN', m); // corrupção de estado precisa aparecer no farol.log
     // config.json antigo (várias contas, modo simples, chaves do que saiu) vira o formato de hoje sem lançar
-    const configSalva = normalizarConfig(readJson(CONFIG_FILE, {}, warn));
-    this.config = { ...DEFAULTS, ...configSalva };
+    this.configCrua = readJson(CONFIG_FILE, {}, warn); // o arquivo como veio, para o rastro da carga (contas-config.js)
+    this.config = { ...DEFAULTS, ...normalizarConfig(this.configCrua) };
     // bind é só de arquivo e chega ao listen e à allowlist: saneia aqui, uma vez, para todo leitor
     this.config.bind = sanear('bind', this.config.bind, this.config, PARSERS);
     delete this.config.autoOpenReview; // chave antiga (sessão interativa); o modo autonomo tem semantica nova
@@ -355,8 +355,8 @@ class Engine extends EventEmitter {
         if (fs.existsSync(src)) { ensureDir(path.dirname(dst)); fs.copyFileSync(src, dst); }
       }
     } catch { /* sincronizar o protocolo nunca derruba o boot */ }
-    // a política mora só na conta (30/09/2026) e vai por extenso para o arquivo (contas-config.js)
-    if (contasConfig.escreverPoliticaPorExtenso(this) || !fs.existsSync(CONFIG_FILE)) this.saveConfig();
+    // a política mora só na conta (30/09/2026): vai por extenso para o arquivo, com o rastro do que a carga decidiu
+    if (contasConfig.aoCarregar(this) || !fs.existsSync(CONFIG_FILE)) this.saveConfig();
     this.ensureWorkspaceTrusted();
   }
 
@@ -506,11 +506,7 @@ class Engine extends EventEmitter {
     const r = await io.run('gh', ['api', 'user', '--jq', '.login'], { env: { ...process.env, GH_PAGER: 'cat' } });
     const login = r.ok ? r.stdout.trim() : '';
     if (login) {
-      // a conta detectada herda o que o arquivo já dizia sobre ela (a escolha de política
-      // gravada antes do login) e nasce com as orgs padrão e a política por extenso
-      const atual = this.accountList()[0];
-      this.config.conta = { ...atual, user: login, owners: atual.owners.length ? atual.owners : [...OWNERS_PADRAO] };
-      contasConfig.escreverPoliticaPorExtenso(this);
+      contasConfig.contaDetectada(this, login); // herda a política gravada antes do login (contas-config.js)
       this.saveConfig();
       this.emit('toast', { kind: 'info', text: `Conta do GitHub detectada: @${login}. Ajuste em Sistema se usar outra.` });
     }

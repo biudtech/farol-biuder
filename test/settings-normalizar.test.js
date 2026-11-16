@@ -40,19 +40,20 @@ test('os campos de várias contas não sobrevivem na conta', () => {
   const saida = normalizarConfig({
     accounts: [{ user: 'b', owners: ['biudtech'], label: 'Trabalho', color: '#fff', kind: 'trabalho', muted: false, claudeProfileId: 'y', budgetWeight: 2, autoReview: false, onCaveats: 'wait', onReject: 'wait', padroesRevisao: 'sem any' }],
   });
-  assert.deepEqual(Object.keys(saida.conta).sort(), ['autoReview', 'onCaveats', 'onReject', 'owners', 'padroesRevisao', 'user']);
+  assert.deepEqual(Object.keys(saida.conta).sort(), ['autoReview', 'onCaveats', 'onClean', 'onReject', 'owners', 'padroesRevisao', 'user']);
   assert.equal(saida.conta.autoReview, false);
   assert.equal(saida.conta.padroesRevisao, 'sem any');
 });
 
-test('todas as contas silenciadas: nenhuma vira a conta', () => {
+test('todas as contas silenciadas: nenhuma vira a conta, e a que nascer da detecção não age', () => {
   const saida = normalizarConfig({ accounts: [{ user: 'a', muted: true }, { user: 'b', muted: true }] });
-  assert.equal('conta' in saida, false, 'silenciada não agia, então não vira a conta revisora');
+  assert.deepEqual(saida.conta, { user: '', owners: [], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }, 'silenciada não agia: fica guardado, sem login, que a conta não age');
 });
 
 test('modo simples antigo: ghUser e owners viram a conta', () => {
   const saida = normalizarConfig({ ghUser: ' eu ', owners: ['biudtech', ' acme '] });
-  assert.deepEqual(saida.conta, { user: 'eu', owners: ['biudtech', 'acme'] });
+  // sem o marcador de esquema é config de antes da primeira migração: ressalvas e reprovação esperam você
+  assert.deepEqual(saida.conta, { user: 'eu', owners: ['biudtech', 'acme'], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' });
   assert.equal('ghUser' in saida, false);
   assert.equal('owners' in saida, false);
 });
@@ -77,13 +78,14 @@ test('as chaves gerais antigas de política valem para a conta que não escolheu
   const comConta = normalizarConfig({ ghUser: 'eu', autoReview: false, autoApproveAll: false });
   assert.equal(comConta.conta.autoReview, false);
   assert.equal(comConta.conta.onCaveats, 'wait');
+  assert.equal(comConta.conta.onReject, 'wait', 'reprovar sozinha nunca veio de chave geral');
   assert.equal('autoReview' in comConta, false);
   assert.equal('autoApproveAll' in comConta, false);
   // a instância de teste do guia ({"port": 47180, "autoReview": false}): ainda sem login, a
   // escolha fica guardada na conta e vale quando o gh for detectado
   const semLogin = normalizarConfig({ port: 47180, autoReview: false });
   assert.equal(semLogin.port, 47180);
-  assert.deepEqual(semLogin.conta, { user: '', owners: [], autoReview: false });
+  assert.deepEqual(semLogin.conta, { user: '', owners: [], autoReview: false, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' });
 });
 
 test('conta gravada ainda sem login guarda a política até o gh ser detectado; sem política, não é conta', () => {
@@ -121,7 +123,7 @@ test('lixo dentro da config não lança', () => {
   const saida = normalizarConfig({ accounts: 'a:b', claudeProfiles: 'x', conta: 'eu', owners: 9, ghUser: { a: 1 } });
   assert.equal('conta' in saida, false);
   assert.deepEqual(saida.claudeProfiles, []);
-  assert.deepEqual(normalizarConfig({ accounts: [null, 'x', { user: '  ' }, { user: 'ok' }] }).conta, { user: 'ok', owners: [] });
+  assert.deepEqual(normalizarConfig({ esquemaConfig: 2, accounts: [null, 'x', { user: '  ' }, { user: 'ok' }] }).conta, { user: 'ok', owners: [] });
 });
 
 test('a tabela de preferências não conhece mais a lista de contas nem o modo simples', () => {
