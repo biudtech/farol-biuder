@@ -64,7 +64,7 @@ Ainda sem versão publicada.
   qualquer uma das duas chaves preenchida a autenticação é exigida sempre, sem configuração que
   desligue.
 - **`http://` em `origensPermitidas`, só para desenvolvimento:** `http://localhost` e
-  `http://127.0.0.1` (com porta) são aceitos, para o front rodando na máquina de quem desenvolve.
+  `http://127.0.0.1` (com ou sem porta) são aceitos, para o front rodando na máquina de quem desenvolve.
   É um desvio declarado do desenho da fase, que fala só em `https://`. Qualquer outro `http://` é
   inválido.
 - **Valor inválido nas duas chaves impede o boot:** se `hostPublico` ou `origensPermitidas` vêm no
@@ -72,18 +72,33 @@ Ainda sem versão publicada.
   válidos, o motor não sobe: diz no stderr a chave, o valor e o formato aceito, sai com código 1
   e não altera o arquivo. Vazio significaria "não hospedado", e um erro de digitação deixaria a
   API sem autenticação atrás de um proxy que reescreve o Host. Chave ausente ou vazia segue sem
-  erro.
+  erro. Tipo trocado não conta como vazio: `"hostPublico": []` e `"origensPermitidas": ""`
+  também impedem o boot.
+- **Nome de chave errado impede o boot:** `hostpublico`, `host_publico`, `origensPermitida`,
+  `LocalAuth` e parecidos eram descartados sem aviso, e o motor subia sem autenticação. Agora a
+  chave que só difere de `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` por
+  maiúsculas, `_`, `-` ou espaço, e a chave desconhecida que começa por `host`, `origens`,
+  `origem`, `origin` ou `localauth`, impedem o boot, e a mensagem diz a chave escrita e a grafia
+  certa.
+- **`localAuth` e `bind` inválidos impedem o boot:** `localAuth` preenchido com qualquer coisa que
+  não seja exatamente `"exigir"` (`"Exigir"`, `true`, `"sim"`) subia sem exigir, e `bind`
+  inválido (`"0.0.0.0:47170"`) voltava calado para o loopback. Agora os dois recusam o boot pelo
+  mesmo caminho.
 - **`config.json` presente e ilegível impede o boot:** arquivo que não dá para ler, vazio, que não
-  é JSON ou que é JSON mas não é um objeto. Antes o motor subia com os padrões (loopback puro, sem
+  é JSON, que é JSON mas não é um objeto, ou que é um link simbólico para um arquivo que não
+  existe (esse contava como ausente, e o motor trocava o link por um arquivo novo). Antes o motor subia com os padrões (loopback puro, sem
   autenticação, conta padrão agindo sozinha) e deixava uma cópia `.bad` ao lado. Agora diz o
   motivo e o caminho no stderr, sai com código 1 e não toca no arquivo. A mensagem não cita
   trecho do arquivo, porque a chave de API mora nele. Arquivo ausente continua sendo instalação
-  nova e sobe.
+  nova e sobe. O BOM UTF-8 no início do arquivo é aceito. Em toda recusa de boot o valor citado
+  sai com os caracteres de controle escapados, no log e no stderr.
 - **Rota de saúde:** `GET /api/health` responde `{"ok":true}` sem autenticação, para o probe do
   orquestrador. Não leva dado nenhum do motor.
 - **Pareamento sem pista para quem está de fora:** código que não vale recebe sempre a mesma
   recusa, sem dizer se há código esperando nem quantas tentativas restam. O limite de cinco erros
   continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
+  Quando os erros bloqueiam um código pendente, o motor grava uma linha de aviso no `farol.log`,
+  sem o código e sem o valor tentado.
 
 ### Correções
 
@@ -91,7 +106,8 @@ Ainda sem versão publicada.
   tratamento de erro do servidor e encerrava o processo. Agora responde 400.
 - **Falha ao montar o estado no stream de eventos derrubava o motor:** o stream já tinha começado
   a responder, e a tentativa de responder 500 lançava dentro do tratamento de erro. Agora a
-  conexão é fechada e o processo segue.
+  conexão é fechada e o processo segue, e o cliente sai do registro do servidor mesmo quando a
+  falha vem depois de ele ter sido registrado.
 - **Dois cabeçalhos `Host`:** o pedido era aceito pelo primeiro e o segundo era ignorado. Agora é
   recusado.
 - **`OPTIONS` executava a rota:** um `OPTIONS /api/state` devolvia o estado. Todo `OPTIONS` em

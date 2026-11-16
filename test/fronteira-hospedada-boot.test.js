@@ -43,7 +43,8 @@ let serie = 0;
 function casaNova() {
   const casa = path.join(RAIZ, `casa-${++serie}`);
   fs.mkdirSync(path.join(casa, '.farol', 'workspace', 'state'), { recursive: true });
-  // o farol.log já existe, para a recusa ter onde ser registrada
+  // o farol.log já existe aqui; a recusa também o cria quando só a pasta existe
+  // (test/fronteira-hospedada-recusas.test.js)
   fs.writeFileSync(path.join(casa, '.farol', 'workspace', 'state', 'farol.log'), '');
   for (const irma of ['tmp', 'cwd']) fs.mkdirSync(path.join(casa, irma));
   return casa;
@@ -143,7 +144,7 @@ async function assertRecusou(t, padrao) {
   assert.deepEqual(fs.readdirSync(path.join(t.casa, 'tmp')), []);
   assert.deepEqual(fs.readdirSync(path.join(t.casa, 'cwd')), []);
   const log = fs.readFileSync(path.join(t.casa, '.farol', 'workspace', 'state', 'farol.log'), 'utf8');
-  assert.match(log, /\[ERROR\].*o motor não sobe/, 'a recusa também fica no farol.log, quando ele já existe');
+  assert.match(log, /\[ERROR\].*o motor não sobe/, 'a recusa também fica no farol.log');
 }
 
 /* ---------- valor inválido na fronteira ---------- */

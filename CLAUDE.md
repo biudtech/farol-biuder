@@ -80,7 +80,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/http-server.js` | HTTP e SSE: as rotas de `/api` e a entrega da `ui/` |
 | `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota menos a de saúde: o loopback com a porta, o `hostPublico` sem porta e as `origensPermitidas`, tudo por igualdade exata. Devolve a origem configurada que casou, e recusa pedido com dois `Host` |
 | `lib/http-cors.js` | Os cabeçalhos CORS da origem que a allowlist devolveu (nunca `*`, sem credenciais) e a resposta do preflight |
-| `lib/fronteira-hospedada.js` | A carga do `config.json` no boot e as duas recusas de boot: arquivo presente e ilegível (ausente é instalação nova e sobe), e valor inválido em `hostPublico` ou `origensPermitidas`. Nos dois o motor não sobe e o `config.json` não é tocado. Também saneia as chaves só de arquivo (`bind` e as duas da fronteira) |
+| `lib/fronteira-hospedada.js` | A carga do `config.json` no boot e as recusas de boot: arquivo presente e ilegível, inclusive o link simbólico para nada (ausente é instalação nova e sobe; BOM UTF-8 é aceito), nome de chave errado que lembra `hostPublico`, `origensPermitidas`, `localAuth` ou `bind`, e valor inválido nessas quatro. Em todas o motor não sobe e o `config.json` não é tocado. Também saneia as chaves só de arquivo (`bind`, `hostPublico` e `origensPermitidas`) |
 | `lib/http-ui.js` | Resolve o que fica fora de `/api`: arquivo de `ui/` ou o `index.html` |
 | `lib/local-auth/` | Autenticação da API: `modo.js` (quando é exigida), `acesso.js` (o porteiro), `pareamento.js` e `sessoes.js` (só hash em disco), `inventario.js` (toda rota `/api` classificada) |
 | `lib/estado-delta.js` | O snapshot vai para a tela por diferença |
@@ -281,8 +281,9 @@ Escuta em `127.0.0.1:47170` por padrão. A ordem das defesas, em toda requisiç�
 
 O token nasce em `POST /api/auth/pair`, trocado por um código de `node tools/farol-parear.js`.
 Não há cookie, e a recusa do pareamento é uma só, sem dizer se há código esperando. Valor
-inválido em `hostPublico` ou `origensPermitidas` não vira vazio, e `config.json` presente e
-ilegível não vira os padrões: nos dois casos o motor não sobe (`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
+inválido em `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` não vira vazio nem
+loopback, nome errado numa dessas chaves não é descartado calado, e `config.json` presente e
+ilegível não vira os padrões: nos três casos o motor não sobe (`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar).
 
 Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (31 caminhos; três

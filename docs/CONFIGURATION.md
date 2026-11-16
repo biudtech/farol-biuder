@@ -182,7 +182,7 @@ no padrão.
 | `autoOpus` | `null` (lista do roteador) | arquivo |
 | `port` | `47170` | arquivo |
 | `bind` | `"127.0.0.1"` | arquivo ([Para hospedar](#para-hospedar)) |
-| `localAuth` | `""` (`"exigir"` liga a autenticação) | arquivo |
+| `localAuth` | `""` (`"exigir"` liga a autenticação; outro valor preenchido impede o boot) | arquivo ([Para hospedar](#para-hospedar)) |
 | `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
 | `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |
 
@@ -557,26 +557,47 @@ atrás de um proxy que reescreve o Host para `127.0.0.1:<porta>`**: ali quem alc
 alcança a API inteira, e é preciso gravar `"localAuth": "exigir"`. Prefira `hostPublico`, que
 dispensa a reescrita (item 2).
 
-**Valor inválido nas duas chaves não sobe.** Se `hostPublico` ou `origensPermitidas` estão no
-arquivo com um valor que o motor não aceita (item 2), inclusive um único item inválido numa
-lista de origens válidas, o motor não inicia: escreve o motivo no stderr (e no `farol.log`, se
-ele já existir), sai com código 1 e não altera o `config.json`
-(`lib/fronteira-hospedada.js`). A mensagem traz a chave, o valor recusado e o formato aceito:
+**Valor inválido ou nome errado nas chaves da fronteira não sobe.** As chaves são quatro:
+`hostPublico`, `origensPermitidas`, `localAuth` e `bind`. O motor não inicia quando o
+`config.json` traz:
+
+- `hostPublico` ou `origensPermitidas` com um valor que o motor não aceita (item 2), inclusive
+  um único item inválido numa lista de origens válidas, e inclusive o tipo trocado
+  (`"hostPublico": []`, `"origensPermitidas": ""`);
+- `localAuth` preenchido com qualquer coisa que não seja exatamente `"exigir"` (`"Exigir"`,
+  `true`, `"sim"`);
+- `bind` preenchido com um valor que `sanearBind` não aceita (por exemplo `"0.0.0.0:47170"`: a
+  porta vai na chave `port`);
+- uma chave que não é a grafia exata de uma das quatro, mas fica igual a ela quando se ignoram
+  maiúsculas, `_`, `-` e espaço (`hostpublico`, `Host_Publico`, `LocalAuth`, `Bind`), ou uma
+  chave que o motor não conhece e que, nessa mesma comparação, começa por `host`, `origens`,
+  `origem`, `origin` ou `localauth` (`origensPermitida`, `origins`). Chave desconhecida é
+  descartada na leitura sem aviso; sem esta recusa, o nome errado subia sem autenticação.
+
+Nesses casos o motor escreve o motivo no stderr e no `farol.log` (o arquivo é criado na hora se
+a pasta `workspace/state/` já existir; sem a pasta, fica só o stderr), sai com código 1 e não
+altera o `config.json` (`lib/fronteira-hospedada.js`). A mensagem de valor traz a chave, o
+valor recusado e o formato aceito; a de nome traz a chave como foi escrita e a grafia certa. O
+valor e o nome saem com os caracteres de controle escapados:
 
 ```
 [farol] config.json inválido, o motor não sobe: "hostPublico" tem valor recusado: "https://farol.exemplo.com". Formato aceito: um nome de host ou um IPv4, sem esquema, sem caminho, sem porta e sem espaço, por exemplo "farol.exemplo.com". Corrija ou apague a chave em /home/farol/.farol/config.json (o arquivo não foi alterado).
+[farol] config.json inválido, o motor não sobe: a chave "hostpublico" não existe; a grafia certa é "hostPublico" (maiúsculas e minúsculas contam, sem "_", "-" nem espaço). Corrija ou apague a chave em /home/farol/.farol/config.json (o arquivo não foi alterado).
 ```
 
 É assim porque vazio quer dizer "não hospedado": se um erro de digitação virasse vazio em
 silêncio, o motor em loopback atrás de um proxy que reescreve o Host ficaria com a API inteira
-sem autenticação. Chave ausente, `null`, `""` e `[]` continuam valendo como "não hospedado",
-sem erro.
+sem autenticação. Vazio de verdade continua sem erro: chave ausente, `null`, `""` nas três
+chaves de texto e `[]` em `origensPermitidas`.
 
 **`config.json` presente e ilegível também não sobe.** Se o arquivo existe e não dá para ler,
-está vazio (zero bytes ou só espaço), não é JSON ou é JSON que não é um objeto (`[]`,
-`"texto"`), o motor não inicia, pelo mesmo caminho: motivo no stderr e no `farol.log`, código
-1, e o arquivo fica como estava, sem cópia ao lado. Subir com os padrões no lugar dele seria
-uma instância em loopback puro, sem autenticação e com a conta padrão, que age sozinha.
+está vazio (zero bytes ou só espaço), não é JSON, é JSON que não é um objeto (`[]`,
+`"texto"`), ou é um link simbólico que aponta para um arquivo que não existe, o motor não
+inicia, pelo mesmo caminho: motivo no stderr e no `farol.log` (com a mesma condição da pasta),
+código 1, e o arquivo, ou o link, fica como estava, sem cópia ao lado. Subir com os padrões no
+lugar dele seria uma instância em loopback puro, sem autenticação e com a conta padrão, que
+age sozinha. O BOM UTF-8 no início do arquivo não é erro: a leitura o ignora e o arquivo não é
+regravado por causa dele.
 
 ```
 [farol] config.json ilegível, o motor não sobe: não é JSON válido (linha 1, coluna 64). Arquivo: /home/farol/.farol/config.json. Corrija o arquivo: ele não foi alterado nem renomeado, e o motor não sobe com os padrões no lugar dele.
@@ -584,7 +605,7 @@ uma instância em loopback puro, sem autenticação e com a conta padrão, que a
 
 A mensagem traz a linha e a coluna quando o erro as tem, e nunca um trecho do arquivo: a chave
 de API do perfil do Claude mora nele. Arquivo **ausente** é outra coisa, a instalação nova, e
-sobe. Valor torto dentro de um JSON válido, fora das duas chaves da fronteira, continua sendo
+sobe. Valor torto dentro de um JSON válido, fora das quatro chaves da fronteira, continua sendo
 saneado sem derrubar o boot.
 
 Depois de subir, confira: `GET /api/auth/status` tem de responder `"exigida": true`.
@@ -599,7 +620,8 @@ Com a autenticação exigida, todo `/api/*` pede `Authorization: Bearer <token>`
    a resposta traz o token só no corpo, sem cookie, e a página o guarda no navegador. Código
    que não vale recebe sempre a mesma recusa, `{ "ok": false, "code": "codigo_invalido" }`,
    sem dizer se há código esperando nem quantas tentativas restam; cinco erros invalidam o
-   código pendente, e aí é preciso gerar outro.
+   código pendente, e aí é preciso gerar outro. Quando isso acontece o motor grava uma linha
+   `WARN` no `farol.log`, uma por bloqueio, sem o código e sem o valor tentado.
 3. A sessão vence com 30 dias sem uso ou 90 dias depois de emitida. Em disco fica só o hash,
    em `~/.farol/local-auth/`.
 
@@ -675,9 +697,10 @@ cabeçalhos anunciados para o `fetch` do front poder mandá-lo.
 **Sem `hostPublico`**, com o motor em loopback, o proxy precisa reescrever o Host para
 `127.0.0.1:<porta>`. Com `bind` fora do loopback, o Host `<bind>:<porta>` e as origens
 `http://<bind>:<porta>` e `https://<bind>` também passam, e a autenticação passa a ser exigida
-sozinha. `sanearBind` (`lib/parse.js`) aceita IPv4, IPv6 entre colchetes ou nome de host em
-caixa baixa; o resto volta para `127.0.0.1`. `bind` e `port` são só de arquivo e valem depois
-de reiniciar.
+sozinha. `sanearBind` (`lib/parse.js`) aceita IPv4, IPv6 entre colchetes ou nome de host, e
+passa para caixa baixa; `bind` preenchido com qualquer outra coisa impede o boot (item 1), e
+só a chave ausente, `null` ou `""` fica em `127.0.0.1`. `bind` e `port` são só de arquivo e
+valem depois de reiniciar.
 
 ### 3. A sessão de revisão alcança a credencial da assinatura
 
