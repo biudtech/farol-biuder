@@ -60,7 +60,7 @@ Para a lista inteira, `git ls-files lib`.
 |---|---|
 | `server.js` | A classe `Engine` (estado, ciclo de checagem, fila, snapshot) e as fachadas que delegam para `lib/engine/`. `start()` sobe o HTTP e só então começa a monitorar: o listen na porta é o lock de instância única |
 | `package.json` | Scripts e o contrato de Node (`engines.node`). Sem `dependencies` |
-| `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos: `CLAUDE.md`, `prompts/pr-review-auto.md` (o contrato da revisão headless), os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`. O `.claude/settings.json` é semeado uma vez e nunca atualizado. O `.claude/guardas.json` (o que a sessão não pode rodar) não é copiado: a sessão o lê direto do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
+| `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos (`CLAUDE.md`, `prompts/pr-review-auto.md`, que é o contrato da revisão headless, os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`) e copia o que faltar em `prompts/` (a pasta inteira se faltar o `pr-review-auto.md`, e cada prompt do template que o workspace não tiver, sem sobrescrever). O resto vem só da primeira cópia e nunca é atualizado, inclusive o `.claude/settings.json`. O `.claude/guardas.json` (o que a sessão não pode rodar) também vai na primeira cópia, mas essa cópia não é usada: a sessão lê o do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
 | `ui/` | A tela antiga, sem framework: `index.html`, `app.js`, `transporte.js`, `pure/` (funções puras, com teste) e `telas/` |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
@@ -138,7 +138,11 @@ Não se negociam. Mudar um deles é decisão do dono, com teste junto.
    persiste. O motor não escreve na pasta do código nem no diretório de trabalho, e no boot não
    escreve na pasta temporária (`test/boot-vazio.test.js`). As duas escritas fora de `~/.farol`
    estão em "Onde mora o dado".
-3. **Log só de falhas.** `farol.log` não recebe ruído operacional, e é a fonte do diagnóstico. A
+3. **Log sem ruído.** O `farol.log` é a fonte do diagnóstico. `log()` grava qualquer nível, e hoje
+   há, além de ERROR e WARN, algumas linhas INFO de evento que explica uma decisão (por exemplo,
+   por que o automático foi segurado num PR). O que se espera de quem escreve log novo: falha, ou
+   o motivo de uma decisão que alguém vai perguntar depois; nunca passo normal nem sucesso de
+   rotina, e no máximo uma linha por mudança de estado, não uma por ciclo. A
    classificação de falha mora só em `lib/log-taxonomy.js`: falha nova se cadastra lá e passa a
    valer no retry e no diagnóstico de uma vez. Não escreva regex de erro em outro lugar.
 4. **Nada é postado no GitHub sem gate.** Detalhe logo abaixo.
@@ -232,11 +236,13 @@ O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 | Caminho | O que é |
 |---|---|
 | `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`) |
-| `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot (ver o mapa); o `.claude/settings.json` não |
+| `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot e prompt que falta é copiado (ver o mapa); o `.claude/settings.json` não |
 | `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/` |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
 | `claude/<id>/` | A pasta de configuração de cada perfil de assinatura do Claude, com o login |
 | `jira-credentials.json` | A credencial do Jira, fora do `config.json` |
+| `cards/` | O cache dos cards do Jira, por site (`lib/jira/cache.js`) |
+| `mcp/` | A configuração do servidor MCP do Jira que a sessão recebe (`lib/engine/jira.js`) |
 | `source-cache/` | O cache das fontes de revisão |
 | `technical-review/repositories.json`, `toolchains/` | O cadastro por repositório e a ferramenta da avaliação técnica |
 

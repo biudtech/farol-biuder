@@ -555,7 +555,8 @@ aberto é cortado quando a credencial dele é revogada.
 
 A allowlist de `lib/http-guard.js` (`validarHostEOrigem`) roda antes de qualquer rota, com a
 porta efetiva do socket. Com o `bind` em loopback, o Host aceito é só `127.0.0.1:<porta>` ou
-`localhost:<porta>`, por igualdade exata. O `Origin` ausente passa; presente, precisa ser
+`localhost:<porta>`, por igualdade exata (com `bind: "[::1]"`, também `[::1]:<porta>`, e a
+origem `http://[::1]:<porta>`). O `Origin` ausente passa; presente, precisa ser
 `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`. Recusa é
 `403 { error: "forbidden", motivo: "host" | "origin" }`.
 
@@ -607,9 +608,10 @@ e a revisão headless sempre passa essa flag (classe permanente `skip-permission
 
 ### 6. Imagem nova com volume antigo
 
-O workspace mora no volume (`~/.farol/workspace`), e o boot só regrava nele cinco arquivos do
+O workspace mora no volume (`~/.farol/workspace`), e o boot regrava nele cinco arquivos do
 protocolo: `CLAUDE.md`, `prompts/pr-review-auto.md`, os dois agentes e
-`.claude/commands/pr-review.md` (`prepareHome`, `server.js`). O `.claude/settings.json` é copiado
+`.claude/commands/pr-review.md` (`prepareHome`, `server.js`). Ele também copia o prompt do
+template que faltar em `prompts/`, sem sobrescrever o que existe. O `.claude/settings.json` é copiado
 uma vez, quando o workspace nasce, e nunca mais: mudança nele numa imagem nova não chega a um
 volume que já existe, e precisa ser aplicada à mão no volume. O `.claude/guardas.json` não tem
 esse problema, porque a sessão o lê direto da imagem.
