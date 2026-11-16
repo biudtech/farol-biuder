@@ -13,8 +13,8 @@ import { ehOFront, ignorar } from '../nao-e-fonte.js';
 const RAIZ = path.join(import.meta.dirname, '..', '..');
 const BASELINE = path.join(import.meta.dirname, 'baseline.json');
 // Os extras sao deste gate: ele mede o codigo de producao, entao suite,
-// documentacao, o template distribuido e material de instalador ficam de fora.
-const IGNORAR = ignorar('test', 'docs', 'workspace-template', 'installer', 'assets');
+// documentacao, o template distribuido e o parser de terceiros ficam de fora.
+const IGNORAR = ignorar('test', 'docs', 'workspace-template', 'assets');
 
 // A raiz viaja na recursão porque o front só sai na posição dele: a `web` filha da raiz.
 function listar(dir, achados = [], raiz = dir) {
