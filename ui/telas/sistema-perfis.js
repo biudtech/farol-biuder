@@ -32,9 +32,23 @@ function saveClaudeProfiles(profiles, defaultId) {
   // defaultId opcional: seta o perfil como o padrão global no MESMO patch.
   if (defaultId !== undefined) { estado().config.claudeProfileId = defaultId; patch.claudeProfileId = defaultId; }
   api('/api/settings', patch).then(r => {
-    if (r?.ok) toast('ok', '✓ Configurações salvas', 2000);
-    else toast('error', 'Erro ao salvar configurações');
+    recusas.clear();
+    if (r?.ok) return toast('ok', '✓ Configurações salvas', 2000);
+    if (r?.code === 'chave_exigida') return mostrarRecusa(r);
+    toast('error', 'Erro ao salvar configurações');
   });
+}
+
+/* Recusa do motor por perfil (mudar o endereço sem redigitar a chave). Fica na tela, por id, e
+   some no próximo salvar. Nada foi gravado, então a tela volta ao que o motor guarda. */
+const recusas = new Map();
+
+function mostrarRecusa(r) {
+  for (const id of r.perfis || []) recusas.set(id, r.erro || 'O motor recusou esta mudança.');
+  if (r.config && Array.isArray(r.config.claudeProfiles)) estado().config.claudeProfiles = r.config.claudeProfiles;
+  if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+  renderClaudeProfiles();
+  toast('error', r.erro || 'Erro ao salvar configurações', 5000);
 }
 
 /* Resultado do último teste de cada perfil, por id. Fica na tela, nunca na configuração:
@@ -54,7 +68,7 @@ export function renderClaudeProfiles() {
   // guarda de foco: não reconstrói enquanto você digita num campo deste bloco
   if (document.activeElement && box.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   box.innerHTML = perfilProblemasHtml((estado().claudePerfis || {}).problemas)
-    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor, claudePerfis: estado().claudePerfis });
+    + claudeProfilesHtml({ config: estado().config, usage: estado().usage, doctor: estado().doctor, claudePerfis: estado().claudePerfis, recusas: Object.fromEntries(recusas) });
   renderTestes();
   renderLoginWeb();
 }
@@ -215,8 +229,15 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
       if (p.id !== id) return p;
       const next = { ...p };
       if (t.classList.contains('cp-label')) next.label = t.value.trim() || p.label;
-      if (chave) next.apiKey = chave;
-      if (t.classList.contains('cp-baseurl')) next.baseUrl = t.value.trim();
+      // chave e endereço viajam no mesmo salvar quando os dois estão digitados: o motor só aceita
+      // endereço novo com a chave junto
+      const digitado = (seletor) => ((document.querySelector(seletor) || {}).value || '').trim();
+      if (chave) { next.apiKey = chave; next.baseUrl = digitado(`.cp-baseurl[data-id="${CSS.escape(id)}"]`); }
+      if (t.classList.contains('cp-baseurl')) {
+        next.baseUrl = t.value.trim();
+        const chaveDigitada = digitado(`.cp-apikey[data-id="${CSS.escape(id)}"]`);
+        if (chaveDigitada) next.apiKey = chaveDigitada;
+      }
       if (t.classList.contains('cp-budget-daily')) {
         const v = t.value.trim();
         if (v === '') delete next.budgetDaily; else next.budgetDaily = Number(v);

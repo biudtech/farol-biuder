@@ -176,7 +176,7 @@ export function budgetEditorHtml(p, info) {
 }
 
 // O campo da chave nasce sempre vazio: a chave não sai do motor, que manda só `temChave`.
-function camposDaChaveHtml(p) {
+function camposDaChaveHtml(p, recusa) {
   const apoio = p.temChave
     ? { campo: 'digite outra chave para substituir', texto: 'Há uma chave guardada no Farol. Ela não é mostrada: digitar outra aqui substitui a guardada.' }
     : { campo: 'chave de API', texto: 'Sem chave guardada: digite a chave de API.' };
@@ -188,7 +188,8 @@ function camposDaChaveHtml(p) {
       <div class="a-hint">${apoio.texto}</div>
       <div class="a-editrow">
         <input class="cp-baseurl" data-id="${esc(p.id)}" value="${esc(p.baseUrl || '')}" placeholder="URL base (opcional, deixe em branco pra usar a Anthropic direto)" spellcheck="false">
-      </div>`;
+      </div>
+      <div class="cp-teste-erro" data-recusa="${esc(p.id)}" role="alert">${esc(recusa || '')}</div>`;
 }
 
 export function claudeProfilesHtml(ctx) {
@@ -203,7 +204,7 @@ export function claudeProfilesHtml(ctx) {
     const camposOrcamento = budgetEditorHtml(p, budgetInfo);
     const assinatura = p.kind === 'dir';
     const uso = assinatura ? usoDoPlanoHtml(((ctx.claudePerfis || {}).uso || {})[p.id]) : '';
-    const camposChave = assinatura ? '<div class="a-hint">Assinatura do Claude: o login fica guardado no próprio Farol, numa pasta só deste perfil.</div>' : camposDaChaveHtml(p);
+    const camposChave = assinatura ? '<div class="a-hint">Assinatura do Claude: o login fica guardado no próprio Farol, numa pasta só deste perfil.</div>' : camposDaChaveHtml(p, (ctx.recusas || {})[p.id]);
     return `<div class="card acct-card">
     <div class="a-body">
       <div class="a-editrow">
