@@ -163,8 +163,11 @@ test('a recusa também fica no farol.log quando o log já existe', async () => {
   const env = { HOME: casa, TMPDIR: path.join(casa, 'tmp'), PATH: [BIN, path.dirname(process.execPath), '/usr/bin', '/bin'].join(':') };
   const filho = spawn(process.execPath, [path.join(REPO, 'server.js')], { cwd: path.join(casa, 'cwd'), env, stdio: 'ignore' });
   filhos.add(filho);
+  // se o motor subir em vez de recusar, o teste não fica esperando para sempre
+  const desistir = setTimeout(() => filho.kill('SIGKILL'), 20000);
   const fim = await new Promise((resolve) => filho.on('exit', (code) => resolve(code)));
-  assert.notEqual(fim, 0);
+  clearTimeout(desistir);
+  assert.equal(fim, 1, 'o motor recusa o boot com código 1');
   const log = fs.readFileSync(path.join(estado, 'farol.log'), 'utf8');
   assert.match(log, /\[ERROR\].*"hostPublico" tem valor recusado/);
 });
