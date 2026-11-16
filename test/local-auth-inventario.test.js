@@ -55,6 +55,16 @@ test('toda rota inventariada existe no servidor (sem classe morta)', () => {
   assert.deepEqual(mortas, [], `rota inventariada que o servidor não roteia: ${mortas.join(', ')}`);
 });
 
+// Corte da Fase 1 (lote 15): os dois conjuntos são o MESMO, rota a rota. Os testes acima dizem
+// qual lado sobrou; este trava a igualdade de uma vez, e que nada do que saiu do motor
+// (coordenação entre instalações, autoanálise, chat, ferramentas) voltou a ter rota.
+test('o servidor e o inventário têm as mesmas rotas, e nenhuma é do que saiu do motor', () => {
+  const servidas = [...rotasServidas()].sort();
+  assert.deepEqual(servidas, todasAsRotas().slice().sort());
+  const proibidas = ['/api/sync', '/api/self-review', '/api/chat', '/api/tool'];
+  assert.deepEqual(servidas.filter(r => proibidas.some(p => r.startsWith(p))), []);
+});
+
 test('a exceção pública depende do método', () => {
   assert.deepEqual({ ...PUBLICAS }, { '/api/auth/pair': 'POST', '/api/auth/status': 'GET' });
   assert.equal(rotaPublicaDeAutenticacao('POST', '/api/auth/pair'), true);

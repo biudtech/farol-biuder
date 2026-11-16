@@ -40,9 +40,8 @@ const ESTADO = {
     people: {}, claudeProfiles: [], claudeProfileId: '',
   },
   queue: [], decisions: { pending: [], resolved: [] },
-  activeSessions: [], headlessWaiting: [], reviewActions: {}, staleStates: {},
-  usage: {}, usageSessions: [], pushbacks: {}, team: [],
-  update: { state: 'idle' }, doctor: null,
+  activeSessions: [], headlessWaiting: [], reviewActions: {},
+  usage: {}, pushbacks: {}, doctor: null,
   paths: { home: '/tmp/.farol', workspace: '/tmp/.farol/workspace' },
 };
 const ultima = () => history.chamadas[history.chamadas.length - 1];

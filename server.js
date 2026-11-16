@@ -1048,7 +1048,7 @@ class Engine extends EventEmitter {
   async staleForReview(pr) { return staleMod.staleForReview(this, pr); }
 
   // --- pushback automático: detecta e classifica a contestação do autor ------
-  // Best-effort (como o staleStates): qualquer incerteza não registra nada. O
+  // Best-effort: qualquer incerteza não registra nada. O
   // gatilho barato via gh evita acender IA à toa; a classificação é 1 sessão
   // Claude por candidato novo, LEITURA pura (nunca posta), limitada por ciclo.
   async scanPushbacks() { return pushbackMod.scanPushbacks(this); }
