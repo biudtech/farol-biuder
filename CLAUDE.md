@@ -111,6 +111,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
 | Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `quota.js`, `falhas.js` |
+| Histórico | `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
 | Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js` |
 
 ### `tools/`
@@ -286,12 +287,24 @@ loopback, nome errado numa dessas chaves não é descartado calado, e `config.js
 ilegível não vira os padrões: nos três casos o motor não sobe (`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar).
 
-Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (31 caminhos; três
+Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (32 caminhos; três
 públicos, cada um só no método dele: o pareamento, o status da autenticação e a saúde), e rota
 nova sem classe reprova em `test/local-auth-inventario.test.js`. O estado inteiro sai em `GET /api/state` e, por
 diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada, travada em
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
 recalcula.
+
+O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
+mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
+(`lib/engine/historico-paginado.js`). Todos os parâmetros são opcionais: `page` (a partir de 1),
+`pageSize` (padrão 30, teto 100), `q` (busca sem caixa e sem acento em repositório, número,
+título, autor do PR e chave do card; até 200 caracteres), `veredito` (`approve`,
+`request_changes` ou `comment`) e `repo` (`dono/nome` exato, sem caixa). Responde
+`{ ok, page, pageSize, total, pages, items, repos }`: `total` e `pages` contam o que passou nos
+filtros, e `repos` são os repositórios de todo o histórico. Cada item sai pela mesma projeção do
+snapshot (`decisionForUi`), e as pendentes ficam só no snapshot. Parâmetro inválido ou repetido
+responde 400 com `{ ok: false, code: "parametro_invalido", campo }`; página além do fim
+responde 200 com `items` vazio. A rota só lê: não altera o histórico e não escreve no log.
 
 ## Como rodar e testar
 
