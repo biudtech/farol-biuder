@@ -18,7 +18,7 @@ describe('revisão do histórico', () => {
   it('lê o que a projeção do motor emite, e larga o que a tela não usa', () => {
     expect(lerRevisao(INTEIRA)).toEqual({
       id: 'd1', createdAt: 1, resolvedAt: 2, key: 'dono/repo#12', card: 'BT-9', verdict: 'approve', status: 'auto_approved', action: 'approve',
-      viaAdmin: true, prProprio: true, pr: INTEIRA.pr, technical: INTEIRA.technical,
+      prProprio: true, pr: INTEIRA.pr, technical: INTEIRA.technical,
       rounds: { id: 'r1', ordinal: 2, mode: 'enforce', parentCount: 1, lateCount: 0, droppedCount: 0, resolvedOnUnchangedCount: 1, unresolvedCount: 3, unverified: false, changedContext: true },
       stages: INTEIRA.stages, verificationCheckpoint: INTEIRA.verificationCheckpoint,
       reportMarkdown: '## Review', reasons: INTEIRA.reasons, attention: INTEIRA.attention,

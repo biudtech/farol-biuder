@@ -62,7 +62,6 @@ export interface Revisao {
   card?: string;
   pr?: PrDaPendencia;
   prProprio?: true;
-  viaAdmin?: true;
   blockedReason?: string;
   technical?: { state?: string; message: string };
   rounds?: Rodadas;
@@ -112,7 +111,6 @@ export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
     card: lerCard(v.card),
     pr: lerPrDaPendencia(v.pr),
     prProprio: v.prProprio === true ? (true as const) : undefined,
-    viaAdmin: v.viaAdmin === true ? (true as const) : undefined,
     blockedReason: campo(v.blockedReason, ehTexto) || undefined,
     technical: lerTecnica(v.technical),
     rounds: lerRodadas(v.rounds),
