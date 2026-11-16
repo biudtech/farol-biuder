@@ -175,16 +175,17 @@ test('sem hostPublico o nome de fora continua recusado', async () => {
   assert.deepEqual(JSON.parse(r.body), { error: 'forbidden', motivo: 'host' });
 });
 
-test('a tela antiga continua servida em loopback, com e sem o modo hospedado', async () => {
+test('fora de /api o motor responde 404 em JSON em loopback, com e sem o modo hospedado', async () => {
   const fora = await pedir('GET', '/');
-  assert.equal(fora.status, 200);
-  assert.match(String(fora.headers['content-type']), /text\/html/);
-  assertSemCors(fora, 'página em loopback');
+  assert.equal(fora.status, 404);
+  assert.match(String(fora.headers['content-type']), /application\/json/);
+  assert.deepEqual(JSON.parse(fora.body), { error: 'not found' });
+  assertSemCors(fora, 'raiz em loopback');
   await hospedado(async () => {
     const dentro = await pedir('GET', '/');
-    assert.equal(dentro.status, 200);
+    assert.equal(dentro.status, 404);
     assert.equal(dentro.body, fora.body);
-    assert.equal((await pedir('GET', '/pure/comum.js')).status, 200);
+    assert.equal((await pedir('GET', '/pure/comum.js')).status, 404);
   });
 });
 

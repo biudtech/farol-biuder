@@ -24,7 +24,7 @@ test('varUse: pega var, ignora dentro de string', () => {
 });
 
 test('jsonParseCru: conta JSON.parse fora de arquivo santuario', () => {
-  assert.equal(scanFile('const a = JSON.parse(s);', 'ui/app.js').jsonParseCru, 1);
+  assert.equal(scanFile('const a = JSON.parse(s);', 'lib/app.js').jsonParseCru, 1);
   // io.js e o wrapper legitimo (readJson): la ele mora com try/catch
   assert.equal(scanFile('const a = JSON.parse(s);', 'lib/io.js').jsonParseCru, 0);
 });

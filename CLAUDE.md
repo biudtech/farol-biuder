@@ -41,12 +41,13 @@ instância, uma conta revisora do GitHub, só Linux. Ele:
    protocolo de `workspace-template/`, o card do Jira já lido e o diff já gravado em disco;
 3. recebe o envelope JSON da sessão, passa pelos gates e posta APPROVE, REQUEST_CHANGES ou COMMENT,
    ou leva o PR à mesa ("Precisa de você") quando a política da conta manda esperar;
-4. serve a API e a tela (`ui/`) por HTTP e SSE.
+4. serve a API por HTTP e SSE. A tela é o front de `web/`, que fala com essa API de outra origem.
 
 A sessão de IA nunca posta: quem escreve no GitHub é o motor, pela conta revisora.
 
-A `ui/` é a tela antiga, servida pelo próprio motor. Ela continua até o front novo cobrir as mesmas
-telas; não acrescente tela nela.
+O motor não serve página. A tela antiga (`ui/`, servida pelo próprio motor) saiu em 16/11/2026,
+quando o front de `web/` passou a cobrir as cinco telas: fora de `/api/`, todo pedido responde 404
+em JSON.
 
 ## Mapa de arquivos
 
@@ -62,8 +63,7 @@ Para a lista inteira, `git ls-files lib`.
 | `server.js` | A classe `Engine` (estado, ciclo de checagem, fila, snapshot) e as fachadas que delegam para `lib/engine/`. `start()` sobe o HTTP e só então começa a monitorar: o listen na porta é o lock de instância única |
 | `package.json` | Scripts e o contrato de Node (`engines.node`). Sem `dependencies` |
 | `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos (`CLAUDE.md`, `prompts/pr-review-auto.md`, que é o contrato da revisão headless, os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`) e copia o que faltar em `prompts/` (a pasta inteira se faltar o `pr-review-auto.md`, e cada prompt do template que o workspace não tiver, sem sobrescrever). O resto vem só da primeira cópia e nunca é atualizado, inclusive o `.claude/settings.json`. O `.claude/guardas.json` (o que a sessão não pode rodar) também vai na primeira cópia, mas essa cópia não é usada: a sessão lê o do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
-| `ui/` | A tela antiga, sem framework: `index.html`, `app.js`, `transporte.js`, `pure/` (funções puras, com teste) e `telas/` |
-| `web/` | O front novo (Next.js e TypeScript), que vai substituir a `ui/`: fala direto com a API do motor e hoje tem o pareamento, a casca das cinco abas e as cinco telas (Radar, Histórico, Time, Consumo e Sistema). Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Guia em [`web/README.md`](web/README.md) |
+| `web/` | O front (Next.js e TypeScript), a única tela: fala direto com a API do motor e tem o pareamento, a casca das cinco abas e as cinco telas (Radar, Histórico, Time, Consumo e Sistema). Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Guia em [`web/README.md`](web/README.md) |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
 | `tools/` | Gate e utilitários (tabela abaixo) |
@@ -79,11 +79,10 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/io.js` | `run` e `runShell` (todo `gh` passa aqui; nunca lançam, devolvem `{ ok, code, stdout, stderr }`), `readJson`, escrita atômica |
 | `lib/settings.js` | A tabela única das preferências (`SETTINGS`) e `normalizarConfig`, que lê `config.json` antigo sem lançar |
 | `lib/parse.js` | Normalizadores de config: perfis do Claude, pessoas, `bind`, `hostPublico`, `origensPermitidas`, e o saneamento de modelo e esforço (os valores que entram numa linha de comando) |
-| `lib/http-server.js` | HTTP e SSE: as rotas de `/api` e a entrega da `ui/` |
+| `lib/http-server.js` | HTTP e SSE: as rotas de `/api`. Fora de `/api/` responde 404 em JSON, sem ler o disco (`test/http-sem-pagina.test.js`) |
 | `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota menos a de saúde: o loopback com a porta, o `hostPublico` sem porta e as `origensPermitidas`, tudo por igualdade exata. Devolve a origem configurada que casou, e recusa pedido com dois `Host` |
 | `lib/http-cors.js` | Os cabeçalhos CORS da origem que a allowlist devolveu (nunca `*`, sem credenciais) e a resposta do preflight |
 | `lib/fronteira-hospedada.js` | A carga do `config.json` no boot e as recusas de boot: arquivo presente e ilegível, inclusive o link simbólico para nada (ausente é instalação nova e sobe; BOM UTF-8 é aceito), nome de chave errado que lembra `hostPublico`, `origensPermitidas`, `localAuth` ou `bind`, e valor inválido nessas quatro. Em todas o motor não sobe e o `config.json` não é tocado. Também saneia as chaves só de arquivo (`bind`, `hostPublico` e `origensPermitidas`) |
-| `lib/http-ui.js` | Resolve o que fica fora de `/api`: arquivo de `ui/` ou o `index.html` |
 | `lib/local-auth/` | Autenticação da API: `modo.js` (quando é exigida), `acesso.js` (o porteiro), `pareamento.js` e `sessoes.js` (só hash em disco), `inventario.js` (toda rota `/api` classificada) |
 | `lib/estado-delta.js` | O snapshot vai para a tela por diferença |
 | `lib/log-taxonomy.js` | Fonte única de classificação de falha: o retry e o diagnóstico leem a mesma tabela |
@@ -127,7 +126,6 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | `tools/farol-parear.js` | Imprime um código de pareamento da API no stdout; `--revogar-todas` |
 | `tools/jira-mcp.js` | O servidor MCP local do Jira que a sessão usa. Recebe só o id do site e lê a credencial do disco |
 | `tools/simular-politica.js`, `tools/diagnosticar-legados.js` | Leitura: o que mudaria com outra política; o que há de formato antigo no disco |
-| `tools/dev-ui-sandbox.mjs` | Sobe o motor num `FAROL_HOME` de sandbox para olhar a tela |
 
 ## Invariantes do projeto
 
@@ -282,6 +280,9 @@ Escuta em `127.0.0.1:47170` por padrão. A ordem das defesas, em toda requisiç�
    `config.origensPermitidas` preenchidos, sem chave que desligue), e também com
    `config.localAuth: "exigir"` ou `bind` fora do loopback (`lib/local-auth/modo.js`).
 
+Fora de `/api/` não há rota: depois da allowlist (item 3), qualquer caminho e qualquer método
+respondem 404 com `{ "error": "not found" }`, o mesmo corpo da rota de API que não existe.
+
 O token nasce em `POST /api/auth/pair`, trocado por um código de `node tools/farol-parear.js`.
 Não há cookie, e a recusa do pareamento é uma só, sem dizer se há código esperando. Valor
 inválido em `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` não vira vazio nem
@@ -295,6 +296,22 @@ nova sem classe reprova em `test/local-auth-inventario.test.js`. O estado inteir
 diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada, travada em
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
 recalcula.
+
+Nem toda rota tem tela. O front lê o estado só pelo SSE (não chama `GET /api/state`, que
+serve a `tools/diagnosticar-legados.js` e a quem consulta à mão) e não usa `GET /api/log`, `GET /api/log/triage`,
+`POST /api/jira/credential`, `POST /api/jira/credential/remove` nem as três de
+`POST /api/claude/login-web/*`, e não cria nem remove perfil do Claude: a credencial do Jira, a
+chave de API e o login da assinatura entram por chamada direta à API (com o Bearer do
+pareamento e `x-farol: 1`). Os corpos estão em
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#chamar-a-api-sem-tela) e nas lacunas do
+[`web/README.md`](web/README.md).
+
+Das preferências de `POST /api/settings`, o front edita `aguardarCiParaAprovar`,
+`parallelReviews`, `reviewModel`, `reviewEffort` e `people`. Só mudam pela API ou pelo arquivo:
+`jiraSites`, `claudeProfiles`, `claudeProfileId`, `intervalSeconds`, `globalParallelReviews`,
+`reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`.
+`soundEnabled`, `theme` e `autostart` são resto da tela antiga: a API aceita e grava, e nada no
+motor lê.
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
@@ -330,7 +347,7 @@ escreve no log, nem no 200 nem no 400.
   `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão.
 - **Nunca passe de 4 de concorrência** na suíte (`FAROL_TEST_CONCORRENCIA`, de 1 a 4).
 - **Fora de Linux**, rode o gate num container `node:24.22.1-bookworm` com o repositório montado.
-- **Instância para olhar**: `FAROL_HOME=/tmp/farol-teste node server.js` sobe motor e tela sem
+- **Instância para olhar**: `FAROL_HOME=/tmp/farol-teste node server.js` sobe o motor sem
   tocar nos dados reais, e por ser isolada não escreve no GitHub. Para trocar a porta, grave
   `{"port": 47180}` no `config.json` dela antes de subir.
 - **Instância nova age sozinha.** Com a pasta de dados vazia e o `gh` logado, a conta detectada

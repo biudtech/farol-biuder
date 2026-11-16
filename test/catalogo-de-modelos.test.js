@@ -18,7 +18,6 @@ const { sanitizeClaudeModel, effortForModel, MODEL_ALIASES } = await import('../
 const { escolheModelo } = (await import('../lib/engine/model-router.js')).default;
 const { buildModelFlags } = await import('../lib/engine/session.js');
 const { modelLabel } = await import('../lib/format.js');
-const P = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -87,21 +86,8 @@ test('o catálogo da tela é só dado, sem regex, e traz o esforço de cada sele
   assert.deepEqual(JSON.parse(JSON.stringify(c)), c, 'atravessa o snapshot sem perder nada');
   assert.deepEqual(c.claude.map((s) => s.valor), M.SELECOES_CLAUDE.map((s) => s.valor));
   assert.equal(c.claude.find((s) => s.valor === 'auto').aceitaEsforco, false);
+  assert.equal(c.claude.find((s) => s.valor === 'opus').aceitaEsforco, true);
   assert.equal(c.claude.find((s) => s.valor === 'auto').rotulo, M.rotuloDoAuto());
-});
-
-test('as opções do seletor saem do catálogo, escapadas', () => {
-  const html = P.opcoesDeModeloHtml([{ valor: 'opus', rotulo: 'Opus <5>' }, { valor: '', rotulo: 'Padrão' }]);
-  assert.match(html, /<option value="opus">Opus &lt;5&gt;<\/option>/);
-  assert.match(html, /<option value="">Padrão<\/option>/);
-  assert.equal(P.opcoesDeModeloHtml(null), '', 'sem catálogo, nenhuma opção inventada');
-});
-
-test('a tela sabe se a seleção aceita esforço pelo catálogo, e valor fora dele aceita', () => {
-  const lista = M.catalogoParaTela().claude;
-  assert.equal(P.selecaoAceitaEsforco(lista, 'auto'), false);
-  assert.equal(P.selecaoAceitaEsforco(lista, 'opus'), true);
-  assert.equal(P.selecaoAceitaEsforco(lista, 'claude-opus-5-5'), true, 'fixado à mão: o engine é quem tem a palavra final');
 });
 
 /* ---------- o snapshot: chave própria, e o `app` continua sendo só identidade ---------- */
@@ -120,10 +106,9 @@ test('o snapshot leva o catálogo e a versão do CLI em `modelos`, e deixa `app`
   assert.equal(snap.modelos.cli.instalada, '2.1.282', 'a versão do CLI viaja junto do catálogo que ela resolve');
 });
 
-test('sem leitura do CLI, `cli` vai nulo, e o check da tela simplesmente não aparece', () => {
+test('sem leitura do CLI, `cli` vai nulo', () => {
   const c = M.catalogoParaTela(null);
   assert.equal(c.cli, null);
-  assert.deepEqual(P.versaoClaudeCheck(c.cli), []);
 });
 
 /* ---------- a trava: a dispersão não volta ---------- */
@@ -153,7 +138,7 @@ function semComentario(src) {
 }
 
 test('nenhum modelo é escrito à mão fora do catálogo', () => {
-  const alvos = [...arquivos('lib', ['lib/modelos.js']), ...arquivos('ui'), 'server.js'];
+  const alvos = [...arquivos('lib', ['lib/modelos.js']), 'server.js'];
   const LITERAL = /(['"`])(opus|sonnet|haiku|fable|best|gpt-\d[\w.-]*)\1/;
   const achados = [];
   for (const rel of alvos) {
@@ -161,13 +146,4 @@ test('nenhum modelo é escrito à mão fora do catálogo', () => {
     src.split('\n').forEach((linha, i) => { if (LITERAL.test(linha)) achados.push(`${rel.replace(/\\/g, '/')}:${i + 1}: ${linha.trim().slice(0, 90)}`); });
   }
   assert.deepEqual(achados, [], 'modelo escrito à mão fora de lib/modelos.js; leia do catálogo');
-});
-
-test('o seletor da tela não tem opção fixa no HTML: todas vêm do catálogo', () => {
-  const html = fs.readFileSync(path.join(RAIZ, 'ui', 'index.html'), 'utf8');
-  for (const id of ['setReviewModel']) {
-    const m = new RegExp(`<select id="${id}"[^>]*>([\\s\\S]*?)</select>`).exec(html);
-    assert.ok(m, `#${id} existe`);
-    assert.doesNotMatch(m[1], /<option/, `#${id} com opção fixa no HTML volta a ser uma segunda lista`);
-  }
 });

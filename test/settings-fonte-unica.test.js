@@ -1,48 +1,19 @@
-// A tabela de preferências (lib/settings.js) é a FONTE ÚNICA, e este teste é a ponte
-// que a UI não consegue ser.
+// A tabela de preferências (lib/settings.js) é a FONTE ÚNICA.
 //
 // Queixa que originou tudo (18/08/2026): "Sistema > Automação não está salvando as
 // minhas preferências, toda vez que ocorre um update perco tudo". A persistência em si
 // estava certa (escrita atômica, snapshot completo, allowlist cobrindo os toggles). O
-// problema era a FORMA: uma preferência morava em cinco lugares (DEFAULTS, allowlist,
-// saneamento, settingsMap da tela, leitura no renderSettings), e esquecer um deles não
-// quebrava nada visível — o updateSettings descartava a chave em silêncio, devolvia
-// `undefined`, e a tela dizia "Configuração salva." do mesmo jeito.
+// problema era a FORMA: uma preferência morava em cinco lugares, e esquecer um deles não
+// quebrava nada visível.
 //
-// O `ui/app.js` não pode importar `lib/settings.js` (o servidor estático só serve
-// `ui/`, ver lib/http-server.js), então a checagem cruzada vive aqui: chave que a tela
-// edita e a tabela não conhece quebra a suíte, em vez de sumir com a preferência de
-// alguém. Mesmo padrão do guarda de taxonomia UI x engine.
+// Este arquivo também cruzava o `settingsMap` da tela antiga com a tabela. A tela saiu em
+// 16/11/2026: o front novo manda só a chave editada e mostra as `ignoradas` que
+// POST /api/settings devolve (test/http.test.js prova a resposta), e as chaves que ele edita
+// são conferidas contra o motor no pacote dele (web/src/sistema/automacao.ts). Aqui ficam os
+// padrões e o saneamento.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { SETTINGS, EDITAVEIS, defaults, sanear, contaLimpa } from '../lib/settings.js';
-import { fonteDasTelas } from './helpers/fontes-ui.js';
-
-const APPJS = fonteDasTelas();
-
-// as duplas [seletor, chave] que a tela liga no change
-function togglesDaTela() {
-  const m = APPJS.match(/const settingsMap = \[([\s\S]*?)\n\];/);
-  assert.ok(m, 'settingsMap precisa existir no ui/app.js');
-  return [...m[1].matchAll(/\['([^']+)',\s*'([^']+)'/g)].map(x => ({ sel: x[1], key: x[2] }));
-}
-
-test('toda preferência que a tela edita existe na tabela e é editável', () => {
-  const daTela = togglesDaTela();
-  assert.ok(daTela.length >= 13, `esperava os toggles de Sistema, achei ${daTela.length}`);
-  const órfãs = daTela.filter(t => !EDITAVEIS.has(t.key));
-  assert.deepEqual(órfãs.map(t => `${t.sel} -> ${t.key}`), [],
-    'chave que a tela manda e o servidor não aceita é preferência que some em silêncio');
-});
-
-test('a tela não inventa chave: todo seletor lê um id que existe no HTML', () => {
-  const html = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'index.html'), 'utf8');
-  const semElemento = togglesDaTela().filter(t => !html.includes(`id="${t.sel.slice(1)}"`));
-  assert.deepEqual(semElemento.map(t => t.sel), [],
-    'seletor sem elemento no HTML explode no boot da tela (addEventListener de null)');
-});
 
 test('defaults cobre toda a tabela e a porta entra por injeção', () => {
   const d = defaults(12345);

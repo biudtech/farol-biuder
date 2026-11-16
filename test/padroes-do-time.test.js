@@ -108,13 +108,3 @@ test('o protocolo manda ler as regras do repositório revisado e citar a regra u
   assert.match(revisor, /padrões do time/);
   assert.match(revisor, /Gate do BLOCKER/);
 });
-
-test('a tela de Contas mostra os padrões da conta num campo próprio, com o texto escapado', async () => {
-  const P = await import('../ui/pure.js');
-  const html = P.accountsManagerHtml({
-    accounts: [{ user: 'alex', owners: ['o'], label: 'alex', color: '#fff', padroesRevisao: 'Use <Strategy> & evite switch' }],
-    config: { accounts: [], claudeProfiles: [] }, acct: 'all', doctor: {}, usage: {},
-  });
-  assert.match(html, /<textarea class="acct-padroes" data-user="alex"/);
-  assert.match(html, /Use &lt;Strategy&gt; &amp; evite switch<\/textarea>/);
-});

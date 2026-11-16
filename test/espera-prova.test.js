@@ -45,7 +45,6 @@ const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
 const reviewMod = (await import('../lib/engine/review.js')).default;
-const { separarPendentes, staleCardMeta } = await import('../ui/pure/review.js');
 const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
 const { technicalPublication } = await import('../lib/technical-review/publication.js');
 const { technicalReport } = await import('./helpers/technical-proof.js');
@@ -180,14 +179,11 @@ test('aprovável com análise incompleta: nada é postado, e a pendência RECUPE
   assert.equal(e.toasts.some((t) => /precisa da sua atenção/.test(t)), false);
   const tela = e.decisionForUi(d);
   assert.equal(tela.esperaProva.tentativas, 0, 'a tela sabe que é espera');
+  assert.notEqual(tela.esperaProva.pedeVoce, true, 'fora de Precisa de você: a recuperação é automática');
+  assert.ok(!tela.esperaProva.impedimento, 'recuperação agendada, sem impedimento');
+  assert.ok(!tela.esperaProva.aguardandoCi);
+  assert.equal(tela.esperaCi, undefined);
   assert.equal(e.reviewActions()[PR.key].esperaProva, true, 'o Panorama também');
-  const { precisam, esperandoCi } = separarPendentes([tela]);
-  assert.equal(precisam.length, 0, 'fora de Precisa de você');
-  assert.equal(esperandoCi.length, 1);
-  const meta = staleCardMeta(tela, null);
-  assert.match(meta.statusHtml, /Recuperação agendada/);
-  assert.match(meta.statusHtml, /Farol retoma sozinho/);
-  assert.match(meta.verdictHtml, /RECUPERANDO A ANÁLISE/);
 });
 
 test('recuperação entrega as 44 lacunas completas após persistir a marca, sem cortar caminhos', async () => {
@@ -266,7 +262,6 @@ test('CI muda após o agendamento: ciclo completo espera sem virar órfã e reto
   assert.equal(d.esperaProva.tentativas, 0);
   const projetada = e.decisionForUi(d);
   assert.equal(projetada.esperaProva.aguardandoCi, true);
-  assert.match(staleCardMeta(projetada, null).statusHtml, /Aguardando o CI antes de retomar/);
   e.reReviewLaunched[PR.key] = { head: HEAD, at: 1 };
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
   assert.equal(d.esperaProva.interrupcoes, 0);
@@ -295,7 +290,8 @@ test('head não confirmado entra na recuperação e só publica após uma nova a
   assert.equal(d.blockedHead, HEAD);
   assert.equal(d.headSha || '', '', 'o alvo novo não altera o commit da análise anterior');
   assert.equal(e.reReviewTargets(new Set()).length, 1);
-  assert.match(staleCardMeta(e.decisionForUi(d), null).verdictHtml, /RECUPERANDO A ANÁLISE/);
+  assert.ok(e.decisionForUi(d).esperaProva, 'a projeção segue em recuperação da análise');
+  assert.notEqual(e.decisionForUi(d).esperaProva.pedeVoce, true);
   await revisado(e, {});
   assert.equal(pendente(e), undefined);
   assert.deepEqual(envios.map(x => [x.event, x.commit_id]), [['APPROVE', HEAD]]);
@@ -439,11 +435,9 @@ test('execução estacionada por falha transitória é reagendada sem decisão m
   assert.equal(d.blockedKind, undefined);
   assert.deepEqual(e.eventos, []);
   const tela = e.decisionForUi(d);
-  assert.equal(separarPendentes([tela]).precisam.length, 0);
-  const meta = staleCardMeta(tela, { estado: 'parado' });
-  assert.match(meta.statusHtml, /Próxima tentativa/);
-  assert.equal(meta.approveDisabled, true);
-  assert.notEqual(meta.reviewBtn, 'primary');
+  assert.equal(tela.esperaProva.proximaEm, d.esperaProva.proximaEm, 'a projeção leva a hora da próxima tentativa');
+  assert.ok(tela.esperaProva.proximaEm > Date.now());
+  assert.notEqual(tela.esperaProva.pedeVoce, true, 'reagendada sem decisão manual');
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0, 'não relança antes da hora');
   d.esperaProva.proximaEm = Date.now() - 1;
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
@@ -599,9 +593,7 @@ for (const retry of [null, { event: 'approve', attempts: 3, exhausted: true }]) 
     e.eventos = [];
     const tela = e.decisionForUi(pendente(e));
     assert.equal(tela.technical.state, 'pending', 'a prova anterior não continua verde');
-    const card = staleCardMeta(tela, null);
-    assert.equal(card.approveDisabled, true, 'clicar de novo não pode publicar a análise antiga');
-    assert.equal(card.reviewBtn, 'primary');
+    assert.equal(tela.blockedKind, 'technical_recheck', 'a projeção diz que é reconferência: clicar de novo não publica a análise antiga');
     assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
     assert.ok(pendente(e).esperaProva, 'o motivo durável recupera a marca já consumida pela fila');
     assert.equal(pendente(e).postRetry, null, 'a reconferência substitui o reenvio do texto antigo');
@@ -633,7 +625,7 @@ test('cancelamento explícito não é desfeito pela recuperação e aparece como
   for (let i = 0; i < 3; i++) assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
   assert.equal(e.autoReviewParked.has(PR.key), true);
   assert.match(d.esperaProva.impedimento, /cancelada por você/);
-  assert.match(staleCardMeta(e.decisionForUi(d)).statusHtml, /cancelada por você/);
+  assert.match(e.decisionForUi(d).esperaProva.impedimento, /cancelada por você/, 'o impedimento chega à projeção');
   // a pausa que só você desfaz é "precisa de você", avisada uma vez (06/11/2026)
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });
@@ -747,4 +739,3 @@ test('ressalva real após recuperar a prova continua obedecendo à aprovação m
   assert.deepEqual(envios, []);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });
-

@@ -57,36 +57,5 @@
   },
   "tools/quality/strip.js": {
     "profundidadeExcedida": 2
-  },
-  "ui/pure/consumo.js": {
-    "ternarioAninhado": 1
-  },
-  "ui/pure/review.js": {
-    "ternarioAninhado": 6
-  },
-  "ui/pure/sistema.js": {
-    "ternarioAninhado": 1
-  },
-  "ui/telas/consumo.js": {
-    "ternarioAninhado": 1
-  },
-  "ui/telas/diagnostico.js": {
-    "ternarioAninhado": 2
-  },
-  "ui/telas/infra.js": {
-    "jsonStringifyCru": 1,
-    "ternarioAninhado": 3
-  },
-  "ui/telas/perfil-pessoa.js": {
-    "profundidadeExcedida": 1
-  },
-  "ui/telas/radar.js": {
-    "ternarioAninhado": 2
-  },
-  "ui/telas/sistema-ambiente.js": {
-    "ternarioAninhado": 2
-  },
-  "ui/telas/time.js": {
-    "ternarioAninhado": 1
   }
 }

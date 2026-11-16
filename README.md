@@ -22,7 +22,8 @@ Requisitos, no usuário que roda o motor:
 node server.js
 ```
 
-O motor escuta em `http://127.0.0.1:47170`, serve a tela nesse endereço e guarda tudo em `~/.farol`.
+O motor escuta em `http://127.0.0.1:47170`, serve só a API e guarda tudo em `~/.farol`. A tela é o
+front de [`web/`](web/README.md), um pacote à parte que roda em outro endereço e fala com essa API.
 
 **Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada nasce
 revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
@@ -37,14 +38,15 @@ depois.
 
 ## Configuração mínima
 
-Tudo mora em `~/.farol/config.json`; a tela (Sistema) edita a maior parte. O detalhe está em
+Tudo mora em `~/.farol/config.json`. A tela (Sistema) edita a conta, a política e a automação; o
+resto entra pela API ou pelo arquivo. O detalhe está em
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 | O quê | Onde | Leia |
 |---|---|---|
 | A conta revisora: login, organizações monitoradas (`owners`) e a política (`autoReview`, `onClean`, `onCaveats`, `onReject`) | `conta`, pela tela ou pelo arquivo | [A conta revisora e a política](docs/CONFIGURATION.md#a-conta-revisora-e-a-política) |
-| O perfil do Claude: por assinatura (login feito pela própria tela) ou por chave de API (a chave entra e não sai mais do motor) | `claudeProfiles`, pela tela | [Perfis do Claude](docs/CONFIGURATION.md#perfis-do-claude) |
-| O Jira de cada organização, para a revisão ler o card | `jiraSites`, pela tela | [Jira](docs/CONFIGURATION.md#jira) |
+| O perfil do Claude: por assinatura (login feito pela API, sem terminal) ou por chave de API (a chave entra e não sai mais do motor) | `claudeProfiles`, por `POST /api/settings` ou pelo arquivo | [Perfis do Claude](docs/CONFIGURATION.md#perfis-do-claude) |
+| O Jira de cada organização, para a revisão ler o card | `jiraSites`, por `POST /api/settings` ou pelo arquivo; a credencial, por `POST /api/jira/credential` | [Jira](docs/CONFIGURATION.md#jira) |
 | Motor hospedado: `hostPublico` (o nome com que o proxy chega ao motor) e `origensPermitidas` (de onde o front chama a API). Qualquer uma das duas já exige autenticação | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
 | Autenticação da API sem as duas chaves acima: `"localAuth": "exigir"`, obrigatório em qualquer instância que não seja só da própria máquina | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
 
@@ -83,7 +85,7 @@ instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, salvo com
 | `lib/review-source/` | Aquisição e cache do código do PR |
 | `lib/technical-review/` | A avaliação técnica do PR revisado |
 | `workspace-template/` | O protocolo que a sessão de IA lê |
-| `ui/` | A tela, servida pelo motor |
+| `web/` | A tela: o front, pacote à parte ([`web/README.md`](web/README.md)) |
 | `test/` | A suíte: `npm test` |
 | `tools/quality/` | O gate de qualidade: `npm run lint` |
 | `tools/check-syntax.js` | O gate de sintaxe: `npm run check` |

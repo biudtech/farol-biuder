@@ -1,6 +1,6 @@
 // Inventário das rotas /api (A4, spec 7.A4): toda rota que o servidor roteia tem classe.
-// Rota nova sem classe reprova aqui. A lista do servidor é DERIVADA do fonte, com o mesmo
-// extrator do test/ui-contract.test.js, para não virar tabela curada que envelhece.
+// Rota nova sem classe reprova aqui. A lista do servidor é DERIVADA do fonte, para não
+// virar tabela curada que envelhece.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -1,5 +1,5 @@
 /* Identidade do Farol: tema escuro por padrão, claro como alternativa. As cores vêm da tela
-   antiga (ui/app.css, na raiz). As variáveis terminadas em -texto, --foco, --borda-campo e
+   antiga (a `ui/app.css`, que saiu do motor). As variáveis terminadas em -texto, --foco, --borda-campo e
    --borda-botao são daqui: existem para o contraste AA nos dois temas, e
    src/tema/contraste.test.ts confere. No claro o --accent é mais escuro que o da tela antiga
    (#e08700 dava 2,75:1 sobre o cartão branco): o botão primário pede 3:1 contra o fundo. */

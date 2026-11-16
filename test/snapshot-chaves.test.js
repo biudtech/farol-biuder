@@ -15,7 +15,7 @@ after(() => fs.rmSync(home, { recursive: true, force: true }));
 // A lista do plano da Fase 1 (Task 15), com duas diferenças medidas no lote:
 // - `staleStates` não está: saiu no lote 10, junto do Panorama, que era quem a escrevia e lia.
 // - `headlessWaitingPrs` está: é a lista dos PRs pedidos que esperam vaga, com a conta que
-//   revisa cada um, e a fila de Pra mim (ui/telas/radar.js) a desenha. A definição é do motor
+//   revisa cada um, e a fila do Radar a desenha. A definição é do motor
 //   (lib/engine/headless-fila.js); a tela só fatia.
 const CHAVES = [
   'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',

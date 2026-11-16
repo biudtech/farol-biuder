@@ -52,7 +52,7 @@ const finishOriginal = technicalRuntime.finishTechnicalReview;
 const targetOriginal = technicalRuntime.targetFor;
 const snapshotOriginal = technicalRuntime.reviewSnapshot;
 const { decisionForUi } = await import('../lib/engine/public-review.js');
-const { staleCardMeta } = await import('../ui/pure/review.js');
+const { camposDoAprovar } = await import('./helpers/projecao-do-aprovar.js');
 after(() => {
   io.run = runReal;
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* limpeza best-effort do temporário */ }
@@ -172,7 +172,8 @@ test('lacuna que não é dura na rodada 1 com a conta esperando você nas ressal
   assert.deepEqual(d.approvalEvidence, [], 'nada segue exigido: o Aprovar da mesa fica com você');
   assert.ok(textos(d).some((t) => /^faltou prova nesta revisão, então segue como ressalva: protocolo de revisão não comprovado/.test(t)), textos(d).join(' | '));
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-  assert.equal(staleCardMeta(decisionForUi(d), null).approveDisabled, false);
+  // o Aprovar da mesa fica ligado: nada na projeção o segura
+  assert.deepEqual(camposDoAprovar(decisionForUi(d)), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'pass', recheck: false });
 });
 
 test('falta de prova que segue exigida não é ressalva que transfere uma decisão ainda bloqueada', async () => {
@@ -181,7 +182,7 @@ test('falta de prova que segue exigida não é ressalva que transfere uma decis�
   assert.ok(d.esperaProva);
   assert.deepEqual(envios, []);
   assert.deepEqual(e.eventos, []);
-  assert.equal(staleCardMeta(decisionForUi(d), null).approveDisabled, true, 'análise incompleta não libera o Aprovar');
+  assert.equal(camposDoAprovar(decisionForUi(d)).esperaProva, true, 'análise incompleta não libera o Aprovar: a espera da prova vai na projeção');
   await esperaProva.reverQuandoAProvaMudar(e);
   await revisado(e, {});
   assert.equal(envios.length, 1);
@@ -404,7 +405,7 @@ test('PR #248, achado 1: com a prova esgotada, base nova ou objeção nova recus
   assert.equal((await approvalRefusal(leituraFalha, pr, payload)).error, 'não foi possível reconfirmar a base e as objeções da revisão');
 }));
 
-test('PR #248, achado 2: com a prova esgotada e a política esperando você, o Aprovar fica ligado', () => {
+test('PR #248, achado 2: com a prova esgotada, a projeção diz ressalva; sem esgotar segue exigida, e violação nunca vira ressalva', () => {
   const head = 'a'.repeat(40);
   const inconclusivo = { ...technicalReport(head), verdict: 'not-run', rules: [{ rule: 'x', verdict: 'not-run' }] };
   // a prova gravada pelas regras vigentes (a de regras anteriores pede revisão nova, legacy-technical-evidence.test.js)
@@ -412,12 +413,10 @@ test('PR #248, achado 2: com a prova esgotada e a política esperando você, o A
   const esgotada = decisionForUi({ ...base, provaEsgotada: true });
   assert.equal(esgotada.provaEsgotada, true, 'a marca chega à tela');
   assert.equal(esgotada.technical.state, 'ressalva');
+  assert.deepEqual(camposDoAprovar(esgotada), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'ressalva', recheck: false });
   assert.match(esgotada.technical.message, /avaliação técnica inconclusiva; segue como ressalva desta revisão/);
-  assert.equal(staleCardMeta(esgotada, null).approveDisabled, false);
   const exigida = decisionForUi(base);
   assert.equal(exigida.technical.state, 'pending', 'sem esgotar, segue exigida');
-  assert.equal(staleCardMeta(exigida, null).approveDisabled, true);
   const violada = decisionForUi({ ...base, provaEsgotada: true, technicalReview: { ...inconclusivo, verdict: 'fail', rules: [{ rule: 'x', verdict: 'fail' }] } });
   assert.equal(violada.technical.state, 'violation', 'violação nunca vira ressalva');
-  assert.equal(staleCardMeta(violada, null).approveDisabled, true);
 });

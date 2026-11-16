@@ -190,21 +190,17 @@ test('pareamento: código não funciona duas vezes e exige x-farol', async () =>
   assert.equal(JSON.parse((await pedir('POST', '/api/auth/pair', { corpo: { codigo: outro } })).body).ok, true, 'a recusa por x-farol não gasta o código');
 });
 
-test('o segredo não aparece em log, spawns.log, snapshot, HTML nem URL', async () => {
+test('o segredo não aparece em log, spawns.log, snapshot nem URL', async () => {
   await comExigencia(async () => {
     const { codigo, token, resposta } = await parearViaHttp();
     await pedir('POST', '/api/auth/pair', { corpo: { codigo } });   // reuso recusado
     await pedir('POST', '/api/auth/pair', { corpo: { codigo: 'ERRADO2345' } });
     const estado = await pedir('GET', '/api/state', { cabecalhos: bearer(token) });
-    const ui = await pedir('GET', '/', { cabecalhos: bearer(token) });
-    const appjs = await pedir('GET', '/app.js', { cabecalhos: bearer(token) });
     const textos = {
       'farol.log': fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '',
       'spawns.log': fs.existsSync(SPAWN_LOG_FILE) ? fs.readFileSync(SPAWN_LOG_FILE, 'utf8') : '',
       snapshot: JSON.stringify(engine.snapshot()),
       'GET /api/state': estado.body,
-      'GET /': ui.body,
-      'GET /app.js': appjs.body,
       'cabeçalhos do pareamento': JSON.stringify(resposta.headers),
     };
     for (const [onde, texto] of Object.entries(textos)) {
@@ -247,19 +243,6 @@ test('POST /api/settings não liga nem desliga localAuth', async () => {
   const antes = engine.config.localAuth;
   await pedir('POST', '/api/settings', { corpo: { localAuth: 'exigir' } });
   assert.equal(engine.config.localAuth, antes);
-});
-
-test('transporte da UI lê o SSE real com o cabeçalho no modo que exige', async () => {
-  const { FonteDeEventosAutenticada } = await import('../ui/transporte.js');
-  await comExigencia(async () => {
-    const { token } = await parearViaHttp('navegador');
-    const estado = await new Promise((resolve, reject) => {
-      const fonte = new FonteDeEventosAutenticada('/api/events', () => token, (url, init) => fetch(base + url, init), (fn, ms) => { if (ms === 0) fn(); });
-      fonte.onerror = () => reject(new Error('o stream autenticado falhou'));
-      fonte.addEventListener('state', e => { fonte.close(); resolve(JSON.parse(e.data)); });
-    });
-    assert.ok(estado.decisions, 'o evento state chegou com o snapshot');
-  });
 });
 
 // As duas rotas de sessão (lista e revogação) vieram de test/contrato-telas.test.js, que saiu

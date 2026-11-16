@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { seguraPorConflito, limparConflito, marcarConflito } = await import('../lib/engine/espera-conflito.js');
-const P = await import('../ui/pure.js');
 
 const PR = { key: 'acme/api#7', url: 'https://github.com/acme/api/pull/7', updatedAt: '2026-11-05T10:00:00Z', headSha: 'h1' };
 const fake = (config = {}) => { const toasts = []; return { config, toasts, emit: (n, p) => { if (n === 'toast') toasts.push(p); } }; };
@@ -73,12 +72,4 @@ test('marcar e limpar são a via da tarefa seguinte', () => {
   assert.deepEqual(e.esperaConflito[PR.key], { at: 3, head: 'h1', updatedAt: 'u1' });
   limparConflito(e, PR.key);
   assert.equal(e.esperaConflito[PR.key], undefined);
-});
-
-test('queueCardHtml mostra a nota de conflito quando há espera', () => {
-  const MARK = { style: '', varStyle: '', dim: '', chip: '', dot: '', acct: { label: 'acme' } };
-  const pr = { ...PR, title: 't', author: 'alice' };
-  const com = P.queueCardHtml(pr, { people: {}, mark: MARK, esperaConflito: { [PR.key]: { at: 1, head: 'h1' } } });
-  assert.match(com, /Em conflito com a base: a revisão automática abre quando o conflito for resolvido\. O botão Revisar não espera\./);
-  assert.doesNotMatch(P.queueCardHtml(pr, { people: {}, mark: MARK }), /Em conflito com a base/);
 });

@@ -21,7 +21,6 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const versao = (await import('../lib/engine/versao-claude.js')).default;
-const P = await import('../ui/pure.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -134,41 +133,3 @@ test('erro inesperado na leitura não derruba o ciclo', async () => {
 });
 
 /* ---------- o check da tela ---------- */
-
-test('sem leitura, o check não aparece: nunca um verde que ninguém conferiu', () => {
-  assert.deepEqual(P.versaoClaudeCheck(null), []);
-  assert.deepEqual(P.versaoClaudeCheck(undefined), []);
-});
-
-test('atrasado: vermelho, com a versão, desde quando, e o comando que resolve', () => {
-  const v = versao.avaliarVersao({ instalada: '2.1.268', maisRecente: '2.1.282', datas: DATAS, agora: AGORA });
-  const [c] = P.versaoClaudeCheck(v);
-  assert.equal(c.ok, false);
-  assert.match(c.detail, /2\.1\.268/);
-  assert.match(c.detail, /2\.1\.282/);
-  assert.match(c.detail, /11\/09/, 'desde quando, que é o que diz se é descuido de ontem ou de semanas');
-  assert.match(c.detail, /claude update/);
-  assert.match(c.detail, /modelo/, 'e por que isso importa para o Farol');
-});
-
-test('atualizado: verde', () => {
-  const v = versao.avaliarVersao({ instalada: '2.1.282', maisRecente: '2.1.282', datas: DATAS, agora: AGORA });
-  const [c] = P.versaoClaudeCheck(v);
-  assert.equal(c.ok, true);
-  assert.match(c.detail, /mais recente/);
-});
-
-test('patch recente: verde, mas dizendo que há versão nova', () => {
-  const v = versao.avaliarVersao({ instalada: '2.1.281', maisRecente: '2.1.282', datas: DATAS, agora: AGORA });
-  const [c] = P.versaoClaudeCheck(v);
-  assert.equal(c.ok, true);
-  assert.match(c.detail, /2\.1\.282/);
-});
-
-test('o rótulo nomeia a DIMENSÃO: não repete o "Claude Code" do check de presença', () => {
-  const v = versao.avaliarVersao({ instalada: '2.1.282', maisRecente: '2.1.282', datas: DATAS, agora: AGORA });
-  const [c] = P.versaoClaudeCheck(v);
-  assert.notEqual(c.label, 'Claude Code');
-  assert.match(c.label, /vers[aã]o/i);
-  assert.equal(c.goto, undefined, 'nenhuma tela do app atualiza o CLI: clique que não leva a nada é pior que texto');
-});

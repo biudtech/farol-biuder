@@ -1,6 +1,6 @@
 // Smoke da camada HTTP (lib/http-server.js): sobe o servidor com uma Engine real contra
-// um FAROL_HOME temporário (sem polling, sem gh) e confere que /api/state e a UI estática
-// respondem. Protege a extração do http server. Runner nativo, ZERO deps.
+// um FAROL_HOME temporário (sem polling, sem gh) e confere que /api/state responde e que
+// fora de /api não há página. Protege a extração do http server. Runner nativo, ZERO deps.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
-const { LOG_FILE, UI_DIR } = await import('../lib/paths.js');
+const { LOG_FILE } = await import('../lib/paths.js');
 
 let server, base, engine;
 
@@ -79,13 +79,14 @@ test('GET /api/state devolve o snapshot serializável', async () => {
   assert.equal(typeof snap, 'object');
   assert.ok(snap.decisions, 'snapshot traz decisions');
   assert.ok(Array.isArray(snap.decisions.resolved), 'resolved é array');
-  assert.ok(snap.decisions.resolved.length <= 30, 'payload do SSE respeita o cap de 30 (Revisões recentes)');
+  assert.ok(snap.decisions.resolved.length <= 30, 'payload do SSE respeita o cap de 30 (as resolvidas mais recentes)');
 });
 
-test('GET / serve a UI estática (index.html)', async () => {
+test('GET / não serve página: responde 404 em JSON', async () => {
   const r = await get('/');
-  assert.equal(r.status, 200);
-  assert.match(r.type, /text\/html/);
+  assert.equal(r.status, 404);
+  assert.match(r.type, /application\/json/);
+  assert.deepEqual(JSON.parse(r.body), { error: 'not found' });
 });
 
 test('GET numa rota /api desconhecida devolve 405 (só POST é aceito além das GET conhecidas)', async () => {
@@ -132,8 +133,8 @@ test('as rotas da sessão interativa saíram: POST cai no 404, e sem o x-farol s
 
 /* ---------- /api/log/triage: o log agrupado que o Diagnóstico mostra ----------
    A rota crua (/api/log) devolve linha por linha e tem consumidor e teste; esta
-   devolve o MESMO tail já triado por lib/log-taxonomy.js, porque o ui/app.js é
-   carregado por <script src> e não pode dar require num módulo de lib/. */
+   devolve o MESMO tail já triado por lib/log-taxonomy.js, porque quem está fora do motor
+   não importa módulo de lib/. */
 
 // linhas REAIS do farol.log de produção, no formato "[ts] [NIVEL] mensagem"
 function semeiaLog(linhas) {
@@ -227,26 +228,12 @@ test('GET /api/decision sem chave nao explode', async () => {
   assert.equal(JSON.parse(r.body).found, false);
 });
 
-/* A quebra do ui/pure.js em ui/pure/*.js depende de o servidor entregar arquivo em
-   SUBPASTA de ui/ com o tipo de módulo ES. O navegador carrega o app por
-   <script type="module">, e um 404 aqui quebraria a tela inteira com a suíte verde. */
-test('GET de arquivo em subpasta de ui/ e servido como modulo ES', async () => {
-  const dir = path.join(UI_DIR, 'prova-subpasta');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'modulo.js'), 'export const x = 1;\n');
-  try {
-    const r = await get('/prova-subpasta/modulo.js');
-    assert.equal(r.status, 200, 'subpasta de ui/ precisa ser servida');
-    assert.match(r.type, /text\/javascript/, 'modulo ES precisa do tipo javascript');
-    assert.match(r.body, /export const x/);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+test('GET de caminho de arquivo do repositório nunca entrega o arquivo', async () => {
+  for (const caminho of ['/../package.json', '/package.json', '/server.js', '/lib/paths.js', '/web/package.json']) {
+    const r = await get(caminho);
+    assert.equal(r.status, 404, caminho);
+    assert.deepEqual(JSON.parse(r.body), { error: 'not found' }, caminho);
   }
-});
-
-test('GET fora de ui/ continua recusado', async () => {
-  const r = await get('/../package.json');
-  assert.notEqual(r.status, 200, 'escapar de UI_DIR nao pode servir arquivo do repositorio');
 });
 
 /* C0, defeito 2: a rota descartava o retorno de updateSettings e mandava só

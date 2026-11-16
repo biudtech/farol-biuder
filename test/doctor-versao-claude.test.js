@@ -10,7 +10,6 @@ process.env.FAROL_HOME = taskHome;
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 const versao = (await import('../lib/engine/versao-claude.js')).default;
-const { versaoClaudeCheck } = await import('../ui/pure.js');
 const io = (await import('../lib/io.js')).default;
 const originais = { run: io.run, runShell: io.runShell, fetch: globalThis.fetch };
 let instalada, consultasCli, consultasRegistro, registro;
@@ -44,7 +43,6 @@ test('HTTP de Reverificar saúde atualiza versão e aviso antes da resposta, den
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/doctor`);
     assert.equal(response.status, 200); assert.equal((await response.json()).claude, '2.1.310 (Claude Code)');
     assert.equal(e.claudeVersao.instalada, '2.1.310'); assert.equal(e.claudeVersao.atualizada, true);
-    assert.equal(versaoClaudeCheck(e.claudeVersao)[0].ok, true);
     assert.equal(consultasCli, 1, 'reutiliza a versão já lida no diagnóstico'); assert.equal(consultasRegistro, 1);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });
@@ -61,12 +59,11 @@ test('registro indisponível não conserva aviso de outra versão nem inventa at
   registro = null; const e = motor(); await e.doctor({ forcarVersaoClaude: true });
   assert.equal(e.doctorInfo.claude, '2.1.310 (Claude Code)'); assert.equal(e.claudeVersao.instalada, instalada);
   assert.equal(e.claudeVersao.indisponivel, true); assert.notEqual(e.claudeVersao.atualizada, true);
-  assert.match(versaoClaudeCheck(e.claudeVersao)[0].detail, /indisponível/);
 });
 
 test('CLI ausente remove a comparação antiga; presença fica sem versão', async () => {
   instalada = ''; const e = motor(); await e.doctor({ forcarVersaoClaude: true });
-  assert.equal(e.doctorInfo.claude, null); assert.equal(e.claudeVersao, null); assert.deepEqual(versaoClaudeCheck(e.claudeVersao), []);
+  assert.equal(e.doctorInfo.claude, null); assert.equal(e.claudeVersao, null);
 });
 
 test('diagnóstico automático que confirma CLI ausente também remove a comparação antiga', async () => {
@@ -80,9 +77,9 @@ test('falha e referência inválida expõem indisponibilidade sem revelar o erro
     { 'dist-tags': { latest: '2.1.311' }, time: { '2.1.311': { toString: null, valueOf: null } } },
   ]) {
     registro = resposta; const e = motor(); await e.doctor({ forcarVersaoClaude: true });
-    const aviso = versaoClaudeCheck(e.claudeVersao)[0]; assert.equal(aviso.ok, false);
-    assert.equal(e.claudeVersao.instalada, instalada); assert.match(aviso.detail, /indisponível/);
-    assert.doesNotMatch(aviso.detail, /synthetic|2\.1\.301|a mais recente/);
+    assert.equal(e.claudeVersao.indisponivel, true); assert.notEqual(e.claudeVersao.atualizada, true);
+    assert.equal(e.claudeVersao.instalada, instalada);
+    assert.doesNotMatch(JSON.stringify(e.claudeVersao), /synthetic|2\.1\.301/);
   }
 });
 

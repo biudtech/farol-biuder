@@ -16,7 +16,6 @@ import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 const { montarDiagnostico, diagnosticoMarkdown } = await import('../lib/engine/diagnostico.js');
-const { diagnosticoHtml } = await import('../ui/pure.js');
 
 const TOKEN = 'ghp_' + 'A1b2C3d4'.repeat(4);
 const MALICIOSO = [
@@ -116,31 +115,6 @@ test('seções vazias dizem que estão vazias', () => {
   const md = montarDiagnostico({ versao: '1', plataforma: 'x', geradoEm: 'y', ambiente: [], falhas: [], resumo: [] });
   assert.match(md, /Nenhuma falha registrada\./);
   assert.match(md, /O log de falhas está vazio\./);
-});
-
-test('o HTML da tela é inerte: sem tag ativa, sem atributo vindo do texto, sem link nem imagem', () => {
-  // além do Markdown do engine (já mascarado), o hostil CRU: mascarar é do engine, ser
-  // inerte é daqui, e o renderizador não pode depender de quem o alimenta
-  const html = diagnosticoHtml(diagnosticoMarkdown(engine) + '\n' + MALICIOSO.replace(TOKEN, 'sem-segredo-aqui') + '\n[x](https://a.example) ![y](https://b.example/y.png)');
-  assert.doesNotMatch(html, /<script/i);
-  assert.doesNotMatch(html, /<img/i);
-  assert.doesNotMatch(html, /<a[\s>]/i);
-  assert.doesNotMatch(html, /<[^>]*\s(?:src|href|on\w+)\s*=/i);
-  const tags = [...html.matchAll(/<\/?([a-z0-9]+)/gi)].map((m) => m[1].toLowerCase());
-  const permitidas = new Set(['h2', 'h3', 'h4', 'p', 'ul', 'li', 'pre', 'code']);
-  assert.deepEqual(tags.filter((t) => !permitidas.has(t)), []);
-  assert.equal(html.includes(TOKEN), false);
-});
-
-test('o HTML mostra o conteúdo das cercas como texto e os títulos como título', () => {
-  const html = diagnosticoHtml('# Título\n\n- item com `código`\n\n```text\n<b>cru</b>\n```');
-  assert.match(html, /<h3>Título<\/h3>/);
-  assert.match(html, /<li>item com <code>código<\/code><\/li>/);
-  assert.match(html, /<pre>&lt;b&gt;cru&lt;\/b&gt;<\/pre>/);
-});
-
-test('cerca sem fechamento ainda sai como bloco de texto', () => {
-  assert.match(diagnosticoHtml('```\n<i>solto</i>'), /<pre>&lt;i&gt;solto&lt;\/i&gt;<\/pre>/);
 });
 
 test('GET /api/diagnostics devolve o Markdown já mascarado, e visualizar não executa nada', async () => {

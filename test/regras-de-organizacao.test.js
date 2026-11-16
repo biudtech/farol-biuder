@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { technicalGap, technicalSummary, relatorioComViolacao, ehDeOrganizacao, TOOL } from '../lib/technical-review/verdict.js';
-import { criterioTecnicoHtml } from '../ui/pure/review.js';
 import { technicalPrompt } from '../lib/technical-review/prompt.js';
 import { debtVerdict } from '../lib/technical-review/debt.js';
 import { publicTextLanguageIssues } from '../lib/engine/public-review.js';
@@ -135,17 +134,17 @@ test('dívida de regra de organização não trava; a das outras exige comparaç
   assert.equal(await debtVerdict(contexto('backend.output.sanitized'), resultado('backend.output.sanitized'), agravada), 'not-run', 'sem evidência segue sem autorizar');
 });
 
+// O front mostra o critério técnico quando a mensagem do resumo diz algo além do veredito.
+test('a mensagem do resumo técnico: comprovado, organização como sugestão, violação e dívida anterior', () => {
+  assert.equal(technicalSummary(relatorio([pass('backend.output.sanitized')])).message, 'Critérios técnicos comprovados.');
+  assert.match(technicalSummary(relatorio([fail(ORGANIZACAO)])).message, /seguem como sugestão/);
+  assert.match(technicalSummary(relatorio([fail('backend.output.sanitized')])).message, /violação técnica confirmada/);
+  assert.match(technicalSummary(relatorio([pass('a')], { rules: [{ rule: 'a', verdict: 'pass', conhecidos: 2 }] })).message, /dívida anterior/);
+});
+
 test('aprovar com só organização reprovada é coerente', () => {
   const base = { verdict: 'approve', findings: [], reviewMarkdown: 'Tudo certo para seguir.', payloads: { approve: { event: 'APPROVE', body: 'Tudo certo para seguir.' }, request_changes: { event: 'REQUEST_CHANGES', body: '' } } };
   assert.equal(reviewCoherenceGap({ ...base, technicalReview: relatorio([fail(ORGANIZACAO)]) }), '');
-});
-
-test('o card só mostra o critério técnico quando ele informa algo além do veredito', () => {
-  assert.equal(criterioTecnicoHtml(technicalSummary(relatorio([pass('backend.output.sanitized')]))), '');
-  assert.equal(criterioTecnicoHtml(null), '');
-  assert.match(criterioTecnicoHtml(technicalSummary(relatorio([fail(ORGANIZACAO)]))), /seguem como sugestão/);
-  assert.match(criterioTecnicoHtml(technicalSummary(relatorio([fail('backend.output.sanitized')]))), /violação técnica confirmada/);
-  assert.match(criterioTecnicoHtml(technicalSummary(relatorio([pass('a')], { rules: [{ rule: 'a', verdict: 'pass', conhecidos: 2 }] }))), /dívida anterior/);
 });
 
 test('o prompt nomeia as regras de organização e mantém o bloqueio das demais', () => {

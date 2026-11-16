@@ -139,11 +139,10 @@ for (const c of CLASSES_A4) {
   });
 }
 
-test('Host inválido: arquivo estático recebe 403 JSON e nenhum byte da UI', async () => {
+test('Host inválido: fora de /api a recusa também é o 403 da allowlist, antes do 404', async () => {
   for (const rota of ['/', '/index.html', '/app.css', '/pure/comum.js']) {
     const r = await pedir(rota, { headers: { host: HOST_REBINDING() } });
     assertRecusa(r, 'host');
-    assert.doesNotMatch(r.corpo, /<html|<script|\{\s*[a-z-]+\s*:|export /i, rota);
   }
 });
 
@@ -193,11 +192,9 @@ test('nenhum cabeçalho CORS de permissão sai, nem na resposta aceita nem na re
 test('janela do Electron: Host 127.0.0.1:<porta>, GET sem Origin e POST com a própria origem', async () => {
   const espiao = espionar(ESPIOES);
   try {
-    const pagina = await pedir('/', { headers: { host: hostLocal() } });
-    assert.equal(pagina.status, 200);
-    assert.match(pagina.tipo, /text\/html/);
-    const modulo = await pedir('/pure/comum.js', { headers: { host: hostLocal() } });
-    assert.equal(modulo.status, 200, 'os módulos de ui/pure/ também são servidos');
+    const raiz = await pedir('/', { headers: { host: hostLocal() } });
+    assert.equal(raiz.status, 404, 'o Host certo passa pela allowlist, e fora de /api não há página');
+    assert.match(raiz.tipo, /application\/json/);
     const eventos = await pedir('/api/events', { headers: { host: hostLocal() } });
     assert.equal(eventos.status, 200);
     assert.match(eventos.tipo, /text\/event-stream/);
@@ -212,9 +209,9 @@ test('janela do Electron: Host 127.0.0.1:<porta>, GET sem Origin e POST com a pr
 test('navegador da própria máquina: Host e Origin em localhost:<porta>', async () => {
   const espiao = espionar(ESPIOES);
   try {
-    const pagina = await pedir('/app.css', { headers: { host: `localhost:${porta}` } });
-    assert.equal(pagina.status, 200);
-    assert.match(pagina.tipo, /text\/css/);
+    const raiz = await pedir('/app.css', { headers: { host: `localhost:${porta}` } });
+    assert.equal(raiz.status, 404);
+    assert.match(raiz.tipo, /application\/json/);
     const estado = await pedir('/api/state', { headers: { host: `localhost:${porta}`, origin: `http://localhost:${porta}` } });
     assert.equal(estado.status, 200);
     const acao = await postJson('/api/check', {}, { host: `localhost:${porta}`, origin: `http://localhost:${porta}`, 'x-farol': '1' });

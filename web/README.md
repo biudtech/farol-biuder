@@ -341,10 +341,6 @@ Regras que valem para quem mexer nela:
   aberta.
 - **Sessão em curso por revisão.** O item não diz se o PR já está sendo revisado de novo. A
   tela oferece "Revisar de novo" e mostra a resposta do motor.
-- **O aviso do motor cita uma tela que não existe aqui.** Quando o motor suspeita de
-  contestação, o aviso dele (evento `toast`, texto de `lib/engine/pushback.js`) manda
-  confirmar o desfecho em "Revisões recentes", que é da tela antiga. A tela nova mostra o
-  aviso como o motor escreveu; o desfecho se confirma no detalhe da revisão, no Histórico.
 
 ## A tela Time
 
@@ -779,9 +775,22 @@ Regras que valem para quem mexer nela:
   sem ela editar o endereço ou o `id` de um site por esta tela não é seguro. Neste lote a
   seção inteira ficou só leitura: a parte que seria segura (rótulo, organizações e projetos
   de um site, e site novo sem credencial) não foi construída.
-- **A credencial do Jira, a chave de API e o login da assinatura só entram pela tela antiga.**
-  As rotas existem (`jira/credential`, `claudeProfiles` com `apiKey`, `claude/login-web/*`),
-  mas todas recebem segredo digitado, e esta tela não tem campo para isso.
+- **A credencial do Jira, a chave de API e o login da assinatura não têm tela.** A tela
+  antiga, que tinha os campos, saiu do motor em 16/11/2026, e esta não tem campo para segredo
+  digitado. As rotas ficaram, e o caminho é a chamada direta à API do motor, com o Bearer do
+  pareamento e `x-farol: 1` (os corpos e os exemplos estão em `docs/CONFIGURATION.md`, em
+  "Perfis do Claude" e "Jira"):
+  - credencial do Jira: `POST /api/jira/credential` com `{ siteId, email, token }`; tirar,
+    `POST /api/jira/credential/remove` com `{ siteId }`;
+  - criar, trocar ou remover perfil do Claude e a chave de API: `POST /api/settings` com
+    `claudeProfiles` (a lista inteira; o de chave leva `apiKey`) e `claudeProfileId`;
+  - login da assinatura: `POST /api/claude/login-web/start` com `{ profileId }` devolve
+    `{ loginId, url }`; a pessoa abre a `url` em qualquer navegador e copia o código;
+    `POST /api/claude/login-web/code` com `{ loginId, code }` conclui, e
+    `POST /api/claude/login-web/cancel` com `{ loginId }` ou `{ profileId }` encerra;
+  - sites do Jira, perfil padrão e regras de review: `POST /api/settings` (`jiraSites`,
+    `claudeProfileId`) e `POST /api/accounts/edit` (`tipo: "regra-review"`), ou o
+    `config.json` com o motor parado.
 - **"Presente" não é "válido".** `tokenOk` e `doctor.ghAuth` dizem que o `gh` tem token, não
   que o GitHub o aceita. A chave de API só tem `temChave`: o teste do perfil não a confere,
   porque custaria uma chamada paga. Validade de verdade só há para o login da assinatura

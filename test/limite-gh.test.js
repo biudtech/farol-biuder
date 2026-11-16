@@ -33,7 +33,6 @@ import fs from 'node:fs';
 const { Engine } = await import('../server.js');
 const limiteGh = (await import('../lib/engine/limite-gh.js')).default;
 const { classify } = await import('../lib/log-taxonomy.js');
-const { operationChecks } = await import('../ui/pure/sistema.js');
 const { TEMPOS } = await import('../lib/constants.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { } });
@@ -160,13 +159,4 @@ test('a linha do log leva o que o gh disse, para separar rajada de cota esgotada
   const linha = e.logs.find(l => /limite de requisi/i.test(l.msg)).msg;
   assert.ok(linha.includes(`O gh disse: ${LIMITE}`));
   assert.ok(!linha.includes('segunda linha'), 'so a primeira linha, para nao entupir o log');
-});
-
-test('o Diagnostico mostra a conta parada no limite, com hora', () => {
-  const ate = new Date('2026-09-23T15:40:00').getTime();
-  const checks = operationChecks([{ user: 'eu', owners: ['acme'], tokenOk: true, limiteGhAte: ate }]);
-  const c = checks.find(x => x.label === 'Monitoramento de @eu');
-  assert.equal(c.ok, false, 'conta parada no limite nao pode aparecer verde');
-  assert.match(c.detail, /limite de requisi/i);
-  assert.match(c.detail, /15:40/, 'diz ate quando');
 });

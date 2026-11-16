@@ -13,7 +13,6 @@ const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
 const { rememberReview, publicationEvidence } = await import('../lib/technical-review/registry.js');
 const { lacunasDaRodada } = await import('../lib/engine/busca-da-prova.js');
 const { technicalReport } = await import('./helpers/technical-proof.js');
-const { staleCardMeta } = await import('../ui/pure/review.js');
 const { decisionForUi } = await import('../lib/engine/public-review.js');
 const { Engine } = await import('../server.js');
 
@@ -39,8 +38,7 @@ test('decisão antiga com evidência filtrada recusa e agenda nova revisão, inc
     assert.equal(saves, 1);
     const ui = decisionForUi(item);
     assert.equal(ui.technical.state, 'pending');
-    assert.equal(staleCardMeta(ui).approveDisabled, true);
-    assert.equal(staleCardMeta(ui).reviewBtn, 'primary');
+    assert.equal(ui.blockedKind, 'technical_recheck', 'a projeção pede a revisão nova');
   }
 });
 
@@ -77,19 +75,6 @@ test('nova revisão substitui a decisão esgotada e persiste a versão para a pu
   assert.deepEqual(e.decisions.pending, [current]);
   assert.equal(e.decisions.resolved[0].status, 'superseded');
   assert.equal(publicationEvidence(e, pr).evidenceVersion, VERSAO_DAS_REGRAS);
-});
-
-// Decisão do dono de 18/10/2026, que supera o PR #250: depois das duas tentativas o que faltar
-// vira ressalva e a política da conta decide, e o card diz isso. A prova esgotada que ainda
-// mostra lacuna pendente (de regras anteriores, por exemplo) continua sem liberar o Aprovar.
-test('a recuperação diz que o que falta impede a decisão, e a lacuna ainda pendente não libera Aprovar', () => {
-  const active = staleCardMeta({ esperaProva: { tentativas: 1 }, technical: { state: 'pending' } });
-  assert.match(active.statusHtml, /retoma sozinho para concluir o parecer, porque o que falta impede a decisão/);
-  assert.doesNotMatch(active.statusHtml, /Depois de duas tentativas/, 'a rodada complementar acabou: a tela não a promete');
-  assert.match(active.statusHtml, /Análise incompleta não é aprovação nem reprovação/);
-  const blocked = staleCardMeta({ provaEsgotada: true, technical: { state: 'pending' }, verdict: 'approve' });
-  assert.equal(blocked.reviewBtn, 'primary');
-  assert.equal(blocked.approveDisabled, true);
 });
 
 test('registrar um relatório sem a evidência de aprovação não fabrica um array completo', async () => {

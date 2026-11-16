@@ -34,7 +34,6 @@ const { caminhoSensivel } = await import('../lib/engine/leitura-sensivel.js');
 const { ARQUIVO_DE_GUARDAS } = await import('../lib/engine/guardas-da-sessao.js');
 const { aoSair } = await import('../lib/engine/saida-ordenada.js');
 const { default: loginWeb } = await import('../lib/engine/login-web.js');
-const P = await import('../ui/pure.js');
 
 after(() => {
   childProcess.spawn = realSpawn;
@@ -98,15 +97,6 @@ test('o doctor não fica verde com o perfil de assinatura sem login, e fica depo
   await e.doctor();
   assert.equal(e.doctorInfo.claudePerfilPronto, true);
   assert.equal(e.doctorInfo.claudePerfilFalta, '');
-});
-
-test('o check do Claude Code diz qual tipo de perfil está pronto, ou o que falta', () => {
-  const base = { claude: '2.1.322 (Claude Code)' };
-  assert.equal(P.detalheDoClaudeCode({}), 'claude não encontrado no PATH');
-  assert.match(P.detalheDoClaudeCode({ ...base, claudePerfilPronto: true, claudePerfilTipo: 'assinatura' }), /^2\.1\.322 \(Claude Code\), com perfil de assinatura pronto$/);
-  assert.match(P.detalheDoClaudeCode({ ...base, claudePerfilPronto: true, claudePerfilTipo: 'chave' }), /com perfil de chave de API pronto$/);
-  assert.match(P.detalheDoClaudeCode({ ...base, claudePerfilPronto: false, claudePerfilTipo: 'assinatura', claudePerfilFalta: 'login' }), /falta entrar com a assinatura/);
-  assert.match(P.detalheDoClaudeCode({ ...base, claudePerfilPronto: false, claudePerfilFalta: 'perfil' }), /sem perfil utilizável/);
 });
 
 test('sessão com perfil de assinatura sem login é recusada antes do processo, numa classe que estaciona', async () => {
@@ -189,13 +179,6 @@ test('cancelar pelo perfil encerra o login aberto dele (a tela que perdeu o logi
   const c = await loginWeb.iniciar(e, 'c2', { spawn });
   assert.equal(c.ok, true);
   loginWeb.cancelar(e, c.loginId);
-});
-
-test('o painel oferece cancelar o login aberto e começar de novo quando o motor recusa por login em curso', () => {
-  const html = P.loginWebHtml({ estado: 'erro', perfil: 'Plano', motivo: 'já há um login aberto', recomecar: true });
-  assert.match(html, /id="cpLoginWebRecomecar"/);
-  assert.match(html, /Cancelar o login aberto e começar de novo/);
-  assert.doesNotMatch(P.loginWebHtml({ estado: 'erro', perfil: 'Plano', motivo: 'm' }), /cpLoginWebRecomecar/);
 });
 
 test('a saída ordenada encerra o claude auth login em curso (o filho nasce destacado)', async () => {

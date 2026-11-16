@@ -44,6 +44,35 @@ Ainda sem versão publicada.
     com a pasta de dados vazia. Do protocolo do workspace saem a sessão de terminal, o caminho de
     postagem pela sessão e a seção "Destaques do time".
 
+### O que saiu (fase 4, lote 14)
+
+- **A tela antiga, servida pelo motor:** saem a pasta `ui/`, o resolvedor de página
+  (`lib/http-ui.js`), a entrega de arquivo e do `index.html` em `lib/http-server.js`, os testes
+  da tela e o DOM de mentira que os sustentava, e as ferramentas que só existiam por ela
+  (`tools/dev-ui-sandbox.mjs`, `tools/benchmark-ui-pintura.js`, `tools/bench/`). A tela é o
+  front de `web/`, que já cobre Radar, Histórico, Time, Consumo e Sistema e fala com o motor só
+  pela API.
+- **Fora de `/api/` o motor responde 404 em JSON:** `GET /`, `GET /index.html` e qualquer outro
+  caminho ou método recebem `{ "error": "not found" }`, o mesmo corpo da rota de API que não
+  existe, sem ler o disco. A allowlist de Host e Origin continua vindo antes, e a rota de saúde,
+  o CORS, o `x-farol` e a autenticação por Bearer não mudaram.
+- **Nenhuma rota da API saiu.** Ficaram sem tela, porque o front não tem campo para segredo
+  digitado: a credencial do Jira (`POST /api/jira/credential`), a criação, a troca e a remoção
+  de perfil do Claude e a chave de API (`POST /api/settings` com `claudeProfiles`) e o login da
+  assinatura (`POST /api/claude/login-web/start`, o link aberto em qualquer navegador, e
+  `POST /api/claude/login-web/code`). O passo a passo com os corpos está em
+  `docs/CONFIGURATION.md`. Também ficaram sem quem as chame `GET /api/log` e
+  `GET /api/log/triage`.
+- **Preferências que ficaram sem tela:** `intervalSeconds`, `globalParallelReviews`,
+  `reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns` só
+  mudam por `POST /api/settings` ou pelo `config.json`. `soundEnabled`, `theme` e `autostart`
+  eram da tela antiga: a API ainda aceita e grava, e nada no motor lê; saem no fechamento.
+- **Os avisos do motor param de apontar para tela que saiu:** o motivo de estacionamento, a
+  ação das falhas de perfil e o aviso de vencimento do login diziam "Sistema > Plano e
+  chaves", e agora apontam para a API e para `docs/CONFIGURATION.md`; o aviso de contestação
+  manda confirmar o desfecho no Histórico.
+- **A linha de subida do motor** passa a dizer "API em" no lugar de "UI em".
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em

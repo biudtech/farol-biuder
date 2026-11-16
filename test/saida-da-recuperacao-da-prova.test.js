@@ -17,6 +17,7 @@ process.env.FAROL_HOME = FAROL_HOME;
 
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { camposDoAprovar } from './helpers/projecao-do-aprovar.js';
 
 const HEAD = '1f18057f09f3cef5043ec47e5eebbc5e8c44eb9c';
 
@@ -46,7 +47,6 @@ const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
 const busca = (await import('../lib/engine/busca-da-prova.js')).default;
 const { shouldAutoApprove, textoDaRecusa } = await import('../lib/engine/approval-policy.js');
 const { AUTOMACAO_DESLIGADA, registrarPausa } = await import('../lib/engine/recuperacao-prova.js');
-const { separarPendentes, staleCardMeta, reviewBoxHtml } = await import('../ui/pure/review.js');
 
 after(() => {
   io.run = runReal;
@@ -154,8 +154,8 @@ test('B1: com a conta em "só põe na fila", cada revisão sua conta e a que con
   assert.ok(textos(segunda).some((t) => /faltou prova nesta revisão/.test(t)), textos(segunda).join(' | '));
   assert.equal(pendentes(e).length, 1);
   assert.deepEqual(envios, [], 'a política em wait leva à mesa, sem postar');
-  const meta = staleCardMeta(e.decisionForUi(segunda), null);
-  assert.equal(meta.approveDisabled, false, 'o Aprovar fica ligado na mesa');
+  // o Aprovar fica ligado na mesa: nada na projeção o segura
+  assert.deepEqual(camposDoAprovar(e.decisionForUi(segunda)), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'pass', recheck: false });
 });
 
 test('B3: rodada relançada e barrada antes da sessão, e sessão interrompida, não gastam tentativa', async () => {
@@ -247,26 +247,19 @@ test('B4: valor oculto de ambiente não impede armar a busca da prova', () => {
 });
 
 // B7: a pausada é "precisa de você" em toda superfície, e o fato viaja como motivo.
-test('B7: pendência pausada conta no contador, no ícone e no card', async () => {
+test('B7: pendência pausada vai marcada na projeção, e a que não está pausada não', async () => {
   const e = motor(['wait', 'wait'], { automatica: false });
   const d = await revisado(e, INCOMPLETA);
   assert.equal(d.esperaProva.pedeVoce, true);
   const tela = e.decisionForUi(d);
   assert.equal(tela.esperaProva.pedeVoce, true);
-  const { precisam, esperandoCi } = separarPendentes([tela]);
-  assert.equal(precisam.length, 1, 'dentro de Precisa de você');
-  assert.equal(esperandoCi.length, 0);
-  const meta = staleCardMeta(tela, null);
-  assert.match(meta.statusHtml, /precisa de você/i);
-  assert.match(meta.statusHtml, /revis(e|ão) de novo/i, 'diz o que destrava');
-  assert.doesNotMatch(meta.statusHtml, /sem decisão manual|não exige decisão manual/);
-  assert.equal(meta.cardClass, 'urgent');
-  assert.doesNotMatch(reviewBoxHtml(tela), /sem decisão manual/);
+  assert.equal(tela.esperaProva.impedimento, AUTOMACAO_DESLIGADA, 'a projeção diz o que pausou');
+  assert.equal(tela.esperaCi, undefined);
   // a que NÃO está pausada continua fora, como antes
   revisaSozinha(e, true);
   await esperaProva.reverQuandoAProvaMudar(e);
   assert.equal(d.esperaProva.pedeVoce, false);
-  assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 0);
+  assert.equal(e.decisionForUi(d).esperaProva.pedeVoce, false, 'a projeção acompanha');
 });
 
 test('B7: a pausa que chega depois avisa needs-decision uma vez, e a espera do CI no início não é "precisa de você"', async () => {
@@ -289,7 +282,7 @@ test('B7: a pausa que chega depois avisa needs-decision uma vez, e a espera do C
   assert.match(dc.esperaProva.impedimento, /checks/);
   assert.equal(dc.esperaProva.pedeVoce, false);
   assert.deepEqual(c.eventos, []);
-  assert.equal(separarPendentes([c.decisionForUi(dc)]).precisam.length, 0);
+  assert.equal(c.decisionForUi(dc).esperaProva.pedeVoce, false, 'na projeção, a espera pelo CI não pede você');
 });
 
 // Review do PR #349: `anotarPausa` e `registrarPausa` saíam quando o texto do impedimento não
@@ -299,7 +292,6 @@ function marcaAntiga(d) {
   delete d.esperaProva.pedeVoce;
   delete d.esperaProva.avisada;
   assert.equal(d.esperaProva.impedimento, AUTOMACAO_DESLIGADA);
-  assert.equal(separarPendentes([d]).precisam.length, 0, 'como a marca antiga se comportava');
 }
 
 test('B7: marca pausada gravada antes do pedeVoce entra em Precisa de você na varredura, com aviso único', async () => {
@@ -310,7 +302,7 @@ test('B7: marca pausada gravada antes do pedeVoce entra em Precisa de você na v
   await esperaProva.reverQuandoAProvaMudar(e);
   await esperaProva.reverQuandoAProvaMudar(e);
   assert.equal(d.esperaProva.pedeVoce, true);
-  assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 1);
+  assert.equal(e.decisionForUi(d).esperaProva.pedeVoce, true, 'a projeção leva a marca');
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'avisa uma vez só');
 });
 

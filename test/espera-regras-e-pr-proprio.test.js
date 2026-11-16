@@ -52,7 +52,6 @@ isolateTechnicalTool();
 const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
 const { VERSAO_DAS_REGRAS } = await import('../lib/technical-review/evidence.js');
 const { shouldAutoApprove, shouldAutoReject } = await import('../lib/engine/approval-policy.js');
-const { separarPendentes, staleCardMeta } = await import('../ui/pure/review.js');
 const reviewMod = (await import('../lib/engine/review.js')).default;
 
 after(() => {
@@ -188,7 +187,6 @@ test('carimbo atual: a busca relança pela falta de prova, e a tentativa conta q
   assert.doesNotMatch(textos(pendente(e))[0], /regras do gate/);
 });
 
-
 // ---------------------------------------------------------------- defeito 2: PR da própria conta
 
 test('gate: PR da própria conta nunca é aprovado nem reprovado sozinho (caixa ignorada)', () => {
@@ -210,7 +208,9 @@ test('PR da própria conta com a conta esperando você: nenhuma espera, mesa com
   assert.ok(textos(d).includes(TEXTO_PROPRIO), textos(d).join(' | '));
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
   assert.deepEqual(envios, []);
-  assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 1, 'em Precisa de você, nunca em Aprova sozinho');
+  // em Precisa de você, nunca em Aprova sozinho: a projeção não leva espera nenhuma
+  const tela = e.decisionForUi(d);
+  assert.deepEqual([tela.esperaProva, tela.esperaCi, tela.prProprio], [undefined, undefined, true]);
 });
 
 test('PR da própria conta aprovável, conta aprovando sozinha: sai como COMMENT e resolve, sem mesa', async () => {
@@ -288,7 +288,9 @@ test('espera da prova que já existia em PR da própria conta, conta esperando v
   assert.equal(leiturasDoPr, 0, 'autor gravado basta, sem leitura gh');
   for (let ciclo = 0; ciclo < 2; ciclo++) assert.equal(await esperaProva.varrerEsperas(e), 0);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'needs-decision uma vez só');
-  assert.equal(separarPendentes([e.decisionForUi(d)]).precisam.length, 1);
+  const tela = e.decisionForUi(d);
+  assert.ok(!tela.esperaProva && !tela.esperaCi, 'a projeção não leva espera: é Precisa de você');
+  assert.equal(tela.prProprio, true);
 });
 
 test('espera sem autor gravado: o autor lido do GitHub na varredura também conta, e o comentário sai', async () => {
@@ -346,19 +348,19 @@ test('PR #248, achado 3: o portão de postagem recusa APPROVE e REQUEST_CHANGES 
   assert.notEqual(comentario.blocked, 'pr_proprio', 'comentar o próprio PR continua permitido');
 });
 
-test('PR #248, achado 3: a pendência de PR próprio não oferece Aprovar nem Pedir mudanças', async () => {
+test('PR #248, achado 3: a pendência de PR próprio vai marcada na projeção, e a decisão pelo clique não sai', async () => {
   const e = esperaVoce(motor());
   const d = await revisado(e, PROPRIO, {});
   const tela = e.decisionForUi(d);
   assert.equal(tela.prProprio, true);
-  const meta = staleCardMeta(tela, null);
-  assert.equal(meta.semDecisivos, true);
-  assert.equal(meta.approveDisabled, true);
   // a decisão pelo clique também não sai
   envios = [];
   await e.decide(d.id, 'approve').catch(() => { });
   assert.deepEqual(envios, []);
-  assert.equal(staleCardMeta(e.decisionForUi(await revisado(motor(), PR, INCOMPLETA)), null).semDecisivos, undefined, 'PR de outra pessoa segue com os botões');
+  // PR de outra pessoa segue com os botões: a marca não vai na projeção
+  const alheio = e.decisionForUi(await revisado(motor(), PR, INCOMPLETA));
+  assert.notEqual(alheio.prProprio, true);
+  assert.equal(Object.hasOwn(alheio, 'prProprio'), false, 'ausente, não falso');
 });
 
 test('PR #248, achado 4: largar a espera de PR próprio durante a rodada complementar limpa o estado de commit novo', async () => {
@@ -374,8 +376,8 @@ test('PR #248, achado 4: largar a espera de PR próprio durante a rodada complem
   assert.equal(d.blockedKind, undefined, 'sem stale_head');
   assert.equal(d.blockedHead, undefined);
   assert.equal(reviewMod.explicaReRound(e, { ...PR }, new Set(), Date.now()).estado, 'sem_gatilho', 'o round automático não mira mais o PR');
-  const meta = staleCardMeta(e.decisionForUi(d), null);
-  assert.equal(meta.stale, false, 'sem card de commit novo');
-  assert.equal(meta.semDecisivos, true);
+  const tela = e.decisionForUi(d);
+  assert.notEqual(tela.blockedKind, 'stale_head', 'sem card de commit novo na projeção');
+  assert.equal(tela.prProprio, true);
   assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
 });

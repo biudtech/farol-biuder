@@ -41,9 +41,9 @@ provedor e modalidade histórica podem estar ausentes. Só eventos recebidos ent
 no consolidado. Falha de leitura é indisponibilidade, não consumo zero. A falta de
 cobertura anterior ao primeiro registro também é sinalizada.
 
-A matriz e o histórico técnico anteriores continuam disponíveis em uma seção
-recolhida da tela antiga, com seus totais gerais explicitamente separados dos
-filtros de atividade. Nenhuma contagem modifica os gates ou a política de revisão.
+A matriz e o histórico técnico anteriores ficavam em uma seção recolhida da tela
+antiga, que saiu em 16/11/2026; as séries que os alimentavam continuam no snapshot
+(`usage`). Nenhuma contagem modifica os gates ou a política de revisão.
 
 ## O consumo mede, não barra
 

@@ -17,7 +17,6 @@ import { PassThrough } from 'node:stream';
 import cp from 'node:child_process';
 
 const { default: loginWeb } = await import('../lib/engine/login-web.js');
-const { loginWebHtml } = await import('../ui/pure.js');
 const { CLAUDE_PERFIS_DIR } = await import('../lib/paths.js');
 const uso = await import('../lib/engine/uso-do-plano.js');
 
@@ -195,21 +194,6 @@ test('as funções puras: link, código e motivo', () => {
   assert.equal(loginWeb.codigoValido('abc"; rm -rf /'), '');
   assert.equal(loginWeb.motivoDaFalha('sem a linha'), 'o Claude Code não aceitou o código');
   assert.equal(loginWeb.motivoDaFalha('Login failed: recusei segredo#123 aqui', 'segredo#123'), 'Login failed: recusei  aqui');
-});
-
-test('o painel mostra o link só se for https, e não oferece o login pelo terminal', () => {
-  const html = loginWebHtml({ estado: 'link', perfil: 'Pessoal Max 20X', url: LINK });
-  assert.match(html, /Login do Claude em Pessoal Max 20X/);
-  assert.match(html, /href="https:\/\/claude\.com\/cai\/oauth\/authorize/);
-  assert.match(html, /id="cpLoginWebCodigo"/);
-  assert.match(html, /autocomplete="off"/);
-  assert.doesNotMatch(html, /terminal/i);
-  const falso = loginWebHtml({ estado: 'link', url: 'javascript:alert(1)', motivo: 'm' });
-  assert.doesNotMatch(falso, /javascript:/);
-  assert.doesNotMatch(falso, /cpLoginWebCodigo/);
-  assert.equal(loginWebHtml({}), '');
-  assert.match(loginWebHtml({ estado: 'enviando', url: LINK }), /disabled/);
-  assert.match(loginWebHtml({ estado: 'feito', perfil: 'P' }), /Login feito/);
 });
 
 // `/bin/sh -lc` lê /etc/profile e ~/.profile DEPOIS do ambiente limpo: um profile que

@@ -13,7 +13,6 @@ io.run = async () => ({ ok: true, stdout: '[]', stderr: '' });
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 const restore = isolateTechnicalTool();
 const { readRounds, scopeFor, roundsPath } = await import('../lib/engine/review-round-store.js');
-const { resolvedRow } = await import('../ui/pure/review.js');
 const { publicationRefusal } = await import('../lib/engine/review-rounds.js');
 after(() => { restore(); io.run = originalRun; fs.rmSync(home, { recursive: true, force: true }); });
 
@@ -194,8 +193,6 @@ test('modo observação não dispensa destino dos critérios publicados nem vaza
   assert.equal(ui.findings, undefined);
   assert.equal(ui.roundReview, undefined);
   assert.equal(ui.criteriaEvidence, undefined);
-  const html = resolvedRow(ui, {});
-  assert.doesNotMatch(html, /class="round-summary/);
   assert.equal(d.analysisStatus, 'incomplete');
 });
 

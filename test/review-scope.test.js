@@ -8,7 +8,6 @@ const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-review-scope-'));
 process.env.FAROL_HOME = testHome;
 const { Engine } = await import('../server.js');
 const { editarRegra, normalizarRegras, politicaDeInicio } = await import('../lib/engine/review-scope.js');
-const { reviewScopeHtml } = await import('../ui/pure/review-scope.js');
 after(() => fs.rmSync(testHome, { recursive: true, force: true }));
 
 const pr = (author = 'joao', org = 'acme') => ({ key: `${org}/app#1`, repo: `${org}/app`, number: 1, url: `https://github.com/${org}/app/pull/1`, account: 'revisor', author });
@@ -320,36 +319,8 @@ test('mudança durante consulta libera apenas a vaga original e preserva a próx
   assert.equal(e.queue[0].key, pr().key, 'o PR bloqueado continua visível');
 });
 
-test('tela distingue herança, autor, publicação e conta manual, e escapa texto', () => {
-  const html = reviewScopeHtml({ user: 'revisor', autoReview: false, reviewRules: { acme: { mode: 'manual', authors: { joao: 'auto' } } } });
-  assert.match(html, /Review por organização e autor/);
-  assert.match(html, /Seguir organização/);
-  assert.match(html, /Seguir conta/);
-  assert.doesNotMatch(html, /Sem efeito/);
-  assert.match(html, /Automático revisam sozinhos mesmo com a conta só na fila/);
-  assert.match(html, /a publicação segue as opções acima/);
-  assert.match(html, /data-author="joao"/);
-  assert.match(html, /aria-label="Modo de review: acme, @joao"/);
-  assert.doesNotMatch(reviewScopeHtml({ user: '"><script>alert(1)</script>' }), /<script>/i);
-});
-
-// Revisão independente (12/11/2026): duas telas ainda decidiam só pela conta. O card da fila dizia
-// "desativada para esta conta" num PR da CNBB que ia ser revisado sozinho, e a tela
-// oferecia ligar a conta inteira, o que ligaria a BIUD junto.
-test('o card da fila segue a decisão do PR que a tela lhe passa', async () => {
-  const P = await import('../ui/pure.js');
-  const card = (manual) => P.queueCardHtml(CNBB(), { people: {}, ...(manual === undefined ? {} : { manual }) });
-  assert.doesNotMatch(card(false), /Revisão automática desativada/);
-  assert.match(card(true), /Revisão automática desativada para este PR/);
-  // sem a decisão do motor quem cai na conta é a tela (manualDe, ui/telas/radar.js), antes de chamar o card
-  assert.doesNotMatch(card(undefined), /Revisão automática desativada/);
-  const radar = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'telas', 'radar.js'), 'utf8');
-  assert.match(radar, /Object\.hasOwn\(mapa, pr\.key\) \? !mapa\[pr\.key\] : \(contaRevisora\(\) \|\| \{\}\)\.autoReview === false/);
-});
-
 test('o motor manda para a tela, por PR, se a revisão inicia sozinha', () => {
   const e = engine(SO_CNBB, false);
   e.queue = [pr(), CNBB()];
   assert.deepEqual(e.inicioAutomaticoDaFila(), { [pr().key]: false, [CNBB().key]: true });
 });
-

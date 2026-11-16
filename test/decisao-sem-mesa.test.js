@@ -843,12 +843,10 @@ test('Codex 7: o texto reconstruído na espera do CI é o que fica para o reenvi
   assert.deepEqual(envios.map((p) => p.body), ['Leitura completa, sem bloqueios.']);
 });
 
-test('Codex 8: o comentário automático chega à tela (SSE) e à notificação nativa', () => {
+test('Codex 8: o comentário automático é repassado pelo SSE', () => {
   const http = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'http-server.js'), 'utf8');
-  const app = fs.readFileSync(path.join(import.meta.dirname, '..', 'ui', 'app.js'), 'utf8');
   // os eventos que viram aviso na tela são repassados crus pelo SSE
   assert.match(http, /\[[^\]\n]*'auto-commented'[^\]\n]*\]\.forEach\(evento => engine\.on\(evento, p => broadcast\(evento, p\)\)\)/);
-  assert.match(app, /addEventListener\('auto-commented'/);
 });
 
 // ---------------------------------------------------------------- causa do bloqueio (05/11/2026)
