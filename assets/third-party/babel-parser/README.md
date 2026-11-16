@@ -21,9 +21,3 @@ Para reproduzir, instale o pin de desenvolvimento em um diretório isolado e cop
 esta pasta, sem transformar os bytes. Confira os hashes do manifesto. Atualizar
 o parser exige revisão explícita de versão, origem, licença, hashes e dos testes;
 o loader não procura outra implementação npm como fallback.
-
-Os pacotes existentes incluem `assets/` e `lib/` integralmente. Instalação nova,
-instalador offline e upgrade que preserva `node_modules` recebem o mesmo artefato.
-Isso também vale para o modo servidor, que troca essas pastas sem instalar
-Electron ou executar npm. O verificador recusa artefato ausente/corrompido antes
-da troca pelo servidor e nas checagens de runtime dos caminhos desktop.
