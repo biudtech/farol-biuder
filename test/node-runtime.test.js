@@ -43,10 +43,13 @@ test('lockfile, versão local e CI preservam o piso e o Linux', () => {
   assert.equal(lock.packages[''].engines.node, packageNodeRequirement());
   assert.equal(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8').trim(), '24.22.1');
   const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
-  assert.equal((workflow.match(/node-version: '24\.22\.1'/g) || []).length, 1);
-  assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 2);
+  // três jobs: o gate do motor, o do front (web) e o agregador `ci`, que exige os dois
+  assert.equal((workflow.match(/node-version: '24\.22\.1'/g) || []).length, 2);
+  assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 3);
   assert.doesNotMatch(workflow, /windows-latest|macos-latest/);
-  assert.match(workflow, /needs: \[gate\]/);
+  assert.match(workflow, /needs: \[gate, web\]/);
+  assert.match(workflow, /needs\.gate\.result/);
+  assert.match(workflow, /needs\.web\.result/);
 });
 
 test('o motor roda só em Linux: win32 e darwin são recusados', () => {
