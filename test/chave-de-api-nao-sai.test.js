@@ -164,6 +164,49 @@ test('(d) e (e) as respostas de POST não trazem a chave', async () => {
   assert.equal(r.json.config.claudeProfiles.find((p) => p.id === 'k1').temChave, true);
 });
 
+// Os outros segredos que passam pelo motor, na mesma varredura: o token do GitHub da conta, a
+// credencial do Jira, o código de pareamento, o token e o hash das sessões da autenticação
+// local, e o conteúdo do `.credentials.json` do perfil de assinatura. O token de sessão sai
+// uma vez, no corpo de POST /api/auth/pair, que é onde ele nasce; em mais nenhuma resposta.
+test('os outros segredos também não saem: GitHub, Jira, autenticação local e a credencial da assinatura', async () => {
+  const { criarCodigo } = await import('../lib/local-auth/pareamento.js');
+  const { sessoesPath } = await import('../lib/local-auth/sessoes.js');
+  const { pareamentosPath } = await import('../lib/local-auth/pareamento.js');
+  const { CLAUDE_PERFIS_DIR } = await import('../lib/paths.js');
+
+  engine.token = 'ghp_TOKENFALSODOGITHUB0123456789abcdef';
+  await pedir('POST', '/api/settings', { jiraSites: [{ id: 'site1', label: 'Jira', baseUrl: 'https://exemplo.atlassian.net', owners: ['acme'], projectKeys: ['BT'] }] });
+  const jira = await pedir('POST', '/api/jira/credential', { siteId: 'site1', email: 'pessoa@exemplo.com', token: 'JIRATOKENFALSO-nao-sai-0123456789' });
+  assert.deepEqual(jira.json, { ok: true });
+  const pasta = path.join(CLAUDE_PERFIS_DIR, 's1');
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.writeFileSync(path.join(pasta, '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 'sk-ant-oat-CREDENCIALFALSA-0123456789', refreshToken: 'sk-ant-ort-RENOVACAOFALSA-0123456789', expiresAt: Date.now() + 3600000 } }));
+  const usado = criarCodigo();
+  const pendente = criarCodigo();
+  const par = await pedir('POST', '/api/auth/pair', { codigo: usado, rotulo: 'teste' });
+  assert.equal(par.json.ok, true);
+  const tokenDaSessao = par.json.token;
+  const hashes = [...JSON.parse(fs.readFileSync(sessoesPath(), 'utf8')), ...JSON.parse(fs.readFileSync(pareamentosPath(), 'utf8'))].flatMap((r) => [r.hash, r.sal]).filter(Boolean);
+  assert.ok(hashes.length >= 3, 'há hash de sessão e de código pendente para procurar');
+
+  const segredos = ['TOKENFALSODOGITHUB', 'JIRATOKENFALSO', 'CREDENCIALFALSA', 'RENOVACAOFALSA', tokenDaSessao, pendente, ...hashes];
+  const limpo = (texto, onde) => { for (const x of segredos) assert.equal(String(texto).includes(x), false, `${onde} traz um segredo (${x.slice(0, 6)}...)`); };
+
+  await engine.doctor();
+  const s = engine.snapshot();
+  limpo(JSON.stringify(s), 'o snapshot');
+  assert.equal(s.accounts.every((a) => typeof a.tokenOk === 'boolean'), true);
+  assert.equal(s.jiraSites.find((x) => x.id === 'site1').hasCredential, true, 'do Jira sai só a existência');
+  for (const rota of todasAsRotas().filter((r) => r !== '/api/events')) limpo((await pedir('GET', rota)).corpo, `GET ${rota}`);
+  const posts = [
+    ['/api/settings', { theme: 'dark' }], ['/api/claude/profile-test', { profileId: 's1' }], ['/api/accounts/edit', {}],
+    ['/api/auth/sessions', {}], ['/api/jira/test', { siteId: 'site1' }], ['/api/jira/credential', { siteId: 'site1' }],
+    ['/api/auth/pair', { codigo: 'ERRADO0000', rotulo: 'x' }],
+  ];
+  for (const [rota, corpo] of posts) limpo((await pedir('POST', rota, corpo)).corpo, `POST ${rota}`);
+  limpo(await ouvirEventos('state', () => {}), 'o SSE');
+});
+
 test('salvar pela tela sem redigitar a chave mantém a chave guardada, em memória e no disco', async () => {
   const lista = perfisDaTela().map((p) => (p.id === 'k1' ? { ...p, label: 'Chave renomeada' } : p));
   assert.equal('apiKey' in lista.find((p) => p.id === 'k1'), false, 'a tela não tem a chave para mandar');

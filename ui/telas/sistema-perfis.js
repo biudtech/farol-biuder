@@ -17,8 +17,17 @@ import { renderLoginWeb, tratouLoginWeb } from './login-claude.js';
 // o login entra pela tela, telas/login-claude.js) ou {id,label,kind:'apikey',apiKey,baseUrl},
 // com o selo do estado de cada um (badge, via doctor).
 
+// A chave digitada vai ao motor e não fica na memória da tela: o perfil guarda só `temChave`,
+// que é como o motor o devolve (lib/engine/chave-do-perfil.js).
+function semChaveNaTela(p) {
+  if (!p || !p.apiKey) return p;
+  const resto = { ...p, temChave: true };
+  delete resto.apiKey;
+  return resto;
+}
+
 function saveClaudeProfiles(profiles, defaultId) {
-  estado().config.claudeProfiles = profiles;
+  estado().config.claudeProfiles = profiles.map(semChaveNaTela);
   const patch = { claudeProfiles: profiles };
   // defaultId opcional: seta o perfil como o padrão global no MESMO patch.
   if (defaultId !== undefined) { estado().config.claudeProfileId = defaultId; patch.claudeProfileId = defaultId; }
@@ -194,6 +203,9 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
   const camposEditaveis = ['cp-label', 'cp-apikey', 'cp-baseurl', 'cp-budget-daily', 'cp-budget-total', 'cp-budget-since'];
   if (camposEditaveis.some(cls => t.classList.contains(cls))) {
     const id = t.dataset.id;
+    // campo de chave vazio não salva nada: a guardada continua, e para apagar remove-se o perfil
+    const chave = t.classList.contains('cp-apikey') ? t.value.trim() : '';
+    if (t.classList.contains('cp-apikey') && !chave) return;
     if ((t.classList.contains('cp-apikey') || t.classList.contains('cp-baseurl'))
         && /["\r\n]/.test(t.value.replace(/^"(.*)"$/s, '$1').trim())) {
       toast('error', 'Esse valor tem aspas ou quebra de linha no meio, não pode ser usado.', 4500);
@@ -203,7 +215,7 @@ $('#claudeProfilesManager').addEventListener('change', (e) => {
       if (p.id !== id) return p;
       const next = { ...p };
       if (t.classList.contains('cp-label')) next.label = t.value.trim() || p.label;
-      if (t.classList.contains('cp-apikey')) next.apiKey = t.value.trim();
+      if (chave) next.apiKey = chave;
       if (t.classList.contains('cp-baseurl')) next.baseUrl = t.value.trim();
       if (t.classList.contains('cp-budget-daily')) {
         const v = t.value.trim();
