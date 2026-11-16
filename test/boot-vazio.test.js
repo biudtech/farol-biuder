@@ -26,8 +26,6 @@ const CWD = path.join(RAIZ, 'cwd');
 const BIN = path.join(RAIZ, 'bin');
 for (const pasta of [CASA, TMP, CWD, BIN]) fs.mkdirSync(pasta);
 
-const DEPURAR = process.argv.includes('--depurar');
-
 let filho = null;
 after(() => {
   if (filho && filho.exitCode === null && filho.signalCode === null) filho.kill('SIGKILL');
@@ -121,7 +119,6 @@ test('motor sobe com o HOME vazio, responde /api/state, não escreve fora do HOM
   const saude = await fetch(`http://127.0.0.1:${porta}/api/doctor`);
   assert.equal(saude.status, 200);
   assert.equal(filho.exitCode, null, 'o motor segue de pé depois da primeira checagem');
-  if (DEPURAR) console.log(JSON.stringify({ status: depois.status, error: depois.error, casa: listar(CASA) }));
 
   filho.kill('SIGTERM');
   const fim = await fimDoFilho;
