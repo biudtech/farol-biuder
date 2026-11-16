@@ -50,11 +50,6 @@ redução da memória de rodadas não demonstra economia total de tokens.
 O `tools/benchmark-ui-native.js`, que complementava o lote com Electron real, também não
 existe mais.
 
-O smoke nativo usa `tools/electron-smoke.js --allow-desktop --output <pasta>` e runtime
-isolado compatível. Dados, contas, rede e processos externos são controlados pela
-fixture. Não usar `--allow-autostart-probe` para esta entrega. A jornada de pintura
-verifica SSE/DOM/janela reais, incluindo hide/show, foco, arquivo selecionado e cauda.
-
 ## Limitações e ativação
 
 As opções e os procedimentos estão em [CONFIGURATION.md](CONFIGURATION.md).

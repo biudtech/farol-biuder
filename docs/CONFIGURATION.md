@@ -154,27 +154,29 @@ Aprovar e pedir mudanças continuam obedecendo a `onClean`, `onCaveats` e `onRej
 
 ## Preferências do config.json
 
-A tabela única é `SETTINGS`, em `lib/settings.js`: chave, padrão, se a tela edita (`ui`) e o
+A tabela única é `SETTINGS`, em `lib/settings.js`: chave, padrão, se a API aceita (`ui`) e o
 saneador. `POST /api/settings` aceita só as chaves com `ui: true` e devolve as outras em
-`ignoradas`. Chave marcada `omitirPadraoAoGravar` não é escrita no arquivo enquanto estiver
+`ignoradas`. "Sistema" e "Time" na coluna abaixo são as telas do front (`web/`); "API" é
+`POST /api/settings` chamado à mão ([como chamar](#chamar-a-api-sem-tela)), e "arquivo" é o
+`config.json`, com o motor parado. Chave marcada `omitirPadraoAoGravar` não é escrita no arquivo enquanto estiver
 no padrão.
 
-| chave | padrão | quem edita |
+| chave | padrão | onde se muda |
 |---|---|---|
-| `conta` | `null` | `POST /api/accounts/edit` e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
-| `jiraSites` | `[]` | `POST /api/settings` ou o arquivo (a tela só lê) |
-| `intervalSeconds` | `300` (180 a 3600) | tela |
-| `parallelReviews` | `1` (1 a 4) | tela, "Revisões paralelas por conta" |
-| `globalParallelReviews` | `0` (0 a 8; 0 = sem teto total) | tela, "Teto total desta instalação" |
-| `soundEnabled`, `theme`, `autostart` | `true`, `"dark"`, `false` | tela |
-| `reReviewResume` | `true` | tela, "Retomar a sessão na segunda rodada" |
-| `reviewFast` | `false` | tela, "Modo rápido da revisão" |
-| `aguardarCiParaRevisar` | `false` | tela, "Esperar o CI antes de revisar" |
-| `aguardarCiParaAprovar` | `false` | tela, "CI obrigatório antes da aprovação" |
-| `people` | `{}` | tela |
-| `reviewModel`, `reviewEffort` | `""` | tela ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
-| `autoPushback`, `debugSpawns` | `true`, `false` | tela |
-| `claudeProfiles`, `claudeProfileId` | `[]`, `""` | tela ([perfis](#perfis-do-claude)) |
+| `conta` | `null` | Sistema (política e organizações, por `POST /api/accounts/edit`) e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
+| `aguardarCiParaAprovar` | `false` | Sistema, "CI antes de aprovar" |
+| `parallelReviews` | `1` (1 a 4) | Sistema, "revisões ao mesmo tempo" |
+| `reviewModel`, `reviewEffort` | `""` | Sistema ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
+| `people` | `{}` | Time |
+| `jiraSites` | `[]` | API ou arquivo; Sistema só mostra ([Jira](#jira)) |
+| `claudeProfiles`, `claudeProfileId` | `[]`, `""` | API ou arquivo; Sistema só mostra e testa ([perfis](#criar-trocar-e-remover-perfil)) |
+| `intervalSeconds` | `300` (180 a 3600) | API ou arquivo |
+| `globalParallelReviews` | `0` (0 a 8; 0 = sem teto total) | API ou arquivo; Sistema avisa quando está ligado |
+| `reReviewResume` | `true` (retoma a sessão na segunda rodada) | API ou arquivo |
+| `reviewFast` | `false` (modo rápido da revisão) | API ou arquivo |
+| `aguardarCiParaRevisar` | `false` (espera o CI antes de revisar) | API ou arquivo |
+| `autoPushback`, `debugSpawns` | `true`, `false` | API ou arquivo |
+| `soundEnabled`, `theme`, `autostart` | `true`, `"dark"`, `false` | resto da tela antiga: a API ainda aceita e grava, e nada no motor lê |
 | `reviewSingleOutput` | `false` | arquivo |
 | `reviewRoundsMode` | `"observe"` (`"enforce"` liga os gates de rodada) | arquivo |
 | `reviewContextMode`, `reviewContextTokens`, `reviewContextLimits` | `"off"`, `3000`, `{}` | arquivo ([fontes](#fontes-versionadas-e-contexto-controlado)) |
@@ -186,6 +188,19 @@ no padrão.
 | `localAuth` | `""` (`"exigir"` liga a autenticação; outro valor preenchido impede o boot) | arquivo ([Para hospedar](#para-hospedar)) |
 | `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
 | `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |
+
+Desde 16/11/2026, quando a tela antiga saiu, sete chaves que ela editava só mudam pela API ou
+pelo arquivo: `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `reviewFast`,
+`aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`. Um exemplo:
+
+```sh
+curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
+  -d '{"intervalSeconds":600,"aguardarCiParaRevisar":true}'
+```
+
+`soundEnabled`, `theme` e `autostart` eram da tela antiga (som, tema e abrir com o sistema):
+continuam na tabela e no `config.json`, mas nenhum módulo do motor as lê. São resto, e a
+remoção fica para o fechamento da fase 4.
 
 Lidas só do arquivo e fora da tabela (`CHAVES_SO_DE_ARQUIVO`): `instanciaIsoladaPosta` e
 `aguardarMergeavelParaRevisar` (ligada salvo `false` explícito: PR em conflito com a base
@@ -278,30 +293,63 @@ só vale pelo arquivo, absoluta, dentro do HOME do Farol e fora do workspace das
 aparece como inválido. A pasta que chega pela API é descartada: `POST /api/settings` mantém
 a que já está no arquivo (`semPastaDaTela`). O login cria a pasta com modo 0700.
 
+### Chamar a API sem tela
+
+O que não tem tela se faz por `curl` (ou qualquer cliente HTTP), de uma máquina que alcance o
+motor. Os exemplos deste guia usam duas variáveis e o `jq`:
+
+```sh
+FAROL=http://127.0.0.1:47170   # hospedado: https:// e o hostPublico
+
+# 1. no servidor do motor, gere um código (vale alguns minutos e uma vez só)
+node tools/farol-parear.js
+
+# 2. troque o código pelo token, sem deixar nenhum dos dois no histórico do shell
+read -rs -p 'Código de pareamento: ' CODIGO; echo
+TOKEN=$(jq -n --arg c "$CODIGO" '{codigo:$c, rotulo:"terminal"}' \
+  | curl -sS -X POST "$FAROL/api/auth/pair" -H "x-farol: 1" -H "Content-Type: application/json" -d @- \
+  | jq -r .token)
+unset CODIGO
+```
+
+`POST /api/auth/pair` recebe `{ "codigo": "...", "rotulo": "..." }` e responde
+`{ "ok": true, "token": "..." }`; a recusa é uma só, `{ "ok": false, "code": "codigo_invalido" }`,
+e nesse caso o `TOKEN` acima fica `null`. O token é uma sessão como a do navegador: aparece
+em Sistema, na lista de sessões, com o rótulo dado, e se revoga por lá. Todo `POST` leva
+`x-farol: 1`. Com a autenticação desligada (motor só em loopback, sem `localAuth`), o
+`Authorization` é dispensável.
+
+**Segredo não vai na linha de comando.** Chave de API, token do Jira, código de pareamento e
+código do login ficariam no histórico do shell e na lista de processos. Os exemplos leem o
+segredo de um arquivo ou de `read -s` e montam o corpo com o `jq`.
+
 ### Criar, trocar e remover perfil
 
 A tela mostra os perfis e testa cada um, mas não cria, não edita e não remove (ela não tem
-campo para segredo). Isso se faz por `POST /api/settings`, com o Bearer do pareamento e o
-cabeçalho `x-farol: 1`, ou pelo `config.json` com o motor parado. `claudeProfiles` é sempre a
-lista inteira: o que não vier na lista é removido.
+campo para segredo). Isso se faz por `POST /api/settings` ou pelo `config.json` com o motor
+parado. `claudeProfiles` é sempre a **lista inteira**: o perfil que não vier na lista é removido.
 
 ```sh
-# perfil de assinatura (a pasta é do motor; o login vem depois, veja abaixo)
-curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" \
-  -H "Content-Type: application/json" \
+# um perfil de assinatura (a pasta é do motor; o login vem depois, veja abaixo)
+curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
   -d '{"claudeProfiles":[{"id":"plano","label":"Plano","kind":"dir"}],"claudeProfileId":"plano"}'
 
-# perfil de chave de API (a chave vem de um arquivo, para não ficar no histórico do shell)
-jq -n --rawfile chave chave.txt \
-  '{claudeProfiles:[{id:"chave",label:"Chave",kind:"apikey",apiKey:($chave|rtrimstr("\n"))}],claudeProfileId:"chave"}' \
-  | curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" \
-      -H "Content-Type: application/json" -d @-
+# acrescentar um perfil de chave de API: a lista vai com os DOIS, senão o primeiro some.
+# A chave vem de um arquivo (chave.txt, modo 600), que se apaga depois.
+jq -n --rawfile chave chave.txt '{
+    claudeProfiles: [
+      { id: "plano", label: "Plano", kind: "dir" },
+      { id: "chave", label: "Chave", kind: "apikey", apiKey: ($chave | rtrimstr("\n")) }
+    ],
+    claudeProfileId: "plano"
+  }' | curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
 ```
 
 A resposta traz `ok`, as `ignoradas` e a `config` como sai do motor (o perfil de chave só com
 `temChave`). Perfil que o saneamento recusa (sem `id`, de chave sem chave, com chave ou
 endereço fora da forma) some da lista sem erro: confira `config.claudeProfiles` na resposta.
-Remover é mandar a lista sem o perfil.
+Perfil de chave que já existe pode ir sem `apiKey`: o motor mantém a guardada. Remover é
+mandar a lista sem o perfil. `claudeProfileId` diz qual perfil as sessões usam.
 
 ### A chave de API nunca sai do motor
 
@@ -332,6 +380,19 @@ com o Bearer do pareamento e `x-farol: 1`:
    O motor entrega o código à entrada padrão do Claude Code; saída 0 é login feito, e a
    resposta é `{ "ok": true }`.
 
+Com as variáveis de [Chamar a API sem tela](#chamar-a-api-sem-tela):
+
+```sh
+LOGIN=$(curl -sS -X POST "$FAROL/api/claude/login-web/start" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d '{"profileId":"plano"}')
+echo "$LOGIN" | jq -r .url          # abra este endereço no navegador
+
+read -rs -p 'Código da página: ' CODE; echo
+jq -n --arg id "$(echo "$LOGIN" | jq -r .loginId)" --arg c "$CODE" '{loginId:$id, code:$c}' \
+  | curl -sS -X POST "$FAROL/api/claude/login-web/code" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
+unset CODE
+```
+
+O código é credencial de uso único: não o cole na linha de comando.
 `POST /api/claude/login-web/cancel` encerra, com `{ "loginId": "..." }` ou
 `{ "profileId": "..." }`. Para conferir, `POST /api/claude/profile-test` com
 `{ "profileId": "..." }`, ou o teste do perfil na tela Sistema. As recusas voltam com
@@ -466,13 +527,44 @@ outros (`mcpArgsFor` em `lib/engine/jira.js`). O modelo chama `getJiraIssue` e
    marcas do delimitador são removidas do conteúdo antes.
 
 **A tela.** Jira é seção própria de Sistema, só de leitura: mostra os sites, se cada um tem
-credencial, e testa a conexão. Os sites entram por `POST /api/settings` com `jiraSites` (a
-lista inteira) ou pelo arquivo. A credencial entra por `POST /api/jira/credential` com
-`{ "siteId": "...", "email": "...", "token": "..." }` (responde `{ "ok": true }`, ou
-`{ "ok": false, "error": "dados incompletos" }`) e sai por
-`POST /api/jira/credential/remove` com `{ "siteId": "..." }`; ela fica em
-`~/.farol/jira-credentials.json`, fora do `config.json`. O primeiro site muda os MCPs da
-sessão.
+credencial, e testa a conexão. Site e credencial entram pela API
+([como chamar](#chamar-a-api-sem-tela)) ou, no caso dos sites, pelo arquivo.
+
+Um site tem cinco campos (`umSite`, `lib/jira/sites.js`):
+
+| campo | o que é |
+|---|---|
+| `id` | o nome do site no Farol: letras, dígitos, `_` e `-`, até 64. É a chave da credencial |
+| `label` | o rótulo mostrado; vazio, vira o host |
+| `baseUrl` | a origem do Jira, só `https://host`: sem caminho, sem usuário, sem query |
+| `owners` | as organizações do GitHub que usam este Jira (gravadas em minúsculas) |
+| `projectKeys` | as chaves de projeto aceitas (gravadas em maiúsculas) |
+
+Site sem `id` válido, sem `baseUrl` válida ou com `id` repetido é descartado sem erro.
+`jiraSites` é a lista inteira: o site que não vier é removido (a credencial dele fica no disco
+até ser tirada).
+
+```sh
+# os sites
+curl -sS -X POST "$FAROL/api/settings" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" \
+  -d '{"jiraSites":[{"id":"biud","label":"Jira BIUD","baseUrl":"https://exemplo.atlassian.net","owners":["biudtech"],"projectKeys":["BT"]}]}'
+
+# a credencial do site: o token do Atlassian vem do teclado, sem eco
+read -rs -p 'Token do Jira: ' JIRA; echo
+jq -n --arg t "$JIRA" '{siteId:"biud", email:"pessoa@exemplo.com", token:$t}' \
+  | curl -sS -X POST "$FAROL/api/jira/credential" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d @-
+unset JIRA
+
+# tirar a credencial
+curl -sS -X POST "$FAROL/api/jira/credential/remove" -H "Authorization: Bearer $TOKEN" -H "x-farol: 1" -H "Content-Type: application/json" -d '{"siteId":"biud"}'
+```
+
+`POST /api/jira/credential` responde `{ "ok": true }`, ou
+`{ "ok": false, "error": "dados incompletos" }` quando falta `siteId`, `email` ou `token`;
+`POST /api/jira/credential/remove` responde `{ "ok": true }`, ou `{ "ok": false }` quando o
+site não tinha credencial. A credencial fica em `~/.farol/jira-credentials.json`, fora do
+`config.json`, e não volta em resposta nenhuma (travado em
+`test/jira-credencial-http.test.js`). O primeiro site muda os MCPs da sessão.
 
 **Testar o site** (`POST /api/jira/test`, `testarSite` em `lib/engine/jira.js`, testes em
 `test/jira-teste-site.test.js`) prova o site sem esperar PR, por `/rest/api/2/myself`:

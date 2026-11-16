@@ -303,8 +303,15 @@ serve a `tools/diagnosticar-legados.js` e a quem consulta à mão) e não usa `G
 `POST /api/claude/login-web/*`, e não cria nem remove perfil do Claude: a credencial do Jira, a
 chave de API e o login da assinatura entram por chamada direta à API (com o Bearer do
 pareamento e `x-farol: 1`). Os corpos estão em
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#perfis-do-claude) e nas lacunas do
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#chamar-a-api-sem-tela) e nas lacunas do
 [`web/README.md`](web/README.md).
+
+Das preferências de `POST /api/settings`, o front edita `aguardarCiParaAprovar`,
+`parallelReviews`, `reviewModel`, `reviewEffort` e `people`. Só mudam pela API ou pelo arquivo:
+`jiraSites`, `claudeProfiles`, `claudeProfileId`, `intervalSeconds`, `globalParallelReviews`,
+`reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`.
+`soundEnabled`, `theme` e `autostart` são resto da tela antiga: a API aceita e grava, e nada no
+motor lê.
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez

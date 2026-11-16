@@ -341,10 +341,6 @@ Regras que valem para quem mexer nela:
   aberta.
 - **Sessão em curso por revisão.** O item não diz se o PR já está sendo revisado de novo. A
   tela oferece "Revisar de novo" e mostra a resposta do motor.
-- **O aviso do motor cita uma tela que não existe aqui.** Quando o motor suspeita de
-  contestação, o aviso dele (evento `toast`, texto de `lib/engine/pushback.js`) manda
-  confirmar o desfecho em "Revisões recentes", que era da tela antiga (ela saiu do motor em
-  16/11/2026). A tela mostra o aviso como o motor escreveu; o desfecho se confirma no detalhe da revisão, no Histórico.
 
 ## A tela Time
 

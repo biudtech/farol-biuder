@@ -63,6 +63,14 @@ Ainda sem versão publicada.
   `POST /api/claude/login-web/code`). O passo a passo com os corpos está em
   `docs/CONFIGURATION.md`. Também ficaram sem quem as chame `GET /api/log` e
   `GET /api/log/triage`.
+- **Preferências que ficaram sem tela:** `intervalSeconds`, `globalParallelReviews`,
+  `reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns` só
+  mudam por `POST /api/settings` ou pelo `config.json`. `soundEnabled`, `theme` e `autostart`
+  eram da tela antiga: a API ainda aceita e grava, e nada no motor lê; saem no fechamento.
+- **Os avisos do motor param de apontar para tela que saiu:** o motivo de estacionamento, a
+  ação das falhas de perfil e o aviso de vencimento do login diziam "Sistema > Plano e
+  chaves", e agora apontam para a API e para `docs/CONFIGURATION.md`; o aviso de contestação
+  manda confirmar o desfecho no Histórico.
 - **A linha de subida do motor** passa a dizer "API em" no lugar de "UI em".
 
 ### O que voltou ou entrou
