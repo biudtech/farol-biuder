@@ -242,7 +242,7 @@ describe('get e post', () => {
     // os campos do motor (CAMPOS, lib/engine/historico-paginado.js) e um código com hífen
     expect(await recusa({ code: 'parametro_invalido', campo: 'pageSize' })).toEqual({ ...semDetalhe, detalhe: { codigo: 'parametro_invalido', campo: 'pageSize' } });
     expect(await recusa({ code: 'codigo-invalido' })).toEqual({ ...semDetalhe, detalhe: { codigo: 'codigo-invalido' } });
-    for (const torto of ['Parâmetro inválido', 'tem espaco', '<b>x</b>', '9comeca_com_digito', '_x', 'a.b', 'a‮b', '']) {
+    for (const torto of ['Parâmetro inválido', 'tem espaco', '<b>x</b>', '9comeca_com_digito', '_x', 'a.b', 'a\u202eb', '']) {
       expect(await recusa({ code: torto, campo: 'q' }), torto).toEqual(semDetalhe);
       expect(await recusa({ code: 'parametro_invalido', campo: torto }), torto).toEqual({ ...semDetalhe, detalhe: { codigo: 'parametro_invalido' } });
     }

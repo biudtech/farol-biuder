@@ -50,7 +50,7 @@ export interface Documento {
 const COMECO_DE_URL = /^https:\/\/[^/?#]/;
 // espaço, controle, aspas, e os controles de direção do texto (U+202A a U+202E e U+2066 a
 // U+2069), que fazem o endereço parecer outro na tela
-const PROIBIDO_NA_URL = /[\s\u0000-\u001f\u007f<>"'`\\‪-‮⁦-⁩]/;
+const PROIBIDO_NA_URL = /[\s\u0000-\u001f\u007f<>"'`\\\u202a-\u202e\u2066-\u2069]/;
 // a autoridade: do fim de `https://` até a primeira barra, interrogação ou cerquilha
 const AUTORIDADE = /^https:\/\/([^/?#]*)/;
 

@@ -243,7 +243,7 @@ describe('markdown: entrada hostil', () => {
   it('arroba na autoridade, controle de direção e host disfarçado não passam', () => {
     for (const ruim of [
       'https://@evil.com', 'https://:@evil.com', 'https://good.com@evil.com/x', 'https://good.com:443@evil.com',
-      'https://exemplo.com/‮gpj.exe', 'https://exemplo.com/⁦a⁩', 'https://‭exemplo.com',
+      'https://exemplo.com/\u202egpj.exe', 'https://exemplo.com/\u2066a\u2069', 'https://\u202dexemplo.com',
     ]) {
       expect(linkSeguro(ruim), JSON.stringify(ruim)).toBeNull();
       expect(temLink(blocos(`veja ${ruim} e [x](${ruim})`)), JSON.stringify(ruim)).toBe(false);
@@ -254,7 +254,7 @@ describe('markdown: entrada hostil', () => {
 
   it('no endereço solto o texto visível é o endereço normalizado, que é para onde o link vai', () => {
     // o ponto ideográfico vira ponto comum no host: quem lê vê o host de verdade
-    const arvore = blocos('abra https://good.com。evil.com/x agora');
+    const arvore = blocos('abra https://good.com\u3002evil.com/x agora');
     expect(arvore).toEqual([paragrafo(
       txt('abra '), { t: 'link', href: 'https://good.com.evil.com/x', f: [txt('https://good.com.evil.com/x')] }, txt(' agora'),
     )]);
