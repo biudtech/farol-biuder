@@ -43,6 +43,7 @@ const SO_DAQUI = `O token foi apagado deste navegador, mas a sessão continua va
 export function textoDaSaida(saida: Saida): string {
   switch (saida) {
     case 'revogada': return 'Você saiu, e o motor revogou a sessão deste navegador: o token que estava aqui não vale mais.';
+    case 'nao-confirmada': return `Você saiu deste navegador, e o token foi apagado daqui, mas não deu para confirmar se o motor revogou a sessão: o pedido de revogação saiu e a resposta não chegou (falha de rede, ou o prazo venceu). Para ter certeza, confira em Sistema, Sessões pareadas, a partir de um navegador pareado, ou rode ${COMANDO_DE_PAREAR} --revogar-todas no terminal do motor.`;
     case 'sem-resposta': return `Você saiu deste navegador, mas não deu para falar com o motor para revogar a sessão (falha de rede, ou ele não respondeu a tempo). ${SO_DAQUI}`;
     case 'recusada': return `Você saiu deste navegador, mas o motor não revogou a sessão (a rota recusou o pedido ou respondeu fora do formato). ${SO_DAQUI}`;
     case 'nao-encontrada': return `Você saiu deste navegador, mas o motor não listou a sessão dele entre as pareadas, então nada foi revogado. ${SO_DAQUI}`;

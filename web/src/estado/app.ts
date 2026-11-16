@@ -22,11 +22,12 @@ export type DesfechoDoPareamento = 'pareado' | 'recusado' | 'inalcancavel' | 'ca
 // pede explicação, só o foco no campo do código. nenhum: a página abriu sem token.
 export type MotivoDoPareamento = 'nenhum' | 'saiu' | 'nao-autenticado' | 'outra-aba';
 // O que aconteceu com a sessão no MOTOR quando este navegador saiu. revogada: o motor a
-// revogou, e o token não vale mais lá. Nos outros três o token só foi esquecido aqui e
-// continua valendo no motor até expirar: sem-resposta (falha de rede, ou o motor não
-// respondeu no prazo), recusada (a rota respondeu fora do esperado, ou recusou a revogação) e
+// revogou, e o token não vale mais lá. nao-confirmada: o pedido de revogação saiu e a resposta
+// não chegou (rede, ou o prazo venceu): não dá para dizer se o motor revogou. Nos outros três
+// nada foi revogado, e o token só foi esquecido aqui: sem-resposta (não deu para pedir a lista
+// de sessões), recusada (a rota respondeu fora do esperado, ou recusou a revogação) e
 // nao-encontrada (a lista veio sem a sessão deste navegador).
-export type Saida = 'revogada' | 'sem-resposta' | 'recusada' | 'nao-encontrada';
+export type Saida = 'revogada' | 'nao-confirmada' | 'sem-resposta' | 'recusada' | 'nao-encontrada';
 
 // Quanto o Sair espera pelo motor antes de sair só deste navegador.
 export const PRAZO_DO_SAIR_MS = 5000;
@@ -86,9 +87,11 @@ export interface App {
   parear(codigo: string, rotulo: string): Promise<DesfechoDoPareamento>;
   // Aborta as chamadas em curso, pede ao motor que revogue a sessão deste navegador (acha a
   // sessão `atual` em POST /api/auth/sessions e a revoga pelo `id`) e apaga o token daqui (as
-  // outras abas vão ao pareamento junto). Falha de rede ou de rota não impede o sair local: o
-  // desfecho diz se a sessão foi revogada no motor ou só esquecida aqui. `null` quando a
-  // sessão acabou por outro caminho no meio (o motor já a recusava, ou outra aba saiu).
+  // outras abas vão ao pareamento junto). Falha de rede, de rota ou exceção não impedem o sair
+  // local: o desfecho diz se a sessão foi revogada no motor, se não deu para confirmar, ou se
+  // ela só foi esquecida aqui. `null` quando a sessão acabou ou mudou por outro caminho no
+  // meio (o motor já a recusava, outra aba saiu, ou outra aba pareou de novo e esta segue
+  // com o token dela).
   sair(): Promise<Saida | null>;
   // A metade local do Sair, para quem já revogou a própria sessão no motor (a lista de
   // sessões da tela Sistema): apaga o token daqui e vai ao pareamento, com o desfecho dito.
@@ -183,38 +186,86 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   }
 
   // Pede ao motor que revogue a sessão deste navegador: a lista diz qual é a `atual`, e a
-  // revogação vai pelo `id` dela. As duas chamadas dividem um prazo só. Nunca lança.
-  async function revogarAPropria(): Promise<Saida> {
+  // revogação vai pelo `id` dela. As duas chamadas dividem um prazo só. Nunca lança: exceção
+  // de quem lê a resposta vira o desfecho da fase em que aconteceu. `nao-autenticado`: o motor
+  // já recusava o token.
+  async function revogarAPropria(): Promise<Saida | 'nao-autenticado'> {
     const prazo = new AbortController();
     const relogio = setTimeout(() => prazo.abort(), PRAZO_DO_SAIR_MS);
+    // depois que o pedido de revogação sai, falha de rede ou de prazo não diz se ele chegou
+    let pediuARevogacao = false;
     try {
       const lista = await cliente.post('/api/auth/sessions', {}, lerSessoes, { sinal: prazo.signal });
-      if (!lista.ok) return lista.falha === 'rede' || lista.falha === 'cancelado' ? 'sem-resposta' : 'recusada';
+      if (!lista.ok) {
+        if (lista.falha === 'nao_autenticado') return 'nao-autenticado';
+        return lista.falha === 'rede' || lista.falha === 'cancelado' ? 'sem-resposta' : 'recusada';
+      }
       const atual = lista.dados.sessoes.find((sessao) => sessao.atual);
       if (!atual) return 'nao-encontrada';
+      pediuARevogacao = true;
       const revogacao = await cliente.post('/api/auth/revoke', { id: atual.id }, lerRevogacao, { sinal: prazo.signal });
-      if (!revogacao.ok) return revogacao.falha === 'rede' || revogacao.falha === 'cancelado' ? 'sem-resposta' : 'recusada';
+      if (!revogacao.ok) {
+        if (revogacao.falha === 'nao_autenticado') return 'nao-autenticado';
+        return revogacao.falha === 'rede' || revogacao.falha === 'cancelado' ? 'nao-confirmada' : 'recusada';
+      }
       return revogacao.dados.ok ? 'revogada' : 'recusada';
+    } catch {
+      return pediuARevogacao ? 'nao-confirmada' : 'recusada';
     } finally {
       clearTimeout(relogio);
     }
   }
 
-  async function sairDoMotorEDaqui(): Promise<Saida | null> {
-    const token = tokenDaSessao;
-    // as chamadas das telas param já: a resposta delas não grava mais nada
+  // Outro token no armazenamento (outra aba pareou de novo): esta aba segue pareada com ele,
+  // em vez de ir ao pareamento com um token válido guardado.
+  function seguirComOutroToken(token: string): boolean {
+    const outro = cofre.sincronizar();
+    if (!outro || outro === token) return false;
     cliente.cancelarChamadas();
-    store.trocar({ saindo: true });
-    const saida = await revogarAPropria();
+    entrar(outro, store.ler().entrouAgora);
+    return true;
+  }
+
+  // A metade local do Sair, depois da resposta do motor.
+  function concluirSaida(token: string, saida: Saida | 'nao-autenticado'): Saida | null {
     // A sessão acabou por outro caminho enquanto o motor era consultado (o 401, que já levou a
     // tela ao pareamento, ou o token trocado ou apagado por outra aba): não há o que esquecer.
     if (store.ler().sessao !== 'pareado' || tokenDaSessao !== token) {
       store.trocar({ saindo: false });
       return null;
     }
+    // O motor recusou o token e a aba continua pareada: o cliente apagou o token recusado e
+    // achou outro no armazenamento, senão já teria levado a tela ao pareamento.
+    if (saida === 'nao-autenticado') {
+      if (!seguirComOutroToken(token)) voltarAoPareamento('nao-autenticado');
+      return null;
+    }
     cofre.esquecer(token);
+    if (seguirComOutroToken(token)) return null;
     voltarAoPareamento('saiu', saida);
     return saida;
+  }
+
+  async function sairDoMotorEDaqui(): Promise<Saida | null> {
+    const token = tokenDaSessao;
+    let concluido = false;
+    try {
+      // as chamadas das telas param já: a resposta delas não grava mais nada
+      cliente.cancelarChamadas();
+      store.trocar({ saindo: true });
+      const fim = concluirSaida(token, await revogarAPropria());
+      concluido = true;
+      return fim;
+    } finally {
+      // Qualquer exceção no caminho: o sair local acontece do mesmo jeito. O token sai daqui,
+      // o botão volta, e a tela não afirma nada sobre o motor.
+      if (!concluido) {
+        if (store.ler().sessao === 'pareado' && tokenDaSessao === token) {
+          cofre.esquecer(token);
+          voltarAoPareamento('saiu', 'nao-confirmada');
+        } else store.trocar({ saindo: false });
+      }
+    }
   }
 
   function entrar(token: string, entrouAgora: boolean): void {
@@ -278,7 +329,8 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     },
     sair() {
       if (store.ler().sessao !== 'pareado') return Promise.resolve(null);
-      saindo ??= sairDoMotorEDaqui().finally(() => { saindo = null; });
+      // a exceção já foi tratada no finally de lá: quem clicou recebe o desfecho, não um erro
+      saindo ??= sairDoMotorEDaqui().catch((): Saida => 'nao-confirmada').finally(() => { saindo = null; });
       return saindo;
     },
     esquecerSessao(saida) {

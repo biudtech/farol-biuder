@@ -588,12 +588,119 @@ describe('sair revoga a sessão no motor', () => {
     expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu', saida: 'sem-resposta' });
   });
 
-  it('rede que cai entre a lista e a revogação também sai só daqui', async () => {
+  it('rede que cai depois de o pedido de revogação sair: sai daqui, e a tela não afirma se o motor revogou', async () => {
     const t = await pareado();
     t.rotas.set('/api/auth/sessions', () => json(SESSOES));
-    expect(await t.app.sair()).toBe('sem-resposta');
+    expect(await t.app.sair()).toBe('nao-confirmada');
     expect(dasRotasDeSessao(t)).toHaveLength(2);
-    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', saida: 'sem-resposta' });
+    expect(t.cofre.ler()).toBe('');
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', saida: 'nao-confirmada', saindo: false });
+  });
+
+  it('prazo que vence na segunda chamada (a revogação): não dá para confirmar, e o sair local acontece', async () => {
+    const t = await pareado();
+    t.rotas.set('/api/auth/sessions', () => json(SESSOES));
+    t.rotas.set('/api/auth/revoke', (p) => new Promise<Response>((_resolver, rejeitar) => {
+      p.init.signal?.addEventListener('abort', () => rejeitar(new DOMException('abortado', 'AbortError')));
+    }));
+    const saindo = t.app.sair();
+    await vi.advanceTimersByTimeAsync(PRAZO_DO_SAIR_MS - 1);
+    expect(dasRotasDeSessao(t).map(caminho)).toEqual(['/api/auth/sessions', '/api/auth/revoke']);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: true });
+    expect(t.cofre.ler()).toBe(TOKEN);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await saindo).toBe('nao-confirmada');
+    expect((dasRotasDeSessao(t)[1]?.init.signal as AbortSignal).aborted).toBe(true);
+    expect(t.cofre.ler()).toBe('');
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu', saida: 'nao-confirmada', saindo: false });
+  });
+
+  // Um corpo que lança quando o leitor o toca: o cliente não segura a exceção do leitor.
+  const corpoQueLanca = (): Response => ({
+    status: 200,
+    ok: true,
+    headers: new Headers(),
+    // `then` passa, para o corpo chegar ao leitor em vez de falhar na leitura do JSON
+    json: async () => new Proxy({}, { get(_alvo, campo) { if (campo === 'then') return undefined; throw new Error('leitor quebrado'); } }),
+  }) as unknown as Response;
+
+  it('exceção no leitor da lista: o token local é apagado e o botão volta, sem erro para quem clicou', async () => {
+    const t = await pareado();
+    t.rotas.set('/api/auth/sessions', corpoQueLanca);
+    expect(await t.app.sair()).toBe('recusada');
+    expect(dasRotasDeSessao(t).map(caminho)).toEqual(['/api/auth/sessions']);
+    expect(t.cofre.ler()).toBe('');
+    expect(t.guardado.has(CHAVE_DO_TOKEN)).toBe(false);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu', saida: 'recusada', saindo: false });
+  });
+
+  it('exceção no leitor da revogação: o pedido saiu, então a tela diz que não deu para confirmar', async () => {
+    const t = await pareado();
+    t.rotas.set('/api/auth/sessions', () => json(SESSOES));
+    t.rotas.set('/api/auth/revoke', corpoQueLanca);
+    expect(await t.app.sair()).toBe('nao-confirmada');
+    expect(t.cofre.ler()).toBe('');
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', saida: 'nao-confirmada', saindo: false });
+  });
+
+  it('exceção fora das chamadas (um assinante do store que lança): o finally apaga o token e solta o botão', async () => {
+    const t = await pareado();
+    t.rotas.set('/api/auth/sessions', () => json(SESSOES));
+    t.rotas.set('/api/auth/revoke', () => json({ ok: true, eraAtual: true }));
+    let lancar = true;
+    t.app.store.assinar(() => {
+      // lança uma vez só, quando o Sair marca "saindo"
+      if (lancar && t.app.store.ler().saindo) { lancar = false; throw new Error('assinante quebrado'); }
+    });
+    expect(await t.app.sair()).toBe('nao-confirmada');
+    expect(t.cofre.ler()).toBe('');
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu', saida: 'nao-confirmada', saindo: false });
+  });
+
+  it('evento storage no meio do Sair (outra aba pareou de novo): esta aba segue pareada com o token novo', async () => {
+    const t = await pareado();
+    const novo = 'n'.repeat(43);
+    let soltar!: (r: Response) => void;
+    t.rotas.set('/api/auth/sessions', () => new Promise<Response>((resolver) => { soltar = resolver; }));
+    const saindo = t.app.sair();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: true });
+    // a outra aba grava o token novo, e o navegador avisa esta
+    t.guardado.set(CHAVE_DO_TOKEN, novo);
+    t.janela.disparar(CHAVE_DO_TOKEN);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: false });
+    soltar(json(SESSOES));
+    expect(await saindo).toBeNull();
+    // nada foi revogado nem apagado: a sessão é a da outra aba
+    expect(dasRotasDeSessao(t).map(caminho)).toEqual(['/api/auth/sessions']);
+    expect(t.cofre.ler()).toBe(novo);
+    expect(t.guardado.get(CHAVE_DO_TOKEN)).toBe(novo);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: false, saida: null });
+  });
+
+  it('401 no Sair com outro token já gravado por outra aba: não vai ao pareamento, segue pareado com o novo', async () => {
+    const t = await pareado();
+    const novo = 'n'.repeat(43);
+    // a outra aba pareou de novo, e o evento storage ainda não chegou a esta
+    t.rotas.set('/api/auth/sessions', () => { t.guardado.set(CHAVE_DO_TOKEN, novo); return json({ error: 'nao_autenticado' }, 401); });
+    expect(await t.app.sair()).toBeNull();
+    expect(t.cofre.ler()).toBe(novo);
+    expect(t.guardado.get(CHAVE_DO_TOKEN)).toBe(novo);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: false, saida: null });
+    // o fluxo reabriu com o token novo
+    await vi.advanceTimersByTimeAsync(0);
+    const fluxos = t.pedidos.filter((p) => caminho(p) === '/api/events');
+    expect(fluxos.at(-1)?.init.headers).toMatchObject({ Authorization: `Bearer ${novo}` });
+  });
+
+  it('revogou, e outra aba gravou outro token nesse meio: o token velho sai, e esta aba segue com o novo', async () => {
+    const t = await pareado();
+    const novo = 'n'.repeat(43);
+    t.rotas.set('/api/auth/sessions', () => json(SESSOES));
+    t.rotas.set('/api/auth/revoke', () => { t.guardado.set(CHAVE_DO_TOKEN, novo); return json({ ok: true, eraAtual: true }); });
+    expect(await t.app.sair()).toBeNull();
+    expect(t.guardado.get(CHAVE_DO_TOKEN)).toBe(novo);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', saindo: false });
   });
 
   it('rota que não existe, ou resposta fora do formato, não impede o sair local', async () => {

@@ -128,6 +128,12 @@ describe('sessões e Sair', () => {
 
   it('o Sair diz se a sessão foi revogada no motor ou só esquecida aqui', () => {
     expect(textoDaSaida('revogada')).toContain('o motor revogou a sessão');
+    // prazo vencido ou rede caída depois de o pedido de revogação sair: a tela não afirma nada
+    const incerta = textoDaSaida('nao-confirmada');
+    expect(incerta).toContain('não deu para confirmar se o motor revogou a sessão');
+    expect(incerta).not.toContain('continua valendo');
+    expect(incerta).not.toContain('o motor revogou a sessão deste navegador');
+    expect(incerta).toContain('--revogar-todas');
     for (const saida of ['sem-resposta', 'recusada', 'nao-encontrada'] satisfies Saida[]) {
       const texto = textoDaSaida(saida);
       expect(texto).toContain('continua valendo no motor até expirar');

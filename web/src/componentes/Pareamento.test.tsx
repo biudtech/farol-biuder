@@ -103,6 +103,7 @@ describe('tela de pareamento', () => {
 
   it.each([
     ['revogada', /o motor revogou a sessão deste navegador/],
+    ['nao-confirmada', /não deu para confirmar se o motor revogou a sessão/],
     ['sem-resposta', /não deu para falar com o motor.*continua valendo no motor até expirar/],
     ['recusada', /o motor não revogou a sessão.*continua valendo no motor até expirar/],
     ['nao-encontrada', /não listou a sessão.*continua valendo no motor até expirar/],
