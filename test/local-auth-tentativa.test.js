@@ -57,12 +57,16 @@ test('consumirCodigo continua booleano para quem já o usava', () => {
   assert.equal(consumirCodigo(codigo), false);
 });
 
-test('a rota de pareamento leva o motivo e a contagem para a tela', () => {
+// O motivo e a contagem ficam do lado de dentro (tentarCodigo, acima). Para fora a recusa é uma
+// só, porque hospedada a rota é alcançável por qualquer um, e "há código esperando" e "restam N"
+// diriam a quem não pareou a hora de queimar o código dos outros.
+test('a rota de pareamento responde a mesma recusa com e sem código pendente', () => {
+  const semPendente = acesso.parear({ codigo: ERRADO, rotulo: 'Chrome de teste' });
+  assert.deepEqual(semPendente, { ok: false, code: 'codigo_invalido' });
   criarCodigo();
   const r = acesso.parear({ codigo: ERRADO, rotulo: 'Chrome de teste' });
-  assert.equal(r.ok, false);
-  assert.equal(r.code, 'codigo_invalido');
-  assert.equal(r.restantes, LOCAL_AUTH.CODIGO_MAX_ERROS - 1);
+  assert.deepEqual(r, semPendente);
+  assert.equal('restantes' in r, false);
   const certo = criarCodigo();
   const bom = acesso.parear({ codigo: certo, rotulo: 'Chrome de teste' });
   assert.equal(bom.ok, true);

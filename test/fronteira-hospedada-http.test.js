@@ -395,12 +395,16 @@ for (const [nome, chaves] of MODOS_HOSPEDADOS) {
     for (const localAuth of LOCAL_AUTH_QUE_NAO_DESLIGA) {
       await hospedado(() => espiar(METODOS_DO_ENGINE, async (chamadas) => {
         for (const rota of naoPublicas) {
-          for (const metodo of ['GET', 'POST']) {
+          // As rotas de leitura não olham o método (respondem a PUT, DELETE e PATCH), então a
+          // prova é por método: nenhum deles passa pelo porteiro sem Bearer.
+          for (const metodo of ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']) {
             for (const host of hosts) {
-              const r = await pedir(metodo, rota, { headers: { host, 'x-farol': '1' }, corpo: metodo === 'POST' ? { urls: ['https://github.com/acme/app/pull/1'], id: 'x', key: 'acme/app#1' } : undefined });
+              const r = await pedir(metodo, rota, { headers: { host, 'x-farol': '1' }, corpo: ['GET', 'HEAD'].includes(metodo) ? undefined : { urls: ['https://github.com/acme/app/pull/1'], id: 'x', key: 'acme/app#1' } });
               assert.equal(r.status, 401, `${metodo} ${rota} via ${host}, localAuth ${JSON.stringify(localAuth)}`);
-              assert.deepEqual(JSON.parse(r.body), { error: 'nao_autenticado' });
               assert.match(String(r.headers['content-type']), /application\/json/, `${rota} não abre stream`);
+              // a resposta a um HEAD não tem corpo
+              if (metodo === 'HEAD') assert.equal(r.body, '');
+              else assert.deepEqual(JSON.parse(r.body), { error: 'nao_autenticado' });
             }
           }
         }
@@ -608,12 +612,35 @@ test('ataque: alvo malformado recebe 400 e o processo continua de pé', async ()
   assert.equal((await pedir('GET', '/api/health')).status, 200, 'o servidor segue de pé');
 });
 
+// Um GET de saúde com corpo de verdade (256 kB). A conexão fica aberta de propósito: o teste
+// espera a resposta completa e só então a derruba, para não depender de como o servidor fecha
+// um socket com dado por ler.
+function saudeComCorpo(corpo) {
+  return new Promise((resolve, reject) => {
+    const s = net.connect(porta, '127.0.0.1');
+    let d = '';
+    s.setEncoding('latin1');
+    s.on('connect', () => s.write(`GET /api/health HTTP/1.1\r\nHost: atacante.net\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(corpo)}\r\n\r\n${corpo}`));
+    s.on('data', (c) => { d += c; if (d.includes('\r\n0\r\n\r\n')) s.destroy(); });
+    s.on('close', () => resolve(d));
+    s.on('error', err => { if (!['ECONNRESET', 'EPIPE'].includes(err.code)) reject(err); });
+    setTimeout(() => s.destroy(), 3000).unref();
+  });
+}
+
 test('ataque: a saúde não vira eco nem porta de entrada', async () => {
-  // corpo grande num GET de saúde: a resposta sai fixa, sem ler o corpo
-  const r = await pedidoCru('GET /api/health HTTP/1.1', ['Host: atacante.net', `Origin: ${ORIGEM}`, 'X-Forwarded-Host: atacante.net', 'Content-Length: 0']);
+  // cabeçalhos do atacante num GET de saúde: nada deles volta
+  const r = await pedidoCru('GET /api/health HTTP/1.1', ['Host: atacante.net', `Origin: ${ORIGEM}`, 'X-Forwarded-Host: atacante.net']);
   assert.equal(r.status, 200);
   assert.equal(r.body, SAUDE);
   assert.doesNotMatch(r.cabeca, /atacante|access-control-/i);
+  // corpo grande num GET de saúde: a resposta é a mesma, fixa, e nada do corpo volta
+  const marca = 'segredo-no-corpo-do-pedido';
+  const comCorpo = await saudeComCorpo(JSON.stringify({ ok: false, marca, enchimento: 'x'.repeat(256 * 1024) }));
+  assert.match(comCorpo, /^HTTP\/1\.1 200 /);
+  assert.ok(comCorpo.includes(`\r\n${SAUDE}\r\n`), 'o corpo da resposta é o fixo');
+  assert.equal(comCorpo.includes(marca), false);
+  assert.equal(comCorpo.length < 600, true, `a resposta não cresce com o pedido (${comCorpo.length} bytes)`);
   // travessia que normaliza para a saúde responde a saúde (corpo fixo), nunca outra rota
   const normalizada = await pedidoCru('GET /api/state/../health HTTP/1.1', ['Host: atacante.net']);
   assert.equal(normalizada.body, SAUDE);
@@ -621,6 +648,71 @@ test('ataque: a saúde não vira eco nem porta de entrada', async () => {
   const fuga = await pedidoCru('GET /api/health/../state HTTP/1.1', ['Host: atacante.net']);
   assert.equal(fuga.status, 403);
   assert.doesNotMatch(fuga.body, /"decisions"/);
+});
+
+// O SSE escreve o cabeçalho 200 antes de montar o snapshot. Se o snapshot lança, o tratamento
+// de erro tentava responder 500 numa resposta que já tinha começado: ERR_HTTP_HEADERS_SENT
+// dentro do catch, numa função assíncrona, que é rejeição sem tratamento e derruba o processo.
+test('ataque: snapshot que lança no SSE fecha a conexão e o processo continua de pé', async () => {
+  const original = engine.snapshot;
+  const rejeicoes = [];
+  const anotar = (motivo) => rejeicoes.push(motivo);
+  process.on('unhandledRejection', anotar);
+  engine.snapshot = () => { throw new Error('falha de propósito no snapshot'); };
+  try {
+    for (const ligar of [false, true]) {
+      await hospedado(async () => {
+        const inicio = Date.now();
+        const r = await pedidoCru('GET /api/events HTTP/1.1', [`Host: ${local()}`, `Authorization: Bearer ${token}`]);
+        assert.ok(Date.now() - inicio < 2500, 'a conexão fecha sozinha, sem esperar o teste derrubá-la');
+        assert.doesNotMatch(r.body, /event: state/);
+        assert.doesNotMatch(r.cabeca + r.body, /falha de propósito/, 'a mensagem do erro não vai para fora num stream');
+      }, ligar ? undefined : {});
+    }
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(rejeicoes.map(String), [], 'nenhuma rejeição sem tratamento');
+  } finally {
+    engine.snapshot = original;
+    process.off('unhandledRejection', anotar);
+  }
+  assert.equal((await pedir('GET', '/api/state')).status, 200, 'o servidor segue de pé');
+  const sse = await pedir('GET', '/api/events');
+  assert.equal(sse.status, 200);
+  assert.match(sse.body, /^event: state\n/, 'e o SSE volta a funcionar');
+});
+
+/* ---------- pareamento: a recusa não diz se há código esperando ---------- */
+
+// Hospedado, POST /api/auth/pair é alcançável por qualquer um. A resposta de erro é UMA só:
+// quem tenta não descobre se há código pendente, quantas tentativas restam nem se acabou de
+// queimar o código. O limite de tentativas continua valendo.
+test('pareamento: sem código, com código errado e no erro que bloqueia, a recusa é a mesma', async () => {
+  const { criarCodigo, revogarCodigos } = await import('../lib/local-auth/pareamento.js');
+  const { LOCAL_AUTH } = await import('../lib/constants.js');
+  const tentar = async (codigo) => {
+    const r = await pedir('POST', '/api/auth/pair', { headers: { host: HOST, origin: ORIGEM, 'x-farol': '1' }, corpo: { codigo, rotulo: 'x' } });
+    return { status: r.status, body: r.body };
+  };
+  await hospedado(async () => {
+    revogarCodigos();
+    const semCodigo = await tentar('AAAAAAAAAA');
+    assert.equal(semCodigo.status, 200);
+    assert.deepEqual(JSON.parse(semCodigo.body), { ok: false, code: 'codigo_invalido' });
+    assert.deepEqual(await tentar(''), semCodigo, 'código vazio');
+    assert.deepEqual(await tentar('curto'), semCodigo, 'código de tamanho errado');
+    const codigo = criarCodigo();
+    for (let i = 1; i <= LOCAL_AUTH.CODIGO_MAX_ERROS; i++) {
+      assert.deepEqual(await tentar('AAAAAAAAAA'), semCodigo, `erro ${i} com código pendente`);
+    }
+    // o limite continua: depois dos cinco erros nem o código certo vale, e a recusa é a mesma
+    assert.deepEqual(await tentar(codigo), semCodigo, 'código queimado pelo limite');
+    const novo = criarCodigo();
+    assert.deepEqual(await tentar(novo.slice(0, -1) + (novo.endsWith('A') ? 'B' : 'A')), semCodigo);
+    const certo = JSON.parse((await tentar(novo)).body);
+    assert.equal(certo.ok, true, 'um erro não queima o código');
+    assert.match(certo.token, /^[A-Za-z0-9_-]{43}$/);
+    assert.deepEqual(await tentar(novo), semCodigo, 'código já usado');
+  });
 });
 
 /* ---------- as duas chaves não mudam pela API ---------- */

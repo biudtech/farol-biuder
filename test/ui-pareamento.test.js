@@ -24,7 +24,11 @@ function armazenamentoFalso() {
 test('a recusa diz qual é, e a contagem só aparece quando existe', () => {
   assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: 3 }), /não confere.*Restam 3 tentativas/);
   assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: 1 }), /Resta 1 tentativa/);
-  assert.match(textoDaRecusa({ ok: false, code: 'codigo_invalido', restantes: null }), /^Código não confere\.$/);
+  // é a recusa que o servidor manda hoje, uma só: sem contagem, ela diz o que conferir e quando gerar outro
+  for (const r of [{ ok: false, code: 'codigo_invalido', restantes: null }, { ok: false, code: 'codigo_invalido' }]) {
+    assert.match(textoDaRecusa(r), /^Código não confere\. Confira o que digitou\./);
+    assert.match(textoDaRecusa(r), /10 minutos, já foi usado ou teve cinco tentativas erradas.*gere outro no terminal\.$/);
+  }
   assert.match(textoDaRecusa({ ok: false, code: 'bloqueado', restantes: 0 }), /Cinco tentativas erradas/);
   assert.match(textoDaRecusa({ ok: false, code: 'sem_codigo_pendente' }), /10 minutos ou já ter sido usado/);
   assert.match(textoDaRecusa(null), /não deu para falar com o Farol/i);
