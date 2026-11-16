@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { enderecoDoMotor } from '@/transporte/endereco';
 import { montarCsp } from './csp';
 
 function diretivas(csp: string): Map<string, string[]> {
@@ -38,6 +39,20 @@ describe('CSP do front', () => {
   it('sem endereço do motor, connect-src fica só na própria origem', () => {
     expect(diretivas(montarCsp({ nonce: 'n', motor: '', dev: false })).get('connect-src')).toEqual(["'self'"]);
   });
+
+  it.each(['https://*', 'https://*.exemplo.com', 'https://a.com;x', "https://a.com 'unsafe-inline'"])(
+    'endereço torto (%s) não chega ao connect-src: fica só a própria origem',
+    (torto) => {
+      // pelo caminho de verdade (o endereço saneado) e direto, se alguém chamar sem sanear
+      for (const motor of [enderecoDoMotor(torto), torto]) {
+        const csp = montarCsp({ nonce: 'n', motor, dev: false });
+        expect(diretivas(csp).get('connect-src')).toEqual(["'self'"]);
+        expect(csp).not.toContain('*');
+        expect(csp).not.toContain('unsafe-inline');
+        expect(diretivas(csp).has('upgrade-insecure-requests')).toBe(false);
+      }
+    },
+  );
 
   it('só sobe pedido inseguro para https quando o motor é https', () => {
     expect(producao.has('upgrade-insecure-requests')).toBe(true);

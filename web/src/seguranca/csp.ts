@@ -12,8 +12,13 @@ export interface OpcoesDaCsp {
 }
 
 const NONCE_VALIDO = /^[A-Za-z0-9+/=_-]+$/;
+// Segunda conferência do endereço do motor, além da de enderecoDoMotor: o que vai para o
+// cabeçalho só tem letra, dígito, ponto, hífen, dois pontos e colchetes. Sem curinga, espaço,
+// aspa nem ponto e vírgula, que abririam ou quebrariam a diretiva.
+const ORIGEM_SEGURA = /^https?:\/\/[A-Za-z0-9.:[\]-]+$/;
 
-export function montarCsp({ nonce, motor, dev }: OpcoesDaCsp): string {
+export function montarCsp({ nonce, motor: motorPedido, dev }: OpcoesDaCsp): string {
+  const motor = ORIGEM_SEGURA.test(motorPedido) ? motorPedido : '';
   if (!NONCE_VALIDO.test(nonce)) throw new Error('nonce fora do alfabeto de base64');
   const fonte = `'nonce-${nonce}'`;
   // Só no servidor de desenvolvimento (`next dev`): o React usa eval para remontar a pilha de
