@@ -57,16 +57,35 @@ Ainda sem versão publicada.
 - **Fronteira do motor hospedado (fase 2a):** duas chaves novas, só de arquivo. `hostPublico` é o
   nome com que o proxy com TLS chega ao motor, aceito no Host sem porta, então o proxy não precisa
   reescrever o Host. `origensPermitidas` é a lista das origens exatas de onde o front chama a API:
-  elas ganham cabeçalhos CORS em toda resposta, com a origem exata, nunca `*` e sem credenciais, e
-  o preflight responde 204 antes da autenticação. Com qualquer uma das duas preenchida a
-  autenticação é exigida sempre, sem configuração que desligue.
+  o pedido de uma delas que passa pela allowlist ganha cabeçalhos CORS na resposta, qualquer que
+  seja o desfecho (200, 401, 403 do `x-farol`, 404, 500, o stream de eventos), com a origem exata,
+  nunca `*` e sem credenciais. Duas respostas não levam CORS: a da rota de saúde e o 400 de pedido
+  malformado, que saem antes da allowlist. O preflight responde 204 antes da autenticação. Com
+  qualquer uma das duas chaves preenchida a autenticação é exigida sempre, sem configuração que
+  desligue.
+- **`http://` em `origensPermitidas`, só para desenvolvimento:** `http://localhost` e
+  `http://127.0.0.1` (com porta) são aceitos, para o front rodando na máquina de quem desenvolve.
+  É um desvio declarado do desenho da fase, que fala só em `https://`. Qualquer outro `http://` é
+  inválido.
+- **Valor inválido nas duas chaves impede o boot:** se `hostPublico` ou `origensPermitidas` vêm no
+  `config.json` com valor que o motor não aceita, inclusive um item inválido numa lista de
+  válidos, o motor não sobe: diz no stderr a chave, o valor e o formato aceito, sai com código 1
+  e não altera o arquivo. Vazio significaria "não hospedado", e um erro de digitação deixaria a
+  API sem autenticação atrás de um proxy que reescreve o Host. Chave ausente ou vazia segue sem
+  erro.
 - **Rota de saúde:** `GET /api/health` responde `{"ok":true}` sem autenticação, para o probe do
   orquestrador. Não leva dado nenhum do motor.
+- **Pareamento sem pista para quem está de fora:** código que não vale recebe sempre a mesma
+  recusa, sem dizer se há código esperando nem quantas tentativas restam. O limite de cinco erros
+  continua. A tela passa a dizer, numa mensagem só, o que conferir e quando gerar outro código.
 
 ### Correções
 
 - **Pedido malformado derrubava o motor:** um alvo que não é URL (`GET //`) lançava fora do
   tratamento de erro do servidor e encerrava o processo. Agora responde 400.
+- **Falha ao montar o estado no stream de eventos derrubava o motor:** o stream já tinha começado
+  a responder, e a tentativa de responder 500 lançava dentro do tratamento de erro. Agora a
+  conexão é fechada e o processo segue.
 - **Dois cabeçalhos `Host`:** o pedido era aceito pelo primeiro e o segundo era ignorado. Agora é
   recusado.
 - **`OPTIONS` executava a rota:** um `OPTIONS /api/state` devolvia o estado. Todo `OPTIONS` em

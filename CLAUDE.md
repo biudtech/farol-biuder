@@ -80,6 +80,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/http-server.js` | HTTP e SSE: as rotas de `/api` e a entrega da `ui/` |
 | `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota menos a de saúde: o loopback com a porta, o `hostPublico` sem porta e as `origensPermitidas`, tudo por igualdade exata. Devolve a origem configurada que casou, e recusa pedido com dois `Host` |
 | `lib/http-cors.js` | Os cabeçalhos CORS da origem que a allowlist devolveu (nunca `*`, sem credenciais) e a resposta do preflight |
+| `lib/fronteira-hospedada.js` | Saneia no boot as chaves só de arquivo (`bind`, `hostPublico`, `origensPermitidas`) e recusa o boot quando uma das duas da fronteira veio com valor inválido: o motor não sobe e o `config.json` não é tocado |
 | `lib/http-ui.js` | Resolve o que fica fora de `/api`: arquivo de `ui/` ou o `index.html` |
 | `lib/local-auth/` | Autenticação da API: `modo.js` (quando é exigida), `acesso.js` (o porteiro), `pareamento.js` e `sessoes.js` (só hash em disco), `inventario.js` (toda rota `/api` classificada) |
 | `lib/estado-delta.js` | O snapshot vai para a tela por diferença |
@@ -279,7 +280,9 @@ Escuta em `127.0.0.1:47170` por padrão. A ordem das defesas, em toda requisiç�
    `config.localAuth: "exigir"` ou `bind` fora do loopback (`lib/local-auth/modo.js`).
 
 O token nasce em `POST /api/auth/pair`, trocado por um código de `node tools/farol-parear.js`.
-Não há cookie. O detalhe de hospedagem está em
+Não há cookie, e a recusa do pareamento é uma só, sem dizer se há código esperando. Valor
+inválido em `hostPublico` ou `origensPermitidas` não vira vazio: o motor não sobe
+(`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar).
 
 Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (31 caminhos; três

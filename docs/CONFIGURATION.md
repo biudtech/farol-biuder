@@ -557,8 +557,21 @@ atrás de um proxy que reescreve o Host para `127.0.0.1:<porta>`**: ali quem alc
 alcança a API inteira, e é preciso gravar `"localAuth": "exigir"`. Prefira `hostPublico`, que
 dispensa a reescrita (item 2).
 
-Valor inválido nas duas chaves vira vazio (item 2), e vazio não liga o modo hospedado. O nome
-e a origem de fora continuam recusados pela allowlist nesse caso, mas confira depois de subir:
+**Valor inválido nas duas chaves não sobe.** Se `hostPublico` ou `origensPermitidas` estão no
+arquivo com um valor que o motor não aceita (item 2), inclusive um único item inválido numa
+lista de origens válidas, o motor não inicia: escreve o motivo no stderr (e no `farol.log`, se
+ele já existir), sai com código 1 e não altera o `config.json`
+(`lib/fronteira-hospedada.js`). A mensagem traz a chave, o valor recusado e o formato aceito:
+
+```
+[farol] config.json inválido, o motor não sobe: "hostPublico" tem valor recusado: "https://farol.exemplo.com". Formato aceito: um nome de host ou um IPv4, sem esquema, sem caminho, sem porta e sem espaço, por exemplo "farol.exemplo.com". Corrija ou apague a chave em /home/farol/.farol/config.json (o arquivo não foi alterado).
+```
+
+É assim porque vazio quer dizer "não hospedado": se um erro de digitação virasse vazio em
+silêncio, o motor em loopback atrás de um proxy que reescreve o Host ficaria com a API inteira
+sem autenticação. Chave ausente, `null`, `""` e `[]` continuam valendo como "não hospedado",
+sem erro. Um `config.json` que nem é JSON é outro caso, anterior a esta regra: o motor sobe
+com os padrões, em loopback puro, e registra o aviso no `farol.log`. Depois de subir, confira:
 `GET /api/auth/status` tem de responder `"exigida": true`.
 
 Com a autenticação exigida, todo `/api/*` pede `Authorization: Bearer <token>`, exceto
@@ -568,7 +581,10 @@ Com a autenticação exigida, todo `/api/*` pede `Authorization: Bearer <token>`
 1. No próprio container, com o mesmo `FAROL_HOME` do motor: `node tools/farol-parear.js`. Ele
    imprime no terminal um código de uso único, válido por dez minutos.
 2. A tela pede o código e chama `POST /api/auth/pair` com `{ "codigo": "...", "rotulo": "..." }`;
-   a resposta traz o token só no corpo, sem cookie, e a página o guarda no navegador.
+   a resposta traz o token só no corpo, sem cookie, e a página o guarda no navegador. Código
+   que não vale recebe sempre a mesma recusa, `{ "ok": false, "code": "codigo_invalido" }`,
+   sem dizer se há código esperando nem quantas tentativas restam; cinco erros invalidam o
+   código pendente, e aí é preciso gerar outro.
 3. A sessão vence com 30 dias sem uso ou 90 dias depois de emitida. Em disco fica só o hash,
    em `~/.farol/local-auth/`.
 
@@ -598,8 +614,8 @@ subdomínio e o nome que só começa ou termina igual. Pedido com dois cabeçalh
 recusado, em qualquer ordem (`hostDoPedido`).
 
 `sanearHostPublico` (`lib/parse.js`) aceita um nome de host ou um IPv4, e passa para caixa
-baixa. Esquema, caminho, porta, espaço, curinga ou IPv6 entre colchetes fazem o valor inteiro
-virar vazio, sem erro no boot.
+baixa. Esquema, caminho, porta, espaço, ponto final, curinga ou IPv6 entre colchetes são valor
+inválido, e com valor inválido o motor não sobe (item 1).
 
 **Origin.** Ausente, passa (curl, o probe, a navegação direta). Presente, precisa ser uma
 destas, também por igualdade exata:
@@ -612,16 +628,17 @@ O `hostPublico` não vira origem sozinho. Para abrir a tela antiga pelo endereç
 (`https://farol.exemplo.com`), escreva essa origem em `origensPermitidas`; sem isso todo `POST`
 dela volta 403, a começar pelo pareamento.
 
-`sanearOrigensPermitidas` (`lib/parse.js`) mantém só o item que é uma origem exata
-`https://host` ou `https://host:porta`, em caixa baixa: sem caminho, sem barra final, sem
-curinga, sem usuário. Item inválido é descartado, repetido conta uma vez, e o que não é lista
-vira lista vazia. Dois detalhes:
+`sanearOrigensPermitidas` (`lib/parse.js`) aceita só o item que é uma origem exata
+`https://host` ou `https://host:porta`: sem caminho, sem barra final, sem curinga, sem usuário.
+Caixa alta é passada para baixa e item repetido conta uma vez. Qualquer outro item, ou um
+valor que não é lista, é inválido, e basta um para o motor não subir (item 1). Dois detalhes:
 
-- a porta padrão do esquema não se escreve (`https://painel.exemplo.com:443` é descartado): o
+- a porta padrão do esquema não se escreve (`https://painel.exemplo.com:443` é inválido): o
   navegador nunca a manda no `Origin`, e o item ficaria na lista sem casar com nada;
 - `http://` só é aceito para `localhost` e `127.0.0.1` (por exemplo `http://localhost:3000`),
-  para o front em desenvolvimento. Qualquer outro `http://` é descartado. Lembre que uma
-  origem dessas na lista também liga a exigência de autenticação.
+  para o front em desenvolvimento. Qualquer outro `http://` é inválido. O desenho da fase fala
+  só em `https://`; esta exceção é um desvio declarado dele. Lembre que uma origem dessas na
+  lista também liga a exigência de autenticação.
 
 **CORS** (`lib/http-cors.js`). Quando o `Origin` é um item de `origensPermitidas`, toda
 resposta leva, inclusive 401, 403 do `x-farol`, 404, 500 e o stream de `/api/events`:
