@@ -44,11 +44,14 @@ test('nenhuma rota aparece em duas classes', () => {
 // /api/claude/login-web/start, /code e /cancel. As não públicas foram de 25 a 28, e o total de 27 a 30.
 // A fase 2a (fronteira hospedada) trouxe a rota de saúde, GET /api/health, numa classe pública
 // própria: as não públicas seguem 28, as públicas foram de 2 a 3 e o total de 30 a 31.
-test('as classes da spec cobrem os 31 caminhos, e as públicas são só as duas de autenticação e a de saúde', () => {
+// A fase 2b (histórico paginado) trouxe GET /api/decisions, na classe de leitura sensível, a mesma
+// de /api/decision e /api/state: as não públicas foram de 28 a 29 e o total de 31 a 32.
+test('as classes da spec cobrem os 32 caminhos, e as públicas são só as duas de autenticação e a de saúde', () => {
   const publicas = ['autenticacao-publica', 'saude-publica'];
   const naoPublicas = Object.entries(CLASSES).filter(([c]) => !publicas.includes(c)).flatMap(([, rotas]) => rotas);
-  assert.equal(naoPublicas.length, 28);
-  assert.equal(todasAsRotas().length, 31);
+  assert.equal(naoPublicas.length, 29);
+  assert.equal(todasAsRotas().length, 32);
+  assert.equal(classeDaRota('/api/decisions'), 'leitura-sensivel');
   assert.deepEqual(CLASSES['autenticacao-publica'].slice().sort(), ['/api/auth/pair', '/api/auth/status']);
   assert.deepEqual(CLASSES['saude-publica'], ['/api/health']);
   assert.deepEqual(Object.keys(CLASSES).sort(), ['autenticacao-publica', 'demais', 'destrutiva', 'escreve-github', 'evento', 'leitura-sensivel', 'recebe-segredo', 'saude-publica', 'sessao-paga']);

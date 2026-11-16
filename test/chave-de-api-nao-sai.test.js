@@ -131,7 +131,7 @@ test('(b) a (e) varredura: nenhuma rota GET do inventário responde com a chave'
   }
   // a varredura não está cega: as leituras respondem 200, e são as que o motor tem
   const com200 = conferidas.filter((c) => c.endsWith('=200')).map((c) => c.split('=')[0]).sort();
-  assert.deepEqual(com200, ['/api/auth/status', '/api/decision', '/api/diagnostics', '/api/doctor', '/api/health', '/api/log', '/api/log/triage', '/api/state', '/api/team', '/api/usage']);
+  assert.deepEqual(com200, ['/api/auth/status', '/api/decision', '/api/decisions', '/api/diagnostics', '/api/doctor', '/api/health', '/api/log', '/api/log/triage', '/api/state', '/api/team', '/api/usage']);
   const estado = await pedir('GET', '/api/state');
   assert.equal(estado.json.config.claudeProfiles.find((p) => p.id === 'k1').temChave, true);
 });
