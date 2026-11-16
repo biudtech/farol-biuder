@@ -215,6 +215,34 @@ Ainda sem versão publicada.
   frase), não manda custo por modelo no período, nem o total de uma operação com retomada,
   nem o que falta para o teto na conta do gate: a tela mostra o que vem e diz o que não vem.
   A tela antiga continua servida pelo motor, sem mudança.
+- **Tela Sistema no front novo (fase 3, lote 6):** a aba Sistema de `web/` deixa de ser "Em
+  construção", e com ela o front novo tem as cinco telas. São sete seções. Saúde mostra o que
+  o diagnóstico do motor mediu, uma verificação por linha, com o estado dito em texto, a
+  versão do motor e a do Claude Code, o botão de rodar o diagnóstico de novo (que não abre
+  sessão de IA) e o relatório que o próprio motor monta. Conta revisora e política mostra a
+  conta, se o token do GitHub está presente, as organizações monitoradas e o que o motor faz
+  quando a revisão sai limpa, com ressalvas ou reprovada; o salvar manda só o campo que mudou,
+  e toda mudança que amplia o que o motor publica sozinho (ligar a revisão automática, trocar
+  esperar por publicar, acrescentar organização) pergunta antes, dizendo o efeito. Automação
+  edita CI antes de aprovar, revisões ao mesmo tempo, modelo e esforço, com o efeito de cada
+  um, e desligar o CI antes de aprovar também pergunta. Perfil do Claude e teto de gasto
+  mostra os perfis, a presença da credencial, o uso do plano, o teste do perfil (que não
+  consome nada) e o teto em dólar por dia e total; mudar o teto pergunta sempre, dizendo se
+  pode pausar ou soltar as revisões automáticas. Jira mostra os sites, a presença da
+  credencial e o teste de conexão. Sessões pareadas lista os navegadores com acesso, com o
+  atual marcado, e revoga um por vez; revogar o atual leva este navegador ao pareamento.
+  Rede e acesso mostra `bind`, `hostPublico` e `origensPermitidas`, que só mudam pelo arquivo.
+  Nenhum segredo passa pela tela: ela não tem campo para token, chave nem credencial, e o que
+  chegar do motor com cara de segredo é descartado antes de entrar na tela. Cada salvar confere
+  o que o motor respondeu e diz quando ele gravou diferente do pedido. Ficaram só para leitura,
+  e continuam na tela antiga: os sites e a credencial do Jira (o motor aceita trocar o endereço
+  de um site sem pedir a credencial de novo, e isso se corrige nele), a criação de perfil do Claude, a chave de API e
+  o login da assinatura (pedem segredo digitado), o perfil padrão, os tetos por dia da semana
+  e por data e as regras de review por organização e autor.
+- **"Sair" revoga a sessão no motor:** o Sair do front novo passa a pedir ao motor que revogue
+  a sessão do navegador antes de apagar o token dele. Se o motor não responde em 5 segundos,
+  recusa ou não lista a sessão, o navegador sai do mesmo jeito, e a tela de pareamento diz se
+  a sessão foi revogada no motor ou só esquecida ali, e como derrubá-la nesse caso.
 - **O CI passa a exigir o front:** o check obrigatório continua se chamando `ci`, e agora depende
   também do job `web` (auditoria de dependências, tipos, lint, testes e build do front). O gate
   do motor não entra em `web/`: sintaxe, qualidade, higiene e a descoberta de testes do
