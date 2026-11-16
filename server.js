@@ -1,7 +1,7 @@
 import { assertExternalNodeRuntime } from './lib/node-runtime.js';
 import { repescarRetry } from './lib/engine/review-retry.js';
 assertExternalNodeRuntime();
-// Farol: engine de monitoramento de PRs + servidor http local da UI.
+// Farol: engine de monitoramento de PRs + servidor http da API.
 // Porta a logica do antigo pr-reviewer.ps1: o polling do GitHub roda aqui
 // (so comandos gh, sem gastar tokens de IA); a revisao em si roda numa sessao
 // headless do Claude Code.
@@ -1360,6 +1360,6 @@ if (executadoDireto(import.meta.url)) {
   subirOuRecusar(() => start((url, err) => {
     if (err) { console.error('[farol] erro ao subir o servidor:', err.message); process.exit(1); }
     // um console.log só, com as duas linhas de sempre: o server.js está no teto de linhas do ratchet
-    console.log(`[farol] monitorando · UI em ${url}\n[farol] Ctrl+C para sair`);
+    console.log(`[farol] monitorando · API em ${url}\n[farol] Ctrl+C para sair`);
   }));
 }
