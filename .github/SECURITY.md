@@ -1,70 +1,59 @@
 # Política de segurança
 
-O Farol roda na máquina de quem usa, com as credenciais de quem usa, e é capaz de
-**escrever no GitHub em nome da pessoa** (aprovar PR, pedir mudanças, comentar, mergear).
-Falha de segurança aqui tem consequência real na conta de terceiros, então este arquivo
-existe.
-
-## Versões com suporte
-
-| Versão | Suporte |
-|---|---|
-| Última release publicada | sim |
-| Qualquer versão anterior | não |
-
-O app se atualiza sozinho a partir das releases do GitHub. Correção de segurança sai
-sempre como uma release nova, nunca como remendo em versão antiga. Se você está numa
-versão anterior, atualize antes de reportar.
+O Farol roda com a credencial da conta revisora e é capaz de **escrever no GitHub em nome
+dela** (aprovar PR, pedir mudanças, comentar). Falha de segurança aqui tem consequência real
+nos repositórios da BIUD, então este arquivo existe.
 
 ## Como reportar
 
-**Não abra issue pública para falha de segurança.**
+**Não abra issue para falha de segurança.**
 
-1. Preferido: [**Report a vulnerability**](https://github.com/wandersonaadsantos/farol/security/advisories/new), na aba Security do repositório. O canal é privado entre você e o mantenedor.
-2. Alternativa: e-mail para **wandersonsantos@biud.com.br**, com `[SEGURANÇA] Farol` no assunto.
+1. Preferido: abra um advisory privado do próprio repositório em
+   <https://github.com/biudtech/farol-biuder/security/advisories/new>. Só quem administra o
+   repositório vê.
+2. Alternativa: avise diretamente o responsável pelo repositório, por canal privado.
 
-Ajuda muito no relato: versão do Farol, sistema operacional, o que o atacante consegue
-fazer, e o passo a passo mínimo para reproduzir. Nunca inclua token, credencial ou conteúdo
-de repositório privado no relato.
+Ajuda no relato: o commit em que o problema acontece, o que um atacante consegue fazer e o
+passo a passo mínimo para reproduzir. Nunca inclua token, credencial ou conteúdo de
+repositório privado no relato.
 
-## Prazos
+## O que está em escopo
 
-O projeto é mantido por uma pessoa, no tempo dela. O compromisso é de melhor esforço, sem
-SLA contratual:
+- **Escapar de um gate de postagem.** Qualquer caminho que faça o motor aprovar, reprovar ou
+  comentar no GitHub sem o gate correspondente (`shouldAutoApprove`, `shouldAutoReject`,
+  cobertura da leitura, trava de linguagem pública, dedup por head).
+- **Vazamento de credencial.** Token do `gh`, chave do Claude ou conteúdo de repositório
+  privado indo parar em log, em arquivo de estado, no corpo de um review postado ou em
+  qualquer tráfego que não seja GitHub e Anthropic.
+- **Superfície HTTP local.** O motor escuta em `127.0.0.1` por padrão, com allowlist de Host
+  e Origin (`lib/http-guard.js`) e autenticação opcional (`lib/local-auth/`), exigida sempre
+  que o bind sai do loopback. Qualquer forma de alcançar a API de fora da máquina sem essa
+  proteção, ou de fazer uma página web chamar os endpoints dela (CSRF, DNS rebinding, CORS
+  frouxo), é falha.
+- **Execução de código.** Conteúdo controlado por terceiros (título de PR, nome de branch,
+  corpo de comentário, resposta do `gh`) que vire comando de shell ou execução arbitrária no
+  motor.
+- **Injeção com efeito de escrita pelo caminho do motor.** Conteúdo de PR que faça o motor
+  escrever no GitHub o que os gates deveriam segurar: aprovar ou reprovar sem revisão
+  pedida, passar texto interno pelo filtro de linguagem ou postar sobre um commit que a
+  revisão não leu.
 
-- confirmação de recebimento em até 5 dias corridos;
-- avaliação e posição (procede, não procede, precisa de mais informação) em até 15 dias corridos;
-- correção publicada assim que possível, com crédito a quem reportou, se a pessoa quiser.
+## Limitações conhecidas e assumidas
 
-Pedimos divulgação coordenada: aguarde a correção sair antes de publicar detalhes.
+- **Sessão do Claude Code com credencial.** A sessão de revisão recebe uma credencial do
+  GitHub para investigar PRs, inclusive privados. A proibição de escrever por fora do funil
+  do motor é regra de protocolo, não uma fronteira contra um processo deliberadamente
+  malicioso, inclusive a sessão sequestrada por injeção no conteúdo do PR que chama o `gh`
+  por conta própria: o limite ali é o que a credencial da sessão permite. Detalhe em
+  [`docs/REVIEW-GATES.md`](../docs/REVIEW-GATES.md).
+- **Quem liga a automação responde por ela.** A política da conta (`onClean`, `onCaveats`,
+  `onReject`) decide o que sai sozinho, e o que sai é postado na conta revisora.
+- **Acesso local à máquina.** Quem já tem sessão de usuário no host lê `~/.farol` e fala com
+  a API local. O motor não protege contra o dono da máquina nem contra malware já rodando
+  com o mesmo usuário.
+- **Prompt injection sem efeito colateral.** Conteúdo de PR que influencia o TEXTO de uma
+  revisão, sem escapar de nenhum gate de postagem, é qualidade de review, não segurança.
+  Abra issue normal.
 
-## Modelo de ameaça (o que está em escopo)
-
-O que interessa reportar:
-
-- **Escapar de um gate de postagem.** Qualquer caminho que faça o app aprovar, reprovar, comentar ou mergear no GitHub sem o gate correspondente (`shouldAutoApprove`, `shouldAutoReject`, cobertura da leitura, clique explícito em Meus PRs).
-- **Vazamento de credencial.** Token do `gh`, credencial de sessão do Claude ou conteúdo de repositório privado indo parar em log, em arquivo de estado, no corpo de um review postado ou em qualquer tráfego que não seja GitHub e Anthropic.
-- **Superfície HTTP local.** O engine sobe um servidor em `127.0.0.1:47170` sem autenticação. Qualquer forma de alcançar esse servidor de fora da máquina, ou de fazer uma página web chamar os endpoints dele (CSRF, DNS rebinding, CORS frouxo), é falha.
-- **Execução de código.** Conteúdo controlado por terceiros (título de PR, nome de branch, corpo de comentário, resposta do `gh`) que vire comando de shell ou execução arbitrária no engine ou no instalador.
-- **Injeção com efeito de escrita pelo caminho do Farol.** Conteúdo de PR que faça o ENGINE escrever no GitHub o que os gates deveriam segurar: aprovar ou reprovar sem revisão pedida, passar texto interno pelo filtro de linguagem, postar sobre um commit que a revisão não leu, ou abrir uma sessão interativa com permissão que ela não deveria ter. O que interessa é o efeito sair pelo `postReview`, pela capability do `/api/review/post` ou por outra escrita que o Farol faz em seu nome.
-- **Cadeia de atualização.** Qualquer forma de fazer o auto-update aplicar código que não veio da release oficial do repositório.
-
-## Fora de escopo (limitações conhecidas e assumidas)
-
-Estes pontos são decisão de projeto, estão documentados, e reportá-los não gera correção:
-
-- **Sessão do Claude Code com credencial.** As sessões de revisão recebem uma credencial do GitHub para investigar PRs, inclusive privados. A capability efêmera do `/api/review/post` evita bypass acidental do gate de linguagem, mas **não é uma fronteira contra um processo deliberadamente malicioso** que ignore o protocolo e use a credencial diretamente. Isso inclui a sessão sequestrada por injeção no conteúdo do PR que chama o `gh` por conta própria: o limite ali é o que a credencial da sessão permite, não um gate do Farol, e por isso a injeção só entra no escopo acima quando a escrita passa pelo caminho do engine. Está escrito em [`docs/REVIEW-GATES.md`](../docs/REVIEW-GATES.md#invariante-4-em-detalhe), parágrafo "Fronteira do review humano".
-- **Binários sem assinatura de código.** O instalador do Windows e o `.command` do macOS não são assinados, então SmartScreen e Gatekeeper avisam na primeira execução. É custo de certificado, não bug.
-- **Quem liga a automação responde por ela.** `onClean`, `onCaveats` e `onReject`, por conta, vêm ligados por padrão na conta nova (aprovar e reprovar sozinho; desde a v2.69.0) e podem ser desligados no cartão da conta, e o que elas postam sai na conta de quem as deixou ligadas. Comportamento indesejado de uma automação que você ligou é configuração, não vulnerabilidade.
-- **Acesso local à máquina.** Quem já tem sessão de usuário na máquina lê `~/.farol` e fala com `127.0.0.1:47170`. O app não protege contra o dono da máquina nem contra malware já rodando com o seu usuário.
-- **Prompt injection sem efeito colateral.** Conteúdo de PR que influencia o TEXTO de uma revisão, sem escapar de nenhum gate de postagem, é qualidade de review, não segurança. Abra issue normal.
-
-## Compromissos do projeto
-
-- Sem telemetria, sem analytics, sem servidor do projeto. Nada é enviado ao mantenedor, e o app ainda desliga a telemetria do GitHub CLI nas sessões que dispara.
-- Todo tráfego de rede é em seu nome, com as suas credenciais: GitHub via o `gh` da sua máquina e Anthropic via o seu Claude Code.
-- Nenhum token ou conta viaja dentro do app. O token é pedido ao `gh` local em tempo de execução.
-- O pacote de distribuição é auditado automaticamente e a build falha se detectar estado, configuração, token ou conta pessoal.
-
-Nunca compartilhe a sua pasta `~/.farol`: ela contém o seu estado, as suas configurações e
-a sua memória de reviews.
+Nunca compartilhe a pasta `~/.farol`: ela contém o estado, a configuração e a memória de
+reviews.

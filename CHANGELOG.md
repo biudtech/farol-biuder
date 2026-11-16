@@ -1,13 +1,64 @@
-# Changelog do Farol
+# Changelog do Farol BIUD
 
-Notas de versão do Farol (radar de Pull Requests). O `tools/publish-release.ps1`
-publica a seção da versão atual como corpo da release no GitHub, então escreva
-aqui pensando em quem instala e usa, não no código.
+Histórico do `biudtech/farol-biuder`, o revisor autônomo de pull requests da BIUD. A numeração
+recomeça em 3.0.0, com o motor enxuto. Cada versão tem uma linha de resumo e os grupos que
+existirem, e descreve só o que mudou para quem opera e mantém o motor.
 
-Convenção: cada versão tem uma linha de resumo e os grupos **Novidades**,
-**Melhorias** e **Correções** (só os que existirem). Descreva só o que mudou:
-o `publish-release.ps1` anexa sozinho o rodapé padrão (**Instalar / Atualizar**
-e **Anexos**, de `tools/release-footer.md`) e o título **Farol vX.Y.Z**.
+As versões 2.x abaixo são o histórico do aplicativo de mesa de onde este repositório saiu, mantidas
+como registro: muito do que elas descrevem não existe mais aqui.
+
+## 3.0.0-dev
+
+O Farol virou um motor de revisão: uma instância, uma conta revisora, só Linux, `node server.js`.
+Ainda sem versão publicada.
+
+### O que saiu (fase 1, lotes 1 a 16)
+
+1. **CI só em Linux:** saem o job do Electron, a release nativa e a doutrina eng-behaviour como gate
+   do próprio repositório. O check obrigatório continua se chamando `ci`.
+2. **Rotas sem uso no ciclo de revisão:** auditoria de revisão, transferência de preferências, chat
+   por PR e reviewers por projeto.
+3. **Auto-update.**
+4. **Electron, instaladores e pacote de distribuição.** O `package.json` fica sem dependência de
+   runtime.
+5. **Cascas nativas** de macOS e Windows.
+6. **Windows e macOS no motor:** o código passa a ter um caminho só, o de Linux, e recusa outra
+   plataforma na largada.
+7. **Intervenções, Entregas, Destaques e ferramentas.** O log e a limpeza dele passam a morar no
+   diagnóstico.
+8. **Especialistas por repositório e reserva de capacidade.**
+9. **Outros provedores de IA e a cadeia de perfis:** só o Claude Code roda revisão.
+10. **Panorama, faixa de prontidão, co-assinatura e "revisar junto".** A fila é o que foi pedido à
+    conta; revisar por URL continua.
+11. **Autoanálise e Meus PRs,** com o merge pelo app. O PR da própria conta continua saindo como
+    comentário.
+12. **Sessão de terminal:** só existe a revisão headless, e a sessão de IA não posta por conta
+    própria.
+13. **Sincronização entre aparelhos,** em dois passos: primeiro a revisão e a postagem sem
+    coordenação, depois o resto. O dedup por head continua.
+14. **Várias contas:** uma instância, uma conta revisora (`config.conta`). Um `config.json` antigo é
+    lido sem erro e nunca deixa a conta mais permissiva do que era.
+15. **Estado e rotas em lista fechada:** as chaves do snapshot e as rotas da API são as do motor, e
+    só elas.
+16. **Guias reescritos** para o que existe (`CLAUDE.md`, `README.md`, `docs/`), o protocolo do
+    workspace sem a sessão de terminal, e um teste de boot com a pasta de dados vazia.
+
+### O que voltou ou entrou
+
+- **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em
+  `~/.farol/claude/<id>`, login pela própria tela e leitura do uso do plano e da validade do login.
+  O perfil por chave de API continua. Perfil de assinatura sem login não conta como pronto.
+- **A chave de API não sai do motor:** para fora o perfil leva só a informação de que tem chave.
+  Salvar sem redigitar mantém a guardada, e mudar o endereço do perfil exige a chave de novo.
+- **Avaliação técnica pela cópia da BIUD:** a ferramenta fixada vem de `biudtech/eng-behaviour`.
+- **Boot provado em máquina vazia:** o motor sobe sem `gh` logado, responde a API, não escreve fora
+  do HOME e sai com 0 no SIGTERM.
+
+### Para quem sobe uma instância
+
+- Uma instância nova, com a pasta de dados vazia e o `gh` logado, nasce revisando, aprovando e
+  reprovando sozinha. A receita para subir sem agir está em `docs/CONFIGURATION.md`.
+- Hospedada, a instância precisa de `"localAuth": "exigir"` no `config.json`.
 
 ## v2.80.1
 

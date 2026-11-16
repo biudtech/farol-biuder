@@ -1,34 +1,34 @@
 # Contrato de qualidade do Farol
 
-Diretriz de qualidade de código do Farol, extraída do `lovelace-eng/lace-be-fastify` (referência de backend em camadas) e adaptada ao stack do Farol (Node puro, zero dependências, sem framework). Leia junto com o `CLAUDE.md` (que manda nos invariantes do app). Este arquivo manda em COMO o código é organizado e verificado.
+Diretriz de qualidade de código do Farol, extraída de uma referência de backend em camadas e adaptada ao stack do Farol (Node puro, sem dependência npm de runtime, sem framework). Leia junto com o `CLAUDE.md` (que manda nos invariantes do app). Este arquivo manda em COMO o código é organizado e verificado.
 
 ## De onde vem
 
-O `lace-be-fastify` é um backend TS + Fastify + Prisma + Zod com uma arquitetura em camadas madura. O valor dele pro Farol não é o stack (que é o oposto do nosso), é o conjunto de princípios que tornam o código previsível e seguro de mudar. Abaixo separo o que transfere do que não transfere, pra não copiar cegamente.
+A referência é um backend TypeScript com framework HTTP, ORM e validação por schema, com uma arquitetura em camadas madura. O valor dela pro Farol não é o stack (que é o oposto do nosso), é o conjunto de princípios que tornam o código previsível e seguro de mudar. Abaixo separo o que transfere do que não transfere, pra não copiar cegamente.
 
 ## Princípios universais (valem pro Farol)
 
-1. **Responsabilidade única por unidade.** Cada função e cada módulo faz UMA coisa. No lace isso aparece como `route` (fiação) / `resolver` (adapter) / `policy` (regra) / `selector`+`recorder` (dados), cada arquivo com um papel. No Farol a tradução é: nada de função que busca no gh, decide, formata e posta tudo junto; cada passo é uma unidade nomeada.
+1. **Responsabilidade única por unidade.** Cada função e cada módulo faz UMA coisa: fiação, adapter, regra e acesso a dados, cada um no seu arquivo. No Farol a tradução é: nada de função que busca no gh, decide, formata e posta tudo junto; cada passo é uma unidade nomeada.
 
-2. **Separação de camadas.** O fluxo tem estágios distintos e a dependência aponta numa direção só: composição (quem liga as peças) → adapter (fala com o mundo: gh, http, claude) → domínio (a regra: gate de aprovação, política por conta) → dados (ler/gravar estado em disco). A camada de baixo não conhece a de cima.
+2. **Separação de camadas.** O fluxo tem estágios distintos e a dependência aponta numa direção só: composição (quem liga as peças) → adapter (fala com o mundo: gh, http, claude) → domínio (a regra: gate de aprovação, política da conta) → dados (ler/gravar estado em disco). A camada de baixo não conhece a de cima.
 
-3. **Estrutura consistente e previsível.** Coisas parecidas têm a mesma forma. Se `parseAccounts`, `parseProjectReviewers` e `parseDefaultReviewers` fazem o mesmo tipo de trabalho, elas moram juntas e seguem o mesmo formato de entrada/saída.
+3. **Estrutura consistente e previsível.** Coisas parecidas têm a mesma forma. Normalizadores de config moram juntos em `lib/parse.js` e seguem o mesmo formato de entrada e saída.
 
-4. **Erros tipados e centralizados.** O lace usa `AppError(mensagem, code, statusCode)` e um handler central. No Farol: erros de operação com causa clara (rede, limite de sessão, binário do claude ausente) são classificados num ponto só, não com `catch` improvisado espalhado. O `farol.log` (invariante 3: só falhas) é o ponto central.
+4. **Erros tipados e centralizados.** Erros de operação com causa clara (rede, limite de sessão, binário do claude ausente) são classificados num ponto só, não com `catch` improvisado espalhado. A classificação de falha mora em `lib/log-taxonomy.js`, e o `farol.log` (invariante 3: só falhas) é o ponto central.
 
-5. **Gate automático, não manual.** O lace roda `lint + format + test` em todo commit (husky + lint-staged). O Farol não tem husky (seria dependência, viola o invariante 1), mas tem o equivalente possível dentro do zero-deps: `npm run check` (`node --check` em todo `.js`) + `npm run lint` (catraca de qualidade + higiene) + `npm test` (runner nativo `node --test`, ZERO dependências). Rodar isso é obrigatório antes de qualquer entrega, e é a rede que protege a decomposição em ondas. Desde 17/08/2026 a mesma trinca roda no **CI** (`.github/workflows/ci.yml`) em todo push na `main` e em todo PR, numa matriz **Linux + Windows + macOS**. O macOS na matriz não é enfeite: o suporte a Mac foi construído sem um Mac de teste, então o CI é a única validação contínua de que o caminho POSIX não quebrou. O job agregador `ci` é o status check exigido pela proteção da `main`, o que permite mexer na matriz sem reconfigurar a regra.
+5. **Gate automático, não manual.** O Farol não usa ferramenta de hook por pacote (seria dependência, viola o invariante 1), mas tem o equivalente dentro do zero-deps: `npm run check` (`node --check` em todo `.js`) + `npm run lint` (catraca de qualidade + higiene) + `npm test` (runner nativo `node --test`). Rodar isso é obrigatório antes de qualquer entrega, e é a rede que protege a decomposição em ondas. A mesma trinca roda no **CI** (`.github/workflows/ci.yml`) em todo push na `main` e em todo PR para a `main`, em `ubuntu-latest` com Node 24.22.1, que é a plataforma do motor. O job agregador `ci` é o status check exigido pela proteção da `main`, o que permite mexer no job `gate` sem reconfigurar a regra.
 
-6. **Testabilidade por construção.** O lace separa `app` (fábrica) de `server` (listener) pra testar sem subir HTTP. O Farol já expõe `Engine` e as funções puras via `module.exports`, e o `require` não tem efeito colateral (só `new Engine()` toca disco). Isso é o que torna o teste possível: preservar essa propriedade é regra (nunca fazer trabalho no top-level do módulo).
+6. **Testabilidade por construção.** O servidor HTTP é separado da `Engine`, e o `server.js` só sobe quando executado direto (`executadoDireto`, em `lib/paths.js`). Importar o `server.js` ou um módulo de `lib/` não tem efeito colateral (só `new Engine()` toca disco). Isso é o que torna o teste possível: preservar essa propriedade é regra (nunca fazer trabalho no top-level do módulo).
 
 ## O que NÃO transfere (não force no Farol)
 
-Estes são específicos do stack do lace e violariam os invariantes do Farol (ver `CLAUDE.md`, invariante 1: zero dependências além do Electron):
+Estes são específicos do stack da referência e violariam os invariantes do Farol (ver `CLAUDE.md`, invariante 1: o motor roda em Node puro, sem dependência npm de runtime):
 
-- **Fastify, plugins, ciclo de request/response.** O Farol tem um `http.createServer` mínimo, de propósito.
-- **Prisma / selectors+recorders sobre banco.** O estado do Farol é arquivo em `~/.farol`, não banco. A ideia de "acesso a dados isolado" transfere; o Prisma não.
-- **Zod / schema-first / tipos derivados.** Não há TS nem build. Validação continua sendo função pura de normalização (`parse*`).
-- **Vertical slices por feature (route/resolver/policy/schemas).** Estrutura boa pra HTTP REST; o Farol é um engine de polling + orquestração, a decomposição natural é por RESPONSABILIDADE (gh, review, decisão, chat, update), não por rota.
-- **argon2 / jose / helmet / rate-limit.** O Farol não autentica ninguém nem expõe superfície pública; roda em `127.0.0.1`.
+- **Framework HTTP, plugins, ciclo de request/response.** O Farol tem um `http.createServer` mínimo, de propósito.
+- **ORM sobre banco.** O estado do Farol é arquivo em `~/.farol`, não banco. A ideia de "acesso a dados isolado" transfere; o ORM não.
+- **Schema-first e tipos derivados.** Não há TypeScript nem build. Validação continua sendo função pura de normalização (`parse*`).
+- **Fatias verticais por rota.** Estrutura boa pra HTTP REST; o Farol é um engine de polling + orquestração, e a decomposição natural é por RESPONSABILIDADE (gh, review, decisão, sessão), não por rota.
+- **Bibliotecas de autenticação e rate-limit.** A API local do Farol escuta em `127.0.0.1` por padrão; a autenticação dela é a de `lib/local-auth/`, em Node puro.
 
 ## Como o Farol aplica isso (plano em ondas)
 
@@ -36,213 +36,61 @@ O débito original era o `server.js`: uma classe `Engine` de 3122 linhas fazendo
 
 - **Onda 0 (feita):** este contrato + a rede (`npm test`, `npm run check`), baseline verde.
 - **Onda 1 (feita):** funções puras sem estado pra `lib/` (`format`, `io`, `parse`, `taxonomy`), com teste.
-- **Onda 2 (feita):** camadas base `lib/paths.js` (versão/plataforma/caminhos), `lib/workspace.js` (leitura dos artefatos do workspace) e `lib/http-server.js` (adapter HTTP+SSE), e a `Engine` separada por responsabilidade em `lib/engine/` (colaboradores que recebem o `engine` como ctx; a `Engine` mantém fachadas finas que delegam): `update`, `chat`, `tools`, `pushback`, `decision`, `gh-queries`, `session`, `selfpr` (Meus PRs), `review` (pipeline headless + gate). O `server.js` caiu de 3122 pra ~905 linhas; o que ficou na `Engine` é o núcleo legítimo (composição, ciclo de vida, contas/política, polling, settings/snapshot).
-- **Onda 3 (feita):** cobertura e gate. Sete módulos de produção estavam sem nenhum teste, incluindo o `selfpr.js` (que mergeia PR no GitHub) e o `pushback.js` (cujo teste era uma cópia manual do gate, ou seja, testava o teste). O `npm run check` validava três arquivos escolhidos a dedo e ignorava os 19 de `lib/`. Corrigido: `tools/check-syntax.js` descobre todo `.js` do projeto, e `test/facades.test.js` deriva do fonte a aridade esperada de cada fachada, no lugar de uma tabela curada de 6.
-- **Onda 4 (feita, e depois migrada pra ESM):** o `ui/app.js` não tinha **nenhum** teste, porque é um script de navegador que toca `document` no top-level (o que também viola o princípio 6). As **26 funções puras** saíram para `ui/pure.js`. Na migração ESM (fase 13, ver abaixo), o truque de carga dupla (`<script src>` antes do `app.js` no navegador + rodapé CommonJS pro `node --test`) morreu: `ui/pure.js` usa `export function`/`export const` nativo, `ui/index.html` carrega um `<script type="module" src="app.js">` só (que importa `pure.js` por cima), e o `node --test` importa o mesmo arquivo (`import * as P from '../ui/pure.js'` ou `await import()` quando precisa vir depois de fixar `process.env` como `TZ`).
+- **Onda 2 (feita):** camadas base `lib/paths.js` (versão, plataforma, caminhos), `lib/workspace.js` (leitura dos artefatos do workspace) e `lib/http-server.js` (adapter HTTP+SSE), e a `Engine` separada por responsabilidade em `lib/engine/` (colaboradores que recebem o `engine` como ctx; a `Engine` mantém fachadas finas que delegam), como `pushback`, `decision`, `gh-queries`, `session` e `review` (pipeline headless + gate). O que ficou na `Engine` é o núcleo legítimo (composição, ciclo de vida, política da conta, polling, settings e snapshot).
+- **Onda 3 (feita):** cobertura e gate. Havia módulos de produção sem nenhum teste, e o teste do `pushback.js` era uma cópia manual do gate, ou seja, testava o teste. O `npm run check` validava três arquivos escolhidos a dedo e ignorava os de `lib/`. Corrigido: `tools/check-syntax.js` descobre todo `.js` do projeto, e `test/facades.test.js` deriva do fonte a aridade esperada de cada fachada, no lugar de uma tabela curada.
+- **Onda 4 (feita, e depois migrada pra ESM):** o `ui/app.js` não tinha **nenhum** teste, porque é um script de navegador que toca `document` no top-level (o que também viola o princípio 6). As funções puras saíram para `ui/pure.js`, que usa `export` nativo; `ui/index.html` carrega um `<script type="module">` só, e o `node --test` importa o mesmo arquivo (`import * as P from '../ui/pure.js'`, ou `await import()` quando precisa vir depois de fixar `process.env`, como `TZ`).
 
-  Entrou junto o único ajuste de forma: `fmtRel` e `usageDayKeysBack` ganharam um parâmetro `agora = Date.now()`. Todos os chamadores passam um argumento só e nenhum é passado por referência a `.map` (conferido um a um), então nada mudou para eles, e o teste virou determinístico em vez de depender do relógio.
+  **Regra do arquivo puro:** só entra o que for puro. Função que precise de estado global ou de `document` fica nas telas; para trazer, primeiro passe o que ela lê como parâmetro.
 
-  **Regra do arquivo novo:** só entra o que for puro. Função que precise de `STATE`, `SCOPE` ou `document` fica no `app.js`; para trazer, primeiro passe o que ela lê como parâmetro.
+- **Onda 5 (feita em passos, de 17/08 a 16/09/2026):** o render, o estado e a fiação que sobravam no `ui/app.js` foram saindo aos poucos. Hoje o `ui/pure.js` é só uma fachada que reexporta os módulos de `ui/pure/` (um por assunto, em camadas sem ciclo; contrato em `ui/pure/README.md`), e o `ui/app.js` é o bootstrap da página: liga o SSE ao estado, comanda a troca de aba e o `data-goto` e inicializa as telas, que moram em `ui/telas/` e se registram em `ui/telas/registro.js` (contrato em `ui/telas/README.md`).
 
-- **Onda 5 (em andamento, o débito atual):** o que sobrou no `ui/app.js` são ~4000 linhas de render, estado, atalhos, paleta de comandos, busca e SSE, ainda sem teste que o execute.
+  O que os passos ensinaram, e vale pra qualquer extração:
 
-  **Primeiro passo, feito em 17/08/2026:** as sete funções que o texto anterior mapeava saíram. `buildFixPrompt` e `pushbackControl` já tinham ido antes; as cinco restantes foram na mesma leva, e não como cinco casos soltos: `personOf` era a única leitura de global de todo o grupo de perfil, então com `people` no argumento os cinco (`personOf`, `papelOf`, `domLevelOf`, `papelPicker`, `domainMatrix`) viraram puros de uma vez, junto das três tabelas de opções. `reviewerLabel`/`chipHtml` foram juntas (uma chama a outra, ambas liam `reviewerCands`) e `chatBadge` levou `chats`. São 8 funções e ~36 linhas. Os pontos de chamada são **13 no `app.js`** mais 5 internos ao `pure.js` (`personOf` por `papelOf`/`domLevelOf`, `papelOf` por `papelPicker`, `domLevelOf` por `domainMatrix`, `reviewerLabel` por `chipHtml`): 18 no total. O número que circulou antes (19) contava a linha da própria definição como chamador.
-
-  Duas coisas que a extração trouxe de brinde. A primeira: as tabelas de opções **duplicam** as chaves de `lib/taxonomy.js`, e a duplicação é estrutural (o servidor estático só entrega `UI_DIR`, então o navegador não importa `lib/`). Ninguém defendia isso, então chave nova no engine sumiria da UI em silêncio; `test/taxonomy-ui.test.js` passou a comparar os **conjuntos de chaves**, deixando os rótulos livres de propósito (a UI abrevia pra caber no `<select>`). A segunda: o `chipHtml` carregava dois ternários no mesmo statement, o que fez o `ternarioAninhado` do `ui/pure.js` subir ao receber a função; foi corrigido na mudança em vez de re-baselinado, então a dívida líquida **caiu** (`ui/app.js` foi de 57 pra 56 e o `ui/pure.js` não subiu).
-
-  **Como se provou que foi movimentação e não reescrita:** as funções antigas foram reconstruídas do `git show main:ui/app.js`, com os globais injetados, e comparadas com as novas em 27 entradas (login vazio, caixa alta, pessoa inexistente, tentativa de XSS, time desconhecido, time enterprise, chat com contagem zero e sem chat). **Zero divergências** na saída.
-
-  **Segundo passo, no mesmo dia:** o bloco da aba **Consumo** (`fmtMoney`,
-  `fmtUsageMetric`, `usageColorsFor`, `usageTooltipHtml` e os quatro construtores
-  `usageKpisHtml`/`usageMatrixHtml`/`usageBudgetHtml`/`usageSessionsHtml`, mais as duas
-  tabelas de cor). São ~175 linhas, e o bloco **já era puro**: não lia global nenhuma, só
-  montava string a partir do resumo que o engine manda. O que o prendia no `app.js` era a
-  forma, não o conteúdo: cada função terminava atribuindo em `el.innerHTML`, então parecia
-  render de DOM. Separado o build da atribuição, o `app.js` fica com
-  `el.innerHTML = xHtml(...)`. O `usageMatrixHtml` devolve `{ html, caption }` porque a
-  versão antiga escrevia em dois lugares. Fica de fora o `drawUsageTimeline`, que mede
-  `clientWidth` e ata listener, ou seja, precisa do elemento de verdade.
-
-  Três coisas que este passo ensinou, e que valem pros próximos:
-
-  1. **Mover pode quebrar sem que nada acuse.** Deixei `USAGE_KIND_COLOR` e
-     `USAGE_PALETTE` pra trás no `app.js`, e três funções passaram a referenciar constante
-     inexistente. `node --check` passa (é erro de runtime) e `npm test` passava (nada
-     executava o código recém-chegado). Quem denunciou foi a comparação com o original.
-     A lição virou teste: o primeiro caso do bloco novo só **executa** cada construtor.
-  2. **O ratchet reclama de mudança de casa.** Os 4 ternários aninhados que vieram junto
-     fizeram o `pure.js` subir de 16 pra 20 enquanto o `app.js` caía de 56 pra 52, soma
-     idêntica. Reescrevi os quatro em vez de re-baselinar, e aí a dívida caiu de verdade:
-     72 → 68 nos dois arquivos somados.
-  3. **Asserção de texto sobre o `app.js` fica cega quando o código sai dele.** O teste de
-     acessibilidade contava `data-goto` só no `app.js` e no HTML, e reprovou por piso
-     (6 → 5) sem que nenhuma menção tivesse perdido `role`. Hoje o `pure.js` tem **mais**
-     emissores que o `app.js` (5 contra 3), então a varredura passou a incluí-lo: o teste
-     ficou mais forte, não só verde.
-
-  **Terceiro passo, ainda no mesmo dia:** o **editor de reviewers** (`defaultFor`,
-  `overrideFor`, `reposOfOrg`, `suggestDefault`, `addControl` e o `renderOrgBlock`, que
-  compõe todos). Diferente dos dois anteriores, aqui não bastava um parâmetro: as funções
-  liam **sete globais** entre config, candidatos e três Sets de estado de tela. Todas só
-  **leem** (quem muta os Sets são os handlers, que ficaram no `app.js`), então entra um
-  `ctx` único, montado uma vez por renderização (`revCtx`) — mesmo motivo do `peopleOf`.
-
-  A extração foi **de baixo pra cima**: primeiro as folhas, e só então o compositor.
-  Tentar o `renderOrgBlock` antes arrastaria as folhas impuras junto. Ficaram de fora o
-  `seedException` (muta os Sets e persiste via API) e o `renderReviewersEditor` (escreve
-  no DOM).
-
-  A comparação com o original cobriu 32 combinações de estado (exceção aberta, pendente,
-  org expandida, candidatos carregados ou não) contra 4 orgs e 4 repos: **768 comparações,
-  zero divergências**. Ela pegou dois erros meus antes do commit — `ctx` usado sem ser
-  declarado no `seedException`, e três chamadas de `addControl` que ficaram sem receber o
-  `ctx`. Os dois são `ReferenceError`/`TypeError` de runtime: `node --check` passa e a
-  suíte passava, porque nada executava o caminho novo.
-
-  Um achado de comportamento ficou registrado em teste em vez de corrigido: o
-  `suggestDefault` usa limiar `ceil(n/2)`, então com **exatamente duas** exceções o limiar
-  vira 1 e qualquer reviewer que apareça numa delas é sugerido. É surpreendente ao ler o
-  nome da função, mas mudar seria decisão de produto, não refactor.
-
-  **Quarto passo:** os dois maiores construtores de card do Radar (`queueCardHtml`,
-  `panoramaRowHtml`) e o `reviewChip`, 93 linhas. O `acctMark` **ficou** no `app.js` e o
-  ctx recebe o resultado dele: ele depende de `SCOPE`, `TWEAK` e da tabela de contas, uma
-  cadeia que não tem a ver com desenhar o card, e puxá-la junto arrastaria meio painel de
-  contas sem ganho de teste.
-
-  Este foi o primeiro passo a **esbarrar de verdade** no obstáculo previsto: o teste
-  "Panorama: o autor fica FORA da caixa que trunca o título" era regex sobre o texto do
-  `app.js`, e reprovou quando o markup mudou de arquivo. A resposta não foi repontar o
-  regex pro `pure.js`, e sim **migrar a asserção pra teste real** — agora ele renderiza um
-  título de 300 caracteres e verifica a estrutura, que é o que o regex tentava aproximar.
-  Provado por mutação: reintroduzir o defeito de 11/08 (menção do autor dentro da caixa
-  que trunca) faz o teste novo reprovar. A metade de CSS ficou no `ui-widgets`, porque
-  `app.css` não é executável. **É o caminho pros próximos passos**: cada extração que
-  cruzar uma asserção de texto migra ela junto, e o teste sai mais forte do que entrou.
-
-  O `panoramaRowHtml` trouxe **duas** globais declaradas dentro do `renderPanorama`
-  (`runningKeys`, `waitingKeys`) que o regex de conversão não pegou — de novo achadas pela
-  comparação, não pelos gates. E carregava as cadeias de ternário mais densas do arquivo
-  (o rótulo do estado, o botão, o tooltip com quatro motivos): nomeadas uma a uma, o
-  `app.js` caiu de 51 pra 46 e a dívida somada de 67 pra 62.
-
-  **Quinto passo:** o painel **Sistema** (`claudeAuthBadge`, `claudeProfilesHtml`,
-  `accountsManagerHtml`), 199 linhas. Dois pedaços ficaram no `app.js` de propósito,
-  porque são DOM e não markup: o guarda de foco (não reconstruir enquanto a pessoa
-  digita num campo do bloco) e o `hint.hidden` do fim dos perfis, que o listener do
-  seletor desfaz.
-
-  Este passo rendeu a lição mais útil sobre o **ratchet de ternário**, e ela custou
-  caro: eu passei a maior parte do tempo caçando falso positivo. O gate conta `?` por
-  statement **depois de remover comentários e strings** (`strip`, em `rules.js`), coisa
-  que eu só fui verificar depois de reescrever comentários e trocar um `'?'` de texto
-  da UI por outra palavra. Essa troca chegou a mudar texto visível, e a comparação não
-  pegou porque os fixtures não cobriam aquele ramo. **Antes de perseguir o número, leia
-  como ele é medido, e bisecte com o scanner de verdade** (`scanFile(source, relPath)`)
-  em vez de reimplementar a fórmula.
-
-  O que de fato reduziu a dívida foi tratar repetição, não espremer expressão: um
-  helper `sel(cond)` eliminou onze `? ' selected' : ''` idênticos, e a barra de ações
-  virou um nome em vez de um bloco inteiro no meio do markup. `app.js` foi de 46 pra 42
-  e o `pure.js` voltou pra baseline; a soma caiu de 62 pra 58.
-
-  **Sexto passo:** o banner do topo (`statusBannerHtml`) e o vazio da fila
-  (`queueEmptyOkHtml`), mais a limpeza de **17 imports mortos** que os passos 2 a 5
-  tinham deixado para trás.
-
-  Este passo foi planejado por uma rodada de análise em paralelo (dez candidatos, cada
-  plano passando por dois céticos independentes: um procurando furo no plano, outro só
-  no eixo do gate). Valeu por três coisas que eu não teria achado sozinho:
-
-  1. **Import morto não quebra nada e por isso apodrece.** Um cético apontou o risco
-     antes de eu cometer o próximo; ao medir, havia **17** já acumulados, todos meus.
-     Símbolo importado do `pure.js` que ninguém mais usa passa por `node --check`, pelo
-     lint, pela suíte e pelo CI. Virou guarda em `test/app-carrega.test.js`.
-  2. **Extrair para função NÃO reduz o ratchet; só nomear em `const` reduz.** O
-     `rules.js` conta `?` por trecho separado por `;` no arquivo inteiro, então cada
-     hoist precisa ser statement próprio. Foi por isso que o banner saiu com `if`
-     planos em vez de ternário encadeado: medido, a escada subiria o `pure.js` de 16
-     para 17, e o arquivo tem folga ZERO nesse eixo.
-  3. **Um candidato foi descartado com razão.** O `cmdStatic` não tem parte pura com
-     ganho real, e saber isso vale tanto quanto extrair.
-
-  O banner saiu **sem `?.`** de propósito: snapshot sem `account` tem que explodir
-  alto, como explode hoje, em vez de virar silenciosamente "Nenhuma conta detectada" e
-  mentir para quem está olhando.
-
-  **Sétimo passo:** o **diagnóstico** (`diagnosticsText`) e o **cartão da sessão ao
-  vivo** (`sessionCardHtml`).
-
-  O diagnóstico é o único texto do Farol que alguém lê **fora** do Farol: a pessoa
-  clica em "gerar diagnóstico", cola no chat e espera socorro. Estava sem um único
-  teste. Agora tem dez, e um deles é o que faltava — o relatório **promete** no rodapé
-  que não contém tokens nem senhas, e nada garantia isso. O teste planta token, senha e
-  cabeçalho de autorização no estado e exige que nenhum apareça na saída. Provado por
-  mutação: um `JSON.stringify(config)` no relatório faz o teste falhar.
-
-  A extração custou trabalho extra por causa do ratchet. `buildDiagnostics` era um
-  `return [...]` gigante com uma dúzia de ternários dentro de template literals — um
-  único statement, portanto uma única contagem no `app.js`, mas que estouraria o
-  `pure.js` (folga zero). Cada ternário virou seu próprio `const`, o que baixou a soma
-  em 2 em vez de subir.
-
-  **As duas asserções fixadas migraram, e a migração é a parte que interessa.** O
-  `ui-widgets.test.js` casava regex contra o corpo de `buildDiagnostics` (`indexOf('  Resumo:')
-  < indexOf('Detalhe')`) e contra a marcação do cartão (`class="session-stage" data-started=`,
-  metade do guarda de B13). Regex contra o fonte quebra quando o código se move mesmo
-  sem mudar de comportamento — foi o que aconteceu. Cada uma virou teste de **saída** em
-  `ui-pure.test.js`; do lado do `app.js` sobrou só a metade que de fato mora lá (de onde
-  vem o dado, quem envelhece o rótulo), com comentário dizendo para onde foi a outra.
-
-  **O que vem depois, e o obstáculo real:** a separação entre render e estado. O `app.js` tem **25 globais mutáveis** espalhados e nenhuma função de boot (tudo é efeito de topo, em ordem de arquivo), então o corte não é mecânico. E há um risco a respeitar: `test/ui-widgets.test.js` fixa **22 corpos de função inteiros** por regex sobre o texto do `app.js`, e mover qualquer um deles faz o `match` devolver `null`. Nenhum dos chamadores deste primeiro passo caía dentro dessas 22 (foi conferido antes de mexer); do próximo em diante, cada extração precisa vir junto com a migração da asserção de texto pra teste real em `pure.js`, que é a direção que o cabeçalho daquele arquivo já defende.
+  1. **Mover pode quebrar sem que nada acuse.** Uma constante deixada pra trás vira `ReferenceError` de runtime: `node --check` passa e a suíte passa se nada executa o código recém-chegado. Quem denuncia é comparar a saída da função antiga (reconstruída do `git show main:<arquivo>`, com os globais injetados) com a da nova, em várias entradas. O primeiro teste de um bloco movido só **executa** cada função.
+  2. **Extraia de baixo pra cima.** Primeiro as folhas, só então o compositor; tentar o compositor antes arrasta as folhas impuras junto.
+  3. **Asserção de texto sobre um arquivo fica cega quando o código sai dele.** Regex contra o fonte quebra quando o código se move sem mudar de comportamento. A resposta não é repontar o regex, é **migrar a asserção pra teste de saída**, e provar por mutação que o teste novo reprova o defeito antigo.
+  4. **Import morto não quebra nada e por isso apodrece.** Símbolo importado que ninguém usa passa por `node --check`, pelo lint, pela suíte e pelo CI. A guarda mora em `test/app-carrega.test.js`.
+  5. **O ratchet reclama de mudança de casa, e extrair para função não reduz a contagem.** O `ternarioAninhado` conta `?` por trecho separado por `;` no arquivo inteiro, depois de remover comentários e strings (`strip.js`). Mover ternário de arquivo só troca a dívida de lugar; o que reduz é nomear em `const` próprio ou tratar repetição com um helper. **Antes de perseguir o número, leia como ele é medido, e bisecte com o scanner de verdade** (`scanFile(source, relPath)`, em `tools/quality/rules.js`) em vez de reimplementar a fórmula.
+  6. **Achado de comportamento num refactor fica registrado em teste, não corrigido.** Mudar comportamento é decisão de produto, não refactor.
 
 ### Números de hoje (mantenha esta linha viva)
 
-| Arquivo | Linhas | Testes |
+| Arquivo | Linhas no arquivo | Linhas úteis (`maxLines`) |
 |---|---|---|
-| `ui/app.js` | 418 (bootstrap, depois da Fase 1b) | nenhum que o execute (os 5 que o tocam leem o arquivo como texto) |
-| `ui/pure.js` e `ui/pure/` | fachada de 37 linhas; 31 módulos, o maior (`compartilhado.js`) com 385 linhas úteis | `ui-pure.test.js` e `ui-pure-superficie.test.js` (atualizado em 15/09/2026, Fase 1a) |
-| `server.js` | 2326 no arquivo, **1388 úteis** | via `boot`, `facades`, e os testes de comportamento |
-| maior módulo de `lib/` (`review.js`) | 2343 no arquivo, **1330 úteis** | `review-*.test.js` e os testes de gate |
-| suíte | | 1415 testes (1408 passando, 7 pulados fora do macOS) |
+| `server.js` | 1522 | 871 |
+| `lib/engine/review.js` (maior módulo de `lib/`) | 1484 | 851 |
+| `lib/engine/decision.js` | 898 | 562 |
+| `ui/app.js` | 429 | dentro do teto |
 
-Os cinco que leem o `ui/app.js` do disco: `ui-widgets` (fixa 22 corpos de função por
-regex), `ui-contract` (extrai as rotas `/api/*` e cruza com o `http-server.js`),
-`ui-semantics` (varre texto proibido), `ui-pure` (compara `app.js` com `pure.js`) e
-`release-consistency`, que é o único que não olha código: lê só o banner `RELEASE_NOTES`.
+Mais: `ui/pure/` tem 28 módulos `.js` e a fachada `ui/pure.js` tem 26 linhas; `ui/telas/` tem 37 módulos; a suíte tem 374 arquivos `test/*.test.js`.
 
-Medidos em 22/09/2026, na v2.62.10 (os anteriores eram de 17/08/2026, v2.48.0). O
-`ui/app.js` encolheu de verdade na Fase 1b, mas o `server.js` fez o caminho contrário: a
-Onda 2 o tinha deixado em ~905 linhas e ele voltou a 2326, o que é a dívida aberta de
-decomposição, agora travada contra novo crescimento pelo `maxLines` (ver
-"Por que o `maxLines` conta linhas, e não arquivos").
+Medidos em 15/11/2026, no commit `c16cb47c` (versão `3.0.0-dev`): linhas no arquivo por `wc -l`; linhas úteis por `scanFile` de `tools/quality/rules.js` (linhas não vazias depois de tirar comentários e strings), e os três arquivos da tabela são os únicos acima do teto de 400 segundo o `scanRepo` de `tools/quality/gate.js`; módulos por `git ls-files 'ui/pure/*.js' | wc -l` e `git ls-files 'ui/telas/*.js' | wc -l`; testes por `git ls-files 'test/*.test.js' | wc -l`.
 
-Quem mexer aqui e deixar esses números defasados repete o problema que esta seção teve: o documento afirmava "~2600 linhas com ~120 métodos" muito depois de o `server.js` ter caído para mil.
+Quem mexer aqui e deixar esses números defasados repete o problema que esta seção já teve: o documento afirmava "~2600 linhas com ~120 métodos" muito depois de o `server.js` ter caído para mil. Número que não foi medido de novo sai, em vez de ficar.
 
 Padrão do colaborador: funções `(engine, ...args)`, todo `this.` vira `engine.`, e a `Engine` ganha um método-fachada `x(a) { return mod.x(this, a); }`. Assim nenhum chamador muda e o comportamento é idêntico.
 
-Regra de cada onda: extrai um pedaço → `grep this.` no módulo novo deve dar zero → `npm run check && npm test` verde → só então segue. Sem regressão; refactor é movimentação, não reescrita.
+Regra de cada onda: extrai um pedaço → `grep this.` no módulo novo deve dar zero → `npm run check && npm run lint && npm test` verde → só então segue. Sem regressão; refactor é movimentação, não reescrita.
 
 ## O ui/app.js virou executável em teste (18/08/2026)
 
-A onda 5 sempre carregou um custo declarado: **nenhum teste executa o `ui/app.js`**. Os
-arquivos que o "testam" leem o fonte como texto e casam regex, e num único dia isso
-deixou passar dois bugs, ambos com sintaxe válida e CI verde nos três sistemas:
+A onda 5 carregava um custo declarado: **nenhum teste executava o `ui/app.js`**. Os
+arquivos que o "testavam" liam o fonte como texto e casavam regex, e num único dia isso
+deixou passar dois bugs, ambos com sintaxe válida e CI verde:
 
 1. bloco de Consumo movido pro `pure.js` deixando `USAGE_KIND_COLOR` pra trás;
 2. um regex de conversão enfiando `ctxRev` **dentro** da string `'var(--accent)'`, o que
-   quebrou a tela de Reviewers inteira, em produção, por duas releases.
+   quebrou uma tela inteira, em produção, por duas releases.
 
 `jsdom` resolveria e está fora (invariante 1). Então entrou `test/helpers/dom-stub.js`:
-um DOM mínimo escrito à mão, deliberadamente burro, que existe pra **uma** pergunta —
+um DOM mínimo escrito à mão, deliberadamente burro, que existe pra **uma** pergunta:
 "carregar a tela e desenhar com um estado plausível levanta exceção?".
 
 O caminho exercitado é o mesmo do app real: o handler de `state` do SSE, que é o
-orquestrador de render (chama ~15 funções numa tacada). `test/app-carrega.test.js`
-dispara estados plausíveis nele: cheio, vazio, sem reviewers, com org órfã, com decisão
-pendente, e com as abas Sistema e Consumo **ativas** (esses dois ramos só desenham
-quando a aba está ativa, e foi assim que a primeira versão do teste deixou passar a
-mutação do Consumo).
+orquestrador de render. `test/app-carrega.test.js` dispara estados plausíveis nele,
+inclusive com as abas Sistema e Consumo **ativas** (esses ramos só desenham quando a
+aba está ativa, e foi assim que a primeira versão do teste deixou passar a mutação do
+Consumo).
 
 Provado por mutação: reintroduzir qualquer um dos dois bugs reprova o teste, e
 `node --check` continua passando nas duas versões corrompidas, que é o ponto.
@@ -251,17 +99,16 @@ Provado por mutação: reintroduzir qualquer um dos dois bugs reprova o teste, e
 cascata nem evento de verdade. Verde aqui não diz que a tela está certa, diz que ela
 não explode. Validar visual e clique continua sendo abrir o app.
 
-Nota de operação: o script de test ganhou `--test-force-exit`, porque carregar o
+Nota de operação: o script de test chegou a usar `--test-force-exit`, porque carregar o
 `app.js` liga os timers dele e o runner esperava o event loop drenar.
-Ele saiu em 13/11/2026: o encerramento forçado truncava o relatório de alguns arquivos
-(7059 testes relatados com ele, 7101 sem, nas duas rodadas, sem travar), e um teste que
-falhasse no trecho cortado não apareceria.
+Ele saiu em 13/11/2026: o encerramento forçado truncava o relatório de alguns arquivos,
+e um teste que falhasse no trecho cortado não apareceria.
 
 ## Achar trava sem guarda (auditoria de mutação)
 
 O gate diz se a suíte passa. Ele **não** diz se a suíte testa alguma coisa. A
-diferença apareceu em 17/08/2026, quando o repo passou a receber contribuição de mais
-gente e a pergunta virou "o que dá pra quebrar sem ninguém perceber?".
+diferença apareceu em 17/08/2026, quando a pergunta virou "o que dá pra quebrar sem
+ninguém perceber?".
 
 O método é bruto e funciona: **apaga a trava, roda a suíte inteira, vê se alguém
 reclama.** Zero falhas significa que aquela linha não tem dono.
@@ -273,14 +120,14 @@ todas com a mesma assinatura: um par onde uma metade tinha teste e a outra não.
 |---|---|---|
 | clique nunca auto-posta | 2 testes | **nenhum** |
 | cobertura incompleta | 8 testes | **nenhum** |
-| token da conta dona (não é par, é única) | — | **nenhum** |
+| token da conta dona (não é par, é única) | n/a | **nenhum** |
 
 As duas primeiras eram assimetria pura: o mesmo invariante, guardado de um lado e
 esquecido do outro, sendo que o comentário do código dizia que o lado desguardado era
 o *mais* grave ("reprovar com leitura parcial é pior ainda"). A terceira era a única
-coisa impedindo um review de sair assinado pela conta errada, o cenário A1.
+coisa impedindo um review de sair assinado pela conta errada.
 
-**A heurística que sobra disso, e que vale pra revisar contribuição de fora: assimetria
+**A heurística que sobra disso, e que vale pra revisar qualquer contribuição: assimetria
 é cheiro.** Quando um caminho novo faz diferente de um caminho velho equivalente, o
 velho quase sempre tem uma razão. Foi assim que os dois furos do reenvio apareceram
 também: `retryFailedPosts` e `decide()` fazem a mesma coisa (postar um payload decidido
@@ -296,157 +143,56 @@ existe, e o próximo a mexer ali não vai ter aviso nenhum.
 npm run check && npm run lint && npm test
 ```
 
-`check` = `tools/check-syntax.js`, que **descobre** todo `.js` do projeto (ESM nativo desde a migração da fase 13; o gate imprime quantos achou, e por isso o número não é escrito aqui) e valida a sintaxe rodando `node --check` por processo filho em cada um (`execFileSync`, sem `vm.Script`: `node --check` já entende ESM direto, então não precisa de wrapper nenhum). Era uma lista fixa de três arquivos, e por isso os 19 módulos de `lib/` ficavam de fora. `test` usa `tools/rodar-testes.js` para executar a rede completa no runner nativo do Node. Verde nos dois é pré-requisito de qualquer entrega.
+- `check` = `tools/check-syntax.js`, que **descobre** todo `.js` do projeto (ESM nativo; o gate imprime quantos achou, e por isso o número não é escrito aqui) e valida a sintaxe rodando `node --check` por processo filho em cada um.
+- `lint` = `tools/quality/gate.js` (o ratchet, ver abaixo) seguido de `tools/quality/higiene.js` (número de card em código só aparece na forma `TODO(BT-123)`; `docs/`, `workspace-template/` e `assets/` ficam fora).
+- `test` = `tools/rodar-testes.js`, que executa a rede completa no runner nativo do Node.
 
-A suíte executa até quatro arquivos em paralelo. Em máquina ocupada, `FAROL_TEST_CONCORRENCIA` aceita um inteiro de 1 a 4 para reduzir a disputa por recursos; casos, asserções, limites de tempo e código de saída continuam os mesmos. No PowerShell, por exemplo: `$env:FAROL_TEST_CONCORRENCIA = '1'; npm test`. A matriz de CI mantém o padrão de quatro arquivos.
+Os quatro scripts passam antes por `lib/node-runtime.js` (os `pre*` do `package.json`), que confere a versão do Node. Verde nos três é pré-requisito de qualquer entrega.
 
-Os dois testes estruturais da rede trazem **piso anti-vacuidade** (`facades.test.js` exige um mínimo de fachadas casadas, `check-syntax.js` um mínimo de arquivos encontrados): verificação dirigida por varredura que deixa de casar vira laço vazio e fica verde sem verificar nada, que é a pior falha possível num gate.
+A suíte executa até quatro arquivos em paralelo. Em máquina ocupada, `FAROL_TEST_CONCORRENCIA` aceita um inteiro de 1 a 4 para reduzir a disputa por recursos; casos, asserções, limites de tempo e código de saída continuam os mesmos. Por exemplo: `FAROL_TEST_CONCORRENCIA=1 npm test`. O CI usa o padrão de quatro arquivos.
 
-### Princípio 4 ainda não está implementado
+**Onde o gate roda.** No CI, como passos do job `gate`. E localmente no pre-push (`tools/hooks/pre-push`, instalado por `npm run hooks:install`, que grava `core.hooksPath` no clone): ele recusa push direto na `main` (o caminho é branch, PR, `ci` verde e merge) e depois roda `check`, `lint` e `test`, nessa ordem, parando no primeiro vermelho. O pre-push não substitui o CI: o que vale como plataforma é o Linux do CI.
 
-Não existe `AppError` nem classificação central de erro. Há dezenas de `catch` vazios espalhados, alguns com justificativa no comentário ("best-effort", "log nunca derruba o app") e a maioria sem. É a lacuna conhecida deste contrato, e o lugar certo de atacá-la é junto com a Onda 4, não antes.
+Os dois testes estruturais da rede trazem **piso anti-vacuidade** (`test/facades.test.js` exige um mínimo de fachadas casadas, `tools/check-syntax.js` um mínimo de arquivos encontrados): verificação dirigida por varredura que deixa de casar vira laço vazio e fica verde sem verificar nada, que é a pior falha possível num gate.
 
-## A constituição vem do eng-behaviour
+### Princípio 4 ainda não está completo
 
-A doutrina que este repositório assina é o [eng-behaviour](https://github.com/wandersonaadsantos/eng-behaviour). É a única, e não existe segunda doutrina valendo aqui.
+Não existe classe de erro de aplicação nem tratamento central de erro. A classificação de falha já é única (`lib/log-taxonomy.js`), mas há `catch` vazios espalhados, alguns com justificativa no comentário ("best-effort", "log nunca derruba o app") e outros sem. É a lacuna conhecida deste contrato; o `emptyCatch` do ratchet impede que ela cresça.
 
-O escopo aplicável está em `eng-behaviour.json` (`core`), o recorte das regras vive versionado em `eng-behaviour.rules.md`, e `npm run eng` roda os dois gates do pacote: `check`, que prova byte a byte que o recorte versionado é o que o catálogo gera hoje, e `audit`, que roda a regra hard aplicável e exige evidência de avaliação das de julgamento.
+## Gate de ratchet
 
-**Por que ele não está no CI.** Duas razões independentes, cada uma suficiente sozinha. O CI roda sem `npm install` de propósito (invariante 1, zero dependências além do Electron) e não alcança a CLI de um pacote que não é publicado em registro nenhum. E o `audit` lê `avaliacoes.jsonl`, que fica fora do controle de versão por decisão em aberto do próprio pacote: a identidade de uma avaliação é a regra mais o head, e commitar o registro dentro do repositório que ele avalia move esse head e invalida a avaliação recém-escrita. O runner não tem como ler um arquivo que não viaja no commit. Então o gate mora no pre-push, que é onde o Farol já põe o que o CI não alcança; como o pre-push também proíbe push direto na main, todo caminho até a main atravessa o gate.
+O gate de ratchet é o enforcement mecânico local do Farol, em Node puro (`tools/quality/`): compara as violações com `tools/quality/baseline.json` e reprova qualquer contagem que SUBA (arquivo novo com violação é subir de zero). Corrigiu dívida? `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão. Ele mede o código de produção: `test/`, `docs/`, `workspace-template/` e `assets/` ficam fora da varredura.
 
-**O custo, medido.** O escopo `core` seleciona 13 regras desde a v0.12.0 do pacote: 3 hard e 10 de julgamento (eram 10, com 2 hard e 8 de julgamento, na medição de 30/08/2026). `core.suppression.declared` examinou 176 arquivos de código com zero achado na medição de 30/08/2026, e o número acompanha o tamanho do repositório; `core.testing.e2e-without-mocks` não roda, porque não existe suíte de ponta a ponta declarada aqui e o pacote não adivinha qual diretório é. Restam **até 10 avaliações escritas por commit**, uma por regra de julgamento que a entrega aciona, cada uma com fundamentação própria sobre aquele diff. Um laço escrevendo a mesma frase em todas passa no gate sem avaliar nada, e é por isso que não existe script para gerá-las.
+As regras se dividem em três grupos, e vale saber em qual cada uma cai.
 
-**Estado em 30/08/2026: a metade de julgamento está BLOQUEADA por cima, no pacote.** A CLI subiu para a
-v0.4.0 e mudou duas coisas do contrato. A primeira o Farol já acompanhou: `audit` passou a exigir `--base`,
-porque sem ela não há entrega para auditar, só uma árvore, e sem esse argumento `npm run eng` saía 2 em
-qualquer clone, o que bloqueava TODO push (o gate mora no pre-push). `baseDaEntrega` resolve isso derivando
-do git, `origin/main` e `main` como degrau, e falhando fechado quando não acha nenhuma das duas.
+- **Fonte de verdade única**: `jsonParseCru`, `jsonStringifyCru`, `processEnvDireto`, `portaLiteral` e `tempoMagico`. Distinguir invariante compartilhado de coincidência de valor normalmente exige entender o domínio; aqui o domínio é conhecido e os santuários são nomeados no `rules.js`, então dá pra medir sem adivinhar.
+- **Forma do código**: `emptyCatch`, `varUse`, `ternarioAninhado`, `profundidadeExcedida`.
+- **Tamanho**: `maxLines` (400) mede tamanho de arquivo, que não é o critério certo de responsabilidade única. O contador fica como ratchet sobre dívida já medida, não como afirmação de que tamanho é o critério certo. Tirá-lo é decisão do dono; deixá-lo sem dizer isto seria a divergência ficar escondida.
 
-A segunda não dá para acompanhar daqui. A identidade de uma avaliação deixou de ser o head e passou a ser o
-`materialFingerprint` do que a regra observou (ADR-0012), e o registro v2 (ADR-0013) exige esse campo, mais
-`ruleVersion`, evidência apontando para dentro da worktree e confiança declarada. **A CLI calcula o
-fingerprint e não o imprime**: o relato do `audit` só escreve regra, tipo, veredito e motivo, sem saída
-JSON. Até 30/08/2026 isso parecia bloquear as 8 avaliações (terminavam `not-run`, exit 2) e o push saía com
-`--no-verify`.
-
-**Desde 03/09/2026 (PR #67) o gate passa sem `--no-verify`, pela API pública do pacote.** O fingerprint sai
-de `runAudit` (`dist/index.js` do eng-behaviour, `rules[].materialFingerprint`, mais `acionadores` e
-`contexto`), e `loadBundledCatalog` dá a `ruleVersion` (campo `since` da regra). Isso NÃO é recalcular o
-fingerprint a partir do fonte do pacote (que continua sendo a saída errada, por acoplar o Farol a um interno
-dele): é consumir o que o pacote expõe. O roteiro: rodar `runAudit` com `{ repositoryId: 'farol',
-base: 'origin/main', head: 'HEAD' }`, escrever `avaliacoes.jsonl` na raiz da worktree (uma linha por regra
-acionada, `schemaVersion: 2`, `repositoryId` = `farol` em qualquer checkout, porque o gate passa `--repo-id farol` desde a v0.12.0,
-`rule`, `ruleVersion`, `materialFingerprint`, `head`, `verdict`, `confidence` alta ou media, `evidence[]`
-apontando para arquivo que existe na worktree, `rationale`, `author`, `date`; o schema é estrito e campo extra
-reprova) e só então `npm run eng`. Commit novo muda o `head` e, se o material mudou, o fingerprint: as
-avaliações se escrevem no head final, depois das revisões, porque cada uma precisa de fundamentação própria
-sobre AQUELE diff. A saída definitiva continua sendo o pacote imprimir o fingerprint no próprio `audit`.
-
-### Qual eng-behaviour o gate usa (16/09/2026)
-
-O gate mede contra a versão que o Farol **adota**, e não contra "o que estiver" no clone ao
-lado. A identidade adotada fica em `tools/eng-behaviour/ferramenta.json`: pacote, versão
-(0.16.0 desde a noite de 18/09/2026, a mesma do `catalogVersion` do baseline), commit completo, origem e o comando de
-construção. O caso que motivou: o clone `../eng-behaviour`, onde o pacote é desenvolvido,
-estava com a 0.13.0 em andamento e sem commit, com o `dist/` reconstruído a partir dela.
-
-A CLI é procurada, nesta ordem, em `FAROL_ENG_BEHAVIOUR_HOME` (quando definida, vale
-sozinha), em `../eng-behaviour@<versão>` e em `../eng-behaviour`. Qualquer que seja o caminho,
-o gate só roda se as quatro provas passarem. Com qualquer falha, sai 2 e diz qual foi:
-- a versão do `package.json` é a adotada;
-- o checkout é um repositório git próprio, no commit adotado;
-- não há alteração local em arquivo versionado;
-- `dist/.farol-construido-de` traz o mesmo commit, porque `dist/` não é versionado.
-
-A cópia fixada se monta com:
-
-```
-node tools/eng-behaviour/preparar-copia.js [--origem <url ou caminho>] [--destino <caminho>]
-```
-
-Ela clona (lendo, sem tocar no clone de desenvolvimento), faz checkout do commit, roda os
-passos de `construcao` e grava o carimbo. Nunca apaga nada, e um destino que já existe só é
-aceito se já for a cópia certa. A troca de versão continua sendo a entrega que regenera o
-recorte e migra o baseline; ela passa a incluir também este arquivo.
-
-### Dívida registrada de responsabilidade única (v0.12.0 do pacote, 15/09/2026)
-
-Até a v0.12.0, `core.file.single-responsibility` só tinha duas respostas para arquivo que já violava a regra antes da entrega: `violacao`, que reprovava a entrega que não causou a dívida, ou `conforme`. O Farol escolheu a segunda sete vezes sobre o `ui/app.js`, com a tensão escrita só na fundamentação, e foi essa medição que virou a ADR-0015 do eng-behaviour. Desde a v0.12.0 a dívida anterior de uma regra de julgamento mora num baseline finito, com contagem e condição de fechamento, e o gate passa `--baselines tools/eng-behaviour/baselines.json` e `--repo-id farol` (a identidade fixa é o que faz o baseline valer também dentro de uma worktree).
-
-Em 17/09/2026 o baseline foi migrado para o catálogo 0.13.0. A migração é só de versão: a 0.13.0 acrescentou três regras de `frontend`, e o escopo `core` que o Farol declara não mudou, então a lista e a contagem seguem as mesmas.
-
-Em 18/09/2026 o baseline foi migrado para o catálogo 0.15.0, de novo só de versão. A 0.14.0 trocou `frontend.design-system.one-component-per-file` por `frontend.component.one-component-per-file` e acrescentou `frontend.design-system.storybook-single-subject`; a 0.15.0 acrescentou `frontend.component.named-structural-branches`. As três são de `frontend`, nenhuma regra de `core` mudou, e o `check` confirmou o recorte versionado byte a byte sem regenerar. O baseline não tinha entrada do id removido, então não houve assinatura a migrar. Na mesma noite ele foi para o 0.16.0, que acrescenta só `frontend.component.scalable-units` (pixel escalável em componente React), também de `frontend`: de novo nada muda no escopo `core` que o Farol declara.
-
-A lista inicial saiu de uma avaliação arquivo a arquivo, pelas três perguntas da regra, em 14/09/2026. Nove arquivos saíram com confiança alta e seis com média. Os de confiança média entram assim mesmo, porque o custo de errar é assimétrico: um arquivo listado que na verdade é conforme sai da lista na primeira avaliação `conforme`, e um arquivo em violação que ficasse de fora exigiria reabrir o baseline.
-
-| arquivo | confiança | condição de fechamento |
-|---|---|---|
-| `server.js` | alta | fica a carga de estado, as fachadas de uma linha e o ciclo de vida; os corpos com assunto próprio (workspace, PATH do boot, vistos, política por conta, identidade no GitHub, polling, auth do Claude, doctor, settings, orçamento e fila justa, snapshot) viram colaboradores |
-| `lib/engine/review.js` | alta | fica o ciclo de uma revisão (`runHeadlessReview`); escalonador, prompt, label de revisando, etapas, coordenação, re-revisão e estacionamento saem |
-| `lib/engine/selfpr.js` | alta | fica a sessão de autoanálise; elegibilidade de qualidade, ocultar PR, merge com mergeabilidade, reviewers e staleness dos meus reviews saem |
-| `lib/engine/session.js` | alta | fica o spawn e o controle do processo headless; terminal e login, feed e subagentes, captura de checkpoint, consumo e parsing do envelope saem |
-| `lib/engine/decision.js` | alta | fica o ciclo do registro de decisão; gate puro, funil de postagem com reenvio, capabilities e memória do time saem |
-| `lib/parse.js` | alta | ficam os normalizadores de config; isolamento de credencial, `extractCardKeys` e `workspaceTrust` saem |
-| `lib/engine/skip-review.js` | alta | fica a saída de cena; co-assinatura e a junção dos gates de lançamento (`bloqueiaAutomatico`) saem |
-| `lib/engine/usage.js` | média | a política de orçamento sai para perto de `quota.js` |
-| `lib/io.js` | média | arquivo e JSON, execução de processo e descoberta de ambiente de boot se separam |
-| `lib/format.js` | média | `isPermanentBranch`, que é política de merge, sai |
-| `lib/log-taxonomy.js` | média | `parseLine` e `triage` vão para um módulo do Diagnóstico que importa `classify` |
-| `lib/engine/public-review.js` | média | a projeção da decisão para a UI (`decisionForUi` e vizinhos) sai |
-| `lib/taxonomy.js` | média | a paleta de cores por conta sai para perto da normalização de contas |
-
-**Resolvido:** `ui/pure.js` saiu da lista em 15/09/2026, na Fase 1a da reorganização. Ele só reexporta, e o conteúdo mora em 16 módulos de `ui/pure/`, um por assunto, em camadas sem ciclo (`comum`, depois `mencoes`, depois os de domínio). A condição de fechamento era exatamente essa, e `currentFindings` baixou de 15 para 14. O contrato do diretório está em `ui/pure/README.md`.
-
-**Resolvido:** `ui/app.js` saiu da lista em 16/09/2026, na Fase 1b da reorganização. Ele virou bootstrap (liga o SSE ao estado, comanda a troca de aba e o `data-goto`, e inicializa as telas), o que antes era cada aba vira módulo em `ui/telas/` (30 arquivos, um por assunto, cada um se registrando em `registro.js`), e `RELEASE_NOTES` virou dado próprio (`ui/telas/novidades.js`). A condição de fechamento era exatamente essa, e `currentFindings` baixou de 14 para 13. O contrato do diretório está em `ui/telas/README.md`.
-
-**Como manter o número honesto:**
-
-- **Entrega que toca um arquivo listado e não resolve a dívida:** a avaliação da regra é `violacao`, uma por arquivo, com o arquivo na frente da evidência; os itens seguintes da evidência são contexto. O gate absorve e imprime `baseline: core.file.single-responsibility: N achado(s) conhecido(s)`.
-- **Entrega que resolve a dívida de um arquivo:** a avaliação é `conforme`, o gate imprime `resolvido <assinatura>`, e a mesma entrega tira a assinatura de `known` e baixa `currentFindings`.
-- **Arquivo listado que muda de caminho** ainda em violação: a assinatura acompanha o caminho novo na mesma entrega, e `test/eng-behaviour-baseline.test.js` reprova se isso ficar para trás. Dividir um arquivo listado em dois que continuam violando não cabe no baseline, porque a contagem subiria: a divisão precisa resolver a responsabilidade.
-- **Arquivo fora da lista julgado em violação** não entra sozinho. `initialFindings` só desce, e reabrir o baseline é decisão explícita, registrada nesta seção.
-- **A cada release do eng-behaviour**, a mesma entrega que regenera o recorte migra o `catalogVersion` do baseline; a CLI recusa baseline aberto sob outra versão.
-- **Fora da avaliação:** `tools/` e `test/` também contam como código para o pacote e não foram avaliados. Se um avaliador achar violação ali, vale a regra do item anterior.
-
-
-O parágrafo do custo abaixo descreve o regime da v0.3.x e continua valendo como intenção; os números mudam
-quando a identidade material entrar em vigor, porque a ADR-0012 corta o número de regras cobradas por commit.
-
-## Gate de ratchet (v2.45.1)
-
-O `lint` é o gate de ratchet do **enforcement mecânico local do Farol** em Node puro (`tools/quality/`), que é coisa diferente da constituição acima: compara as violações com `baseline.json` e reprova qualquer contagem que SUBA. Corrigiu dívida? `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão.
-
-As regras abaixo se dividem em três grupos em relação ao catálogo, e vale saber em qual cada uma cai.
-
-- **Face mecânica de `core.duplication.business-rule`** (fonte de verdade única): `jsonParseCru`, `jsonStringifyCru`, `processEnvDireto`, `portaLiteral` e `tempoMagico`. O catálogo deixa essa regra como julgamento porque distinguir invariante compartilhado de coincidência de valor exige entender o domínio. Aqui o domínio é conhecido e os santuários são nomeados no `rules.js`, então dá pra medir sem adivinhar.
-- **Eixos que o catálogo não cobre**: `emptyCatch`, `varUse`, `ternarioAninhado`, `profundidadeExcedida`.
-- **Uma divergência declarada**: `maxLines` (400) mede tamanho de arquivo, e `core.file.single-responsibility` **rejeita esse eixo por princípio**. O contador fica como ratchet sobre dívida já medida, não como afirmação de que tamanho é o critério certo. Tirá-lo é decisão do dono; deixá-lo sem dizer isto seria a divergência ficar escondida.
-
-**Por que o `maxLines` conta linhas, e não arquivos** (22/09/2026). Até aqui ele valia 1 para o arquivo acima do teto e 0 para o resto, e isso abria um buraco no ratchet: arquivo que JÁ estava na baseline podia crescer à vontade, porque a contagem continuava 1. Medido no `server.js`, que a Onda 2 tinha levado a ~905 linhas: ele voltou a 2144 linhas em 15/09/2026, quando o baseline de responsabilidade única foi aberto, e chegou a 2326 em 22/09/2026, com o gate verde em cada um dos 51 commits do caminho. O mesmo vale para o baseline do eng-behaviour, que conta UM achado por arquivo: arquivo já listado como `violacao` continua listado, cresça quanto crescer. Hoje `maxLines` é **quantas linhas úteis o arquivo tem acima de 400**, então o ratchet que já existia passa a reprovar o crescimento sem mecanismo novo, e a promessa de que "a contagem só desce" vale também por dentro dos arquivos da dívida.
+**Por que o `maxLines` conta linhas, e não arquivos** (22/09/2026). Até então ele valia 1 para o arquivo acima do teto e 0 para o resto, e isso abria um buraco no ratchet: arquivo que JÁ estava na baseline podia crescer à vontade, porque a contagem continuava 1. Medido no `server.js`, que a Onda 2 tinha levado a ~905 linhas: ele voltou a 2144 linhas em 15/09/2026 e chegou a 2326 em 22/09/2026, com o gate verde em cada um dos 51 commits do caminho. Hoje `maxLines` é **quantas linhas úteis o arquivo tem acima de 400**, então o ratchet que já existia passa a reprovar o crescimento sem mecanismo novo, e a promessa de que "a contagem só desce" vale também por dentro dos arquivos da dívida.
 
 Regras medidas (chaves do `rules.js`):
 
-1. `maxLines` — arquivo não pode exceder 400 linhas de código útil. A contagem é o EXCESSO (linhas úteis menos 400, zero quando está dentro do teto), então crescer um arquivo que já está acima reprova.
-2. `emptyCatch` — blocos `catch` vazios sem comentário de intenção reprovam.
-3. `varUse` — uso de `var` é reprovado; use `const`/`let`.
-4. `jsonParseCru` — chamadas diretas a `JSON.parse` fora de `lib/io.js` reprovam.
-5. `jsonStringifyCru` — chamadas diretas a `JSON.stringify` fora de `lib/io.js` reprovam.
-6. `processEnvDireto` — acesso direto a `process.env` fora de `lib/paths.js` e `lib/env.js` reprovam.
-7. `ternarioAninhado` — dois ou mais ternários no mesmo statement reprovam.
-8. `tempoMagico` — números mágicos de tempo (milissegundos, segundos) em propriedades ou cálculos reprovam.
-9. `portaLiteral` — porta 47170 escrita em código fora de `lib/constants.js` reprova.
-10. `profundidadeExcedida` — profundidade de chaves dentro de função acima de 3 níveis reprova (contada a partir do corpo da função).
+1. `maxLines`: arquivo não pode exceder 400 linhas de código útil. A contagem é o EXCESSO (linhas úteis menos 400, zero quando está dentro do teto), então crescer um arquivo que já está acima reprova.
+2. `emptyCatch`: blocos `catch` vazios sem comentário de intenção reprovam.
+3. `varUse`: uso de `var` é reprovado; use `const`/`let`.
+4. `jsonParseCru`: chamadas diretas a `JSON.parse` fora de `lib/io.js` e `ui/pure/comum.js` reprovam.
+5. `jsonStringifyCru`: chamadas diretas a `JSON.stringify` fora de `lib/io.js` e `ui/pure/comum.js` reprovam.
+6. `processEnvDireto`: acesso direto a `process.env` fora de `lib/paths.js` e `lib/env.js` reprova.
+7. `ternarioAninhado`: dois ou mais ternários no mesmo statement reprovam.
+8. `tempoMagico`: números mágicos de tempo (milissegundos, segundos) em propriedades ou cálculos reprovam.
+9. `portaLiteral`: porta 47170 escrita em código fora de `lib/constants.js` reprova.
+10. `profundidadeExcedida`: profundidade de chaves dentro de função acima de 3 níveis reprova (contada a partir do corpo da função).
 
-**Dívida que muda de caminho** (15/09/2026, Fase 1a da reorganização). O teto é por arquivo e arquivo ausente vale zero (`gate.js:44`), então mover código com dívida registrada reprova no destino mesmo sem nada ter piorado. Nesse caso a dívida acompanha o código: a entrega roda `npm run lint:update` e prova, no próprio commit, que **o total por regra não subiu** (somando as contagens do `baseline.json` antes e depois; nenhuma regra pode crescer). É a mesma doutrina da assinatura do baseline do eng-behaviour, que acompanha o arquivo movido na mesma entrega, e o que continua proibido é o total subir, que é dívida nova entrando pela porta dos fundos.
+**Dívida que muda de caminho** (15/09/2026). O teto é por arquivo e arquivo ausente na baseline vale zero (`comparar`, em `tools/quality/gate.js`), então mover código com dívida registrada reprova no destino mesmo sem nada ter piorado. Nesse caso a dívida acompanha o código: a entrega roda `npm run lint:update` e prova, no próprio commit, que **o total por regra não subiu** (somando as contagens do `baseline.json` antes e depois; nenhuma regra pode crescer). O que continua proibido é o total subir, que é dívida nova entrando pela porta dos fundos.
 
-Não confunda o contador com a regra do catálogo. O `ternarioAninhado` quebra o arquivo por `;` e conta `?` por statement, então ele também acusa ternário dentro de template literal (`\`${p ? 's' : ''}\`` dentro do ramo de outro ternário), que a regra hard `core.javascript.no-nested-ternary`, que lê a árvore sintática, **não** acusa: lá o pai do ternário de dentro é o template, não o ternário de fora. Medido no `ui/pure.js` em 15/09/2026, onde parte das 11 ocorrências é disso. Contorcer código legítimo para zerar o contador é perseguir métrica, o mesmo motivo pelo qual o `maxLines` está declarado como divergência acima.
+Não confunda o contador com a regra. O `ternarioAninhado` quebra o arquivo por `;` e conta `?` por statement, então ele também acusa ternário dentro de template literal (`\`${p ? 's' : ''}\`` dentro do ramo de outro ternário), que uma regra que lê a árvore sintática **não** acusaria: lá o pai do ternário de dentro é o template, não o ternário de fora. Contorcer código legítimo para zerar o contador é perseguir métrica, o mesmo motivo pelo qual o `maxLines` está declarado como divergência acima.
 
 ## Backlog da onda de qualidade (16/08/2026, deferido com veredito de review)
 
-Itens julgados no review final da v2.45.1 como "não bloqueia, fica pra depois". Quem pegar qualidade em seguida, começa por aqui:
+Itens julgados num review final como "não bloqueia, fica pra depois". Quem pegar qualidade em seguida, começa por aqui:
 
-1. **Comentários de teste ensinando o invariante CommonJS morto**: `test/merge-gates.test.js` (~linha 9), `test/session-claude-profile.test.js` (~18), `test/boot.test.js` (~5) e `test/account-identity.test.js` (~15) ainda explicam o patch em termos de `require`/referência capturada no load. Pós-ESM o mecanismo real é outro (patch no objeto default + `await import()` depois). Reescrever os comentários pra ensinar o mecanismo atual.
-2. **Sombreamento de nome em `lib/engine/session.js`** (~linha 522): o módulo importa `env` (lib/env.js) e o `runClaudeStream` declara um local `const env = engine.ghEnv(...)`. Funciona, mas confunde; renomear o local pra `childEnv`.
-3. **Trava estrutural nos módulos de patch**: a garantia de que `run`/`runShell` (io.js) e `prMetrics` (fanout.js) só existem no default mutável é hoje uma omissão da lista de named exports. Uma checagem no `tools/quality/higiene.js` proibindo esses nomes em `export {}` desses dois arquivos transformaria a doutrina em gate.
-4. **`realpath` no guard de execução direta** (`server.js`, comparação `import.meta.url` vs `process.argv[1]`): com symlink/junction no caminho, o modo `node server.js` não sobe e não avisa. Teórico na instalação atual (o installer copia arquivos); `fs.realpathSync` nos dois lados fecha.
-5. **Ondas futuras do ratchet**: `maxLines` segue com 5 arquivos acima do teto (22/09/2026: `server.js` com 1388 linhas úteis, `review.js` 1330, `session.js` 880, `selfpr.js` 763 e `decision.js` 739). O gate impede crescer; a redução é trabalho de decomposição planejada, não de correção pontual.
+1. **Comentários de teste ensinando o invariante CommonJS morto**: `test/boot.test.js` (~linha 5) e `test/account-identity.test.js` (~15) ainda explicam o patch em termos de `require`/referência capturada no load. Pós-ESM o mecanismo real é outro (patch no objeto default + `await import()` depois). Reescrever os comentários pra ensinar o mecanismo atual.
+2. **Sombreamento de nome em `lib/engine/session.js`**: o módulo importa `env` (`lib/env.js`) e o `runSelectedProvider` declara um local `const env = { ...engine.ghEnv(...), ... }`. Funciona, mas confunde; renomear o local pra `childEnv`.
+3. **Trava estrutural nos módulos de patch**: a garantia de que `run`/`runShell` (`lib/io.js`) e `prMetrics` (`lib/engine/fanout.js`) só existem no default mutável é hoje uma omissão da lista de named exports. Uma checagem no `tools/quality/higiene.js` proibindo esses nomes em `export {}` desses dois arquivos transformaria a doutrina em gate.
+4. **Ondas futuras do ratchet**: `maxLines` segue com 3 arquivos acima do teto (15/11/2026: `server.js` com 871 linhas úteis, `lib/engine/review.js` 851 e `lib/engine/decision.js` 562). O gate impede crescer; a redução é trabalho de decomposição planejada, não de correção pontual.

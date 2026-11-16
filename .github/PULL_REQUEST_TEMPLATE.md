@@ -8,18 +8,18 @@
 
 ## Como validar
 
-<!-- O caminho pelo app, ou o teste que cobre. Quem revisa precisa conseguir repetir. -->
+<!-- O caminho pelo motor, ou o teste que cobre. Quem revisa precisa conseguir repetir. -->
 
 ## Checklist
 
 - [ ] `npm run check && npm run lint && npm test` verdes localmente
 - [ ] Teste novo cobrindo o comportamento novo (ou justificativa de por que não cabe)
-- [ ] Nenhuma dependência npm nova (invariante 1)
-- [ ] Nenhum gate de postagem afrouxado (invariante 4)
-- [ ] Diferença de sistema operacional passando por `IS_WIN` / `IS_MAC` / `IS_LINUX` (invariante 5)
-- [ ] Texto em português, sem travessão (invariante 6)
+- [ ] Nenhum teste de gate apagado ou afrouxado
+- [ ] Nenhuma dependência npm nova
+- [ ] Nenhum gate de postagem afrouxado
+- [ ] Texto e comentários em português, sem travessão
+- [ ] Base trazida por merge commit, sem rebase
 - [ ] Documentação atualizada no mesmo PR (`CLAUDE.md`, `README.md` ou `docs/QUALITY.md`), se o comportamento documentado mudou
-- [ ] `package.json`, `CHANGELOG.md` e `RELEASE_NOTES` **não** foram tocados (versão é do mantenedor, na hora da release)
 
 ## Risco
 
