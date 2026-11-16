@@ -20,7 +20,7 @@ const custo = (dia: SomaComNome): number | undefined => dia.costUsd;
 // O que o gráfico diz, em uma frase: é o nome da imagem. O total é o que o motor somou.
 export function resumoDoGrafico(relatorio: Relatorio): string {
   const { range, series, totals } = relatorio;
-  const inicio = `Custo estimado por dia, em dólar, de ${textoDoPeriodo(range)}.`;
+  const inicio = `Custo estimado por dia de Brasília, em dólar, de ${textoDoPeriodo(range)}.`;
   const maior = maiorDia(series, custo);
   if (!maior) return `${inicio} Nenhum dia com custo neste período.`;
   const comExecucao = `${inteiro(series.length)} ${series.length === 1 ? 'dia com execução' : 'dias com execução'}`;
@@ -82,7 +82,7 @@ export const GraficoPorDia = memo(function GraficoPorDia({ relatorio }: Props) {
       {ordenada.length ? (
         <div className={estilos.rolagem} role="region" aria-label="Tabela do consumo por dia" tabIndex={0}>
           <table className={estilos.tabela}>
-            <caption>Consumo por dia, só os dias com execução. O dia vira à meia-noite de Brasília, que é o fuso em que o motor agrupa o diário.</caption>
+            <caption>Consumo por dia de Brasília (o fuso em que o motor agrupa o diário), só os dias com execução.</caption>
             <thead>
               <tr>
                 <th scope="col">Dia</th>

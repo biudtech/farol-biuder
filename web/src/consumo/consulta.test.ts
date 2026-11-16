@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Relatorio } from '@/contratos/consumo';
 import {
-  CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoRelatorio, comPeriodo, ehRecusaDeCampo, enderecoDa, lerEndereco, marcaDoConsumo, mensagemDaFalha, periodoPronto, temFiltro,
+  ANO_MINIMO, CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoRelatorio, comPeriodo, dataAceita, dicaDoPeriodo, ehRecusaDeCampo, enderecoDa, lerEndereco, marcaDoConsumo, mensagemDaFalha, periodoPronto, temFiltro,
   temPeriodo,
   textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
 } from './consulta';
@@ -70,22 +70,64 @@ describe('o pedido ao motor', () => {
 });
 
 describe('os períodos prontos', () => {
-  it('saem do fim que o motor disse, não do relógio', () => {
-    expect(comPeriodo({ ...CONSULTA_VAZIA, tipo: 'review', pagina: 4 }, '2026-11-16', 7)).toEqual({ ...CONSULTA_VAZIA, tipo: 'review', inicio: '2026-11-10', pagina: 1 });
-    expect(comPeriodo(CONSULTA_VAZIA, '2026-11-16', 90).inicio).toBe('2026-08-19');
-    // o fim escolhido fica
-    expect(comPeriodo({ ...CONSULTA_VAZIA, fim: '2026-10-31' }, '2026-10-31', 30)).toMatchObject({ inicio: '2026-10-02', fim: '2026-10-31' });
+  it('saem do fim que o motor disse, não do relógio, e gravam as duas datas', () => {
+    expect(comPeriodo({ ...CONSULTA_VAZIA, tipo: 'review', pagina: 4 }, '2026-11-16', 7)).toEqual({ ...CONSULTA_VAZIA, tipo: 'review', inicio: '2026-11-10', fim: '2026-11-16', pagina: 1 });
+    expect(comPeriodo(CONSULTA_VAZIA, '2026-11-16', 90)).toMatchObject({ inicio: '2026-08-19', fim: '2026-11-16' });
+    // o fim é o do relatório na tela, não o que estava no endereço
+    expect(comPeriodo({ ...CONSULTA_VAZIA, fim: '2026-11-20' }, '2026-10-31', 30)).toMatchObject({ inicio: '2026-10-02', fim: '2026-10-31' });
+    // e o pedido leva as duas: o período não cresce no dia seguinte
+    expect(caminhoDoRelatorio(comPeriodo(CONSULTA_VAZIA, '2026-11-16', 7))).toBe('/api/usage?start=2026-11-10&end=2026-11-16');
   });
 
   it('fim que não é dia não muda a consulta', () => {
     expect(comPeriodo(cheia, 'x', 7)).toBe(cheia);
   });
 
-  it('diz qual período pronto o relatório cobre', () => {
+  it('o período pronto só fica marcado quando as duas datas do endereço são as do relatório', () => {
     expect(PERIODOS).toEqual([7, 30, 90]);
-    expect(periodoPronto({ start: '2026-10-18', end: '2026-11-16' })).toBe(30);
-    expect(periodoPronto({ start: '2026-11-10', end: '2026-11-16' })).toBe(7);
-    expect(periodoPronto({ start: '2026-11-11', end: '2026-11-16' })).toBeNull();
+    const sete = { start: '2026-11-10', end: '2026-11-16' };
+    expect(periodoPronto({ inicio: '2026-11-10', fim: '2026-11-16' }, sete)).toBe(7);
+    expect(periodoPronto({ inicio: '2026-10-18', fim: '2026-11-16' }, { start: '2026-10-18', end: '2026-11-16' })).toBe(30);
+    // as duas batem, mas não é um período pronto
+    expect(periodoPronto({ inicio: '2026-11-11', fim: '2026-11-16' }, { start: '2026-11-11', end: '2026-11-16' })).toBeNull();
+  });
+
+  it('só o início no endereço: no dia seguinte são 8 dias, e nenhum atalho fica marcado', () => {
+    const hoje = { start: '2026-11-10', end: '2026-11-16' };
+    const amanha = { start: '2026-11-10', end: '2026-11-17' };
+    expect(periodoPronto({ inicio: '2026-11-10', fim: '' }, hoje)).toBeNull();
+    expect(periodoPronto({ inicio: '2026-11-10', fim: '' }, amanha)).toBeNull();
+    expect(textoDoPeriodo(amanha)).toBe('10/11/2026 a 17/11/2026 (8 dias)');
+  });
+
+  it('fim do endereço diferente do fim do relatório não marca atalho', () => {
+    expect(periodoPronto({ inicio: '2026-11-10', fim: '2026-11-17' }, { start: '2026-11-10', end: '2026-11-16' })).toBeNull();
+    expect(periodoPronto({ inicio: '', fim: '2026-11-16' }, { start: '2026-10-18', end: '2026-11-16' })).toBeNull();
+  });
+
+  it('sem data nenhuma o período é o padrão do motor, que são sempre 30 dias', () => {
+    expect(periodoPronto({ inicio: '', fim: '' }, { start: '2026-10-18', end: '2026-11-16' })).toBe(30);
+    expect(periodoPronto({ inicio: '', fim: '' }, { start: '2026-10-19', end: '2026-11-17' })).toBe(30);
+  });
+});
+
+describe('as datas do campo', () => {
+  it('só dia que existe, de 1970 em diante, vira pedido', () => {
+    expect(ANO_MINIMO).toBe(1970);
+    for (const boa of ['1970-01-01', '2026-11-16', '2028-02-29', '9999-12-31']) expect(dataAceita(boa), boa).toBe(true);
+    // o que o campo entrega enquanto se digita o ano, e o que não é dia
+    for (const ruim of ['', '0002-11-16', '0020-11-16', '0202-11-16', '0000-01-01', '0099-12-31', '1969-12-31', '2026-02-30', '2026-13-01', '16/11/2026', 'hoje', '2026-11-16T00:00']) {
+      expect(dataAceita(ruim), ruim).toBe(false);
+    }
+  });
+
+  it('a dica diz o que o período quer dizer com nenhuma, uma ou as duas datas', () => {
+    const range = { start: '2026-11-10', end: '2026-11-17' };
+    expect(dicaDoPeriodo({ inicio: '', fim: '' }, null)).toBe('Sem datas, o motor mostra os 30 dias que terminam no hoje dele.');
+    expect(dicaDoPeriodo({ inicio: '2026-11-10', fim: '' }, range)).toBe('Só com "De", o período vai dessa data até o hoje do motor e cresce a cada dia. Agora ele termina em 17/11/2026.');
+    expect(dicaDoPeriodo({ inicio: '2026-11-10', fim: '' }, null)).toBe('Só com "De", o período vai dessa data até o hoje do motor e cresce a cada dia.');
+    expect(dicaDoPeriodo({ inicio: '', fim: '2026-01-31' }, null)).toBe('Só com "Até", o motor começa 30 dias antes do hoje dele, não desta data. Se a data for mais antiga que isso, ele não entrega o relatório: preencha também "De".');
+    expect(dicaDoPeriodo({ inicio: '2026-11-10', fim: '2026-11-16' }, range)).toBe('Período fixo nas duas datas: não acompanha o dia de hoje.');
   });
 });
 

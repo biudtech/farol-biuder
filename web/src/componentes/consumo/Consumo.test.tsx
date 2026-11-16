@@ -8,6 +8,8 @@ import { criarStore } from '@/estado/store';
 import type { Resultado } from '@/transporte/cliente';
 import { voltarPara } from '../historico/apoio-de-teste';
 import { Consumo } from './Consumo';
+import { PERIODOS } from '@/consumo/consulta';
+import { NOTA_DA_PAUSA } from '@/consumo/teto';
 import { ESPERA_DA_BUSCA_MS } from './Filtros';
 import { SESSOES_A_VISTA } from './SessoesRecentes';
 import { consumoDoMotor, operacaoDoMotor, relatorioDoMotor, sessaoDoMotor, somaDoMotor, tetoDoMotor } from './apoio-de-teste';
@@ -90,9 +92,28 @@ describe('Consumo: o período', () => {
     ]);
     const resumo = secao('Resumo do período');
     expect(within(resumo).getByText(/^De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar\. Em perfil de assinatura ninguém cobra esse valor por sessão: ele é uma estimativa/)).toBeTruthy();
-    expect(within(resumo).getByText('5 de 5 execuções deste período rodaram por assinatura: para elas o valor em dólar não é cobrança.')).toBeTruthy();
-    // o fuso do dia é o do motor, e a tela diz qual
-    expect(within(resumo).getByText('18/10/2026 a 16/11/2026 (30 dias). Os dias são os do motor, que vira o dia do consumo à meia-noite de Brasília.')).toBeTruthy();
+    expect(within(resumo).getByText('Por assinatura: 5 execuções. O valor em dólar delas não é cobrança.')).toBeTruthy();
+    // o dia do período é o de Brasília, e a tela diz
+    expect(within(resumo).getByText('18/10/2026 a 16/11/2026 (30 dias), em dias de Brasília: é nesse fuso que o motor agrupa o diário.')).toBeTruthy();
+  });
+
+  it('modalidade: uma por assinatura e duas sem registro não viram "1 de 3", que faria o resto parecer cobrado', async () => {
+    montar({ responder: () => corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 3, costUsd: 3, subscription: 1, unknownBilling: 2 }) })) });
+    await assentar();
+    const resumo = secao('Resumo do período');
+    expect(within(resumo).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
+    expect(within(resumo).getByText('Sem modalidade registrada: 2 execuções. O motor não gravou se rodaram por assinatura ou por chave de API, e a tela não supõe.')).toBeTruthy();
+    expect(within(resumo).queryByText(/Por chave de API/)).toBeNull();
+    expect(resumo.textContent).not.toMatch(/\d+ de \d+ execuç/);
+  });
+
+  it('modalidade: a chave de API aparece com o dólar que o motor somou, sem contagem inventada', async () => {
+    montar({ responder: () => corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 4, costUsd: 9, subscription: 1, apiUsd: 7.5, apiEstimatedUsd: 0.5, apiUnknown: 1 }) })) });
+    await assentar();
+    const resumo = secao('Resumo do período');
+    expect(within(resumo).getByText('Por chave de API: US$ 7,50, dos quais US$ 0,50 calculados pelo motor. O motor soma o valor e não diz quantas execuções foram. Mais 1 execução de custo desconhecido.')).toBeTruthy();
+    expect(within(resumo).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
+    expect(within(resumo).queryByText(/Sem modalidade registrada/)).toBeNull();
   });
 
   it('avisa o que o período tem de calculado, de desconhecido e de incompleto', async () => {
@@ -112,7 +133,7 @@ describe('Consumo: o período', () => {
     expect(within(resumo).getByText(/^O diário tem menos sessões do que o agregado do motor contou/)).toBeTruthy();
     expect(within(resumo).getByText(/^2 execuções sem identidade de operação/)).toBeTruthy();
     expect(within(resumo).getByText('O período começa antes do primeiro registro do diário (01/10/2026): não há dado dos dias anteriores.')).toBeTruthy();
-    expect(within(resumo).queryByText(/rodaram por assinatura/)).toBeNull();
+    expect(within(resumo).queryByText(/Por assinatura/)).toBeNull();
   });
 });
 
@@ -121,7 +142,7 @@ describe('Consumo: gasto por dia', () => {
     const { container } = montar();
     await assentar();
     const grafico = screen.getByRole('img');
-    expect(grafico.getAttribute('aria-label')).toBe('Custo estimado por dia, em dólar, de 18/10/2026 a 16/11/2026 (30 dias). 3 dias com execução. Maior dia: 15/11/2026, com US$ 9,10. Custo estimado do período, somado pelo motor: US$ 12,50.');
+    expect(grafico.getAttribute('aria-label')).toBe('Custo estimado por dia de Brasília, em dólar, de 18/10/2026 a 16/11/2026 (30 dias). 3 dias com execução. Maior dia: 15/11/2026, com US$ 9,10. Custo estimado do período, somado pelo motor: US$ 12,50.');
     const barras = [...container.querySelectorAll('svg rect')];
     expect(barras.map((b) => b.querySelector('title')?.textContent)).toEqual(['14/11/2026: US$ 2,00 estimados', '15/11/2026: US$ 9,10 estimados', '16/11/2026: US$ 1,40 estimados']);
     // a maior barra é a do maior dia, e nenhuma passa do topo do eixo (US$ 10,00)
@@ -145,7 +166,7 @@ describe('Consumo: gasto por dia', () => {
       ['15/11/2026', 'US$ 9,10', '3', '0', '4.000', '1.500', '300.000', '9.000'],
       ['16/11/2026', 'US$ 1,40', '1', '0', '1.000', '200', '50.000', '1.000'],
     ]);
-    expect(tabela('Tabela do consumo por dia').querySelector('caption')?.textContent).toBe('Consumo por dia, só os dias com execução. O dia vira à meia-noite de Brasília, que é o fuso em que o motor agrupa o diário.');
+    expect(tabela('Tabela do consumo por dia').querySelector('caption')?.textContent).toBe('Consumo por dia de Brasília (o fuso em que o motor agrupa o diário), só os dias com execução.');
     expect(secao('Tabela do consumo por dia').getAttribute('tabindex')).toBe('0');
   });
 
@@ -170,7 +191,7 @@ describe('Consumo: gasto por dia', () => {
     const { container } = montar({ responder: () => corpo(relatorioDoMotor({ series: [{ name: '2026-11-16', ...somaDoMotor({ attempts: 1, unknownCost: 1 }) }] })) });
     await assentar();
     expect(container.querySelectorAll('svg rect')).toHaveLength(0);
-    expect(screen.getByRole('img').getAttribute('aria-label')).toBe('Custo estimado por dia, em dólar, de 18/10/2026 a 16/11/2026 (30 dias). Nenhum dia com custo neste período.');
+    expect(screen.getByRole('img').getAttribute('aria-label')).toBe('Custo estimado por dia de Brasília, em dólar, de 18/10/2026 a 16/11/2026 (30 dias). Nenhum dia com custo neste período.');
     expect(linhasDa('Tabela do consumo por dia')[0]?.slice(0, 4)).toEqual(['16/11/2026', 'US$ 0,00', '1', '1']);
   });
 });
@@ -237,6 +258,28 @@ describe('Consumo: o diário', () => {
     expect(linhas[0]?.slice(8)).toEqual(['US$ 2,00', 'Concluída']);
     expect(linhas[1]?.[0]).toMatch(/\(tentativa 1 de 2 da mesma operação\)$/);
     expect(linhas[1]?.slice(4)).toEqual(['10', '5', '0', '0', 'US$ 0,25 (calculado pelo motor)', 'Parcial (a sessão morreu antes do fim)']);
+  });
+
+  it('tentativa de fora do período fica marcada em texto, e a tela diz por que as linhas não fecham com o total', async () => {
+    // o relatório é só do dia 15; a operação tem uma tentativa do dia 14, que as somas não contam
+    const operacao = operacaoDoMotor(13, { at: Date.UTC(2026, 10, 15, 15), day: '2026-11-15' }, [{ at: Date.UTC(2026, 10, 14, 15), day: '2026-11-14', status: 'parcial' }]);
+    const sozinha = operacaoDoMotor(14, { day: '2026-11-16' });
+    montar({
+      url: '/consumo?inicio=2026-11-15&fim=2026-11-15',
+      responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-15', end: '2026-11-15' }, history: { total: 2, page: 0, pages: 1, rows: [operacao, sozinha] } })),
+    });
+    await assentar();
+    const quando = linhasDa(NOME).map((linha) => linha[0]?.replace(/^[^(]*/, ''));
+    expect(quando).toEqual(['(tentativa 2 de 2 da mesma operação)', '(tentativa 1 de 2 da mesma operação, fora do período)', '(fora do período)']);
+    expect(screen.getByText('As linhas não fecham com o total do período: cada operação traz todas as tentativas dela, inclusive as de fora do período ou do filtro, que as somas não contam. As de fora do período estão marcadas na coluna Quando; as de fora do filtro o motor não marca.')).toBeTruthy();
+    expect(tabela(NOME).querySelector('caption')?.textContent).toBe('Operações com execução no período, a mais recente primeiro, 8 por página. A hora é a do fim de cada execução, no fuso deste navegador.');
+  });
+
+  it('tentativa sem o dia não é marcada: a tela não supõe', async () => {
+    const operacao = operacaoDoMotor(13, { day: undefined }, [{ day: 'ontem' }]);
+    montar({ responder: () => corpo(relatorioDoMotor({ history: { total: 1, page: 0, pages: 1, rows: [operacao] } })) });
+    await assentar();
+    expect(linhasDa(NOME).map((linha) => linha[0]?.replace(/^[^(]*/, ''))).toEqual(['(tentativa 2 de 2 da mesma operação)', '(tentativa 1 de 2 da mesma operação)']);
   });
 
   it('texto de fora é texto, e a referência só vira link quando é chave de PR', async () => {
@@ -353,18 +396,91 @@ describe('Consumo: período e filtros no endereço', () => {
     expect(tipo.selectedOptions[0]?.textContent).toBe('tipo_novo (valor do endereço)');
   });
 
-  it('os períodos prontos saem do último dia que o motor disse, e o que está na tela fica marcado', async () => {
-    const t = montar();
+  // o motor de mentira que segue o período pedido: sem datas, os 30 dias até `hoje`
+  const seguindo = (hoje: string): Responder => (caminho) => {
+    const params = new URLSearchParams(caminho.split('?')[1] ?? '');
+    return corpo(relatorioDoMotor({ range: { start: params.get('start') ?? '2026-10-18', end: params.get('end') ?? hoje } }));
+  };
+  const marcados = () => PERIODOS.filter((dias) => screen.getByRole('button', { name: `${dias} dias` }).getAttribute('aria-pressed') === 'true');
+  const dica = () => screen.getByRole('note', { name: 'Como o período é lido' }).textContent;
+
+  it('os períodos prontos saem do último dia que o motor disse, gravam as duas datas e ficam marcados', async () => {
+    const t = montar({ responder: seguindo('2026-11-16') });
     // antes da primeira resposta não há dia do motor: os botões esperam
     expect((screen.getByRole('button', { name: '7 dias' }) as HTMLButtonElement).disabled).toBe(true);
     await assentar();
-    expect(screen.getByRole('button', { name: '30 dias' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: '7 dias' }).getAttribute('aria-pressed')).toBe('false');
+    // sem datas, o padrão do motor são sempre 30 dias
+    expect(marcados()).toEqual([30]);
+    expect(dica()).toBe('Sem datas, o motor mostra os 30 dias que terminam no hoje dele.');
     await clicar('7 dias');
-    expect(window.location.search).toBe('?inicio=2026-11-10');
-    expect(t.pedidos().at(-1)).toBe('/api/usage?start=2026-11-10');
+    expect(window.location.search).toBe('?inicio=2026-11-10&fim=2026-11-16');
+    expect(t.pedidos().at(-1)).toBe('/api/usage?start=2026-11-10&end=2026-11-16');
+    await assentar();
+    expect(marcados()).toEqual([7]);
+    expect(dica()).toBe('Período fixo nas duas datas: não acompanha o dia de hoje.');
     await clicar('90 dias');
-    expect(window.location.search).toBe('?inicio=2026-08-19');
+    expect(window.location.search).toBe('?inicio=2026-08-19&fim=2026-11-16');
+    await assentar();
+    expect(marcados()).toEqual([90]);
+  });
+
+  it('endereço só com o início, aberto no dia seguinte: a tela diz os 8 dias, e nenhum atalho fica marcado', async () => {
+    montar({ url: '/consumo?inicio=2026-11-10', responder: seguindo('2026-11-17') });
+    await assentar();
+    expect(anuncio()).toMatch(/^Período de 10\/11\/2026 a 17\/11\/2026 \(8 dias\)/);
+    expect(marcados()).toEqual([]);
+    expect(dica()).toBe('Só com "De", o período vai dessa data até o hoje do motor e cresce a cada dia. Agora ele termina em 17/11/2026.');
+    // no mesmo dia em que foi gravado (7 dias exatos) também não marca: o fim não está fixo
+    cleanup();
+    montar({ url: '/consumo?inicio=2026-11-10', responder: seguindo('2026-11-16') });
+    await assentar();
+    expect(marcados()).toEqual([]);
+  });
+
+  it('fim do endereço diferente do fim do relatório não marca atalho', async () => {
+    // o endereço pede até o dia 17, e o motor de mentira entrega até o dia 16
+    montar({ url: '/consumo?inicio=2026-11-10&fim=2026-11-17', responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-10', end: '2026-11-16' } })) });
+    await assentar();
+    expect(anuncio()).toMatch(/^Período de 10\/11\/2026 a 16\/11\/2026 \(7 dias\)/);
+    expect(marcados()).toEqual([]);
+  });
+
+  it('só "Até" preenchido: a dica avisa de onde o motor começa, e o que ele faz com data antiga', async () => {
+    const t = montar({ url: '/consumo?fim=2026-01-31', responder: () => corpo({ ok: false, motivo: 'Selecione um intervalo válido, sem datas futuras.' }) });
+    await assentar();
+    expect(t.pedidos()).toEqual(['/api/usage?end=2026-01-31']);
+    expect(dica()).toBe('Só com "Até", o motor começa 30 dias antes do hoje dele, não desta data. Se a data for mais antiga que isso, ele não entrega o relatório: preencha também "De".');
+    expect(screen.getByRole('alert').textContent).toContain('Selecione um intervalo válido, sem datas futuras.');
+  });
+
+  it('ano ainda sendo digitado não vira pedido: o campo diz que a data é inválida, e a data completa vai', async () => {
+    const t = montar({ responder: seguindo('2026-11-16') });
+    await assentar();
+    const de = screen.getByLabelText('De') as HTMLInputElement;
+    // o que o campo de data entrega enquanto se digita "2026"
+    for (const parcial of ['0002-11-05', '0020-11-05', '0202-11-05', '1969-12-31']) {
+      await act(async () => { fireEvent.change(de, { target: { value: parcial } }); });
+      expect(de.value).toBe(parcial);
+      expect(de.getAttribute('aria-invalid')).toBe('true');
+    }
+    expect(t.pedidos()).toEqual(['/api/usage']);
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('alert').textContent).toBe('Data inválida: use um dia de 1970 em diante. Nada foi pedido ao motor.');
+    await act(async () => { fireEvent.change(de, { target: { value: '2026-11-05' } }); });
+    expect(de.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(t.pedidos()).toEqual(['/api/usage', '/api/usage?start=2026-11-05']);
+    // esvaziar o campo tira a data do endereço
+    await act(async () => { fireEvent.change(de, { target: { value: '' } }); });
+    expect(window.location.search).toBe('');
+  });
+
+  it('o filtro de modelo diz que recorta pelo modelo principal da execução', async () => {
+    montar();
+    await assentar();
+    const modelo = screen.getByLabelText('Modelo');
+    const idDaDica = modelo.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(idDaDica)?.textContent).toBe('Recorta pelo modelo principal de cada execução. A tabela Por modelo ainda pode trazer outros, que são partes das mesmas execuções.');
   });
 
   it('as datas vão ao endereço trocando a entrada, e Limpar volta ao padrão do motor', async () => {
@@ -539,7 +655,8 @@ describe('Consumo: estados', () => {
     expect(screen.queryByRole('button', { name: 'Atualizar' })).toBeNull();
     act(() => { t.store.trocar({ snapshot: snapshotCom(consumoDoMotor({ totals: { sessions: 43 } })) }); });
     expect(t.pedidos()).toHaveLength(1);
-    expect(screen.getByText(/Há sessão nova desde a última carga deste relatório\./)).toBeTruthy();
+    // a sessão nova pode estar fora do período ou do filtro, e o aviso diz
+    expect(screen.getByText(/^O motor registrou sessão nova desde a última carga deste relatório\. Ela pode não entrar neste recorte: o aviso não olha o período nem os filtros\./)).toBeTruthy();
     await clicar('Atualizar');
     await assentar();
     expect(t.pedidos()).toEqual(['/api/usage', '/api/usage']);
@@ -572,7 +689,8 @@ describe('Consumo: o teto', () => {
     await assentar();
     expect(within(teto()).getByRole('heading', { level: 3 }).textContent).toBe('Assinatura do time Assinatura');
     expect(within(teto()).getByText('Dentro do teto: a revisão automática segue.')).toBeTruthy();
-    expect(within(teto()).getByText('Hoje, no dia do motor: US$ 12,50 estimados de US$ 50,00 (teto diário). Resta US$ 37,50.')).toBeTruthy();
+    expect(within(teto()).getByText('Hoje, no dia local do processo do motor: US$ 12,50 estimados de US$ 50,00 (teto diário). Resta US$ 37,50.')).toBeTruthy();
+    expect(within(teto()).getByText('O "hoje" do teto é o dia local do processo do motor, não o dia de Brasília do diário: com o motor em UTC, ele vira às 21h de Brasília.')).toBeTruthy();
     expect(within(teto()).getByText('Registro inteiro de sessões: US$ 900,00 estimados em 42 sessões.')).toBeTruthy();
     expect(within(teto()).getByText(/^Não viraram resultado .*US\$ 90,00 em 3 sessões, 10% do custo registrado\.$/)).toBeTruthy();
   });
@@ -583,9 +701,10 @@ describe('Consumo: o teto', () => {
     const [primeiro, segundo] = within(teto()).getAllByRole('listitem').filter((item) => item.querySelector('h3'));
     expect(within(primeiro as HTMLElement).getByText('Pausado: o teto de hoje foi atingido.')).toBeTruthy();
     expect(within(primeiro as HTMLElement).getByText(/Teto atingido\.$/)).toBeTruthy();
-    expect(within(primeiro as HTMLElement).getByText(/^Enquanto durar, o motor não inicia revisão automática, retentativa nem busca de contestação por este perfil\. A revisão pedida por você continua liberada\.$/)).toBeTruthy();
+    expect(within(primeiro as HTMLElement).getByText(NOTA_DA_PAUSA)).toBeTruthy();
+    expect(NOTA_DA_PAUSA).toMatch(/revisão em lote, mesmo pedida por você\. A revisão de um PR só, pedida por você, continua liberada\.$/);
     expect(within(segundo as HTMLElement).getByText('Sem teto definido: este perfil não pausa por gasto.')).toBeTruthy();
-    expect(within(segundo as HTMLElement).getByText('Hoje, no dia do motor: US$ 12,50 estimados, sem teto diário.')).toBeTruthy();
+    expect(within(segundo as HTMLElement).getByText('Hoje, no dia local do processo do motor: US$ 12,50 estimados, sem teto diário.')).toBeTruthy();
   });
 
   it('sem a chave no snapshot, sem perfil e com perfil ilegível dizem coisas diferentes', async () => {

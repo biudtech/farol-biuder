@@ -84,16 +84,45 @@ export function caminhoDoRelatorio(consulta: Consulta): string {
 export const PERIODOS = [7, 30, 90] as const;
 
 // A consulta com o período de `dias` que termina no fim do relatório na tela. O dia de hoje é
-// o que o motor disse (o `range.end` de uma resposta), nunca o relógio do navegador.
+// o que o motor disse (o `range.end` de uma resposta), nunca o relógio do navegador. Grava as
+// duas datas: só o início deixaria o fim correr com o hoje do motor, e o endereço de "7 dias"
+// aberto no dia seguinte mostraria 8.
 export function comPeriodo(consulta: Consulta, fimDoRelatorio: string, dias: number): Consulta {
   const inicio = diaMenos(fimDoRelatorio, dias - 1);
-  return inicio ? { ...consulta, inicio, pagina: 1 } : consulta;
+  return inicio ? { ...consulta, inicio, fim: fimDoRelatorio, pagina: 1 } : consulta;
 }
 
-// Qual dos períodos prontos o relatório na tela cobre, se algum.
-export function periodoPronto(range: { start: string; end: string }): number | null {
+// Qual dos períodos prontos está na tela, se algum. Só vale quando o endereço pede as duas
+// datas que o relatório trouxe, ou nenhuma (aí o período é o padrão do motor, que são sempre
+// 30 dias). Com uma data só, ou com datas que o motor não seguiu, nenhum fica marcado.
+export function periodoPronto(consulta: Pick<Consulta, 'inicio' | 'fim'>, range: { start: string; end: string }): number | null {
+  const asDuas = consulta.inicio === range.start && consulta.fim === range.end;
+  const nenhuma = consulta.inicio === '' && consulta.fim === '';
+  if (!asDuas && !nenhuma) return null;
   const dias = diasNoPeriodo(range.start, range.end);
   return PERIODOS.find((p) => p === dias) ?? null;
+}
+
+// o primeiro ano que o campo de data aceita
+export const ANO_MINIMO = 1970;
+
+// A data digitada serve para virar pedido: é um dia que existe, de 1970 em diante. Enquanto
+// se digita o ano, o campo de data passa por 0002, 0020 e 0202: nenhum deles vai ao motor.
+export function dataAceita(dia: string): boolean {
+  return diasNoPeriodo(dia, dia) === 1 && Number(dia.slice(0, 4)) >= ANO_MINIMO;
+}
+
+// O que o período do endereço quer dizer, para quem preencheu só uma das datas.
+export function dicaDoPeriodo(consulta: Pick<Consulta, 'inicio' | 'fim'>, range: { start: string; end: string } | null): string {
+  if (consulta.inicio === '' && consulta.fim === '') return 'Sem datas, o motor mostra os 30 dias que terminam no hoje dele.';
+  if (consulta.fim === '') {
+    const ate = range ? ` Agora ele termina em ${diaPorExtenso(range.end)}.` : '';
+    return `Só com "De", o período vai dessa data até o hoje do motor e cresce a cada dia.${ate}`;
+  }
+  if (consulta.inicio === '') {
+    return 'Só com "Até", o motor começa 30 dias antes do hoje dele, não desta data. Se a data for mais antiga que isso, ele não entrega o relatório: preencha também "De".';
+  }
+  return 'Período fixo nas duas datas: não acompanha o dia de hoje.';
 }
 
 export function textoDoPeriodo(range: { start: string; end: string }): string {

@@ -3,7 +3,7 @@
 // As somas do período, como o motor as mandou, e de onde vem o custo. Nenhum número daqui é
 // somado na tela.
 import { memo, useId } from 'react';
-import type { Relatorio } from '@/contratos/consumo';
+import type { Relatorio, Soma } from '@/contratos/consumo';
 import { textoDoPeriodo } from '@/consumo/consulta';
 import { diaPorExtenso, dolar, inteiro, tokens } from '@/consumo/formato';
 import comuns from '../radar/Radar.module.css';
@@ -18,13 +18,34 @@ function Par({ nome, children }: { nome: string; children: string }) {
   );
 }
 
+const execucoes = (n: number): string => `${inteiro(n)} ${n === 1 ? 'execução' : 'execuções'}`;
+
+// A modalidade das execuções, nas três parcelas em que o motor as separa (add e addApi,
+// lib/usage/report.js): as de assinatura são contadas, as de chave de API só somadas em dólar,
+// e as sem modalidade registrada contadas à parte. Nenhuma frase diz "N de M": a diferença
+// não é o que foi cobrado.
+export function modalidades(totals: Soma): string[] {
+  const linhas: string[] = [];
+  if (totals.subscription !== undefined && totals.subscription > 0) {
+    linhas.push(`Por assinatura: ${execucoes(totals.subscription)}. O valor em dólar delas não é cobrança.`);
+  }
+  const temApi = (totals.apiUsd ?? 0) > 0 || (totals.apiEstimatedUsd ?? 0) > 0 || (totals.apiUnknown ?? 0) > 0;
+  if (temApi) {
+    const calculado = totals.apiEstimatedUsd !== undefined && totals.apiEstimatedUsd > 0 ? `, dos quais ${dolar(totals.apiEstimatedUsd)} calculados pelo motor` : '';
+    const desconhecido = totals.apiUnknown !== undefined && totals.apiUnknown > 0 ? ` Mais ${execucoes(totals.apiUnknown)} de custo desconhecido.` : '';
+    linhas.push(`Por chave de API: ${dolar(totals.apiUsd)}${calculado}. O motor soma o valor e não diz quantas execuções foram.${desconhecido}`);
+  }
+  if (totals.unknownBilling !== undefined && totals.unknownBilling > 0) {
+    linhas.push(`Sem modalidade registrada: ${execucoes(totals.unknownBilling)}. O motor não gravou se rodaram por assinatura ou por chave de API, e a tela não supõe.`);
+  }
+  return linhas;
+}
+
 // O que o período tem de incompleto ou de estimado, com os números do motor.
 export function avisosDoPeriodo(relatorio: Relatorio): string[] {
   const { totals, range } = relatorio;
   const avisos: string[] = [];
-  if (totals.subscription !== undefined && totals.subscription > 0) {
-    avisos.push(`${inteiro(totals.subscription)} de ${inteiro(totals.attempts)} execuções deste período rodaram por assinatura: para elas o valor em dólar não é cobrança.`);
-  }
+  avisos.push(...modalidades(totals));
   if (totals.estimatedUsd !== undefined && totals.estimatedUsd > 0) {
     avisos.push(`${dolar(totals.estimatedUsd)} do custo deste período foi calculado pelo motor, para sessão que morreu antes de informar o valor: ele usa a mediana do custo por token de saída das sessões concluídas do mesmo modelo.`);
   }
@@ -57,7 +78,7 @@ export const ResumoDoPeriodo = memo(function ResumoDoPeriodo({ relatorio, vazio 
     <section className={comuns.bloco} aria-labelledby={id}>
       <h2 id={id} className={comuns.tituloDoBloco}>Resumo do período</h2>
       <p className={comuns.meta}>
-        {textoDoPeriodo(relatorio.range)}. Os dias são os do motor, que vira o dia do consumo à meia-noite de Brasília.
+        {textoDoPeriodo(relatorio.range)}, em dias de Brasília: é nesse fuso que o motor agrupa o diário.
       </p>
       {semExecucao ? <p className={comuns.vazio}>{vazio}</p> : (
         <dl className={estilos.pares}>

@@ -53,14 +53,24 @@ function situacaoDo(teto: TetoDoPerfil, temTeto: boolean): string {
   return temTeto ? 'Dentro do teto: a revisão automática segue.' : 'Sem teto definido: este perfil não pausa por gasto.';
 }
 
+// O que para e o que continua com o perfil pausado, lido do motor: a fila automática
+// (server.js), o round automático de re-revisão (travaDoRound, lib/engine/review.js), a
+// retentativa (review-retry.js), a recuperação de prova de PR estacionado por orçamento
+// (recuperacao-prova.js) e a busca de contestação (pushback.js). Na largada da sessão
+// (review.js) só passa a revisão manual que não é de lote.
+export const NOTA_DA_PAUSA = 'Enquanto durar, o motor não inicia por este perfil: revisão automática da fila, nova rodada automática de um PR já revisado, retentativa, recuperação de prova, busca de contestação e revisão em lote, mesmo pedida por você. A revisão de um PR só, pedida por você, continua liberada.';
+
+// O dia do teto não é o do diário: o motor corta o gasto de hoje pelo dia local do processo.
+export const NOTA_DO_DIA_DO_TETO = 'O "hoje" do teto é o dia local do processo do motor, não o dia de Brasília do diário: com o motor em UTC, ele vira às 21h de Brasília.';
+
 export function estadoDoTeto(teto: TetoDoPerfil): EstadoDoTeto {
   const temTeto = teto.capHoje !== undefined || teto.budgetTotal !== undefined;
   const linhas: string[] = [];
   if (teto.capHoje !== undefined) {
     const origem = proprio(ORIGEM_DO_TETO, teto.capOrigem) ?? 'teto de hoje';
-    linhas.push(`Hoje, no dia do motor: ${contraOTeto(teto.today, teto.capHoje, origem)}`);
+    linhas.push(`Hoje, no dia local do processo do motor: ${contraOTeto(teto.today, teto.capHoje, origem)}`);
   } else if (teto.today !== undefined) {
-    linhas.push(`Hoje, no dia do motor: ${dolar(teto.today)} estimados, sem teto diário.`);
+    linhas.push(`Hoje, no dia local do processo do motor: ${dolar(teto.today)} estimados, sem teto diário.`);
   }
   if (teto.budgetTotal !== undefined) {
     const desde = teto.budgetSince ? `Desde ${diaPorExtenso(teto.budgetSince)}` : 'Em todo o registro';
@@ -69,7 +79,7 @@ export function estadoDoTeto(teto: TetoDoPerfil): EstadoDoTeto {
 
   const notas: string[] = [];
   if (teto.blocked === true) {
-    notas.push('Enquanto durar, o motor não inicia revisão automática, retentativa nem busca de contestação por este perfil. A revisão pedida por você continua liberada.');
+    notas.push(NOTA_DA_PAUSA);
     if (teto.reason?.endsWith('-previsto') && teto.tipicoReview !== undefined && teto.tipicoReview > 0) {
       notas.push(`O motor projeta ${dolar(teto.tipicoReview)} para a próxima revisão (a mediana do custo das revisões dos últimos 30 dias) e pausa antes de gastar.`);
     }

@@ -10,22 +10,36 @@ import comuns from '../radar/Radar.module.css';
 import { TabelaDeExecucoes, type LinhaDeExecucao } from './TabelaDeExecucoes';
 import estilos from './Consumo.module.css';
 
-// As linhas da tabela: por operação, da tentativa mais nova à mais antiga.
-export function linhasDoDiario(operacoes: readonly Operacao[]): LinhaDeExecucao[] {
+export const FORA_DO_PERIODO = 'fora do período';
+
+// O dia da execução (o que o motor mandou, em dia de Brasília) cai fora do período do
+// relatório. É comparação de texto entre dois dias do motor; sem o dia, não dá para dizer.
+function foraDoPeriodo(dia: string | undefined, periodo: { start: string; end: string }): boolean {
+  return dia !== undefined && (dia < periodo.start || dia > periodo.end);
+}
+
+// As linhas da tabela: por operação, da tentativa mais nova à mais antiga. O motor manda todas
+// as tentativas da operação, também as que ficaram fora do período: essas saem marcadas.
+export function linhasDoDiario(operacoes: readonly Operacao[], periodo: { start: string; end: string }): LinhaDeExecucao[] {
   return operacoes.flatMap((operacao): LinhaDeExecucao[] => {
     const total = operacao.attempts.length;
-    if (total <= 1) return [{ chave: operacao.key, execucao: operacao.attempts[0] ?? operacao, pr: operacao.pr }];
+    if (total <= 1) {
+      const execucao = operacao.attempts[0] ?? operacao;
+      return [{ chave: operacao.key, execucao, pr: operacao.pr, observacao: foraDoPeriodo(execucao.day, periodo) ? FORA_DO_PERIODO : undefined }];
+    }
     return operacao.attempts.map((tentativa, i) => ({
       chave: `${operacao.key}|${i}`,
       execucao: { ...tentativa, ref: tentativa.ref ?? operacao.ref },
       pr: operacao.pr,
-      observacao: `tentativa ${i + 1} de ${total} da mesma operação`,
+      observacao: `tentativa ${i + 1} de ${total} da mesma operação${foraDoPeriodo(tentativa.day, periodo) ? `, ${FORA_DO_PERIODO}` : ''}`,
     })).reverse();
   });
 }
 
 interface Props {
   diario: PaginaDoDiario;
+  // o período do relatório, para marcar a tentativa que ficou fora dele
+  periodo: { start: string; end: string };
   vazio: string;
   // uma carga está no ar: os botões esperam
   ocupado: boolean;
@@ -33,9 +47,9 @@ interface Props {
   aoIr(pagina: number): void;
 }
 
-export const Diario = memo(function Diario({ diario, vazio, ocupado, titulo, aoIr }: Props) {
+export const Diario = memo(function Diario({ diario, periodo, vazio, ocupado, titulo, aoIr }: Props) {
   const id = useId();
-  const linhas = useMemo(() => linhasDoDiario(diario.rows), [diario.rows]);
+  const linhas = useMemo(() => linhasDoDiario(diario.rows, periodo), [diario.rows, periodo]);
   // no motor a página começa em zero; na tela e no endereço, em um
   const pagina = diario.page + 1;
   return (
@@ -50,9 +64,14 @@ export const Diario = memo(function Diario({ diario, vazio, ocupado, titulo, aoI
       {linhas.length ? (
         <TabelaDeExecucoes
           nome="Tabela do diário de execuções"
-          legenda="Operações do período, a mais recente primeiro, 8 por página. A hora é a do fim de cada execução, no fuso deste navegador."
+          legenda="Operações com execução no período, a mais recente primeiro, 8 por página. A hora é a do fim de cada execução, no fuso deste navegador."
           linhas={linhas}
         />
+      ) : null}
+      {linhas.length ? (
+        <p className={comuns.meta}>
+          As linhas não fecham com o total do período: cada operação traz todas as tentativas dela, inclusive as de fora do período ou do filtro, que as somas não contam. As de fora do período estão marcadas na coluna Quando; as de fora do filtro o motor não marca.
+        </p>
       ) : null}
       {diario.total > 0 ? (
         <nav className={estilos.paginacao} aria-label="Páginas do diário">

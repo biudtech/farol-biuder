@@ -41,7 +41,11 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
     const r = await relatorio();
     // sem start nem end o motor usa os 30 dias que terminam no dia de hoje dele
     expect(r.range).toEqual({ start: '2026-10-18', end: '2026-11-16' });
-    expect(r.totals).toEqual({ attempts: 4, inputTokens: 317, outputTokens: 125, cacheReadTokens: 900, cacheCreationTokens: 30, costUsd: 3.75, estimatedUsd: 0.25, unknownCost: 1, subscription: 3 });
+    // três por assinatura; a de chave de API tem custo desconhecido, e por isso não soma em apiUsd
+    expect(r.totals).toEqual({
+      attempts: 4, inputTokens: 317, outputTokens: 125, cacheReadTokens: 900, cacheCreationTokens: 30, costUsd: 3.75, estimatedUsd: 0.25, unknownCost: 1,
+      subscription: 3, unknownBilling: 0, apiUsd: 0, apiEstimatedUsd: 0, apiUnknown: 1,
+    });
     expect(r.series.map((dia) => [dia.name, dia.attempts, dia.costUsd])).toEqual([['2026-11-14', 1, 1.5], ['2026-11-15', 2, 2.25], ['2026-11-16', 1, 0]]);
     // todos os tipos, na ordem do motor, inclusive os zerados
     expect(r.byKind.map((tipo) => [tipo.name, tipo.attempts])).toEqual([['review', 3], ['pushback', 1], ['chat', 0], ['tool', 0], ['outro', 0]]);
@@ -69,6 +73,38 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
     expect(retomada?.attempts.map((t) => [t.status, t.costUsd, t.costSource])).toEqual([['parcial', 0.25, 'estimado'], ['ok', 2, 'medido']]);
     // a operação leva os campos da tentativa mais recente
     expect(retomada).toMatchObject({ at: AGORA - 25 * HORA, model: 'Sonnet 5', ref: 'dono/repo#13', inputTokens: 200, outputTokens: 80, costUsd: 2 });
+  });
+
+  it('a modalidade vem em três parcelas: assinatura contada, chave de API só em dólar, e sem registro contada à parte', async () => {
+    const relatar = await relatorDoMotor();
+    const sessao = (n: number, extra: Record<string, unknown>) => ({ id: id(n), at: AGORA - n * HORA, kind: 'review', status: 'ok', ref: `dono/repo#${n}`, account: 'rev', model: 'Sonnet 5', inputTokens: 1, outputTokens: 1, costUsd: 1, costSource: 'medido', ...extra });
+    // uma com modalidade conhecida e duas gravadas sem ela (registro antigo)
+    const lido = lerRespostaDoConsumo(relatar([{ device: 'local', rows: [sessao(1, { billingKind: 'dir' }), sessao(2, {}), sessao(3, { billingKind: '' })] }], {}, AGORA));
+    if (!lido?.ok) throw new Error('não leu');
+    expect(lido.relatorio.totals).toMatchObject({ attempts: 3, subscription: 1, unknownBilling: 2, apiUsd: 0, apiUnknown: 0 });
+    // com chave de API o motor soma o dólar, e não conta as execuções
+    const comApi = lerRespostaDoConsumo(relatar([{ device: 'local', rows: [sessao(1, { billingKind: 'apikey', costUsd: 2 }), sessao(2, { billingKind: 'apikey', costUsd: 0.5, costSource: 'estimado' })] }], {}, AGORA));
+    if (!comApi?.ok) throw new Error('não leu');
+    expect(comApi.relatorio.totals).toMatchObject({ attempts: 2, subscription: 0, unknownBilling: 0, apiUsd: 2.5, apiEstimatedUsd: 0.5, apiUnknown: 0 });
+    const soma = fonte('lib/usage/report.js');
+    expect(soma).toContain("if (['assinatura', 'dir', 'maquina', 'codex', 'agy'].includes(row.billing)) bucket.subscription++;");
+    expect(soma).toContain("else if (['apikey', 'openrouter'].includes(row.billing)) addApi(bucket, row);");
+    expect(soma).toContain('else bucket.unknownBilling++;');
+  });
+
+  it('a operação traz também a tentativa que ficou fora do período, com o dia de Brasília dela', async () => {
+    const relatar = await relatorDoMotor();
+    const tentativa = (horasAtras: number, status: string) => ({ id: id(9), at: AGORA - horasAtras * HORA, kind: 'review', status, ref: 'dono/repo#9', account: 'rev', model: 'Sonnet 5', billingKind: 'dir', inputTokens: 10, outputTokens: 5, costUsd: 1, costSource: 'medido' });
+    // a mesma operação com uma tentativa no dia 14 e a retomada no dia 15; o pedido é só do dia 15
+    const lido = lerRespostaDoConsumo(relatar([{ device: 'local', rows: [tentativa(50, 'parcial'), tentativa(25, 'ok')] }], { start: '2026-11-15', end: '2026-11-15' }, AGORA));
+    if (!lido?.ok) throw new Error('não leu');
+    const r = lido.relatorio;
+    // a soma conta só a do período, e a linha do diário traz as duas
+    expect(r.totals).toMatchObject({ attempts: 1, costUsd: 1 });
+    expect(r.history.rows.map((op) => op.attempts.map((t) => [t.day, t.status]))).toEqual([[['2026-11-14', 'parcial'], ['2026-11-15', 'ok']]]);
+    // a operação entra quando alguma tentativa passa, e viaja com todas
+    expect(fonte('lib/usage/report.js')).toContain('const groups = groupActivity(all).filter(row => row.attempts.some(a => inRange(a) && matchesActivity(a, query)))');
+    expect(fonte('lib/usage/activity.js')).toContain('return { ...attempts.at(-1), attempts };');
   });
 
   it('os filtros são do motor: o tipo recorta as somas, e a busca só o diário', async () => {
@@ -164,7 +200,7 @@ describe('a chave usage do snapshot', () => {
     }, registrar);
     expect(lido).toEqual({
       budgets: [{ id: 'p1', label: 'Assinatura do time', kind: 'assinatura', capHoje: 50, capOrigem: 'base', today: 12.5, sinceCutoff: 300, blocked: false, parcialmenteEstimado: false, tipicoReview: 4.1 }],
-      recentSessions: [{ at: 1000, kind: 'review', status: 'ok', ref: 'dono/repo#12', model: 'Sonnet 5', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido' }],
+      recentSessions: [{ at: 1000, day: '2026-11-16', kind: 'review', status: 'ok', ref: 'dono/repo#12', model: 'Sonnet 5', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido' }],
       auditoria: { total: parte(42, 900), util: parte(40, 880), perdido: parte(2, 20), medido: parte(41, 890), estimado: parte(1, 10), desconhecido: parte(0, 0) },
       sessionsSince: 500,
       sessoesContadas: 42,

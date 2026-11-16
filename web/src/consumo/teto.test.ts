@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { TetoDoPerfil } from '@/contratos/consumo';
-import { estadoDoTeto, linhasDaAuditoria } from './teto';
+import { NOTA_DA_PAUSA, NOTA_DO_DIA_DO_TETO, estadoDoTeto, linhasDaAuditoria } from './teto';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 const fonte = (arquivo: string): string => fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
@@ -16,7 +16,7 @@ describe('o estado do teto em frases', () => {
       tipo: 'Assinatura',
       pausado: false,
       situacao: 'Dentro do teto: a revisão automática segue.',
-      linhas: ['Hoje, no dia do motor: US$ 12,50 estimados de US$ 50,00 (teto diário). Resta US$ 37,50.'],
+      linhas: ['Hoje, no dia local do processo do motor: US$ 12,50 estimados de US$ 50,00 (teto diário). Resta US$ 37,50.'],
       notas: [],
     });
   });
@@ -38,7 +38,8 @@ describe('o estado do teto em frases', () => {
     expect(pausado.pausado).toBe(true);
     expect(pausado.situacao).toBe('Pausado: o teto de hoje foi atingido.');
     expect(pausado.linhas[0]).toMatch(/Teto atingido\.$/);
-    expect(pausado.notas).toEqual(['Enquanto durar, o motor não inicia revisão automática, retentativa nem busca de contestação por este perfil. A revisão pedida por você continua liberada.']);
+    expect(pausado.notas).toEqual([NOTA_DA_PAUSA]);
+    expect(NOTA_DA_PAUSA).toBe('Enquanto durar, o motor não inicia por este perfil: revisão automática da fila, nova rodada automática de um PR já revisado, retentativa, recuperação de prova, busca de contestação e revisão em lote, mesmo pedida por você. A revisão de um PR só, pedida por você, continua liberada.');
     expect(estadoDoTeto({ ...base, blocked: true, reason: 'total' }).situacao).toBe('Pausado: o teto total foi atingido.');
   });
 
@@ -58,13 +59,13 @@ describe('o estado do teto em frases', () => {
 
   it('sem teto, e sem o campo de pausa', () => {
     const semTeto = estadoDoTeto({ id: 'p2', kind: 'apikey', today: 3, blocked: false });
-    expect(semTeto).toMatchObject({ nome: 'p2', tipo: 'Chave de API', situacao: 'Sem teto definido: este perfil não pausa por gasto.', linhas: ['Hoje, no dia do motor: US$ 3,00 estimados, sem teto diário.'] });
+    expect(semTeto).toMatchObject({ nome: 'p2', tipo: 'Chave de API', situacao: 'Sem teto definido: este perfil não pausa por gasto.', linhas: ['Hoje, no dia local do processo do motor: US$ 3,00 estimados, sem teto diário.'] });
     expect(estadoDoTeto({ id: 'p3' })).toEqual({ nome: 'p3', tipo: 'Tipo não informado', pausado: false, situacao: 'O motor não disse se este perfil está pausado.', linhas: [], notas: [] });
     expect(estadoDoTeto({ id: 'p4', kind: 'outro' }).tipo).toBe('outro');
   });
 
   it('gasto que não veio aparece como sem dado, sem inventar o que resta', () => {
-    expect(estadoDoTeto({ id: 'p', capHoje: 10, blocked: false }).linhas).toEqual(['Hoje, no dia do motor: gasto não informado; o teto é de US$ 10,00 (teto de hoje).']);
+    expect(estadoDoTeto({ id: 'p', capHoje: 10, blocked: false }).linhas).toEqual(['Hoje, no dia local do processo do motor: gasto não informado; o teto é de US$ 10,00 (teto de hoje).']);
   });
 
   it('reserva por custo desconhecido vira nota', () => {
@@ -81,12 +82,29 @@ describe('o estado do teto em frases', () => {
     expect(consumo).toContain("? 'base' : 'nenhum';");
     expect(consumo).toContain('const TIPICO_DIAS = 30;');
     expect(consumo).toContain("const kind = p.kind === 'apikey' ? 'apikey' : 'assinatura';");
-    // quem deixa de rodar com o perfil pausado: a fila automática, a retentativa e a busca de
-    // contestação; a revisão pedida à mão passa
+    // quem deixa de rodar com o perfil pausado: a fila automática, o round automático, a
+    // retentativa, a recuperação de prova e a busca de contestação; na largada da sessão só
+    // passa a revisão manual que não é de lote
+    expect(fonte('lib/engine/review.js')).toContain("if (engine.budgetBlockedFor(acct)) return parado('orcamento', acct);");
+    expect(fonte('lib/engine/review.js')).toContain("it.lote = porClique && extras.lote === true;");
+    expect(fonte('lib/engine/recuperacao-prova.js')).toContain("return engine.budgetBlockedFor(conta) ? 'Orçamento de revisões atingido. Retomo quando houver orçamento disponível.' : '';");
     expect(fonte('server.js')).toContain('const blockedProfile = this.budgetBlockedFor(acct);');
     expect(fonte('lib/engine/review-retry.js')).toContain('!engine.budgetBlockedFor(engine.accountForPr(pr))');
     expect(fonte('lib/engine/pushback.js')).toContain('if (engine.budgetBlockedFor(engine.accountForPr(pr))) return false;');
     expect(fonte('lib/engine/review.js')).toContain('const perfilEstourado = pr.manual && !pr.lote ? null : engine.budgetBlockedFor(engine.accountForPr(pr));');
+  });
+});
+
+describe('o dia do teto', () => {
+  it('é o dia local do processo do motor, e a nota diz a diferença para o dia de Brasília', () => {
+    expect(NOTA_DO_DIA_DO_TETO).toBe('O "hoje" do teto é o dia local do processo do motor, não o dia de Brasília do diário: com o motor em UTC, ele vira às 21h de Brasília.');
+    const consumo = fonte('lib/engine/usage.js');
+    // o gasto de hoje e o teto de hoje saem de localDay(), que lê o relógio local do processo
+    expect(consumo).toContain('return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;');
+    expect(consumo).toContain('const today = localDay();');
+    expect(consumo).toContain('const hoje = localDay();');
+    // meia-noite UTC são 21h em Brasília (UTC-3, sem horário de verão)
+    expect(new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(Date.UTC(2026, 10, 17, 0, 0))).toBe('21:00');
   });
 });
 

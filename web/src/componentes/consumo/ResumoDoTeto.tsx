@@ -5,7 +5,7 @@
 // em texto se a revisão automática está pausada: a cor só acompanha.
 import { memo, useId } from 'react';
 import type { Auditoria, TetoDoPerfil } from '@/contratos/consumo';
-import { estadoDoTeto, linhasDaAuditoria } from '@/consumo/teto';
+import { NOTA_DO_DIA_DO_TETO, estadoDoTeto, linhasDaAuditoria } from '@/consumo/teto';
 import comuns from '../radar/Radar.module.css';
 import estilos from './Consumo.module.css';
 
@@ -58,6 +58,7 @@ export const ResumoDoTeto = memo(function ResumoDoTeto({ tetos, descartados, aud
           O teto é um limite em dólar por perfil do Claude, definido na configuração do motor (por dia e total). O motor compara o custo estimado com ele antes de iniciar cada revisão automática.
         </p>
       ) : null}
+      {tetos?.length ? <p className={comuns.meta}>{NOTA_DO_DIA_DO_TETO}</p> : null}
       {auditoria ? (
         <ul className={estilos.linhas}>
           {linhasDaAuditoria(auditoria).map((linha) => <li key={linha}>{linha}</li>)}

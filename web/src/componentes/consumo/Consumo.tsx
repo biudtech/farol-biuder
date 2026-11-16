@@ -82,7 +82,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
 
       {haNovo ? (
         <p className={estilos.novas} role="status">
-          Há sessão nova desde a última carga deste relatório.{' '}
+          O motor registrou sessão nova desde a última carga deste relatório. Ela pode não entrar neste recorte: o aviso não olha o período nem os filtros.{' '}
           <button type="button" className={comuns.botao} onClick={aoAtualizar}>Atualizar</button>
         </p>
       ) : null}
@@ -123,7 +123,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
           {semExecucao ? null : <GraficoPorDia relatorio={relatorio} />}
           {semExecucao ? null : <PorTipo relatorio={relatorio} />}
           {semExecucao ? null : <PorModelo relatorio={relatorio} />}
-          <Diario diario={relatorio.history} vazio={textoDoDiarioVazio(consulta)} ocupado={esperando} titulo={tituloDoDiario} aoIr={aoIrParaPagina} />
+          <Diario diario={relatorio.history} periodo={relatorio.range} vazio={textoDoDiarioVazio(consulta)} ocupado={esperando} titulo={tituloDoDiario} aoIr={aoIrParaPagina} />
         </div>
       ) : null}
 

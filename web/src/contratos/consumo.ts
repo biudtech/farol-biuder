@@ -79,6 +79,8 @@ const lerTeto: LeitorDeItem<TetoDoPerfil> = (v) => {
 // (normalizeActivity, lib/usage/activity.js). Só a hora (`at`) é exigida.
 export interface Execucao {
   at: number;
+  // o dia em que o motor pôs a execução (AAAA-MM-DD): no diário, o dia de Brasília
+  day?: string;
   // review, pushback, chat, tool ou outro (kindFromId, lib/engine/usage.js)
   kind?: string;
   // ok, erro, cancelada, interrompida, parcial ou descartada (lib/engine/usage-desfechos.js)
@@ -99,6 +101,7 @@ const lerExecucao: LeitorDeItem<Execucao> = (v) => {
   if (!ehObjeto(v) || !ehNumero(v.at) || v.at <= 0) return undefined;
   return semAusentes({
     at: v.at,
+    day: campo(v.day, ehDia),
     kind: campo(v.kind, ehTextoComConteudo),
     status: campo(v.status, ehTextoComConteudo),
     ref: campo(v.ref, ehTextoComConteudo),
@@ -184,8 +187,13 @@ export const lerConsumoDoSnapshot: Leitor<ConsumoDoSnapshot> = (valor, registrar
 
 // As somas de um recorte (zero(), lib/usage/report.js). `attempts` são as execuções (cada
 // retentativa conta); `costUsd` soma o custo das que têm valor, e `unknownCost` conta as que
-// não têm; `estimatedUsd` é a parte de `costUsd` que o motor calculou; `subscription` conta as
-// execuções que rodaram por assinatura.
+// não têm; `estimatedUsd` é a parte de `costUsd` que o motor calculou.
+//
+// A modalidade de cada execução entra em um de três lugares, e só em um: `subscription` conta
+// as que rodaram por assinatura; as de chave de API não são contadas, só somadas em dólar
+// (`apiUsd`, com `apiEstimatedUsd` calculado pelo motor e `apiUnknown` contando as de custo
+// desconhecido); `unknownBilling` conta as que não têm modalidade registrada. Por isso
+// `subscription` não é "as de assinatura entre todas": o resto pode ser sem registro.
 export interface Soma {
   attempts?: number;
   inputTokens?: number;
@@ -196,6 +204,10 @@ export interface Soma {
   estimatedUsd?: number;
   unknownCost?: number;
   subscription?: number;
+  unknownBilling?: number;
+  apiUsd?: number;
+  apiEstimatedUsd?: number;
+  apiUnknown?: number;
 }
 
 export interface SomaComNome extends Soma {
@@ -214,6 +226,10 @@ function lerSoma(v: Record<string, unknown>): Soma {
     estimatedUsd: campo(v.estimatedUsd, ehQuantia),
     unknownCost: campo(v.unknownCost, ehContagem),
     subscription: campo(v.subscription, ehContagem),
+    unknownBilling: campo(v.unknownBilling, ehContagem),
+    apiUsd: campo(v.apiUsd, ehQuantia),
+    apiEstimatedUsd: campo(v.apiEstimatedUsd, ehQuantia),
+    apiUnknown: campo(v.apiUnknown, ehContagem),
   });
 }
 
@@ -240,7 +256,9 @@ const lerSomaDoModelo: LeitorDeItem<SomaDoModelo> = (v) => {
 };
 
 // Uma operação do diário (groupActivity): os campos são os da tentativa mais recente, e
-// `attempts` traz todas, da mais antiga à mais nova. Só a chave é exigida.
+// `attempts` traz todas, da mais antiga à mais nova, inclusive as que ficaram fora do período
+// ou do filtro (a operação entra na página quando ao menos uma tentativa passa). Só a chave é
+// exigida.
 export interface Operacao extends Partial<Execucao> {
   key: string;
   // a chave canônica do PR, quando o trabalho é de um PR
