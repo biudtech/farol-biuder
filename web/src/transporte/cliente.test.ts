@@ -207,6 +207,31 @@ describe('get e post', () => {
     expect(await t.cliente.post('/api/check', {}, objeto)).toEqual({ ok: false, falha: 'recusado', status: 403 });
   });
 
+  it('a recusa com código no corpo entrega o código e o campo, e só eles', async () => {
+    const t = montar();
+    t.respostas.push(() => json({ ok: false, code: 'parametro_invalido', campo: 'veredito', sobra: 'x' }, 400));
+    expect(await t.cliente.get('/api/decisions?veredito=x', objeto)).toEqual({
+      ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo: 'veredito' },
+    });
+    // código sem campo, e campo de forma errada, que conta como ausente
+    t.respostas.push(() => json({ code: 'modo_invalido' }, 400));
+    t.respostas.push(() => json({ code: 'parametro_invalido', campo: 7 }, 400));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'modo_invalido' } });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido' } });
+  });
+
+  it('recusa sem código, com corpo que não é JSON ou com texto longo demais não leva detalhe', async () => {
+    const t = montar();
+    t.respostas.push(() => new Response('<html>', { status: 502 }));
+    t.respostas.push(() => json({ code: 'c'.repeat(81), campo: 'q' }, 400));
+    t.respostas.push(() => json({ code: 'parametro_invalido', campo: 'c'.repeat(81) }, 400));
+    t.respostas.push(() => json(['parametro_invalido'], 400));
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 502 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido' } });
+    expect(await t.cliente.get('/api/x', objeto)).toEqual({ ok: false, falha: 'recusado', status: 400 });
+  });
+
   it('corpo que não é JSON, ou que o leitor da borda recusa, não chega a quem chamou', async () => {
     const t = montar();
     t.respostas.push(() => new Response('<html>', { status: 200 }));

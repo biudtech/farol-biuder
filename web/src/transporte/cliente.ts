@@ -12,9 +12,17 @@ import type { CofreDoToken } from './token';
 // Não é falha do motor, e quem recebe não deve gravar nada por causa dela.
 export type Falha = 'rede' | 'nao_autenticado' | 'recusado' | 'resposta_invalida' | 'cancelado';
 
+// O que o motor diz no corpo de uma recusa (o 400 de GET /api/decisions, por exemplo): o
+// código (`code`) e, quando ele manda, o campo recusado (`campo`). Só esses dois textos saem
+// do corpo, e curtos: o resto da recusa não chega a quem chamou.
+export interface DetalheDaRecusa {
+  codigo: string;
+  campo?: string;
+}
+
 export type Resultado<T> =
   | { ok: true; dados: T }
-  | { ok: false; falha: Falha; status: number };
+  | { ok: false; falha: Falha; status: number; detalhe?: DetalheDaRecusa };
 
 // Confere o corpo cru e devolve o tipo, ou null quando a forma não é a esperada.
 export type Leitor<T> = (bruto: unknown) => T | null;
@@ -57,7 +65,26 @@ export interface DependenciasDoCliente {
 
 type Desfecho = 'caiu' | 'falhou' | 'nao_autenticado' | 'outro_token';
 
-const CANCELADO = Object.freeze({ ok: false, falha: 'cancelado', status: 0 }) satisfies Resultado<never>;
+const TETO_DO_DETALHE = 80;
+
+function textoCurto(valor: unknown): string | undefined {
+  return typeof valor === 'string' && valor.length > 0 && valor.length <= TETO_DO_DETALHE ? valor : undefined;
+}
+
+// Lê o código e o campo do corpo de uma recusa. Corpo que não é JSON, que não é objeto ou que
+// não traz código não vira detalhe: a recusa segue só com o status.
+async function detalheDaRecusa(resposta: Response): Promise<DetalheDaRecusa | undefined> {
+  let bruto: unknown;
+  try { bruto = await resposta.json(); } catch { return undefined; }
+  if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto)) return undefined;
+  const { code, campo } = bruto as Record<string, unknown>;
+  const codigo = textoCurto(code);
+  if (!codigo) return undefined;
+  const lido = textoCurto(campo);
+  return lido ? { codigo, campo: lido } : { codigo };
+}
+
+const CANCELADO =Object.freeze({ ok: false, falha: 'cancelado', status: 0 }) satisfies Resultado<never>;
 
 export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => {}, buscar = (u, i) => globalThis.fetch(u, i) }: DependenciasDoCliente): Cliente {
   // o sinal comum a todo get e post em curso; cancelarChamadas aborta este e abre outro
@@ -104,7 +131,11 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
         perderCredencial(token);
         return { ok: false, falha: 'nao_autenticado', status: 401 };
       }
-      if (!resposta.ok) return { ok: false, falha: 'recusado', status: resposta.status };
+      if (!resposta.ok) {
+        const detalhe = await detalheDaRecusa(resposta);
+        if (cancelado()) return CANCELADO;
+        return detalhe ? { ok: false, falha: 'recusado', status: resposta.status, detalhe } : { ok: false, falha: 'recusado', status: resposta.status };
+      }
       let bruto: unknown;
       try { bruto = await resposta.json(); } catch {
         return cancelado() ? CANCELADO : { ok: false, falha: 'resposta_invalida', status: resposta.status };
