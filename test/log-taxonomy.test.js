@@ -85,7 +85,7 @@ test('recusa da política de uso do modelo tem classe própria, de ambiente e se
   assert.equal(c.id, 'recusa-de-seguranca');
   assert.equal(c.kind, 'permanente');
   assert.equal(c.grupo, 'ambiente');
-  assert.match(c.acao, /outro modelo ou provedor/);
+  assert.match(c.acao, /outro modelo \(Sistema, Automação\) ou com outro perfil do Claude/);
 });
 
 test('resultado ausente ou inválido tem diagnóstico próprio e não provoca retry', () => {
@@ -756,4 +756,8 @@ test('sem perfil de chave de API é permanente e de credencial: esperar não res
   const novo = classify('sem perfil do Claude utilizável (assinatura ou chave de API): faça o login do perfil ou cadastre a chave em Sistema > Plano e chaves');
   assert.equal(novo.id, 'sem-perfil-de-chave');
   assert.equal(novo.kind, 'permanente');
+  // desde 16/11/2026 a frase aponta para a API, porque a tela de Plano e chaves saiu: a classe é a mesma
+  const atual = classify('sem perfil do Claude utilizável (assinatura ou chave de API): faça o login do perfil ou cadastre a chave pela API do motor (docs/CONFIGURATION.md, Perfis do Claude)');
+  assert.equal(atual.id, 'sem-perfil-de-chave');
+  assert.equal(atual.kind, 'permanente');
 });

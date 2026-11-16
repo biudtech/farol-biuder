@@ -103,7 +103,8 @@ test('avisoDeVencimento: longe não avisa; cada faixa tem chave própria; login 
   assert.equal(new Set([perto.chave, ultimo.chave, vencido.chave]).size, 3);
   assert.match(perto.texto, /BIUD-EX-5X vence em/);
   assert.match(vencido.texto, /BIUD-EX-5X venceu em/);
-  assert.match(perto.texto, /Plano e chaves/);
+  assert.match(perto.texto, /Renove fazendo o login da assinatura de novo, pela API do motor/);
+  assert.doesNotMatch(perto.texto + vencido.texto, /Plano e chaves|Sistema >/, 'não aponta para tela que saiu');
   const renovado = uso.avisoDeVencimento(PERFIL, vence + 28 * TEMPOS.DIA_MS, vence + 26 * TEMPOS.DIA_MS);
   assert.notEqual(renovado.chave, perto.chave);
 });
@@ -183,6 +184,8 @@ test('falha de passagem mantém a última leitura boa, marcada; depois de uma ho
   assert.equal(l.erro, 'o Claude Code não respondeu a tempo');
   const tela = uso.usoParaTela(engine, PERFIL, AGORA);
   assert.deepEqual([tela.desatualizado, tela.lidaEm], [true, boa.em]);
+  assert.deepEqual(tela.janelas, l.janelas, 'a última leitura boa segue na projeção, com as janelas dela');
+  assert.equal(tela.janelas[0].usado, 0.29);
 
   const velha = { ...boa, em: boa.em - TEMPOS.HORA_MS - 1 };
   const nova = { ok: false, respondeu: false, erro: 'x', semLogin: false, janelas: [], venceEm: 0, em: boa.em };

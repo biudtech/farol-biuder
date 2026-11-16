@@ -79,7 +79,7 @@ test('GET /api/state devolve o snapshot serializável', async () => {
   assert.equal(typeof snap, 'object');
   assert.ok(snap.decisions, 'snapshot traz decisions');
   assert.ok(Array.isArray(snap.decisions.resolved), 'resolved é array');
-  assert.ok(snap.decisions.resolved.length <= 30, 'payload do SSE respeita o cap de 30 (Revisões recentes)');
+  assert.ok(snap.decisions.resolved.length <= 30, 'payload do SSE respeita o cap de 30 (as resolvidas mais recentes)');
 });
 
 test('GET / não serve página: responde 404 em JSON', async () => {
