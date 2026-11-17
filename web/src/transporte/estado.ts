@@ -94,7 +94,8 @@ export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, regi
 // `state-patch`. Ausente, torto ou igual ao que a sessão já tem, as sessões ficam como estavam
 // (o mesmo array): a linha do feed não redesenha o cartão à toa.
 function comProgresso(sessoes: SessaoAtiva[] | undefined, id: string, progresso: SessaoAtiva['progresso']): { activeSessions?: SessaoAtiva[] } {
-  const atual = sessoes?.find((s) => s.id === id);
-  if (!progresso || !atual || mesmoJson(atual.progresso, progresso)) return {};
+  if (!progresso || !sessoes) return {};
+  const atual = sessoes.find((s) => s.id === id);
+  if (!atual || mesmoJson(atual.progresso, progresso)) return {};
   return { activeSessions: sessoes.map((s) => (s.id === id ? { ...s, progresso } : s)) };
 }
