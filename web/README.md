@@ -168,6 +168,13 @@ cabeçalhos) derrubam a conexão, e a reconexão espera de 3 a 30 s, dobrando a 
 espera só volta a 3 s quando o fluxo entrega um evento, não quando o motor aceita a conexão.
 Um evento que passa de 8 MiB sem terminar também derruba a conexão.
 
+Quando a conexão cai com a tela já desenhada, a casca mostra a faixa "Sem motor"
+(`FaixaDeQueda.tsx`) no alto do conteúdo: a hora da queda (a primeira desde o último
+"conectado", medida aqui), que o que está na tela é do último estado recebido, e a hora da
+próxima tentativa, que o cliente informa pelo recuo (`aoMudarConexao(conexao, esperaMs)`).
+"Tentar agora" adianta essa tentativa (`tentarAgora` do fluxo aberto, por `app.tentarReconectar`)
+sem zerar o recuo das seguintes. Sem estado recebido não há faixa: a tela é a de conexão.
+
 **Como testar.** O teste mora ao lado do arquivo, com nome `*.test.ts` ou `*.test.tsx`. Lógica
 (transporte, contrato, estado) testa sem React, com `fetch` e relógio de mentira; escreva o
 teste antes. Componente usa Testing Library e começa com `// @vitest-environment jsdom`. Cor

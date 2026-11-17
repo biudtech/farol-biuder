@@ -48,8 +48,13 @@ export type Conexao = 'conectando' | 'conectado' | 'reconectando' | 'sem-motor';
 export interface OuvinteDoFluxo {
   // Se lançar, o evento é descartado e o fluxo segue (a exceção é registrada uma vez).
   aoEvento(tipo: string, dados: string): void;
-  aoMudarConexao(conexao: Conexao): void;
+  // `esperaMs`: na queda, em quanto tempo sai a próxima tentativa (o recuo de agora)
+  aoMudarConexao(conexao: Conexao, esperaMs?: number): void;
 }
+
+// O que abrirFluxo devolve: chamar fecha o fluxo; `tentarAgora` antecipa a próxima tentativa
+// quando o fluxo está esperando o recuo depois de uma queda (fora disso não faz nada).
+export type FluxoAberto = (() => void) & { tentarAgora(): void };
 
 export interface Cliente {
   get<T>(caminho: string, ler: Leitor<T>, opcoes?: OpcoesDaChamada): Promise<Resultado<T>>;
@@ -57,8 +62,8 @@ export interface Cliente {
   // Aborta todo get e post em curso: cada um devolve `cancelado`, e a resposta que ainda
   // chegar não é lida. O que for chamado depois segue normal. Não mexe no fluxo de eventos.
   cancelarChamadas(): void;
-  // Abre GET /api/events e mantém aberto. Devolve a função que fecha.
-  abrirFluxo(ouvinte: OuvinteDoFluxo): () => void;
+  // Abre GET /api/events e mantém aberto. Devolve a função que fecha, com o tentar agora.
+  abrirFluxo(ouvinte: OuvinteDoFluxo): FluxoAberto;
 }
 
 export interface DependenciasDoCliente {
@@ -208,8 +213,9 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
     }
   }
 
-  function abrirFluxo(ouvinte: OuvinteDoFluxo): () => void {
+  function abrirFluxo(ouvinte: OuvinteDoFluxo): FluxoAberto {
     let fechado = false;
+    let esperandoRecuo = false;
     let controle: AbortController | null = null;
     let espera = RECUO_INICIAL_MS;
     let relogioDoRecuo: ReturnType<typeof setTimeout> | undefined;
@@ -293,6 +299,7 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
     }
 
     async function tentar(): Promise<void> {
+      esperandoRecuo = false;
       if (fechado) return;
       const destaTentativa = new AbortController();
       controle = destaTentativa;
@@ -309,21 +316,30 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
         aoNaoAutenticado();
         return;
       }
-      ouvinte.aoMudarConexao(desfecho === 'caiu' ? 'reconectando' : 'sem-motor');
       const agora = espera;
       espera = proximoRecuo(espera);
+      esperandoRecuo = true;
       relogioDoRecuo = setTimeout(() => { void tentar(); }, agora);
+      ouvinte.aoMudarConexao(desfecho === 'caiu' ? 'reconectando' : 'sem-motor', agora);
     }
 
     ouvinte.aoMudarConexao('conectando');
     void tentar();
 
-    return () => {
+    const fechar = () => {
       fechado = true;
       clearTimeout(relogioDoRecuo);
       clearTimeout(relogioOcioso);
       controle?.abort();
     };
+    // Só no recuo: com o pedido em curso (ou conectado) já há tentativa no ar. O recuo continua
+    // o mesmo: o clique adianta esta tentativa, não zera a espera das seguintes.
+    const tentarAgora = () => {
+      if (fechado || !esperandoRecuo) return;
+      clearTimeout(relogioDoRecuo);
+      void tentar();
+    };
+    return Object.assign(fechar, { tentarAgora });
   }
 
   return {
