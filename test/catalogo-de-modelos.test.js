@@ -1,6 +1,6 @@
 // Selecao de modelo centralizada: cada selecao definida UMA vez (24/09/2026).
 //
-// Pedido do Wanderson: "essa parte de selecao de modelo precisa estar bem centralizada pra
+// Pedido do dono: "essa parte de selecao de modelo precisa estar bem centralizada pra
 // que sempre que eu selecionar algum modo isso seja bem definido e equalizado no farol".
 // Ate aqui a mesma decisao estava escrita em quatro lugares (allowlist, seletor da tela,
 // roteador do Auto e a regra de esforco em tres copias). Estes casos travam que ela mora

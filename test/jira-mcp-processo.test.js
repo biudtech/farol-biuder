@@ -5,7 +5,7 @@
    processo. O que havia era estático dos dois lados: um teste lia o
    `--mcp-config` escrito (test/jira-composer.test.js) e outro lia a lista de
    pastas dos instaladores. Os dois passavam
-   verdes enquanto, na máquina do Guilherme, o servidor não subia de jeito
+   verdes enquanto, na máquina de um colega, o servidor não subia de jeito
    nenhum. O gate aprovou o PR sem tocar no comportamento.
 
    O defeito de campo tinha DUAS causas somadas, cada uma suficiente sozinha:

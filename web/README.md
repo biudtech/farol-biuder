@@ -98,7 +98,7 @@ corrigida sozinho, o `overrides` sai.
 | `src/seguranca/` | A regra da Content-Security-Policy e os cabeçalhos fixos que o `next.config.ts` devolve |
 | `src/proxy.ts` | Gera o nonce e o cabeçalho da CSP a cada pedido; o `matcher` dele diz o que fica de fora |
 
-## Convenções para os próximos lotes
+## Convenções
 
 **Onde entra tela.** Cada aba é uma pasta em `src/app/` com um `page.tsx` fino, que só escolhe
 o componente. A tela mesma é um componente em `src/componentes/`, com `'use client'`, porque
@@ -251,12 +251,27 @@ do motor, não com regra na tela:
 - **As ações permitidas por pendência.** Não há campo que diga o que cada pendência aceita
   (por exemplo, Aprovar barrado pela avaliação técnica). A tela oferece o botão e o motor
   recusa.
-- **Quando o motor revisa de novo sozinho** (`reRounds`). A pendência de commit novo mostra o
-  motivo do bloqueio e o Revisar agora, mas não diz se e quando a rodada automática sai.
 - **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
   na aba aberta.
 - **O bloco de cada pendência.** Não há campo que diga se a pendência espera clique ou se
   resolve sozinha: a tela corta pela presença de `esperaCi` e de `esperaProva` sem `pedeVoce`.
+
+### O que o front ainda não usa do que o motor manda
+
+Cinco chaves do snapshot continuam sem tipo em `src/contratos/snapshot.ts` (`unknown`): chegam
+ao store e nenhuma tela as lê. Aqui a lacuna é do front.
+
+- **`reRounds`** (`reRoundParaUi`, `lib/engine/review.js`): por pendência de commit novo, o que
+  a rodada automática vai fazer e a partir de quando, ou por que não vai. Sem ler a chave, o
+  cartão mostra o motivo do bloqueio e o Revisar agora, e não diz se e quando o motor revisa de
+  novo sozinho.
+- **`baseline`**: desde quando o motor vigia e quantos PRs ficaram fora da fila na primeira
+  checagem (`lib/engine/baseline.js`).
+- **`filaJusta`**: o rodízio entre organizações e o teto de revisões simultâneas, como estão
+  agora (`filaJusta`, `server.js`).
+- **`reviewActions`**: a última ação registrada para cada PR que o snapshot traz
+  (`snapshotReviewActions`, `lib/engine/snapshot-decisions.js`).
+- **`paths`**: as pastas do motor (`home` e `workspace`).
 
 ## A tela Histórico
 

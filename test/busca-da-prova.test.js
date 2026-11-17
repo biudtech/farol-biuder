@@ -283,7 +283,7 @@ test('inventário acima do limite do GitHub: desfecho terminal, a decisão é su
   assert.notEqual(e.shouldAutoApprove({ ...PR }, passageiro).motivo, 'inventario_no_limite');
 });
 
-// Edicoes-CNBB/biblioteca-cnbb-web#182, 05/11/2026: a mesma divergência entre passadas, num
+// acme/web#182, 05/11/2026: a mesma divergência entre passadas, num
 // arquivo inalterado, voltou em 7 commits e cada um gastou as duas buscas antes de virar
 // ressalva. O checkpoint é só de acréscimo: outra tentativa nunca desfaz a divergência.
 const DIVERGENCIA = 'divergência de veredito em src/a.ts:75 ("o alerta some ao salvar") entre passadas de verificação';

@@ -42,7 +42,7 @@ const HEAD_NOVO = '135fa0b4da5fadb9fda260565f166c977eb5d992';
 const PR = {
   key: 'acme/app#796', repo: 'acme/app', number: 796,
   url: 'https://github.com/acme/app/pull/796',
-  requested: true, title: 'feat: jornada de entrada', author: 'gabriel'
+  requested: true, title: 'feat: jornada de entrada', author: 'colega'
 };
 
 function novoEngine() {

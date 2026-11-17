@@ -63,7 +63,7 @@ const HEAD_NOVO = 'b8722a34da5fadb9fda260565f166c977eb5d992';
 const PR = {
   key: 'biudtech/biud-esg#224', repo: 'biudtech/biud-esg', number: 224,
   url: 'https://github.com/biudtech/biud-esg/pull/224',
-  requested: true, title: 'feat(reports): separa leitura e escrita', author: 'thiago'
+  requested: true, title: 'feat(reports): separa leitura e escrita', author: 'colega'
 };
 
 const APPROVE = { event: 'APPROVE', body: 'A matriz de permissões fecha.', comments: [] };

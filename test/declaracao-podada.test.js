@@ -1,6 +1,6 @@
 // Pasta ausente com o resto da declaração de pé vira ressalva (07/11/2026).
 //
-// Medido no admin da Hostinger: a declaração do biud-frontend listava 1206 pastas de teste, três
+// Medido numa instalação hospedada: a declaração do biud-frontend listava 1206 pastas de teste, três
 // delas apagadas da development em 01/11 e ainda vivas na production. Toda revisão de PR da linha
 // de desenvolvimento parava em "recuperação pausada" (21 PRs desde 31/10), porque uma declaração só
 // por repositório não serve às duas linhas. Agora a conferência tira da cópia avaliada só as pastas

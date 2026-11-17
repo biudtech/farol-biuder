@@ -17,7 +17,7 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 451,
+    "maxLines": 438,
     "profundidadeExcedida": 3
   },
   "lib/engine/session.js": {
@@ -27,7 +27,7 @@
     "profundidadeExcedida": 7
   },
   "lib/engine/usage.js": {
-    "ternarioAninhado": 2
+    "ternarioAninhado": 1
   },
   "lib/format.js": {
     "ternarioAninhado": 1
@@ -45,11 +45,11 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 471,
+    "maxLines": 379,
     "processEnvDireto": 5,
     "ternarioAninhado": 2,
     "tempoMagico": 1,
-    "profundidadeExcedida": 5
+    "profundidadeExcedida": 3
   },
   "tools/quality/gate.js": {
     "jsonParseCru": 1,

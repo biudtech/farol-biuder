@@ -43,7 +43,7 @@ const HEAD_NOVO = '2187af82d4e90000000000000000000000000000';
 
 const PR = {
   key: 'o/r#742', repo: 'o/r', number: 742, url: 'https://github.com/o/r/pull/742',
-  requested: true, title: 'fix(shell): preserva permissões', author: 'thiago'
+  requested: true, title: 'fix(shell): preserva permissões', author: 'colega'
 };
 
 function envelopeReject() {

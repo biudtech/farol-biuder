@@ -97,8 +97,8 @@ test('a tabela saneia as duas chaves com os saneadores de lib/parse.js', () => {
 });
 
 test('no padrão as duas chaves não são gravadas no config.json; preenchidas, são', () => {
-  const gravado = paraGravar({ hostPublico: '', origensPermitidas: [], theme: 'dark' });
-  assert.deepEqual(gravado, { theme: 'dark' });
+  const gravado = paraGravar({ hostPublico: '', origensPermitidas: [], reviewFast: true });
+  assert.deepEqual(gravado, { reviewFast: true });
   assert.deepEqual(paraGravar({ hostPublico: HOST, origensPermitidas: [ORIGEM] }), { hostPublico: HOST, origensPermitidas: [ORIGEM] });
 });
 

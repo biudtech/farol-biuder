@@ -1,9 +1,9 @@
-// Label de revisão em andamento (pedido do Thiago, 18/08/2026): quando a revisão
+// Label de revisão em andamento (pedido de um revisor do time, 18/08/2026): quando a revisão
 // headless de um PR começa, o PR ganha a label "<conta>:revisando" no GitHub e a
-// perde quando a sessão termina. Desde 19/08/2026 (pedido do Thiago), label que não
+// perde quando a sessão termina. Desde 19/08/2026 (pedido de um revisor do time), label que não
 // existe no repo é CRIADA pelo Farol (gh label create) e a adição é retentada UMA
 // vez. Em 28/08/2026 a label morreu de manhã (v2.53.9, trocada por refs git) e
-// VOLTOU à tarde por decisão do Wanderson: a visibilidade pro time é desejada, o
+// VOLTOU à tarde por decisão do dono: a visibilidade pro time é desejada, o
 // proibido é texto público não-humanizado. O contrato aqui é o dos GUARDAS e da
 // SEQUÊNCIA de chamadas, provados com um runner injetado (sem rede): a composição
 // do nome é pura; sem conta ou sem token o gh NUNCA é chamado (mesma raiz A1 do
@@ -29,7 +29,7 @@ const { inProgressLabelFor, addInProgressLabel, removeInProgressLabel } = await 
 const { repoDoPr } = await import('../lib/engine/review-label-target.js');
 
 test('inProgressLabelFor compõe "<conta>:revisando" e vazio sem conta', () => {
-  assert.equal(inProgressLabelFor('thiagocarvalho-dev'), 'thiagocarvalho-dev:revisando');
+  assert.equal(inProgressLabelFor('revisor-dev'), 'revisor-dev:revisando');
   assert.equal(inProgressLabelFor('  x  '), 'x:revisando');
   assert.equal(inProgressLabelFor(''), '');
   assert.equal(inProgressLabelFor(null), '');
@@ -54,13 +54,13 @@ test('addInProgressLabel sem conta resolvida não roda gh e devolve vazio', asyn
 });
 
 test('addInProgressLabel sem token da conta não roda gh e devolve vazio', async () => {
-  const e = engineQueNaoPodeRodarGh({ account: 'thiagocarvalho-dev', token: null });
+  const e = engineQueNaoPodeRodarGh({ account: 'revisor-dev', token: null });
   const label = await addInProgressLabel(e, { key: 'o/r#1', url: 'https://github.com/o/r/pull/1' });
   assert.equal(label, '');
 });
 
 test('addInProgressLabel sem url do PR não roda gh e devolve vazio', async () => {
-  const e = engineQueNaoPodeRodarGh({ account: 'thiagocarvalho-dev', token: 'tok' });
+  const e = engineQueNaoPodeRodarGh({ account: 'revisor-dev', token: 'tok' });
   const label = await addInProgressLabel(e, { key: 'o/r#1', url: '' });
   assert.equal(label, '');
 });
@@ -69,7 +69,7 @@ test('addInProgressLabel sem url do PR não roda gh e devolve vazio', async () =
 // verdade, quem responde é o fake, que grava a sequência de comandos.
 function engineComGh() {
   return {
-    accountForPr: () => 'thiagocarvalho-dev',
+    accountForPr: () => 'revisor-dev',
     tokenFor: () => 'tok',
     ghEnv: () => ({ GH_TOKEN: 'tok' }),
     log: () => {},
@@ -81,7 +81,7 @@ test('adição que funciona de primeira não cria label nenhuma', async () => {
   const chamadas = [];
   const run = async (cmd, args) => { chamadas.push(args.slice(0, 2).join(' ')); return { ok: true }; };
   const label = await addInProgressLabel(engineComGh(), PR, run);
-  assert.equal(label, 'thiagocarvalho-dev:revisando');
+  assert.equal(label, 'revisor-dev:revisando');
   assert.deepEqual(chamadas, ['pr edit']);
 });
 
@@ -90,14 +90,14 @@ test('label inexistente é criada no repo e a adição é retentada uma vez', as
   const run = async (cmd, args) => {
     chamadas.push(args);
     // 1ª adição falha (label não existe), criação ok, 2ª adição ok
-    if (args[0] === 'pr' && chamadas.filter(c => c[0] === 'pr').length === 1) return { ok: false, stderr: "'thiagocarvalho-dev:revisando' not found" };
+    if (args[0] === 'pr' && chamadas.filter(c => c[0] === 'pr').length === 1) return { ok: false, stderr: "'revisor-dev:revisando' not found" };
     return { ok: true };
   };
   const label = await addInProgressLabel(engineComGh(), PR, run);
-  assert.equal(label, 'thiagocarvalho-dev:revisando');
+  assert.equal(label, 'revisor-dev:revisando');
   assert.deepEqual(chamadas.map(c => c.slice(0, 2).join(' ')), ['pr edit', 'label create', 'pr edit']);
   const create = chamadas[1];
-  assert.equal(create[2], 'thiagocarvalho-dev:revisando');
+  assert.equal(create[2], 'revisor-dev:revisando');
   assert.equal(create[create.indexOf('--repo') + 1], 'o/r');
   // a descrição não pode citar o Farol nem automação (autor não sabe que é bot)
   const desc = create[create.indexOf('--description') + 1];
@@ -108,7 +108,7 @@ test('criação que falha preserva a tag tentada para limpeza, sem terceira tent
   const chamadas = [];
   const run = async (cmd, args) => { chamadas.push(args.slice(0, 2).join(' ')); return { ok: false, stderr: 'boom' }; };
   const label = await addInProgressLabel(engineComGh(), PR, run);
-  assert.equal(label, 'thiagocarvalho-dev:revisando');
+  assert.equal(label, 'revisor-dev:revisando');
   assert.deepEqual(chamadas, ['pr edit', 'label create']);
 });
 
@@ -119,7 +119,7 @@ test('retentativa que falha mantém a tag tentada disponível para limpeza', asy
     return { ok: args[0] === 'label' };
   };
   const label = await addInProgressLabel(engineComGh(), PR, run);
-  assert.equal(label, 'thiagocarvalho-dev:revisando');
+  assert.equal(label, 'revisor-dev:revisando');
   assert.deepEqual(chamadas, ['pr edit', 'label create', 'pr edit']);
 });
 
@@ -132,23 +132,23 @@ test('identidade do PR incompatível com a URL não escreve label', async () => 
 });
 
 test('removeInProgressLabel sem label aplicada é no-op (não toca o engine)', async () => {
-  const e = engineQueNaoPodeRodarGh({ account: 'thiagocarvalho-dev', token: 'tok' });
+  const e = engineQueNaoPodeRodarGh({ account: 'revisor-dev', token: 'tok' });
   await removeInProgressLabel(e, { key: 'o/r#1', url: 'https://github.com/o/r/pull/1' }, '');
 });
 
 test('falha na remoção nunca sobe: vira WARN no log', async () => {
   const logs = [];
   const e = {
-    accountForPr: () => 'thiagocarvalho-dev',
+    accountForPr: () => 'revisor-dev',
     // ghEnv explode simulando o token sumindo entre a adição e a remoção (flake do
     // keyring): a remoção não pode derrubar o finally da revisão por causa disso.
     ghEnv: () => { throw new Error('conta sem token no gh'); },
     log: (level, msg) => logs.push({ level, msg }),
   };
-  await removeInProgressLabel(e, { key: 'o/r#1', url: 'https://github.com/o/r/pull/1' }, 'thiagocarvalho-dev:revisando');
+  await removeInProgressLabel(e, { key: 'o/r#1', url: 'https://github.com/o/r/pull/1' }, 'revisor-dev:revisando');
   assert.equal(logs.length, 1);
   assert.equal(logs[0].level, 'WARN');
-  assert.match(logs[0].msg, /thiagocarvalho-dev:revisando/);
+  assert.match(logs[0].msg, /revisor-dev:revisando/);
   assert.match(logs[0].msg, /o\/r#1/);
 });
 

@@ -1,82 +1,91 @@
 # Farol BIUD
 
-Revisor autônomo de pull requests da BIUD.
+Revisor autônomo de pull requests da BIUD. Monitora os PRs pedidos a uma conta revisora do
+GitHub, revisa cada um numa sessão headless do Claude Code (com o card do Jira lido e o diff em
+disco), passa o resultado pelos gates e posta aprovação, pedido de mudanças ou comentário. O
+que a política da conta não decide sozinha fica na mesa ("Precisa de você"), esperando uma
+pessoa.
 
-O Farol é um motor: um processo Node que monitora os PRs pedidos a uma conta revisora do GitHub,
-revisa cada um numa sessão headless do Claude Code (com o card do Jira lido e o diff em disco), passa
-o resultado pelos gates e posta aprovação, pedido de mudanças ou comentário. O que a política da
-conta não decide sozinha fica na mesa, esperando uma pessoa.
+São duas partes, no mesmo repositório:
 
-Uma instância, uma conta revisora, só Linux, sem dependência npm de runtime.
+- **O motor** (a raiz): um processo Node, uma instância, uma conta revisora, só Linux, sem
+  dependência npm de runtime. Serve só a API (HTTP e SSE) e guarda tudo em `~/.farol`.
+- **O front** ([`web/`](web/README.md)): a tela, em Next.js, pacote à parte. Roda em outro
+  endereço e fala com o motor só pela API. Cinco telas: Radar, Histórico, Time, Consumo e
+  Sistema.
 
-## Como rodar
+## Subir o motor
 
-Requisitos, no usuário que roda o motor:
-
-- Linux e Node `>=24.22.1 <25` (o `.nvmrc` fixa 24.22.1);
-- `gh` logado na conta revisora (`gh auth login`);
-- `claude` (Claude Code) no PATH;
-- usuário comum, nunca root: o Claude Code recusa o modo headless com uid 0.
+No usuário que roda o motor: Linux, Node `>=24.22.1 <25` (o `.nvmrc` fixa 24.22.1), `gh`
+logado na conta revisora (`gh auth login`) e `claude` (Claude Code) no PATH. Usuário comum,
+nunca root: o Claude Code recusa o modo headless com uid 0.
 
 ```sh
 node server.js
 ```
 
-O motor escuta em `http://127.0.0.1:47170`, serve só a API e guarda tudo em `~/.farol`. A tela é o
-front de [`web/`](web/README.md), um pacote à parte que roda em outro endereço e fala com essa API.
+O motor escuta em `http://127.0.0.1:47170`. Fora de `/api/` ele responde 404: não há página.
 
-**Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada nasce
-revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
+**Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada
+nasce revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
 `~/.farol/config.json` antes do primeiro boot:
 
 ```json
 { "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" } }
 ```
 
-Na primeira checagem, os PRs que já pediam revisão ficam fora da fila: o motor só revisa o que chegar
-depois.
+Na primeira checagem, os PRs que já pediam revisão ficam fora da fila: o motor só revisa o que
+chegar depois.
 
-## Configuração mínima
+## Rodar o front contra o motor
 
-Tudo mora em `~/.farol/config.json`. A tela (Sistema) edita a conta, a política e a automação; o
-resto entra pela API ou pelo arquivo. O detalhe está em
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+1. Libere a origem do front no `config.json` do motor e reinicie:
 
-| O quê | Onde | Leia |
-|---|---|---|
-| A conta revisora: login, organizações monitoradas (`owners`) e a política (`autoReview`, `onClean`, `onCaveats`, `onReject`) | `conta`, pela tela ou pelo arquivo | [A conta revisora e a política](docs/CONFIGURATION.md#a-conta-revisora-e-a-política) |
-| O perfil do Claude: por assinatura (login feito pela API, sem terminal) ou por chave de API (a chave entra e não sai mais do motor) | `claudeProfiles`, por `POST /api/settings` ou pelo arquivo | [Perfis do Claude](docs/CONFIGURATION.md#perfis-do-claude) |
-| O Jira de cada organização, para a revisão ler o card | `jiraSites`, por `POST /api/settings` ou pelo arquivo; a credencial, por `POST /api/jira/credential` | [Jira](docs/CONFIGURATION.md#jira) |
-| Motor hospedado: `hostPublico` (o nome com que o proxy chega ao motor) e `origensPermitidas` (de onde o front chama a API). Qualquer uma das duas já exige autenticação | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
-| Autenticação da API sem as duas chaves acima: `"localAuth": "exigir"`, obrigatório em qualquer instância que não seja só da própria máquina | só pelo arquivo | [Para hospedar](docs/CONFIGURATION.md#para-hospedar) |
+   ```json
+   { "origensPermitidas": ["http://localhost:3100"] }
+   ```
 
-Com a autenticação exigida, a tela pede um código de pareamento. Gere um no servidor com
-`node tools/farol-parear.js`.
+   Com `origensPermitidas` preenchida o motor passa a exigir autenticação em toda a API.
 
-## Como testar
+2. Suba o front (qualquer sistema com Node 24):
+
+   ```sh
+   cd web
+   npm ci
+   cp .env.example .env.local
+   npm run dev
+   ```
+
+3. **Parear.** Abra `http://localhost:3100`. A tela pede um código: gere-o no servidor do
+   motor, com o mesmo `FAROL_HOME` dele, e digite. O código vale dez minutos e uma vez só.
+
+   ```sh
+   node tools/farol-parear.js
+   ```
+
+O que a tela Sistema edita: as organizações e a política da conta, e quatro chaves de
+automação. Perfil do Claude (chave de API ou login da assinatura), sites e credencial do Jira e
+as outras preferências entram pela API ou pelo arquivo; as chaves de rede (`bind`, `port`,
+`hostPublico`, `origensPermitidas`, `localAuth`), só pelo arquivo. O passo a passo de cada uma
+está em [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+## Testar
 
 ```sh
-npm run check && npm run lint && npm test
+npm run check && npm run lint && npm test     # o motor, em Linux
+cd web && npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build
 ```
 
-É o gate do repositório e o mesmo que o CI roda (check obrigatório `ci`). A suíte usa o runner nativo
-do Node e sobe o motor contra pastas temporárias. Fora de Linux, rode num container:
-
-```sh
-docker run --rm -v "$PWD:/src:ro" node:24.22.1-bookworm bash -c \
-  'cp -r /src /work && cd /work && npm run check && npm run lint && npm test'
-```
-
-Para olhar a tela sem tocar nos dados reais: `FAROL_HOME=/tmp/farol-teste node server.js`. Uma
-instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, salvo com
-`"instanciaIsoladaPosta": true` no `config.json` dela ou com a variável
-`FAROL_UPDATE_MANAGER=external`.
+O CI roda os dois. O motor recusa plataforma que não é Linux: em outra máquina, rode o gate
+dele num Linux (WSL, por exemplo). Para subir um motor sem tocar nos dados reais:
+`FAROL_HOME=/tmp/farol-teste node server.js`; uma instância com `FAROL_HOME` fora de `~/.farol`
+não escreve no GitHub.
 
 ## Mapa do código
 
 | Caminho | O que é |
 |---|---|
-| `server.js` | A entrada do motor: `node server.js`, ou `npm run server`, que antes confere Node e plataforma |
+| `server.js` | A entrada do motor: `node server.js` ou `npm run server`. O próprio `server.js` confere plataforma e Node antes de tudo |
 | `lib/engine/` | O ciclo de revisão: fila, sessão, gates, postagem, re-revisão, consumo |
 | `lib/http-server.js` | A API (`/api`) e o SSE |
 | `lib/local-auth/` | Autenticação e pareamento da API |
@@ -85,21 +94,28 @@ instância com `FAROL_HOME` fora de `~/.farol` não escreve no GitHub, salvo com
 | `lib/review-source/` | Aquisição e cache do código do PR |
 | `lib/technical-review/` | A avaliação técnica do PR revisado |
 | `workspace-template/` | O protocolo que a sessão de IA lê |
-| `web/` | A tela: o front, pacote à parte ([`web/README.md`](web/README.md)) |
-| `test/` | A suíte: `npm test` |
+| `web/` | O front, pacote à parte |
+| `test/` | A suíte do motor: `npm test` |
 | `tools/quality/` | O gate de qualidade: `npm run lint` |
 | `tools/check-syntax.js` | O gate de sintaxe: `npm run check` |
 | `tools/farol-parear.js` | Gera o código de pareamento da API |
 
-O mapa por assunto, os invariantes e as regras de quem mexe no código estão no
-[`CLAUDE.md`](CLAUDE.md).
-
 ## Guias
 
-- [`CLAUDE.md`](CLAUDE.md): guia do mantenedor.
-- [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md): as regras de postagem, uma a uma.
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md): configuração e hospedagem.
-- [`docs/QUALITY.md`](docs/QUALITY.md): o gate e o ratchet de qualidade.
-- [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md): como contribuir.
-- [`.github/SECURITY.md`](.github/SECURITY.md): como reportar falha de segurança.
-- [`CHANGELOG.md`](CHANGELOG.md): histórico.
+| Guia | Assunto |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | Guia do mantenedor: mapa por assunto, invariantes, a API, como testar |
+| [`web/README.md`](web/README.md) | O front: como rodar, convenções, o contrato de cada tela |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Conta e política, preferências, perfis do Claude, Jira, hospedagem |
+| [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | As regras de postagem, uma a uma |
+| [`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md) | O que o consumo mede e `GET /api/usage` |
+| [`docs/QUALITY.md`](docs/QUALITY.md) | O gate e o ratchet de qualidade |
+| [`docs/RUNTIME.md`](docs/RUNTIME.md) | O contrato de versão do Node |
+| [`docs/SOURCE-STORAGE.md`](docs/SOURCE-STORAGE.md) | O cache das fontes de revisão |
+| [`docs/CONTEXTO-FRONTEND.md`](docs/CONTEXTO-FRONTEND.md) | O mapa sintático do código do PR e os modos de seleção |
+| [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md), [`.github/SECURITY.md`](.github/SECURITY.md) | Como contribuir e como reportar falha de segurança |
+| [`CHANGELOG.md`](CHANGELOG.md) | Histórico |
+
+`docs/superpowers/` guarda desenhos e planos: é registro de decisão, não descreve o código de
+hoje. O desenho vigente é
+[`docs/superpowers/specs/2026-11-12-farol-biuder-enxuto-design.md`](docs/superpowers/specs/2026-11-12-farol-biuder-enxuto-design.md).

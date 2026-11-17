@@ -71,7 +71,7 @@ const GRAFIAS_ERRADAS = [
 
 for (const [escrita, certa] of GRAFIAS_ERRADAS) {
   test(`nome de chave errado: "${escrita}" impede o boot e a mensagem diz a grafia certa "${certa}"`, () => {
-    gravar({ theme: 'light', [escrita]: certa === 'origensPermitidas' ? ['https://painel.exemplo.com'] : 'farol.exemplo.com' });
+    gravar({ reviewFast: true, [escrita]: certa === 'origensPermitidas' ? ['https://painel.exemplo.com'] : 'farol.exemplo.com' });
     const mensagem = recusa();
     assert.ok(mensagem.includes(JSON.stringify(escrita)), `cita a chave como foi escrita\n${mensagem}`);
     assert.ok(mensagem.includes(`"${certa}"`), `diz a grafia certa\n${mensagem}`);

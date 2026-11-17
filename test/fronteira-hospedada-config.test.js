@@ -33,7 +33,7 @@ test('sem as chaves no arquivo o motor nasce em loopback puro e não as carimba 
   assert.equal(engine.config.hostPublico, '');
   assert.deepEqual(engine.config.origensPermitidas, []);
   assert.equal(exigeAutenticacao({ config: engine.config }), false);
-  engine.updateSettings({ soundEnabled: false });
+  engine.updateSettings({ reviewFast: true });
   const gravado = configGravada();
   assert.equal('hostPublico' in gravado, false);
   assert.equal('origensPermitidas' in gravado, false);
@@ -46,7 +46,7 @@ test('valores válidos no arquivo entram saneados e ligam a exigência de autent
   assert.equal(engine.config.hostPublico, 'farol.exemplo.com');
   assert.deepEqual(engine.config.origensPermitidas, ['https://painel.exemplo.com', 'http://localhost:3000']);
   assert.equal(exigeAutenticacao({ config: engine.config }), true);
-  engine.updateSettings({ soundEnabled: false });
+  engine.updateSettings({ reviewFast: true });
   assert.equal(configGravada().hostPublico, 'farol.exemplo.com', 'salvar preferência não apaga o que veio do arquivo');
   assert.deepEqual(configGravada().origensPermitidas, ['https://painel.exemplo.com', 'http://localhost:3000']);
 });
@@ -93,7 +93,7 @@ const TORTOS = [
 
 for (const [torto, chaves] of TORTOS) {
   test(`valor inválido no arquivo: a Engine não nasce, diz a chave e não toca no config.json: ${JSON.stringify(torto)}`, () => {
-    gravar({ theme: 'light', ...torto });
+    gravar({ reviewFast: true, ...torto });
     const antes = fs.readFileSync(CONFIG_FILE);
     let erro = null;
     try { new Engine(); } catch (e) { erro = e; }

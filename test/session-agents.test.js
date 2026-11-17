@@ -122,8 +122,8 @@ test('pushActivity: linha de subagente carrega o rótulo (item.a); linha da prin
    grava (review) e quem entrega ao snapshot (projectSessions). */
 
 test('projectSessions: o autor do PR chega inteiro no snapshot', () => {
-  const [p] = projectSessions([{ id: 'a1', mode: 'auto', pr: { key: 'org/app#1', url: 'u', author: 'gabrielk5' } }]);
-  assert.equal(p.pr.author, 'gabrielk5');
+  const [p] = projectSessions([{ id: 'a1', mode: 'auto', pr: { key: 'org/app#1', url: 'u', author: 'revisork5' } }]);
+  assert.equal(p.pr.author, 'revisork5');
 });
 
 test('a sessão de revisão grava o autor no pr (senão a UI perde a foto)', () => {

@@ -1,4 +1,4 @@
-// Arquivo do próprio Farol preso por outro processo (19/10/2026, biblioteca-cnbb-web#109):
+// Arquivo do próprio Farol preso por outro processo (19/10/2026, acme/web#109):
 // o rm do material da revisão técnica falhou com EPERM no Windows e, como roda no finally,
 // substituía o resultado da revisão. O PR estacionava como "falha não classificada".
 import fs from 'node:fs';
@@ -40,7 +40,7 @@ function travado(code) {
 }
 
 test('a mensagem real do farol.log é transitória, não falha não classificada', () => {
-  const real = "revisao autonoma Edicoes-CNBB/biblioteca-cnbb-web#109: EPERM, Permission denied: \\\\?\\C:\\Users\\wanderson\\.farol\\workspace\\state\\technical-review\\review-4j1GTS '\\\\?\\C:\\Users\\wanderson\\.farol\\workspace\\state\\technical-review\\review-4j1GTS'";
+  const real = "revisao autonoma acme/web#109: EPERM, Permission denied: \\\\?\\C:\\Users\\alguem\\.farol\\workspace\\state\\technical-review\\review-4j1GTS '\\\\?\\C:\\Users\\alguem\\.farol\\workspace\\state\\technical-review\\review-4j1GTS'";
   const c = classify(real);
   assert.equal(c.id, 'arquivo-local-preso');
   assert.equal(c.kind, 'transitorio');
@@ -48,8 +48,8 @@ test('a mensagem real do farol.log é transitória, não falha não classificada
 });
 
 test('FAROL_HOME com outro nome também é caminho do Farol', () => {
-  assert.equal(classify('EPERM, Permission denied: \\\\?\\D:\\dados\\farol-hostinger\\workspace\\state\\technical-review\\review-a').id, 'arquivo-local-preso');
-  assert.equal(classify("EBUSY: resource busy or locked, rmdir '/home/u/.farol-hostinger-test/workspace/state/technical-review/review-a'").id, 'arquivo-local-preso');
+  assert.equal(classify('EPERM, Permission denied: \\\\?\\D:\\dados\\farol-hospedado\\workspace\\state\\technical-review\\review-a').id, 'arquivo-local-preso');
+  assert.equal(classify("EBUSY: resource busy or locked, rmdir '/home/u/.farol-hospedado-test/workspace/state/technical-review/review-a'").id, 'arquivo-local-preso');
 });
 
 test('permissão negada fora do .farol continua não classificada', () => {

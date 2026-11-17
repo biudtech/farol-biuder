@@ -43,16 +43,16 @@ test('localAuth não é editável pela tela nem pelo updateSettings', () => {
 });
 
 test('paraGravar omite a chave no padrão e preserva quem ligou', () => {
-  assert.equal('localAuth' in paraGravar({ localAuth: '', theme: 'dark' }), false);
+  assert.equal('localAuth' in paraGravar({ localAuth: '', reviewFast: true }), false);
   assert.equal(paraGravar({ localAuth: 'exigir' }).localAuth, 'exigir');
-  assert.deepEqual(paraGravar({ theme: 'dark' }), { theme: 'dark' }, 'o resto da config passa inteiro');
+  assert.deepEqual(paraGravar({ reviewFast: true }), { reviewFast: true }, 'o resto da config passa inteiro');
 });
 
 test('quem nunca ligou o recurso não ganha localAuth no config.json (CT-COMPAT a)', () => {
   const engine = new Engine();
   assert.equal(engine.config.localAuth, '', 'em memória a chave existe com o padrão');
   assert.equal('localAuth' in configGravada(), false, 'o boot não carimba a chave no arquivo');
-  engine.updateSettings({ soundEnabled: false });
+  engine.updateSettings({ reviewFast: true });
   assert.equal('localAuth' in configGravada(), false, 'salvar preferência também não carimba');
 });
 
@@ -61,6 +61,6 @@ test('quem ligou localAuth no arquivo não perde a chave ao salvar preferência'
   fs.writeFileSync(CONFIG_FILE, JSON.stringify({ localAuth: 'exigir' }));
   const engine = new Engine();
   assert.equal(engine.config.localAuth, 'exigir');
-  engine.updateSettings({ soundEnabled: false });
+  engine.updateSettings({ reviewFast: true });
   assert.equal(configGravada().localAuth, 'exigir', 'a gravação preserva o que não está no padrão');
 });

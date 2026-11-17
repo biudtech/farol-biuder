@@ -104,7 +104,7 @@ test('parseHeadlessResult: objeto iniciado e truncado é JSON inválido, não re
 
 /* ---------- envelope incompleto por falha de infra não vira veredito ---------- */
 
-// 11/09/2026, Edicoes-CNBB/biblioteca-cnbb-ai-engine#13: os quatro lotes morreram na
+// 11/09/2026, acme/ai-engine#13: os quatro lotes morreram na
 // largada com "OAuth session expired and could not be refreshed" e a sessão devolveu
 // um envelope VÁLIDO com analysisStatus incomplete e payloads vazios. Como não houve
 // exceção, toda a máquina de retry/estacionamento (retryAfterNet, classify) ficou de

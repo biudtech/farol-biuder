@@ -76,7 +76,7 @@ test('sem Bearer, as rotas que eram das sessões interativas respondem 401, com 
 test('os cabeçalhos antigos não abrem nenhuma outra rota', async () => {
   for (const cabecalhos of CABECALHOS) {
     assert.equal((await pedir('GET', '/api/state', cabecalhos)).status, 401);
-    assert.equal((await pedir('POST', '/api/settings', cabecalhos, { theme: 'light' })).status, 401);
+    assert.equal((await pedir('POST', '/api/settings', cabecalhos, { reviewFast: true })).status, 401);
     assert.equal((await pedir('POST', '/api/review', cabecalhos, { urls: ['https://github.com/acme/repo/pull/1'] })).status, 401);
     assert.equal((await pedir('POST', '/api/decide', cabecalhos, { id: 'd1', action: 'approve' })).status, 401);
   }

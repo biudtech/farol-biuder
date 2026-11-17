@@ -1,5 +1,5 @@
 // Histórico de decisões: quanto o Farol guarda e como uma revisão antiga é
-// alcançada. Motivo (pedido do Wanderson, 11/08/2026): a tabela de Consumo
+// alcançada. Motivo (pedido do dono, 11/08/2026): a tabela de Consumo
 // passou a oferecer a caixa de revisão por clique, e o clique não podia esbarrar
 // num teto. O teto era 200 em disco e 30 no payload; o payload continua enxuto
 // (medido: 5,2 KB por decisão COM relatório, ou seja 3000 seriam 15 MB por push

@@ -204,7 +204,7 @@ test('3 rodadas hoje não seguram mais: head novo enfileira sem aviso de teto (v
    ÂNCORA de todos os alvos ANTES de consultar o gate de consciência; alvo
    bloqueado saía pelo `continue` com a âncora já queimada, e o
    `classificaReRound` nunca mais devolvia 'relanca' pra aquele head. Resultado
-   visto pelo Wanderson: o PR fica esperando clique, e o clique gera um round
+   visto pelo dono: o PR fica esperando clique, e o clique gera um round
    que precisa de clique de novo. O G7 do recoverInflight já tinha identificado
    essa classe de defeito no caminho do CRASH; o caminho do BLOQUEIO ficou. */
 

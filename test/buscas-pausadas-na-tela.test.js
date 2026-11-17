@@ -1,6 +1,6 @@
 // O bloqueio do GitHub tem que APARECER. Antes disto ele existia só no farol.log, e a
 // tela seguia exibindo o panorama velho como se fosse o de agora: 38 bloqueios medidos na
-// máquina do Wanderson em poucos dias, nenhum visível para quem olhava o painel.
+// máquina do dono em poucos dias, nenhum visível para quem olhava o painel.
 // Aqui fica a projeção do motor (`buscasPausadas`, que vai no snapshot); o aviso é do front.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

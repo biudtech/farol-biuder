@@ -9,10 +9,8 @@
 // suite inteira verde. Nada falha quando o isolamento falta; o estrago aparece
 // noutro lugar, depois, com cara de outro problema.
 //
-// A doutrina do repositorio e "travas automaticas, nao confiar em disciplina"
-// (docs/RELEASE.md, "Versionamento"), e o docs/REVIEW-GATES.md ja registrou que aviso em
-// prosa nao substitui invariante no codigo (secao "A garantia mora no
-// estrangulamento"). Aqui nao ha estrangulamento possivel, porque cada chamada
+// A doutrina do repositorio e "travas automaticas, nao confiar em disciplina":
+// aviso em prosa nao substitui invariante no codigo. Aqui nao ha estrangulamento possivel, porque cada chamada
 // monta as opcoes dela, entao a garantia e conferida no fonte.
 //
 // COMO ELA LE: as chamadas sao localizadas no fonte CRU, porque o nome do

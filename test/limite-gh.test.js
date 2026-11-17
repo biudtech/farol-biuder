@@ -1,6 +1,6 @@
 // Limite de requisicoes do GitHub: o Farol PARA de buscar ate renovar (23/09/2026).
 //
-// Medido no farol.log do Wanderson: 312 linhas de `gh search falhou` com
+// Medido no farol.log do dono: 312 linhas de `gh search falhou` com
 // "API rate limit already exceeded for user ID 95881233", 297 delas num unico dia.
 // Duas causas somadas:
 //
@@ -53,7 +53,7 @@ function engine() {
 }
 
 test('a taxonomia reconhece o texto REAL do limite do GitHub', () => {
-  const c = classify(`gh search falhou (wandersonaadsantos: --owner acme): ${LIMITE}`);
+  const c = classify(`gh search falhou (conta-revisora: --owner acme): ${LIMITE}`);
   assert.equal(c.id, 'rate-limit-github', 'o "already" no meio da frase nao pode virar falha desconhecida');
   assert.equal(c.kind, 'transitorio', 'e espera, nao defeito permanente');
 });

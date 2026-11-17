@@ -1,5 +1,5 @@
 // Gate de CONSCIÊNCIA do review automático (28/08/2026 à tarde). A regra do
-// Wanderson: "se alguém já aprovou, se alguém tá revisando e se alguém já
+// O dono: "se alguém já aprovou, se alguém tá revisando e se alguém já
 // reprovou que não seja o acrity, não fazemos review a menos que haja ação
 // manual. Se ninguém está revisando e não temos histórico de review no head
 // ativo então devemos seguir na revisão automatizada." O que se prova aqui:
@@ -255,7 +255,7 @@ test('duas aprovações dispensam a automática mesmo com um pedido de mudanças
 test('textoDoBloqueio: aprovação no singular, sem travessão e sem nomear a ferramenta', () => {
   const t = skip.textoDoBloqueio('o/r#1', { quem: ['ana'], decisivos: [{ quem: 'ana', state: 'APPROVED' }] });
   assert.match(t, /^o\/r#1: @ana já aprovou este head/);
-  assert.match(t, /o botão Revisar continua valendo/);
+  assert.match(t, /o Revisar agora continua valendo/);
   assert.doesNotMatch(t, /—/, 'sem travessão, regra da casa');
   // o toast é interno e pode falar de "revisão automática", mas nunca nomeia a
   // ferramenta (o texto não pode virar copy público por acidente)
@@ -391,7 +391,7 @@ test('launchReview por clique atravessa o bloqueio (ação manual sempre vale)',
    o teste não via, é que a âncora é justamente o que o classificaReRound usa
    pra dizer "esse head já teve o round dele": com ela gravada por um round que
    NUNCA rodou, o relançamento automático morria pra sempre naquele head e o PR
-   passava a depender de clique. Foi o bug de campo do Wanderson ("entra um
+   passava a depender de clique. Foi o bug de campo do dono ("entra um
    commit novo, a review não fica automática e depende de ação manual").
    O controle de custo continua, agora em `bloqueioConsultado`: memória, não
    decisão, com janela de HEAD_QUIETO_MS (ver test/rereview-launch.test.js). */

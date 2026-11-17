@@ -10,7 +10,7 @@ const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
 describe('nome e link do PR', () => {
   it('a chave do motor vira o nome que o botão diz', () => {
     expect(nomeDoPr('dono/repo#123')).toBe('PR #123 de dono/repo');
-    expect(nomeDoPr('Edicoes-CNBB/biblioteca.web#7')).toBe('PR #7 de Edicoes-CNBB/biblioteca.web');
+    expect(nomeDoPr('Outra-Org/biblioteca.web#7')).toBe('PR #7 de Outra-Org/biblioteca.web');
   });
 
   it('chave fora do formato aparece como veio', () => {

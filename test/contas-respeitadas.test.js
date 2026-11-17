@@ -1,6 +1,6 @@
 // As configurações da conta precisam ser respeitadas (25/09/2026).
 //
-// Pedido do Wanderson, ao ver quatro PRs aprováveis sem ressalva esperando clique numa conta
+// Pedido do dono, ao ver quatro PRs aprováveis sem ressalva esperando clique numa conta
 // que estava em "aprova sozinho": "Essas configurações precisam serem respeitadas". A
 // investigação achou a classe do defeito: a tela salvava a conta INTEIRA a cada edição, com o
 // que ela tinha na memória, e o servidor gravava como veio. Qualquer campo que a tela não
@@ -164,8 +164,9 @@ test('a diferença de política considera a conta e a chave geral, e ignora o qu
   assert.deepEqual(semChave, []);
 });
 
-test('a origem da mudança diz se veio da janela do Farol ou de um navegador', () => {
-  assert.equal(C.origemDaRequisicao('Mozilla/5.0 Chrome/140 Electron/38.0.0 Safari/537'), 'janela do Farol');
+test('a origem da mudança é o navegador, e sem User-Agent fica desconhecida', () => {
+  // a janela do app saiu com o Electron: o User-Agent dela não tem mais nome próprio
+  assert.equal(C.origemDaRequisicao('Mozilla/5.0 Chrome/140 Electron/38.0.0 Safari/537'), 'navegador');
   assert.equal(C.origemDaRequisicao('Mozilla/5.0 (Linux; Android 14) Chrome/140 Mobile'), 'navegador');
   assert.equal(C.origemDaRequisicao(''), 'desconhecida');
 });

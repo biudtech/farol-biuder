@@ -7,7 +7,7 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // O `next dev` escreveria um AGENTS.md nesta pasta. O que ele diz está no README, em
-  // "Convenções para os próximos lotes".
+  // "Convenções".
   agentRules: false,
   // O repositório tem dois package-lock (o do motor, na raiz, e este): sem isto o Next
   // adivinha a raiz pelo de cima.

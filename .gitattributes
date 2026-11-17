@@ -5,5 +5,3 @@
 * text=auto eol=lf
 # binários nunca sofrem conversão
 *.png binary
-*.ico binary
-*.icns binary

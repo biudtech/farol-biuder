@@ -556,7 +556,7 @@ test('aprovação em branco (sem texto) também é resultado incompleto: segue n
   semMesa(e);
 });
 
-// biblioteca-cnbb-api#143 (30/10/2026): violação confirmada e uma regra inconclusiva. Defeito
+// acme/api#143 (30/10/2026): violação confirmada e uma regra inconclusiva. Defeito
 // não arma recuperação e incompleto não reprovava: o PR parava na mesa com a conta reprovando sozinha.
 test('análise incompleta com violação confirmada: a conta reprova sozinha, sem mesa', async () => {
   const e = motor();

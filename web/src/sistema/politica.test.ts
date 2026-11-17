@@ -84,8 +84,8 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
   it('organização que outra pessoa pôs ou tirou nesse meio fica como o motor a tem', () => {
     const visto = rascunhoDaConta({ ...CONTA, owners: ['biudtech', 'velha'] });
     const rascunho = { ...visto, owners: ['biudtech', 'acme'] };
-    // ela tirou "velha" e pôs "acme"; alguém pôs "cnbb" e tirou "biudtech"
-    expect(camposAlterados(visto, rascunho, { ...CONTA, owners: ['velha', 'cnbb'] })).toEqual({ owners: ['cnbb', 'acme'] });
+    // ela tirou "velha" e pôs "acme"; alguém pôs "outra" e tirou "biudtech"
+    expect(camposAlterados(visto, rascunho, { ...CONTA, owners: ['velha', 'outra'] })).toEqual({ owners: ['outra', 'acme'] });
     expect(organizacoesMescladas(['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'd'])).toEqual(['a', 'b', 'd', 'c']);
     expect(organizacoesMescladas(['a', 'b'], ['a'], ['A', 'B', 'd'])).toEqual(['A', 'd']);
     // o que ela pôs e o motor já tem não é repetido
@@ -101,9 +101,9 @@ describe('refazerConta: o rascunho sobre o valor novo do motor', () => {
   const visto = rascunhoDaConta(ABERTA);
 
   it('o campo que ela não tocou passa a ser o do motor; o que ela tocou fica', () => {
-    const novo = rascunhoDaConta({ ...ABERTA, autoReview: false, owners: ['biudtech', 'cnbb'] });
+    const novo = rascunhoDaConta({ ...ABERTA, autoReview: false, owners: ['biudtech', 'outra'] });
     expect(refazerConta(visto, { ...visto, onReject: 'wait' }, novo)).toEqual({
-      valor: { owners: ['biudtech', 'cnbb'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' },
+      valor: { owners: ['biudtech', 'outra'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' },
       conflitos: [],
     });
   });
@@ -190,7 +190,7 @@ describe('textos', () => {
   });
 
   it('nome de organização: letras, dígitos e hífen, sem hífen nas pontas, até 39', () => {
-    for (const boa of ['biudtech', 'Edicoes-CNBB', 'a', 'a1', 'x'.repeat(39)]) expect(organizacaoValida(boa)).toBe(true);
+    for (const boa of ['biudtech', 'Outra-Org', 'a', 'a1', 'x'.repeat(39)]) expect(organizacaoValida(boa)).toBe(true);
     for (const ruim of ['', ' ', '-a', 'a-', 'a b', 'a/b', 'x'.repeat(40), 'ação']) expect(organizacaoValida(ruim)).toBe(false);
     expect(temOrganizacao(['BiudTech'], ' biudtech ')).toBe(true);
     expect(temOrganizacao(['biudtech'], 'acme')).toBe(false);

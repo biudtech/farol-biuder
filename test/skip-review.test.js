@@ -12,7 +12,7 @@ import path from 'node:path';
 // GRAVAM em STATE_DIR, que o paths.js resolve na hora do import. Sem fixar o
 // FAROL_HOME antes, a suíte escrevia `skip-comentado.json` na instalação REAL
 // (achado em 20/08/2026, com lixo de teste no ~/.farol de verdade). É a mesma
-// lição do spawnlog.test.js documentada no docs/MACOS.md, com outra roupa: lá o
+// lição do spawnlog.test.js, com outra roupa: lá o
 // problema era o import hasteado, aqui era não ter env nenhuma.
 process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-skip-'));
 
@@ -34,15 +34,15 @@ const TTL = TEMPOS.SINAL_REVISAO_TTL_MS;
 // disso deixa os casos seguintes CANCELADOS, numa rodada que ainda diz "0 falhas".
 
 test('revisandoPorOutros: acha a label de outra pessoa', () => {
-  assert.deepEqual(revisandoPorOutros(['thiagocarvalho-dev:revisando'], 'wandersonbiuder'), ['thiagocarvalho-dev']);
+  assert.deepEqual(revisandoPorOutros(['revisor-dev:revisando'], 'contabiuder'), ['revisor-dev']);
 });
 
 test('revisandoPorOutros: a MINHA própria label não me barra, mesmo com outra caixa', () => {
-  assert.deepEqual(revisandoPorOutros(['wandersonbiuder:revisando'], 'wandersonbiuder'), []);
-  assert.deepEqual(revisandoPorOutros(['WandersonBiuder:revisando'], 'wandersonbiuder'), []);
+  assert.deepEqual(revisandoPorOutros(['contabiuder:revisando'], 'contabiuder'), []);
+  assert.deepEqual(revisandoPorOutros(['ContaBiuder:revisando'], 'contabiuder'), []);
 });
 
-// regra explícita do Wanderson: review de ferramenta não substitui olho humano
+// regra explícita do dono: review de ferramenta não substitui olho humano
 test('revisandoPorOutros: acrity NUNCA entra na conta', () => {
   assert.deepEqual(revisandoPorOutros(['acrity:revisando'], 'eu'), []);
   assert.deepEqual(revisandoPorOutros(['acrity:revisando', 'ana:revisando'], 'eu'), ['ana']);
@@ -65,7 +65,7 @@ test('ehFerramenta: reconhece a ferramenta pelas três provas', () => {
 test('ehFerramenta: gente continua sendo gente', () => {
   const { ehFerramenta } = skip;
   assert.equal(ehFerramenta('Alexpraxedes'), false);
-  assert.equal(ehFerramenta('wandersonbiuder', 'User'), false);
+  assert.equal(ehFerramenta('contabiuder', 'User'), false);
   assert.equal(ehFerramenta('acrityana'), false, 'prefixo sem hífen não é a ferramenta');
   assert.equal(ehFerramenta(''), false);
   assert.equal(ehFerramenta(null), false);

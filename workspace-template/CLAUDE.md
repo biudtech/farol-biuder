@@ -41,7 +41,7 @@ registre o resto como comentário não-bloqueante. Rigor proporcional ao risco.
 
 ## Aprendizados operacionais — valem SEMPRE
 
-Regras aprendidas com reviews reais (retro de 14/07/2026, estudo em `docs/reviews-retro-2026-07.md` na fonte do app, mais pushbacks confirmados de autores que tinham razão, mais a auditoria de qualidade de 25/09/2026). Os itens 1 a 7 são nuances da org biudtech; 8 a 13 valem em qualquer repo. Os erros de análise da auditoria (mock contra o colaborador real, ler o chamado, premissa de biblioteca, ausência provada, regra escrita, receita verificada) estão na seção "Precisão do achado" do agente `pr-reviewer`. Calibram severidade e tom; não afrouxam o gate de blocker.
+Regras aprendidas com reviews reais (retro de 14/07/2026, mais pushbacks confirmados de autores que tinham razão, mais a auditoria de qualidade de 25/09/2026). Os itens 1 a 7 são nuances da org biudtech; 8 a 13 valem em qualquer repo. Os erros de análise da auditoria (mock contra o colaborador real, ler o chamado, premissa de biblioteca, ausência provada, regra escrita, receita verificada) estão na seção "Precisão do achado" do agente `pr-reviewer`. Calibram severidade e tom; não afrouxam o gate de blocker.
 
 1. **CI vermelho = só check obrigatório em FAILURE.** `security/snyk` em **ERROR** é cota do Snyk (padrão conhecido da org), NÃO é CI vermelho: vira no máximo uma nota, nunca reason. Check **IN_PROGRESS** = "CI em andamento" (impede confirmar verde, mas escreva exatamente isso; nunca chame de vermelho).
 2. **PR do Snyk** (bump automático de dependência): padrão conhecido, vá direto aos dois pontos: (a) lockfile pnpm não regenerado → `ERR_PNPM_OUTDATED_LOCKFILE` no CI; (b) bump **major** costuma quebrar o build (ex.: typeorm 1.x, puppeteer 25 ESM-only). Correção padrão: regenerar o lockfile (`pnpm install --lockfile-only`) e adaptar breaking changes. Sem card BT é o esperado nesses PRs (guarda-chuva BT-778): não gaste reasons com "sem card". No texto, endereçe **quem disparou o Snyk** (dono da ação), com objetividade.
@@ -65,7 +65,7 @@ Regras aprendidas com reviews reais (retro de 14/07/2026, estudo em `docs/review
 
 ## Fluxo por PR
 
-1. **Identidade + autor.** A conta de trabalho já está fixada via `GH_TOKEN` (o Farol injeta o token da conta configurada em Sistema). Pegue autor e metadados: `gh pr view <url> --json author,headRefName,title,body`.
+1. **Identidade + autor.** A conta de trabalho já está fixada via `GH_TOKEN` (o Farol injeta o token da conta revisora). Pegue autor e metadados: `gh pr view <url> --json author,headRefName,title,body`.
    - **PR de outro repositório** (dependência citada, PR ligado): passe a URL completa ou o número com `-R dono/repo`, como `gh pr view 439 -R biudtech/biud-core`. A forma `dono/repo#N` **não existe** no `gh pr view` e falha com "not a git repository" fora de um clone, e aí a dependência fica sem leitura (caso real: biudtech/backoffice#153, 16/10/2026).
 
 2. **Card do Jira.** O card **já vem lido pelo Farol**, na seção "Card do Jira" que aparece mais adiante neste prompt, com título, status, critérios de aceite, escopo técnico e fora de escopo. Não busque de novo o card que já está ali.
@@ -134,7 +134,7 @@ Mantém o review personalizado e mostra evolução. **Notas factuais e construti
 
 No passo 3 do próximo PR da pessoa, use isso para reconhecer progresso ("2º PR seguido sem X").
 
-## Log de falhas (state\farol.log) — só erros, sem ruído
+## Log de falhas (state/farol.log) — só erros, sem ruído
 
 Se **qualquer ferramenta/comando falhar** durante o review — `Write` retornar erro, `gh` falhar (buscar/postar), busca do Jira falhar, etc. — **mesmo que você recupere logo depois** — registre **uma linha** no log antes de seguir:
 

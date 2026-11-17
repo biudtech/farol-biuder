@@ -230,7 +230,7 @@ test('nenhuma resposta emite Set-Cookie', async () => {
 });
 
 test('modo decidido no servidor: User-Agent forjado não muda nada', async () => {
-  const telefone = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) Termux/0.118' };
+  const telefone = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) Chrome/140.0 Mobile' };
   const desktop = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Electron/44.1.0' };
   assert.equal((await pedir('GET', '/api/state', { cabecalhos: telefone })).status, 200, 'UA de telefone não liga a exigência');
   assert.deepEqual(JSON.parse((await pedir('GET', '/api/auth/status', { cabecalhos: telefone })).body), { exigida: false, autenticado: false });

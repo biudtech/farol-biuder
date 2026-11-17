@@ -1,6 +1,5 @@
 {
   "name": "farol-biuder",
-  "productName": "Farol",
   "version": "3.0.0-dev",
   "description": "Revisor autônomo de pull requests da BIUD",
   "type": "module",
