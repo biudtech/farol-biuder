@@ -93,9 +93,20 @@ export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, regi
 // sessão dela; os arquivos lidos não publicam estado, e sem isto a barra esperaria o próximo
 // `state-patch`. Ausente, torto ou igual ao que a sessão já tem, as sessões ficam como estavam
 // (o mesmo array): a linha do feed não redesenha o cartão à toa.
-function comProgresso(sessoes: SessaoAtiva[] | undefined, id: string, progresso: SessaoAtiva['progresso']): { activeSessions?: SessaoAtiva[] } {
-  if (!progresso || !sessoes) return {};
+// Os nomes das etapas não vêm na linha (o motor os manda só no estado): a linha sem eles mantém
+// os que a sessão já tem, quando ainda fecham com o total e com a etapa nova. Motor que ainda os
+// manda na linha continua valendo.
+function comNomesDasEtapas(progresso: NonNullable<SessaoAtiva['progresso']>, anterior: SessaoAtiva['progresso']): NonNullable<SessaoAtiva['progresso']> {
+  const nomes = anterior?.etapas;
+  if (progresso.etapas || !nomes || nomes.length !== progresso.totalEtapas || nomes[progresso.etapa - 1] !== progresso.rotuloDaEtapa) return progresso;
+  return { ...progresso, etapas: nomes };
+}
+
+function comProgresso(sessoes: SessaoAtiva[] | undefined, id: string, daLinha: SessaoAtiva['progresso']): { activeSessions?: SessaoAtiva[] } {
+  if (!daLinha || !sessoes) return {};
   const atual = sessoes.find((s) => s.id === id);
-  if (!atual || mesmoJson(atual.progresso, progresso)) return {};
+  if (!atual) return {};
+  const progresso = comNomesDasEtapas(daLinha, atual.progresso);
+  if (mesmoJson(atual.progresso, progresso)) return {};
   return { activeSessions: sessoes.map((s) => (s.id === id ? { ...s, progresso } : s)) };
 }

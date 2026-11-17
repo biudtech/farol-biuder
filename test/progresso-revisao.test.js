@@ -166,6 +166,8 @@ test('SSE: a linha nova do feed leva o progresso; a de verificação só abre a 
   const { engine, eventos } = engineCom(rec);
   pushActivity(engine, 'a1', 'tool', 'Read a.js', undefined, 'leitura');
   assert.equal(eventos[0].dados.progresso.percentual, 31);
+  assert.equal('etapas' in eventos[0].dados.progresso, false, 'os nomes das etapas ficam só no estado');
+  assert.deepEqual(projectSessions([rec], Date.now())[0].progresso.etapas, ['fontes', 'card', 'código', 'conferência dos achados', 'postagem']);
   // checkpoint no meio da leitura, ou verificador de um lote paralelo: segue no código
   pushActivity(engine, 'a1', 'text', 'FAROL_CHECKPOINT', undefined, 'verificacao');
   pushActivity(engine, 'a1', 'tool', 'Read', 'claim-verifier 1', 'verificacao');
