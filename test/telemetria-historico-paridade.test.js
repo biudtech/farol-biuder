@@ -92,7 +92,7 @@ function noBanco(resolved) {
   assert.equal(r.ok, true, r.motivo);
   // leitura que falhou no banco cai no vazio com um WARN: o aviso guardado reprova a paridade
   const avisos = [];
-  return base.seen(Object.assign(base([]), { telemetria: h, historicoNoBanco: true, avisos, log: (nivel, msg) => avisos.push(`${nivel} ${msg}`) }));
+  return base.seen(Object.assign(base([]), { historicoH: h, historicoNoBanco: true, avisos, log: (nivel, msg) => avisos.push(`${nivel} ${msg}`) }));
 }
 const modos = (resolved = RESOLVIDAS) => ({
   json: base.seen(base(structuredClone(resolved))),
@@ -184,9 +184,20 @@ test('linha torta (texto que o SQL não compara igual) faz a página sair pela l
   igual(historicoPaginado(m.banco, new URLSearchParams('q=%00a')), historicoPaginado(m.json, new URLSearchParams('q=%00a')), 'termo com nulo');
 });
 
+test('repositório pedido que o SQL não compara igual (nulo) também sai pela lista, com o mesmo resultado', () => {
+  const tortas = structuredClone(RESOLVIDAS);
+  tortas[2].pr.repo = 'acme/\u0000nulo';
+  const m = modos(tortas);
+  const so = modos();
+  for (const c of ['repo=acme%2F%00nulo', 'repo=acme%2Fapp%00', 'repo=acme%2F%00nulo&veredito=skip']) {
+    igual(historicoPaginado(so.banco, new URLSearchParams(c)), historicoPaginado(so.json, new URLSearchParams(c)), `sem linha torta: ${c}`);
+    igual(historicoPaginado(m.banco, new URLSearchParams(c)), historicoPaginado(m.json, new URLSearchParams(c)), c);
+  }
+});
+
 test('a consulta paginada no banco usa as colunas: o SQL sozinho dá o mesmo total da lista', () => {
   const m = modos();
-  const h = m.banco.telemetria;
+  const h = m.banco.historicoH;
   const { total } = tabela.paginaDeDecisoes(h, { termos: ['acme'], veredito: 'skip', repoDobrado: 'acme/app', publicados: ['approve', 'request_changes', 'comment'] }, { limite: 5, offset: 0 });
   const r = historicoPaginado(m.json, new URLSearchParams('q=acme&veredito=skip&repo=acme/app'));
   assert.equal(total, r.body.total);

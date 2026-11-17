@@ -19,8 +19,12 @@ import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { STATE_DIR, TELEMETRIA_DB, LOG_FILE } = await import('../lib/paths.js');
 const banco = await import('../lib/telemetria/banco.js');
-const { iniciarTelemetria, fecharTelemetria, decisoesResolvidas, historico } = await import('../lib/engine/telemetria-do-motor.js');
-const { HIST_LIMIT } = await import('../lib/engine/historico-decisoes.js');
+const { iniciarTelemetria, iniciarConsumo, iniciarHistorico, fecharTelemetria, decisoesResolvidas, historico } = await import('../lib/engine/telemetria-do-motor.js');
+const { HIST_LIMIT, historicoIndisponivel } = await import('../lib/engine/historico-decisoes.js');
+const { reconciliarVistos } = await import('../lib/engine/vistos-reconciliacao.js');
+const { historicoPaginado } = await import('../lib/engine/historico-paginado.js');
+const { concluidaDepois } = await import('../lib/engine/retomada-duravel.js');
+const { DatabaseSync } = await import('node:sqlite');
 const { classify } = await import('../lib/log-taxonomy.js');
 const { varrerRetiradas } = await import('../lib/engine/retirada-de-pedido.js');
 
@@ -69,7 +73,7 @@ test('a primeira subida importa o histórico, guarda a cópia do original e regr
   const e = motor();
   assert.equal(e.historicoNoBanco, true);
   assert.deepEqual(decisoesResolvidas(e), resolved, 'mesmos itens, mesma ordem, mesmos campos');
-  assert.deepEqual(ler(), { pending, resolved: [] });
+  assert.deepEqual(ler(), { pending, resolved: [], historicoNoBanco: true }, 'só as pendências e a marca de que o histórico mora no banco');
   assert.equal(copias().length, 1);
   assert.ok(copias()[0].startsWith('decisions.json.migrado-'));
   assert.deepEqual(fs.readFileSync(path.join(STATE_DIR, copias()[0])), original, 'a cópia é o arquivo original, byte a byte');
@@ -95,6 +99,7 @@ test('importar de novo o mesmo arquivo (queda entre o COMMIT e a regravação) n
   assert.equal(contar(), 12);
   assert.deepEqual(decisoesResolvidas(e), resolved);
   assert.match(linhasDeTelemetria().at(-1), /0 decisões; 12 já estavam no banco/);
+  assert.equal(copias().length, 1, 'a cópia íntegra do mesmo arquivo não é feita de novo');
 });
 
 test('resolver grava no banco, mais nova no topo, e o teto de 3000 vale no banco como valia no arquivo', () => {
@@ -180,7 +185,7 @@ test('importação que não confere desfaz tudo, não copia nem regrava o arquiv
 test('escrita que o banco recusa: a decisão fica no decisions.json, as leituras a enxergam, e a próxima gravação leva as duas', () => {
   gravar({ pending: [], resolved: historicoDe(2) });
   const e = motor();
-  e.telemetria.db.exec("CREATE TEMP TRIGGER cheio BEFORE INSERT ON resolvidas BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
+  e.historicoH.db.exec("CREATE TEMP TRIGGER cheio BEFORE INSERT ON resolvidas BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
   e.resolveIntoHistory(decisao(10, { id: 'presa' }));
   e.saveDecisions();
   assert.deepEqual(ler().resolved.map((d) => d.id), ['presa'], 'durável no decisions.json');
@@ -193,7 +198,7 @@ test('escrita que o banco recusa: a decisão fica no decisions.json, as leituras
   assert.equal(classe(aviso), 'telemetria-anormal');
   e.resolveIntoHistory(decisao(11, { id: 'presa-2' }));
   assert.equal(linhasDeTelemetria().filter((l) => l.includes('gravar o histórico')).length, 1, 'um WARN por mudança de estado');
-  e.telemetria.db.exec('DROP TRIGGER cheio');
+  e.historicoH.db.exec('DROP TRIGGER cheio');
   e.resolveIntoHistory(decisao(12, { id: 'volta' }));
   e.saveDecisions();
   assert.deepEqual(ler().resolved, []);
@@ -269,4 +274,139 @@ test('no banco, a reconciliação cancela a pendência de PR mergeado e o skip r
   assert.equal(porId.pular, 'skipped');
   assert.deepEqual(ler().pending, []);
   assert.equal(e.reviewActions()['acme/repo#6'], undefined, 'pulado não marca ação');
+});
+
+// B1 da revisão (17/11/2026): com o histórico já no banco, banco fora não pode virar "nada foi
+// decidido". O estado "histórico indisponível" segura as regras que tratariam o vazio assim.
+const marcarVersaoFutura = (v) => { const db = new DatabaseSync(TELEMETRIA_DB); db.exec(`PRAGMA user_version = ${v}`); db.close(); };
+const avisosDeIndisponivel = () => linhasDeTelemetria().filter((l) => l.includes('histórico de decisões indisponível'));
+
+test('banco que não abre DEPOIS da migração: nenhum PR já decidido volta à fila e nada é marcado como ignorado', () => {
+  gravar({ pending: [], resolved: historicoDe(5) });
+  motor();
+  fecharMotores();
+  assert.equal(ler().historicoNoBanco, true, 'o decisions.json diz que o histórico mora no banco');
+  marcarVersaoFutura(banco.VERSAO_DO_ESQUEMA + 1);
+  const e = motor();
+  assert.notEqual(e.historicoNoBanco, true);
+  assert.equal(historicoIndisponivel(e), true);
+  const aviso = avisosDeIndisponivel();
+  assert.equal(aviso.length, 1, 'uma linha só');
+  assert.match(aviso[0], /\[WARN\] telemetria: histórico de decisões indisponível/);
+  assert.equal(classe(aviso[0]), 'telemetria-anormal');
+  // vistos: o PR decidido não volta à fila
+  e.ignorados = new Set();
+  e.seen.add('acme/app#3');
+  assert.equal(reconciliarVistos(e, [{ key: 'acme/app#3' }]), 0);
+  assert.equal(e.seen.has('acme/app#3'), true);
+  // a migração dos ignorados não roda
+  e.ignorados = undefined;
+  e.migrarIgnorados();
+  assert.equal(e.ignorados, undefined);
+  // o re-request não rearma nem esquece o que já tinha voltado à fila
+  e.reReviewedKeys = new Set(['acme/app#3']);
+  assert.deepEqual([...e.markReRequests(new Set(['acme/app#3']))], ['acme/app#3']);
+  assert.deepEqual([...e.reReviewedKeys], ['acme/app#3']);
+  // a retomada não continua uma sessão cujo desfecho não dá para ver
+  assert.equal(concluidaDepois(e, { key: 'acme/app#3', knownHead: 'x', atualizadoEm: '2026-01-01T00:00:00Z' }), true);
+  // a rota responde que o histórico está indisponível, sem escrever no log
+  const linhas = fs.readFileSync(LOG_FILE, 'utf8').length;
+  assert.equal(historicoPaginado(e, new URLSearchParams('')).status, 503);
+  assert.equal(fs.readFileSync(LOG_FILE, 'utf8').length, linhas);
+  fecharMotores();
+  marcarVersaoFutura(banco.VERSAO_DO_ESQUEMA);
+  const e3 = motor();
+  assert.equal(historicoIndisponivel(e3), false);
+  assert.equal(decisoesResolvidas(e3).length, 5);
+});
+
+test('antes da migração, banco que não abre não deixa o histórico indisponível: ele está inteiro no decisions.json', () => {
+  gravar({ pending: [], resolved: historicoDe(4) });
+  fs.mkdirSync(TELEMETRIA_DB);
+  const e = motor();
+  assert.equal(historicoIndisponivel(e), false);
+  assert.equal(avisosDeIndisponivel().length, 0);
+  e.ignorados = new Set();
+  e.seen.add('acme/app#4');
+  assert.equal(reconciliarVistos(e, [{ key: 'acme/app#4' }]), 0, 'tem decisão no arquivo');
+});
+
+test('leitura que falha em tempo de execução segura as mesmas regras, com WARN uma vez e INFO na volta', () => {
+  gravar({ pending: [], resolved: historicoDe(5) });
+  const e = motor();
+  e.ignorados = new Set();
+  e.seen.add('acme/app#3');
+  e.historicoH.db.exec('ALTER TABLE resolvidas RENAME TO resolvidas_fora');
+  e.historicoCache = null; // como depois de cada atualização da retirada
+  assert.equal(reconciliarVistos(e, [{ key: 'acme/app#3' }]), 0);
+  assert.equal(e.seen.has('acme/app#3'), true);
+  assert.equal(historicoIndisponivel(e), true);
+  reconciliarVistos(e, [{ key: 'acme/app#3' }]);
+  e.reviewActions();
+  assert.equal(avisosDeIndisponivel().length, 1);
+  const tamanho = fs.readFileSync(LOG_FILE, 'utf8').length;
+  assert.equal(historicoPaginado(e, new URLSearchParams('page=2')).status, 503);
+  assert.equal(fs.readFileSync(LOG_FILE, 'utf8').length, tamanho, 'a rota não escreve no log');
+  e.historicoH.db.exec('ALTER TABLE resolvidas_fora RENAME TO resolvidas');
+  assert.equal(Object.keys(e.reviewActions()).length > 0, true);
+  assert.equal(historicoIndisponivel(e), false);
+  assert.match(linhasDeTelemetria().at(-1), /\[INFO\] telemetria: o histórico de decisões voltou a responder/);
+});
+
+test('a importação do consumo que falha não derruba o histórico', () => {
+  gravar({ pending: [], resolved: historicoDe(3) });
+  fs.writeFileSync(path.join(STATE_DIR, 'usage-sessions.json'), '{ ilegível');
+  const e = motor();
+  assert.equal(e.telemetria, null, 'o consumo segue no JSON');
+  assert.equal(e.historicoNoBanco, true, 'o histórico abre no banco');
+  assert.equal(decisoesResolvidas(e).length, 3);
+  assert.equal(historicoIndisponivel(e), false);
+});
+
+test('sem folga de disco a migração espera: o histórico segue no decisions.json, com o espaço que falta no WARN', () => {
+  const resolved = historicoDe(6);
+  gravar({ pending: [], resolved });
+  const antes = fs.readFileSync(ARQ);
+  const e = new Engine();
+  engines.push(e);
+  iniciarConsumo(e);
+  iniciarHistorico(e, undefined, { espacoLivre: () => 10 });
+  assert.notEqual(e.historicoNoBanco, true);
+  assert.equal(historicoIndisponivel(e), false);
+  assert.deepEqual(fs.readFileSync(ARQ), antes);
+  assert.equal(copias().length, 0);
+  assert.match(linhasDeTelemetria().at(-1), /\[WARN\] telemetria: espaço em disco insuficiente para migrar o histórico de decisões: faltam \d+ bytes/);
+});
+
+test('a cópia é feita num nome temporário: sobra de cópia interrompida sai e não vira cópia válida', () => {
+  gravar({ pending: [], resolved: historicoDe(3) });
+  const original = fs.readFileSync(ARQ);
+  const dia = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  fs.writeFileSync(path.join(STATE_DIR, `decisions.json.migrado-${dia}.parcial`), 'pela metade');
+  fs.writeFileSync(path.join(STATE_DIR, `decisions.json.migrado-${dia}`), original.subarray(0, 10)); // cópia velha, de outro tamanho
+  motor();
+  assert.deepEqual(copias(), [`decisions.json.migrado-${dia}`, `decisions.json.migrado-${dia}-2`]);
+  assert.deepEqual(fs.readFileSync(path.join(STATE_DIR, `decisions.json.migrado-${dia}-2`)), original);
+  assert.equal(fs.readdirSync(STATE_DIR).some((n) => n.endsWith('.parcial')), false);
+});
+
+test('retirada com a atualização recusada: a contagem de tentativas fica em memória e o teto continua valendo', () => {
+  const marcada = decisao(3, { id: 'marcada', retiradaPendente: { tipo: 'rodada', head: 'h1', tentativas: 0 } });
+  gravar({ pending: [], resolved: [marcada, ...historicoDe(2)] });
+  const e = motor();
+  const hist = historico(e);
+  const [item] = hist.comRetiradaPendente();
+  e.historicoH.db.exec("CREATE TEMP TRIGGER recusa BEFORE UPDATE ON resolvidas BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
+  item.retiradaPendente.tentativas = 3;
+  assert.equal(hist.atualizar(item), false);
+  e.historicoCache = null;
+  assert.equal(historico(e).comRetiradaPendente()[0].retiradaPendente.tentativas, 3);
+  item.retiradaPendente = null;
+  assert.equal(hist.atualizar(item), false);
+  assert.deepEqual(historico(e).comRetiradaPendente(), [], 'a marca que saiu em memória não volta');
+  e.historicoH.db.exec('DROP TRIGGER recusa');
+  item.pedidoRetirado = { head: 'h1', at: 1 };
+  assert.equal(historico(e).atualizar(item), true);
+  fecharMotores();
+  assert.equal(decisoesResolvidas(motor()).find((d) => d.id === 'marcada').retiradaPendente, null);
 });
