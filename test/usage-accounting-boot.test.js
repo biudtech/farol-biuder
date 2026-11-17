@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-accounting-boot-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
-const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { sessoesDoDiario, iniciarConsumo } = await import('../lib/engine/telemetria-do-motor.js');
 const { fecharTodos } = await import('../lib/telemetria/banco.js');
 const journal = await import('../lib/engine/usage-tentativas.js');
 after(() => { fecharTodos(); fs.rmSync(home, { recursive: true, force: true }); });
@@ -24,6 +24,7 @@ test('boot preserva id do provedor e a tentativa interrompida invalida o cursor 
   assert.equal(journal.registrarSessao(e, attempt, 'provider-resume'), true);
   journal.registrarParcial(e, attempt, { usage: { output_tokens: 100 }, fimDeTurno: true });
   const boot = new Engine();
+  iniciarConsumo(boot); // a subida: o banco abre, importa e reconcilia depois do listen
   const interrupted = sessoesDoDiario(boot).at(-1);
   assert.equal(interrupted.accounting.sessionId, 'provider-resume');
   assert.equal(interrupted.status, 'interrompida');

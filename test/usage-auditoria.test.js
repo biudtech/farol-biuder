@@ -199,5 +199,6 @@ test('o resumo da aba Consumo carrega a auditoria', () => {
   assert.match(USAGE, /auditoria: d\.auditoria\(\)/, 'sem isso a auditoria existe no arquivo e não na tela');
   const DIARIO = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'usage-diario.js'), 'utf8');
   assert.match(DIARIO, /auditoria: \(\) => auditoriaDeConsumo\(lista\(\)\)/);
-  assert.match(DIARIO, /auditoria: \(\) => consumo\.auditoriaDasSessoes\(h, VOCABULARIO\)/);
+  const BANCO = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'usage-diario-banco.js'), 'utf8');
+  assert.match(BANCO, /consumo\.auditoriaDasSessoes\(h, VOCABULARIO\)/);
 });

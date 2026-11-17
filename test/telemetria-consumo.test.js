@@ -61,6 +61,29 @@ test('cada linha volta do banco igual à que o arquivo guardava, na mesma ordem'
   } finally { banco.fecharBanco(h); }
 });
 
+test('inteiro acima do MAX_SAFE_INTEGER vai para extra: a leitura não lança e o valor volta igual', () => {
+  const h = abrir();
+  try {
+    const linha = { id: 'a-grande', at: 2 ** 53, inputTokens: 2 ** 53, outputTokens: Number.MAX_SAFE_INTEGER, costUsd: 2 ** 53, status: 'ok' };
+    consumo.inserirSessao(h, linha);
+    assert.deepEqual(consumo.todasAsSessoes(h), [linha]);
+    assert.deepEqual(consumo.sessoesDaAtividade(h), [linha]);
+    assert.equal(consumo.somasDasSessoes(h).sessoes, 1);
+  } finally { banco.fecharBanco(h); }
+});
+
+test('a chave de uma linha do diário é estável e separa as linhas do diário real', () => {
+  const linhas = linhasVariadas();
+  const chaves = linhas.map(consumo.chaveDaSessao);
+  assert.equal(new Set(chaves).size, linhas.length);
+  assert.equal(consumo.chaveDaSessao({ ...linhas[1], status: 'erro' }), chaves[1], 'o desfecho marcado depois não muda a chave');
+  const h = abrir();
+  try {
+    for (const l of linhas) consumo.inserirSessao(h, l);
+    assert.deepEqual([...consumo.chavesDasSessoes(h)].sort(), [...chaves].sort());
+  } finally { banco.fecharBanco(h); }
+});
+
 test('campo com valor undefined não vira nulo: some, como no arquivo', () => {
   const h = abrir();
   try {

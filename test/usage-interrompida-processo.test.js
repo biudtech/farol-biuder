@@ -59,16 +59,21 @@ function ambiente(home, extra = {}) {
   };
 }
 
+// o filho faz a subida inteira (construtor e iniciarConsumo, que o start() chama depois do listen),
+// para gravar as tentativas no banco como o motor de verdade
 const SESSAO = [
   `const { Engine } = await import(${JSON.stringify(SERVER_URL)});`,
+  `const { iniciarConsumo } = await import(${JSON.stringify(MOTOR_URL)});`,
   'const e = new Engine();',
+  'iniciarConsumo(e);',
   "e.runClaudeStream('prompt', { id: 'a-filho', account: '', ref: 'o/r#1' }).then(() => process.exit(0), () => process.exit(3));",
 ].join('\n');
 
 const BOOT = [
   `const { Engine } = await import(${JSON.stringify(SERVER_URL)});`,
-  `const { sessoesDoDiario } = await import(${JSON.stringify(MOTOR_URL)});`,
+  `const { sessoesDoDiario, iniciarConsumo } = await import(${JSON.stringify(MOTOR_URL)});`,
   'const e = new Engine();',
+  'iniciarConsumo(e);',
   `process.stdout.write('\\n${MARCA}' + JSON.stringify(sessoesDoDiario(e)));`,
   'process.exit(0);',
 ].join('\n');

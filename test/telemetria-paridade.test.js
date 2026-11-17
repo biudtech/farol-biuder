@@ -22,6 +22,9 @@ const { activityDay } = await import('../lib/usage/activity.js');
 const { safeStringify } = await import('../lib/io.js');
 const motor = await import('../lib/engine/telemetria-do-motor.js');
 const banco = await import('../lib/telemetria/banco.js');
+const consumo = await import('../lib/telemetria/consumo.js');
+const { diario } = await import('../lib/engine/usage-diario.js');
+const { DESFECHOS_PERDIDOS, ORIGENS_DESCONHECIDAS } = await import('../lib/engine/usage-desfechos.js');
 const { ordenado, retratoDoConsumo, somasDoDiario } = await import('../tools/comparar-consumo-sqlite.js');
 
 after(() => { banco.fecharTodos(); fs.rmSync(FAROL_HOME, { recursive: true, force: true }); });
@@ -84,6 +87,7 @@ test('rota e snapshot devolvem o mesmo JSON antes e depois da migração, em tod
 
   const depoisEngine = { config: {}, log() { }, pushState() { } };
   motor.carregarConsumo(depoisEngine, () => { });
+  motor.iniciarConsumo(depoisEngine, () => { }, { reconciliar: false });
   try {
     assert.ok(depoisEngine.telemetria, 'migrou para o banco');
     assert.equal(fs.existsSync(path.join(STATE_DIR, 'usage-sessions.json')), false);
@@ -93,5 +97,16 @@ test('rota e snapshot devolvem o mesmo JSON antes e depois da migração, em tod
     assert.ok(Object.values(antes.rota).some((r) => r.history.rows.length === 8 && r.history.pages > 2), 'há páginas cheias no meio');
     assert.ok(antes.snapshot.recentSessions.length === 100 && Object.keys(antes.snapshot.falhasPorSessao).length > 0);
     assert.equal(safeStringify(ordenado(depois)), safeStringify(ordenado(antes)));
+    // o cache da atividade e da auditoria cresce com a sessão nova e segue igual à leitura cheia
+    const d = diario(depoisEngine);
+    const h = depoisEngine.telemetria;
+    const vocabulario = { perdidos: [...DESFECHOS_PERDIDOS], desconhecidas: [...ORIGENS_DESCONHECIDAS] };
+    const nova = { ...linhas.at(-1), id: 'a-00000000-0000-4000-8000-0000000fffff', at: agora, costUsd: 0.123456789, accounting: { sessionId: 'x' } };
+    d.inserir(nova);
+    assert.deepEqual(d.paraAtividade(), consumo.sessoesDaAtividade(h));
+    assert.deepEqual(d.auditoria(), consumo.auditoriaDasSessoes(h, vocabulario));
+    assert.equal(d.marcarStatus(nova.id, 'descartada'), true);
+    assert.deepEqual(d.paraAtividade(), consumo.sessoesDaAtividade(h));
+    assert.deepEqual(d.auditoria(), consumo.auditoriaDasSessoes(h, vocabulario));
   } finally { motor.fecharTelemetria(depoisEngine); }
 });

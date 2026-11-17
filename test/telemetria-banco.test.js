@@ -23,14 +23,15 @@ test('o arquivo mora na pasta de estado do motor, dentro do FAROL_HOME', () => {
   assert.ok(TELEMETRIA_DB.startsWith(FAROL_HOME + path.sep));
 });
 
-test('abrir cria o arquivo com permissão 600, WAL, synchronous NORMAL, busy_timeout e foreign_keys', () => {
+test('abrir cria o arquivo com permissão 600, WAL, synchronous FULL, busy_timeout e foreign_keys', () => {
   const caminho = path.join(pasta(), 'telemetria.db');
   const h = banco.abrirBanco(caminho);
   try {
     assert.equal(fs.statSync(caminho).mode & 0o777, 0o600);
     const pragma = (nome) => Object.values(h.db.prepare(`PRAGMA ${nome}`).get())[0];
     assert.equal(pragma('journal_mode'), 'wal');
-    assert.equal(pragma('synchronous'), 1, 'NORMAL');
+    // FULL: com WAL, o NORMAL perde numa queda de energia tudo desde o último checkpoint
+    assert.equal(pragma('synchronous'), 2, 'FULL');
     assert.ok(pragma('busy_timeout') >= 1000);
     assert.equal(pragma('foreign_keys'), 1);
     assert.equal(pragma('temp_store'), 2, 'MEMORY: nada vai para a pasta temporária do sistema');

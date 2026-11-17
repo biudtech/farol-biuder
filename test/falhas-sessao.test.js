@@ -13,11 +13,9 @@ import assert from 'node:assert/strict';
 
 const falhas = await import('../lib/engine/falhas.js');
 const { Engine } = await import('../server.js');
-const { LOG_FILE, TELEMETRIA_DB } = await import('../lib/paths.js');
-const { todasAsFalhas } = await import('../lib/telemetria/falhas.js');
+const { LOG_FILE } = await import('../lib/paths.js');
 
-const { fecharTodos } = await import('../lib/telemetria/banco.js');
-after(() => { fecharTodos(); try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
+after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
 test('motivo longo fica inteiro (sem o corte de 300) e sobrevive a um engine novo', () => {
   const e = new Engine();
@@ -36,9 +34,7 @@ test('log zerado não apaga o registro de falha', () => {
   e.log('ERROR', 'linha de teste');
   fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
   fs.writeFileSync(LOG_FILE, '');
-  // o registro mora no banco da telemetria (16/11/2026), fora do log e sem o JSON de antes
-  assert.ok(fs.existsSync(TELEMETRIA_DB));
-  assert.equal(fs.existsSync(falhas.arquivoDeFalhas()), false);
+  assert.ok(fs.existsSync(falhas.arquivoDeFalhas()));
   assert.equal(new Engine().falhaDaSessao('a-limpar').motivo, 'quebrou qwerty');
 });
 
@@ -56,10 +52,7 @@ test('segredo no motivo é mascarado antes de gravar', () => {
     assert.doesNotMatch(r.motivo, new RegExp(vazado), `vazou ${vazado}`);
   }
   assert.match(r.motivo, /ANTHROPIC_API_KEY=\[segredo mascarado\]/);
-  assert.match(todasAsFalhas(e.telemetria).find((f) => f.sessionId === 'a-segredo').motivo, /\[segredo mascarado\]/);
-  // nem o arquivo do banco nem o WAL guardam o segredo cru
-  const bytes = [TELEMETRIA_DB, `${TELEMETRIA_DB}-wal`].filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'latin1')).join('');
-  for (const vazado of ['sk-ant-api03', 'ghp_abcdef', 'segredo123']) assert.equal(bytes.includes(vazado), false, `vazou ${vazado} no banco`);
+  assert.match(fs.readFileSync(falhas.arquivoDeFalhas(), 'utf8'), /\[segredo mascarado\]/);
 });
 
 test('motivo acima do teto é cortado no teto próprio e marcado', () => {

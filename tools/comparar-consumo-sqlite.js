@@ -107,6 +107,7 @@ async function montar(modo, estado, log) {
   }
   const motor = await import('../lib/engine/telemetria-do-motor.js');
   motor.carregarConsumo(engine, (m) => log('WARN', m));
+  motor.iniciarConsumo(engine, (m) => log('WARN', m), { reconciliar: false });
   if (!engine.telemetria) throw new Error('o banco não abriu; veja as linhas de log acima');
   return { engine, usageMod, linhas: () => motor.sessoesDoDiario(engine), fechar: () => motor.fecharTelemetria(engine) };
 }
