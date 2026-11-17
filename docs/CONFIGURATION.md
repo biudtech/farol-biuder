@@ -213,6 +213,7 @@ no padrão.
 | `autoOpus` | `null` (lista do roteador) | arquivo |
 | `port` | `47170` | arquivo |
 | `bind` | `"127.0.0.1"` | arquivo ([Para hospedar](#para-hospedar)) |
+| `socket` | `""` (o caminho absoluto de um socket Unix em que o motor escuta no lugar da porta; exige `hostPublico` e não combina com `bind`) | arquivo ([hospedagem compartilhada](HOSPEDAGEM.md#hospedagem-compartilhada-sem-docker)) |
 | `localAuth` | `""` (`"exigir"` liga a autenticação; outro valor preenchido impede o boot) | arquivo ([Para hospedar](#para-hospedar)) |
 | `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
 | `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |

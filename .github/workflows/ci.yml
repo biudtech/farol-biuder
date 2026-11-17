@@ -91,6 +91,13 @@ jobs:
         env:
           NEXT_PUBLIC_FAROL_API: http://127.0.0.1:47170
 
+      # O servidor do socket Unix (servidor.mjs) sobre o build acima: CSP por nonce, permissão
+      # 600, socket órfão, socket vivo e o encerramento. O endereço é o mesmo do build.
+      - name: Servidor no socket
+        run: npm run test:servidor
+        env:
+          NEXT_PUBLIC_FAROL_API: http://127.0.0.1:47170
+
   # A imagem do container do motor (Dockerfile, docs/HOSPEDAGEM.md): constrói e prova com o
   # container de pé. NÃO publica: não há login em registro, não há push e não há segredo. O
   # job de publicação fica para quando o registro for decidido (o esboço está no guia).

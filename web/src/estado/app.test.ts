@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHAVE_DO_TOKEN, criarCofreDoToken } from '@/transporte/token';
-import { PRAZO_DO_SAIR_MS, criarApp } from './app';
+import { JANELA_DA_RECARGA_MS, PRAZO_DO_SAIR_MS, criarApp, type JanelaDoPortao } from './app';
 
 const BASE = 'http://127.0.0.1:47170';
 const TOKEN = 't'.repeat(43);
@@ -38,11 +38,11 @@ function fluxoFalso(init: RequestInit) {
   };
 }
 
-interface Montagem { token?: string; base?: string; guardado?: Map<string, string>; aoGravar?: () => void }
+interface Montagem { token?: string; base?: string; guardado?: Map<string, string>; aoGravar?: () => void; portao?: JanelaDoPortao; agora?: () => number }
 
 // `guardado` faz as vezes do localStorage: duas montagens sobre o mesmo mapa são duas abas.
 // `aoGravar` é chamado depois de cada escrita, como o navegador faz com as outras abas.
-function montar({ token = '', base = BASE, guardado = new Map<string, string>(), aoGravar = () => {} }: Montagem = {}) {
+function montar({ token = '', base = BASE, guardado = new Map<string, string>(), aoGravar = () => {}, portao, agora }: Montagem = {}) {
   const escritas = { total: 0 };
   const cofre = criarCofreDoToken(() => ({
     getItem: (k: string) => guardado.get(k) ?? null,
@@ -59,6 +59,8 @@ function montar({ token = '', base = BASE, guardado = new Map<string, string>(),
     base,
     cofre,
     janela,
+    portao,
+    agora,
     registrar: (aviso) => { avisos.push(aviso); },
     buscar: async (url, init = {}) => {
       const pedido = { url: String(url), init };
@@ -87,9 +89,10 @@ describe('sessão do front', () => {
     const t = montar();
     t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: false }));
     t.app.iniciar();
-    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motor: 'verificando' });
+    // a sondagem diz se há um portão na frente antes de a tela decidir
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'carregando', motor: 'verificando' });
     await vi.advanceTimersByTimeAsync(0);
-    expect(t.app.store.ler().motor).toBe('alcancavel');
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motor: 'alcancavel' });
     expect(t.pedidos.map((p) => p.url)).toEqual([`${BASE}/api/auth/status`]);
   });
 
@@ -785,5 +788,171 @@ describe('sair revoga a sessão no motor', () => {
     expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motivo: 'saiu', saida: 'revogada', snapshot: null });
     // só a sondagem do pareamento saiu depois
     expect(t.pedidos.slice(antes).map(caminho)).toEqual(['/api/auth/status']);
+  });
+});
+
+// A sessão pelo portão: um login na frente, na mesma origem, injeta o Bearer de uma sessão do
+// motor. O front só entra sem token quando o motor responde `autenticado: true` a um pedido
+// que saiu sem token.
+describe('sessão pelo portão', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  function portaoFalso(ultima = 0) {
+    const estado = { ultima, idas: 0 };
+    const portao: JanelaDoPortao = {
+      irParaARaiz: () => { estado.idas += 1; },
+      lerUltimaRecarga: () => estado.ultima,
+      gravarUltimaRecarga: (quando) => { estado.ultima = quando; },
+    };
+    return { portao, estado };
+  }
+
+  const semAuthorization = (p: Pedido | undefined) => !new Headers(p?.init.headers).has('authorization');
+
+  it('motor sem portão, sem token: continua indo ao pareamento, com uma sondagem só', async () => {
+    const p = portaoFalso();
+    const t = montar({ portao: p.portao });
+    t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: false }));
+    t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', motor: 'alcancavel', viaPortao: false });
+    expect(t.pedidos.map((x) => x.url)).toEqual([`${BASE}/api/auth/status`]);
+    expect(p.estado.idas).toBe(0);
+  });
+
+  it('status diz autenticado sem token: entra sem gravar nada, sem Authorization, e o fluxo leva o cookie da origem', async () => {
+    const t = montar({ portao: portaoFalso().portao });
+    t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: true }));
+    let fluxo!: ReturnType<typeof fluxoFalso>;
+    t.rotas.set('/api/events', (p) => { fluxo = fluxoFalso(p.init); return fluxo.resposta; });
+    t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', viaPortao: true, conexao: 'conectado' });
+    expect(t.escritas.total).toBe(0);
+    expect(t.guardado.size).toBe(0);
+    const [status, eventos] = t.pedidos;
+    expect(status?.init.credentials).toBe('same-origin');
+    expect(semAuthorization(status) && semAuthorization(eventos)).toBe(true);
+    expect(eventos?.init.credentials).toBe('same-origin');
+    fluxo.enviar(`event: state\ndata: ${JSON.stringify({ app: APP, status: 'idle' })}\n\n`);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().snapshot).toEqual({ app: APP, status: 'idle' });
+  });
+
+  it('não entra sem o motor dizer autenticado: exigida false, resposta torta ou falha de rede vão ao pareamento', async () => {
+    for (const resposta of [() => json({ exigida: false, autenticado: true }), () => json({ autenticado: true }), () => json({ exigida: true, autenticado: 'sim' }), null]) {
+      const t = montar({ portao: portaoFalso().portao });
+      if (resposta) t.rotas.set('/api/auth/status', resposta);
+      t.app.iniciar();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(t.app.store.ler()).toMatchObject({ sessao: 'pareamento', viaPortao: false });
+      expect(t.pedidos.some((x) => x.url.endsWith('/api/events'))).toBe(false);
+    }
+  });
+
+  it('com token guardado o comportamento não muda: entra com o token, sem sondar o portão', async () => {
+    const t = montar({ token: TOKEN, portao: portaoFalso().portao });
+    t.rotas.set('/api/events', (p) => fluxoFalso(p.init).resposta);
+    t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', viaPortao: false });
+    expect(t.pedidos.map((x) => x.url)).toEqual([`${BASE}/api/events`]);
+    expect(new Headers(t.pedidos[0]?.init.headers).get('authorization')).toBe(`Bearer ${TOKEN}`);
+    expect(t.pedidos[0]?.init.credentials).toBe('omit');
+  });
+
+  async function entrarPeloPortao(p: ReturnType<typeof portaoFalso>, agora = () => 1_000_000) {
+    const t = montar({ portao: p.portao, agora });
+    t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: true }));
+    t.rotas.set('/api/events', (x) => fluxoFalso(x.init).resposta);
+    t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler().viaPortao).toBe(true);
+    return t;
+  }
+
+  it('401 num pedido: recarrega na raiz uma vez e guarda a hora, sem ir ao pareamento', async () => {
+    const p = portaoFalso();
+    const t = await entrarPeloPortao(p);
+    t.rotas.set('/api/team', () => json({ error: 'google_login_required' }, 401));
+    const r = await t.app.cliente.get('/api/team', (b) => b);
+    expect(r).toMatchObject({ ok: false, falha: 'nao_autenticado' });
+    expect(p.estado).toEqual({ idas: 1, ultima: 1_000_000 });
+    expect(t.app.store.ler().sessao).toBe('carregando');
+    expect(t.pedidos.some((x) => x.url.endsWith('/api/auth/pair'))).toBe(false);
+  });
+
+  it('401 no fluxo também recarrega, e dois 401 juntos recarregam uma vez só', async () => {
+    const p = portaoFalso();
+    const t = montar({ portao: p.portao, agora: () => 5_000_000 });
+    t.rotas.set('/api/auth/status', () => json({ exigida: true, autenticado: true }));
+    t.rotas.set('/api/events', () => json({ error: 'google_login_required' }, 401));
+    t.rotas.set('/api/team', () => json({ error: 'google_login_required' }, 401));
+    t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    void t.app.cliente.get('/api/team', (b) => b);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(p.estado.idas).toBe(1);
+    expect(t.app.store.ler().sessao).toBe('carregando');
+  });
+
+  it('o segundo 401 dentro da janela mostra a tela de Entrar de novo, sem recarregar; fora da janela recarrega', async () => {
+    const dentro = portaoFalso(1_000_000 - JANELA_DA_RECARGA_MS + 1);
+    const t = await entrarPeloPortao(dentro);
+    t.rotas.set('/api/team', () => json({}, 401));
+    await t.app.cliente.get('/api/team', (b) => b);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'portao-expirado', snapshot: null });
+    expect(dentro.estado.idas).toBe(0);
+    t.app.entrarDeNovo();
+    expect(dentro.estado).toEqual({ idas: 1, ultima: 1_000_000 });
+
+    const fora = portaoFalso(1_000_000 - JANELA_DA_RECARGA_MS);
+    const t2 = await entrarPeloPortao(fora);
+    t2.rotas.set('/api/team', () => json({}, 401));
+    await t2.app.cliente.get('/api/team', (b) => b);
+    expect(fora.estado.idas).toBe(1);
+  });
+
+  it('Sair: POST /auth/logout na mesma origem com x-farol, sem o motor, e depois a raiz', async () => {
+    const p = portaoFalso();
+    const t = await entrarPeloPortao(p);
+    t.rotas.set('/auth/logout', () => new Response(null, { status: 204 }));
+    expect(await t.app.sair()).toBe('revogada');
+    const logout = t.pedidos.find((x) => x.url === '/auth/logout');
+    expect(logout?.init.method).toBe('POST');
+    expect(new Headers(logout?.init.headers).get('x-farol')).toBe('1');
+    expect(semAuthorization(logout)).toBe(true);
+    expect(logout?.init.credentials).toBe('same-origin');
+    expect(t.pedidos.some((x) => /\/api\/auth\/(sessions|revoke)/.test(x.url))).toBe(false);
+    expect(p.estado.idas).toBe(1);
+    expect(t.escritas.total).toBe(0);
+  });
+
+  it('Sair com o portão fora do ar ainda vai à raiz, e o desfecho não afirma a revogação', async () => {
+    const p = portaoFalso();
+    const t = await entrarPeloPortao(p);
+    expect(await t.app.sair()).toBe('nao-confirmada');
+    expect(p.estado.idas).toBe(1);
+  });
+
+  it('revogar a sessão atual pela tela Sistema equivale a sair', async () => {
+    const p = portaoFalso();
+    const t = await entrarPeloPortao(p);
+    t.rotas.set('/auth/logout', () => new Response(null, { status: 204 }));
+    t.app.esquecerSessao('revogada');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.pedidos.some((x) => x.url === '/auth/logout')).toBe(true);
+    expect(p.estado.idas).toBe(1);
+    expect(t.app.store.ler().sessao).not.toBe('pareamento');
+  });
+
+  it('outra aba apagando o token não tira a sessão pelo portão; outra aba pareando troca para o token', async () => {
+    const t = await entrarPeloPortao(portaoFalso());
+    t.janela.disparar(CHAVE_DO_TOKEN);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', viaPortao: true });
+    t.guardado.set(CHAVE_DO_TOKEN, TOKEN);
+    t.janela.disparar(CHAVE_DO_TOKEN);
+    expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', viaPortao: false });
   });
 });

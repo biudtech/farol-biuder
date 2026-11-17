@@ -42,7 +42,7 @@ function fluxoFalso(init: RequestInit) {
   };
 }
 
-function montar(token = TOKEN, dados = new Map<string, string>()) {
+function montar(token = TOKEN, dados = new Map<string, string>(), viaPortao?: () => boolean) {
   const pedidos: Pedido[] = [];
   const respostas: Array<(p: Pedido) => Response | Promise<Response>> = [];
   const cofre = cofreCom(token, dados);
@@ -52,6 +52,7 @@ function montar(token = TOKEN, dados = new Map<string, string>()) {
     base: BASE,
     cofre,
     aoNaoAutenticado,
+    viaPortao,
     registrar: (aviso) => { registros.push(aviso); },
     buscar: async (url, init = {}) => {
       const pedido = { url: String(url), init };
@@ -90,7 +91,7 @@ describe('get e post', () => {
     expect(t.pedidos[0]?.init.body).toBe('{"a":"b"}');
   });
 
-  it('sem token não manda Authorization, e nunca manda cookie', async () => {
+  it('sem token não manda Authorization, e fora do portão não manda cookie', async () => {
     const t = montar('');
     t.respostas.push(() => json({ ok: true }));
     await t.cliente.post('/api/auth/pair', { codigo: 'X' }, objeto);
@@ -122,6 +123,24 @@ describe('get e post', () => {
     const r = await t.cliente.get('/api/auth/status', objeto);
     expect(r).toEqual({ ok: false, falha: 'nao_autenticado', status: 401 });
     expect(t.aoNaoAutenticado).not.toHaveBeenCalled();
+  });
+
+  it('sessão pelo portão: o pedido leva o cookie da origem, sem Authorization, e o 401 sem token avisa', async () => {
+    const t = montar('', new Map(), () => true);
+    t.respostas.push(() => json({ error: 'google_login_required' }, 401));
+    const r = await t.cliente.get('/api/team', objeto);
+    expect(r).toEqual({ ok: false, falha: 'nao_autenticado', status: 401 });
+    expect(t.aoNaoAutenticado).toHaveBeenCalledTimes(1);
+    expect(t.pedidos[0]?.init.credentials).toBe('same-origin');
+    expect(cabecalhos(t.pedidos[0]).has('authorization')).toBe(false);
+  });
+
+  it('a sondagem com comCookie leva o cookie da origem; o resto, fora do portão, segue sem cookie', async () => {
+    const t = montar('');
+    t.respostas.push(() => json({ exigida: true, autenticado: false }), () => json({}));
+    await t.cliente.get('/api/auth/status', objeto, { comCookie: true });
+    await t.cliente.get('/api/team', objeto);
+    expect(t.pedidos.map((p) => p.init.credentials)).toEqual(['same-origin', 'omit']);
   });
 
   it('duas abas: o 401 do token antigo, que esta aba tem na memória, não apaga o token novo que a outra guardou', async () => {
