@@ -77,15 +77,11 @@ export function avisosDoPeriodo(relatorio: Relatorio): string[] {
 
 const serve = (n: number | undefined): n is number => n !== undefined && Number.isFinite(n) && n >= 0;
 
-// A frase ao lado do número grande: as execuções que o motor contou e, quando dá, a média por
-// execução. A média é conta de exibição (o custo do motor dividido pelas execuções do motor),
-// e só aparece quando nenhuma execução do período tem custo desconhecido: com elas no divisor
-// e fora do dividendo, a média sairia mais baixa do que é.
+// A frase ao lado do número grande: só as execuções que o motor contou. Média por execução não
+// entra: seria conta da tela, e a tela não inventa número que o motor não manda.
 export function fraseDasExecucoes(totals: Soma): string {
   if (!serve(totals.attempts)) return '';
-  const contagem = `${execucoes(totals.attempts)} de IA`;
-  if (totals.attempts === 0 || !serve(totals.costUsd) || totals.unknownCost !== 0) return contagem;
-  return `${contagem} · média de ${dolar(totals.costUsd / totals.attempts)} por execução`;
+  return `${execucoes(totals.attempts)} de IA`;
 }
 
 interface PropsDoCusto {

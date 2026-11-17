@@ -112,16 +112,11 @@ describe('Consumo: o desenho enxuto', () => {
     expect(screen.queryByRole('group', { name: 'Filtros ativos' })).toBeNull();
   });
 
-  it('a frase ao lado do número diz as execuções e a média por execução, que é conta de exibição', async () => {
+  it('a frase ao lado do número diz só as execuções que o motor contou, sem média feita pela tela', async () => {
     montar();
     await assentar();
-    expect(within(cartao()).getByText('5 execuções de IA · média de US$ 2,50 por execução')).toBeTruthy();
-  });
-
-  it('com execução de custo desconhecido, ou sem o custo do motor, não há média: só a contagem', async () => {
-    montar({ responder: () => corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 5, costUsd: 12.5, unknownCost: 1 }) })) });
-    await assentar();
     expect(within(cartao()).getByText('5 execuções de IA')).toBeTruthy();
+    expect(cartao().textContent).not.toMatch(/média|por execução/);
     cleanup();
     montar({ responder: () => corpo(relatorioDoMotor({ totals: { attempts: 2 } })) });
     await assentar();

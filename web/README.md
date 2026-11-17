@@ -658,11 +658,9 @@ Regras que valem para quem mexer nela:
   `byKind` por tipo, `models` por modelo, `auditoria` para o registro inteiro. A tela não soma
   linhas de uma página nem tentativas de uma operação. As contas daqui são de exibição e
   estão ditas: a participação percentual (a fatia de uma linha no total do motor, também no
-  resumo das linhas Por tipo e Por modelo), entrada mais saída da mesma linha (para ordenar
-  os modelos) e a média por execução ao lado do número grande (`fraseDasExecucoes`): o
-  `totals.costUsd` do motor dividido pelo `totals.attempts` do motor, só quando os dois vêm e
-  `totals.unknownCost` é zero (execução de custo desconhecido entraria no divisor e não no
-  dividendo, e a média sairia baixa). Não é custo por revisão: o motor não manda esse número.
+  resumo das linhas Por tipo e Por modelo) e entrada mais saída da mesma linha (para ordenar
+  os modelos). Ao lado do número grande vai só a contagem de execuções do motor
+  (`fraseDasExecucoes`): média por execução seria conta da tela, e saiu.
 - **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
   informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
   esse valor, e a tela diz isso no cartão do número grande ("É uma estimativa...") e, por
@@ -729,8 +727,7 @@ Regras que valem para quem mexer nela:
   resultado de cada carga.
 - **Número torto não vira "US$ NaN".** Negativo, infinito ou que não é número aparece como
   "valor inválido"; fracionário onde se espera inteiro aparece com as casas que tem;
-  participação acima de 100% aparece como veio. A média por execução só sai com os dois
-  números servindo. `dolarDoEixo` (as casas que o passo pede, 0,025 pede três) continua em
+  participação acima de 100% aparece como veio. `dolarDoEixo` (as casas que o passo pede, 0,025 pede três) continua em
   `formato.ts`, sem uso na tela enxuta, que não escreve o eixo vertical. As funções puras não
   lançam com valor denormal, enorme ou `NaN`.
 
@@ -754,8 +751,8 @@ Regras que valem para quem mexer nela:
   tipo e Por modelo, e recortar por um repositório é o filtro. Somar o diário por
   repositório seria soma da tela, e o diário vem paginado.
 - **Sem custo por revisão.** O motor conta as revisões concluídas (`completed.reviews`), mas
-  não diz quanto elas custaram: o custo do período inclui erro, contestação e chat. A frase do
-  número grande dá a média por execução, conta de exibição dita acima.
+  não diz quanto elas custaram: o custo do período inclui erro, contestação e chat. A tela
+  não divide o total por conta própria.
 - **Sem custo nem cache por modelo no período.** `models` traz execuções e tokens de entrada
   e de saída. O custo por modelo existe só nas séries diárias do snapshot, que a tela teria
   de somar.
