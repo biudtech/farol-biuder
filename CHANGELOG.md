@@ -242,6 +242,19 @@ Ainda sem versão publicada.
   sessão anterior e vistos) devolvem o mesmo, provado com os dados reais em 304 consultas da rota
   e 1.684 chaves, comparando o JSON de chaves ordenadas contra o código anterior. As regras leem
   um recorte leve de cada decisão, mantido em memória. Nenhuma rota, chave ou campo novo.
+- **Histórico indisponível não é "nada decidido":** depois da migração o `decisions.json` traz
+  `historicoNoBanco: true`; com o banco fora, ou uma leitura dele falhando, o motor não devolve à
+  fila PR já visto, não marca ignorados, não rearma re-request, não retoma sessão interrompida, a
+  memória de critérios sai como não verificável e `GET /api/decisions` responde 503
+  (`historico_indisponivel`, sem escrever no log). `WARN` quando liga, `INFO` quando volta.
+- **Consumo e histórico abrem cada um por si:** a falha da importação do consumo não deixa mais o
+  histórico fora do banco.
+- **Disco e cópia:** a migração exige folga de 2,5 vezes o `decisions.json` (sem ela, espera a
+  próxima subida, com o que falta no `WARN`); a cópia é feita num nome temporário e não se repete
+  quando já existe uma íntegra do mesmo arquivo. A retirada do pedido de mudanças cuja atualização
+  o banco recusa guarda a contagem de tentativas em memória, e o teto continua valendo.
+- **Voltar a imagem para antes deste lote** exige restaurar o `decisions.json.migrado-<dia>`
+  (`docs/HOSPEDAGEM.md`).
 
 ### O que voltou ou entrou
 

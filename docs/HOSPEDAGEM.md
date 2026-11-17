@@ -195,14 +195,34 @@ abertas e 244 falhas viraram um `telemetria.db` de 3,9 MB, no lugar de 5,8 MB de
 pendências; o histórico (`resolved`) vai para a tabela `resolvidas` do mesmo banco. Na primeira
 subida desta versão o motor importa o histórico que o arquivo tiver (só o que o banco ainda não
 tem), confere a contagem e cada decisão, copia o arquivo original para
-`decisions.json.migrado-<dia>` e só então regrava o `decisions.json` com `resolved: []`, com uma
-linha `INFO`. A cópia fica no volume até quem opera apagá-la. Resolver uma decisão grava no banco
-antes de regravar o `decisions.json`; se o processo cair entre os dois, a subida seguinte acha a
-pendência no histórico e a tira das pendências, sem gravar de novo. Banco que não abre,
-importação que não confere ou escrita que o banco recusa deixam o histórico no `decisions.json`,
-como antes, com uma linha `WARN` começando por `telemetria:`; ele entra no banco quando o banco
-voltar. Enquanto o motor estiver nessa subida sem banco, o histórico de antes (que está no banco)
-não aparece na tela nem nas regras que o leem.
+`decisions.json.migrado-<dia>` e só então regrava o `decisions.json` com `resolved: []` e a marca
+`"historicoNoBanco": true`, com uma linha `INFO`. A cópia é feita num nome temporário
+(`.parcial`) e renomeada no fim, e não se repete se já houver uma cópia íntegra do mesmo arquivo
+(mesmo tamanho e hash). Ela fica no volume até quem opera apagá-la. Resolver uma decisão grava no
+banco antes de regravar o `decisions.json`; se o processo cair entre os dois, a subida seguinte
+acha a pendência no histórico e a tira das pendências, sem gravar de novo (o dossiê do autor, o
+aviso e o evento para a tela daquela decisão se perdem; o review, quando houve, já está no GitHub).
+
+**Folga de disco para migrar:** 2,5 vezes o tamanho do `decisions.json` livres na pasta de estado
+(medido: o pico é de 1,9 vez, o banco com o WAL da transação ou o banco com a cópia). Sem essa
+folga o motor não migra naquela subida: segue no `decisions.json`, como antes, com uma linha
+`WARN` que diz quantos bytes faltam, e tenta de novo na subida seguinte.
+
+**Banco fora antes e depois da migração.** Antes da primeira migração (sem a marca), banco que não
+abre, importação que não confere ou falta de folga deixam o histórico inteiro no `decisions.json`,
+como antes, com uma linha `WARN`; ele entra no banco numa subida seguinte. Depois da migração (com
+a marca), o histórico mora no banco: se ele não abrir, ou se uma leitura dele falhar com o motor de
+pé, o histórico fica **indisponível**, com uma linha `WARN` (`histórico de decisões indisponível`)
+e outra `INFO` quando volta. Nesse estado o motor não trata o vazio como "nada foi decidido": não
+devolve à fila PR já visto, não marca PR como ignorado, não rearma re-request, não retoma sessão
+interrompida, a memória de critérios sai como não verificável (o que barra a publicação por
+critérios) e `GET /api/decisions` responde 503 com `historico_indisponivel`. Decisão nova que o
+banco não aceitar fica no `resolved` do `decisions.json` e entra no banco depois.
+
+**Voltar a imagem para antes deste lote** exige restaurar o `decisions.json.migrado-<dia>` no lugar
+do `decisions.json`, com o motor parado: a versão anterior não lê o histórico do banco e subiria
+com o histórico vazio. As pendências criadas depois da migração ficam no `decisions.json` atual;
+quem restaurar copia o `pending` dele para o arquivo restaurado antes de subir.
 
 Medido com o histórico real em 17/11/2026 (2.596 decisões, `decisions.json` de 217 MB, numa cópia
 num disco Linux do WSL): a importação levou de 3,9 a 5,4 s, o processo chegou a 1,1 GB de memória
