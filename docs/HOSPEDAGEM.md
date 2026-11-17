@@ -314,9 +314,12 @@ anterior, se havia, ficou como estava". As que quem opera vai encontrar:
 |---|---|
 | o `gh` sem login, ou a conta sem acesso ao repositório | `sem acesso ao repositório da ferramenta técnica (https://github.com/biudtech/eng-behaviour.git): o gh não está logado, ou a conta logada não enxerga esse repositório. Confira com "gh auth status" e "gh repo view biudtech/eng-behaviour", como o usuário do motor.` |
 | sem rede até o GitHub | `falha de rede no clone da ferramenta técnica: https://github.com/biudtech/eng-behaviour.git não respondeu.` |
+| o `gh` não instalado | `o "gh" não está instalado ou não está no PATH do usuário que roda a instalação` |
 | commit do pino fora da origem | `o commit do pino (ed3e1535..., em lib/technical-review/tool.json) não existe em <origem>` |
 | `pnpm` ausente | `o gerenciador de pacotes "pnpm" não está instalado ou não está no PATH` |
 | sem rede até o registro de pacotes | `falha de rede em "pnpm install --frozen-lockfile": o registro de pacotes não respondeu` |
+| registro de pacotes que recusa (401 ou 403) | `o registro de pacotes recusou o acesso em "pnpm install --frozen-lockfile" (ERR_PNPM_FETCH_401)` |
+| outra instalação em curso | `outra instalação da ferramenta técnica em curso desde <hora> (pid <pid>); se ela morreu, apague /home/farol/.farol/toolchains/.instalacao.trava` |
 | passo morto de fora | `o passo "pnpm" foi encerrado pelo sinal SIGKILL antes de terminar.` |
 
 As duas primeiras foram medidas na imagem, num volume sem login do `gh` (a segunda com
@@ -327,7 +330,10 @@ URL é recusada antes de qualquer comando.
 A instalação é atômica. Na prova, o `pnpm install` morto com `SIGKILL` no meio do download
 deixou `~/.farol/toolchains` vazia num volume novo (a ferramenta continuou "não instalada", e a
 pasta de preparo saiu), e, sobre uma ferramenta já presente, deixou a pasta anterior no lugar,
-intacta. A instalação seguinte terminou normalmente, com a loja do `pnpm` pela metade.
+intacta. A instalação seguinte terminou normalmente, com a loja do `pnpm` pela metade. Duas
+instalações ao mesmo tempo não se atropelam: a segunda acha a trava `.instalacao.trava` em
+`~/.farol/toolchains` e sai sem tocar em nada. Se o `setup.js` morrer sem soltar a trava
+(`SIGKILL` nele mesmo), apague o arquivo que a mensagem cita e rode de novo.
 
 ### O cadastro dos repositórios
 
@@ -371,18 +377,27 @@ do motor (10001) e só para ele (700 e 600):
 docker exec -i farol sh -c 'umask 077; mkdir -p ~/.farol/technical-review && cat > ~/.farol/technical-review/repositories.json' < repositories.json
 ```
 
-Com `docker cp`, o arquivo chega com dono root (medido: `0:0`, modo 755); acerte o dono e o
-modo como root:
+Com `docker cp` ou `kubectl cp`, a pasta `technical-review` tem de existir antes: crie-a como o
+usuário do motor, copie, e acerte o dono e o modo depois. Com `docker cp` o arquivo chega com
+dono root (medido: `0:0`, modo 755), e o acerto é como root:
 
 ```sh
+docker exec farol sh -c 'umask 077; mkdir -p ~/.farol/technical-review'
 docker cp repositories.json farol:/home/farol/.farol/technical-review/repositories.json
 docker exec -u 0 farol sh -c 'chown 10001:10001 /home/farol/.farol/technical-review/repositories.json && chmod 600 /home/farol/.farol/technical-review/repositories.json'
 ```
 
-Em Kubernetes, `kubectl cp` roda o `tar` dentro do container, como o usuário dele; confira com
-`kubectl exec <pod> -- ls -ln /home/farol/.farol/technical-review` e ajuste o modo com
-`chmod 600` pelo `kubectl exec` (não exercitado aqui). A pasta `technical-review` tem de existir
-antes do `cp`. O motor lê o arquivo a cada avaliação: não precisa reiniciar.
+Em Kubernetes, `kubectl cp` roda o `tar` dentro do container, como o usuário dele, e o arquivo
+deve nascer com o dono 10001; o modo segue o do arquivo de origem (não exercitado aqui):
+
+```sh
+kubectl exec <pod> -- sh -c 'umask 077; mkdir -p ~/.farol/technical-review'
+kubectl cp repositories.json <pod>:/home/farol/.farol/technical-review/repositories.json
+kubectl exec <pod> -- sh -c 'chmod 600 ~/.farol/technical-review/repositories.json && ls -ln ~/.farol/technical-review'
+```
+
+Se o `ls -ln` mostrar outro dono, acerte com `chown 10001:10001` num contexto que rode como
+root. O motor lê o arquivo a cada avaliação: não precisa reiniciar.
 
 Repositório fora do cadastro é revisado e publicado sem avaliação técnica: o resultado aprovável
 leva o ponto "Este repositório não tem declaração técnica cadastrada, então a avaliação técnica
@@ -407,19 +422,21 @@ limpo do commit do pino com o carimbo de construção); `cadastro` é `legivel`,
 `ilegivel`. A tela mostra o mesmo `detalhe` na linha "Avaliação técnica" de Sistema > Saúde, com
 o estado em texto: OK quando ela roda para alguém (ferramenta íntegra e pelo menos um
 repositório declarado), Atenção nos outros casos. Nenhum caminho de arquivo sai no diagnóstico.
+A linha só muda quando o diagnóstico roda: depois de instalar a ferramenta ou de trocar o
+cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde (ou chame `GET /api/doctor`).
 
-No boot, uma linha no `farol.log` diz o mesmo estado, em `INFO`. Repositório declarado sem a
-ferramenta íntegra vira `WARN`, com o comando da instalação, e com a instância hospedada ligada
-a linha vai também ao stderr (o `docker logs`). Medido na prova, com o cadastro do exemplo e sem a
-ferramenta:
+No boot, o `farol.log` só ganha linha quando o estado é anormal: repositório declarado sem a
+ferramenta íntegra (com o comando da instalação) ou cadastro ilegível, as duas em `WARN`. Tudo
+certo, ou sem cadastro (quem não usa a avaliação técnica), não gera linha. Com a instância
+hospedada ligada, a linha vai também ao stderr (o `docker logs`). Medido na prova, com o cadastro
+do exemplo e sem a ferramenta:
 
 ```
 [farol] avaliação técnica: ferramenta ausente (eng-behaviour 0.17.0, commit ed3e1535cb84 não instalada); 1 repositório declarado: a avaliação técnica dos repositórios declarados falha: nenhuma regra é avaliada, a sessão de revisão é orientada a não aprovar e nenhuma aprovação deles sai como limpa, até a ferramenta íntegra ser instalada. Instale no volume, dentro do container e como o usuário do motor: node lib/technical-review/setup.js (docs/HOSPEDAGEM.md).
 ```
 
-Cadastro ilegível também vira `WARN`. O resumo do log no diagnóstico classifica a linha como
-"Estado da avaliação técnica no boot" (sem falha) ou, quebrada, como "Avaliação técnica sem a
-ferramenta íntegra ou com o cadastro ilegível" (`lib/log-taxonomy.js`).
+O resumo do log no diagnóstico classifica a linha como "Avaliação técnica sem a ferramenta
+íntegra ou com o cadastro ilegível", que não passa sozinha (`lib/log-taxonomy.js`).
 
 ### Atualizar quando o pino mudar
 

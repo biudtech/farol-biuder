@@ -565,16 +565,27 @@ os dois, com o `pnpm` na versão que o `Dockerfile` fixa.
   `biudtech/eng-behaviour` (`gh repo view biudtech/eng-behaviour`). Origem com usuário ou
   token na URL é recusada antes de rodar qualquer comando. Caminho local e origem fora do
   GitHub seguem com o `git` comum, sem credencial.
-- **Cada falha diz a causa** (`lib/technical-review/setup-falhas.js`) e sai com código 2: sem
-  acesso ao repositório (o `gh` não está logado ou a conta não enxerga o repositório), falha de
-  rede no clone, `git` ausente, commit do pino que não existe na origem, gerenciador de pacotes
-  ausente, falha de rede no `pnpm install`, passo que passou do prazo (dez minutos), instalação
-  interrompida (`SIGINT` ou `SIGTERM`) e passo morto por sinal de fora. Saída que não casa com
-  nenhuma causa conhecida vira a mensagem do passo, com o código de saída.
+- **Origem com `?` ou `#`** também é recusada antes de qualquer comando, e a mensagem não a
+  repete: um token na consulta ficaria na linha de comando.
+- **Cada falha diz a causa** (`lib/technical-review/setup-falhas.js`) e sai com código 2: o `gh`
+  ausente, sem acesso ao repositório (o `gh` não está logado ou a conta não enxerga o
+  repositório), falha de rede no clone, `git` ausente, commit do pino que não existe na origem,
+  checkout que não terminou, gerenciador de pacotes ausente, falha de rede no `pnpm install`,
+  acesso recusado pelo registro de pacotes (401 ou 403), passo que passou do prazo (dez
+  minutos), instalação interrompida (`SIGINT` ou `SIGTERM`) e passo morto por sinal de fora.
+  Todo passo roda com `LC_ALL=C`, porque a classificação lê a saída em inglês, e do `pnpm` vale
+  o último código `ERR_PNPM_*` da saída. Saída que não casa com nenhuma causa conhecida vira a
+  mensagem do passo, com o código de saída (e o `ERR_PNPM_*`, quando há).
+- **Uma por vez**: a instalação cria a trava `~/.farol/toolchains/.instalacao.trava` (com o pid e
+  a hora) e a solta no fim, com sucesso ou com falha. A segunda instalação que a acha sai com
+  código 2 e "outra instalação da ferramenta técnica em curso desde <hora>; se ela morreu, apague
+  <arquivo>", sem tocar em nada. Logo antes de trocar a pasta, a instalação confere de novo a do
+  lugar: se ela já vale, fica.
 - **Idempotente**: instalação válida não é refeita, e o comando sai na hora.
 - **Atômica**: a falha em qualquer passo remove a pasta de preparo, e a pasta válida, se havia,
   não é tocada. A instalação morta sem chance de limpar (`SIGKILL` no próprio `setup.js`) deixa
-  a pasta de preparo, que a próxima instalação remove quando tem mais de vinte minutos. Uma
+  a pasta de preparo e a trava: apagada a trava, a próxima instalação remove a sobra, porque só
+  quem detém a trava limpa e, com ela, nenhuma outra está em curso. Uma
   pasta anterior que deixou de validar (pino trocado no mesmo número de versão) é guardada como
   `eng-behaviour@<versão>.incomplete-<id>` quando a nova fica pronta, e sai só à mão.
 
@@ -591,8 +602,10 @@ identidade não comprovada, com a versão e o commit do pino) e o cadastro (quan
 declarados, ausente ou ilegível), com o efeito do que falta. A conferência é o mesmo
 `requireTool` que a avaliação usa, e por isso respeita `FAROL_ENG_BEHAVIOUR_HOME` (`lib/env.js`)
 quando a variável aponta outra pasta; a instalação grava sempre no lugar padrão. No boot, uma
-linha no `farol.log` diz o mesmo estado (`lib/technical-review/estado.js`), em `WARN` quando há
-repositório declarado sem a ferramenta íntegra ou o cadastro não abre.
+linha no `farol.log` diz o estado quando ele é anormal (`lib/technical-review/estado.js`), em
+`WARN`: repositório declarado sem a ferramenta íntegra, ou cadastro que não abre. Com tudo certo,
+ou sem cadastro, não há linha. A linha da tela só muda quando o diagnóstico roda: depois de
+instalar ou de trocar o cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde.
 
 Esse nome `eng-behaviour` aqui é só a ferramenta que avalia os PRs revisados
 (`lib/technical-review/`). O motor não roda mais a doutrina como gate do próprio repositório.

@@ -159,15 +159,20 @@ Ainda sem versão publicada.
   busca das fontes de revisão, sem token em argumento, URL ou log; origem com credencial na URL é
   recusada. Cada falha diz a causa (sem acesso ao repositório, rede no clone, `git` ausente,
   commit do pino fora da origem, `pnpm` ausente, rede no `pnpm install`, prazo, interrupção, passo
-  morto por sinal) e sai com código 2. Instalação válida não é refeita, e a que falha no meio não
-  deixa pasta de preparo nem toca a válida.
+  morto por sinal, mais o `gh` ausente, o checkout que não terminou e o registro que recusa o
+  acesso) e sai com código 2; origem com `?` ou `#` também é recusada. Todo passo roda com
+  `LC_ALL=C`, e do `pnpm` vale o último `ERR_PNPM_*` da saída. Instalação válida não é refeita, a
+  que falha no meio não deixa pasta de preparo nem toca a válida, e duas ao mesmo tempo não se
+  atropelam: a trava `.instalacao.trava` em `toolchains` segura a segunda, só quem a detém limpa
+  as sobras, e a pasta que passou a valer durante a construção não é trocada.
 - **Visível para quem opera:** `GET /api/doctor` ganha `avaliacaoTecnica` (a ferramenta instalada
   e íntegra, ausente ou com identidade não comprovada, com versão e commit; o cadastro, com
   quantos repositórios, ausente ou ilegível; e o efeito do que falta), e Sistema > Saúde ganha a
-  linha "Avaliação técnica". No boot, uma linha no `farol.log` com o mesmo estado, em `WARN`
-  quando há repositório declarado sem a ferramenta íntegra ou o cadastro não abre (com a
-  instância hospedada, também no stderr). O resumo do log classifica a linha (duas classes novas
-  em `lib/log-taxonomy.js`), em vez de "não classificada".
+  linha "Avaliação técnica", que muda quando o diagnóstico roda de novo. No boot, uma linha
+  `WARN` no `farol.log` só em estado anormal: repositório declarado sem a ferramenta íntegra ou
+  cadastro que não abre (com a instância hospedada, também no stderr); tudo certo, ou sem
+  cadastro, não gera linha. O resumo do log a classifica (classe nova em `lib/log-taxonomy.js`),
+  em vez de "não classificada".
 - **Cadastro de exemplo** em `docs/exemplos/repositories.exemplo.json`, com um repositório
   fictício e cada campo que o motor lê; o guia explica cada campo e como pôr o arquivo no
   volume com o dono e o modo certos.
