@@ -10,10 +10,10 @@ const RAIZ = path.join(import.meta.dirname, '..');
 const ler = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8');
 const README = ler('README.md');
 
-/* Os guias travados aqui são o CLAUDE.md (sumário) e os dois guias operacionais que sobraram
-   do corte de distribuição. A lista é esta, escrita de propósito: não há mais empacotador de
-   onde derivá-la. */
-const GUIAS_OPERACIONAIS = ['docs/REVIEW-GATES.md', 'docs/CONFIGURATION.md'];
+/* Os guias travados aqui são o CLAUDE.md (sumário), os dois guias operacionais que sobraram
+   do corte de distribuição e o de hospedagem em container, que entrou com a imagem do motor.
+   A lista é esta, escrita de propósito: não há mais empacotador de onde derivá-la. */
+const GUIAS_OPERACIONAIS = ['docs/REVIEW-GATES.md', 'docs/CONFIGURATION.md', 'docs/HOSPEDAGEM.md'];
 
 /** Caminhos relativos dos guias travados: o CLAUDE.md e os guias operacionais. */
 function guiasDistribuidos() {
@@ -62,6 +62,7 @@ const PISO_DE_SECOES = {
   'CLAUDE.md': 7,
   'docs/CONFIGURATION.md': 3,
   'docs/REVIEW-GATES.md': 11,
+  'docs/HOSPEDAGEM.md': 11, // medido em 16/11/2026, quando o guia entrou
 };
 
 function destinoDoLink(guia, alvo) {

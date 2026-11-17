@@ -26,6 +26,11 @@ node server.js
 
 O motor escuta em `http://127.0.0.1:47170`. Fora de `/api/` ele responde 404: não há página.
 
+Para rodar em container há um [`Dockerfile`](Dockerfile) na raiz, com `git`, `gh` e Claude Code
+em versão fixada: `docker build -t farol-biuder-motor:dev .`. A imagem só sobe com um
+`config.json` de instância hospedada no volume; o passo a passo está em
+[`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md).
+
 **Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada
 nasce revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
 `~/.farol/config.json` antes do primeiro boot:
@@ -99,6 +104,7 @@ não escreve no GitHub.
 | `tools/quality/` | O gate de qualidade: `npm run lint` |
 | `tools/check-syntax.js` | O gate de sintaxe: `npm run check` |
 | `tools/farol-parear.js` | Gera o código de pareamento da API |
+| `Dockerfile`, `tools/provar-imagem.sh` | A imagem do container do motor e a prova dela com o container de pé |
 
 ## Guias
 
@@ -107,6 +113,7 @@ não escreve no GitHub.
 | [`CLAUDE.md`](CLAUDE.md) | Guia do mantenedor: mapa por assunto, invariantes, a API, como testar |
 | [`web/README.md`](web/README.md) | O front: como rodar, convenções, o contrato de cada tela |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Conta e política, preferências, perfis do Claude, Jira, hospedagem |
+| [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md) | O motor em container: a imagem, o volume, a primeira subida, o que o orquestrador garante |
 | [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | As regras de postagem, uma a uma |
 | [`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md) | O que o consumo mede e `GET /api/usage` |
 | [`docs/QUALITY.md`](docs/QUALITY.md) | O gate e o ratchet de qualidade |

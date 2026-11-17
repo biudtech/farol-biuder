@@ -109,6 +109,35 @@ Ainda sem versão publicada.
   corpo com segredo vai pela entrada padrão e o cabeçalho de autorização é lido de um arquivo
   com modo 600. O guia diz o que cada forma protege.
 
+### Container do motor (fase 5)
+
+- **Imagem do motor:** `Dockerfile` na raiz, sobre `node:24.22.1-bookworm-slim` fixado por
+  digest, com `git` 2.39.5, `gh` 2.104.0 (repositório apt oficial, chaveiro conferido por
+  sha256) e Claude Code 2.1.326 (pacote npm), cada um em versão exata. O processo roda como o
+  usuário 10001, com o `tini` como PID 1, e a raiz do container pode ser somente leitura. Só
+  entra o que o motor lê em execução: `web/`, `test/` e `docs/` ficam fora.
+- **A instância hospedada não sobe aberta:** com `FAROL_INSTANCIA_HOSPEDADA=1`, que a imagem
+  liga, o motor recusa o boot, com código 1 e sem criar nem alterar nada, quando não há
+  `config.json` (o volume que não montou era tratado como instalação nova e subia sem
+  autenticação, com a conta agindo sozinha), quando o `config.json` não exige autenticação e
+  quando ele não define `hostPublico` nem `origensPermitidas`. Valor da variável que não é `1`
+  nem `0` também recusa. Fora do container nada muda: sem a variável, a instalação nova sobe
+  como antes.
+- **O volume é o HOME inteiro do usuário do motor** (`/home/farol`), porque o motor grava
+  `~/.claude.json` e o `gh` e o Claude Code gravam em outros pontos do HOME. `FAROL_HOME`
+  continua no padrão (`~/.farol`).
+- **CI:** o job `imagem` constrói a imagem e a prova com o container de pé
+  (`tools/provar-imagem.sh`), sem publicar; o check obrigatório `ci` passa a exigir `gate`,
+  `web` e `imagem`.
+- **Guia novo, `docs/HOSPEDAGEM.md`:** a imagem e as versões, as variáveis, o volume, o
+  `config.json` de exemplo (`docs/exemplos/config.hospedagem.exemplo.json`), a primeira subida,
+  o que o orquestrador precisa garantir, o fuso, os riscos conhecidos e o que falta decidir
+  para publicar a imagem.
+- **Ainda não feito:** publicar a imagem (registro, disparo e credencial por decidir), o login
+  real do `gh` e da assinatura dentro do container e uma revisão de verdade nele. O código de
+  pareamento ainda pode ser invalidado por quem não pareou, e a sessão de revisão ainda alcança
+  as credenciais: os dois estão descritos nos riscos do guia.
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em
@@ -353,6 +382,10 @@ Ainda sem versão publicada.
 - Hospedada com `hostPublico` ou `origensPermitidas` no `config.json`, a instância já exige
   autenticação. Sem nenhuma das duas (motor em loopback atrás de um proxy que reescreve o Host),
   ela continua precisando de `"localAuth": "exigir"`.
+- Em container, a imagem só sobe com o `config.json` da instância no volume, com `hostPublico`
+  ou `origensPermitidas`. Sem isso o container sai com código 1 e diz o motivo. O `GH_TOKEN` no
+  ambiente não serve ao motor: o `gh` tem de estar logado dentro do container. O passo a passo
+  está em `docs/HOSPEDAGEM.md`.
 - Um `config.json` que ainda traga teto de gasto num perfil sobe sem erro: os campos são
   ignorados e somem do arquivo na próxima gravação da configuração. O PR que estava parado por
   orçamento volta à fila automática no primeiro boot, com uma linha no `farol.log` dizendo
