@@ -121,3 +121,29 @@ export function resumoDaSaude(verificacoes: readonly Verificacao[]): string {
   if (atencao === 0) return `${verificacoes.length} verificações, nenhuma pede atenção.`;
   return `${verificacoes.length} verificações, ${atencao} ${atencao === 1 ? 'pede' : 'pedem'} atenção.`;
 }
+
+// As verificações que, fora do certo, param a revisão de vez: sem elas nenhuma sessão abre ou
+// nada é publicado. Na tela viram problema (vermelho); as outras que pedem atenção, aviso.
+const GRAVES = new Set(['GitHub CLI', 'Autenticação do GitHub', 'Claude Code', 'Usuário do sistema', 'Perfil do Claude que o motor usa']);
+
+export function ehGrave(verificacao: Verificacao): boolean {
+  return verificacao.estado === 'atencao' && GRAVES.has(verificacao.nome);
+}
+
+// Todas as linhas da seção Saúde, na ordem da tela: o diagnóstico, a versão do Claude Code, os
+// perfis apontados com problema e o monitoramento da conta.
+export function todasAsVerificacoes(
+  saude: Saude | null | undefined,
+  cli: VersaoDoCli | undefined,
+  perfis: PerfisDoClaude | undefined,
+  conta: ContaRevisora | undefined,
+  quando: (ms: number) => string,
+): Verificacao[] {
+  const daVersao = verificacaoDoCli(cli);
+  return [
+    ...(saude ? verificacoesDaSaude(saude) : []),
+    ...(daVersao ? [daVersao] : []),
+    ...verificacoesDosPerfis(perfis),
+    verificacaoDaConta(conta, quando),
+  ];
+}

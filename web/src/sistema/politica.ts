@@ -28,6 +28,12 @@ export type Desfecho = 'onClean' | 'onCaveats' | 'onReject';
 // O valor de cada desfecho com que o motor publica sozinho; o outro é `wait`.
 export const PUBLICA: Record<Desfecho, string> = { onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
 
+// O que o seletor de cada desfecho oferece: só publicar. O revisor é autônomo e nunca espera
+// (desenho de 17/11/2026): a tela não oferece nem manda `wait`. Uma conta que chega do motor
+// com `wait` (posto por arquivo ou por API) mostra o valor como está, numa opção desabilitada,
+// e a tela só deixa trocar para publicar.
+export const OPCOES_DA_TELA: Record<Desfecho, readonly string[]> = { onClean: ['approve'], onCaveats: ['approve'], onReject: ['request_changes'] };
+
 export const ROTULO_DO_DESFECHO: Record<Desfecho, string> = {
   onClean: 'Quando a revisão sai limpa (aprovável sem ressalvas)',
   onCaveats: 'Quando a revisão sai com ressalvas (aprovável, com pontos de atenção)',
@@ -37,7 +43,7 @@ export const ROTULO_DO_DESFECHO: Record<Desfecho, string> = {
 // O que o motor faz com cada valor, numa linha. O que é limpo, ressalva e reprovação quem
 // decide é o motor, depois dos gates; aqui só se escreve o que a política manda fazer.
 export function efeitoDoDesfecho(campo: Desfecho, valor: string | undefined): string {
-  if (valor === 'wait') return 'Espera você: o PR vai a "Precisa de você" no Radar, e nada é publicado sem o seu clique.';
+  if (valor === 'wait') return 'Esperar (definido no motor): o motor não publica este desfecho sozinho, e esta tela não tem decisão a oferecer para o PR que fica esperando. Daqui só dá para trocar para publicar; voltar a esperar é só pelo arquivo de configuração ou pela API.';
   if (valor !== PUBLICA[campo]) return 'O motor mandou um valor que esta tela não conhece: ela não diz o que ele faz.';
   if (campo === 'onReject') return 'Publica sozinho o pedido de mudanças (REQUEST_CHANGES) no GitHub, pela conta revisora: o PR fica bloqueado até o autor tratar.';
   return campo === 'onClean'
@@ -46,7 +52,7 @@ export function efeitoDoDesfecho(campo: Desfecho, valor: string | undefined): st
 }
 
 export function rotuloDoValor(campo: Desfecho, valor: string): string {
-  if (valor === 'wait') return 'Esperar você';
+  if (valor === 'wait') return 'Esperar (definido no motor)';
   if (valor === PUBLICA[campo]) return campo === 'onReject' ? 'Publicar o pedido de mudanças sozinho' : 'Publicar a aprovação sozinho';
   return `${valor} (valor que esta tela não conhece)`;
 }
@@ -116,9 +122,9 @@ const DESFECHOS_EM_ORDEM = ['onClean', 'onCaveats', 'onReject'] as const;
 // Os campos que A PESSOA alterou nesta edição: a diferença entre o rascunho e o valor que ela
 // viu ao começar (`visto`), nunca a diferença contra a conta de agora. Campo que outra pessoa
 // mudou no motor nesse meio não entra, e por isso não é revertido. Só valor do domínio, e só
-// o que ainda difere do motor (`conta`). Com o "limpo" em espera o "com ressalvas" não vai: o
-// motor o põe em espera sozinho (o com ressalvas nunca é mais permissivo que o limpo), e
-// recusaria o pedido de aprovar.
+// o que ainda difere do motor (`conta`), e nunca `wait` (OPCOES_DA_TELA). Com o "limpo" em
+// espera (vindo do motor) o "com ressalvas" não vai: o motor o põe em espera sozinho (o com
+// ressalvas nunca é mais permissivo que o limpo), e recusaria o pedido de aprovar.
 export function camposAlterados(visto: RascunhoDaConta, rascunho: RascunhoDaConta, conta: ContaRevisora): CamposDaConta {
   const campos: CamposDaConta = {};
   if (!mesmaLista(visto.owners, rascunho.owners)) {
@@ -128,7 +134,7 @@ export function camposAlterados(visto: RascunhoDaConta, rascunho: RascunhoDaCont
   if (rascunho.autoReview !== undefined && rascunho.autoReview !== visto.autoReview && rascunho.autoReview !== conta.autoReview) campos.autoReview = rascunho.autoReview;
   for (const campo of DESFECHOS_EM_ORDEM) {
     const valor = rascunho[campo];
-    if (valor === visto[campo] || valor === (conta[campo] ?? '') || !(DOMINIO_DA_POLITICA[campo] as readonly string[]).includes(valor)) continue;
+    if (valor === visto[campo] || valor === (conta[campo] ?? '') || !OPCOES_DA_TELA[campo].includes(valor)) continue;
     if (campo === 'onCaveats' && rascunho.onClean === 'wait') continue;
     campos[campo] = valor;
   }
@@ -178,12 +184,22 @@ export function textosDosConflitos(conflitos: readonly string[], conta: ContaRev
   return saida;
 }
 
-// O que a tela diz do "com ressalvas" quando o "limpo" está em espera. O campo do formulário
-// não é mexido: voltar o limpo para publicar devolve o com ressalvas ao valor que estava.
+// O que a tela diz do "com ressalvas" quando o "limpo" está em espera (só pode vir do motor:
+// a tela não oferece esperar). O campo do formulário não é mexido: trocar o limpo para
+// publicar libera este campo com o valor que ele tinha.
 export function notaDasRessalvasTravadas(rascunho: RascunhoDaConta): string {
-  const base = 'Espera você: com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo).';
+  const base = 'Esperar (definido no motor): com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo). Troque a limpa para publicar para liberar este campo.';
   if (rascunho.onCaveats !== 'approve') return base;
-  return `${base} Ajuste da tela: este campo estava em "publicar a aprovação sozinho" e é mostrado em espera enquanto a limpa esperar; se você salvar assim, o motor o grava em espera, e se voltar a limpa para publicar antes de salvar, ele volta a "publicar a aprovação sozinho".`;
+  return `${base} Este campo está em "publicar a aprovação sozinho" no formulário e é mostrado em espera enquanto a limpa esperar.`;
+}
+
+// O resumo da política na linha fechada: o que o motor faz sozinho hoje.
+export function resumoDaPolitica(conta: Pick<ContaRevisora, 'autoReview' | 'onClean' | 'onCaveats' | 'onReject'>): string {
+  if (conta.autoReview === false) return 'revisão automática desligada';
+  const esperando = DESFECHOS_EM_ORDEM.filter((campo) => conta[campo] === 'wait').length;
+  if (esperando) return `${esperando} ${esperando === 1 ? 'desfecho espera' : 'desfechos esperam'} (definido no motor)`;
+  if (conta.autoReview === true && DESFECHOS_EM_ORDEM.every((campo) => conta[campo] === PUBLICA[campo])) return 'publica sozinho';
+  return 'política incompleta';
 }
 
 // O corpo de POST /api/accounts/edit: a operação de editar, com a conta e os campos.
@@ -192,8 +208,9 @@ export function corpoDaConta(user: string, campos: CamposDaConta): { tipo: 'edit
 }
 
 // Cada mudança dos campos que AMPLIA o que o motor faz ou publica sozinho, com o efeito
-// exato. A que reduz (desligar a revisão automática, trocar publicar por esperar, tirar
-// organização) não entra: essa não pede confirmação.
+// exato: ligar a revisão automática, trocar o esperar que veio do motor por publicar e
+// acrescentar organização. A que reduz (desligar a revisão automática, tirar organização) não
+// entra: essa não pede confirmação.
 export function ampliacoesDaConta(conta: ContaRevisora, campos: CamposDaConta): string[] {
   const quem = `@${conta.user}`;
   const saida: string[] = [];
@@ -227,10 +244,10 @@ const NOME_DO_CAMPO: Record<keyof CamposDaConta, string> = {
 function valorDoCampo(campo: keyof CamposDaConta, campos: CamposDaConta): string {
   if (campo === 'owners') return campos.owners?.length ? campos.owners.join(', ') : 'nenhuma';
   if (campo === 'autoReview') return campos.autoReview ? 'ligada' : 'desligada';
-  return campos[campo] === 'wait' ? 'esperar você' : 'publicar sozinho';
+  return campos[campo] === 'wait' ? 'esperar' : 'publicar sozinho';
 }
 
-// O pedido numa frase, para o resultado: "revisão limpa: esperar você; organizações
+// O pedido numa frase, para o resultado: "revisão limpa: publicar sozinho; organizações
 // monitoradas: biudtech, acme".
 export function textoDosCampos(campos: CamposDaConta): string {
   return (Object.keys(NOME_DO_CAMPO) as Array<keyof CamposDaConta>)

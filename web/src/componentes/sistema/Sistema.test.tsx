@@ -114,7 +114,8 @@ function montar({ bruto = BRUTO, semEstado = false, conexao = 'conectado', estad
 
 // deixa as promessas pendentes (a resposta do motor de mentira) assentarem
 const assentar = async () => { await act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); }); };
-const secao = (nome: string | RegExp) => screen.getByRole('region', { name: nome });
+// cada seção é uma Linha: o <details> com o título como nome (papel group)
+const secao = (nome: string | RegExp) => screen.getByRole('group', { name: nome });
 const na = (nome: string | RegExp) => within(secao(nome));
 const clicarEm = async (onde: ReturnType<typeof within>, nome: string | RegExp) => { await act(async () => { fireEvent.click(onde.getByRole('button', { name: nome })); }); };
 const mudar = (campo: HTMLElement, valor: string) => { act(() => { fireEvent.change(campo, { target: { value: valor } }); }); };
@@ -133,15 +134,60 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// Uma resposta que só chega quando o teste mandar: para ver o "Salvando…", o "Encerrando…" e o
+// "Conferindo" enquanto o pedido está no ar.
+function adiada() {
+  let soltar: (r: Resposta) => void = () => {};
+  const promessa = new Promise<Resposta>((resolver) => { soltar = resolver; });
+  return { promessa, soltar: async (r: Resposta) => { await act(async () => { soltar(r); }); await assentar(); } };
+}
+
+const linhas = (t: ReturnType<typeof montar>) => [...t.container.querySelectorAll('details')];
+const resumoDe = (nome: string) => (secao(nome).querySelector('summary') as HTMLElement);
+
 describe('Sistema: a página', () => {
-  it('tem as sete seções com título próprio e o índice que leva a cada uma', async () => {
-    montar();
+  it('tem o título, a frase de quantos pontos pedem atenção e as sete linhas fechadas, com bolinha e resumo', async () => {
+    const t = montar();
     await assentar();
     expect(screen.getByRole('heading', { level: 1, name: 'Sistema' })).toBeTruthy();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([SAUDE, CONTA_E_POLITICA, AUTOMACAO, CLAUDE, JIRA, SESSOES_PAREADAS, REDE_E_ACESSO]);
-    const indice = within(screen.getByRole('navigation', { name: 'Seções do Sistema' })).getAllByRole('link');
-    expect(indice.map((a) => a.getAttribute('href'))).toEqual(['#saude', '#conta', '#automacao', '#claude', '#jira', '#sessoes', '#rede']);
-    for (const link of indice) expect(document.getElementById((link.getAttribute('href') ?? '').slice(1))).not.toBeNull();
+    expect(screen.getByText('Nenhum ponto pede atenção')).toBeTruthy();
+    expect(linhas(t).map((d) => d.getAttribute('aria-label'))).toEqual([SAUDE, CONTA_E_POLITICA, AUTOMACAO, CLAUDE, JIRA, SESSOES_PAREADAS, REDE_E_ACESSO]);
+    // nada aberto de início: o detalhe é sob demanda
+    expect(linhas(t).every((d) => !d.open)).toBe(true);
+    // cada resumo: a bolinha (com o estado escrito para o leitor), o título e o resumo à direita
+    expect(linhas(t).map((d) => d.querySelector('summary')?.textContent)).toEqual([
+      'OK:Saúde12 verificações OK',
+      'OK:Conta revisora e política@farol-bot, revisão automática desligada',
+      'OK:Automação1 ao mesmo tempo, Opus',
+      'OK:Perfil do ClaudeAssinatura, pronto',
+      'OK:Jirabiud.atlassian.net',
+      'OK:Sessões pareadas2 ativas',
+      'OK:Rede e acessofarol.exemplo.com',
+    ]);
+    expect(linhas(t).map((d) => d.querySelector('summary [data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
+    // o índice do topo saiu: cada seção já é uma linha
+    expect(screen.queryByRole('navigation', { name: 'Seções do Sistema' })).toBeNull();
+  });
+
+  it('a frase do topo conta as linhas em âmbar e vermelho, e a bolinha diz o estado de cada uma', async () => {
+    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false }, accounts: [{ ...CONTA, owners: [] }], jiraSites: [] } });
+    await assentar();
+    expect(screen.getByText('2 pontos pedem atenção')).toBeTruthy();
+    expect(resumoDe(SAUDE).querySelector('[data-tom]')?.getAttribute('data-tom')).toBe('ruim');
+    expect(resumoDe(SAUDE).textContent).toBe('Problema:SaúdeAutenticação do GitHub e mais 1');
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Atenção:Conta revisora e política@farol-bot, sem organização monitorada');
+    // o Jira desligado é cinza e não conta
+    expect(resumoDe(JIRA).textContent).toBe('Sem dado ou desligado:Jiradesligado');
+  });
+
+  it('um clique no resumo abre a linha, e outro fecha', async () => {
+    montar();
+    await assentar();
+    const linha = secao(AUTOMACAO) as HTMLDetailsElement;
+    act(() => { fireEvent.click(resumoDe(AUTOMACAO)); });
+    expect(linha.open).toBe(true);
+    act(() => { fireEvent.click(resumoDe(AUTOMACAO)); });
+    expect(linha.open).toBe(false);
   });
 
   it('não tem campo de senha nem campo para digitar token, chave ou credencial', async () => {
@@ -173,49 +219,61 @@ describe('Sistema: a página', () => {
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
-  it('sem o estado do motor a tela diz que está esperando, e cada seção diz o que falta', async () => {
-    montar({ semEstado: true });
+  it('sem o estado do motor a página mostra o esqueleto e diz que está esperando, sem salvar nenhum', async () => {
+    const t = montar({ semEstado: true });
     await assentar();
-    expect(screen.getByText(/Esperando o estado do motor/)).toBeTruthy();
-    expect(na(SAUDE).getByText(/o motor não mandou o diagnóstico/)).toBeTruthy();
+    expect(screen.getByText('Esperando o estado do motor')).toBeTruthy();
+    expect(screen.getByRole('status', { name: '' }).textContent).toBe('Esperando o estado do motor: as seções aparecem preenchidas quando ele chegar.');
+    expect(linhas(t)).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /^Salvar/ })).toBeNull();
+  });
+
+  it('cada linha diz o que falta quando o motor não mandou a parte dela', async () => {
+    montar({ bruto: { app: BRUTO.app } });
+    await assentar();
+    expect(na(SAUDE).getByText(/^Atenção: o motor não mandou o diagnóstico/)).toBeTruthy();
     expect(na(CONTA_E_POLITICA).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
     expect(na(AUTOMACAO).getByText(/o motor não mandou as chaves de automação/)).toBeTruthy();
     expect(na(CLAUDE).getByText(/o motor não mandou a lista de perfis/)).toBeTruthy();
     expect(na(JIRA).getByText(/o motor não mandou a lista de sites/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^Salvar/ })).toBeNull();
+    expect(resumoDe(AUTOMACAO).textContent).toBe('Sem dado ou desligado:Automaçãoo motor não mandou as chaves');
   });
 });
 
 describe('Sistema: saúde', () => {
-  const linhas = () => within(na(SAUDE).getByRole('list', { name: 'Verificações do diagnóstico' })).getAllByRole('listitem').map((li) => li.textContent);
+  const itens = () => within(na(SAUDE).getByRole('list', { name: 'Verificações do diagnóstico' })).getAllByRole('listitem');
+  const textos = () => itens().map((li) => li.textContent);
 
-  it('mostra cada verificação com o estado em texto e a versão do motor', async () => {
+  it('mostra cada verificação com o estado num chip em texto, e a versão do motor', async () => {
     montar();
     await assentar();
-    expect(linhas()).toEqual([
-      'OKNode: v24.22.1',
-      'OKGitHub CLI: gh version 2.80.0',
-      'OKAutenticação do GitHub: autenticado',
-      'OKClaude Code: 2.1.300 (Claude Code)',
-      'OKUsuário do sistema: usuário comum',
-      'OKPerfil do Claude que o motor usa: pronto (assinatura)',
-      'OKPerfil de assinatura: Assinatura: pronto',
-      'OKPerfil de chave de API: Chave: pronto',
-      'OKAvaliação técnica: ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado',
-      'OKEscrita no GitHub: instância normal: o motor publica pelos gates',
-      'OKVersão do Claude Code: 2.1.300 é a mais recente',
-      'OKMonitoramento da conta: @farol-bot vigiando biudtech',
+    expect(textos()).toEqual([
+      'Node: v24.22.1OK',
+      'GitHub CLI: gh version 2.80.0OK',
+      'Autenticação do GitHub: autenticadoOK',
+      'Claude Code: 2.1.300 (Claude Code)OK',
+      'Usuário do sistema: usuário comumOK',
+      'Perfil do Claude que o motor usa: pronto (assinatura)OK',
+      'Perfil de assinatura: Assinatura: prontoOK',
+      'Perfil de chave de API: Chave: prontoOK',
+      'Avaliação técnica: ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declaradoOK',
+      'Escrita no GitHub: instância normal: o motor publica pelos gatesOK',
+      'Versão do Claude Code: 2.1.300 é a mais recenteOK',
+      'Monitoramento da conta: @farol-bot vigiando biudtechOK',
     ]);
     expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, nenhuma pede atenção.');
-    expect(na(SAUDE).getByText('3.0.0-dev')).toBeTruthy();
+    expect(na(SAUDE).getByText(/^Motor 3\.0\.0-dev, diagnóstico feito em/)).toBeTruthy();
   });
 
-  it('o que não está certo pede atenção em texto, não só na cor', async () => {
-    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false, claudePerfilPronto: false, claudePerfilFalta: 'login' }, accounts: [{ ...CONTA, tokenOk: false }] } });
+  it('o que não está certo pede atenção em texto; o que para a revisão é vermelho, o resto âmbar', async () => {
+    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false, claudePerfilPronto: false, claudePerfilFalta: 'login' }, modelos: { ...BRUTO.modelos, cli: { instalada: '2.1.200', maisRecente: '2.1.300', atualizada: false, atrasada: true } } } });
     await assentar();
-    expect(linhas()).toContain('AtençãoAutenticação do GitHub: sem autenticação');
-    expect(linhas().find((l) => l?.includes('Perfil do Claude que o motor usa'))).toMatch(/^Atenção.*sem login/);
-    expect(linhas().find((l) => l?.includes('Monitoramento da conta'))).toMatch(/^Atenção.*sem token no gh/);
+    const chip = (trecho: string) => itens().find((li) => li.textContent?.includes(trecho))?.querySelector('[data-tom]');
+    expect(textos()).toContain('Autenticação do GitHub: sem autenticaçãoAtenção');
+    expect(chip('Autenticação do GitHub')?.getAttribute('data-tom')).toBe('ruim');
+    expect(chip('Perfil do Claude que o motor usa')?.getAttribute('data-tom')).toBe('ruim');
+    expect(chip('Versão do Claude Code')?.getAttribute('data-tom')).toBe('aviso');
+    expect(chip('Node')?.getAttribute('data-tom')).toBe('ok');
     expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, 3 pedem atenção.');
   });
 
@@ -223,17 +281,25 @@ describe('Sistema: saúde', () => {
     montar({ bruto: { ...BRUTO, doctor: null } });
     await assentar();
     expect(na(SAUDE).getByText(/ainda não rodou nesta execução do motor\. Rode-o abaixo/)).toBeTruthy();
-    expect(linhas()).toEqual(['OKVersão do Claude Code: 2.1.300 é a mais recente', 'OKMonitoramento da conta: @farol-bot vigiando biudtech']);
+    expect(textos()).toEqual(['Versão do Claude Code: 2.1.300 é a mais recenteOK', 'Monitoramento da conta: @farol-bot vigiando biudtechOK']);
+    expect(resumoDe(SAUDE).textContent).toBe('Sem dado ou desligado:Saúdediagnóstico ainda não rodou');
   });
 
-  it('Rodar o diagnóstico de novo chama GET /api/doctor e diz o que o motor respondeu', async () => {
-    const t = montar({ responder: (caminho) => (caminho === '/api/doctor' ? corpo({ ...BRUTO.doctor, checkedAt: 1763300060000 }) : REDE) });
+  it('Rodar o diagnóstico de novo chama GET /api/doctor; enquanto roda, as linhas dizem Conferindo e o botão fica ocupado', async () => {
+    const resposta = adiada();
+    const t = montar({ responder: (caminho) => (caminho === '/api/doctor' ? resposta.promessa : REDE) });
     await assentar();
     expect(na(SAUDE).getByText(/Não abre sessão de IA e não consome o plano nem a chave/)).toBeTruthy();
     await clicarEm(na(SAUDE), 'Rodar o diagnóstico de novo');
-    await assentar();
+    const ocupado = na(SAUDE).getByRole('button', { name: 'Rodando o diagnóstico…' }) as HTMLButtonElement;
+    expect(ocupado.disabled).toBe(true);
+    // as linhas que o doctor refaz dizem Conferindo; as que vêm de outro lugar ficam
+    expect(textos().filter((texto) => texto?.endsWith('Conferindo'))).toHaveLength(10);
+    expect(textos()).toContain('Monitoramento da conta: @farol-bot vigiando biudtechOK');
+    await resposta.soltar(corpo({ ...BRUTO.doctor, checkedAt: 1763300060000 }));
     expect(t.get.mock.calls.map(([caminho]) => caminho)).toEqual(['/api/doctor']);
     expect(na(SAUDE).getByRole('status', { name: 'Resultado do diagnóstico' }).textContent).toContain('O motor refez o diagnóstico');
+    expect(textos().some((texto) => texto?.endsWith('Conferindo'))).toBe(false);
   });
 
   it('falha ao rodar o diagnóstico aparece como erro, e a lista anterior fica', async () => {
@@ -242,14 +308,16 @@ describe('Sistema: saúde', () => {
     await clicarEm(na(SAUDE), 'Rodar o diagnóstico de novo');
     await assentar();
     expect(na(SAUDE).getByRole('status', { name: 'Resultado do diagnóstico' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede). O que está acima é do diagnóstico anterior.');
-    expect(linhas()).toHaveLength(12);
+    expect(itens()).toHaveLength(12);
   });
 
-  it('o relatório é o markdown do motor, pedido em GET /api/diagnostics', async () => {
-    const t = montar({ responder: (caminho) => (caminho === '/api/diagnostics' ? corpo({ ok: true, markdown: '# Diagnóstico do Farol\n\n## Ambiente\n\n- ok · Node: v24.22.1\n', falhas: [{}, {}] }) : REDE) });
+  it('o relatório é o markdown do motor, pedido em GET /api/diagnostics, com o botão ocupado enquanto carrega', async () => {
+    const resposta = adiada();
+    const t = montar({ responder: (caminho) => (caminho === '/api/diagnostics' ? resposta.promessa : REDE) });
     await assentar();
     await clicarEm(na(SAUDE), 'Carregar o relatório');
-    await assentar();
+    expect((na(SAUDE).getByRole('button', { name: 'Carregando o relatório…' }) as HTMLButtonElement).disabled).toBe(true);
+    await resposta.soltar(corpo({ ok: true, markdown: '# Diagnóstico do Farol\n\n## Ambiente\n\n- ok · Node: v24.22.1\n', falhas: [{}, {}] }));
     expect(t.get.mock.calls.map(([caminho]) => caminho)).toEqual(['/api/diagnostics']);
     const relatorio = na(SAUDE).getByRole('region', { name: 'Relatório do motor' });
     expect(within(relatorio).getByRole('heading', { name: 'Diagnóstico do Farol' })).toBeTruthy();
@@ -263,21 +331,65 @@ describe('Sistema: conta revisora e política', () => {
   const SALVAR = 'Salvar conta e política de @farol-bot';
   const CONFIRMAR = 'Salvar e ampliar a publicação automática: @farol-bot';
   const campo = (rotulo: string | RegExp) => na(CONTA_E_POLITICA).getByLabelText(rotulo) as HTMLSelectElement;
+  const habilitadas = (select: HTMLSelectElement) => [...select.options].filter((o) => !o.disabled).map((o) => o.value);
 
   it('mostra a conta, a presença do token e a política, com o efeito de cada valor', async () => {
-    montar();
+    montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
     await assentar();
     const s = na(CONTA_E_POLITICA);
     expect(s.getByText('@farol-bot')).toBeTruthy();
     expect(s.getByText('Presente: o motor tem token do gh para esta conta.')).toBeTruthy();
     expect(s.getByText(/Do token o motor informa a presença, não a validade/)).toBeTruthy();
     expect(within(s.getByRole('list', { name: 'Organizações monitoradas' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['biudtechTirar']);
-    expect((s.getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(false);
-    expect(campo(/revisão sai limpa/).value).toBe('wait');
-    expect(campo(/revisão reprova/).value).toBe('wait');
-    expect(s.getAllByText(/Espera você: o PR vai a "Precisa de você"/).length).toBeGreaterThan(0);
+    expect((s.getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(true);
+    expect(campo(/revisão sai limpa/).value).toBe('approve');
+    expect(campo(/revisão reprova/).value).toBe('request_changes');
+    expect(s.getByText(/Publica sozinho o pedido de mudanças/)).toBeTruthy();
     expect(s.getByText('Sem alteração por salvar.')).toBeTruthy();
     expect(s.queryByRole('button', { name: SALVAR })).toBeNull();
+  });
+
+  it('os seletores não oferecem esperar: só publicar', async () => {
+    montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    expect([...campo(/revisão sai limpa/).options].map((o) => o.value)).toEqual(['approve']);
+    expect([...campo(/com ressalvas/).options].map((o) => o.value)).toEqual(['approve']);
+    expect([...campo(/revisão reprova/).options].map((o) => o.value)).toEqual(['request_changes']);
+    expect(na(CONTA_E_POLITICA).queryByText(/Esperar/)).toBeNull();
+  });
+
+  it('conta que chega com esperar mostra o valor sem quebrar, numa opção desabilitada, e nunca o reenvia', async () => {
+    const t = montar();
+    await assentar();
+    const limpa = campo(/revisão sai limpa/);
+    expect(limpa.value).toBe('wait');
+    expect(limpa.selectedOptions[0]?.textContent).toBe('Esperar (definido no motor)');
+    expect(limpa.selectedOptions[0]?.disabled).toBe(true);
+    expect(habilitadas(limpa)).toEqual(['approve']);
+    expect(habilitadas(campo(/revisão reprova/))).toEqual(['request_changes']);
+    expect(na(CONTA_E_POLITICA).getAllByText(/^Esperar \(definido no motor\): o motor não publica este desfecho sozinho/).length).toBeGreaterThan(0);
+    // mexer só na revisão automática não leva a política junto, nem o esperar
+    act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { autoReview: true } }]]);
+    expect(JSON.stringify(t.envios())).not.toContain('wait');
+  });
+
+  it('com a limpa em espera vinda do motor, o com ressalvas fica travado; trocar a limpa para publicar o libera', async () => {
+    const t = montar();
+    await assentar();
+    expect(campo(/com ressalvas/).disabled).toBe(true);
+    expect(campo(/com ressalvas/).value).toBe('wait');
+    expect(na(CONTA_E_POLITICA).getByText(/o com ressalvas nunca é mais permissivo que o limpo\)\. Troque a limpa para publicar/)).toBeTruthy();
+    mudar(campo(/revisão sai limpa/), 'approve');
+    expect(campo(/com ressalvas/).disabled).toBe(false);
+    mudar(campo(/com ressalvas/), 'approve');
+    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'approve', onCaveats: 'approve' } }]]);
   });
 
   it('ligar a revisão automática pergunta antes, com o efeito; cancelar não envia nada', async () => {
@@ -288,27 +400,47 @@ describe('Sistema: conta revisora e política', () => {
     const pergunta = na(CONTA_E_POLITICA).getByRole('group', { name: 'Ampliar o que o motor publica sozinho por @farol-bot?' });
     expect(pergunta.textContent).toContain('Revisão automática ligada: o motor passa a abrir sozinho a sessão de revisão de todo PR pedido a @farol-bot');
     expect(pergunta.textContent).toContain('sem clique');
-    // quando passa a valer, como o motor faz: a mesa não é reavaliada
-    expect(pergunta.textContent).toContain('O que já está em "Precisa de você" não é reavaliado: continua esperando o seu clique.');
-    expect(pergunta.textContent).not.toContain('próximas decisões');
+    // quando passa a valer, como o motor faz; sem mesa nem clique prometido
+    expect(pergunta.textContent).toContain('O PR que a política anterior deixou esperando não é reavaliado');
+    expect(pergunta.textContent).not.toContain('Precisa de você');
+    expect(document.activeElement).toBe(within(pergunta).getByRole('button', { name: 'Voltar sem enviar' }));
     expect(t.envios()).toEqual([]);
     await clicarEm(na(CONTA_E_POLITICA), 'Voltar sem enviar');
     await assentar();
     expect(t.envios()).toEqual([]);
-    // a edição continua no formulário
+    // a edição continua no formulário, e o foco volta ao Salvar
     expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(true);
+    expect(document.activeElement).toBe(na(CONTA_E_POLITICA).getByRole('button', { name: SALVAR }));
   });
 
-  it('aceita a pergunta: o corpo de accounts/edit leva só o campo editado', async () => {
-    const t = montar({ aoPostar: (rota) => (rota === '/api/accounts/edit' ? corpo({ ok: true, ignoradas: [], ignorados: [] }) : undefined) });
+  it('o pé diz quantas alterações há por salvar, e oferece Descartar e Salvar', async () => {
+    montar();
+    await assentar();
+    mudar(campo(/revisão sai limpa/), 'approve');
+    mudar(campo(/revisão reprova/), 'request_changes');
+    expect(na(CONTA_E_POLITICA).getByText('2 alterações por salvar.')).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByRole('button', { name: 'Descartar a edição de a conta e a política' }).textContent).toBe('Descartar');
+    expect(na(CONTA_E_POLITICA).getByRole('button', { name: SALVAR }).textContent).toBe('Salvar');
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toContain('alteração por salvar');
+  });
+
+  it('aceita a pergunta: o corpo leva só o campo editado; enquanto salva o botão diz Salvando…; depois, Salvo às', async () => {
+    const resposta = adiada();
+    const t = montar({ aoPostar: (rota) => (rota === '/api/accounts/edit' ? resposta.promessa : undefined) });
     await assentar();
     act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
-    await assentar();
+    const ocupado = na(CONTA_E_POLITICA).getByRole('button', { name: /^Salvando…/ }) as HTMLButtonElement;
+    expect(ocupado.disabled).toBe(true);
+    expect(ocupado.textContent).toBe('Salvando…');
+    await resposta.soltar(corpo({ ok: true, ignoradas: [], ignorados: [] }));
     expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { autoReview: true } }]]);
     expect(regiao().textContent).toContain('O motor aceitou a mudança em @farol-bot: revisão automática: ligada. A resposta dele não traz a conta gravada.');
     expect(document.activeElement).toBe(regiao());
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, autoReview: true }] });
+    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByText(/^Salvo às /)).toBeTruthy();
   });
 
   it('trocar esperar por publicar pergunta, dizendo o que passa a ser publicado', async () => {
@@ -328,47 +460,11 @@ describe('Sistema: conta revisora e política', () => {
   it('a mudança que reduz vai direto, sem pergunta, só com o que mudou', async () => {
     const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
     await assentar();
-    mudar(campo(/revisão reprova/), 'wait');
     act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await assentar();
     expect(na(CONTA_E_POLITICA).queryByRole('group')).toBeNull();
-    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { autoReview: false, onReject: 'wait' } }]]);
-  });
-
-  it('limpo em espera mostra o com ressalvas em espera, diz o ajuste, e o corpo não o manda', async () => {
-    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
-    await assentar();
-    mudar(campo(/revisão sai limpa/), 'wait');
-    expect(campo(/com ressalvas/).disabled).toBe(true);
-    expect(campo(/com ressalvas/).value).toBe('wait');
-    expect(na(CONTA_E_POLITICA).getByText(/o com ressalvas nunca é mais permissivo que o limpo/).textContent).toContain('Ajuste da tela: este campo estava em "publicar a aprovação sozinho" e é mostrado em espera enquanto a limpa esperar');
-    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
-    await assentar();
-    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } }]]);
-  });
-
-  it('trocar a limpa para esperar e de volta não altera o com ressalvas em silêncio', async () => {
-    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
-    await assentar();
-    mudar(campo(/revisão sai limpa/), 'wait');
-    mudar(campo(/revisão sai limpa/), 'approve');
-    expect(campo(/com ressalvas/).disabled).toBe(false);
-    expect(campo(/com ressalvas/).value).toBe('approve');
-    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
-    expect(na(CONTA_E_POLITICA).queryByRole('button', { name: SALVAR })).toBeNull();
-    expect(t.envios()).toEqual([]);
-  });
-
-  it('depois de salvar a limpa em espera, o motor grava as duas em espera e o formulário fica sem alteração', async () => {
-    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
-    await assentar();
-    mudar(campo(/revisão sai limpa/), 'wait');
-    await clicarEm(na(CONTA_E_POLITICA), SALVAR);
-    await assentar();
-    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, onClean: 'wait', onCaveats: 'wait' }] });
-    expect(na(CONTA_E_POLITICA).getByText('Sem alteração por salvar.')).toBeTruthy();
-    expect(na(CONTA_E_POLITICA).queryByText(/mudou no motor enquanto você editava/)).toBeNull();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { autoReview: false } }]]);
   });
 
   it('organização nova pergunta e vai como lista inteira; tirar organização não pergunta', async () => {
@@ -404,18 +500,19 @@ describe('Sistema: conta revisora e política', () => {
     expect(na(CONTA_E_POLITICA).queryByRole('button', { name: SALVAR })).toBeNull();
   });
 
-  it('campo que o motor ignorou e recusa do motor aparecem como erro', async () => {
-    montar({ bruto: { ...BRUTO, accounts: [ABERTA] }, aoPostar: (rota) => (rota === '/api/accounts/edit' ? corpo({ ok: true, ignoradas: [], ignorados: ['onReject'] }) : undefined) });
+  it('campo que o motor ignorou e recusa do motor aparecem como erro, também no pé do formulário', async () => {
+    montar({ bruto: { ...BRUTO, accounts: [ABERTA] }, aoPostar: (rota) => (rota === '/api/accounts/edit' ? corpo({ ok: true, ignoradas: [], ignorados: ['autoReview'] }) : undefined) });
     await assentar();
-    mudar(campo(/revisão reprova/), 'wait');
+    act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await assentar();
-    expect(regiao().textContent).toContain('Erro: O motor aceitou o pedido de @farol-bot, mas ignorou revisão reprovada');
+    expect(regiao().textContent).toContain('Erro: O motor aceitou o pedido de @farol-bot, mas ignorou revisão automática');
+    expect(na(CONTA_E_POLITICA).getByText(/^Erro ao salvar: o motor não gravou esta edição/)).toBeTruthy();
 
     cleanup();
     montar({ bruto: { ...BRUTO, accounts: [ABERTA] }, aoPostar: (rota) => (rota === '/api/accounts/edit' ? corpo({ ok: false, erro: 'a conta @farol-bot não é a conta deste Farol' }) : undefined) });
     await assentar();
-    mudar(campo(/revisão reprova/), 'wait');
+    act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
     await assentar();
     expect(regiao().textContent).toContain('Erro: O motor recusou: a conta @farol-bot não é a conta deste Farol');
@@ -434,38 +531,37 @@ describe('Sistema: conta revisora e política', () => {
   });
 
   it('política que muda no motor com a edição aberta: o salvar leva só o que a pessoa alterou, e o campo do outro não é revertido', async () => {
-    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    const t = montar();
     await assentar();
     // ela só mexe na reprovada
-    mudar(campo(/revisão reprova/), 'wait');
-    // nesse meio outra pessoa desliga a revisão automática e acrescenta uma organização
-    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, owners: ['biudtech', 'outra'] }] });
+    mudar(campo(/revisão reprova/), 'request_changes');
+    // nesse meio outra pessoa liga a revisão automática e acrescenta uma organização
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, autoReview: true, owners: ['biudtech', 'outra'] }] });
     expect(na(CONTA_E_POLITICA).getByText(/a conta e a política mudou no motor enquanto você editava.*o salvar leva só o que você alterou: o que a outra pessoa mudou não é desfeito/)).toBeTruthy();
     // os campos que ela não tocou mostram o que o motor tem agora
-    expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(false);
+    expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(true);
     expect(within(na(CONTA_E_POLITICA).getByRole('list', { name: 'Organizações monitoradas' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['biudtechTirar', 'outraTirar']);
-    expect(campo(/revisão reprova/).value).toBe('wait');
+    expect(campo(/revisão reprova/).value).toBe('request_changes');
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
     await assentar();
     // nem autoReview nem owners vão no corpo: o que a outra pessoa mudou fica
-    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onReject: 'wait' } }]]);
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onReject: 'request_changes' } }]]);
   });
 
   it('o mesmo campo alterado pelos dois: a tela mostra o valor do motor e o seu, e a pergunta é contra o valor atual do motor', async () => {
-    const t = montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    const t = montar();
     await assentar();
-    // ela desliga a revisão automática e põe a limpa em espera; nesse meio outra pessoa também desliga a revisão automática e muda a limpa para outro valor
-    act(() => { fireEvent.click(na(CONTA_E_POLITICA).getByLabelText('Revisão automática')); });
-    mudar(campo(/revisão sai limpa/), 'wait');
-    t.trocar({ ...BRUTO, accounts: [{ ...ABERTA, autoReview: false, onClean: 'merge' }] });
-    // autoReview: os dois chegaram ao mesmo valor, não é conflito; a limpa é
+    mudar(campo(/revisão sai limpa/), 'approve');
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, onClean: 'merge' }] });
     const aviso = na(CONTA_E_POLITICA).getByText(/mudou no motor enquanto você editava/).closest('div') as HTMLElement;
     expect(within(aviso).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Revisão limpa: no motor agora está "merge (valor que esta tela não conhece)", e no seu formulário, "esperar você". Salvar grava o seu.',
+      'Revisão limpa: no motor agora está "merge (valor que esta tela não conhece)", e no seu formulário, "publicar a aprovação sozinho". Salvar grava o seu.',
     ]);
     await clicarEm(na(CONTA_E_POLITICA), SALVAR);
+    await clicarEm(na(CONTA_E_POLITICA), CONFIRMAR);
     await assentar();
-    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } }]]);
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'approve' } }]]);
 
     // agora o contrário: ela põe a reprovada em publicar, e nesse meio o motor passa a ter outro valor nela
     cleanup();
@@ -483,7 +579,7 @@ describe('Sistema: conta revisora e política', () => {
     expect(outra.envios()).toEqual([]);
   });
 
-  it('dá para descartar a edição e ficar com o que o motor tem agora', async () => {
+  it('dá para descartar a edição e ficar com o que o motor tem agora, inclusive o esperar dele', async () => {
     const t = montar();
     await assentar();
     mudar(campo(/revisão reprova/), 'request_changes');
@@ -516,10 +612,9 @@ describe('Sistema: conta revisora e política', () => {
       return document.getElementById(id ?? '')?.textContent ?? '';
     };
     expect(descricao(na(CONTA_E_POLITICA).getByLabelText('Revisão automática'))).toContain('Desligada: o PR pedido à conta só entra na fila');
-    expect(descricao(campo(/revisão sai limpa/))).toContain('Espera você: o PR vai a "Precisa de você"');
+    expect(descricao(campo(/revisão sai limpa/))).toContain('Esperar (definido no motor)');
     expect(descricao(campo(/com ressalvas/))).toContain('o com ressalvas nunca é mais permissivo que o limpo');
-    expect(descricao(campo(/revisão reprova/))).toContain('Espera você');
-    expect(descricao(na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar'))).toContain('a aprovação automática espera os checks obrigatórios');
+    expect(descricao(campo(/revisão reprova/))).toContain('Esperar (definido no motor)');
     expect(descricao(na(AUTOMACAO).getByLabelText('Revisões ao mesmo tempo'))).toContain('Quantas sessões de revisão');
     expect(descricao(na(AUTOMACAO).getByLabelText('Modelo da revisão'))).toContain('Vira a flag --model');
     expect(descricao(na(AUTOMACAO).getByLabelText('Esforço (effort) da revisão'))).toContain('Vira a flag --effort');
@@ -544,13 +639,16 @@ describe('Sistema: conta revisora e política', () => {
     expect(campo(/revisão sai limpa/).value).toBe('approve');
     expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(true);
     expect(na(CONTA_E_POLITICA).queryByText(/mudou no motor enquanto você editava/)).toBeNull();
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('OK:Conta revisora e política@farol-bot, publica sozinho');
   });
 
-  it('motor sem conta revisora: só leitura, sem formulário', async () => {
+  it('motor sem conta revisora: só leitura, sem formulário, e a linha fica vermelha', async () => {
     montar({ bruto: { ...BRUTO, accounts: [{ user: '', owners: [], tokenOk: false }] } });
     await assentar();
     expect(na(CONTA_E_POLITICA).getByText('O motor ainda não tem conta revisora.')).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByText(/Sem conta revisora não há política a editar/)).toBeTruthy();
     expect(na(CONTA_E_POLITICA).queryByLabelText('Revisão automática')).toBeNull();
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Problema:Conta revisora e políticasem conta revisora');
   });
 
   it('regra de review por organização é avisada, porque decide antes da revisão automática', async () => {
@@ -565,11 +663,9 @@ describe('Sistema: automação', () => {
   const campo = (rotulo: string | RegExp) => na(AUTOMACAO).getByLabelText(rotulo) as HTMLSelectElement;
   const gravou = (config: unknown) => (rota: string) => (rota === '/api/settings' ? corpo({ ok: true, ignoradas: [], config }) : undefined);
 
-  it('mostra as quatro chaves com o efeito de cada uma, e os modelos do catálogo do motor', async () => {
+  it('mostra as três chaves com o efeito de cada uma, e os modelos do catálogo do motor', async () => {
     montar();
     await assentar();
-    expect((na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar') as HTMLInputElement).checked).toBe(true);
-    expect(na(AUTOMACAO).getByText(/a aprovação automática espera os checks obrigatórios/)).toBeTruthy();
     expect([...campo('Revisões ao mesmo tempo').options].map((o) => o.value)).toEqual(['1', '2', '3', '4']);
     expect([...campo('Modelo da revisão').options].map((o) => [o.value, o.textContent])).toEqual([['', 'Padrão do Claude'], ['auto', 'Auto (qualidade primeiro)'], ['opus', 'Opus'], ['sonnet', 'Sonnet']]);
     expect([...campo('Esforço (effort) da revisão').options].map((o) => o.value)).toEqual(['', 'low', 'medium', 'high', 'xhigh']);
@@ -577,10 +673,19 @@ describe('Sistema: automação', () => {
     expect(na(AUTOMACAO).getByText('Sem alteração por salvar.')).toBeTruthy();
   });
 
-  it('salvar manda só a chave editada, sem política nem perfis, e confere a resposta', async () => {
+  it('não tem o controle da espera do CI: nenhum checkbox, nenhum texto de CI antes de aprovar', async () => {
+    montar();
+    await assentar();
+    expect(na(AUTOMACAO).queryByRole('checkbox')).toBeNull();
+    expect(na(AUTOMACAO).queryByLabelText(/CI/)).toBeNull();
+    expect(secao(AUTOMACAO).textContent).not.toMatch(/CI obrigatório|antes de aprovar|Esperando o CI/);
+  });
+
+  it('salvar manda só a chave editada, sem política, perfis nem a espera do CI, e confere a resposta', async () => {
     const t = montar({ aoPostar: gravou({ ...CONFIG, parallelReviews: 3 }) });
     await assentar();
     mudar(campo('Revisões ao mesmo tempo'), '3');
+    expect(na(AUTOMACAO).getByText('1 alteração por salvar.')).toBeTruthy();
     await clicarEm(na(AUTOMACAO), SALVAR);
     await assentar();
     expect(na(AUTOMACAO).queryByRole('group')).toBeNull();
@@ -589,45 +694,37 @@ describe('Sistema: automação', () => {
     expect(document.activeElement).toBe(regiao());
   });
 
-  it('modelo e esforço vão juntos quando os dois mudam, e só eles', async () => {
-    const t = montar({ aoPostar: gravou({ ...CONFIG, reviewModel: 'sonnet', reviewEffort: 'high' }) });
+  it('o corpo nunca leva aguardarCiParaAprovar, nem quando o motor muda a chave com a edição aberta', async () => {
+    const t = montar({ aoPostar: gravou({ ...CONFIG, reviewModel: 'sonnet', reviewEffort: 'high', parallelReviews: 2 }) });
     await assentar();
     mudar(campo('Modelo da revisão'), 'sonnet');
+    t.trocar({ ...BRUTO, config: { ...CONFIG, aguardarCiParaAprovar: false } });
     mudar(campo('Esforço (effort) da revisão'), 'high');
+    mudar(campo('Revisões ao mesmo tempo'), '2');
     await clicarEm(na(AUTOMACAO), SALVAR);
     await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { reviewModel: 'sonnet', reviewEffort: 'high' }]]);
+    expect(t.envios()).toEqual([['/api/settings', { reviewModel: 'sonnet', reviewEffort: 'high', parallelReviews: 2 }]]);
+    expect(JSON.stringify(t.envios())).not.toContain('aguardarCiParaAprovar');
   });
 
-  it('desligar o CI antes de aprovar pergunta, com o efeito; cancelar não envia', async () => {
-    const t = montar({ aoPostar: gravou({ ...CONFIG, aguardarCiParaAprovar: false }) });
+  it('motor sem a espera do CI no config ainda mostra a automação', async () => {
+    const semCi: Record<string, unknown> = { ...CONFIG };
+    delete semCi.aguardarCiParaAprovar;
+    montar({ bruto: { ...BRUTO, config: semCi } });
     await assentar();
-    act(() => { fireEvent.click(na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar')); });
-    expect(na(AUTOMACAO).getByText(/o motor pode aprovar com o CI vermelho ou ainda rodando/)).toBeTruthy();
-    await clicarEm(na(AUTOMACAO), SALVAR);
-    const pergunta = na(AUTOMACAO).getByRole('group', { name: 'Desligar o CI antes de aprovar?' });
-    // o efeito imediato: o que já espera o CI sai na próxima varredura
-    expect(pergunta.textContent).toContain('Efeito imediato: toda aprovação que já está em "Esperando o CI" é publicada (APPROVE) na próxima varredura do motor, sem esperar os checks, mesmo com o CI vermelho ou ainda rodando');
-    expect(pergunta.textContent).toContain('Daqui em diante: a aprovação automática deixa de esperar os checks obrigatórios');
-    expect(pergunta.textContent).toContain('passa a poder publicar APPROVE com o CI vermelho ou ainda rodando');
-    await clicarEm(na(AUTOMACAO), 'Voltar sem enviar');
-    await assentar();
-    expect(t.envios()).toEqual([]);
-
-    await clicarEm(na(AUTOMACAO), SALVAR);
-    await clicarEm(na(AUTOMACAO), 'Salvar e desligar a espera do CI: a automação');
-    await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { aguardarCiParaAprovar: false }]]);
-    expect(regiao().textContent).toContain('O motor gravou: CI antes de aprovar: desligado.');
+    expect(campo('Revisões ao mesmo tempo').value).toBe('1');
   });
 
-  it('ligar o CI antes de aprovar reduz a publicação: vai direto', async () => {
-    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, aguardarCiParaAprovar: false } }, aoPostar: gravou({ ...CONFIG, aguardarCiParaAprovar: true }) });
+  it('enquanto salva, o botão diz Salvando… e fica desabilitado', async () => {
+    const resposta = adiada();
+    montar({ aoPostar: (rota) => (rota === '/api/settings' ? resposta.promessa : undefined) });
     await assentar();
-    act(() => { fireEvent.click(na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar')); });
+    mudar(campo('Revisões ao mesmo tempo'), '2');
     await clicarEm(na(AUTOMACAO), SALVAR);
-    await assentar();
-    expect(t.envios()).toEqual([['/api/settings', { aguardarCiParaAprovar: true }]]);
+    const ocupado = na(AUTOMACAO).getByRole('button', { name: /^Salvando…/ }) as HTMLButtonElement;
+    expect(ocupado.disabled).toBe(true);
+    await resposta.soltar(corpo({ ok: true, ignoradas: [], config: { ...CONFIG, parallelReviews: 2 } }));
+    expect(na(AUTOMACAO).queryByRole('button', { name: /^Salvando…/ })).toBeNull();
   });
 
   it('o motor gravou diferente do pedido: a tela diz o que ficou, como erro', async () => {
@@ -639,13 +736,15 @@ describe('Sistema: automação', () => {
     expect(regiao().textContent).toContain('Erro: O motor gravou diferente do pedido: modelo ficou opus, e o pedido era sonnet.');
   });
 
-  it('falha de rede não afirma que gravou', async () => {
+  it('falha de rede não afirma que gravou, e o pé diz o erro ao salvar', async () => {
     montar({ aoPostar: (rota) => (rota === '/api/settings' ? REDE : undefined) });
     await assentar();
     mudar(campo('Revisões ao mesmo tempo'), '2');
     await clicarEm(na(AUTOMACAO), SALVAR);
     await assentar();
     expect(regiao().textContent).toContain('Erro: Não deu para falar com o motor (falha de rede). Não dá para saber se o pedido chegou');
+    expect(na(AUTOMACAO).getByText(/^Erro ao salvar: o motor não gravou esta edição/)).toBeTruthy();
+    expect(na(AUTOMACAO).getByRole('button', { name: SALVAR })).toBeTruthy();
   });
 
   it('com o Auto, a tela avisa que o esforço não é usado; modelo fixado no arquivo aparece como opção', async () => {
@@ -658,18 +757,18 @@ describe('Sistema: automação', () => {
   });
 
   it('chave que outra pessoa mudou com a edição aberta não vai no corpo, e a que os dois mexeram é dita', async () => {
-    const t = montar({ aoPostar: gravou({ ...CONFIG, parallelReviews: 3, reviewModel: 'sonnet' }) });
+    const t = montar({ aoPostar: gravou({ ...CONFIG, parallelReviews: 3, reviewModel: '' }) });
     await assentar();
     mudar(campo('Revisões ao mesmo tempo'), '3');
     mudar(campo('Modelo da revisão'), '');
-    // nesse meio alguém troca o modelo e desliga o CI
-    t.trocar({ ...BRUTO, config: { ...CONFIG, reviewModel: 'sonnet', aguardarCiParaAprovar: false } });
-    expect((na(AUTOMACAO).getByLabelText('CI obrigatório antes de aprovar') as HTMLInputElement).checked).toBe(false);
+    // nesse meio alguém troca o modelo e o esforço
+    t.trocar({ ...BRUTO, config: { ...CONFIG, reviewModel: 'sonnet', reviewEffort: 'low' } });
+    expect(campo('Esforço (effort) da revisão').value).toBe('low');
     const aviso = na(AUTOMACAO).getByText(/a automação mudou no motor enquanto você editava/).closest('div') as HTMLElement;
     expect(within(aviso).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['modelo: no motor agora está "sonnet", e no seu formulário, "padrão do Claude Code". Salvar grava o seu.']);
     await clicarEm(na(AUTOMACAO), SALVAR);
     await assentar();
-    // o CI que a outra pessoa desligou não é religado, e não há pergunta: ela não mexeu nele
+    // o esforço que a outra pessoa trocou não volta, e não há pergunta
     expect(t.envios()).toEqual([['/api/settings', { parallelReviews: 3, reviewModel: '' }]]);
   });
 
@@ -690,6 +789,7 @@ describe('Sistema: perfil do Claude', () => {
     await assentar();
     expect(perfil('Assinatura').getByText('Assinatura', { selector: 'span + span' })).toBeTruthy();
     expect(perfil('Assinatura').getByText('Perfil padrão')).toBeTruthy();
+    expect(perfil('Assinatura').getByText('Login presente').getAttribute('data-tom')).toBe('ok');
     expect(perfil('Assinatura').getByText(/Login presente na pasta do perfil/)).toBeTruthy();
     expect(perfil('Assinatura').getByText('40% usado, volta às 18h')).toBeTruthy();
     expect(perfil('Chave').getByText('Chave de API')).toBeTruthy();
@@ -761,10 +861,11 @@ describe('Sistema: perfil do Claude', () => {
     expect(na(CLAUDE).queryByRole('alert')).toBeNull();
   });
 
-  it('sem perfil, a seção diz o que isso significa', async () => {
+  it('sem perfil, a seção diz o que isso significa, e a linha fica vermelha', async () => {
     montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [] } } });
     await assentar();
     expect(na(CLAUDE).getByText(/O motor não tem perfil do Claude/)).toBeTruthy();
+    expect(resumoDe(CLAUDE).textContent).toBe('Problema:Perfil do Claudenenhum perfil');
   });
 });
 
@@ -773,7 +874,8 @@ describe('Sistema: Jira', () => {
     montar();
     await assentar();
     const s = na(JIRA);
-    expect(s.getByRole('heading', { level: 3, name: 'BIUD' })).toBeTruthy();
+    expect(s.getByRole('heading', { level: 3, name: /^BIUD/ })).toBeTruthy();
+    expect(s.getByText('Com credencial').getAttribute('data-tom')).toBe('ok');
     expect(s.getByText('https://biud.atlassian.net')).toBeTruthy();
     expect(s.getByText('Presente. Se ela vale, quem diz é o teste abaixo.')).toBeTruthy();
     expect(s.getByText(/Esta seção é só leitura/)).toBeTruthy();
@@ -819,22 +921,23 @@ describe('Sistema: sessões pareadas', () => {
   it('pede a lista em POST /api/auth/sessions e mostra cada sessão, com a atual marcada', async () => {
     const t = montar();
     expect(na(SESSOES_PAREADAS).getByRole('status', { name: 'Resultado da lista de sessões' }).textContent).toBe('Carregando as sessões pareadas.');
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Sessões pareadascarregando');
     await assentar();
     expect(cargas(t).map(([rota, enviado]) => [rota, enviado])).toEqual([['/api/auth/sessions', {}]]);
     expect(na(SESSOES_PAREADAS).getByRole('status', { name: 'Resultado da lista de sessões' }).textContent).toBe('2 sessões pareadas');
     const [atual, outra] = itens();
     expect(within(atual as HTMLElement).getByRole('heading', { level: 3 }).textContent).toBe('Sessão "Notebook"Este navegador');
-    expect(atual?.textContent).toContain(`Criada em${dataComAno(ATUAL.criadoEm)}`);
-    expect(atual?.textContent).toContain(`Usada pela última vez em${dataComAno(ATUAL.ultimoUsoEm)}`);
+    expect(atual?.textContent).toContain(`Criada em ${dataComAno(ATUAL.criadoEm)}`);
+    expect(atual?.textContent).toContain(`usada pela última vez em ${dataComAno(ATUAL.ultimoUsoEm)}`);
     expect(within(outra as HTMLElement).getByRole('heading', { level: 3 }).textContent).toBe('Sessão "Celular"');
     expect(within(outra as HTMLElement).queryByText('Este navegador')).toBeNull();
   });
 
-  it('revogar outra sessão pergunta antes; cancelar não envia', async () => {
+  it('encerrar outra sessão pergunta antes; cancelar não envia', async () => {
     const t = montar();
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Celular"');
-    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Revogar a sessão "Celular"?' });
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Celular"');
+    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Encerrar a sessão "Celular"?' });
     expect(pergunta.textContent).toContain('Este navegador continua pareado');
     await clicarEm(na(SESSOES_PAREADAS), 'Voltar sem enviar');
     await assentar();
@@ -842,47 +945,51 @@ describe('Sistema: sessões pareadas', () => {
     expect(t.esquecerSessao).not.toHaveBeenCalled();
   });
 
-  it('aceita: revoga pelo id, pede a lista de novo, e este navegador continua onde está', async () => {
-    let revogada = false;
+  it('aceita: o botão diz Encerrando… enquanto o motor responde, revoga pelo id, pede a lista de novo, e este navegador continua onde está', async () => {
+    const resposta = adiada();
+    let encerrada = false;
     const t = montar({
       aoPostar: (rota) => {
-        if (rota === '/api/auth/revoke') { revogada = true; return corpo({ ok: true, eraAtual: false }); }
-        return rota === '/api/auth/sessions' && revogada ? corpo({ ok: true, sessoes: [ATUAL] }) : undefined;
+        if (rota === '/api/auth/revoke') { encerrada = true; return resposta.promessa; }
+        return rota === '/api/auth/sessions' && encerrada ? corpo({ ok: true, sessoes: [ATUAL] }) : undefined;
       },
     });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Celular"');
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão: "Celular"');
-    await assentar();
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Celular"');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão: "Celular"');
+    const ocupado = na(SESSOES_PAREADAS).getByRole('button', { name: /^Encerrando…/ }) as HTMLButtonElement;
+    expect(ocupado.disabled).toBe(true);
+    expect(ocupado.textContent).toBe('Encerrando…');
+    await resposta.soltar(corpo({ ok: true, eraAtual: false }));
     expect(t.envios()).toEqual([['/api/auth/revoke', { id: OUTRA.id }]]);
-    expect(regiao().textContent).toContain('O motor revogou a sessão "Celular": o token dela não vale mais.');
+    expect(regiao().textContent).toContain('O motor encerrou a sessão "Celular": o token dela não vale mais.');
     expect(cargas(t)).toHaveLength(2);
     expect(itens()).toHaveLength(1);
     expect(t.esquecerSessao).not.toHaveBeenCalled();
   });
 
-  it('revogar a sessão atual avisa que este navegador volta ao pareamento, e depois do aceite a tela vai de fato', async () => {
+  it('encerrar a sessão atual avisa que este navegador volta ao pareamento, e depois do aceite a tela vai de fato', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: true, eraAtual: true }) : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Notebook" (este navegador)');
-    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Revogar a sessão deste navegador?' });
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
+    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Encerrar a sessão deste navegador?' });
     expect(pergunta.textContent).toContain('esta tela volta ao pareamento assim que o motor aceitar');
     expect(t.esquecerSessao).not.toHaveBeenCalled();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(t.envios()).toEqual([['/api/auth/revoke', { id: ATUAL.id }]]);
     expect(t.esquecerSessao).toHaveBeenCalledTimes(1);
     expect(t.esquecerSessao).toHaveBeenCalledWith('revogada');
   });
 
-  it('revogação da atual cancelada, recusada ou sem resposta não leva ao pareamento', async () => {
+  it('encerramento da atual cancelado, recusado ou sem resposta não leva ao pareamento', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: false, code: 'sessao_inexistente' }) : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
     await clicarEm(na(SESSOES_PAREADAS), 'Voltar sem enviar');
     expect(t.envios()).toEqual([]);
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Notebook" (este navegador)');
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(regiao().textContent).toContain('Erro: O motor não tem mais essa sessão: ela já foi revogada ou expirou. Atualize a lista.');
     expect(t.esquecerSessao).not.toHaveBeenCalled();
@@ -890,8 +997,8 @@ describe('Sistema: sessões pareadas', () => {
     cleanup();
     const semRede = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? REDE : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Notebook" (este navegador)');
-    await clicarEm(na(SESSOES_PAREADAS), 'Revogar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(semRede.esquecerSessao).not.toHaveBeenCalled();
   });
@@ -902,6 +1009,7 @@ describe('Sistema: sessões pareadas', () => {
     await assentar();
     expect(na(SESSOES_PAREADAS).getByRole('alert').textContent).toBe('Erro: Não deu para falar com o motor (falha de rede).');
     expect(na(SESSOES_PAREADAS).queryByRole('list', { name: 'Sessões pareadas' })).toBeNull();
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Atenção:Sessões pareadasa lista não carregou');
     falhar = false;
     await clicarEm(na(SESSOES_PAREADAS), 'Atualizar a lista');
     await assentar();
@@ -913,7 +1021,8 @@ describe('Sistema: sessões pareadas', () => {
   it('lista vazia e lista sem a sessão atual são ditas', async () => {
     montar({ aoPostar: (rota) => (rota === '/api/auth/sessions' ? corpo({ ok: true, sessoes: [] }) : undefined) });
     await assentar();
-    expect(na(SESSOES_PAREADAS).getByText(/O motor não listou sessão pareada/)).toBeTruthy();
+    expect(na(SESSOES_PAREADAS).getByText(/O motor não listou sessão pareada.*não há sessão a encerrar/)).toBeTruthy();
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Sessões pareadasnenhuma');
     cleanup();
     montar({ aoPostar: (rota) => (rota === '/api/auth/sessions' ? corpo({ ok: true, sessoes: [OUTRA] }) : undefined) });
     await assentar();
@@ -927,7 +1036,7 @@ describe('Sistema: rede e acesso', () => {
     await assentar();
     const s = na(REDE_E_ACESSO);
     expect(s.getByText('127.0.0.1')).toBeTruthy();
-    expect(s.getByText('farol.exemplo.com')).toBeTruthy();
+    expect(s.getByText('farol.exemplo.com', { selector: 'dd' })).toBeTruthy();
     expect(s.getByText('https://painel.exemplo.com')).toBeTruthy();
     expect(s.getByText('47170')).toBeTruthy();
     expect(s.getByText(/mudam apenas pelo arquivo de configuração do motor \(config\.json\), com reinício/)).toBeTruthy();
@@ -947,6 +1056,7 @@ describe('Sistema: edição por salvar', () => {
     expect(ouvindo()).toBe(0);
     mudar(na(AUTOMACAO).getByLabelText('Revisões ao mesmo tempo'), '2');
     expect(screen.getByText('Aviso: há edição por salvar nesta tela (automação). Trocar de aba do Farol a descarta sem perguntar.')).toBeTruthy();
+    expect(resumoDe(AUTOMACAO).textContent).toContain('alteração por salvar');
     expect(ouvindo()).toBe(1);
     const evento = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(evento);

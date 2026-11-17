@@ -123,16 +123,16 @@ describe('sessões e Sair', () => {
     expect(nomeDaSessao({ rotulo: 'Notebook', atual: true })).toBe('"Notebook" (este navegador)');
   });
 
-  it('revogar a atual avisa que este navegador volta ao pareamento; a outra, que este continua', () => {
+  it('encerrar a atual avisa que este navegador volta ao pareamento; a outra, que este continua', () => {
     const atual = perguntaDeRevogar({ rotulo: 'Notebook', atual: true });
-    expect(atual.titulo).toBe('Revogar a sessão deste navegador?');
+    expect(atual.titulo).toBe('Encerrar a sessão deste navegador?');
     expect(atual.texto).toContain('esta tela volta ao pareamento');
     expect(atual.texto).toContain('node tools/farol-parear.js');
-    expect(atual.confirmar).toBe('Revogar e voltar ao pareamento');
+    expect(atual.confirmar).toBe('Encerrar e voltar ao pareamento');
     const outra = perguntaDeRevogar({ rotulo: 'Celular', atual: false });
-    expect(outra.titulo).toBe('Revogar a sessão "Celular"?');
+    expect(outra.titulo).toBe('Encerrar a sessão "Celular"?');
     expect(outra.texto).toContain('Este navegador continua pareado');
-    expect(outra.confirmar).toBe('Revogar a sessão');
+    expect(outra.confirmar).toBe('Encerrar a sessão');
   });
 
   it('o Sair diz se a sessão foi revogada no motor ou só esquecida aqui', () => {
