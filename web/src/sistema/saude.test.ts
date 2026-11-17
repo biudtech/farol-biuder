@@ -19,6 +19,7 @@ const SAUDE: Saude = {
   claudePerfilPronto: true,
   claudePerfilTipo: 'assinatura',
   claudePerfilFalta: '',
+  avaliacaoTecnica: { pronta: true, detalhe: 'ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado' },
   checkedAt: 1,
 };
 
@@ -35,6 +36,7 @@ describe('verificacoesDaSaude', () => {
       'OK · Perfil do Claude que o motor usa: pronto (assinatura)',
       'OK · Perfil de assinatura: Assinatura: pronto',
       'Atenção · Perfil de chave de API: api: sem chave',
+      'OK · Avaliação técnica: ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado',
       'OK · Escrita no GitHub: instância normal: o motor publica pelos gates',
     ]);
   });
@@ -49,6 +51,9 @@ describe('verificacoesDaSaude', () => {
     expect(torto.find((l) => l.includes('Escrita no GitHub'))).toContain('instância isolada');
     expect(linhas({ ...SAUDE, claudePerfilPronto: false, claudePerfilFalta: 'perfil' }).join('\n')).toContain('não há perfil do Claude utilizável');
     expect(linhas({ ...SAUDE, claudePerfilPronto: false, claudePerfilFalta: 'outra' }).join('\n')).toContain('sem dizer o que falta');
+    // a avaliação técnica que não roda pede atenção com o texto do motor, sem a tela remontar
+    const semFerramenta = 'ferramenta ausente (eng-behaviour 0.17.0, commit ed3e1535cb84 não instalada); 2 repositórios declarados: a avaliação técnica dos repositórios declarados falha';
+    expect(linhas({ ...SAUDE, avaliacaoTecnica: { pronta: false, detalhe: semFerramenta } })).toContain(`Atenção · Avaliação técnica: ${semFerramenta}`);
   });
 
   it('o que o motor não mandou aparece como sem dado, não como certo', () => {
@@ -56,19 +61,23 @@ describe('verificacoesDaSaude', () => {
     expect(vazio.find((v) => v.nome === 'Autenticação do GitHub')?.estado).toBe('sem-dado');
     expect(vazio.find((v) => v.nome === 'Usuário do sistema')?.estado).toBe('sem-dado');
     expect(vazio.find((v) => v.nome === 'Perfil do Claude que o motor usa')?.estado).toBe('sem-dado');
+    expect(vazio.find((v) => v.nome === 'Avaliação técnica')).toEqual({ nome: 'Avaliação técnica', estado: 'sem-dado', detalhe: 'O motor não informou.' });
     expect(vazio.some((v) => v.nome === 'Escrita no GitHub')).toBe(false);
   });
 
   it('os rótulos são os que o motor usa no diagnóstico dele (lib/engine/diagnostico.js)', () => {
     const fonte = raiz('lib/engine/diagnostico.js');
-    for (const rotulo of ['Node', 'GitHub CLI', 'Autenticação do GitHub', 'Claude Code', 'Usuário do sistema']) expect(fonte).toContain(`sinal('${rotulo}'`);
+    for (const rotulo of ['Node', 'GitHub CLI', 'Autenticação do GitHub', 'Claude Code', 'Usuário do sistema', 'Avaliação técnica']) expect(fonte).toContain(`sinal('${rotulo}'`);
     for (const detalhe of ['não detectado', 'autenticado', 'sem autenticação', 'usuário comum', 'sem chave', 'sem login']) expect(fonte).toContain(`'${detalhe}'`);
+    // o detalhe da avaliação técnica é o texto do motor, que mora em lib/technical-review/estado.js
+    const estado = raiz('lib/technical-review/estado.js');
+    for (const trecho of ['ferramenta instalada e íntegra', 'ferramenta ausente', 'ferramenta com identidade não comprovada', 'repositórios declarados', 'cadastro de repositórios ilegível']) expect(estado).toContain(trecho);
   });
 
   it('o resumo conta quantas pedem atenção', () => {
-    expect(resumoDaSaude(verificacoesDaSaude(SAUDE))).toBe('9 verificações, 1 pede atenção.');
-    expect(resumoDaSaude(verificacoesDaSaude({ ...SAUDE, claudeAuth: [] }))).toBe('7 verificações, nenhuma pede atenção.');
-    expect(resumoDaSaude(verificacoesDaSaude({ ...SAUDE, ghAuth: false }))).toBe('9 verificações, 2 pedem atenção.');
+    expect(resumoDaSaude(verificacoesDaSaude(SAUDE))).toBe('10 verificações, 1 pede atenção.');
+    expect(resumoDaSaude(verificacoesDaSaude({ ...SAUDE, claudeAuth: [] }))).toBe('8 verificações, nenhuma pede atenção.');
+    expect(resumoDaSaude(verificacoesDaSaude({ ...SAUDE, ghAuth: false }))).toBe('10 verificações, 2 pedem atenção.');
     expect(resumoDaSaude([])).toBe('Sem verificação para mostrar.');
   });
 });

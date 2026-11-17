@@ -1083,9 +1083,9 @@ class Engine extends EventEmitter {
     this.doctorLeitura = leitura;
     const primary = this.primaryUser();
     const tokenArgs = primary ? ['auth', 'token', '--user', primary] : ['auth', 'token'];
-    const [gh, claude, auth] = await Promise.all([
+    const [gh, claude, avaliacaoTecnica, auth] = await Promise.all([
       io.run('gh', ['--version']),
-      io.runShell('claude --version'),
+      io.runShell('claude --version'), diagnosticoMod.avaliacaoTecnicaDoDoctor().catch(() => null),
       // o probe roda no MESMO env que o engine usa, e nao no herdado: `gh auth
       // token` SEM --user honra o GH_TOKEN do ambiente, entao sem conta primaria
       // o check ficava verde por um token que o ghEnv recusa, e o doctor mentia
@@ -1106,8 +1106,7 @@ class Engine extends EventEmitter {
       // um "saiu com código 1" por ciclo, pra sempre, com o doctor todo verde.
       root: rodandoComoRoot(),
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
-      home: HOME,
-      workspace: WORKSPACE,
+      home: HOME, workspace: WORKSPACE, avaliacaoTecnica,
       claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
       ...perfilMod.prontidaoParaDoctor(this.config), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
@@ -1311,7 +1310,7 @@ class Engine extends EventEmitter {
     // Só o engine que subiu de verdade lê o uso do plano do Claude (lib/engine/uso-do-plano.js):
     // o de teste nunca abre o CLI. A chave divide a linha com o doctor porque o server.js está
     // no teto do ratchet de tamanho.
-    this.usoDoPlanoLigado = true; this.doctor().catch(() => {});
+    this.usoDoPlanoLigado = true; this.doctor().then(() => diagnosticoMod.registrarAvaliacaoNoBoot(this)).catch(() => {});
     // label presa por morte do processo: limpa antes do primeiro ciclo, pra a
     // frota não continuar saindo de cena por uma sessão que não existe mais
     if (this.inflightRecuperado && this.inflightRecuperado.length) {

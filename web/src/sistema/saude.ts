@@ -42,6 +42,14 @@ function perfilEmUso(saude: Saude): Verificacao {
   return { nome, estado: 'atencao', detalhe: FALTA_NO_PERFIL[saude.claudePerfilFalta ?? ''] ?? 'o motor disse que o perfil não está pronto, sem dizer o que falta' };
 }
 
+// A ferramenta da avaliação técnica e o cadastro de repositórios, numa linha, com o texto do
+// motor (sinalDaAvaliacaoTecnica, lib/engine/diagnostico.js).
+function avaliacaoTecnica(saude: Saude): Verificacao {
+  const nome = 'Avaliação técnica';
+  if (!saude.avaliacaoTecnica) return { nome, estado: 'sem-dado', detalhe: 'O motor não informou.' };
+  return { nome, estado: saude.avaliacaoTecnica.pronta ? 'ok' : 'atencao', detalhe: saude.avaliacaoTecnica.detalhe };
+}
+
 // As verificações do diagnóstico, na ordem do motor.
 export function verificacoesDaSaude(saude: Saude): Verificacao[] {
   const linhas: Verificacao[] = [
@@ -57,6 +65,7 @@ export function verificacoesDaSaude(saude: Saude): Verificacao[] {
     const falta = perfil.tipo === 'chave' ? 'sem chave' : 'sem login';
     linhas.push(booleano(`Perfil de ${tipo}: ${perfil.label || perfil.id || 'sem nome'}`, perfil.ready, true, 'pronto', falta));
   }
+  linhas.push(avaliacaoTecnica(saude));
   if (saude.instanciaIsolada !== undefined) {
     // não é falha: é o modo em que o motor foi posto
     linhas.push(saude.instanciaIsolada

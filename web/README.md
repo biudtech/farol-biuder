@@ -828,7 +828,10 @@ Regras que valem para quem mexer nela:
 - **Trocar de aba do Farol descarta a edição sem perguntar.** A página só segura o fechar e o
   recarregar.
 - **O diagnóstico não tem mensagem por verificação.** `doctor` traz valores, não frases: os
-  detalhes das linhas são escritos aqui, com os mesmos textos do relatório do motor.
+  detalhes das linhas são escritos aqui, com os mesmos textos do relatório do motor. A exceção é
+  `doctor.avaliacaoTecnica`, que já vem com `pronta` e `detalhe` montados pelo motor
+  (`lib/technical-review/estado.js`): a linha "Avaliação técnica" escreve o `detalhe` como veio,
+  em OK quando `pronta` e em Atenção quando não.
 - **A recusa de `accounts/edit` e a de `auth/revoke` têm formas próprias** (`erro`; `code`),
   diferentes das outras ações; `lerRespostaDeAcao` lê as três.
 
