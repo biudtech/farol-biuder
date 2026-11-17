@@ -341,8 +341,10 @@ As rotas, todas em `lib/http-server.js`:
 | `GET` | `/api/health`, `/api/auth/status`, `/api/state`, `/api/events` (SSE), `/api/decision`, `/api/decisions`, `/api/team`, `/api/usage`, `/api/log`, `/api/log/triage`, `/api/diagnostics`, `/api/doctor` |
 | `POST` | `/api/auth/pair`, `/api/auth/sessions`, `/api/auth/revoke`, `/api/check`, `/api/review`, `/api/cancel`, `/api/decide`, `/api/ignore`, `/api/restore`, `/api/pushback`, `/api/settings`, `/api/accounts/edit`, `/api/team/remove`, `/api/claude/profile-test`, `/api/claude/login-web/start`, `/api/claude/login-web/code`, `/api/claude/login-web/cancel`, `/api/jira/credential`, `/api/jira/credential/remove`, `/api/jira/test` |
 
-Nem toda rota tem tela. O front lê o estado só pelo SSE (não chama `GET /api/state`, que
-serve a `tools/diagnosticar-legados.js` e a quem consulta à mão) e não usa `GET /api/log`, `GET /api/log/triage`,
+Nem toda rota tem tela. O front lê o estado pelo SSE e só chama `GET /api/state` (que serve
+também a `tools/diagnosticar-legados.js` e a quem consulta à mão) para reler `config.people` logo
+antes de gravar um perfil ou uma pessoa nova, para o corpo de `people` sair do mapa atual do motor e
+não apagar o que outra aba gravou. Não usa `GET /api/log`, `GET /api/log/triage`,
 `POST /api/jira/credential`, `POST /api/jira/credential/remove` nem as três de
 `POST /api/claude/login-web/*`, e não cria nem remove perfil do Claude: a credencial do Jira, a
 chave de API e o login da assinatura entram por chamada direta à API (com o Bearer do
@@ -389,20 +391,29 @@ guarda não abriu ou não respondeu, `lib/engine/historico-decisoes.js`) respond
 `{ ok: false, code: "historico_indisponivel" }`. A rota só lê: não altera o histórico e não
 escreve no log, nem no 200, nem no 400, nem no 503.
 
-`GET /api/decision?key=` responde `{ found, decision }`, com a decisão pela mesma projeção e,
-só nesta rota (`lib/engine/detalhe-da-decisao.js`), duas chaves quando o motor as tem:
+`GET /api/decision?key=` responde `{ found, decision }` com a decisão mais recente do PR (a
+pendente antes da resolvida), ou, com `id`, aquela decisão do PR (a rodada antiga, ou a resolvida
+quando há uma pendente); `id` fora da forma (letras, dígitos, hífen e sublinhado, até 64) ou
+repetido responde 400 com `{ ok: false, code: "parametro_invalido", campo: "id" }`. A decisão sai
+pela mesma projeção e, só nesta rota (`lib/engine/detalhe-da-decisao.js`), com duas chaves quando o
+motor as tem:
 `checks` (os checks obrigatórios do head lidos no fim da revisão: `conferidoNoHead`,
 `semExigencia`, `naoVerdes` e `herdados`, cada um `{ nome, estado }`; gravados nas provas da
 decisão desde 17/11/2026, e ausentes nas anteriores; a lista dos verdes o motor não guarda) e
-`execucao` (do diário de consumo, pelas linhas da sessão do provedor que a decisão guarda:
-`sessoes`, `modelos` e, quando todas as linhas sabem, `duracaoMs`, `custoUsd` e
-`custoEstimado`). Os critérios do card um a um não saem: a sessão só declara o card inteiro
+`execucao` (do diário de consumo, a rodada desta decisão: as tentativas de revisão do mesmo PR
+registradas depois da criação da decisão anterior do PR e até a criação desta, e não pelo
+`sessionId`, que a retomada repete entre rodadas; `tentativas`, `modelos` e, quando todas as
+tentativas sabem, `duracaoMs`, `custoUsd` e `custoEstimado`; `inicioIncerto` quando não há decisão
+anterior e o histórico está no teto, e a anterior pode ter sido descartada; com o histórico
+indisponível a chave não sai). Os critérios do card um a um não saem: a sessão só declara o card inteiro
 (`cardMet`) e a parte deste PR, e nenhum registro guarda o atendimento de cada critério.
 
 `GET /api/team` é a lista dos dossiês; o autor com PR revisado nos últimos 30 dias leva
 `numeros` (`lib/engine/numeros-do-time.js`): `janelaDias`, `prs` (PRs cuja primeira revisão
 publicada caiu na janela), `aprovadosDePrimeira` e `rodadas` (as revisões publicadas desses PRs).
-Histórico indisponível tira a chave de todos. `GET /api/usage` traz `repos`, o custo e as
+Com o histórico no teto, o PR da decisão mais antiga guardada não conta e os números levam
+`historicoNoTeto`: valem para os PRs com histórico completo. Histórico indisponível tira a chave de
+todos. `GET /api/usage` traz `repos`, o custo e as
 tentativas do período por repositório (nome vazio é o que não é de PR), com os mesmos filtros.
 Em `people` de `POST /api/settings`, a pessoa sem papel nem competência fica (o "Adicionar
 pessoa" do Time) quando a chave tem forma de login do GitHub (`parsePeople`, `lib/parse.js`).

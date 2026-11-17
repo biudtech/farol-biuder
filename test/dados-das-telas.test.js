@@ -22,7 +22,7 @@ const { colunasDaBusca, limitesDoPeriodo, diaValido } = await import('../lib/eng
 const { HIST_LIMIT } = await import('../lib/engine/historico-decisoes.js');
 const { historicoPaginado, lerParametros } = await import('../lib/engine/historico-paginado.js');
 const { provasDaDecisao } = await import('../lib/engine/provas-da-decisao.js');
-const { detalheDaDecisao, execucaoDasLinhas } = await import('../lib/engine/detalhe-da-decisao.js');
+const { detalheDaDecisao, execucaoDasLinhas, janelaDaDecisao } = await import('../lib/engine/detalhe-da-decisao.js');
 const { numerosPorAutor, numerosDoTime, timeComNumeros } = await import('../lib/engine/numeros-do-time.js');
 const { activityReport } = await import('../lib/usage/report.js');
 const { parsePeople } = await import('../lib/parse.js');
@@ -117,51 +117,103 @@ test('as provas guardam os checks do head como lidos no fim da revisão', () => 
 });
 
 const SID = 'f3b1c0de-0000-4000-8000-000000000001';
-const linha = (extra = {}) => ({ id: 'a-1', at: 1_000_000 + 420_000, iniciadaEm: 1_000_000, kind: 'review', ref: 'acme/app#7', account: 'revisora', model: 'Opus 4.1',
+// uma linha do diário de uma tentativa de revisão do PR acme/app#7, gravada em `at`
+const linha = (at, extra = {}) => ({ id: 'a-1', at, iniciadaEm: at - 420_000, kind: 'review', ref: 'acme/app#7', account: 'revisora', model: 'Opus 4.1',
   costUsd: 2, costSource: 'medido', status: 'ok', inputTokens: 1, outputTokens: 1, accounting: { version: 1, sessionId: SID }, ...extra });
 
-test('a execução sai das linhas do diário; o que alguma linha não sabe fica ausente, sem soma parcial', () => {
+test('a execução soma as tentativas; o que alguma tentativa não sabe fica ausente, sem soma parcial', () => {
   assert.equal(execucaoDasLinhas([]), null);
-  assert.deepEqual(execucaoDasLinhas([linha(), linha({ at: 2_000_000 + 60_000, iniciadaEm: 2_000_000, costUsd: 0.84, model: 'Sonnet 4.5' })]),
-    { sessoes: 2, modelos: ['Opus 4.1', 'Sonnet 4.5'], duracaoMs: 480_000, custoUsd: 2.84, custoEstimado: false });
-  assert.deepEqual(execucaoDasLinhas([linha({ costSource: 'estimado' })]), { sessoes: 1, modelos: ['Opus 4.1'], duracaoMs: 420_000, custoUsd: 2, custoEstimado: true });
-  const semInicio = execucaoDasLinhas([linha(), linha({ iniciadaEm: undefined })]);
-  assert.equal('duracaoMs' in semInicio, false);
-  const semCusto = execucaoDasLinhas([linha(), linha({ costSource: 'desconhecido' })]);
+  assert.deepEqual(execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { iniciadaEm: 1_940_000, costUsd: 0.84, model: 'Sonnet 4.5' })]),
+    { tentativas: 2, modelos: ['Opus 4.1', 'Sonnet 4.5'], duracaoMs: 480_000, custoUsd: 2.84, custoEstimado: false });
+  assert.equal(execucaoDasLinhas([linha(1_000_000, { costSource: 'estimado' })]).custoEstimado, true);
+  assert.equal('duracaoMs' in execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { iniciadaEm: undefined })]), false);
+  const semCusto = execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { costSource: 'desconhecido' })]);
   assert.equal('custoUsd' in semCusto, false);
   assert.equal('custoEstimado' in semCusto, false);
-  assert.deepEqual(execucaoDasLinhas([linha({ model: 'desconhecido' })]).modelos, []);
+  assert.deepEqual(execucaoDasLinhas([linha(1_000_000, { model: 'desconhecido' })]).modelos, []);
 });
 
-function decisaoComProvas(extra = {}) {
-  return { ...decisao(7, 5000), sessionId: SID, reportMarkdown: 'r',
-    provas: { checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho', naBase: 'vermelho' }] } }, ...extra };
+const HORA = 3_600_000;
+const T0 = Date.parse('2026-11-17T12:00:00Z');
+// rodada 1 decidida em T0, rodada 2 (retomada no MESMO session_id) decidida em T0 + 2h
+const RODADA_1 = { ...decisao(70, T0 + 1000), id: 'r1', key: 'acme/app#7', createdAt: T0, sessionId: SID, reportMarkdown: 'r',
+  provas: { checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho', naBase: 'vermelho' }] } } };
+const RODADA_2 = { ...RODADA_1, id: 'r2', createdAt: T0 + 2 * HORA, resolvedAt: T0 + 2 * HORA + 1000, provas: {} };
+const DIARIO = [
+  linha(T0 - HORA, { costUsd: 1, status: 'erro', accounting: { sessionId: 'sessao-que-caiu' } }), // tentativa da rodada 1 que caiu, outra sessão
+  linha(T0 - 60_000, { costUsd: 2 }),                                  // a rodada 1
+  linha(T0 + HORA, { costUsd: 5, iniciadaEm: T0 + HORA - 300_000 }),   // a rodada 2, retomada no mesmo session_id
+  linha(T0 + HORA + 10, { costUsd: 7, kind: 'pushback' }),             // outro tipo de sessão do mesmo PR
+  linha(T0 + HORA + 20, { costUsd: 9, ref: 'acme/app#8' }),            // outro PR
+  linha(T0 + 3 * HORA, { costUsd: 11 }),                               // depois da rodada 2
+];
+const consulta = (q) => new URLSearchParams(q);
+
+function enginesDoDetalhe(resolvidas, pendentes = []) {
+  const doJson = { decisions: { pending: structuredClone(pendentes), resolved: structuredClone(resolvidas) }, usageSessions: { sessions: structuredClone(DIARIO) } };
+  const h = abrir();
+  for (const r of DIARIO) consumo.inserirSessao(h, r);
+  const doBanco = { ...noBanco(resolvidas), telemetria: h };
+  doBanco.decisions.pending = structuredClone(pendentes);
+  return [doJson, doBanco];
 }
 
-test('GET /api/decision traz os checks e a execução, pelo diário no JSON e no banco', () => {
-  const doJson = { ...json([decisaoComProvas()]), usageSessions: { sessions: [linha(), linha({ accounting: { sessionId: 'outra' }, costUsd: 99 })] } };
-  const h = abrir();
-  for (const r of [linha(), linha({ accounting: { sessionId: 'outra' }, costUsd: 99 })]) consumo.inserirSessao(h, r);
-  const doBanco = { ...json([decisaoComProvas()]), telemetria: h, log: () => {} };
-  for (const engine of [doJson, doBanco]) {
-    const r = detalheDaDecisao(engine, 'acme/app#7');
-    assert.equal(r.found, true);
-    assert.deepEqual(r.decision.checks, { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho' }] });
-    assert.deepEqual(r.decision.execucao, { sessoes: 1, modelos: ['Opus 4.1'], duracaoMs: 420_000, custoUsd: 2, custoEstimado: false });
-    assert.equal(r.decision.provas, undefined, 'as provas brutas não saem');
-    assert.equal(r.decision.sessionId, undefined, 'o id da sessão não sai');
+test('duas rodadas no mesmo session_id: cada decisão mostra só a própria, com a tentativa que caiu na rodada dela', () => {
+  for (const engine of enginesDoDetalhe([RODADA_2, RODADA_1])) {
+    const ultima = detalheDaDecisao(engine, consulta('key=acme/app%237'));
+    assert.equal(ultima.status, 200);
+    assert.equal(ultima.body.decision.id, 'r2');
+    assert.deepEqual(ultima.body.decision.execucao, { tentativas: 1, modelos: ['Opus 4.1'], duracaoMs: 300_000, custoUsd: 5, custoEstimado: false });
+    assert.equal('checks' in ultima.body.decision, false, 'rodada sem checks gravados');
+    const primeira = detalheDaDecisao(engine, consulta('key=acme/app%237&id=r1'));
+    assert.equal(primeira.body.decision.id, 'r1');
+    assert.deepEqual(primeira.body.decision.execucao, { tentativas: 2, modelos: ['Opus 4.1'], duracaoMs: 840_000, custoUsd: 3, custoEstimado: false });
+    assert.deepEqual(primeira.body.decision.checks, { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho' }] });
+    assert.equal(primeira.body.decision.provas, undefined, 'as provas brutas não saem');
+    assert.equal(primeira.body.decision.sessionId, undefined, 'o id da sessão não sai');
   }
 });
 
-test('decisão antiga (sem checks gravados nem sessão no diário) sai sem as duas chaves, e chave desconhecida é found false', () => {
-  const engine = { ...json([decisaoComProvas({ provas: { checksNaoVerdes: [] }, sessionId: 'sem-linha' })]), usageSessions: { sessions: [linha()] } };
-  const r = detalheDaDecisao(engine, 'acme/app#7');
-  assert.equal(r.found, true);
-  assert.equal('checks' in r.decision, false);
-  assert.equal('execucao' in r.decision, false);
-  assert.equal('checks' in detalheDaDecisao({ ...json([decisaoComProvas({ provas: { checks: { conferidoNoHead: 'sim' } } })]) }, 'acme/app#7').decision, false, 'forma torta não sai');
-  assert.deepEqual(detalheDaDecisao(json([]), 'nao/existe#1'), { found: false, decision: null });
-  assert.deepEqual(detalheDaDecisao(json([]), ''), { found: false, decision: null });
+test('o id pede a resolvida mesmo com uma pendente no PR; id de outro PR ou inexistente é found false', () => {
+  const pendente = { ...RODADA_2, id: 'p3', createdAt: T0 + 4 * HORA, status: 'pending', resolvedAt: undefined };
+  for (const engine of enginesDoDetalhe([RODADA_2, RODADA_1], [pendente])) {
+    assert.equal(detalheDaDecisao(engine, consulta('key=acme/app%237')).body.decision.id, 'p3', 'sem id vale a regra de sempre');
+    const r2 = detalheDaDecisao(engine, consulta('key=acme/app%237&id=r2')).body.decision;
+    assert.equal(r2.id, 'r2');
+    assert.equal(r2.execucao.custoUsd, 5);
+    assert.equal(detalheDaDecisao(engine, consulta('key=acme/app%237&id=p3')).body.decision.execucao.custoUsd, 11, 'a pendente soma o que veio depois da r2');
+    assert.deepEqual(detalheDaDecisao(engine, consulta('key=acme/app%238&id=r1')).body, { found: false, decision: null });
+    assert.deepEqual(detalheDaDecisao(engine, consulta('key=acme/app%237&id=nao')).body, { found: false, decision: null });
+  }
+});
+
+test('id fora da forma ou repetido vira 400 com o campo', () => {
+  const [engine] = enginesDoDetalhe([RODADA_1]);
+  for (const q of ['key=acme/app%237&id=a%20b', `key=acme/app%237&id=${'a'.repeat(65)}`, 'key=acme/app%237&id=r1&id=r1', 'key=x&id=%2E%2E%2F']) {
+    assert.deepEqual(detalheDaDecisao(engine, consulta(q)), { status: 400, body: { ok: false, code: 'parametro_invalido', campo: 'id' } }, q);
+  }
+  assert.equal(detalheDaDecisao(engine, consulta('key=acme/app%237&id=')).body.decision.id, 'r1', 'id vazio é como ausente');
+});
+
+test('a janela: sem anterior começa no início; no teto começa na mais antiga guardada e sai marcada', () => {
+  assert.deepEqual(janelaDaDecisao(RODADA_1, [RODADA_2, RODADA_1], false), { ref: 'acme/app#7', desde: null, ate: T0, inicioIncerto: false });
+  assert.deepEqual(janelaDaDecisao(RODADA_2, [RODADA_2, RODADA_1], false), { ref: 'acme/app#7', desde: T0, ate: T0 + 2 * HORA, inicioIncerto: false });
+  const outra = { ...decisao(1, T0 - 5 * HORA), createdAt: T0 - 5 * HORA };
+  assert.deepEqual(janelaDaDecisao(RODADA_1, [RODADA_1, outra], true), { ref: 'acme/app#7', desde: T0 - 5 * HORA, ate: T0, inicioIncerto: true });
+  assert.equal(janelaDaDecisao({ key: 'a#1' }, [], false), null, 'sem hora não há janela');
+});
+
+test('decisão antiga sem checks gravados sai sem a chave; histórico indisponível tira a execução; chave desconhecida é found false', () => {
+  const [engine] = enginesDoDetalhe([{ ...RODADA_1, provas: { checksNaoVerdes: [] } }]);
+  const d = detalheDaDecisao(engine, consulta('key=acme/app%237')).body.decision;
+  assert.equal('checks' in d, false);
+  assert.equal(d.execucao.tentativas, 2);
+  const torta = { decisions: { pending: [], resolved: [{ ...RODADA_1, provas: { checks: { conferidoNoHead: 'sim' } } }] } };
+  assert.equal('checks' in detalheDaDecisao(torta, consulta('key=acme/app%237')).body.decision, false, 'forma torta não sai');
+  const fora = { decisions: { pending: [RODADA_1], resolved: [] }, historicoForaDoBanco: true, usageSessions: { sessions: DIARIO } };
+  assert.equal('execucao' in detalheDaDecisao(fora, consulta('key=acme/app%237')).body.decision, false);
+  assert.deepEqual(detalheDaDecisao({ decisions: { pending: [], resolved: [] } }, consulta('key=nao/existe%231')).body, { found: false, decision: null });
+  assert.deepEqual(detalheDaDecisao({ decisions: { pending: [], resolved: [] } }, consulta('')).body, { found: false, decision: null });
 });
 
 /* ---------- números de 30 dias por autor ---------- */
@@ -185,6 +237,12 @@ test('números de 30 dias: PRs cuja primeira revisão publicada caiu na janela, 
     ana: { janelaDias: 30, prs: 3, aprovadosDePrimeira: 1, rodadas: 4 },
     bia: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1 },
   });
+});
+
+test('números no teto do histórico: o PR da decisão mais antiga não conta, e os números saem marcados', () => {
+  const lista = [rodada('a/r#2', 'ana', 5, 'approve'), rodada('a/r#1', 'ana', 20, 'approve')];
+  assert.deepEqual(numerosPorAutor(lista, AGORA, { noTeto: true }), { ana: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1, historicoNoTeto: true } });
+  assert.equal(numerosPorAutor(lista, AGORA).ana.prs, 2, 'fora do teto o mesmo PR conta');
 });
 
 test('GET /api/team leva os números no autor que os tem; histórico indisponível não leva nenhum', () => {
