@@ -32,7 +32,7 @@ export const ROTULO_DO_STATUS: Record<string, string> = {
   already_closed: 'PR fechado sem merge: a revisão pendente foi cancelada',
   skipped: 'Pulado na mesa',
   superseded: 'Substituído por rodada nova',
-  pending: 'Esperando a sua decisão no Radar',
+  pending: 'O motor ainda não postou nada desta revisão',
 };
 
 export function textoDoStatus(status: string | undefined): string {
@@ -100,3 +100,31 @@ export const DESFECHOS_DA_CONTESTACAO: ReadonlyArray<readonly [valor: string, ro
 export function textoDoDesfecho(outcome: string): string {
   return DESFECHOS_DA_CONTESTACAO.find(([valor]) => valor === outcome)?.[1] ?? outcome;
 }
+
+// O tom da bolinha e do chip de uma revisão, pelo que foi publicado: aprovação verde,
+// comentário âmbar, pedido de mudanças vermelho, nada postado cinza. A pendência da mesa é
+// sempre "nada postado", qualquer que seja o `action` dela.
+export type TomDoDesfecho = 'ok' | 'aviso' | 'ruim' | 'neutro';
+
+const TOM: Record<string, TomDoDesfecho> = { approve: 'ok', comment: 'aviso', request_changes: 'ruim' };
+const CHIP: Record<string, string> = { approve: 'Aprovado', comment: 'Comentado', request_changes: 'Pediu mudanças' };
+
+export function tomDoDesfecho(revisao: { action?: string; status?: string }): TomDoDesfecho {
+  if (revisao.status === 'pending') return 'neutro';
+  const { action } = revisao;
+  return action !== undefined && Object.hasOwn(TOM, action) ? (TOM[action] ?? 'neutro') : 'neutro';
+}
+
+// O texto do chip do desfecho, no detalhe.
+export function rotuloDoDesfecho(revisao: { action?: string; status?: string }): string {
+  if (revisao.status === 'pending') return 'Nada postado';
+  return proprio(CHIP, revisao.action) ?? 'Nada postado';
+}
+
+// A legenda das cores, no pé da lista, na ordem do desenho.
+export const LEGENDA_DAS_CORES: ReadonlyArray<readonly [tom: TomDoDesfecho, rotulo: string]> = [
+  ['ok', 'aprovado'],
+  ['aviso', 'comentado'],
+  ['ruim', 'pediu mudanças'],
+  ['neutro', 'nada postado'],
+];

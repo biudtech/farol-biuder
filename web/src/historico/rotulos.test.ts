@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   DESFECHOS_DA_CONTESTACAO, FILTROS_DE_DESFECHO, PUBLICADOS, ROTULO_DA_ACAO, ROTULO_DO_STATUS, foiPublicado, parecerQueDifere,
-  textoDoDesfecho, textoDoPublicado, textoDoStatus,
+  LEGENDA_DAS_CORES, rotuloDoDesfecho, textoDoDesfecho, textoDoPublicado, textoDoStatus, tomDoDesfecho,
 } from './rotulos';
 
 // O motor é lido por texto, como em src/contratos/snapshot.test.ts: importar os arquivos dele
@@ -149,5 +149,25 @@ describe('desfechos de contestação', () => {
   it('desfecho desconhecido aparece cru', () => {
     expect(textoDoDesfecho('author_right')).toBe('O autor tinha razão');
     expect(textoDoDesfecho('novo')).toBe('novo');
+  });
+});
+
+describe('cor e chip do desfecho', () => {
+  it('aprovação verde, comentário âmbar, pedido de mudanças vermelho, o resto cinza', () => {
+    expect(tomDoDesfecho({ action: 'approve' })).toBe('ok');
+    expect(tomDoDesfecho({ action: 'comment' })).toBe('aviso');
+    expect(tomDoDesfecho({ action: 'request_changes' })).toBe('ruim');
+    for (const action of ['skip', 'acao_nova', 'constructor', undefined]) expect(tomDoDesfecho({ action })).toBe('neutro');
+    // a pendência da mesa não postou nada, qualquer que seja o action
+    expect(tomDoDesfecho({ action: 'approve', status: 'pending' })).toBe('neutro');
+  });
+
+  it('o chip diz o desfecho, e a legenda cobre as quatro cores', () => {
+    expect(rotuloDoDesfecho({ action: 'approve' })).toBe('Aprovado');
+    expect(rotuloDoDesfecho({ action: 'comment' })).toBe('Comentado');
+    expect(rotuloDoDesfecho({ action: 'request_changes' })).toBe('Pediu mudanças');
+    expect(rotuloDoDesfecho({ action: 'skip' })).toBe('Nada postado');
+    expect(rotuloDoDesfecho({ action: 'approve', status: 'pending' })).toBe('Nada postado');
+    expect(LEGENDA_DAS_CORES.map(([tom]) => tom)).toEqual(['ok', 'aviso', 'ruim', 'neutro']);
   });
 });

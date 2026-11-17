@@ -13,6 +13,8 @@ type Falha = Extract<Resultado<never>, { ok: false }>;
 interface Guardado {
   pedido: string;
   pagina: PaginaDoHistorico | null;
+  // quando a página chegou: é o "hoje" dos grupos por dia
+  lidaEm: number;
   falha: Falha | null;
   // a marca das resolvidas do snapshot quando esta página chegou
   marca: string | null;
@@ -22,8 +24,11 @@ interface Guardado {
 
 export interface LeituraDaPagina {
   carregando: boolean;
-  // A última página lida. Durante uma carga é a anterior, que a tela mostra esmaecida.
+  // A última página lida com sucesso. Durante uma carga é a anterior, que a tela mostra
+  // apagada; depois de uma falha também, com o erro em cima.
   pagina: PaginaDoHistorico | null;
+  // quando a página mostrada chegou: o "hoje" dos grupos por dia
+  lidaEm: number;
   falha: Falha | null;
   repos: readonly string[];
   // o snapshot passou a ter revisão resolvida que esta página não viu
@@ -45,8 +50,9 @@ export function usePagina(cliente: Pick<Cliente, 'get'>, consulta: Consulta, rec
       // o pedido foi trocado por outro: a resposta dele não vale mais
       if (controle.signal.aborted) return;
       setGuardado((antes) => (r.ok
-        ? { pedido, pagina: r.dados, falha: null, marca: marca.current, repos: r.dados.repos }
-        : { pedido, pagina: null, falha: r, marca: antes?.marca ?? null, repos: antes?.repos ?? SEM_REPOS }));
+        ? { pedido, pagina: r.dados, lidaEm: Date.now(), falha: null, marca: marca.current, repos: r.dados.repos }
+        // na falha, a última página boa fica: a tela a mostra com o erro em cima
+        : { pedido, pagina: antes?.pagina ?? null, lidaEm: antes?.lidaEm ?? Date.now(), falha: r, marca: antes?.marca ?? null, repos: antes?.repos ?? SEM_REPOS }));
     });
     return () => controle.abort();
   }, [cliente, caminho, pedido]);
@@ -59,6 +65,7 @@ export function usePagina(cliente: Pick<Cliente, 'get'>, consulta: Consulta, rec
   return {
     carregando,
     pagina: guardado?.pagina ?? null,
+    lidaEm: guardado?.lidaEm ?? 0,
     falha: carregando ? null : guardado?.falha ?? null,
     repos: guardado?.repos ?? SEM_REPOS,
     haNovas: !carregando && guardado !== null && guardado.marca !== null && marcaAtual !== null && guardado.marca !== marcaAtual,

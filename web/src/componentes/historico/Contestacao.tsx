@@ -13,7 +13,7 @@ import type { Acao, DesfechoDaContestacao } from '@/radar/acoes';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import comuns from '../radar/Radar.module.css';
+import { ui } from '../ui';
 import estilos from './Historico.module.css';
 
 // o teto da nota no motor (recordPushback)
@@ -51,28 +51,28 @@ export function Contestacao({ revisao, registro, controle }: Props) {
   };
 
   return (
-    <section className={estilos.secao} aria-labelledby={idDoTitulo}>
-      <h3 id={idDoTitulo} className={estilos.tituloDaSecao}>Contestação do autor</h3>
+    <section className={`${ui.cartao} ${estilos.contestacao}`} aria-labelledby={idDoTitulo}>
+      <h2 id={idDoTitulo} className={estilos.tituloDaContestacao}>Contestação do autor</h2>
       {suspeita ? (
-        <p className={comuns.nota}>
+        <p className={ui.texto}>
           O motor suspeita que o autor contestou a revisão deste PR{registro.note ? `: ${registro.note}` : ''}. Confirme o desfecho, ou diga que não houve contestação.
         </p>
       ) : (
-        <p>
+        <p className={ui.texto}>
           Contestação registrada: {textoDoDesfecho(registro.outcome)} ({origem}{quando ? `, em ${quando}` : ''}).
           {registro.note ? ` Nota: ${registro.note}` : ''}
         </p>
       )}
-      <p className={comuns.meta}>
+      <p className={ui.mini}>
         O registro é do PR, não desta rodada. Confirmado, ele entra no prompt das próximas revisões dos PRs do autor; com o desfecho &quot;o autor tinha razão&quot; ou &quot;meio-termo&quot;, também no de revisões de outros autores neste repositório. Quem grava aqui marca o registro como feito à mão, e o motor deixa de procurar contestação neste PR sozinho. Gravar não publica nada no GitHub.
       </p>
 
       <div className={estilos.formulario}>
-        <div className={estilos.campo}>
-          <label className={comuns.rotulo} htmlFor={idDoDesfecho}>Desfecho</label>
+        <div className={ui.rotulo}>
+          <label htmlFor={idDoDesfecho}>Desfecho</label>
           <select
             id={idDoDesfecho}
-            className={comuns.entrada}
+            className={ui.campo}
             value={desfecho}
             onChange={(evento) => setDesfecho(ehDesfecho(evento.target.value) ? evento.target.value : '')}
           >
@@ -80,11 +80,11 @@ export function Contestacao({ revisao, registro, controle }: Props) {
             <option value="">Não houve contestação (apaga o registro)</option>
           </select>
         </div>
-        <div className={estilos.campo}>
-          <label className={comuns.rotulo} htmlFor={idDaNota}>Nota curta (opcional)</label>
+        <div className={ui.rotulo}>
+          <label htmlFor={idDaNota}>Nota curta (opcional)</label>
           <input
             id={idDaNota}
-            className={comuns.entrada}
+            className={ui.campo}
             type="text"
             value={nota}
             maxLength={TETO_DA_NOTA}

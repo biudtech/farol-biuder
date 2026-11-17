@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ehHistoricoIndisponivel,
   CONSULTA_VAZIA, caminhoDaPagina, caminhoDoDetalhe, enderecoDa, lerEndereco, marcaDasResolvidas, mensagemDaFalha, temFiltro,
   textoDaDuracao, textoDoResultado, textoDoVazio,
 } from './consulta';
@@ -125,5 +126,14 @@ describe('marca das resolvidas do snapshot', () => {
     expect(marcaDasResolvidas([null])).toBe('@');
     expect(marcaDasResolvidas([{ id: 7, resolvedAt: 'x' }])).toBe('@');
     expect(marcaDasResolvidas([{ id: 'd1' }])).toBe('d1@');
+  });
+});
+
+describe('histórico indisponível', () => {
+  it('o 503 do motor é indisponível; recusa de parâmetro e falha de rede não', () => {
+    expect(ehHistoricoIndisponivel({ ok: false, falha: 'recusado', status: 503, detalhe: { codigo: 'historico_indisponivel' } })).toBe(true);
+    expect(ehHistoricoIndisponivel({ ok: false, falha: 'recusado', status: 503 })).toBe(true);
+    expect(ehHistoricoIndisponivel({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo: 'q' } })).toBe(false);
+    expect(ehHistoricoIndisponivel({ ok: false, falha: 'rede', status: 0 })).toBe(false);
   });
 });

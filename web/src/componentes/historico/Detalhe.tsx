@@ -1,48 +1,80 @@
 'use client';
 
-// O detalhe de uma revisão, aberto na própria página: o que foi publicado, os motivos, o
-// resumo técnico, as rodadas, as etapas e o texto do parecer, desenhado de markdown. O foco
-// vai ao título ao abrir, e Escape fecha. As ações são duas: revisar de novo e, quando o PR
-// tem contestação registrada, o desfecho dela.
+// O detalhe de uma revisão, aberto na própria página, no desenho enxuto: o PR, o título, o
+// chip do que foi publicado e a hora; a frase da avaliação técnica; os achados, uma linha por
+// motivo, com o bloqueio aberto e o resto fechado; e "Mais detalhes" (execução, rodadas,
+// etapas e o review completo), tudo fechado, cada um com o resumo na própria linha. O foco vai
+// ao título ao abrir, e Escape fecha. As ações são duas: revisar de novo e, quando o PR tem
+// contestação registrada, o desfecho dela.
 import { useEffect, useId, useRef } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
-import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
-import { foiPublicado, parecerQueDifere, textoDoPublicado, textoDoStatus } from '@/historico/rotulos';
-import { ROTULO_DO_MOTIVO, dataComAno, nomeDoPr, prDaUrl } from '@/radar/formato';
 import type { Motivo } from '@/contratos/radar';
+import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
+import { foiPublicado, parecerQueDifere, rotuloDoDesfecho, textoDoPublicado, textoDoStatus, tomDoDesfecho } from '@/historico/rotulos';
+import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/radar/formato';
 import { Markdown } from '../Markdown';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
-import { ReferenciaDoPr } from '../radar/Bloco';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import comuns from '../radar/Radar.module.css';
+import { Chip, Esqueleto, Linha, Secao, ui, type Tom } from '../ui';
 import { Contestacao } from './Contestacao';
-import { Campo } from './Lista';
 import type { LeituraDoDetalhe } from './useHistorico';
 import estilos from './Historico.module.css';
 
-function Motivos({ titulo, motivos }: { titulo: string; motivos: readonly Motivo[] }) {
-  const id = useId();
-  if (!motivos.length) return null;
+function Campo({ nome, children }: { nome: string; children: string }) {
   return (
-    <section className={estilos.secao} aria-labelledby={id}>
-      <h3 id={id} className={estilos.tituloDaSecao}>{titulo}</h3>
-      <ul className={comuns.motivos}>
-        {motivos.map((m, i) => (
-          <li key={i}><span className={comuns.tipoDoMotivo}>{ROTULO_DO_MOTIVO[m.kind]}:</span> {m.text}</li>
-        ))}
-      </ul>
-    </section>
+    <div className={estilos.par}>
+      <dt>{nome}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
 const contagem = (valor: number | undefined): string => (valor !== undefined && Number.isInteger(valor) && valor >= 0 ? String(valor) : 'não informado');
 
-function Rodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
-  const id = useId();
+function Achado({ rotulo, tom, motivo, aberta }: { rotulo: string; tom: Tom; motivo: Motivo; aberta?: boolean }) {
   return (
-    <section className={estilos.secao} aria-labelledby={id}>
-      <h3 id={id} className={estilos.tituloDaSecao}>Rodadas</h3>
-      <p>
+    <Linha
+      aberta={aberta}
+      rotulo={`${rotulo}: ${motivo.text}`}
+      resumo={(
+        <>
+          <Chip tom={tom} pequeno>{rotulo}</Chip>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{motivo.text}</span>
+        </>
+      )}
+    >
+      <p className={ui.texto}>{motivo.text}</p>
+      <p className={ui.mini}>Origem: {ROTULO_DO_MOTIVO[motivo.kind]}</p>
+    </Linha>
+  );
+}
+
+// Os achados com o que o item traz: o bloqueio (`blockedReason`), aberto; os motivos
+// (`reasons`) e os pontos de atenção (`attention`), fechados. Nada além disso: o item não traz
+// arquivo, linha nem trecho de código de cada achado.
+function Achados({ revisao: r }: { revisao: Revisao }) {
+  if (!r.blockedReason && !r.reasons.length && !r.attention.length) return null;
+  return (
+    <Secao titulo="Achados">
+      {r.blockedReason ? <Achado rotulo="Bloqueio" tom="ruim" aberta motivo={{ text: r.blockedReason, kind: 'gate' }} /> : null}
+      {r.reasons.map((m, i) => <Achado key={`m${i}`} rotulo="Motivo" tom="ruim" motivo={m} />)}
+      {r.attention.map((m, i) => <Achado key={`a${i}`} rotulo="Ponto de atenção" tom="aviso" motivo={m} />)}
+    </Secao>
+  );
+}
+
+function Rodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
+  return (
+    <Linha
+      rotulo="Rodadas"
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Rodadas</span>
+          <span className={ui.r}>rodada {contagem(rodadas.ordinal)} · {contagem(rodadas.unresolvedCount)} pendência(s)</span>
+        </>
+      )}
+    >
+      <p className={ui.texto}>
         Rodada {contagem(rodadas.ordinal)}, com {contagem(rodadas.unresolvedCount)} pendência(s) rastreada(s).{' '}
         {rodadas.mode === 'enforce' ? 'A comparação entre rodadas está ativa.' : 'A comparação entre rodadas está em observação.'}{' '}
         {rodadas.unverified ? 'A memória das rodadas não foi verificada: isto não comprova que não há pendência.' : ''}
@@ -54,52 +86,51 @@ function Rodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
         <Campo nome="Resolvidos em arquivo inalterado">{contagem(rodadas.resolvedOnUnchangedCount)}</Campo>
         <Campo nome="Contexto alterado">{rodadas.changedContext ? 'sim' : 'não registrado'}</Campo>
       </dl>
-    </section>
+    </Linha>
   );
 }
 
 function Etapas({ etapas }: { etapas: NonNullable<Revisao['stages']> }) {
-  const id = useId();
   return (
-    <section className={estilos.secao} aria-labelledby={id}>
-      <h3 id={id} className={estilos.tituloDaSecao}>Etapas da sessão</h3>
+    <Linha
+      rotulo="Etapas da sessão"
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Etapas da sessão</span>
+          <span className={ui.r}>{etapas.totalMs > 0 ? textoDaDuracao(etapas.totalMs) : `${etapas.stages.length} etapa(s)`}</span>
+        </>
+      )}
+    >
       <dl className={estilos.campos}>
         {etapas.stages.map((etapa, i) => <Campo key={i} nome={etapa.label || etapa.id || `Etapa ${i + 1}`}>{textoDaDuracao(etapa.ms)}</Campo>)}
         {etapas.totalMs > 0 ? <Campo nome="Total">{textoDaDuracao(etapas.totalMs)}</Campo> : null}
       </dl>
-    </section>
+    </Linha>
   );
 }
 
-function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; outra: boolean; registro: Registro | undefined; controle: ControleDeAcoes }) {
-  const idDoTexto = useId();
-  const idDasAcoes = useId();
-  const nome = nomeDoPr(r.key);
+function Execucao({ revisao: r }: { revisao: Revisao }) {
   const parecer = parecerQueDifere(r);
   const resolvida = dataComAno(r.resolvedAt);
   const criada = dataComAno(r.createdAt);
   const conferencia = r.verificationCheckpoint;
-  // a URL canônica do PR: é ela que vai ao motor, não a que veio no item
-  const pr = prDaUrl(r.pr?.url ?? '');
-
   return (
-    <>
-      {outra ? (
-        <p className={comuns.nota}>
-          O endereço pedia outra revisão deste PR, que não está na página carregada. O motor só entrega por chave a revisão mais recente do PR, que é a mostrada aqui.
-        </p>
-      ) : null}
-
-      <p className={comuns.tituloDoCartao}><ReferenciaDoPr chave={r.key} url={r.pr?.url} /></p>
-      {r.pr?.title ? <p className={comuns.tituloDoPr}>{r.pr.title}</p> : null}
+    <Linha
+      rotulo="Execução"
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Execução</span>
+          <span className={ui.r}>{textoDoPublicado(r)}</span>
+        </>
+      )}
+    >
       <dl className={estilos.campos}>
-        {r.pr?.author ? <Campo nome="Autor">{r.pr.author}</Campo> : null}
-        {r.card ? <Campo nome="Card">{r.card}</Campo> : null}
         <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
-        {resolvida ? <Campo nome="Resolvida em">{resolvida}</Campo> : null}
+        {r.card ? <Campo nome="Card">{r.card}</Campo> : null}
         {criada ? <Campo nome="Análise concluída em">{criada}</Campo> : null}
+        {resolvida ? <Campo nome="Resolvida em">{resolvida}</Campo> : null}
         {r.technical ? <Campo nome="Avaliação técnica">{r.technical.message}</Campo> : null}
         {conferencia && conferencia.total > 0 ? (
           <Campo nome="Verificação de afirmações">
@@ -107,44 +138,102 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
           </Campo>
         ) : null}
       </dl>
+    </Linha>
+  );
+}
 
-      {r.prProprio ? <p className={comuns.nota}>PR da própria conta revisora: o GitHub não aceita aprovação nem pedido de mudanças do autor.</p> : null}
-      {r.blockedReason ? <p className={`${comuns.nota} ${comuns.bloqueio}`}>Bloqueado: {r.blockedReason}</p> : null}
+function ReviewCompleto({ revisao: r }: { revisao: Revisao }) {
+  const parecer = parecerQueDifere(r);
+  return (
+    <Linha
+      rotulo="Review completo"
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Review completo</span>
+          <span className={ui.r}>{r.reportMarkdown ? 'texto gravado' : 'sem texto gravado'}</span>
+        </>
+      )}
+    >
+      {r.reportMarkdown && parecer && r.status !== 'pending' && foiPublicado(r.action) ? (
+        <p className={ui.nota}>
+          O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
+        </p>
+      ) : null}
+      {r.reportMarkdown ? (
+        <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} /></div>
+      ) : (
+        <p className={ui.vazio}>Esta revisão ficou sem texto gravado.</p>
+      )}
+    </Linha>
+  );
+}
 
-      <Motivos titulo="Motivos" motivos={r.reasons} />
-      <Motivos titulo="Pontos de atenção" motivos={r.attention} />
-      {r.rounds ? <Rodadas rodadas={r.rounds} /> : null}
-      {r.stages ? <Etapas etapas={r.stages} /> : null}
+function Cabecalho({ revisao: r }: { revisao: Revisao }) {
+  const github = linkDoPr(r.pr?.url);
+  const quando = dataComAno(r.resolvedAt ?? r.createdAt);
+  let momento = '';
+  if (quando) {
+    if (r.status !== 'pending' && foiPublicado(r.action)) momento = `publicado em ${quando}`;
+    else if (r.resolvedAt) momento = `resolvida em ${quando}`;
+    else momento = `análise concluída em ${quando}`;
+  }
+  return (
+    <div className={ui.fila}>
+      <Chip tom={tomDoDesfecho(r)}>{rotuloDoDesfecho(r)}</Chip>
+      {momento ? <span className={ui.mini}>{momento}</span> : null}
+      {github ? (
+        <a className={`${ui.link} ${ui.empurra}`} href={github} target="_blank" rel="noreferrer noopener">
+          Ver no GitHub <span className={ui.soLeitor}>(abre em nova aba)</span>
+        </a>
+      ) : null}
+    </div>
+  );
+}
 
-      <section className={estilos.secao} aria-labelledby={idDoTexto}>
-        <h3 id={idDoTexto} className={estilos.tituloDaSecao}>Texto do parecer</h3>
-        {r.reportMarkdown && parecer && r.status !== 'pending' && foiPublicado(r.action) ? (
-          <p className={comuns.nota}>
-            O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
-          </p>
-        ) : null}
-        {r.reportMarkdown ? (
-          <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} /></div>
-        ) : (
-          <p className={comuns.vazio}>Esta revisão ficou sem texto gravado.</p>
-        )}
-      </section>
+function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; outra: boolean; registro: Registro | undefined; controle: ControleDeAcoes }) {
+  const idDasAcoes = useId();
+  const nome = nomeDoPr(r.key);
+  // a URL canônica do PR: é ela que vai ao motor, não a que veio no item
+  const pr = prDaUrl(r.pr?.url ?? '');
+  const naoPostou = r.status === 'pending' || !foiPublicado(r.action);
 
-      <section className={estilos.secao} aria-labelledby={idDasAcoes}>
-        <h3 id={idDasAcoes} className={estilos.tituloDaSecao}>Revisar de novo</h3>
-        {pr ? (
-          <>
-            <p className={comuns.meta}>
-              Abre uma análise nova deste PR no motor. O clique não publica nada: quando a análise termina, o motor publica sozinho ou deixa a revisão em Precisa de você, no Radar, conforme a política da conta.
-            </p>
-            <AcoesDoItem botoes={[{ acao: { tipo: 'revisar', alvo: r.key, nome, url: pr.url, deNovo: true } }]} controle={controle} />
-          </>
-        ) : (
-          <p className={comuns.meta}>Esta revisão não traz o endereço do PR no GitHub: não dá para pedir revisão nova daqui.</p>
-        )}
-      </section>
+  return (
+    <>
+      {outra ? (
+        <p className={ui.nota}>
+          O endereço pedia outra revisão deste PR, que não está na página carregada. O motor só entrega por chave a revisão mais recente do PR, que é a mostrada aqui.
+        </p>
+      ) : null}
+
+      <Cabecalho revisao={r} />
+      {r.technical ? <p className={estilos.frase}>{r.technical.message}</p> : null}
+      {naoPostou ? <p className={ui.mini}>{textoDoStatus(r.status)}. Nada desta revisão foi postado no GitHub.</p> : null}
+      {r.prProprio ? <p className={ui.nota}>PR da própria conta revisora: o GitHub não aceita aprovação nem pedido de mudanças do autor.</p> : null}
+
+      <Achados revisao={r} />
+
+      <Secao titulo="Mais detalhes">
+        <Execucao revisao={r} />
+        {r.rounds ? <Rodadas rodadas={r.rounds} /> : null}
+        {r.stages ? <Etapas etapas={r.stages} /> : null}
+        <ReviewCompleto revisao={r} />
+      </Secao>
 
       {registro ? <Contestacao key={`${registro.outcome}|${registro.status ?? ''}|${registro.at ?? ''}`} revisao={r} registro={registro} controle={controle} /> : null}
+
+      <section className={estilos.pe} aria-labelledby={idDasAcoes}>
+        <h2 id={idDasAcoes} className={ui.soLeitor}>Revisar de novo</h2>
+        {pr ? (
+          <>
+            <AcoesDoItem botoes={[{ acao: { tipo: 'revisar', alvo: r.key, nome, url: pr.url, deNovo: true }, primario: naoPostou }]} controle={controle} />
+            <p className={ui.mini}>
+              Abre uma análise nova deste PR no motor. O clique não publica nada: quando a análise termina, o motor segue a política da conta, que pode publicar sozinha.
+            </p>
+          </>
+        ) : (
+          <p className={ui.mini}>Esta revisão não traz o endereço do PR no GitHub: não dá para pedir revisão nova daqui.</p>
+        )}
+      </section>
     </>
   );
 }
@@ -161,8 +250,13 @@ interface Props {
 
 export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoTentarDeNovo }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
-  const idDoTitulo = useId();
-  const chave = leitura.fase === 'pronto' ? leitura.revisao.key : aberto.chave;
+  const pronta = leitura.fase === 'pronto' ? leitura.revisao : null;
+  const chave = pronta ? pronta.key : aberto.chave;
+  const nome = chave ? nomeDoPr(chave) : '';
+  const rodada = pronta?.rounds?.ordinal;
+  const meta = pronta
+    ? [pronta.key, pronta.pr?.author, rodada !== undefined && Number.isInteger(rodada) && rodada > 0 ? `${rodada}ª rodada` : '', pronta.card].filter(Boolean).join(' · ')
+    : chave;
 
   useEffect(() => { titulo.current?.focus(); }, []);
 
@@ -181,17 +275,21 @@ export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoT
   }, [aoFechar]);
 
   return (
-    <section className={estilos.detalhe} aria-labelledby={idDoTitulo}>
+    <section className={estilos.detalhe} aria-label={nome ? `Revisão de ${nome}` : 'Revisão'}>
+      <button type="button" className={`${ui.link} ${estilos.voltar}`} aria-label="Voltar ao Histórico" onClick={aoFechar}>
+        <span aria-hidden="true">← </span>Histórico
+      </button>
+
       <div className={estilos.topoDoDetalhe}>
-        <h2 id={idDoTitulo} ref={titulo} className={estilos.tituloDoDetalhe} tabIndex={-1}>
-          {chave ? `Revisão de ${nomeDoPr(chave)}` : 'Revisão'}
-        </h2>
-        <button type="button" className={comuns.botao} onClick={aoFechar}>Voltar à lista</button>
+        {meta ? <p className={ui.r}>{meta}</p> : null}
+        <h1 ref={titulo} className={estilos.tituloDoDetalhe} tabIndex={-1}>
+          {pronta?.pr?.title || (nome ? `Revisão de ${nome}` : 'Revisão')}
+        </h1>
       </div>
 
-      {leitura.fase === 'carregando' ? <p className={comuns.vazio} role="status">Carregando a revisão.</p> : null}
+      {leitura.fase === 'carregando' ? <Esqueleto texto="Carregando a revisão." linhas={3} bloco /> : null}
       {leitura.fase === 'ausente' ? (
-        <p className={comuns.nota} role="status">
+        <p className={ui.nota} role="status">
           {aberto.chave
             ? 'Esta revisão não está na página carregada, e o motor não tem revisão deste PR para mostrar.'
             : 'Esta revisão não está na página carregada, e o endereço não diz de qual PR ela é.'}{' '}
@@ -199,16 +297,16 @@ export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoT
         </p>
       ) : null}
       {leitura.fase === 'erro' ? (
-        <div className={estilos.erro} role="alert">
-          <p><strong>Erro:</strong> {leitura.texto}</p>
-          <button type="button" className={comuns.botao} onClick={aoTentarDeNovo}>Tentar de novo</button>
+        <div className={ui.erro} role="alert">
+          <span><strong>Erro:</strong> {leitura.texto}</span>
+          <button type="button" className={ui.botao} onClick={aoTentarDeNovo}>Tentar de novo</button>
         </div>
       ) : null}
-      {leitura.fase === 'pronto' ? (
+      {pronta && leitura.fase === 'pronto' ? (
         <Corpo
-          revisao={leitura.revisao}
+          revisao={pronta}
           outra={leitura.outra}
-          registro={contestacoes && Object.hasOwn(contestacoes, leitura.revisao.key) ? contestacoes[leitura.revisao.key] : undefined}
+          registro={contestacoes && Object.hasOwn(contestacoes, pronta.key) ? contestacoes[pronta.key] : undefined}
           controle={controle}
         />
       ) : null}
