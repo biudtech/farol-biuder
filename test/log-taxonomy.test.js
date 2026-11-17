@@ -48,7 +48,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 25, 'são 25 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo e as duas da linha do boot da avaliação técnica');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 24, 'são 24 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo e a da linha do boot da avaliação técnica');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -73,8 +73,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
     'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem',
-    // a quebrada ANTES da de estado: a de estado casa com toda linha do boot da avaliação técnica
-    'avaliacao-tecnica-quebrada', 'avaliacao-tecnica-estado', 'ferramenta'
+    'avaliacao-tecnica-quebrada', 'ferramenta'
   ]);
 });
 
@@ -743,22 +742,17 @@ test('migração dos vistos sem decisão tem classe própria e operacional', () 
 
 // A linha do boot da avaliação técnica (lib/technical-review/estado.js): o texto vem de lá, não
 // é copiado aqui, para a classe acompanhar a frase.
-test('a linha do boot da avaliação técnica: estado é operacional, quebrada é permanente', async () => {
+test('a linha do boot da avaliação técnica só sai quebrada, e é permanente', async () => {
   const { linhaDoBoot, estadoDaAvaliacaoTecnica } = await import('../lib/technical-review/estado.js');
   const linha = async (ferramenta, estado, repositorios) => linhaDoBoot(await estadoDaAvaliacaoTecnica({
     verify: async () => { if (ferramenta) throw new Error(ferramenta); }, cadastro: () => ({ estado, repositorios }) }), { ligada: true });
-  for (const caso of [await linha('', 'legivel', 2), await linha('ferramenta técnica fixada não instalada', 'ausente', 0), await linha('', 'legivel', 0)]) {
-    assert.equal(caso.nivel, 'INFO');
-    assert.equal(classify(caso.texto).id, 'avaliacao-tecnica-estado', caso.texto);
-    assert.equal(classify(caso.texto).kind, 'operacional');
-  }
   for (const caso of [await linha('ferramenta técnica fixada não instalada', 'legivel', 1), await linha('identidade da ferramenta técnica não comprovada', 'legivel', 3), await linha('', 'ilegivel', 0)]) {
     assert.equal(caso.nivel, 'WARN');
     assert.equal(classify(caso.texto).id, 'avaliacao-tecnica-quebrada', caso.texto);
     assert.equal(classify(caso.texto).kind, 'permanente');
   }
   // ancorada: a frase no meio de outra mensagem não muda a classe dela
-  assert.notEqual(classify('acme/api#1: falhou; avaliação técnica: x').id, 'avaliacao-tecnica-estado');
+  assert.notEqual(classify('acme/api#1: falhou; avaliação técnica: x').id, 'avaliacao-tecnica-quebrada');
 });
 
 test('triage: WARN conhecido e ERROR desconhecido continuam contando', () => {

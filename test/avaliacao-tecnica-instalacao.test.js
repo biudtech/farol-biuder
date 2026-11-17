@@ -14,8 +14,8 @@ import assert from 'node:assert/strict';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-avaliacao-instalacao-'));
 process.env.FAROL_HOME = path.join(root, 'home');
-const { setup, step, removerSobras, SOBRA_APOS_MS } = await import('../lib/technical-review/setup.js');
-const { FalhaDoPasso, origemDoGitHub, origemComCredencial, origemMostrada, falhaDoClone, falhaDaConstrucao } = await import('../lib/technical-review/setup-falhas.js');
+const { setup, step, removerSobras, TRAVA } = await import('../lib/technical-review/setup.js');
+const { FalhaDoPasso, origemDoGitHub, origemComCredencial, origemComConsulta, origemMostrada, falhaDoClone, falhaDoCheckout, falhaDaConstrucao } = await import('../lib/technical-review/setup-falhas.js');
 const { TOOL, technicalGap, technicalSummary, ehLacunaDura } = await import('../lib/technical-review/verdict.js');
 const { FLAGS_GIT_ISOLADO, FLAGS_CREDENCIAL_DO_GH } = await import('../lib/git-isolado.js');
 const { resumoDoCadastro } = await import('../lib/technical-review/profiles.js');
@@ -61,7 +61,9 @@ test('a origem do GitHub é clonada com o git isolado e a credencial do gh, sem 
   // os passos seguintes: o commit do pino e a construção do tool.json, na ordem
   assert.deepEqual(chamadas.slice(1).map((c) => [c.binary, c.args.at(-1)]),
     [['git', `${TOOL.commit}^{commit}`], ['git', TOOL.commit], ...TOOL.construcao.map((c) => [c[0], c.at(-1)])]);
-  assert.equal(chamadas[1].env, undefined, 'só o clone leva o ambiente isolado');
+  // todo passo lê a saída em inglês (a classificação depende dela); só o clone leva o git isolado
+  for (const chamada of chamadas) assert.equal(chamada.env?.LC_ALL, 'C', `${chamada.binary} ${chamada.args.at(-1)}`);
+  assert.notEqual(chamadas[1].env.GIT_CONFIG_GLOBAL, '/dev/null', 'só o clone leva o ambiente isolado');
 });
 
 test('a credencial do gh para o git tem uma fonte só', () => {
@@ -78,7 +80,9 @@ test('caminho local e origem fora do GitHub seguem com o git comum, sem credenci
     const { chamadas, run } = gravador();
     await setup(['--source', source], { home: novoHome(), run, verify });
     assert.deepEqual(chamadas[0].args.slice(0, 4), ['clone', '--no-hardlinks', '--', source], source);
-    assert.equal(chamadas[0].env, undefined, source);
+    assert.equal(chamadas[0].env.LC_ALL, 'C', source);
+    assert.notEqual(chamadas[0].env.GIT_CONFIG_GLOBAL, '/dev/null', source);
+    assert.equal(chamadas[0].args.some((a) => a.includes('credential')), false, source);
   }
   assert.equal(origemDoGitHub('https://github.com/biudtech/eng-behaviour.git'), 'biudtech/eng-behaviour');
   assert.equal(origemDoGitHub('https://github.com/biudtech/eng-behaviour'), 'biudtech/eng-behaviour');
@@ -102,15 +106,38 @@ test('origem com credencial na URL é recusada antes de qualquer comando, e o to
   assert.equal(fs.existsSync(path.dirname(home)), false, 'nem a pasta de toolchains nasce');
 });
 
+test('origem com consulta ou fragmento é recusada antes de qualquer comando, sem ecoar a origem', async () => {
+  for (const source of ['https://github.com/biudtech/eng-behaviour.git?access_token=segredo-da-consulta', 'https://github.com/biudtech/eng-behaviour.git#segredo-do-fragmento', '/mnt/copia?x=segredo-local']) {
+    const home = novoHome();
+    const { chamadas, run } = gravador();
+    assert.equal(origemComConsulta(source), true, source);
+    await assert.rejects(setup(['--source', source], { home, run, verify }), (error) => {
+      assert.match(error.message, /consulta ou fragmento/);
+      assert.doesNotMatch(error.message, /segredo/);
+      return true;
+    });
+    assert.equal(chamadas.length, 0, source);
+    assert.equal(fs.existsSync(path.dirname(home)), false, source);
+  }
+  assert.equal(origemComConsulta(TOOL.origem), false);
+  assert.equal(origemComConsulta('/mnt/eng-behaviour'), false);
+});
+
 // Cada causa com a saída real do comando que a produz (git 2.39 e pnpm 10, com LC_ALL=C).
 const CAUSAS = [
   { nome: 'sem login do gh', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^sem acesso ao repositório da ferramenta técnica \(https:\/\/github\.com\/biudtech\/eng-behaviour\.git\): o gh não está logado, ou a conta logada não enxerga esse repositório\. Confira com "gh auth status" e "gh repo view biudtech\/eng-behaviour"/ },
   { nome: 'conta sem acesso', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "remote: Repository not found.\nfatal: repository 'https://github.com/biudtech/eng-behaviour.git/' not found\n" }, espera: /^sem acesso ao repositório da ferramenta técnica/ },
   { nome: 'rede no clone', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "fatal: unable to access 'https://github.com/biudtech/eng-behaviour.git/': Could not resolve host: github.com\n" }, espera: /^falha de rede no clone da ferramenta técnica/ },
+  { nome: 'gh ausente no clone', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "/bin/sh: 1: gh: not found\nfatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^o "gh" não está instalado ou não está no PATH/ },
+  { nome: 'gh ausente no clone (bash)', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "sh: gh: command not found\nfatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^o "gh" não está instalado ou não está no PATH/ },
   { nome: 'git ausente', quando: (b, a) => a.includes('clone'), falha: { tipo: 'ausente' }, espera: /^o "git" não está instalado/ },
   { nome: 'commit do pino fora da origem', quando: (b, a) => a.includes('cat-file'), falha: { tipo: 'saiu', codigo: 128, saida: 'fatal: Not a valid object name\n' }, espera: new RegExp(`^o commit do pino \\(${TOOL.commit}, em lib/technical-review/tool\\.json\\) não existe em https://github\\.com/biudtech/eng-behaviour\\.git`) },
+  { nome: 'checkout que falha depois de o commit existir', quando: (b, a) => a.includes('checkout'), falha: { tipo: 'saiu', codigo: 1, saida: 'error: unable to create file x: No space left on device\n' }, espera: new RegExp(`^o checkout do commit do pino \\(${TOOL.commit}\\) não terminou: o git saiu com código 1`) },
   { nome: 'gerenciador de pacotes ausente', quando: (b) => b === 'pnpm', falha: { tipo: 'ausente' }, espera: /^o gerenciador de pacotes "pnpm" não está instalado ou não está no PATH: a construção da ferramenta técnica roda "pnpm install --frozen-lockfile"/ },
   { nome: 'rede no install', quando: (b) => b === 'pnpm', falha: { tipo: 'saiu', codigo: 1, saida: ' ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/yaml: request to https://registry.npmjs.org/yaml failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org\n' }, espera: /^falha de rede em "pnpm install --frozen-lockfile": o registro de pacotes não respondeu/ },
+  { nome: 'registro que recusa o acesso', quando: (b) => b === 'pnpm', falha: { tipo: 'saiu', codigo: 1, saida: ' ERR_PNPM_FETCH_401  GET https://registry.npmjs.org/yaml: Unauthorized - 401\n' }, espera: /^o registro de pacotes recusou o acesso em "pnpm install --frozen-lockfile" \(ERR_PNPM_FETCH_401\)/ },
+  { nome: 'pacote que não existe no registro', quando: (b) => b === 'pnpm', falha: { tipo: 'saiu', codigo: 1, saida: ' ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/nada: Not Found - 404\n' }, espera: /^"pnpm install --frozen-lockfile" não terminou: saiu com código 1 \(ERR_PNPM_FETCH_404\)/ },
+  { nome: 'aviso de rede seguido de erro que não é de rede', quando: (b) => b === 'pnpm', falha: { tipo: 'saiu', codigo: 1, saida: ' WARN  GET https://registry.npmjs.org/zod error (ECONNRESET). Will retry in 10 seconds. 2 retries left.\n ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile"\n' }, espera: /^"pnpm install --frozen-lockfile" não terminou: saiu com código 1 \(ERR_PNPM_OUTDATED_LOCKFILE\)/ },
   { nome: 'build que falha', quando: (b, a) => b === 'pnpm' && a.includes('build'), falha: { tipo: 'saiu', codigo: 2, saida: 'src/a.ts(1,1): error TS1005\n' }, espera: /^"pnpm build" não terminou: saiu com código 2/ },
   { nome: 'prazo', quando: (b) => b === 'pnpm', falha: { tipo: 'prazo' }, espera: /^o passo "pnpm" passou do prazo da instalação/ },
   { nome: 'interrompida', quando: (b) => b === 'pnpm', falha: { tipo: 'cancelado' }, espera: /^a instalação da ferramenta técnica foi interrompida no passo "pnpm"/ },
@@ -131,7 +158,11 @@ test('cada falha da instalação tem a mensagem dela, e nenhuma deixa pasta em t
     });
     assert.deepEqual(entradas(home), [], `${causa.nome}: toolchains fica vazia`);
   }
-  assert.ok(mensagens.size >= 8, 'as causas não caem todas na mesma mensagem');
+  assert.ok(mensagens.size >= 11, 'as causas não caem todas na mesma mensagem');
+  for (const causa of CAUSAS.filter((c) => /registro|aviso de rede/.test(c.nome))) {
+    assert.doesNotMatch(falhaDaConstrucao(new FalhaDoPasso('pnpm', ['install', '--frozen-lockfile'], causa.falha)), /\brede\b/, causa.nome);
+  }
+  assert.match(falhaDoCheckout(new FalhaDoPasso('git', ['checkout'], { tipo: 'sinal', sinal: 'SIGKILL' })), /sinal SIGKILL/);
 });
 
 test('saída que não casa com nenhuma causa conhecida vira a mensagem do passo, com o código', () => {
@@ -158,16 +189,71 @@ test('a instalação que falha no meio não toca a válida, e a válida não é 
   assert.deepEqual(entradas(home), [path.basename(home)], 'sem pasta de preparo e sem cópia de reserva');
 });
 
-test('sobra de instalação morta sai quando é velha; a recente fica', () => {
+// Duas instalações ao mesmo tempo: a trava em toolchains (criada com wx, com o pid e a hora)
+// segura a segunda, que sai sem tocar em nada; a trava sai no fim, com sucesso ou com falha.
+test('a segunda instalação acha a trava e sai sem tocar em nada; a trava sai no fim', async () => {
+  const home = novoHome();
+  const parent = path.dirname(home);
+  fs.mkdirSync(path.join(parent, '.install-de-outra'), { recursive: true });
+  const trava = path.join(parent, TRAVA);
+  fs.writeFileSync(trava, JSON.stringify({ pid: 4242, hora: '2026-11-16T22:00:00.000Z' }));
+  const { chamadas, run } = gravador();
+  await assert.rejects(setup(['--source', '/copia'], { home, run, verify }), (error) => {
+    assert.match(error.message, /^outra instalação da ferramenta técnica em curso desde 2026-11-16T22:00:00\.000Z \(pid 4242\); se ela morreu, apague /);
+    assert.ok(error.message.includes(trava));
+    return true;
+  });
+  assert.equal(chamadas.length, 0);
+  assert.deepEqual(fs.readdirSync(parent).sort(), ['.install-de-outra', TRAVA].sort(), 'nem a pasta da outra nem a trava foram tocadas');
+  fs.rmSync(trava);
+  // sem a trava, a instalação a cria, limpa a sobra (só quem detém a trava limpa) e a solta no fim
+  const viu = [];
+  const boa = gravador((b) => { if (b === 'pnpm') viu.push(fs.existsSync(trava)); return null; });
+  await setup(['--source', '/copia'], { home, run: boa.run, verify });
+  assert.deepEqual(viu, [true, true], 'a trava existe durante a construção');
+  assert.deepEqual(fs.readdirSync(parent), [path.basename(home)], 'sobra removida e trava solta');
+  // a falha também solta a trava
+  const pinoNovo = async (directory) => { if (directory === home) throw new Error('identidade da ferramenta técnica não comprovada'); return verify(directory); };
+  await assert.rejects(setup(['--source', '/copia'], { home, run: gravador((b) => (b === 'pnpm' ? { tipo: 'cancelado' } : null)).run, verify: pinoNovo }), /interrompida/);
+  assert.equal(fs.existsSync(trava), false);
+});
+
+test('a trava guarda o pid e a hora de quem instala', async () => {
+  const home = novoHome();
+  const trava = path.join(path.dirname(home), TRAVA);
+  let lido;
+  const { run } = gravador((b) => { if (b === 'pnpm' && !lido) lido = JSON.parse(fs.readFileSync(trava, 'utf8')); return null; });
+  await setup(['--source', '/copia'], { home, run, verify });
+  assert.equal(lido.pid, process.pid);
+  assert.ok(Date.now() - Date.parse(lido.hora) < 60_000);
+});
+
+test('se a pasta passou a validar durante a instalação, ela não é trocada', async () => {
+  const home = novoHome();
+  let valida = false;
+  const verificar = async (directory) => { if (directory === home && !valida) throw new Error('ferramenta técnica fixada não instalada'); return verify(directory); };
+  // outra via instala a válida enquanto esta constrói
+  const { run } = gravador((b, a) => {
+    if (a.includes('build')) {
+      fs.mkdirSync(path.join(home, path.dirname(TOOL.buildStamp)), { recursive: true });
+      fs.writeFileSync(path.join(home, TOOL.buildStamp), TOOL.commit + '\n');
+      fs.writeFileSync(path.join(home, 'marca.txt'), 'a outra');
+      valida = true;
+    }
+    return null;
+  });
+  assert.equal(await setup(['--source', '/copia'], { home, run, verify: verificar }), home);
+  assert.equal(fs.readFileSync(path.join(home, 'marca.txt'), 'utf8'), 'a outra', 'a válida ficou no lugar');
+  assert.deepEqual(entradas(home), [path.basename(home)], 'sem .incomplete e sem pasta de preparo');
+});
+
+test('removerSobras tira toda pasta de preparo (quem chama detém a trava) e nada mais', () => {
   const parent = path.dirname(novoHome());
   fs.mkdirSync(path.join(parent, '.install-velha', 'node_modules'), { recursive: true });
   fs.mkdirSync(path.join(parent, '.install-recente'), { recursive: true });
   fs.mkdirSync(path.join(parent, 'eng-behaviour@0.0.1'), { recursive: true });
-  const velho = new Date(Date.now() - SOBRA_APOS_MS - 60_000);
-  fs.utimesSync(path.join(parent, '.install-velha'), velho, velho);
-  fs.utimesSync(path.join(parent, 'eng-behaviour@0.0.1'), velho, velho);
   removerSobras(parent);
-  assert.deepEqual(fs.readdirSync(parent).sort(), ['.install-recente', 'eng-behaviour@0.0.1']);
+  assert.deepEqual(fs.readdirSync(parent).sort(), ['eng-behaviour@0.0.1']);
 });
 
 test('o passo de verdade: binário ausente, código de saída com o fim da saída, e cancelamento', async () => {
@@ -245,25 +331,33 @@ test('o diagnóstico mostra a avaliação técnica em uma verificação própria
   assert.deepEqual(linha({}), { label: 'Avaliação técnica', ok: false, detalhe: 'não verificada' });
 });
 
-test('a linha do boot é INFO, e WARN quando há repositório declarado sem a ferramenta íntegra', async () => {
+// Invariante 3 do CLAUDE.md: nunca sucesso de rotina no log. A linha do boot só sai quando o
+// estado é anormal: repositório declarado sem a ferramenta íntegra, ou cadastro ilegível. Sem
+// cadastro (quem não usa a avaliação técnica) e com tudo certo, nada é gravado.
+test('a linha do boot só sai em estado anormal, em WARN', async () => {
   const hospedada = { ligada: true }, local = { ligada: false };
   const caso = async (verificar, cad, modo) => estadoMod.linhaDoBoot(await estadoMod.estadoDaAvaliacaoTecnica({ verify: verificar, cadastro: cad }), modo);
-  assert.equal((await caso(integra, cadastro('legivel', 2), hospedada)).nivel, 'INFO');
-  assert.equal((await caso(ausente, cadastro('ausente'), hospedada)).nivel, 'INFO', 'sem cadastro não há o que avaliar: é estado, não falha');
-  assert.equal((await caso(integra, cadastro('legivel', 0), hospedada)).nivel, 'INFO');
+  assert.equal(await caso(integra, cadastro('legivel', 2), hospedada), null, 'tudo certo: sem linha');
+  assert.equal(await caso(ausente, cadastro('ausente'), hospedada), null, 'sem cadastro, sem ferramenta: quem não usa a avaliação técnica');
+  assert.equal(await caso(naoComprovada, cadastro('legivel', 0), local), null, 'nenhum repositório declarado: nada a avaliar');
+  assert.equal(await caso(integra, cadastro('legivel', 0), hospedada), null);
   const semFerramenta = await caso(ausente, cadastro('legivel', 2), hospedada);
   assert.equal(semFerramenta.nivel, 'WARN');
   assert.match(semFerramenta.texto, /^avaliação técnica: ferramenta ausente .*2 repositórios declarados: a avaliação técnica dos repositórios declarados falha: nenhuma regra é avaliada, a sessão de revisão é orientada a não aprovar e nenhuma aprovação deles sai como limpa, até a ferramenta íntegra ser instalada\. Instale no volume, dentro do container e como o usuário do motor: node lib\/technical-review\/setup\.js \(docs\/HOSPEDAGEM\.md\)\.$/);
-  assert.match((await caso(naoComprovada, cadastro('legivel', 1), local)).texto, /Instale com: node lib\/technical-review\/setup\.js \(docs\/CONFIGURATION\.md\)\.$/);
+  const local1 = await caso(naoComprovada, cadastro('legivel', 1), local);
+  assert.equal(local1.nivel, 'WARN');
+  assert.match(local1.texto, /Instale com: node lib\/technical-review\/setup\.js \(docs\/CONFIGURATION\.md\)\.$/);
   const ilegivel = await caso(integra, cadastro('ilegivel'), hospedada);
   assert.equal(ilegivel.nivel, 'WARN');
   assert.doesNotMatch(ilegivel.texto, /Instale/);
 
   const linhas = [];
-  const engine = { log: (nivel, texto) => linhas.push([nivel, texto]), doctorInfo: { avaliacaoTecnica: await estadoMod.estadoDaAvaliacaoTecnica({ verify: integra, cadastro: cadastro('legivel', 1) }) } };
-  registrarAvaliacaoNoBoot(engine);
-  assert.deepEqual(linhas.map((l) => l[0]), ['INFO'], 'uma linha por boot');
-  assert.match(linhas[0][1], /^avaliação técnica: ferramenta instalada e íntegra/);
+  const engine = (estado) => ({ log: (nivel, texto) => linhas.push([nivel, texto]), doctorInfo: { avaliacaoTecnica: estado } });
+  registrarAvaliacaoNoBoot(engine(await estadoMod.estadoDaAvaliacaoTecnica({ verify: integra, cadastro: cadastro('legivel', 1) })));
+  registrarAvaliacaoNoBoot(engine(await estadoMod.estadoDaAvaliacaoTecnica({ verify: ausente, cadastro: cadastro('ausente') })));
+  assert.deepEqual(linhas, [], 'estado normal não vai ao log');
+  registrarAvaliacaoNoBoot(engine(await estadoMod.estadoDaAvaliacaoTecnica({ verify: ausente, cadastro: cadastro('legivel', 1) })));
+  assert.deepEqual(linhas.map((l) => l[0]), ['WARN'], 'uma linha por boot, só no anormal');
   registrarAvaliacaoNoBoot({ log: () => assert.fail('sem diagnóstico não há linha'), doctorInfo: null });
 });
 
