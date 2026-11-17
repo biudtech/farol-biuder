@@ -76,7 +76,7 @@ export interface EstadoDoApp {
   viaPortao: boolean;
   // A queda do fluxo, medida aqui: quando a conexão caiu (a primeira queda desde o último
   // "conectado") e quando sai a próxima tentativa, pelo recuo do cliente. null fora da queda, e
-  // `proximaTentativaEm` null também enquanto uma tentativa está no ar.
+  // `proximaTentativaEm` null também enquanto uma tentativa está no ar (automática ou do clique).
   quedaEm: number | null;
   proximaTentativaEm: number | null;
 }
@@ -201,7 +201,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
 
   function abrirFluxo(): void {
     fechar();
-    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao });
+    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao, aoTentar: () => store.trocar({ proximaTentativaEm: null }) });
   }
 
   function aoMudarConexao(conexao: Conexao, esperaMs?: number): void {
@@ -213,9 +213,10 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
     store.trocar({ conexao, estadoEmDia: false, quedaEm: store.ler().quedaEm ?? quando, proximaTentativaEm: esperaMs === undefined ? null : quando + esperaMs });
   }
 
+  // A faixa sai de "próxima tentativa às" no começo da tentativa, pelo aoTentar do fluxo: vale
+  // para a que o relógio do recuo dispara e para a do clique.
   function tentarReconectar(): void {
     if (!fecharFluxo || store.ler().proximaTentativaEm === null) return;
-    store.trocar({ proximaTentativaEm: null });
     fecharFluxo.tentarAgora();
   }
 

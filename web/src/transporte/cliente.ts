@@ -50,6 +50,9 @@ export interface OuvinteDoFluxo {
   aoEvento(tipo: string, dados: string): void;
   // `esperaMs`: na queda, em quanto tempo sai a próxima tentativa (o recuo de agora)
   aoMudarConexao(conexao: Conexao, esperaMs?: number): void;
+  // Começou uma tentativa depois do recuo (pelo relógio ou pelo tentarAgora): a espera anunciada
+  // acabou, e o desfecho vem por aoMudarConexao.
+  aoTentar?(): void;
 }
 
 // O que abrirFluxo devolve: chamar fecha o fluxo; `tentarAgora` antecipa a próxima tentativa
@@ -299,8 +302,10 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
     }
 
     async function tentar(): Promise<void> {
+      const depoisDoRecuo = esperandoRecuo;
       esperandoRecuo = false;
       if (fechado) return;
+      if (depoisDoRecuo) ouvinte.aoTentar?.();
       const destaTentativa = new AbortController();
       controle = destaTentativa;
       const desfecho = await ler(destaTentativa.signal);

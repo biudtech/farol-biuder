@@ -173,7 +173,10 @@ Quando a conexão cai com a tela já desenhada, a casca mostra a faixa "Sem moto
 "conectado", medida aqui), que o que está na tela é do último estado recebido, e a hora da
 próxima tentativa, que o cliente informa pelo recuo (`aoMudarConexao(conexao, esperaMs)`).
 "Tentar agora" adianta essa tentativa (`tentarAgora` do fluxo aberto, por `app.tentarReconectar`)
-sem zerar o recuo das seguintes. Sem estado recebido não há faixa: a tela é a de conexão.
+sem zerar o recuo das seguintes. No começo de cada tentativa, a do relógio ou a do clique, o
+fluxo avisa (`aoTentar`): a faixa troca a hora por "Tentando reconectar…" e o botão fica ocupado
+até o desfecho, para nunca mostrar uma próxima tentativa já vencida. Sem estado recebido não há
+faixa: a tela é a de conexão.
 
 **Como testar.** O teste mora ao lado do arquivo, com nome `*.test.ts` ou `*.test.tsx`. Lógica
 (transporte, contrato, estado) testa sem React, com `fetch` e relógio de mentira; escreva o

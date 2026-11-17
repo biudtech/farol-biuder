@@ -366,7 +366,8 @@ describe('fluxo de eventos', () => {
     let fluxo!: ReturnType<typeof fluxoFalso>;
     t.respostas.push((p) => { fluxo = fluxoFalso(p.init); return fluxo.resposta; });
     const esperas: Array<[Conexao, number | undefined]> = [];
-    const aberto = t.cliente.abrirFluxo({ aoEvento: () => {}, aoMudarConexao: (c, ms) => { esperas.push([c, ms]); } });
+    let tentativas = 0;
+    const aberto = t.cliente.abrirFluxo({ aoEvento: () => {}, aoMudarConexao: (c, ms) => { esperas.push([c, ms]); }, aoTentar: () => { tentativas += 1; } });
     aberto.tentarAgora();
     await vi.advanceTimersByTimeAsync(0);
     expect(t.pedidos).toHaveLength(1);
@@ -375,7 +376,9 @@ describe('fluxo de eventos', () => {
     fluxo.fim();
     await vi.advanceTimersByTimeAsync(0);
     expect(esperas).toEqual([['conectando', undefined], ['conectado', undefined], ['reconectando', 3000]]);
+    expect(tentativas).toBe(0);
     aberto.tentarAgora();
+    expect(tentativas).toBe(1);
     await vi.advanceTimersByTimeAsync(0);
     expect(t.pedidos).toHaveLength(2);
     expect(esperas.at(-1)).toEqual(['sem-motor', 6000]);
@@ -383,6 +386,7 @@ describe('fluxo de eventos', () => {
     expect(t.pedidos).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(3000);
     expect(t.pedidos).toHaveLength(3);
+    expect(tentativas, 'a tentativa do relógio também avisa').toBe(2);
     aberto();
     aberto.tentarAgora();
     await vi.advanceTimersByTimeAsync(60000);

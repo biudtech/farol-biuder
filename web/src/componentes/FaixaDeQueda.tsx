@@ -13,7 +13,7 @@ import estilos from './Casca.module.css';
 export function textoDaQueda(quedaEm: number, proximaTentativaEm: number | null): string {
   const quando = horaCurta(quedaEm);
   const inicio = quando ? `Sem motor: a conexão caiu às ${quando}.` : 'Sem motor: a conexão caiu.';
-  const proxima = proximaTentativaEm === null ? 'Tentando de novo agora.' : `A próxima tentativa sai às ${hora(proximaTentativaEm)}.`;
+  const proxima = proximaTentativaEm === null ? 'Tentando reconectar…' : `A próxima tentativa sai às ${hora(proximaTentativaEm)}.`;
   return `${inicio} O que está na tela é do último estado recebido. ${proxima}`;
 }
 
@@ -25,7 +25,7 @@ export function FaixaDeQueda({ app = appDoNavegador }: { app?: App }) {
   return (
     <div className={`${ui.erro} ${estilos.faixaDeQueda}`} role="status">
       <span>{textoDaQueda(quedaEm, proxima)}</span>
-      <Botao pequeno ocupado={proxima === null ? 'Tentando…' : undefined} onClick={() => app.tentarReconectar()}>Tentar agora</Botao>
+      <Botao pequeno ocupado={proxima === null ? 'Tentando reconectar…' : undefined} onClick={() => app.tentarReconectar()}>Tentar agora</Botao>
     </div>
   );
 }

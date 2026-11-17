@@ -83,8 +83,9 @@ describe('casca', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tentar agora' }));
     expect(tentarReconectar).toHaveBeenCalledTimes(1);
     act(() => { store.trocar({ proximaTentativaEm: null }); });
-    expect(screen.getByText(/Tentando de novo agora\.$/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Tentando/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/^Sem motor:/).textContent).toBe('Sem motor: a conexão caiu às 14:21. O que está na tela é do último estado recebido. Tentando reconectar…');
+    expect((screen.getByRole('button', { name: 'Tentando reconectar…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/próxima tentativa/)).toBeNull();
     act(() => { store.trocar({ conexao: 'conectado', quedaEm: null, proximaTentativaEm: null }); });
     expect(screen.queryByText(/^Sem motor:/)).toBeNull();
   });
@@ -94,6 +95,6 @@ describe('casca', () => {
     render(<Casca app={app}><h1>Radar</h1></Casca>);
     act(() => { store.trocar({ snapshot: null, conexao: 'sem-motor', quedaEm: 1, proximaTentativaEm: 2 }); });
     expect(screen.queryByText(/^Sem motor:/)).toBeNull();
-    expect(textoDaQueda(0, null)).toBe('Sem motor: a conexão caiu. O que está na tela é do último estado recebido. Tentando de novo agora.');
+    expect(textoDaQueda(0, null)).toBe('Sem motor: a conexão caiu. O que está na tela é do último estado recebido. Tentando reconectar…');
   });
 });
