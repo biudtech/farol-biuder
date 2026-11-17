@@ -1,4 +1,4 @@
-// Tema escuro por padrão, claro como alternativa. A escolha fica no localStorage deste
+// Tema claro por padrão (a identidade BIUD), escuro como alternativa. A escolha fica no localStorage deste
 // navegador e vai para o atributo data-theme do <html>, que é o que o CSS lê.
 import { useSyncExternalStore } from 'react';
 import { CHAVE_DO_TEMA } from './script';
@@ -8,7 +8,7 @@ export type Tema = 'dark' | 'light';
 const ouvintes = new Set<() => void>();
 
 function temaAtual(): Tema {
-  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 
 export function definirTema(tema: Tema): void {
@@ -23,5 +23,5 @@ function assinar(ouvinte: () => void): () => void {
 }
 
 export function useTema(): Tema {
-  return useSyncExternalStore(assinar, temaAtual, () => 'dark');
+  return useSyncExternalStore(assinar, temaAtual, () => 'light');
 }

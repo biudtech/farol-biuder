@@ -2,7 +2,7 @@
 
 // O erro que derruba o próprio layout da raiz. Esta página substitui o layout: desenha o
 // documento inteiro e traz o globals.css por conta própria. O script do tema não roda aqui,
-// então ela sai no tema escuro, que é o padrão das variáveis.
+// então ela sai no tema claro, que é o padrão das variáveis.
 import { useEffect } from 'react';
 import { PaginaDeAviso, classeDaPaginaInteira, classeDaSaida } from '@/componentes/PaginaDeAviso';
 import './globals.css';
@@ -18,7 +18,7 @@ export default function ErroGlobal({ error, retry }: Props) {
   }, [error]);
 
   return (
-    <html lang="pt-BR" data-theme="dark">
+    <html lang="pt-BR" data-theme="light">
       <body>
         <title>Algo deu errado · Farol</title>
         <main className={classeDaPaginaInteira}>

@@ -2,28 +2,31 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  border-radius: 99px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
   white-space: nowrap;
-  background: var(--info-soft);
-  color: var(--info-texto);
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
 }
 
 .ponto {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: currentColor;
-  animation: pulsar 1.6s infinite;
+  background: var(--neutro);
+  animation: pulsar 1.2s ease-in-out infinite;
 }
 
 .indicador[data-conexao="conectado"] { background: var(--ok-soft); color: var(--ok-texto); }
-.indicador[data-conexao="conectado"] .ponto { animation: none; }
+.indicador[data-conexao="conectado"] .ponto { background: var(--ok); animation: none; }
+.indicador[data-conexao="reconectando"] { background: var(--aviso-soft); color: var(--aviso-texto); }
+.indicador[data-conexao="reconectando"] .ponto { background: var(--aviso); }
 .indicador[data-conexao="sem-motor"] { background: var(--danger-soft); color: var(--danger-texto); }
+.indicador[data-conexao="sem-motor"] .ponto { background: var(--danger); animation: none; }
 
 @keyframes pulsar {
-  0%, 100% { opacity: .45; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
 }

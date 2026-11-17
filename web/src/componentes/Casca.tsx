@@ -1,6 +1,6 @@
 'use client';
 
-// A casca das cinco abas: marca, navegação, estado da conexão, tema e Sair. Só existe com
+// A casca das cinco abas: a marca da BIUD com "Farol" ao lado, a navegação, estado da conexão, tema e Sair. Só existe com
 // este navegador pareado (src/componentes/Aplicacao.tsx). O Sair pede ao motor que revogue a
 // sessão deste navegador antes de apagar o token daqui (app.sair, src/estado/app.ts): enquanto
 // o motor não responde o botão diz "Saindo", e o desfecho aparece na tela de pareamento.
@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
-import { ABAS } from '@/navegacao/abas';
+import { ABA_INICIAL, ABAS } from '@/navegacao/abas';
 import { IndicadorDeConexao } from './IndicadorDeConexao';
 import { Logo } from './Logo';
 import { TrocaDeTema } from './TrocaDeTema';
@@ -40,11 +40,13 @@ export function Casca({ children, app = appDoNavegador }: Props) {
     <>
       <a className={estilos.pular} href="#conteudo">Pular para o conteúdo</a>
       <header className={estilos.topo}>
-        <div className={estilos.marca}>
+        <div className={estilos.topoDentro}>
+        <Link href={ABA_INICIAL} className={estilos.marca} aria-label="Farol, ir para o Radar">
           <Logo />
+          <i className={estilos.divisor} aria-hidden="true" />
           <span className={estilos.nome}>Farol</span>
           {versao ? <span className={estilos.versao}>v{versao}</span> : null}
-        </div>
+        </Link>
 
         <nav className={estilos.abas} aria-label="Seções do Farol">
           <ul>
@@ -69,6 +71,7 @@ export function Casca({ children, app = appDoNavegador }: Props) {
             {saindo ? 'Saindo…' : 'Sair'}
           </button>
           <span className={estilos.soLeitor} role="status">{saindo ? (viaPortao ? 'Saindo: encerrando o login da frente.' : 'Saindo: pedindo ao motor que revogue a sessão deste navegador.') : ''}</span>
+        </div>
         </div>
       </header>
 
