@@ -14,7 +14,7 @@
 import { campo, ehBooleano, ehObjeto, ehTexto, type Objeto } from '@/contratos/formas';
 import { mensagemSegura } from '@/contratos/segredos';
 import { lerConfigDoSistema } from '@/contratos/sistema';
-import { lerPessoas, type PessoasCruas } from '@/contratos/time';
+import { lerPessoas, type Pessoa, type PessoasCruas } from '@/contratos/time';
 import {
   TIPOS_DO_SISTEMA, confirmacaoDoSistema, desfechoDoSistema, nomeDoSistema, pedidoDoSistema, rotuloDoSistema,
   type AceiteDoSistema, type AcaoDoSistema,
@@ -44,7 +44,9 @@ export type Acao =
   // O papel e a competência de uma pessoa (POST /api/settings com `people`). O motor troca o
   // mapa inteiro pelo que chega (updateSettings, server.js), então `pessoas` é a lista toda,
   // montada do mapa cru do motor e só com a pessoa alterada (comPerfil, src/time/time.ts).
-  | (Base & { tipo: 'perfil'; login: string; pessoas: PessoasCruas })
+  // `nova`: a pessoa entra agora no Time ("Adicionar pessoa", comPessoaNova); muda o rótulo e a
+  // conferência da resposta, que exige a pessoa no mapa gravado.
+  | (Base & { tipo: 'perfil'; login: string; pessoas: PessoasCruas; nova?: true })
   // Tira uma pessoa do Time (removeTeamMember, lib/engine/decision.js): apaga o dossiê, o
   // perfil e as contestações dela, sem cópia, e só isso (as revisões dos PRs dela continuam
   // no histórico e no log). O que a tela via na hora do clique vai junto só para a pergunta
@@ -89,7 +91,7 @@ export function rotuloDa(acao: Acao): string {
     case 'ignorar': return 'Ignorar';
     case 'restaurar': return 'Restaurar';
     case 'contestacao': return acao.desfecho ? 'Gravar o desfecho' : 'Apagar a contestação';
-    case 'perfil': return 'Salvar papel e competência';
+    case 'perfil': return acao.nova ? 'Adicionar ao Time' : 'Salvar papel e competência';
     case 'removerAutor': return 'Remover do Time';
   }
 }
@@ -98,7 +100,7 @@ export function rotuloDa(acao: Acao): string {
 export function nomeDa(acao: Acao): string {
   if (ehDoSistema(acao)) return nomeDoSistema(acao);
   if (acao.tipo === 'contestacao') return acao.desfecho ? `Gravar o desfecho da contestação de ${acao.nome}` : `Apagar a contestação de ${acao.nome}`;
-  if (acao.tipo === 'perfil') return `Salvar papel e competência de ${acao.nome}`;
+  if (acao.tipo === 'perfil') return acao.nova ? `Adicionar ${acao.nome} ao Time` : `Salvar papel e competência de ${acao.nome}`;
   if (acao.tipo === 'removerAutor') return `Remover ${acao.nome} do Time`;
   return acao.nome ? `${rotuloDa(acao)} ${acao.nome}` : rotuloDa(acao);
 }
@@ -254,6 +256,7 @@ function desfechoDoPerfil(acao: Extract<Acao, { tipo: 'perfil' }>, dados: Aceite
   if (!dados.pessoas) return { tipo: 'ok', texto: `O motor aceitou o pedido de salvar o perfil de ${acao.nome}, mas a resposta não trouxe os perfis gravados: confira o perfil na tela.` };
   const pedido = perfilDe(lerPessoas(acao.pessoas)?.pessoas, acao.login);
   const gravado = perfilDe(lerPessoas(dados.pessoas)?.pessoas, acao.login);
+  if (acao.nova) return desfechoDaPessoaNova(acao, dados.pessoas, gravado, marcaDoPerfil(pedido) === marcaDoPerfil(gravado));
   const igual = marcaDoPerfil(pedido) === marcaDoPerfil(gravado);
   const outras = outrasQueDiferem(acao.pessoas, dados.pessoas, acao.login);
   const daPessoa = igual
@@ -264,6 +267,17 @@ function desfechoDoPerfil(acao: Extract<Acao, { tipo: 'perfil' }>, dados: Aceite
     tipo: 'erro',
     texto: `${daPessoa} Atenção: o perfil de ${outras.length === 1 ? 'outra pessoa' : `outras ${outras.length} pessoas`} ficou diferente do que esta tela enviou, mudou ou saiu da lista (${nomesDe(outras)}). Confira na tela.`,
   };
+}
+
+// A pessoa nova só entrou se está no mapa gravado: perfil vazio e pessoa ausente têm a mesma marca.
+function desfechoDaPessoaNova(acao: Extract<Acao, { tipo: 'perfil' }>, gravados: PessoasCruas, gravado: Pessoa | undefined, igual: boolean): Desfecho {
+  const chave = acao.login.toLowerCase();
+  const entrou = Object.keys(gravados).some((login) => login.toLowerCase() === chave);
+  if (!entrou) return { tipo: 'erro', texto: `O motor não guardou ${acao.nome}: a pessoa não entrou no Time.` };
+  const outras = outrasQueDiferem(acao.pessoas, gravados, acao.login);
+  const texto = `O motor adicionou ${acao.nome} ao Time: ${textoDoPerfil(gravado)}.${igual ? '' : ' O papel pedido não ficou: o que ele não reconhece, ele descarta.'}`;
+  if (!outras.length) return { tipo: igual ? 'ok' : 'erro', texto };
+  return { tipo: 'erro', texto: `${texto} Atenção: o perfil de ${outras.length === 1 ? 'outra pessoa' : `outras ${outras.length} pessoas`} ficou diferente do que esta tela enviou (${nomesDe(outras)}). Confira na tela.` };
 }
 
 const O_QUE_FICA = 'As revisões dos PRs dela continuam no Histórico e no log do motor.';

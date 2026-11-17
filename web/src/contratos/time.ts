@@ -19,12 +19,23 @@ export interface EntradaDeMemoria {
   bullets: string[];
 }
 
+// Os números de 30 dias do autor (numeros-do-time.js, na raiz): os PRs cuja primeira revisão
+// publicada caiu na janela, quantos tiveram essa primeira como aprovação e quantas revisões
+// publicadas eles somam. Ausente quando o motor não tem PR desta pessoa na janela.
+export interface NumerosDoAutor {
+  janelaDias: number;
+  prs: number;
+  aprovadosDePrimeira: number;
+  rodadas: number;
+}
+
 export interface Autor {
   // o nome do arquivo do dossiê, que é o login do GitHub como o motor o recebeu
   login: string;
   // só quando o título do dossiê traz um nome entre parênteses; senão o motor repete o login
   name?: string;
   entries: EntradaDeMemoria[];
+  numeros?: NumerosDoAutor;
 }
 
 export interface Time {
@@ -43,6 +54,14 @@ function lerEntrada(v: unknown): EntradaDeMemoria | undefined {
   });
 }
 
+const ehContagem = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+
+function lerNumeros(v: unknown): NumerosDoAutor | undefined {
+  if (!ehObjeto(v) || !ehContagem(v.janelaDias) || !ehContagem(v.prs) || v.prs < 1 || !ehContagem(v.aprovadosDePrimeira) || !ehContagem(v.rodadas)) return undefined;
+  if (v.aprovadosDePrimeira > v.prs || v.rodadas < v.prs) return undefined;
+  return { janelaDias: v.janelaDias, prs: v.prs, aprovadosDePrimeira: v.aprovadosDePrimeira, rodadas: v.rodadas };
+}
+
 export const lerAutor: LeitorDeItem<Autor> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.login) || !v.login.trim()) return undefined;
   const entries: EntradaDeMemoria[] = [];
@@ -51,7 +70,7 @@ export const lerAutor: LeitorDeItem<Autor> = (v) => {
     if (entrada) entries.push(entrada);
   }
   const nome = campo(v.name, ehTexto);
-  return semAusentes({ login: v.login, name: nome && nome !== v.login ? nome : undefined, entries });
+  return semAusentes({ login: v.login, name: nome && nome !== v.login ? nome : undefined, entries, numeros: lerNumeros(v.numeros) });
 };
 
 // A resposta 200 de GET /api/team: a lista crua, sem envelope.

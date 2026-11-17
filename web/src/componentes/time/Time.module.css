@@ -108,6 +108,9 @@
 }
 .seletor { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
+/* o formulário de pessoa nova, no alto da lista */
+.novaPessoa { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+
 /* carregando o dossiê: o avatar e os blocos dos números */
 .avatarEsqueleto { width: 56px; height: 56px; flex: none; border-radius: 50%; }
 .esqueletoDoDossie { display: flex; flex-direction: column; gap: 12px; }

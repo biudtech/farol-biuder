@@ -335,13 +335,13 @@ describe('Time: o dossiê', () => {
     expect(observa.querySelector('li strong')?.textContent).toBe('limite');
   });
 
-  it('"Números" conta só as entradas listadas, e diz que o motor não manda número por pessoa', async () => {
+  it('"Números" sem os números do motor conta só as entradas listadas, e diz por que não há os do período', async () => {
     montar({ url: '/time?autor=Ana-Souza' });
     await assentar();
     const numeros = secao('Números');
     const caixas = [...numeros.querySelectorAll('dl > div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`);
     expect(caixas).toEqual(['Entradas guardadas: 2', 'Aprovações: 1', 'Pedidos de mudança: 1', 'Comentários: 0']);
-    expect(numeros.textContent).toContain('O motor não manda números por pessoa');
+    expect(numeros.textContent).toContain('o motor não manda os números do período');
   });
 
   it('"Últimas revisões" mostra uma entrada por linha, com a bolinha do desfecho e o dia', async () => {
@@ -913,5 +913,95 @@ describe('Time: remover do Time', () => {
     await clicar(`${CONFIRMAR}: @caio`);
     await assentar();
     expect(regiao().textContent).toContain('O motor respondeu que não tinha dossiê, perfil nem contestação de @caio: nada foi apagado.');
+  });
+});
+
+describe('Time: adicionar pessoa', () => {
+  const digitar = (valor: string) => { act(() => { fireEvent.change(screen.getByLabelText('Login do GitHub'), { target: { value: valor } }); }); };
+  const enviar = async () => { await clicar('Adicionar ao Time'); await assentar(); };
+
+  it('o botão abre o formulário; login é obrigatório, papel é opcional, e vai a lista inteira com a pessoa nova', async () => {
+    const gravado = { ...PESSOAS, dani: {} };
+    const t = montar({ aoPostar: () => corpo({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: gravado } }) });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    expect(screen.getByRole('form', { name: 'Adicionar pessoa ao Time' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Adicionar pessoa' })).toBeNull();
+    await enviar();
+    expect(t.post).not.toHaveBeenCalled();
+    expect(screen.getByText('Digite o login do GitHub.')).toBeTruthy();
+    digitar('@Dani');
+    await enviar();
+    expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/settings', { people: { ...PESSOAS, dani: {} } }]);
+    expect(regiao().textContent).toContain('O motor adicionou @Dani ao Time: sem papel nem competência.');
+    // aceito, o formulário fecha; a pessoa aparece quando o estado do motor chega
+    expect(screen.queryByRole('form', { name: 'Adicionar pessoa ao Time' })).toBeNull();
+    t.trocarSnapshot(comPerfis(gravado));
+    expect(nomes()).toContain('dani');
+  });
+
+  it('com papel, a pessoa vai com ele', async () => {
+    const t = montar({ aoPostar: () => corpo({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: { ...PESSOAS, dani: { papel: 'pleno' } } } }) });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    digitar('dani');
+    escolher('Papel (opcional)', 'pleno');
+    await enviar();
+    expect(t.post.mock.calls[0]?.[1]).toEqual({ people: { ...PESSOAS, dani: { papel: 'pleno' } } });
+    expect(regiao().textContent).toContain('O motor adicionou @dani ao Time: papel Pleno.');
+  });
+
+  it('login fora da forma do GitHub, ou de quem já está no Time, não é enviado', async () => {
+    const t = montar();
+    await assentar();
+    await clicar('Adicionar pessoa');
+    for (const torto of ['ana souza', '-ana', 'ana--b', 'a'.repeat(40)]) {
+      digitar(torto);
+      await enviar();
+      expect(screen.getByText(/Login do GitHub tem só letras/)).toBeTruthy();
+    }
+    digitar('BRUNO');
+    await enviar();
+    expect(screen.getByText('@BRUNO já está no Time: o papel dela se edita no dossiê.')).toBeTruthy();
+    expect(t.post).not.toHaveBeenCalled();
+  });
+
+  it('motor que não guarda a pessoa sem papel é dito como erro', async () => {
+    montar({ aoPostar: () => corpo({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: PESSOAS } }) });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    digitar('dani');
+    await enviar();
+    expect(regiao().textContent).toContain('O motor não guardou @dani: a pessoa não entrou no Time.');
+    expect(screen.getByRole('form', { name: 'Adicionar pessoa ao Time' })).toBeTruthy();
+  });
+
+  it('sem o estado da conexão o envio fica bloqueado, e Cancelar fecha', async () => {
+    montar({ estadoEmDia: false });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    expect((screen.getByRole('button', { name: 'Adicionar ao Time' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/^Bloqueado:/)).toBeTruthy();
+    await clicar('Cancelar');
+    expect(screen.queryByRole('form', { name: 'Adicionar pessoa ao Time' })).toBeNull();
+  });
+});
+
+describe('Time: números de 30 dias', () => {
+  it('com os números do motor, o dossiê mostra PRs, aprovação de primeira e rodadas, e o resumo na linha', async () => {
+    const comNumeros = [{ ...ANA, numeros: { janelaDias: 30, prs: 22, aprovadosDePrimeira: 15, rodadas: 35 } }, BRUNO];
+    montar({ url: '/time?autor=Ana-Souza', responder: () => corpo(comNumeros) });
+    await assentar();
+    expect(subDoDossie()).toContain('22 PRs em 30 dias · 68% aprovados de primeira');
+    expect(resumoDe('Números')).toContain('1,6 rodada por PR');
+    const caixas = [...secao('Números').querySelectorAll('dl > div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`);
+    expect(caixas.slice(0, 3)).toEqual(['PRs revisados: 22', 'De primeira: 68%', 'Rodadas por PR: 1,6']);
+  });
+
+  it('número incoerente (aprovados acima dos PRs) não é mostrado', async () => {
+    montar({ url: '/time?autor=Ana-Souza', responder: () => corpo([{ ...ANA, numeros: { janelaDias: 30, prs: 2, aprovadosDePrimeira: 3, rodadas: 2 } }]) });
+    await assentar();
+    expect(subDoDossie()).not.toContain('PRs em 30 dias');
+    expect(resumoDe('Números')).not.toContain('rodada por PR');
   });
 });

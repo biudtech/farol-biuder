@@ -20,6 +20,7 @@ import { chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, perfilDe, quantasPe
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
+import { AdicionarPessoa } from './AdicionarPessoa';
 import { Dossie, type LeituraDoDossie } from './Dossie';
 import { ListaDoTime, idDoBotao } from './ListaDoTime';
 import { useEnderecoDoTime, useTime } from './useTime';
@@ -62,6 +63,7 @@ export function Time({ app = appDoNavegador }: Props) {
   const [recarga, setRecarga] = useState(0);
   const [busca, setBusca] = useState('');
   const [removidas, setRemovidas] = useState<readonly Removida[]>([]);
+  const [adicionando, setAdicionando] = useState(false);
   const { carregando, time, falha, haNovas } = useTime(app.cliente, recarga, marca);
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
 
@@ -166,8 +168,24 @@ export function Time({ app = appDoNavegador }: Props) {
   return (
     <div className={estilos.time}>
       <div className={estilos.listagem} hidden={aberto !== null}>
-        <Pagina titulo="Time" idDoTitulo={idDoTitulo} sub={time ? quantasPessoas(total) : undefined}>
+        <Pagina
+          titulo="Time"
+          idDoTitulo={idDoTitulo}
+          sub={time ? quantasPessoas(total) : undefined}
+          acoes={adicionando ? undefined : <Botao onClick={() => setAdicionando(true)}>Adicionar pessoa</Botao>}
+        >
           {aberto === null ? avisos : null}
+
+          {adicionando ? (
+            <AdicionarPessoa
+              cru={cru}
+              conhecidos={[...autores.map((a) => a.login), ...semDossie.map((p) => p.login)]}
+              conexao={conexao}
+              emDia={emDia}
+              controle={controle}
+              aoFechar={() => setAdicionando(false)}
+            />
+          ) : null}
 
           <div className={estilos.busca} role="search" aria-label="Busca no Time">
             <label className={ui.soLeitor} htmlFor={idDaBusca}>Buscar por nome ou login</label>

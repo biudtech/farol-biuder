@@ -2,7 +2,8 @@
 
 // As quebras do período: por tipo de sessão e por modelo, cada uma fechada numa linha com o
 // destaque no resumo. As somas são do motor. A participação é a fatia de cada linha no total
-// que o motor mandou, calculada só para exibir. O motor não manda quebra por repositório.
+// que o motor mandou, calculada só para exibir. A quebra por repositório vem do mesmo
+// relatório (custo e execuções de cada repositório no período).
 import { memo, useMemo } from 'react';
 import type { Relatorio } from '@/contratos/consumo';
 import { dolar, inteiro, participacao, rotuloDoModelo, rotuloDoTipo } from '@/consumo/formato';
@@ -122,6 +123,60 @@ export const PorModelo = memo(function PorModelo({ relatorio }: Props) {
         </div>
       )}
       <p className={ui.mini}>O motor não manda custo nem cache por modelo neste relatório. Uma execução que usou dois modelos conta nos dois.</p>
+    </Linha>
+  );
+});
+
+// como a tabela chama o repositório: o nome vazio é o que não é de PR
+function rotuloDoRepo(nome: string): string {
+  return nome || 'Sem repositório';
+}
+
+export function destaqueDoRepo(repos: readonly { name: string; costUsd?: number }[]): string {
+  const comNome = repos.filter((r) => r.name);
+  const maior = maiorDia(comNome, (r) => r.costUsd);
+  if (!maior) return comNome.length ? `${inteiro(comNome.length)} ${comNome.length === 1 ? 'repositório' : 'repositórios'}, sem custo` : 'nenhum repositório';
+  return `${maior.name.split('/').pop() ?? maior.name} lidera`;
+}
+
+export const PorRepositorio = memo(function PorRepositorio({ relatorio }: Props) {
+  const { totals } = relatorio;
+  // do maior custo para o menor (é formatação); o que não é de PR vai por último
+  const ordenados = useMemo(
+    () => [...(relatorio.repos ?? [])].sort((a, b) => Number(!a.name) - Number(!b.name) || (b.costUsd ?? -1) - (a.costUsd ?? -1)),
+    [relatorio.repos],
+  );
+  if (!relatorio.repos) return null;
+  return (
+    <Linha resumo={<Resumo titulo="Por repositório" destaque={destaqueDoRepo(ordenados)} />}>
+      {ordenados.length === 0 ? <p className={ui.mini}>Nenhuma execução neste período.</p> : (
+        <div className={estilos.rolagem} role="region" aria-label="Tabela do consumo por repositório" tabIndex={0}>
+          <table className={estilos.tabela}>
+            <caption>Consumo do período por repositório, do maior custo ao menor.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Repositório</th>
+                <th scope="col">Custo estimado</th>
+                <th scope="col">Participação no custo</th>
+                <th scope="col">Execuções</th>
+                <th scope="col">Execuções de custo desconhecido</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordenados.map((repo) => (
+                <tr key={repo.name || '(sem)'}>
+                  <th scope="row">{rotuloDoRepo(repo.name)}</th>
+                  <td>{dolar(repo.costUsd)}</td>
+                  <td>{participacao(repo.costUsd, totals.costUsd) || 'sem base'}</td>
+                  <td>{inteiro(repo.attempts)}</td>
+                  <td>{inteiro(repo.unknownCost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className={ui.mini}>Sem repositório são as execuções que não são de um PR (ferramenta, conversa ou registro antigo). A execução de custo desconhecido não entra na soma.</p>
     </Linha>
   );
 });

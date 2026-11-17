@@ -24,7 +24,7 @@ import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
 import { Diario } from './Diario';
 import { Filtrar, FiltrosAtivos, SeletorDePeriodo } from './Filtros';
 import { TabelaPorDia } from './GraficoPorDia';
-import { PorModelo, PorTipo } from './Quebras';
+import { PorModelo, PorRepositorio, PorTipo } from './Quebras';
 import { CustoDoPeriodo, DetalhesDoPeriodo } from './ResumoDoPeriodo';
 import { SessoesRecentes } from './SessoesRecentes';
 import { useEnderecoDoConsumo, useRelatorio } from './useConsumo';
@@ -132,6 +132,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
             <CustoDoPeriodo relatorio={relatorio} vazio={textoDoVazio(consulta)} />
             {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
             {semExecucao ? null : <TabelaPorDia relatorio={relatorio} />}
+            {semExecucao ? null : <PorRepositorio relatorio={relatorio} />}
             {semExecucao ? null : <PorTipo relatorio={relatorio} />}
             {semExecucao ? null : <PorModelo relatorio={relatorio} />}
             <Diario

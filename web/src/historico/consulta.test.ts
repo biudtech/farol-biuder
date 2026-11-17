@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ehHistoricoIndisponivel,
   CONSULTA_VAZIA, caminhoDaPagina, caminhoDoDetalhe, enderecoDa, lerEndereco, marcaDasResolvidas, mensagemDaFalha, temFiltro,
-  textoDaDuracao, textoDoResultado, textoDoVazio,
+  desdeDoPeriodo, textoDaDuracao, textoDoResultado, textoDoVazio,
 } from './consulta';
 
 const ler = (query: string) => lerEndereco(new URLSearchParams(query));
@@ -10,12 +10,12 @@ const ler = (query: string) => lerEndereco(new URLSearchParams(query));
 describe('consulta do Histórico no endereço', () => {
   it('endereço sem nada é a primeira página, sem filtro e sem detalhe', () => {
     expect(ler('')).toEqual({ consulta: CONSULTA_VAZIA, detalhe: null });
-    expect(CONSULTA_VAZIA).toEqual({ pagina: 1, q: '', veredito: '', repo: '' });
+    expect(CONSULTA_VAZIA).toEqual({ pagina: 1, q: '', veredito: '', repo: '', periodo: '' });
   });
 
   it('lê busca, desfecho, repositório, página e a revisão aberta', () => {
     expect(ler('q=proj-9+ana&veredito=skip&repo=dono%2Frepo&pagina=3&id=d77&pr=dono%2Frepo%2312')).toEqual({
-      consulta: { pagina: 3, q: 'proj-9 ana', veredito: 'skip', repo: 'dono/repo' },
+      consulta: { pagina: 3, q: 'proj-9 ana', veredito: 'skip', repo: 'dono/repo', periodo: '' },
       detalhe: { id: 'd77', chave: 'dono/repo#12' },
     });
   });
@@ -36,10 +36,10 @@ describe('consulta do Histórico no endereço', () => {
 
   it('escreve o endereço só com o que não é padrão, e ler o que escreveu devolve o mesmo', () => {
     expect(enderecoDa(CONSULTA_VAZIA, null)).toBe('');
-    const consulta = { pagina: 2, q: 'ana & cia', veredito: 'approve', repo: 'dono/repo' };
+    const consulta = { pagina: 2, q: 'ana & cia', veredito: 'approve', repo: 'dono/repo', periodo: '30' };
     const detalhe = { id: 'd1', chave: 'dono/repo#12' };
     const escrito = enderecoDa(consulta, detalhe);
-    expect(escrito).toBe('q=ana+%26+cia&veredito=approve&repo=dono%2Frepo&pagina=2&id=d1&pr=dono%2Frepo%2312');
+    expect(escrito).toBe('q=ana+%26+cia&veredito=approve&repo=dono%2Frepo&periodo=30&pagina=2&id=d1&pr=dono%2Frepo%2312');
     expect(ler(escrito)).toEqual({ consulta, detalhe });
     expect(enderecoDa({ ...CONSULTA_VAZIA, pagina: 4 }, null)).toBe('pagina=4');
   });
@@ -50,14 +50,32 @@ describe('consulta do Histórico no endereço', () => {
     expect(temFiltro({ ...CONSULTA_VAZIA, q: 'a' })).toBe(true);
     expect(temFiltro({ ...CONSULTA_VAZIA, veredito: 'skip' })).toBe(true);
     expect(temFiltro({ ...CONSULTA_VAZIA, repo: 'a/b' })).toBe(true);
+    expect(temFiltro({ ...CONSULTA_VAZIA, periodo: '7' })).toBe(true);
+  });
+
+  it('período que a tela não oferece é ignorado no endereço', () => {
+    expect(ler('periodo=7').consulta.periodo).toBe('7');
+    expect(ler('periodo=30').consulta.periodo).toBe('30');
+    for (const torto of ['15', 'abc', '', '07']) expect(ler(`periodo=${torto}`).consulta.periodo).toBe('');
   });
 });
 
 describe('pedido ao motor', () => {
   it('a página pede só o que foi preenchido, com os nomes da rota', () => {
     expect(caminhoDaPagina(CONSULTA_VAZIA)).toBe('/api/decisions?page=1');
-    expect(caminhoDaPagina({ pagina: 3, q: 'proj-9 ana', veredito: 'skip', repo: 'dono/repo' }))
+    expect(caminhoDaPagina({ pagina: 3, q: 'proj-9 ana', veredito: 'skip', repo: 'dono/repo', periodo: '' }))
       .toBe('/api/decisions?page=3&q=proj-9+ana&veredito=skip&repo=dono%2Frepo');
+  });
+
+  it('o período vira o primeiro dia (desde), contado com hoje, no fuso do motor', () => {
+    // 17/11/2026 01:30 em UTC ainda é 16/11 em São Paulo
+    const agora = Date.parse('2026-11-17T01:30:00Z');
+    expect(desdeDoPeriodo('7', agora)).toBe('2026-11-10');
+    expect(desdeDoPeriodo('30', agora)).toBe('2026-10-18');
+    expect(desdeDoPeriodo('7', Date.parse('2026-11-17T03:00:00Z'))).toBe('2026-11-11');
+    expect(desdeDoPeriodo('', agora)).toBe('');
+    expect(desdeDoPeriodo('15', agora)).toBe('');
+    expect(caminhoDaPagina({ ...CONSULTA_VAZIA, periodo: '7' }, agora)).toBe('/api/decisions?page=1&desde=2026-11-10');
   });
 
   it('o detalhe pede pela chave do PR', () => {

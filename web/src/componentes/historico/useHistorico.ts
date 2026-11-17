@@ -84,8 +84,19 @@ const AUSENTE: LeituraDoDetalhe = Object.freeze({ fase: 'ausente' });
 
 // A revisão aberta. Vem da página carregada quando está nela; fora dela (endereço colado, a
 // lista andou), é pedida ao motor pela chave do PR, que devolve a mais recente daquele PR.
+// Mesmo da página ela é pedida pela chave: os checks do head e a execução só vêm por
+// GET /api/decision (lib/engine/detalhe-da-decisao.js). Enquanto a resposta não chega, ou se
+// ela falhar ou trouxer outra revisão, a da página é mostrada sem as duas linhas.
 // `listaLida`: a página da lista já respondeu (com dados ou com falha); antes disso não dá
 // para saber se o item está nela.
+// Os checks e a execução da resposta por chave, quando ela é a mesma revisão da página.
+function comOComplemento(daPagina: Revisao, r: Resultado<DetalheDaRevisao> | null): Revisao {
+  if (!r?.ok || !r.dados.encontrada || r.dados.revisao.id !== daPagina.id) return daPagina;
+  const { checks, execucao } = r.dados.revisao;
+  if (!checks && !execucao) return daPagina;
+  return { ...daPagina, ...(checks ? { checks } : {}), ...(execucao ? { execucao } : {}) };
+}
+
 export function useDetalhe(
   cliente: Pick<Cliente, 'get'>,
   aberto: DetalheAberto | null,
@@ -97,7 +108,7 @@ export function useDetalhe(
   const id = aberto?.id ?? '';
   const chave = aberto?.chave ?? '';
   const daPagina = useMemo(() => (id ? itens?.find((item) => item.id === id) : undefined), [itens, id]);
-  const buscar = id !== '' && !daPagina && listaLida && chave !== '';
+  const buscar = id !== '' && chave !== '' && (daPagina !== undefined || listaLida);
   const pedido = `${tentativa}|${id}|${chave}`;
 
   useEffect(() => {
@@ -111,7 +122,7 @@ export function useDetalhe(
 
   return useMemo<LeituraDoDetalhe | null>(() => {
     if (!id) return null;
-    if (daPagina) return { fase: 'pronto', revisao: daPagina, outra: false };
+    if (daPagina) return { fase: 'pronto', revisao: comOComplemento(daPagina, buscado?.pedido === pedido ? buscado.r : null), outra: false };
     if (!listaLida) return CARREGANDO;
     if (!chave) return AUSENTE;
     if (buscado?.pedido !== pedido) return CARREGANDO;

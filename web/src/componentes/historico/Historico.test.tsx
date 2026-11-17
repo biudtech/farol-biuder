@@ -223,8 +223,8 @@ describe('Histórico: filtros e busca no endereço', () => {
     const opcoes = (rotulo: string) => [...(screen.getByLabelText(rotulo) as HTMLSelectElement).options].map((o) => o.textContent);
     expect(opcoes('O que foi publicado')).toEqual(['Todos', 'Aprovados', 'Mudanças pedidas', 'Comentados', 'Não publicados']);
     expect(opcoes('Repositório')).toEqual(['Todos', 'dono/outro', 'dono/repo']);
-    // o período não é filtro do motor, e a tela não finge que é
-    expect(screen.queryByLabelText(/Período/)).toBeNull();
+    expect(gaveta().contains(screen.getByLabelText('Período'))).toBe(true);
+    expect(opcoes('Período')).toEqual(['Todo o histórico', 'Últimos 7 dias', 'Últimos 30 dias']);
   });
 
   it('trocar um filtro vai ao endereço, volta à primeira página e pede de novo', async () => {
@@ -738,16 +738,16 @@ describe('Histórico: detalhe da revisão', () => {
     expect(screen.getByRole('button', { name: 'Voltar ao Histórico' }).textContent).toBe('← Histórico');
     await clicar('Voltar ao Histórico');
     expect(window.location.search).toBe('');
-    expect(t.pedidos()).toHaveLength(1);
+    expect(t.pedidos().filter((p) => p.startsWith('/api/decisions'))).toHaveLength(1);
     expect(titulosDosItens()).toHaveLength(2);
   });
 
-  it('endereço com a revisão que está na página abre direto, sem pedir o detalhe ao motor', async () => {
+  it('endereço com a revisão que está na página abre direto, e pede ao motor só o complemento', async () => {
     const t = montar({ url: '/historico?id=d12&pr=dono%2Frepo%2312', responder: comRica });
     expect(screen.getByText('Carregando a revisão.').getAttribute('role')).toBe('status');
     await assentar();
     expect(screen.getByRole('group', { name: 'Review completo' })).toBeTruthy();
-    expect(t.pedidos()).toEqual(['/api/decisions?page=1']);
+    expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312']);
   });
 
   it('revisão que não está na página é pedida pela chave do PR', async () => {
@@ -923,5 +923,76 @@ describe('Histórico: ações do detalhe', () => {
     expect(regiao().querySelector('p')?.textContent).toBe('Erro: O motor recusou: gh sem token');
     act(() => { t.store.trocar({ recados: [{ n: 1, tom: 'info', texto: 'dono/repo#12 entrou na fila.' }] }); });
     expect(regiao().textContent).toContain('Aviso do motor: dono/repo#12 entrou na fila.');
+  });
+});
+
+describe('Histórico: período', () => {
+  it('o select Período vai ao endereço e manda ao motor o primeiro dia, com chip e Limpar filtros', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.parse('2026-11-17T15:00:00Z'));
+    const t = montar({ responder: umaPagina });
+    await assentar();
+    await act(async () => { fireEvent.change(screen.getByLabelText('Período'), { target: { value: '7' } }); });
+    expect(window.location.search).toBe('?periodo=7');
+    expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&desde=2026-11-11');
+    expect(screen.getByText('Filtrar (1)')).toBeTruthy();
+    await clicar('Tirar o filtro Período: Últimos 7 dias');
+    expect(window.location.search).toBe('');
+    expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1');
+  });
+
+  it('o motor recusando o período diz o campo', async () => {
+    montar({ url: '/historico?periodo=30', responder: () => ({ ok: false, falha: 'recusado', status: 400, detalhe: { codigo: 'parametro_invalido', campo: 'desde' } }) });
+    await assentar();
+    expect(screen.getByRole('alert').textContent).toContain('O motor recusou o início do período (campo "desde").');
+  });
+});
+
+describe('Histórico: checks do head e execução', () => {
+  const NOME = 'PR #12 de dono/repo';
+  const daPagina = revisaoDoMotor(12);
+  const complemento = {
+    ...daPagina,
+    checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho' }] },
+    execucao: { sessoes: 2, modelos: ['Opus 4.1'], duracaoMs: 420_000, custoUsd: 2.84, custoEstimado: false },
+  };
+  const responder = (decisao: unknown): Responder => (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([daPagina])) : corpo({ found: true, decision: decisao }));
+  const linhasDe = () => [...screen.getByRole('region', { name: 'Mais detalhes' }).querySelectorAll(':scope > details')] as HTMLDetailsElement[];
+  const resumos = () => linhasDe().map((l) => [l.getAttribute('aria-label'), l.querySelector('summary')?.children[1]?.textContent]);
+  const campos = (nome: string) => [...(linhasDe().find((l) => l.getAttribute('aria-label') === nome)?.querySelectorAll('dl > div') ?? [])]
+    .map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
+
+  it('a revisão da página ganha as linhas com o que GET /api/decision traz', async () => {
+    montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder(complemento) });
+    await assentar();
+    await assentar();
+    expect(screen.getByRole('region', { name: `Revisão de ${NOME}` })).toBeTruthy();
+    expect(resumos().slice(0, 2)).toEqual([['Checks do head', 'tudo verde · osv herdado'], ['Execução', '7 min · US$ 2,84']]);
+    expect(campos('Checks do head')).toEqual(['osv: Falha também na base (herdado, não pesa)']);
+    expect(campos('Execução').slice(0, 4)).toEqual(['Duração da sessão: 7 min', 'Custo estimado: US$ 2,84', 'Modelo: Opus 4.1', 'Linhas no diário de consumo: 2 (a sessão e as retomadas)']);
+  });
+
+  it('sem complemento (motor antigo, outra revisão ou falha) as linhas novas não aparecem', async () => {
+    for (const decisao of [daPagina, { ...complemento, id: 'outra' }]) {
+      montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder(decisao) });
+      await assentar();
+      await assentar();
+      expect(resumos()[0]).toEqual(['Execução', 'Aprovação']);
+      cleanup();
+    }
+  });
+
+  it('o que falta no head vem por nome, e leitura fora do commit revisado é dita', async () => {
+    const naoVerdes = { ...complemento, checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [{ nome: 'e2e', estado: 'rodando' }], herdados: [] }, execucao: { sessoes: 1, modelos: [] } };
+    montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder(naoVerdes) });
+    await assentar();
+    await assentar();
+    expect(resumos().slice(0, 2)).toEqual([['Checks do head', '1 fora do verde'], ['Execução', '1 sessão no diário']]);
+    expect(campos('Checks do head')).toEqual(['e2e: ainda rodando']);
+    cleanup();
+    montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder({ ...complemento, checks: { ...complemento.checks, conferidoNoHead: false } }) });
+    await assentar();
+    await assentar();
+    expect(resumos()[0]).toEqual(['Checks do head', 'não conferidos no commit revisado']);
   });
 });
