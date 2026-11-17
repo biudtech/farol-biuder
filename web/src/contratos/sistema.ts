@@ -141,6 +141,14 @@ export interface PerfilNaSaude {
   tipo: 'chave' | 'assinatura' | 'desconhecido';
 }
 
+// A avaliação técnica dos PRs revisados, como o motor a mediu (lib/technical-review/estado.js):
+// `pronta` diz se ela roda para alguém, e `detalhe` é o texto do motor (a ferramenta, o
+// cadastro e o efeito do que falta), que a tela escreve sem remontar.
+export interface AvaliacaoTecnicaNaSaude {
+  pronta: boolean;
+  detalhe: string;
+}
+
 // O que o diagnóstico do motor mede (Engine.doctor, server.js). Os caminhos de pasta que ele
 // traz (`home`, `workspace`) não são lidos.
 export interface Saude {
@@ -154,7 +162,13 @@ export interface Saude {
   claudePerfilPronto?: boolean;
   claudePerfilTipo?: string;
   claudePerfilFalta?: string;
+  avaliacaoTecnica?: AvaliacaoTecnicaNaSaude;
   checkedAt?: number;
+}
+
+function lerAvaliacaoTecnica(v: unknown): AvaliacaoTecnicaNaSaude | undefined {
+  if (!ehObjeto(v) || !ehBooleano(v.pronta) || !ehTexto(v.detalhe)) return undefined;
+  return { pronta: v.pronta, detalhe: v.detalhe };
 }
 
 const lerPerfilNaSaude: LeitorDeItem<PerfilNaSaude> = (v) => {
@@ -175,6 +189,7 @@ function saudeDe(v: Record<string, unknown>): Saude {
     claudePerfilPronto: campo(v.claudePerfilPronto, ehBooleano),
     claudePerfilTipo: campo(v.claudePerfilTipo, ehTexto),
     claudePerfilFalta: campo(v.claudePerfilFalta, ehTexto),
+    avaliacaoTecnica: lerAvaliacaoTecnica(v.avaliacaoTecnica),
     checkedAt: campo(v.checkedAt, ehNumero),
   });
 }

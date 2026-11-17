@@ -182,7 +182,7 @@ describe('leitores do snapshot', () => {
   it('doctor: nulo é valor (ainda não rodou), e os caminhos de pasta não são lidos', () => {
     expect(lerSaude(null, vi.fn())).toBeNull();
     expect(lerSaude('x', vi.fn())).toBeUndefined();
-    expect(lerSaude({ node: 'v24.22.1', gh: null, claude: '2.1.300', ghAuth: false, root: false, instanciaIsolada: true, home: '/h', workspace: '/w', claudeAuth: [{ id: 'a', label: 'A', ready: true, apiKeyMode: true }, { id: 'b', ready: false, assinaturaMode: true }, { id: 'c' }], claudePerfilPronto: false, claudePerfilTipo: 'assinatura', claudePerfilFalta: 'login', checkedAt: 9 }, vi.fn())).toEqual({
+    expect(lerSaude({ node: 'v24.22.1', gh: null, claude: '2.1.300', ghAuth: false, root: false, instanciaIsolada: true, home: '/h', workspace: '/w', claudeAuth: [{ id: 'a', label: 'A', ready: true, apiKeyMode: true }, { id: 'b', ready: false, assinaturaMode: true }, { id: 'c' }], claudePerfilPronto: false, claudePerfilTipo: 'assinatura', claudePerfilFalta: 'login', avaliacaoTecnica: { pronta: false, detalhe: 'ferramenta ausente', ferramenta: 'ausente' }, checkedAt: 9 }, vi.fn())).toEqual({
       node: 'v24.22.1',
       claude: '2.1.300',
       ghAuth: false,
@@ -192,8 +192,12 @@ describe('leitores do snapshot', () => {
       claudePerfilPronto: false,
       claudePerfilTipo: 'assinatura',
       claudePerfilFalta: 'login',
+      avaliacaoTecnica: { pronta: false, detalhe: 'ferramenta ausente' },
       checkedAt: 9,
     });
+    // avaliação técnica torta (sem o booleano ou sem o texto) fica de fora, e a tela diz sem dado
+    expect(lerSaudeDaRota({ node: 'v24', avaliacaoTecnica: { pronta: 'sim', detalhe: 'x' } })).toEqual({ node: 'v24', claudeAuth: [] });
+    expect(lerSaudeDaRota({ node: 'v24', avaliacaoTecnica: { pronta: true } })).toEqual({ node: 'v24', claudeAuth: [] });
     expect(lerSaudeDaRota({ node: 'v24' })).toEqual({ node: 'v24', claudeAuth: [] });
     expect(lerSaudeDaRota(null)).toBeNull();
   });

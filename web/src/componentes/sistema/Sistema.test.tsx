@@ -53,6 +53,7 @@ const BRUTO = {
     home: '/home/farol/.farol', workspace: '/home/farol/.farol/workspace',
     claudeAuth: [{ id: 'plano', label: 'Assinatura', ready: true, assinaturaMode: true }, { id: 'api', label: 'Chave', ready: true, apiKeyMode: true }],
     claudePerfilPronto: true, claudePerfilTipo: 'assinatura', claudePerfilFalta: '', checkedAt: 1763300000000,
+    avaliacaoTecnica: { ferramenta: 'integra', versao: '0.17.0', commit: 'ed3e1535cb84faf572fe66c6dc13a1af441588ee', cadastro: 'legivel', repositorios: 1, pronta: true, detalhe: 'ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado' },
   },
   modelos: {
     cli: { instalada: '2.1.300', maisRecente: '2.1.300', atualizada: true, atrasadaDesde: 0, atrasada: false },
@@ -200,11 +201,12 @@ describe('Sistema: saúde', () => {
       'OKPerfil do Claude que o motor usa: pronto (assinatura)',
       'OKPerfil de assinatura: Assinatura: pronto',
       'OKPerfil de chave de API: Chave: pronto',
+      'OKAvaliação técnica: ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado',
       'OKEscrita no GitHub: instância normal: o motor publica pelos gates',
       'OKVersão do Claude Code: 2.1.300 é a mais recente',
       'OKMonitoramento da conta: @farol-bot vigiando biudtech',
     ]);
-    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('11 verificações, nenhuma pede atenção.');
+    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, nenhuma pede atenção.');
     expect(na(SAUDE).getByText('3.0.0-dev')).toBeTruthy();
   });
 
@@ -214,7 +216,7 @@ describe('Sistema: saúde', () => {
     expect(linhas()).toContain('AtençãoAutenticação do GitHub: sem autenticação');
     expect(linhas().find((l) => l?.includes('Perfil do Claude que o motor usa'))).toMatch(/^Atenção.*sem login/);
     expect(linhas().find((l) => l?.includes('Monitoramento da conta'))).toMatch(/^Atenção.*sem token no gh/);
-    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('11 verificações, 3 pedem atenção.');
+    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, 3 pedem atenção.');
   });
 
   it('diagnóstico que ainda não rodou é dito, e não vira lista de falhas', async () => {
@@ -240,7 +242,7 @@ describe('Sistema: saúde', () => {
     await clicarEm(na(SAUDE), 'Rodar o diagnóstico de novo');
     await assentar();
     expect(na(SAUDE).getByRole('status', { name: 'Resultado do diagnóstico' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede). O que está acima é do diagnóstico anterior.');
-    expect(linhas()).toHaveLength(11);
+    expect(linhas()).toHaveLength(12);
   });
 
   it('o relatório é o markdown do motor, pedido em GET /api/diagnostics', async () => {
