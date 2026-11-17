@@ -1,0 +1,18 @@
+{
+  "repositories": {
+    "acme/api": {
+      "declaration": {
+        "scopes": ["core", "backend"],
+        "sourceDirs": ["src"],
+        "testDirs": ["test"],
+        "e2eDirs": null,
+        "componentDirs": null,
+        "deliveryMayRepeat": false,
+        "isolationScope": "tenant",
+        "componentEntryPointOnlyReexports": false
+      },
+      "baselines": [],
+      "instrucaoDeProduto": "Toda rota nova valida a entrada antes de chamar o serviço."
+    }
+  }
+}
