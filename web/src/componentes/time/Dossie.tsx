@@ -239,8 +239,8 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
       aria-label={`Dossiê de @${doMotor}`}
       aria-busy={ocupado}
     >
-      <button type="button" className={`${ui.link} ${estilos.voltar}`} onClick={pedirFechar}>
-        <span aria-hidden="true">←</span>{' '}<span className={ui.soLeitor}>Voltar à lista do</span>{' '}Time
+      <button type="button" className={`${ui.link} ${estilos.voltar}`} onClick={pedirFechar} aria-label="Voltar à lista do Time">
+        <span aria-hidden="true">←</span> Time
       </button>
 
       <div className={estilos.cabecalho}>

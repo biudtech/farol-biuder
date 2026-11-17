@@ -61,6 +61,8 @@
   transition: transform .15s;
   flex: none;
 }
+/* quem já empurra a meta para a direita fica com o espaço; a seta vem logo depois dela */
+.resumo:has(.empurra)::after { margin-left: 4px; }
 .linha[open] > .resumo::after { transform: rotate(-135deg); }
 .linha[open] > .resumo { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .corpo {

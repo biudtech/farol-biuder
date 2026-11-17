@@ -304,7 +304,7 @@ describe('Time: o dossiê', () => {
     expect(document.activeElement).toBe(titulo);
     // o papel e o que o motor sustenta: as entradas guardadas, sem número que ele não manda
     expect(subDoDossie()).toBe('@Ana-Souza · Sênior · 2 entradas na memória · a mais recente em 16/11/2026');
-    expect(within(dossie()).getByRole('button', { name: VOLTAR }).textContent).toBe('← Voltar à lista do Time');
+    expect(within(dossie()).getByRole('button', { name: VOLTAR }).textContent).toBe('← Time');
     // a lista continua montada, escondida
     expect(botaoDe('bruno')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Pessoas do Time' })).toBeNull();

@@ -79,8 +79,8 @@ export function RemoverDoTime({ acao, controle }: Props) {
 
   return (
     <div ref={area} className={estilos.remover}>
-      <Botao fantasma pequeno ocupado={enviando === idDa(acao) ? 'Removendo…' : false} disabled={enviando !== null} onClick={() => setPerguntando(true)}>
-        Remover <span className={ui.soLeitor}>{acao.nome}</span>{' '}do Time
+      <Botao fantasma pequeno ocupado={enviando === idDa(acao) ? 'Removendo…' : false} disabled={enviando !== null} onClick={() => setPerguntando(true)} aria-label={enviando === idDa(acao) ? undefined : `Remover ${acao.nome} do Time`}>
+        Remover do Time
       </Botao>
     </div>
   );
