@@ -1,0 +1,25 @@
+# O contexto do build do motor é uma lista do que ENTRA: tudo fica de fora, menos o que o
+# Dockerfile copia. Pasta nova na raiz não vaza para a imagem por esquecimento, e web/, test/,
+# docs/, .git e .github nem chegam ao daemon.
+*
+!package.json
+!server.js
+!LICENSE
+!lib/
+!workspace-template/
+!assets/
+assets/*
+!assets/third-party/
+assets/third-party/*
+!assets/third-party/babel-parser/
+!tools/
+tools/*
+!tools/farol-parear.js
+!tools/jira-mcp.js
+!tools/diagnosticar-legados.js
+!tools/simular-politica.js
+# o que nunca entra, mesmo dentro de uma pasta permitida
+**/node_modules
+**/config.json
+**/*.log
+**/.env*
