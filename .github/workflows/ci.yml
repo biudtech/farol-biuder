@@ -71,9 +71,10 @@ jobs:
       - name: Dependências
         run: npm ci
 
-      # Inclui as de desenvolvimento: nada sobe com vulnerabilidade conhecida.
+      # Inclui as de desenvolvimento: nada sobe com vulnerabilidade conhecida. A única saída é
+      # exceção com motivo e prazo em auditoria-excecoes.json (advisory sem versão corrigida, fora do build).
       - name: Auditoria
-        run: npm audit
+        run: npm run audit
 
       - name: Tipos
         run: npm run typecheck

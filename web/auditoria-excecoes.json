@@ -1,0 +1,8 @@
+[
+  {
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "pacote": "picomatch",
+    "motivo": "ReDoS em extglob repetido. Afeta todas as versões até 4.0.7, a mais nova publicada, sem versão corrigida. Entra só como dependência de desenvolvimento (vitest, vite, typescript-eslint, eslint-config-next): fora do build e do servidor.",
+    "ate": "2026-12-31"
+  }
+]
