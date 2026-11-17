@@ -8,7 +8,7 @@
 // A conferência é aqui, na borda: chave desconhecida é ignorada, e forma errada numa chave
 // conhecida não derruba a tela, só é registrada e o valor anterior fica.
 import { CHAVES_DO_SNAPSHOT, LEITORES, type ChaveDoSnapshot, type Snapshot } from '@/contratos/snapshot';
-import { ehListaDeTextos, ehObjeto, ehTexto, type Objeto, type Registrar } from '@/contratos/formas';
+import { ehListaDeTextos, ehObjeto, ehTexto, mesmoJson, type Objeto, type Registrar } from '@/contratos/formas';
 import { TETO_DO_FEED, lerLinhaDoFeed, lerProgresso, type LinhaDoFeed, type SessaoAtiva } from '@/contratos/radar';
 
 export type { Registrar };
@@ -91,8 +91,10 @@ export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, regi
 
 // O progresso que veio com a linha (progressoDaSessao, lib/engine/progresso-revisao.js) troca o da
 // sessão dela; os arquivos lidos não publicam estado, e sem isto a barra esperaria o próximo
-// `state-patch`. Ausente ou torto, as sessões ficam como estavam.
+// `state-patch`. Ausente, torto ou igual ao que a sessão já tem, as sessões ficam como estavam
+// (o mesmo array): a linha do feed não redesenha o cartão à toa.
 function comProgresso(sessoes: SessaoAtiva[] | undefined, id: string, progresso: SessaoAtiva['progresso']): { activeSessions?: SessaoAtiva[] } {
-  if (!progresso || !sessoes?.some((s) => s.id === id)) return {};
+  const atual = sessoes?.find((s) => s.id === id);
+  if (!progresso || !atual || mesmoJson(atual.progresso, progresso)) return {};
   return { activeSessions: sessoes.map((s) => (s.id === id ? { ...s, progresso } : s)) };
 }

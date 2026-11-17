@@ -167,6 +167,10 @@ describe('activity: a linha nova do feed de uma sessão', () => {
     expect(torto?.activity?.a2?.at(-1)).toEqual(linha(3));
     // sem o campo, as sessões ficam como estavam
     expect(aplicarAtividade(comSessoes, { id: 'a1', item: linha(4) }, registrar)?.activeSessions).toBe(comSessoes.activeSessions);
+    // o mesmo progresso que a sessão já tem não cria array novo (nem redesenha o cartão)
+    const igual = aplicarAtividade(novo, { id: 'a1', item: linha(5), progresso: { ...progresso } }, registrar);
+    expect(igual?.activeSessions).toBe(novo?.activeSessions);
+    expect(igual?.activity?.a1?.at(-1)).toEqual(linha(5));
     expect(avisos).toEqual([]);
   });
 
