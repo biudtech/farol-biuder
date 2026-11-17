@@ -13,7 +13,11 @@
 #   - as três recusas da instância hospedada: sem config.json, config que não exige
 #     autenticação e config sem hostPublico nem origensPermitidas. Em cada uma o container sai
 #     com código 1 em até um minuto e diz o motivo; com config.json, o arquivo fica como estava;
-#     sem config.json, o volume continua vazio.
+#     sem config.json, o volume continua vazio;
+#   - o pnpm da imagem na versão que o Dockerfile fixa (ARG PNPM_VERSION);
+#   - a instalação da ferramenta da avaliação técnica sem acesso à origem, sem rede e sem login
+#     do gh: a mensagem de cada causa, código diferente de zero e nenhuma pasta em
+#     ~/.farol/toolchains. Nada é clonado de verdade: o repositório da ferramenta é privado.
 #
 # Não publica nada, não usa registro e não precisa de segredo. Os pedidos HTTP saem de dentro do
 # container (docker exec com o Node da imagem), então não há porta publicada.
@@ -191,5 +195,35 @@ recusa_com_config "config que não exige autenticação" 'o config.json não exi
   '{"port":47170,"conta":{"autoReview":false,"onClean":"wait","onCaveats":"wait","onReject":"wait"}}'
 recusa_com_config "config sem hostPublico nem origensPermitidas" 'o config.json não define "hostPublico" nem "origensPermitidas"' \
   '{"bind":"0.0.0.0","localAuth":"exigir"}'
+
+# A instalação da ferramenta da avaliação técnica sem acesso à origem (lib/technical-review/
+# setup.js). O repositório da ferramenta é privado e o volume da prova não tem login do gh: nada é
+# clonado de verdade. Exige, em cada caso, a mensagem que diz a causa, código diferente de zero e
+# nenhuma pasta em ~/.farol/toolchains (nem a instalação, nem a pasta de preparo). A saída e o
+# código saem de dentro do container, com a raiz somente leitura.
+SETUP_DO_CONTAINER='node lib/technical-review/setup.js > /tmp/saida 2>&1; codigo=$?; cat /tmp/saida; echo "codigo=$codigo"; echo "toolchains=[$(ls -A "$HOME/.farol/toolchains" 2>/dev/null | tr "\n" " ")]"'
+setup_sem_acesso() { # $1 = rótulo, $2 = trecho esperado, o resto = opções do docker run
+  local rotulo="$1" trecho="$2" codigo=0
+  shift 2
+  volume_da_recusa_novo
+  timeout 180 docker run --rm --read-only --tmpfs /tmp "$@" -v "$VOLUME_DA_RECUSA:/home/farol" \
+    --entrypoint sh "$IMAGEM" -c "$SETUP_DO_CONTAINER" >"$SAIDA" 2>&1 || codigo=$?
+  [ "$codigo" = "0" ] || { cat "$SAIDA" >&2; falhou "$rotulo: o docker run saiu com $codigo"; }
+  if ! grep -qF "$trecho" "$SAIDA"; then cat "$SAIDA" >&2; falhou "$rotulo: a mensagem não traz \"$trecho\""; fi
+  if grep -qx "codigo=0" "$SAIDA" || ! grep -q "^codigo=" "$SAIDA"; then cat "$SAIDA" >&2; falhou "$rotulo: a instalação não saiu com código diferente de zero"; fi
+  if ! grep -qx "toolchains=\[\]" "$SAIDA"; then cat "$SAIDA" >&2; falhou "$rotulo: sobrou pasta em toolchains"; fi
+  passou "$rotulo -> $(grep '^codigo=' "$SAIDA"), toolchains vazia: $(grep -F "$trecho" "$SAIDA" | head -n 1 | cut -c1-110)..."
+}
+
+echo "== o pnpm da imagem, na versão do Dockerfile"
+PNPM_VERSION="$(sed -n 's/^ARG PNPM_VERSION=//p' "$RAIZ/Dockerfile")"
+[ -n "$PNPM_VERSION" ] || falhou "o Dockerfile não tem ARG PNPM_VERSION"
+PNPM_DA_IMAGEM="$(docker run --rm --read-only --tmpfs /tmp --entrypoint pnpm "$IMAGEM" --version)"
+[ "$PNPM_DA_IMAGEM" = "$PNPM_VERSION" ] || falhou "pnpm da imagem é $PNPM_DA_IMAGEM, o Dockerfile fixa $PNPM_VERSION"
+passou "pnpm $PNPM_DA_IMAGEM"
+
+echo "== a instalação da ferramenta técnica sem acesso à origem"
+setup_sem_acesso "sem rede" "falha de rede no clone da ferramenta técnica" --network none
+setup_sem_acesso "sem login do gh" "sem acesso ao repositório da ferramenta técnica"
 
 echo "imagem provada: $IMAGEM"

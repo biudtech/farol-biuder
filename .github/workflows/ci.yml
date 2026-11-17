@@ -116,7 +116,10 @@ jobs:
           docker image inspect --format 'tamanho: {{.Size}} bytes, usuario: {{.Config.User}}' farol-biuder-motor:ci
 
       # Saúde, 404 da raiz, 401 sem token, a sonda, a parada com código 0 e as três recusas
-      # da instância hospedada, com a raiz do container somente leitura.
+      # da instância hospedada, com a raiz do container somente leitura; o pnpm na versão do
+      # Dockerfile e a instalação da ferramenta técnica sem acesso à origem (sem rede e sem
+      # login do gh), que falha com a mensagem da causa e não deixa pasta em toolchains. O
+      # runner não tem acesso ao repositório privado da ferramenta: nada é clonado.
       - name: Provar a imagem com o container de pé
         run: bash tools/provar-imagem.sh farol-biuder-motor:ci
 
