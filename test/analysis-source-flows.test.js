@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-source-flows-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { sourceRuntime } = await import('../lib/engine/analysis-source.js');
 const { PROFILE_FILE } = await import('../lib/technical-review/profiles.js');
 const io = (await import('../lib/io.js')).default;
@@ -69,7 +70,7 @@ test('Engine review usa fonte comum sem perfil técnico e persiste diagnóstico 
   };
   await e.runHeadlessReview({ ...pr });
   assert.equal(entered, 1); assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
-  const item = e.decisions.pending[0] || e.decisions.resolved[0];
+  const item = e.decisions.pending[0] || decisoesResolvidas(e)[0];
   assert.ok(item); assert.equal(item.contextEvidence.sourceStatus, 'complete'); assert.equal(item.contextEvidence.mode, 'off');
   assert.equal(item.technicalReview.semDeclaracao, true);
 });
@@ -87,7 +88,7 @@ test('cancelamento na aquisição impede modelo, não publica e devolve a refer�
     finish(handle);
     await assert.rejects(running, error => error.cancelled === true);
     assert.equal(model, 0); assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
-    assert.equal(e.decisions.pending.length + e.decisions.resolved.length, 0);
+    assert.equal(e.decisions.pending.length + decisoesResolvidas(e).length, 0);
   }
 });
 test('falha do modelo libera a fonte e não inventa resultado', async () => {
@@ -96,7 +97,7 @@ test('falha do modelo libera a fonte e não inventa resultado', async () => {
     e.runClaudeStream = async () => { throw new Error('Provedor indisponível na fixture.'); };
     await assert.rejects(e[flow]({ ...pr }), /Provedor indisponível/);
     assert.equal(handle.releases(), 1); assert.equal(e.activeReviews.size, 0);
-    assert.equal(e.decisions.pending.length + e.decisions.resolved.length, 0);
+    assert.equal(e.decisions.pending.length + decisoesResolvidas(e).length, 0);
   }
 });
 test('fonte indisponível mantém fallback inconclusivo, sem cobertura ou aprovação fabricadas', async () => {

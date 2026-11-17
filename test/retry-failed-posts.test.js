@@ -19,6 +19,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { MAX_POST_RETRY_ATTEMPTS } = await import('../lib/engine/decision.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
@@ -72,7 +73,7 @@ test('postagem que falhou por instabilidade vai sozinha no ciclo seguinte', asyn
   assert.equal(e.posts[0].payload.event, 'APPROVE', 'reusou o payload já decidido');
   assert.equal(e.posts[0].payload.commit_id, HEAD, 'ancorado no head que a sessão leu');
   assert.equal(e.decisions.pending.length, 0, 'saiu de Precisa de você');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.status, 'auto_approved', 'entra no histórico como aprovação automática, porque foi isso');
   assert.equal(h.postRetry, null, 'o marcador de retry morre junto');
 });
@@ -82,7 +83,7 @@ test('a razão de INFRA some ao resolver, o achado da revisão fica', async () =
   // sobre o código continua valendo e precisa seguir visível no histórico
   const e = engineCom(pendencia());
   await e.retryFailedPosts();
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.reasons.length, 1);
   assert.equal(h.reasons[0].kind, 'content');
   assert.match(h.reasons[0].text, /a doc afirma/);
@@ -95,7 +96,7 @@ test('review que JÁ estava no PR não é postado de novo (dedup por head)', asy
   const n = await e.retryFailedPosts();
   assert.equal(n, 1, 'a pendência resolve do mesmo jeito');
   assert.equal(e.posts.length, 0, 'mas NADA foi postado de novo');
-  assert.equal(e.decisions.resolved[0].status, 'auto_approved');
+  assert.equal(decisoesResolvidas(e)[0].status, 'auto_approved');
 });
 
 test('falha de novo incrementa a tentativa e mantém a pendência', async () => {

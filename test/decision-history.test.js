@@ -13,6 +13,7 @@ process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-dechi
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const dec = (await import('../lib/engine/decision.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 
 function engineFake() {
   return { decisions: { pending: [], resolved: [] }, saveDecisions() { } };
@@ -21,10 +22,10 @@ function engineFake() {
 test('o histórico guarda 3000 decisões (o teto de 200 perdia revisão que ainda interessa)', () => {
   const e = engineFake();
   for (let i = 0; i < 3200; i++) dec.resolveIntoHistory(e, { id: 'd' + i, key: `acme/app#${i}` });
-  assert.equal(e.decisions.resolved.length, 3000);
+  assert.equal(decisoesResolvidas(e).length, 3000);
   // unshift: a mais nova entra na frente, e quem cai é a mais VELHA
-  assert.equal(e.decisions.resolved[0].key, 'acme/app#3199');
-  assert.equal(e.decisions.resolved[2999].key, 'acme/app#200');
+  assert.equal(decisoesResolvidas(e)[0].key, 'acme/app#3199');
+  assert.equal(decisoesResolvidas(e)[2999].key, 'acme/app#200');
 });
 
 test('decisionByKey acha a revisão pela chave do PR, mesmo fora do recorte da tela', () => {

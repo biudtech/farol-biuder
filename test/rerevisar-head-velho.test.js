@@ -21,6 +21,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let runImpl = null;
 io.run = function runEspiao(cmd, args, opts) {
@@ -104,9 +105,9 @@ test('round novo do MESMO PR substitui a pendência travada em head velho', () =
   engine.recordDecision(PR, resultado(), { status: 'pending' });
   assert.equal(engine.decisions.pending.length, 1, 'um card por PR: o morto sai, o novo entra');
   assert.equal(engine.decisions.pending[0].headSha, HEAD_NOVO, 'e o que fica é o do head atual');
-  assert.equal(engine.decisions.resolved.length, 1, 'a substituída não some, vai pro histórico');
-  assert.equal(engine.decisions.resolved[0].status, 'superseded');
-  assert.equal(engine.decisions.resolved[0].id, 'd-velha');
+  assert.equal(decisoesResolvidas(engine).length, 1, 'a substituída não some, vai pro histórico');
+  assert.equal(decisoesResolvidas(engine)[0].status, 'superseded');
+  assert.equal(decisoesResolvidas(engine)[0].id, 'd-velha');
 });
 
 test('pendência VIVA do mesmo PR não é substituída (só a bloqueada por head velho)', () => {
@@ -115,7 +116,7 @@ test('pendência VIVA do mesmo PR não é substituída (só a bloqueada por head
   engine.decisions = { pending: [viva], resolved: [] };
   engine.recordDecision(PR, resultado(), { status: 'pending' });
   assert.equal(engine.decisions.pending.length, 2, 'gate que barrou por regra ou conteúdo continua sendo sua pra decidir');
-  assert.equal(engine.decisions.resolved.length, 0);
+  assert.equal(decisoesResolvidas(engine).length, 0);
 });
 
 test('pendência bloqueada de OUTRO PR não é tocada', () => {
@@ -138,5 +139,5 @@ test('decisão que já nasce resolvida TAMBÉM supersede a pendência bloqueada 
   engine.decisions = { pending: [pendenciaBloqueada()], resolved: [] };
   engine.recordDecision(PR, resultado(), { status: 'auto_approved', action: 'approve' });
   assert.equal(engine.decisions.pending.length, 0, 'o card morto some, o round novo já resolveu sozinho');
-  assert.ok(engine.decisions.resolved.some(d => d.id === 'd-velha' && d.status === 'superseded'));
+  assert.ok(decisoesResolvidas(engine).some(d => d.id === 'd-velha' && d.status === 'superseded'));
 });

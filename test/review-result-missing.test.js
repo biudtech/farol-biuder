@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 const FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-result-missing-'));
 process.env.FAROL_HOME = FAROL_HOME;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const fanout = (await import('../lib/engine/fanout.js')).default;
 const metricsOriginal = fanout.prMetrics;
 fanout.prMetrics = async () => null;
@@ -94,7 +95,7 @@ test('prosa final sem JSON, e reparo que também volta em prosa: mesma falha de 
   assert.ok(e.chamadas[1].opts.extraArgs.includes('--resume'), 'o reparo é a mesma conversa, não uma revisão nova');
   assert.equal(e.postados.length, 0);
   assert.equal(e.decisions.pending.length, 0, 'não fabrica veredito nem envelope incompleto');
-  assert.equal(e.decisions.resolved.length, 0);
+  assert.equal(decisoesResolvidas(e).length, 0);
   assert.equal(e.activeReviews.size, 0, 'a sessão encerra pelo finally existente');
 });
 

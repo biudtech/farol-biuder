@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 const HEAD = '1f18057f09f3cef5043ec47e5eebbc5e8c44eb9c';
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let leiturasDoPr = 0;
@@ -105,7 +106,7 @@ function sessao(e, extra) {
 const PR = { key: 'acme/app#1', repo: 'acme/app', number: 1, url: 'https://github.com/acme/app/pull/1', title: 'PR', author: 'dev', requested: true, account: 'eu' };
 const PROPRIO = { ...PR, author: 'Eu' };
 const pendente = (e) => e.decisions.pending.find((x) => x.key === PR.key);
-const resolvida = (e) => e.decisions.resolved.find((x) => x.key === PR.key);
+const resolvida = (e) => decisoesResolvidas(e).find((x) => x.key === PR.key);
 // a conta que espera você: a mesa é escolha dela, e o PR próprio vai para lá com o motivo
 const esperaVoce = (e) => conta(e, { onClean: 'wait', onCaveats: 'wait', onReject: 'wait' });
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);

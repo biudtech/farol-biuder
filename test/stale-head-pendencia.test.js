@@ -6,6 +6,7 @@ import path from 'node:path';
 
 process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-stale-pend-'));
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 
 // O FAROL_HOME de teste e apagado no fim. Sem isto cada rodada da suite deixa um
 // diretorio para tras: medido em 6 por rodada, somando mais de mil na maquina.
@@ -29,7 +30,7 @@ test('recordDecision: desfecho NÃO-pendente (auto_approved) também supersede a
   e.decisions.pending.push({ id: 'velha', key: PR.key, blockedKind: 'stale_head', status: 'pending', reasons: [] });
   e.recordDecision(PR, { verdict: 'approve', reasons: [] }, { status: 'auto_approved', action: 'approve' });
   assert.equal(e.decisions.pending.length, 0, 'a pendência morta tinha que sair da mesa');
-  assert.ok(e.decisions.resolved.some(d => d.id === 'velha' && d.status === 'superseded'));
+  assert.ok(decisoesResolvidas(e).some(d => d.id === 'velha' && d.status === 'superseded'));
 });
 
 test('recordDecision: pendência viva (sem blockedKind) NUNCA é superseded por desfecho novo', () => {

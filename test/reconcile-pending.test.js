@@ -19,6 +19,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 
 after(() => { try { fs.rmSync(process.env.FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
@@ -54,7 +55,7 @@ test('review meu postado DEPOIS da pendência (chat) resolve o card', async () =
   const n = await e.reconcilePending();
   assert.equal(n, 1, 'uma pendência reconciliada');
   assert.equal(e.decisions.pending.length, 0, 'saiu de Precisa de você');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.key, 'o/r#34');
   assert.equal(h.status, 'already_reviewed', 'histórico marca que o review já existia, não que o Farol postou');
   assert.equal(h.action, 'approve', 'a ação vem do estado real do review no GitHub');
@@ -90,7 +91,7 @@ test('CHANGES_REQUESTED e COMMENTED também resolvem, com a ação certa', async
     'o/r#12': [{ state: 'COMMENTED', at: CRIADA + 60 * 1000 }]
   });
   assert.equal(await e.reconcilePending(), 2);
-  const acoes = Object.fromEntries(e.decisions.resolved.map(h => [h.key, h.action]));
+  const acoes = Object.fromEntries(decisoesResolvidas(e).map(h => [h.key, h.action]));
   assert.deepEqual(acoes, { 'o/r#11': 'request_changes', 'o/r#12': 'comment' });
 });
 
@@ -102,7 +103,7 @@ test('vale o review MAIS RECENTE quando há vários depois da pendência', async
     ]
   });
   assert.equal(await e.reconcilePending(), 1);
-  assert.equal(e.decisions.resolved[0].action, 'approve', 'o desfecho é o último review, não o primeiro');
+  assert.equal(decisoesResolvidas(e)[0].action, 'approve', 'o desfecho é o último review, não o primeiro');
 });
 
 test('com keys, olha só os PRs pedidos e não gasta consulta no resto', async () => {
@@ -136,7 +137,7 @@ test('PR já mergeado cancela a pendência sem consultar review nem postar nada'
   assert.equal(n, 1, 'uma pendência cancelada');
   assert.equal(e.decisions.pending.length, 0, 'saiu de Precisa de você');
   assert.equal(consultouReviews, false, 'mergeado não precisa checar estado de review');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.key, 'o/r#50');
   assert.equal(h.status, 'already_merged');
 });
@@ -150,7 +151,7 @@ test('PR fechado sem merge (CLOSED) cancela a pendência sem consultar review ne
   assert.equal(n, 1, 'uma pendência cancelada');
   assert.equal(e.decisions.pending.length, 0, 'saiu de Precisa de você');
   assert.equal(consultouReviews, false, 'fechado sem merge não precisa checar estado de review');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.key, 'o/r#55');
   assert.equal(h.status, 'already_closed');
   assert.equal(h.action, 'skip');
@@ -163,7 +164,7 @@ test('PR ainda aberto (MERGED não confirmado) segue pro fluxo normal de reconci
   e.prState = async () => 'OPEN';
   const n = await e.reconcilePending();
   assert.equal(n, 1);
-  assert.equal(e.decisions.resolved[0].status, 'already_reviewed', 'PR aberto não cancela por merge, resolve pelo review de sempre');
+  assert.equal(decisoesResolvidas(e)[0].status, 'already_reviewed', 'PR aberto não cancela por merge, resolve pelo review de sempre');
 });
 
 test('falha ao confirmar o estado do PR (null) mantém a pendência na fila de reconciliação normal', async () => {
@@ -188,7 +189,7 @@ test('review meu no MESMO head, submetido ANTES da pendência nascer, resolve o 
   const n = await e.reconcilePending();
   assert.equal(n, 1, 'uma pendência reconciliada');
   assert.equal(e.decisions.pending.length, 0, 'saiu de Precisa de você');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.key, 'o/r#60');
   assert.equal(h.status, 'already_reviewed');
   assert.equal(h.action, 'approve');
@@ -226,7 +227,7 @@ test('APPROVED meu no mesmo head, ANTERIOR à pendência, continua resolvendo', 
     'o/r#71': [{ state: 'APPROVED', at: CRIADA - 30 * 60 * 1000, commit: HEAD }]
   });
   assert.equal(await e.reconcilePending(), 1, 'aprovação é decisão humana sobre aquele código');
-  assert.equal(e.decisions.resolved[0].action, 'approve');
+  assert.equal(decisoesResolvidas(e)[0].action, 'approve');
 });
 
 test('CHANGES_REQUESTED meu no mesmo head, ANTERIOR à pendência, continua resolvendo', async () => {
@@ -235,7 +236,7 @@ test('CHANGES_REQUESTED meu no mesmo head, ANTERIOR à pendência, continua reso
     'o/r#72': [{ state: 'CHANGES_REQUESTED', at: CRIADA - 30 * 60 * 1000, commit: HEAD }]
   });
   assert.equal(await e.reconcilePending(), 1);
-  assert.equal(e.decisions.resolved[0].action, 'request_changes');
+  assert.equal(decisoesResolvidas(e)[0].action, 'request_changes');
 });
 
 test('COMMENTED meu POSTERIOR à pendência segue resolvendo (o ramo do horário não mudou)', async () => {
@@ -244,7 +245,7 @@ test('COMMENTED meu POSTERIOR à pendência segue resolvendo (o ramo do horário
     'o/r#73': [{ state: 'COMMENTED', at: CRIADA + 60 * 1000, commit: HEAD }]
   });
   assert.equal(await e.reconcilePending(), 1, 'comentar depois do card nascer é atendimento');
-  assert.equal(e.decisions.resolved[0].action, 'comment');
+  assert.equal(decisoesResolvidas(e)[0].action, 'comment');
 });
 
 // O filtro antigo tinha `r.at &&` na frente e isso guardava os DOIS ramos por tabela.

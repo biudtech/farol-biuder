@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 const HEAD = '7a01c80578a4dfd492e96dfe83b8bcf77fe1309b';
 const BASE = 'b'.repeat(40), PROD = 'c'.repeat(40), ANCESTRAL = 'd'.repeat(40);
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let gh;
 let sessoes;
@@ -134,7 +135,7 @@ function comSessao(e, { achados = [HERDADO], aprova = APROVA } = {}) {
   };
   return e;
 }
-const decisao = (e, n) => [...e.decisions.pending, ...e.decisions.resolved].find((x) => x.key === `acme/app#${n}`);
+const decisao = (e, n) => [...e.decisions.pending, ...decisoesResolvidas(e)].find((x) => x.key === `acme/app#${n}`);
 
 test('backmerge: ponto declarado herdado, em arquivo herdado de verdade, não vira pedido de mudanças', async () => {
   const e = comSessao(motor());

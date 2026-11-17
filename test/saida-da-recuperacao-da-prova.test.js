@@ -22,6 +22,7 @@ import { camposDoAprovar } from './helpers/projecao-do-aprovar.js';
 const HEAD = '1f18057f09f3cef5043ec47e5eebbc5e8c44eb9c';
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let gh;
@@ -123,7 +124,7 @@ test('B6: revisão manual sobre a pendência pausada substitui o card, em vez de
   await revisado(e, INCOMPLETA, CLIQUE);
   assert.equal(pendentes(e).length, 1, 'um card por PR');
   assert.notEqual(pendente(e).id, antes.id, 'o card que fica é o da revisão nova');
-  assert.ok(e.decisions.resolved.some((x) => x.id === antes.id && x.status === 'superseded'));
+  assert.ok(decisoesResolvidas(e).some((x) => x.id === antes.id && x.status === 'superseded'));
   assert.deepEqual(envios, []);
 });
 

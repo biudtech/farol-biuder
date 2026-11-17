@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 
 // o gh é a fronteira de rede: cada teste escolhe o que "está no head"
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let noHead = {};
 let lidos = [];
@@ -175,7 +176,7 @@ function motor(alcance) {
   });
   return e;
 }
-const motivos = (e) => [...e.decisions.pending, ...e.decisions.resolved].find((d) => d.key === PR.key).reasons
+const motivos = (e) => [...e.decisions.pending, ...decisoesResolvidas(e)].find((d) => d.key === PR.key).reasons
   .map((r) => (typeof r === 'string' ? r : r.text)).join(' | ');
 
 // 30/09/2026: a lacuna de alcance é ressalva. Aqui a conta espera nas ressalvas (o motor

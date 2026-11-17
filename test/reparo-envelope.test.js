@@ -20,6 +20,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { TEMPOS } = await import('../lib/constants.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
@@ -82,7 +83,7 @@ test('prosa depois da sessão inteira: UM reparo na mesma sessão salva a revis�
   assert.equal(e.chamadas.length, 2, 'uma sessão de trabalho e um reparo, nada além');
   assert.ok(e.chamadas[1].args.includes('--resume'), 'o reparo continua a MESMA conversa');
   assert.equal(e.chamadas[1].args[e.chamadas[1].args.indexOf('--resume') + 1], 's1');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.ok(h, 'a revisão vira decisão em vez de virar falha');
   assert.equal(h.verdict, 'approve');
 });
@@ -128,7 +129,7 @@ test('envelope com erro de sintaxe (as duas quebras reais de 05/10) ganha UM rep
     assert.match(e.chamadas[1].prompt, /O leitor parou aqui: .*position/, 'a sessão sabe onde quebrou');
     assert.match(e.chamadas[1].prompt, /Não mude veredito/);
     assert.equal(e.autoReviewParked.has(pr.key), false, 'o trabalho da sessão não foi jogado fora: ' + JSON.stringify(e.parkedMotivos[pr.key]));
-    assert.ok([...e.decisions.pending, ...e.decisions.resolved].some((d) => d.key === pr.key));
+    assert.ok([...e.decisions.pending, ...decisoesResolvidas(e)].some((d) => d.key === pr.key));
   }
 });
 
@@ -173,7 +174,7 @@ test('critérios ausentes são concluídos na mesma sessão e a aprovação sai 
   assert.equal(e.chamadas.length, 2);
   assert.ok(e.chamadas[1].args.includes('--resume'));
   assert.equal(published, 1);
-  assert.equal(e.decisions.resolved[0].status, 'auto_approved');
+  assert.equal(decisoesResolvidas(e)[0].status, 'auto_approved');
   assert.equal(e.decisions.pending.some(d => d.key === 'o/r#2201'), false);
 });
 
@@ -291,7 +292,7 @@ test('análise incompleta pode concluir com reprovação própria, sem aprovar p
   assert.equal(e.chamadas.length, 2);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].event, 'REQUEST_CHANGES');
-  assert.equal(e.decisions.resolved[0].status, 'auto_rejected');
+  assert.equal(decisoesResolvidas(e)[0].status, 'auto_rejected');
 });
 
 test('resultado passa pelo avaliador antes do reparo, e erro novo ganha retorno específico', async () => {
@@ -323,7 +324,7 @@ test('resultado passa pelo avaliador antes do reparo, e erro novo ganha retorno 
     assert.deepEqual(e.chamadas[2].args.slice(-2), ['--resume', 's1']);
     assert.equal(audits, 3);
     assert.equal(posts, 1);
-    assert.equal(e.decisions.resolved[0].status, 'auto_approved');
+    assert.equal(decisoesResolvidas(e)[0].status, 'auto_approved');
   } finally { technicalRuntime.finishTechnicalReview = original; }
 });
 

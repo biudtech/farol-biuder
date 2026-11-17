@@ -10,6 +10,7 @@ const FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-public-revi
 process.env.FAROL_HOME = FAROL_HOME;
 
 const publicReview = (await import('../lib/engine/public-review.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 
 const io = (await import('../lib/io.js')).default;
 const runReal = io.run;
@@ -589,7 +590,7 @@ test('decide mantém pendência quando o texto público é bloqueado', async () 
   assert.equal(r.ok, false);
   assert.equal(r.blocked, 'internal_language');
   assert.equal(e.decisions.pending.some(x => x.id === item.id), true);
-  assert.equal(e.decisions.resolved.some(x => x.id === item.id), false);
+  assert.equal(decisoesResolvidas(e).some(x => x.id === item.id), false);
   assert.equal(calls.length, 0);
 });
 
@@ -675,7 +676,7 @@ test('payload contaminado no auto-approve e auto-reject nunca resolve a decisão
 
     await e.runHeadlessReview(headlessPr(scenario.number));
 
-    assert.equal(e.decisions.resolved.length, 0, `${scenario.name}: não pode parecer postado`);
+    assert.equal(decisoesResolvidas(e).length, 0, `${scenario.name}: não pode parecer postado`);
     assert.equal(e.decisions.pending.length, 1, `${scenario.name}: precisa cair na decisão humana`);
     assert.ok(event && event.item, `${scenario.name}: evento user-facing foi emitido`);
     assert.equal('payloads' in event.item, false);
@@ -749,7 +750,7 @@ test('analysisStatus incomplete bloqueia os dois gates e cai como pendência sem
 
   calls.length = 0;
   await e.runHeadlessReview(headlessPr(83));
-  assert.equal(e.decisions.resolved.length, 0);
+  assert.equal(decisoesResolvidas(e).length, 0);
   assert.equal(e.decisions.pending.length, 1);
   assert.equal(e.decisions.pending[0].analysisStatus, 'incomplete');
   assert.equal(calls.some(c => (c.args || []).includes('--input')), false);

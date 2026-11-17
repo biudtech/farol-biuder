@@ -25,6 +25,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 
@@ -108,7 +109,7 @@ test('parecer decisivo oposto publicado durante a sessão encerra qualquer nova 
     const e = engineCom(envelope, { meusReviews: revisao(state, HEAD_NOVO), head: HEAD_NOVO, ...policy });
     await e.runHeadlessReview({ ...PR });
     assert.equal(e.postados.length, 0);
-    assert.equal(e.decisions.resolved[0].status, 'already_reviewed');
+    assert.equal(decisoesResolvidas(e)[0].status, 'already_reviewed');
   }
 });
 
@@ -144,7 +145,7 @@ test('REGRESSÃO #742: 2º round com achado novo em head novo POSTA, mesmo já t
   await e.runHeadlessReview(PR);
   assert.equal(e.postados.length, 1, 'o achado do round novo chega no PR');
   assert.equal(e.postados[0].event, 'REQUEST_CHANGES');
-  const h = e.decisions.resolved[0];
+  const h = decisoesResolvidas(e)[0];
   assert.equal(h.status, 'auto_rejected', 'histórico registra postagem de verdade, não already_reviewed');
 });
 
@@ -154,7 +155,7 @@ test('mesmo head: segue sem repostar (não regride o dedup que existe por motivo
   });
   await e.runHeadlessReview(PR);
   assert.equal(e.postados.length, 0, 'a mesma rodada não vira review duplicado');
-  assert.equal(e.decisions.resolved[0].status, 'already_reviewed');
+  assert.equal(decisoesResolvidas(e)[0].status, 'already_reviewed');
 });
 
 /* ---------- o caminho automático: aprovação de 2º round ---------- */
@@ -166,7 +167,7 @@ test('APPROVE de 2º round em head novo POSTA, mesmo com aprovação minha no he
   await e.runHeadlessReview(PR);
   assert.equal(e.postados.length, 1, 'aprovação nova precisa alcançar o head novo');
   assert.equal(e.postados[0].event, 'APPROVE');
-  assert.equal(e.decisions.resolved[0].status, 'auto_approved');
+  assert.equal(decisoesResolvidas(e)[0].status, 'auto_approved');
 });
 
 /* ---------- o caminho do clique: decide() ---------- */
@@ -185,7 +186,7 @@ test('decide(): clique em REQUEST CHANGES com review meu só no head anterior PO
   const r = await e.decide('d1', 'request_changes');
   assert.equal(r.ok, true);
   assert.equal(e.postados.length, 1, 'clique explícito nunca pode ser engolido por review de rodada antiga');
-  assert.equal(e.decisions.resolved[0].status, 'posted');
+  assert.equal(decisoesResolvidas(e)[0].status, 'posted');
 });
 
 test('decide(): clique com review meu JÁ no head atual continua deduplicando', async () => {
@@ -201,7 +202,7 @@ test('decide(): clique com review meu JÁ no head atual continua deduplicando', 
   };
   await e.decide('d1', 'request_changes');
   assert.equal(e.postados.length, 0);
-  assert.equal(e.decisions.resolved[0].status, 'already_reviewed');
+  assert.equal(decisoesResolvidas(e)[0].status, 'already_reviewed');
 });
 
 /* ---------- G1: o review postado carrega o head que ESTA sessão leu ---------- */

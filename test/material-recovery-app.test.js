@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-material-app-recovery-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
-const { STATE_DIR } = await import('../lib/paths.js');
+const { STATE_DIR, TELEMETRIA_DB } = await import('../lib/paths.js');
+const banco = await import('../lib/telemetria/banco.js');
 const life = await import('../lib/technical-review/cleanup.js');
 const records = await import('../lib/technical-review/material-record.js');
 const { processProbe } = await import('../lib/technical-review/material-process.js');
@@ -15,7 +16,7 @@ const { recoveryProcesses } = await import('../lib/review-source/recovery-owner.
 const originalGit = recoveryProcesses.list;
 const originalProbe = processProbe.read;
 const root = path.join(STATE_DIR, 'technical-review'), H = 'a'.repeat(40);
-after(() => { life.pararManutencaoMaterial(); processProbe.read = originalProbe; recoveryProcesses.list = originalGit; fs.rmSync(home, { recursive: true, force: true }); });
+after(() => { banco.fecharTodos(); life.pararManutencaoMaterial(); processProbe.read = originalProbe; recoveryProcesses.list = originalGit; fs.rmSync(home, { recursive: true, force: true }); });
 function interrupted() {
   const snapshot = life.criarMaterial(root, { repo: 'org/repo', prKey: 'org/repo#7', account: 'fixture', head: H });
   fs.writeFileSync(path.join(snapshot, 'source.js'), 'durável somente até liberação');
@@ -27,8 +28,12 @@ function concluded(extra = {}) {
   return { key: 'org/repo#7', pr: { repo: 'org/repo', number: 7, account: 'fixture' }, headSha: H,
     status: 'posted', resolvedAt: 200, ...extra };
 }
+// `decisions` é o histórico inteiro deste boot: o start() o importa para o banco da telemetria, que
+// sobrevive entre os engines do mesmo FAROL_HOME, então o banco de antes sai a cada boot.
 async function startApp(decisions = []) {
   life.pararManutencaoMaterial();
+  banco.fecharTodos();
+  for (const sufixo of ['', '-wal', '-shm']) fs.rmSync(TELEMETRIA_DB + sufixo, { force: true });
   const engine = new Engine();
   engine.decisions = { pending: [], resolved: decisions };
   engine.migrarIgnorados = () => {};
