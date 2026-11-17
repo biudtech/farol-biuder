@@ -43,13 +43,31 @@ test('lockfile, versão local e CI preservam o piso e o Linux', () => {
   assert.equal(lock.packages[''].engines.node, packageNodeRequirement());
   assert.equal(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8').trim(), '24.22.1');
   const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
-  // três jobs: o gate do motor, o do front (web) e o agregador `ci`, que exige os dois
+  // quatro jobs: o gate do motor, o do front (web), a imagem do container e o agregador `ci`,
+  // que exige os três. O Node do job `imagem` é o do Dockerfile, travado em
+  // test/imagem-do-motor.test.js, e não um setup-node.
   assert.equal((workflow.match(/node-version: '24\.22\.1'/g) || []).length, 2);
-  assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 3);
+  assert.equal((workflow.match(/runs-on: ubuntu-latest/g) || []).length, 4);
   assert.doesNotMatch(workflow, /windows-latest|macos-latest/);
-  assert.match(workflow, /needs: \[gate, web\]/);
+  assert.match(workflow, /needs: \[gate, web, imagem\]/);
   assert.match(workflow, /needs\.gate\.result/);
   assert.match(workflow, /needs\.web\.result/);
+  assert.match(workflow, /needs\.imagem\.result/);
+});
+
+test('o job da imagem constrói e prova, e nada no workflow publica', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /^  imagem:\n    name: imagem\n    runs-on: ubuntu-latest\n    timeout-minutes: \d+\n    permissions:\n      contents: read$/m);
+  assert.match(workflow, /bash tools\/provar-imagem\.sh farol-biuder-motor:ci/);
+  // sem push, sem login em registro e sem permissão de escrita em lugar nenhum
+  assert.doesNotMatch(workflow, /docker (push|login)|--push|packages: write|id-token: write|contents: write|secrets\./);
+  assert.equal((workflow.match(/^\s+permissions:$/gm) || []).length + (workflow.match(/^permissions:$/gm) || []).length, 2, 'só o do topo e o do job da imagem');
+  // as ações são as que o arquivo já usava, na mesma versão
+  const acoes = [...new Set([...workflow.matchAll(/uses: (\S+)/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(acoes, ['actions/checkout@v7', 'actions/setup-node@v7']);
+  const script = fs.readFileSync(path.join(ROOT, 'tools/provar-imagem.sh'), 'utf8');
+  assert.equal(script.includes(String.fromCharCode(13)), false, 'script de shell com CRLF não roda em Linux');
+  assert.doesNotMatch(script, /docker (push|login)/);
 });
 
 test('o motor roda só em Linux: win32 e darwin são recusados', () => {

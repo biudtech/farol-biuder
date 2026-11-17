@@ -718,6 +718,12 @@ As duas chaves são só de arquivo e valem depois de reiniciar: `POST /api/setti
 em `ignoradas` e `POST /api/accounts/edit` não as alcança, porque quem chama a API não pode
 abrir a própria porta.
 
+A imagem do container, o volume, a primeira subida e o que o orquestrador precisa garantir
+estão em [`HOSPEDAGEM.md`](HOSPEDAGEM.md), com um `config.json` de exemplo completo. A imagem
+liga `FAROL_INSTANCIA_HOSPEDADA=1`: com ela o motor também não sobe sem `config.json`, com um
+que não exija autenticação ou com um sem nenhuma das duas chaves acima
+([as três recusas](HOSPEDAGEM.md#variáveis-de-ambiente)).
+
 ### 1. `hostPublico` ou `origensPermitidas` já exigem autenticação
 
 `exigeAutenticacao` (`lib/local-auth/modo.js`) exige autenticação em três casos:
@@ -782,8 +788,9 @@ regravado por causa dele.
 
 A mensagem traz a linha e a coluna quando o erro as tem, e nunca um trecho do arquivo: a chave
 de API do perfil do Claude mora nele. Arquivo **ausente** é outra coisa, a instalação nova, e
-sobe. Valor torto dentro de um JSON válido, fora das quatro chaves da fronteira, continua sendo
-saneado sem derrubar o boot.
+sobe, menos na instância hospedada (`FAROL_INSTANCIA_HOSPEDADA=1`), em que ausente é o volume
+que não montou e o motor não sobe. Valor torto dentro de um JSON válido, fora das quatro chaves
+da fronteira, continua sendo saneado sem derrubar o boot.
 
 Depois de subir, confira: `GET /api/auth/status` tem de responder `"exigida": true`.
 
@@ -909,9 +916,10 @@ perfil novo com o mesmo id reaproveita a pasta e o login que estiverem lá.
 (`instanciaIsolada` em `lib/paths.js`): toda escrita no GitHub (review e label) é
 recusada com `blocked: "instancia_isolada"`, salvo
 `"instanciaIsoladaPosta": true` no `config.json` (`lib/engine/instancia-isolada.js`). Por isso
-no container o HOME do Farol fica no padrão, `~/.farol` do usuário que roda o motor, e é essa
-pasta que vai no volume persistente. A variável `FAROL_UPDATE_MANAGER=external` também tira a
-instância da condição de isolada.
+no container o HOME do Farol fica no padrão, `~/.farol` do usuário que roda o motor. O volume
+persistente é o HOME inteiro desse usuário (`/home/farol` na imagem), porque o motor, o `gh` e
+o Claude Code também gravam fora de `~/.farol` ([o volume](HOSPEDAGEM.md#o-volume)). A variável
+`FAROL_UPDATE_MANAGER=external` também tira a instância da condição de isolada.
 
 Não rode o motor como root: o Claude Code recusa `--dangerously-skip-permissions` com uid 0,
 e a revisão headless sempre passa essa flag (classe permanente `skip-permissions-root` em

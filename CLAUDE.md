@@ -23,6 +23,7 @@ cada coisa mora, o que não se negocia e como rodar sem estragar nada.
 | [`web/README.md`](web/README.md) | o front: como rodar, convenções e o contrato de cada tela |
 | [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md) | o invariante 4 em detalhe: gates de postagem, dedup, re-revisão, checkpoint |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | a conta e a política, perfis do Claude, Jira, preferências, hospedagem |
+| [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md) | o motor em container: a imagem, o volume, a primeira subida, o orquestrador, os riscos conhecidos |
 | [`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md) | o que o registro de consumo mede e por que ele não barra revisão |
 | [`docs/QUALITY.md`](docs/QUALITY.md) | o gate do repositório e o ratchet de qualidade |
 | [`docs/RUNTIME.md`](docs/RUNTIME.md) | o contrato de versão do Node |
@@ -32,8 +33,10 @@ cada coisa mora, o que não se negocia e como rodar sem estragar nada.
 `docs/superpowers/` guarda os desenhos e os planos. São registro de decisão, não guia: não
 descrevem o código de hoje. O desenho vigente é
 `docs/superpowers/specs/2026-11-12-farol-biuder-enxuto-design.md`; as fases 1 a 4 dele (o corte
-do motor, o contrato para o front, o front e a saída da tela antiga) estão feitas, e a 5
-(container e publicação) não está neste repositório.
+do motor, o contrato para o front, o front e a saída da tela antiga) estão feitas. Da 5
+(container e publicação) existem a imagem (`Dockerfile`), o job do CI que a constrói e prova e
+o guia [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md); a publicação num registro e o destino
+esperam decisão.
 
 ## O que é
 
@@ -69,6 +72,8 @@ Para a lista inteira, `git ls-files lib`.
 | `workspace-template/` | O protocolo que a sessão de IA lê. Na primeira execução a pasta inteira é copiada para `~/.farol/workspace`. A cada boot o `prepareHome` (`server.js`) regrava cinco arquivos (`CLAUDE.md`, `prompts/pr-review-auto.md`, que é o contrato da revisão headless, os agentes `pr-reviewer` e `claim-verifier` e o comando `.claude/commands/pr-review.md`) e copia o que faltar em `prompts/` (a pasta inteira se faltar o `pr-review-auto.md`, e cada prompt do template que o workspace não tiver, sem sobrescrever). O resto vem só da primeira cópia e nunca é atualizado, inclusive o `.claude/settings.json`. O `.claude/guardas.json` (o que a sessão não pode rodar) também vai na primeira cópia, mas essa cópia não é usada: a sessão lê o do template, por `--settings` (`lib/engine/guardas-da-sessao.js`). É entrada de modelo, calibrada: mudança ali é mudança de comportamento da revisão |
 | `web/` | O front (Next.js e TypeScript), a única tela: fala direto com a API do motor e tem o pareamento, a casca das cinco abas e as cinco telas (Radar, Histórico, Time, Consumo e Sistema). Pacote à parte, com `package.json`, dependências e gate próprios (job `web` do CI); o invariante 1 continua valendo para a raiz. O `check`, o `lint` e o `npm test` do motor não entram nele (`tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js`). Em `web/src/`: `app/` (as rotas, uma pasta por aba), `componentes/` (os componentes, com uma pasta por tela), `contratos/` (tipos e leitores do que o motor manda), `transporte/` (o cliente da API e o SSE), `estado/` (o store), a lógica sem React de cada tela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), `markdown/`, `navegacao/`, `tema/`, `seguranca/` e `proxy.ts` (a CSP). Guia em [`web/README.md`](web/README.md) |
 | `assets/third-party/babel-parser/` | O parser sintático, artefato autocontido conferido por manifesto e hash (`lib/parser-runtime.js`) |
+| `Dockerfile`, `.dockerignore` | A imagem do container do motor: Node do contrato fixado por digest, `gh` e Claude Code em versão exata, `git` do Debian da base, usuário 10001, HOME no volume e `FAROL_INSTANCIA_HOSPEDADA=1`. O `.dockerignore` libera por lista: arquivo novo que o motor passe a ler em execução, fora de `lib/`, precisa entrar nos dois (`test/imagem-do-motor.test.js` reprova se faltar). Guia em [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md) |
+| `docs/exemplos/` | O `config.json` de exemplo da instância hospedada, que o CI usa para subir a imagem |
 | `test/` | A suíte (`node --test`), um arquivo por assunto |
 | `tools/` | Gate e utilitários (tabela abaixo) |
 
@@ -87,6 +92,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/http-guard.js` | Allowlist de Host e Origin, aplicada antes de qualquer rota menos a de saúde: o loopback com a porta, o `hostPublico` sem porta e as `origensPermitidas`, tudo por igualdade exata. Devolve a origem configurada que casou, e recusa pedido com dois `Host` |
 | `lib/http-cors.js` | Os cabeçalhos CORS da origem que a allowlist devolveu (nunca `*`, sem credenciais) e a resposta do preflight |
 | `lib/fronteira-hospedada.js` | A carga do `config.json` no boot e as recusas de boot: arquivo presente e ilegível, inclusive o link simbólico para nada (ausente é instalação nova e sobe; BOM UTF-8 é aceito), nome de chave errado que lembra `hostPublico`, `origensPermitidas`, `localAuth` ou `bind`, e valor inválido nessas quatro. Em todas o motor não sobe e o `config.json` não é tocado. Também saneia as chaves só de arquivo (`bind`, `hostPublico` e `origensPermitidas`) |
+| `lib/instancia-hospedada.js` | A trava da instância hospedada: com `FAROL_INSTANCIA_HOSPEDADA=1` (o padrão da imagem do container) o boot recusa `config.json` ausente, config que não exige autenticação e config sem `hostPublico` nem `origensPermitidas`. Sai pelo caminho de `lib/fronteira-hospedada.js`, com código 1 e sem tocar o `config.json` (a linha da recusa vai ao `farol.log` quando a pasta de estado existe). Valor da variável que não é `1` nem `0` também recusa, inclusive o vazio. Config que passa e não atende (`bind` em loopback; `origensPermitidas` sem `hostPublico`) sobe com um `WARN` |
 | `lib/local-auth/` | Autenticação da API: `modo.js` (quando é exigida), `acesso.js` (o porteiro), `pareamento.js` e `sessoes.js` (só hash em disco), `inventario.js` (toda rota `/api` classificada) |
 | `lib/estado-delta.js` | O snapshot vai para a tela por diferença |
 | `lib/log-taxonomy.js` | Fonte única de classificação de falha: o retry e o diagnóstico leem a mesma tabela |
@@ -128,6 +134,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | `tools/rodar-testes.js` | `npm test`: `node --test` com teto de 4 de concorrência, sobre os testes do motor (`tools/descoberta-de-testes.js` monta os padrões, sem o front) |
 | `tools/hooks/pre-push` | Recusa push direto na `main` e roda o gate. Instala com `npm run hooks:install` |
 | `tools/farol-parear.js` | Imprime um código de pareamento da API no stdout; `--revogar-todas` |
+| `tools/provar-imagem.sh` | Prova a imagem do container com ele de pé (saúde, 404 da raiz, 401 sem token, sonda, parada com código 0 e as três recusas da instância hospedada). É o que o job `imagem` do CI roda; não publica nada |
 | `tools/jira-mcp.js` | O servidor MCP local do Jira que a sessão usa. Recebe só o id do site e lê a credencial do disco |
 | `tools/simular-politica.js`, `tools/diagnosticar-legados.js` | Leitura: o que mudaria com outra política; o que há de formato antigo no disco |
 | `tools/replay-saida-review.js` | Replay offline da saída pública única, sem modelo ([`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md)) |
@@ -270,6 +277,10 @@ Fora de `~/.farol` o motor grava em dois lugares:
   (`os.tmpdir()`), quando o motor testa o perfil ou lê o uso do plano. A credencial não é copiada,
   e a cópia é apagada no fim (`lib/engine/perfil-assinatura.js`).
 
+Por causa da primeira, e do que o `gh` e o Claude Code gravam por conta própria no HOME
+(`~/.config/gh`, por exemplo), o volume do container é o HOME inteiro do usuário do motor
+(`/home/farol`), e não só `~/.farol` ([`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md#o-volume)).
+
 Credencial fica fora do workspace de propósito: o workspace é o que a sessão de IA lê. A chave de
 API do perfil do Claude mora no `config.json` e não sai do motor por resposta nenhuma: para fora o
 perfil leva só `temChave` (`lib/engine/chave-do-perfil.js`, travado em
@@ -300,7 +311,10 @@ Não há cookie, e a recusa do pareamento é uma só, sem dizer se há código e
 inválido em `hostPublico`, `origensPermitidas`, `localAuth` ou `bind` não vira vazio nem
 loopback, nome errado numa dessas chaves não é descartado calado, e `config.json` presente e
 ilegível não vira os padrões: nos três casos o motor não sobe (`lib/fronteira-hospedada.js`). O detalhe de hospedagem está em
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar).
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#para-hospedar). `config.json` ausente é a
+instalação nova e sobe, menos com `FAROL_INSTANCIA_HOSPEDADA=1`, que a imagem do container
+liga: ali ausente é o volume que não montou, e o motor também não sobe
+(`lib/instancia-hospedada.js`, [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md#variáveis-de-ambiente)).
 
 Toda rota de `/api` está classificada em `lib/local-auth/inventario.js` (32 caminhos; três
 públicos, cada um só no método dele: o pareamento, o status da autenticação e a saúde), e rota
@@ -371,6 +385,9 @@ escreve no log, nem no 200 nem no 400.
   (o que o job `web` do CI roda).
 - **Fora de Linux** o motor não roda (`lib/node-runtime.js` recusa): rode o gate num Linux com
   Node 24.22.1 (WSL, por exemplo). O CI roda em `ubuntu-latest`.
+- **A imagem do container**: `docker build -t farol-biuder-motor:dev .` e
+  `bash tools/provar-imagem.sh farol-biuder-motor:dev` (o que o job `imagem` do CI roda). O
+  check obrigatório `ci` exige `gate`, `web` e `imagem`. Nada no CI publica a imagem.
 - **Instância para olhar**: `FAROL_HOME=/tmp/farol-teste node server.js` sobe o motor sem
   tocar nos dados reais, e por ser isolada não escreve no GitHub. Para trocar a porta, grave
   `{"port": 47180}` no `config.json` dela antes de subir.
