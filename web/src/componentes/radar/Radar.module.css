@@ -240,3 +240,8 @@
 
 /* a linha das revisões guardadas sem publicar: discreta, com o link para o Histórico */
 .pendentes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0; }
+
+/* a sessão em análise: a linha que abre e, fora do <summary>, a barra do andamento */
+.sessao { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-linha); }
+.linhaDaSessao { border: 0; background: transparent; }
+.barraDaSessao { padding: 0 18px 14px; }

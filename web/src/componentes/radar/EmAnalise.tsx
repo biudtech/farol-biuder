@@ -77,15 +77,18 @@ const LinhaDaSessao = memo(function LinhaDaSessao({ sessao: s, feed, controle }:
   const meta = [chave ? chaveCurta(chave) : '', p ? p.rotuloDaEtapa : '', s.cancelled ? 'cancelando' : ''].filter(Boolean).join(' · ');
   const quem = [chave, s.pr?.author ? `PR de ${s.pr.author}` : '', inicio ? `começou em ${inicio}` : ''].filter(Boolean).join(' · ');
 
+  // A barra fica fora do <summary>: dentro dele o leitor de tela lê só o texto do botão de
+  // abrir, e o role="progressbar" com o aria-valuetext se perderia. No resumo vai só texto.
   return (
+    <div className={estilos.sessao}>
     <Linha
+      className={estilos.linhaDaSessao}
       resumo={
         <span className={estilos.resumoDaSessao}>
           <span className={estilos.cabecaDaSessao}>
             <span className={ui.t}>{titulo}</span>
             {p ? <span className={estilos.percentual}>{`${p.percentual}%`}</span> : <Spinner tamanho="p" />}
           </span>
-          {p ? <Barra progresso={p} de={de} /> : null}
           {meta ? <span className={ui.r}>{meta}</span> : null}
         </span>
       }
@@ -110,6 +113,8 @@ const LinhaDaSessao = memo(function LinhaDaSessao({ sessao: s, feed, controle }:
         </div>
       </div>
     </Linha>
+    {p ? <div className={estilos.barraDaSessao}><Barra progresso={p} de={de} /></div> : null}
+    </div>
   );
 });
 

@@ -43,7 +43,12 @@ describe('seção Em análise', () => {
     expect(within(linha).getByText('Corrige o cálculo')).toBeTruthy();
     expect(within(linha).getByText('45%')).toBeTruthy();
     expect(within(linha).getByText('repo#12 · lendo o código')).toBeTruthy();
-    const barra = within(linha).getByRole('progressbar', { name: 'Andamento de PR #12 de dono/repo' });
+    // a barra fica fora do <summary>, para o progressbar chegar ao leitor de tela; no resumo, só texto
+    expect(within(linha).queryByRole('progressbar')).toBeNull();
+    expect(linha.querySelector('svg, [role]')).toBeNull();
+    const barra = screen.getByRole('progressbar', { name: 'Andamento de PR #12 de dono/repo' });
+    expect(barra.closest('summary')).toBeNull();
+    expect(barra.closest('details')).toBeNull();
     expect(barra.getAttribute('aria-valuenow')).toBe('45');
     expect(barra.getAttribute('aria-valuemin')).toBe('0');
     expect(barra.getAttribute('aria-valuemax')).toBe('100');
