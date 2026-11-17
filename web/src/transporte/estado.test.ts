@@ -154,6 +154,26 @@ describe('activity: a linha nova do feed de uma sessão', () => {
     expect(feed.at(-1)).toEqual(linha(500));
   });
 
+  it('o progresso que vem com a linha atualiza a sessão dela, e só ela', () => {
+    const { avisos, registrar } = coletor();
+    const progresso = { percentual: 31, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 5, arquivosTotais: 20 };
+    const comSessoes: Snapshot = { ...base, activeSessions: [{ id: 'a1' }, { id: 'a2', progresso: { percentual: 10, etapa: 2, totalEtapas: 5, rotuloDaEtapa: 'card' } }] };
+    const novo = aplicarAtividade(comSessoes, { id: 'a1', item: linha(2), progresso }, registrar);
+    expect(novo?.activeSessions?.[0]).toEqual({ id: 'a1', progresso });
+    expect(novo?.activeSessions?.[1]).toBe(comSessoes.activeSessions?.[1]);
+    // progresso torto não apaga o que a sessão tinha, e a linha entra do mesmo jeito
+    const torto = aplicarAtividade(comSessoes, { id: 'a2', item: linha(3), progresso: { percentual: 'muito' } }, registrar);
+    expect(torto?.activeSessions).toBe(comSessoes.activeSessions);
+    expect(torto?.activity?.a2?.at(-1)).toEqual(linha(3));
+    // sem o campo, as sessões ficam como estavam
+    expect(aplicarAtividade(comSessoes, { id: 'a1', item: linha(4) }, registrar)?.activeSessions).toBe(comSessoes.activeSessions);
+    // o mesmo progresso que a sessão já tem não cria array novo (nem redesenha o cartão)
+    const igual = aplicarAtividade(novo, { id: 'a1', item: linha(5), progresso: { ...progresso } }, registrar);
+    expect(igual?.activeSessions).toBe(novo?.activeSessions);
+    expect(igual?.activity?.a1?.at(-1)).toEqual(linha(5));
+    expect(avisos).toEqual([]);
+  });
+
   it('evento torto não troca nada e registra', () => {
     const { avisos, registrar } = coletor();
     const tortos = [null, 'x', {}, { id: 'a1' }, { id: 7, item: linha(1) }, { id: 'a1', item: { t: 'agora', k: 'tool', text: 'x' } }];

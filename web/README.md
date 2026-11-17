@@ -194,7 +194,7 @@ blocos e liga os botões às ações:
 |---|---|---|
 | Ações gerais (Checar agora, revisar pela URL de um PR) | `AcoesGerais.tsx` | `status`, `lastCheckAt`, `nextCheckAt` |
 | Precisa de você | `PrecisaDeVoce.tsx` | `decisions.pending` sem espera |
-| Analisando agora | `AnalisandoAgora.tsx` | `activeSessions` e `activity` |
+| Analisando agora | `AnalisandoAgora.tsx` | `activeSessions` (com `progresso`, a porcentagem da revisão) e `activity` (cada linha traz o `progresso` atualizado da sessão) |
 | Esperando o CI | `EsperandoOCi.tsx` | `decisions.pending` com `esperaCi`, ou com `esperaProva` que o motor retoma sozinho |
 | Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails` |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista) |

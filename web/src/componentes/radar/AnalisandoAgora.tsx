@@ -3,7 +3,7 @@
 // O bloco "Analisando agora": as sessões em curso, cada uma com o feed e o Cancelar. O feed
 // é texto de fora (o que a sessão está fazendo) e entra sempre como texto.
 import { memo } from 'react';
-import type { LinhaDoFeed, SessaoAtiva } from '@/contratos/radar';
+import type { LinhaDoFeed, ProgressoDaRevisao, SessaoAtiva } from '@/contratos/radar';
 import { chavesDoFeed, dataHora, hora, nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
 import { Bloco, ReferenciaDoPr } from './Bloco';
@@ -30,6 +30,47 @@ function Feed({ linhas, de }: { linhas: readonly LinhaDoFeed[]; de: string }) {
   );
 }
 
+const MINUTO_MS = 60000;
+
+function faltam(ms: number): string {
+  return ms < MINUTO_MS ? 'faltam menos de 1 min' : `faltam ~${Math.round(ms / MINUTO_MS)} min`;
+}
+
+// A porcentagem que o motor calcula (lib/engine/progresso-revisao.js): o número, a barra e a
+// etapa. A contagem de arquivos e o tempo restante só aparecem quando o motor os manda. A barra
+// é SVG porque a CSP de produção recusa estilo em linha, e a largura vai como atributo.
+function Progresso({ progresso: p, de }: { progresso: ProgressoDaRevisao; de: string }) {
+  const etapa = `etapa ${p.etapa} de ${p.totalEtapas}: ${p.rotuloDaEtapa}`;
+  const detalhes = [
+    p.arquivosTotais !== undefined ? `${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '',
+    p.restanteEstimadoMs !== undefined ? faltam(p.restanteEstimadoMs) : '',
+  ].filter(Boolean);
+  return (
+    <div className={estilos.progresso}>
+      <div className={estilos.cabecaDoProgresso}>
+        <span className={estilos.percentual}>{`${p.percentual}%`}</span>
+        <span className={estilos.etapaDoProgresso}>{etapa}</span>
+      </div>
+      <div
+        role="progressbar" aria-label={`Andamento de ${de}`} aria-valuemin={0} aria-valuemax={100}
+        aria-valuenow={p.percentual} aria-valuetext={`${p.percentual}%, ${etapa}`} className={estilos.barraDoProgresso}
+      >
+        <svg viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <rect className={estilos.trilhoDoProgresso} x={0} y={0} width={100} height={6} />
+          <rect className={estilos.preenchidoDoProgresso} x={0} y={0} width={p.percentual} height={6} />
+        </svg>
+      </div>
+      {detalhes.length ? (
+        <p className={estilos.meta}>
+          {detalhes.map((d, i) => (
+            <span key={d}>{i ? <span aria-hidden="true"> · </span> : null}<span>{d}</span></span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // Com memo: a linha nova do feed de uma sessão não redesenha o cartão das outras.
 const Cartao = memo(function Cartao({ sessao: s, feed, controle }: { sessao: SessaoAtiva; feed: readonly LinhaDoFeed[]; controle: ControleDeAcoes }) {
   const chave = s.pr?.key ?? s.keys?.[0] ?? '';
@@ -45,6 +86,7 @@ const Cartao = memo(function Cartao({ sessao: s, feed, controle }: { sessao: Ses
       <p className={estilos.meta}>
         {[chave ? rotulo : '', s.pr?.author ? `PR de ${s.pr.author}` : '', inicio ? `Começou em ${inicio}` : ''].filter(Boolean).join(' · ')}
       </p>
+      {s.progresso ? <Progresso progresso={s.progresso} de={de} /> : null}
       <Feed linhas={feed} de={de} />
       {s.cancelled ? <p className={estilos.nota}>Cancelamento aceito: a sessão está encerrando.</p> : null}
       {!s.cancelled && s.cancellable === false ? <p className={estilos.meta}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}
