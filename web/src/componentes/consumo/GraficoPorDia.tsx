@@ -1,14 +1,15 @@
 'use client';
 
-// O custo estimado por dia: um gráfico de barras em SVG próprio e a mesma informação numa
-// tabela. O gráfico é complemento (uma imagem com um nome que o resume); quem lê os números,
-// com leitor de tela ou sem, lê a tabela. O dia é o que o motor definiu: nada é reagrupado.
-import { memo, useId, useMemo } from 'react';
+// O custo estimado por dia: um gráfico de barras em SVG próprio e, numa linha que abre, a
+// mesma informação numa tabela. O gráfico é complemento (uma imagem com um nome que o resume);
+// quem lê os números, com leitor de tela ou sem, lê a tabela. O dia é o que o motor definiu:
+// nada é reagrupado.
+import { memo, useMemo } from 'react';
 import type { Relatorio, SomaComNome } from '@/contratos/consumo';
 import { textoDoPeriodo } from '@/consumo/consulta';
-import { diaCurto, diaPorExtenso, dolar, dolarDoEixo, inteiro } from '@/consumo/formato';
-import { AREA_DO_GRAFICO, TETO_DE_BARRAS, alturaDaMarca, barrasDoGrafico, diasDoPeriodo, escalaDoEixo, indicesDosRotulos, maiorDia } from '@/consumo/grafico';
-import comuns from '../radar/Radar.module.css';
+import { diaCurto, diaPorExtenso, dolar, inteiro } from '@/consumo/formato';
+import { AREA_ENXUTA, TETO_DE_BARRAS, barrasDoGrafico, diasDoPeriodo, escalaDoEixo, maiorDia } from '@/consumo/grafico';
+import { Linha, ui } from '../ui';
 import estilos from './Consumo.module.css';
 
 interface Props {
@@ -27,58 +28,54 @@ export function resumoDoGrafico(relatorio: Relatorio): string {
   return `${inicio} ${comExecucao}. Maior dia: ${diaPorExtenso(maior.name)}, com ${dolar(maior.costUsd)}. Custo estimado do período, somado pelo motor: ${dolar(totals.costUsd)}.`;
 }
 
-function Grafico({ relatorio, dias }: { relatorio: Relatorio; dias: readonly string[] }) {
-  const { series } = relatorio;
-  const desenho = useMemo(() => {
+// As barras na primária e a linha de base. O SVG estica na largura do cartão; os dias das
+// pontas ficam embaixo, em texto da página.
+export const GraficoPorDia = memo(function GraficoPorDia({ relatorio }: Props) {
+  const { range, series } = relatorio;
+  const dias = useMemo(() => diasDoPeriodo(range.start, range.end), [range.start, range.end]);
+  const barras = useMemo(() => {
+    if (!dias) return [];
     const porDia = new Map(series.map((dia) => [dia.name, dia.costUsd]));
-    const maior = maiorDia(series, custo);
-    const escala = escalaDoEixo(maior?.costUsd ?? 0);
-    const barras = barrasDoGrafico(dias, (dia) => porDia.get(dia), escala.teto);
-    return { escala, barras, rotulos: indicesDosRotulos(barras.length) };
+    const escala = escalaDoEixo(maiorDia(series, custo)?.costUsd ?? 0);
+    return barrasDoGrafico(dias, (dia) => porDia.get(dia), escala.teto, AREA_ENXUTA);
   }, [series, dias]);
-  const { largura, altura, esquerda, direita, base } = AREA_DO_GRAFICO;
-  const passo = desenho.escala.marcas[1] ?? 1;
 
+  if (!dias) {
+    return <p className={ui.mini}>O período passa de {TETO_DE_BARRAS} dias: o gráfico não é desenhado, e a tabela Por dia traz todos os dias com execução.</p>;
+  }
+  const { largura, altura, base } = AREA_ENXUTA;
+  const chao = altura - base;
   return (
-    <div className={estilos.rolagem} role="region" aria-label="Gráfico do custo estimado por dia" tabIndex={0}>
-      <svg className={estilos.grafico} viewBox={`0 0 ${largura} ${altura}`} role="img" aria-label={resumoDoGrafico(relatorio)}>
-        {desenho.escala.marcas.map((marca) => {
-          const y = alturaDaMarca(marca, desenho.escala.teto);
-          return (
-            <g key={marca}>
-              <line className={marca === 0 ? estilos.eixo : estilos.grade} x1={esquerda} x2={largura - direita} y1={y} y2={y} />
-              <text className={estilos.rotuloDoEixo} x={esquerda - 8} y={y + 4} textAnchor="end">{dolarDoEixo(marca, passo)}</text>
-            </g>
-          );
-        })}
-        {desenho.barras.map((barra) => (barra.altura > 0 ? (
+    <div>
+      <svg className={estilos.grafico} viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" role="img" aria-label={resumoDoGrafico(relatorio)}>
+        {barras.map((barra) => (barra.altura > 0 ? (
           <rect key={barra.dia} className={estilos.barra} x={barra.x} y={barra.y} width={barra.largura} height={barra.altura}>
             <title>{`${diaPorExtenso(barra.dia)}: ${dolar(barra.valor)} estimados`}</title>
           </rect>
         ) : null))}
-        {desenho.rotulos.map((i) => {
-          const barra = desenho.barras[i];
-          return barra ? <text key={barra.dia} className={estilos.rotuloDoEixo} x={barra.centro} y={altura - base + 18} textAnchor="middle">{diaCurto(barra.dia)}</text> : null;
-        })}
+        <line className={estilos.eixo} x1={0} x2={largura} y1={chao} y2={chao} vectorEffect="non-scaling-stroke" />
       </svg>
+      <div className={estilos.pontas} aria-hidden="true">
+        <span className={estilos.rotuloDoEixo}>{diaCurto(range.start)}</span>
+        <span className={estilos.rotuloDoEixo}>{diaCurto(range.end)}</span>
+      </div>
     </div>
   );
-}
+});
 
-export const GraficoPorDia = memo(function GraficoPorDia({ relatorio }: Props) {
-  const id = useId();
-  const { range, series } = relatorio;
-  const dias = useMemo(() => diasDoPeriodo(range.start, range.end), [range.start, range.end]);
+// A tabela por dia, fechada numa linha com o resumo de quantos dias tiveram execução.
+export const TabelaPorDia = memo(function TabelaPorDia({ relatorio }: Props) {
+  const { series } = relatorio;
   // a ordem do dia é formatação: a tabela acompanha o gráfico, do mais antigo ao mais novo
   const ordenada = useMemo(() => [...series].sort((a, b) => a.name.localeCompare(b.name)), [series]);
-
+  const resumo = (
+    <>
+      <span className={ui.t}>Por dia</span>
+      <span className={`${ui.r} ${ui.empurra}`}>{inteiro(ordenada.length)} {ordenada.length === 1 ? 'dia com execução' : 'dias com execução'}</span>
+    </>
+  );
   return (
-    <section className={comuns.bloco} aria-labelledby={id}>
-      <h2 id={id} className={comuns.tituloDoBloco}>Gasto por dia</h2>
-      {dias ? <Grafico relatorio={relatorio} dias={dias} /> : (
-        <p className={comuns.meta}>O período passa de {TETO_DE_BARRAS} dias: o gráfico não é desenhado, e a tabela traz todos os dias com execução.</p>
-      )}
-      {dias ? <p className={comuns.meta}>Barra: custo estimado do dia, em dólar. Dia sem barra não teve execução ou só teve execução de custo desconhecido; a tabela diz qual.</p> : null}
+    <Linha resumo={resumo}>
       {ordenada.length ? (
         <div className={estilos.rolagem} role="region" aria-label="Tabela do consumo por dia" tabIndex={0}>
           <table className={estilos.tabela}>
@@ -111,7 +108,8 @@ export const GraficoPorDia = memo(function GraficoPorDia({ relatorio }: Props) {
             </tbody>
           </table>
         </div>
-      ) : null}
-    </section>
+      ) : <p className={ui.mini}>O motor não mandou nenhum dia com execução.</p>}
+      <p className={ui.mini}>Barra do gráfico: custo estimado do dia, em dólar. Dia sem barra não teve execução ou só teve execução de custo desconhecido; esta tabela diz qual.</p>
+    </Linha>
   );
 });

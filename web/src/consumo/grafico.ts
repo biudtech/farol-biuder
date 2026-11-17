@@ -105,6 +105,11 @@ export interface Area {
 
 export const AREA_DO_GRAFICO: Area = Object.freeze({ largura: 560, altura: 240, esquerda: 84, direita: 10, topo: 12, base: 30 });
 
+// A área do gráfico da tela, no desenho enxuto: só as barras e a linha de base, sem eixo
+// vertical escrito. O SVG estica na largura do cartão (preserveAspectRatio="none"), e os dias
+// do começo e do fim do período ficam embaixo, em texto da página, para não esticar com ele.
+export const AREA_ENXUTA: Area = Object.freeze({ largura: 1200, altura: 160, esquerda: 0, direita: 0, topo: 4, base: 1 });
+
 export interface Barra {
   dia: string;
   // o valor do dia; 0 para o dia que o motor não mandou
