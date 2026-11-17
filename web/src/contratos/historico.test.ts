@@ -45,6 +45,25 @@ describe('revisão do histórico', () => {
   });
 });
 
+describe('critérios do card (GET /api/decision)', () => {
+  it('lê texto e atende; atende fora de booleano é não conferido; item sem texto sai; lista vazia é ausente', () => {
+    const lido = lerRevisao({ id: 'd1', key: 'k', criteriosDoCard: [
+      { texto: 'A', atende: true }, { texto: 'B', atende: false }, { texto: 'C', atende: 'sim' }, { texto: 'D' },
+      { texto: '  ' }, { atende: true }, null, 'solto',
+    ] });
+    expect(lido?.criteriosDoCard).toEqual([
+      { texto: 'A', atende: true }, { texto: 'B', atende: false }, { texto: 'C', atende: null }, { texto: 'D', atende: null },
+    ]);
+    expect(lerRevisao({ id: 'd1', key: 'k', criteriosDoCard: [] })).not.toHaveProperty('criteriosDoCard');
+    expect(lerRevisao({ id: 'd1', key: 'k', criteriosDoCard: { texto: 'A' } })).not.toHaveProperty('criteriosDoCard');
+  });
+
+  it('o texto passa pela máscara de segredo', () => {
+    const lido = lerRevisao({ id: 'd1', key: 'k', criteriosDoCard: [{ texto: 'usar ghp_0123456789abcdefghijABCDEFGHIJ0123456789 no teste', atende: true }] });
+    expect(lido?.criteriosDoCard?.[0]?.texto).not.toContain('ghp_');
+  });
+});
+
 describe('página do histórico (GET /api/decisions)', () => {
   const resposta = (extra: object = {}) => ({ ok: true, page: 2, pageSize: 30, total: 61, pages: 3, items: [INTEIRA], repos: ['dono/repo'], ...extra });
 

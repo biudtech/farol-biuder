@@ -84,18 +84,20 @@ const AUSENTE: LeituraDoDetalhe = Object.freeze({ fase: 'ausente' });
 
 // A revisão aberta. Vem da página carregada quando está nela; fora dela (endereço colado, a
 // lista andou), é pedida ao motor pela chave do PR, que devolve a mais recente daquele PR.
-// Mesmo da página ela é pedida, pela chave e pelo id: os checks do head e a execução só vêm por
+// Mesmo da página ela é pedida, pela chave e pelo id: os checks do head, a execução e os critérios
+// do card só vêm por
 // GET /api/decision (lib/engine/detalhe-da-decisao.js), e o id faz o motor devolver esta revisão e
 // não a mais recente do PR. Enquanto a resposta não chega, ou se ela falhar ou trouxer outra
-// revisão, a da página é mostrada sem as duas linhas.
+// revisão, a da página é mostrada sem essas linhas.
 // `listaLida`: a página da lista já respondeu (com dados ou com falha); antes disso não dá
 // para saber se o item está nela.
-// Os checks e a execução da resposta por chave, quando ela é a mesma revisão da página.
+// Os checks, a execução e os critérios do card da resposta por chave, quando ela é a mesma
+// revisão da página.
 function comOComplemento(daPagina: Revisao, r: Resultado<DetalheDaRevisao> | null): Revisao {
   if (!r?.ok || !r.dados.encontrada || r.dados.revisao.id !== daPagina.id) return daPagina;
-  const { checks, execucao } = r.dados.revisao;
-  if (!checks && !execucao) return daPagina;
-  return { ...daPagina, ...(checks ? { checks } : {}), ...(execucao ? { execucao } : {}) };
+  const { checks, execucao, criteriosDoCard } = r.dados.revisao;
+  if (!checks && !execucao && !criteriosDoCard) return daPagina;
+  return { ...daPagina, ...(checks ? { checks } : {}), ...(execucao ? { execucao } : {}), ...(criteriosDoCard ? { criteriosDoCard } : {}) };
 }
 
 export function useDetalhe(

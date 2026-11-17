@@ -303,7 +303,7 @@ só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o deta
 | Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
 | Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
 | Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
-| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
+| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `criteriosDoCard`, `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
 Regras que valem para quem mexer nela:
@@ -386,8 +386,10 @@ Regras que valem para quem mexer nela:
   GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
   o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
   (`blockedReason`) aberto, os motivos (`reasons`) e os pontos de atenção (`attention`)
-  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Checks do head (`checks`, com
-  o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
+  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Critérios do card
+  (`criteriosDoCard`, com o resumo "2 de 3 atendidos" e uma linha por critério, com a marca e o
+  estado em texto: atende, não atende ou não conferido; só quando a sessão declarou), Checks do
+  head (`checks`, com o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
   duração, custo e modelo; sem ela, o que foi publicado; e sempre publicado,
   parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
   (`rounds`), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
@@ -412,12 +414,13 @@ Regras que valem para quem mexer nela:
   resumo de uma frase do parecer, nem arquivo, linha ou trecho de código de cada achado: a
   linha da lista fica sem resumo, a frase do detalhe é a da avaliação técnica, e cada achado é
   só o texto do motivo.
-- **Critérios do card.** O desenho tem "Critérios do card" com o atendimento de cada um. A
-  sessão só declara o card inteiro (`cardMet`) e a parte deste PR, e nenhum registro do motor
-  guarda critério por critério: a linha fica de fora.
-- **Checks e execução só no detalhe.** `checks` e `execucao` vêm só em `GET /api/decision`
+- **Critérios do card só quando a sessão os declara.** O campo `criteriosDoCard` é opcional no
+  envelope e o prompt o pede só quando o card tem critérios de aceitação lidos: revisão sem card,
+  com card não lido ou gravada antes de 17/11/2026 fica sem a linha. É o que a sessão declarou,
+  e não decide nada: a decisão sobre o card continua sendo `cardMet` e a parte deste PR.
+- **Critérios, checks e execução só no detalhe.** `criteriosDoCard`, `checks` e `execucao` vêm só em `GET /api/decision`
   (`lib/engine/detalhe-da-decisao.js`). A revisão aberta da página é pedida também, pela chave e
-  pelo `id`, e ganha as duas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
+  pelo `id`, e ganha essas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
   endereço fora da página, vale a mais recente do PR, como antes. Os checks verdes não vêm por nome
   (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem checks. A
   execução é a da rodada (as tentativas do PR desde a revisão anterior), e a tela diz quando o

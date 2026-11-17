@@ -102,6 +102,8 @@
   font-size: 13px;
 }
 .par { min-width: 0; overflow-wrap: anywhere; }
+.criterios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.criterio { display: flex; align-items: baseline; gap: 10px; overflow-wrap: anywhere; }
 .par dt { color: var(--muted); font-size: 12px; font-weight: 700; }
 .par dd { margin: 0; }
 
