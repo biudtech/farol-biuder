@@ -49,3 +49,8 @@ describe('página global-error', () => {
     expect(html).toContain('<body');
   });
 });
+
+it('a página não encontrada leva o 404 acima do título, fora do que o leitor de tela lê', () => {
+  const html = renderToStaticMarkup(<NaoEncontrada />);
+  expect(html).toMatch(/<p[^>]*aria-hidden="true"[^>]*>404<\/p><h1/);
+});
