@@ -12,6 +12,12 @@
 #                               quebra o build de propósito: confira as chaves antes de trocar o hash
 #   CLAUDE_CODE_VERSION         o pacote npm @anthropic-ai/claude-code, o mesmo que o motor consulta
 #                               para dizer se o CLI está atrasado (lib/engine/versao-claude.js)
+#   PNPM_VERSION                o pacote npm pnpm, que constrói a ferramenta da avaliação técnica
+#                               (lib/technical-review/tool.json). O package.json da ferramenta no
+#                               commit do pino não declara packageManager, e o pnpm-lock.yaml dele
+#                               é lockfileVersion 9.0, o formato que o pnpm 10 lê e escreve. É a
+#                               última da linha 10 (de 25/10/2026); a cópia de trabalho da
+#                               ferramenta foi instalada com a 10.32.1, da mesma linha
 # O git NÃO tem versão fixada: é o do Debian 12 (bookworm) no dia do build. Fixar o patch do
 # Debian quebraria o build no dia em que o Debian trocasse o pacote por uma correção, que é
 # justamente a versão que se quer. A versão que entrou fica escrita em /etc/farol-versoes, que
@@ -26,6 +32,7 @@ FROM node:${NODE_VERSION}-bookworm-slim@${NODE_DIGEST}
 ARG GH_VERSION=2.104.0
 ARG GH_KEYRING_SHA256=6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b
 ARG CLAUDE_CODE_VERSION=2.1.326
+ARG PNPM_VERSION=10.34.9
 ARG FAROL_UID=10001
 ARG FAROL_GID=10001
 
@@ -57,12 +64,22 @@ RUN set -eux; \
 # O Claude Code, pelo pacote npm e na versão exata, em /usr/local/bin: é onde o "/bin/sh -lc" do
 # motor o acha (o /etc/profile do Debian repõe o PATH). O instalador nativo o poria em
 # ~/.local/bin, que aqui é o volume, e não a imagem.
+# O pnpm, também pelo npm, na versão exata e em /usr/local/bin. Não pelo corepack: ele baixa o
+# gerenciador na primeira chamada, já dentro do container e da rede de produção, para o cache do
+# volume, e confere a assinatura contra chaves embutidas no Node, que envelhecem; aqui a versão
+# entra no build e a prova da imagem a confere. O pnpm serve à instalação da ferramenta da
+# avaliação técnica, que é feita depois, no volume, por um passo explícito de quem opera
+# (docs/HOSPEDAGEM.md): o código dela é privado e não entra na imagem. A construção não pede
+# compilador nem python: nenhuma dependência do lock tem módulo nativo para compilar (os
+# binários do rollup e do esbuild vêm prontos, por plataforma), e o pnpm 10 não roda script de
+# instalação de dependência que não esteja numa lista de permissão.
 RUN set -eux; \
-    npm install --global --no-fund --no-audit --no-update-notifier "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; \
+    npm install --global --no-fund --no-audit --no-update-notifier "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "pnpm@${PNPM_VERSION}"; \
     npm cache clean --force; \
-    rm -rf /root/.npm /tmp/*; \
+    rm -rf /root/.npm /root/.cache /tmp/*; \
     claude --version | grep -F "${CLAUDE_CODE_VERSION}"; \
-    { echo "node $(node --version)"; git --version; gh --version | head -n 1; echo "claude $(claude --version)"; } > /etc/farol-versoes; \
+    test "$(pnpm --version)" = "${PNPM_VERSION}"; \
+    { echo "node $(node --version)"; git --version; gh --version | head -n 1; echo "claude $(claude --version)"; echo "pnpm $(pnpm --version)"; } > /etc/farol-versoes; \
     chmod 0644 /etc/farol-versoes; \
     cat /etc/farol-versoes
 
@@ -92,11 +109,21 @@ RUN chmod -R a+rX,go-w /opt/farol
 # DISABLE_AUTOUPDATER: o Claude Code não tenta se atualizar; a versão é a da imagem.
 # NODE_ENV fica de fora de propósito: o motor não a lê, e "production" faria o pnpm da
 # ferramenta da avaliação técnica deixar de instalar as dependências de desenvolvimento.
+# XDG_DATA_HOME, XDG_CACHE_HOME e XDG_STATE_HOME: a loja de pacotes, o cache e o estado do pnpm,
+# na instalação da ferramenta, ficam no volume, que é o que a raiz somente leitura deixa
+# gravar. Os valores são os padrões do HOME, escritos por extenso: o gh e o Claude Code
+# continuam gravando onde já gravavam. A loja no mesmo volume da ferramenta deixa o pnpm ligar
+# os arquivos em vez de copiar; os temporários vão para o os.tmpdir() do Node, /tmp.
+# npm_config_update_notifier=false: nem o pnpm nem o npm vão ao registro atrás de versão nova.
 ENV HOME=/home/farol \
     FAROL_HOME=/home/farol/.farol \
     FAROL_INSTANCIA_HOSPEDADA=1 \
     TZ=America/Sao_Paulo \
-    DISABLE_AUTOUPDATER=1
+    DISABLE_AUTOUPDATER=1 \
+    XDG_DATA_HOME=/home/farol/.local/share \
+    XDG_CACHE_HOME=/home/farol/.cache \
+    XDG_STATE_HOME=/home/farol/.local/state \
+    npm_config_update_notifier=false
 
 ARG FAROL_VERSAO=0.0.0-dev
 ARG FAROL_REVISAO=desconhecida

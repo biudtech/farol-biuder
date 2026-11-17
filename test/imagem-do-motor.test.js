@@ -34,7 +34,7 @@ function dentroDoCopiado(rel) {
 }
 
 test('Dockerfile, .dockerignore e o config de exemplo estão em LF', () => {
-  for (const arquivo of ['Dockerfile', '.dockerignore', 'docs/exemplos/config.hospedagem.exemplo.json']) {
+  for (const arquivo of ['Dockerfile', '.dockerignore', 'docs/exemplos/config.hospedagem.exemplo.json', 'docs/exemplos/repositories.exemplo.json', 'tools/provar-imagem.sh']) {
     assert.equal(ler(arquivo).includes('\r'), false, `${arquivo} tem CR`);
   }
 });
@@ -56,6 +56,26 @@ test('gh e Claude Code têm versão exata e o chaveiro do gh é conferido por ha
   assert.doesNotMatch(DOCKERFILE, /@latest|:latest/);
 });
 
+// O pnpm constrói a ferramenta da avaliação técnica no volume (lib/technical-review/setup.js). A
+// versão é travada aqui: o lock da ferramenta no pino é lockfileVersion 9.0, o formato da linha
+// 10 do pnpm, e o --frozen-lockfile recusa o lock de outro formato. Trocar a versão é trocar
+// este teste junto, conferindo o lock do pino novo.
+test('o pnpm tem a versão fixada, entra pelo npm e não pelo corepack, e a prova da imagem a confere', () => {
+  assert.equal(ARGS.PNPM_VERSION, '10.34.9');
+  assert.ok(DOCKERFILE.includes('"pnpm@${PNPM_VERSION}"'));
+  assert.ok(DOCKERFILE.includes('test "$(pnpm --version)" = "${PNPM_VERSION}"'), 'o build falha se a versão instalada for outra');
+  assert.doesNotMatch(DOCKERFILE, /^\s*(?:RUN|.*;)\s*corepack\b/m);
+  const construcao = JSON.parse(ler('lib/technical-review/tool.json')).construcao;
+  assert.ok(construcao.every(([binario]) => binario === 'pnpm'), 'a construção da ferramenta só chama o pnpm');
+  // a loja, o cache e o estado do pnpm no volume, com a raiz somente leitura
+  for (const [nome, valor] of [['XDG_DATA_HOME', '/home/farol/.local/share'], ['XDG_CACHE_HOME', '/home/farol/.cache'], ['XDG_STATE_HOME', '/home/farol/.local/state']]) {
+    assert.match(DOCKERFILE, new RegExp(`^\\s+${nome}=${valor.replace(/\./g, '\\.')} \\\\$`, 'm'), nome);
+  }
+  const prova = ler('tools/provar-imagem.sh');
+  assert.ok(prova.includes('PNPM_VERSION'), 'a prova lê a versão do Dockerfile');
+  assert.ok(prova.includes('lib/technical-review/setup.js'), 'a prova roda a instalação sem acesso à origem');
+});
+
 // O patch do Debian fixado (git=1:2.39.5-0+deb12u3) quebrava o job obrigatório no dia em que o
 // Debian trocasse o pacote. O git é o do Debian da base no dia do build, e a versão que entrou
 // fica escrita num arquivo da imagem, que a prova imprime.
@@ -63,7 +83,7 @@ test('o git não tem o patch do Debian fixado, e as versões instaladas ficam es
   assert.equal('GIT_VERSION' in ARGS, false);
   assert.doesNotMatch(DOCKERFILE, /git=/);
   assert.match(DOCKERFILE, /apt-get install -y --no-install-recommends ca-certificates git procps tini tzdata;/);
-  assert.match(DOCKERFILE, /\{ echo "node \$\(node --version\)"; git --version; gh --version \| head -n 1; echo "claude \$\(claude --version\)"; \} > \/etc\/farol-versoes;/);
+  assert.match(DOCKERFILE, /\{ echo "node \$\(node --version\)"; git --version; gh --version \| head -n 1; echo "claude \$\(claude --version\)"; echo "pnpm \$\(pnpm --version\)"; \} > \/etc\/farol-versoes;/);
   assert.ok(ler('tools/provar-imagem.sh').includes('/etc/farol-versoes'), 'a prova imprime o arquivo');
 });
 
