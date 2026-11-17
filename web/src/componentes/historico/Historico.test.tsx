@@ -244,6 +244,8 @@ describe('Histórico: filtros e busca no endereço', () => {
     const t = montar({ url: '/historico?q=ana&veredito=approve&repo=dono%2Frepo', responder: umaPagina });
     await assentar();
     await clicar('Tirar o filtro Repositório: dono/repo');
+    // o chip some com o clique: o foco vai ao Filtrar, que fica
+    expect(document.activeElement).toBe(screen.getByText(/^Filtrar/).closest('summary'));
     expect(window.location.search).toBe('?q=ana&veredito=approve');
     expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&q=ana&veredito=approve');
     await act(async () => { voltarPara('/historico?q=ana&veredito=approve&repo=dono%2Frepo'); });
@@ -251,6 +253,7 @@ describe('Histórico: filtros e busca no endereço', () => {
     expect(window.location.search).toBe('?q=ana');
     expect(screen.queryByRole('group', { name: 'Filtros valendo' })).toBeNull();
     expect(screen.getByText('Filtrar')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByText('Filtrar').closest('summary'));
   });
 
   it('a busca espera a pessoa parar de digitar, e o pedido anterior é abortado', async () => {

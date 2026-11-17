@@ -3,7 +3,9 @@
 // "Revisar um PR", no topo do Radar: o botão abre o painel com o campo da URL e o Revisar.
 // No mesmo painel ficam o Checar agora (secundário) e o estado da checagem. A URL é conferida
 // aqui antes do POST: o que não é URL de PR do GitHub nem chega ao motor, e o que chega é a
-// URL canônica do PR, não o que foi digitado. Aceito o pedido, o campo esvazia e o painel fecha.
+// URL canônica do PR, não o que foi digitado. Aceito o pedido, o campo esvazia, o painel fecha
+// e o foco volta ao botão "Revisar um PR" (o campo que tinha o foco sumiu com o painel); o
+// resultado sai na região de resultado da tela, que é um role="status" (RegiaoDeResultado).
 import { memo, useId, useRef, useState, type FormEvent } from 'react';
 import { Botao, ui } from '@/componentes/ui';
 import { CHECAR } from '@/radar/acoes';
@@ -19,6 +21,7 @@ export const RevisarUmPr = memo(function RevisarUmPr({ checagem, controle }: { c
   const [formaErrada, setFormaErrada] = useState(false);
   const gaveta = useRef<HTMLDetailsElement>(null);
   const campo = useRef<HTMLInputElement>(null);
+  const botao = useRef<HTMLElement>(null);
   const idDoCampo = useId();
   const idDoErro = useId();
   const enviando = controle.emCurso(ALVO) !== null;
@@ -33,6 +36,7 @@ export const RevisarUmPr = memo(function RevisarUmPr({ checagem, controle }: { c
     if (!aceito) return;
     setUrl('');
     if (gaveta.current) gaveta.current.open = false;
+    botao.current?.focus();
   }
 
   return (
@@ -41,7 +45,7 @@ export const RevisarUmPr = memo(function RevisarUmPr({ checagem, controle }: { c
       className={ui.gaveta}
       onToggle={(evento) => { if (evento.currentTarget.open) campo.current?.focus(); }}
     >
-      <summary className={ui.botao}>Revisar um PR</summary>
+      <summary ref={botao} className={ui.botao}>Revisar um PR</summary>
       <div className={ui.painel}>
         <form className={estilos.formDoPainel} onSubmit={(evento) => { void aoEnviar(evento); }} noValidate>
           <label htmlFor={idDoCampo} className={ui.rotulo}>URL do PR</label>

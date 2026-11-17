@@ -48,6 +48,9 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const { carregando, relatorio, motivo, falha, opcoes, fim, haNovo } = useRelatorio(app.cliente, consulta, recarga, marcaDoConsumo(sessoesContadas));
 
   const regiao = useRef<HTMLDivElement>(null);
+  // O X do chip e o Limpar filtros somem com o clique: o foco vai ao Filtrar, que fica.
+  const botaoDeFiltrar = useRef<HTMLElement>(null);
+  const focarFiltrar = useCallback(() => { botaoDeFiltrar.current?.focus(); }, []);
 
   // Página do diário além do fim: o motor devolve a última. O endereço passa a dizer a página
   // que está na tela, trocando a entrada em vez de empilhar outra.
@@ -75,13 +78,13 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const acoes = (
     <>
       <SeletorDePeriodo consulta={consulta} periodo={periodo} fim={fim} aoMudar={aoMudar} />
-      <Filtrar consulta={consulta} opcoes={opcoes} periodo={periodo} aoMudar={aoMudar} />
+      <Filtrar consulta={consulta} opcoes={opcoes} periodo={periodo} aoMudar={aoMudar} refDoBotao={botaoDeFiltrar} />
     </>
   );
 
   return (
     <Pagina titulo="Consumo" sub={sub} acoes={acoes}>
-      <FiltrosAtivos consulta={consulta} periodo={periodo} aoMudar={aoMudar} aoLimpar={aoLimpar} />
+      <FiltrosAtivos consulta={consulta} periodo={periodo} aoMudar={aoMudar} aoLimpar={aoLimpar} aoSair={focarFiltrar} />
 
       {haNovo ? (
         <p className={`${ui.nota} ${estilos.novas}`} role="status">

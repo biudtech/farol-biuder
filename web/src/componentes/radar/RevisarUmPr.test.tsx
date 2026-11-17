@@ -40,6 +40,8 @@ describe('Revisar um PR', () => {
     expect(campo().value).toBe('');
     expect(gaveta(container).open).toBe(false);
     expect(screen.queryByRole('alert')).toBeNull();
+    // o campo sumiu com o painel: o foco volta ao botão que o abriu
+    expect(document.activeElement).toBe(screen.getByText('Revisar um PR'));
   });
 
   it('quando o motor recusa, o que foi digitado fica no campo e o painel fica aberto', async () => {

@@ -7,7 +7,7 @@
 // diário e mora dentro da linha Execuções. As opções de tipo, modelo e repositório são as que
 // o motor listou; valor do endereço que não está nelas continua escolhido, dizendo de onde
 // veio. A busca espera um instante depois da última tecla.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type RefObject } from 'react';
 import type { OpcoesDeFiltro } from '@/contratos/consumo';
 import {
   ANO_MINIMO, PERIODOS, TETO_DA_BUSCA, comPeriodo, dataAceita, dicaDoPeriodo, periodoPronto, temPeriodo, type Consulta,
@@ -144,15 +144,17 @@ interface PropsDoFiltrar {
   opcoes: OpcoesDeFiltro;
   periodo: Periodo | null;
   aoMudar: Ir;
+  // o resumo do Filtrar, para quem tira um chip devolver o foco a ele
+  refDoBotao?: RefObject<HTMLElement | null>;
 }
 
 // O botão Filtrar e o painel que ele abre: o período personalizado e os três filtros que
 // recortam o relatório inteiro.
-export function Filtrar({ consulta, opcoes, periodo, aoMudar }: PropsDoFiltrar) {
+export function Filtrar({ consulta, opcoes, periodo, aoMudar, refDoBotao }: PropsDoFiltrar) {
   const n = quantosAtivos(consulta, periodo);
   return (
     <details className={ui.gaveta}>
-      <summary className={`${ui.botao} ${estilos.botaoDeFiltrar}`}>
+      <summary ref={refDoBotao} className={`${ui.botao} ${estilos.botaoDeFiltrar}`}>
         Filtrar{n ? <span className={estilos.contagemDeFiltros}>({n})</span> : null}
       </summary>
       <form
@@ -214,19 +216,21 @@ interface PropsDosAtivos {
   periodo: Periodo | null;
   aoMudar: Ir;
   aoLimpar(): void;
+  // o chip e o Limpar somem com o clique: quem chama leva o foco a um lugar que fica
+  aoSair?(): void;
 }
 
-export function FiltrosAtivos({ consulta, periodo, aoMudar, aoLimpar }: PropsDosAtivos) {
+export function FiltrosAtivos({ consulta, periodo, aoMudar, aoLimpar, aoSair }: PropsDosAtivos) {
   const ativos = filtrosAtivos(consulta, periodo);
   if (!ativos.length) return null;
   return (
     <div className={estilos.ativos} role="group" aria-label="Filtros ativos">
       {ativos.map((ativo) => (
-        <button key={ativo.chave} type="button" className={estilos.tirar} aria-label={`Tirar o filtro ${ativo.texto}`} onClick={() => aoMudar(ativo.sem, 'empilhar')}>
+        <button key={ativo.chave} type="button" className={estilos.tirar} aria-label={`Tirar o filtro ${ativo.texto}`} onClick={() => { aoSair?.(); aoMudar(ativo.sem, 'empilhar'); }}>
           <Chip tom="marca">{ativo.texto}<span aria-hidden="true">✕</span></Chip>
         </button>
       ))}
-      <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={aoLimpar}>Limpar filtros</button>
+      <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => { aoSair?.(); aoLimpar(); }}>Limpar filtros</button>
     </div>
   );
 }

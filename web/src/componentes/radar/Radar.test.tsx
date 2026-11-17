@@ -211,6 +211,10 @@ describe('tela Radar: ações', () => {
     fireEvent.change(screen.getByLabelText('URL do PR'), { target: { value: `${URL_DO_PR}/files?w=1#x` } });
     await clicar('Revisar');
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/review', { urls: [URL_DO_PR] }]);
+    // aceito: o painel fecha, o foco volta ao botão e o resultado sai na região de status
+    expect(gaveta.open).toBe(false);
+    expect(document.activeElement).toBe(screen.getByText('Revisar um PR'));
+    expect(regiao().textContent).toMatch(/^O motor aceitou o pedido: .*PR #12 de dono\/repo/);
   });
 
   it('envio: o POST sai pelo cliente, o botão diz Enviando e fica desabilitado, a região viva anuncia, e depois vem o resultado', async () => {

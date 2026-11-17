@@ -455,6 +455,12 @@ describe('Consumo: período e filtros no endereço', () => {
     expect(window.location.search).toBe('?repo=dono%2Frepo');
     expect(window.history.length).toBe(entradas + 1);
     expect(t.pedidos().at(-1)).toBe('/api/usage?repo=dono%2Frepo');
+    // o chip some com o clique: o foco vai ao Filtrar, que fica
+    const filtrar = screen.getByText(/^Filtrar/).closest('summary');
+    expect(document.activeElement).toBe(filtrar);
+    await clicar('Limpar filtros');
+    expect(screen.queryByRole('group', { name: 'Filtros ativos' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText(/^Filtrar/).closest('summary'));
   });
 
   it('o período pronto do seletor não vira chip: ele já está escrito no topo', async () => {

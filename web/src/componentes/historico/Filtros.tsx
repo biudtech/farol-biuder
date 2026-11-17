@@ -5,7 +5,7 @@
 // ao motor); Enter manda na hora. Os filtros (repositório e o que foi publicado, os dois que
 // GET /api/decisions aceita) ficam atrás do botão Filtrar e mandam ao trocar; os que estão
 // valendo aparecem embaixo como chips, cada um com o seu X.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { TETO_DA_BUSCA, type Consulta } from '@/historico/consulta';
 import { FILTROS_DE_DESFECHO } from '@/historico/rotulos';
 import { Chip, ui } from '../ui';
@@ -49,6 +49,12 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
   }, [texto, consulta.q, aoBuscar]);
 
   const idDaBusca = useId();
+  // O X do chip e o Limpar filtros somem com o clique: o foco vai ao Filtrar, que fica.
+  const filtrar = useRef<HTMLElement>(null);
+  const tirar = (mudanca: Parameters<typeof aoFiltrar>[0]) => {
+    filtrar.current?.focus();
+    aoFiltrar(mudanca);
+  };
   const idDaDica = useId();
   const idDoDesfecho = useId();
   const idDoRepo = useId();
@@ -86,7 +92,7 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
         <p id={idDaDica} className={ui.soLeitor}>Repositório, número, título, autor do PR ou card. Todos os termos têm de aparecer.</p>
 
         <details className={ui.gaveta}>
-          <summary className={ui.botao} aria-label={ativos ? `Filtrar, ${ativos} filtro(s) valendo` : 'Filtrar'}>
+          <summary ref={filtrar} className={ui.botao} aria-label={ativos ? `Filtrar, ${ativos} filtro(s) valendo` : 'Filtrar'}>
             Filtrar{ativos ? ` (${ativos})` : ''}
           </summary>
           <div className={ui.painel}>
@@ -114,7 +120,7 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
       {ativos ? (
         <div className={ui.fila} role="group" aria-label="Filtros valendo">
           {consulta.repo ? (
-            <button type="button" className={estilos.chipQueSai} aria-label={`Tirar o filtro Repositório: ${repoEscolhido}`} onClick={() => aoFiltrar({ repo: '' })}>
+            <button type="button" className={estilos.chipQueSai} aria-label={`Tirar o filtro Repositório: ${repoEscolhido}`} onClick={() => tirar({ repo: '' })}>
               <Chip tom="marca">Repositório: {repoEscolhido} <span aria-hidden="true">✕</span></Chip>
             </button>
           ) : null}
@@ -123,12 +129,12 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
               type="button"
               className={estilos.chipQueSai}
               aria-label={`Tirar o filtro O que foi publicado: ${rotuloDoDesfecho(consulta.veredito)}`}
-              onClick={() => aoFiltrar({ veredito: '' })}
+              onClick={() => tirar({ veredito: '' })}
             >
               <Chip tom="marca">Publicado: {rotuloDoDesfecho(consulta.veredito)} <span aria-hidden="true">✕</span></Chip>
             </button>
           ) : null}
-          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => aoFiltrar({ repo: '', veredito: '' })}>
+          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', veredito: '' })}>
             Limpar filtros
           </button>
         </div>
