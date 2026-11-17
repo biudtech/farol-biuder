@@ -145,7 +145,8 @@ e os arquivos sentinela postos em `.farol/claude/<id>/.credentials.json` e em `.
 O exemplo está em
 [`exemplos/config.hospedagem.exemplo.json`](exemplos/config.hospedagem.exemplo.json), sem
 segredo nenhum, e é o que o CI usa para subir a imagem. Troque os dois endereços e grave em
-`/home/farol/.farol/config.json`, com dono 10001 e modo 600.
+`/home/farol/.farol/config.json`, com dono 10001. O motor regrava esse arquivo no boot com modo
+644; quem o protege é a pasta, `/home/farol` e `.farol`, as duas com modo 700 (medido na prova).
 
 | chave | no exemplo | por quê |
 |---|---|---|
@@ -295,9 +296,10 @@ Quem trocar `TZ` no orquestrador troca os quatro pontos acima.
    pública. Cada tentativa errada conta contra todos os códigos pendentes, e a quinta os tira
    do arquivo (`registrarErro`, `lib/local-auth/pareamento.js`). Quem alcança o proxy consegue,
    com cinco pedidos, invalidar o código que alguém acabou de gerar, e repetir isso impede
-   qualquer pareamento novo. Ninguém entra por aí: o código tem dez caracteres em base32
-   (cerca de 50 bits), vale dez minutos e uma vez, e as sessões já pareadas não são afetadas. O
-   motor grava uma linha `WARN` no `farol.log` a cada bloqueio. Não foi corrigido neste lote
+   qualquer pareamento novo. Medido na imagem: cinco pedidos sem token, todos com a mesma
+   resposta `codigo_invalido`, e o código pendente saiu do disco. Ninguém entra por aí: o código
+   tem dez caracteres em base32 (cerca de 50 bits), vale dez minutos e uma vez, e a sessão já
+   pareada seguiu valendo. O motor grava uma linha `WARN` no `farol.log` a cada bloqueio. Não foi corrigido neste lote
    (ver [o que falta](#o-que-não-foi-provado)). Até lá: limite a taxa de `POST /api/auth/pair`
    no proxy, por endereço de origem, e use o código assim que gerar.
 
