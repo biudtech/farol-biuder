@@ -265,6 +265,36 @@ test('a saída ordenada remove o socket que o motor criou, e só ele', async () 
   aoSair({ log() {} });
 });
 
+test('a telemetria abre só depois do listen no socket: a segunda instância, sem o socket, não abre o banco nem o histórico', async () => {
+  const farol = await import('../server.js');
+  const { iniciarTelemetria, fecharTelemetria } = await import('../lib/engine/telemetria-do-motor.js');
+  const { TELEMETRIA_DB } = await import('../lib/paths.js');
+  const banco = await import('../lib/telemetria/banco.js');
+  const bytes = (f) => (fs.existsSync(f) ? fs.readFileSync(f) : Buffer.alloc(0));
+  const caminho = caminhoNovo();
+  const { server, engine: primeira, err } = await subir(configDoSocket(caminho));
+  assert.equal(err, undefined);
+  iniciarTelemetria(primeira);
+  try {
+    assert.ok(primeira.telemetria, 'a primeira, com o socket, abriu o banco');
+    const antes = { db: bytes(TELEMETRIA_DB), wal: bytes(`${TELEMETRIA_DB}-wal`) };
+    const r = await new Promise((resolve) => {
+      const iniciado = farol.start((url, erro) => resolve({ erro, iniciado }));
+    });
+    assert.equal(r.erro && r.erro.code, 'EADDRINUSE', 'o socket estava em uso');
+    const segunda = r.iniciado.engine;
+    assert.equal(segunda.telemetria, null, 'a segunda não abriu o banco da telemetria');
+    assert.ok(!segunda.historicoH, 'a segunda não abriu o histórico no banco');
+    assert.ok(bytes(TELEMETRIA_DB).equals(antes.db) && bytes(`${TELEMETRIA_DB}-wal`).equals(antes.wal), 'o banco não mudou um byte');
+    assert.ok(fs.lstatSync(caminho).isSocket(), 'o socket da primeira continua no lugar');
+    assert.equal((await pedir(caminho, '/api/health')).status, 200, 'e respondendo');
+  } finally {
+    fecharTelemetria(primeira);
+    banco.fecharTodos();
+    await fechar(server);
+  }
+});
+
 /* ---------- recusas de boot ---------- */
 
 function recusaDoEngine(config) {
@@ -275,7 +305,7 @@ function recusaDoEngine(config) {
   assert.ok(erro, 'a Engine tem de lançar');
   assert.equal(erro.code, 'FRONTEIRA_INVALIDA', erro.message);
   assert.match(erro.message, /o motor não sobe/);
-  assert.doesNotMatch(erro.message, /—/);
+  assert.doesNotMatch(erro.message, /—/, 'sem travessão');
   assert.deepEqual(fs.readFileSync(CONFIG_FILE), antes, 'o config.json fica como estava');
   return erro.message;
 }
