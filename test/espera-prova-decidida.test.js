@@ -22,6 +22,7 @@ const HEAD = '1f18057f09f3cef5043ec47e5eebbc5e8c44eb9c';
 const HEAD_NOVO = 'b8722a3f09f3cef5043ec47e5eebbc5e8c44eb9c';
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let gh;
@@ -75,7 +76,7 @@ function motor() {
 
 const PR = { key: 'acme/app#1841', repo: 'acme/app', number: 1841, url: 'https://github.com/acme/app/pull/1841', title: 'PR', author: 'dev', requested: true, account: 'eu' };
 const pendente = (e) => e.decisions.pending.find((x) => x.key === PR.key);
-const resolvida = (e) => e.decisions.resolved.find((x) => x.key === PR.key);
+const resolvida = (e) => decisoesResolvidas(e).find((x) => x.key === PR.key);
 
 // leva o PR até o estado medido: espera da prova relançada no mesmo head (stale_head)
 async function recuperacaoRelancada(e) {
@@ -146,7 +147,7 @@ test('meu pedido automático aberto (pedidoMeuAberto): decidido mas não bloquea
   await e.launchReReviews();
   assert.equal(e.headlessQueue.length, 1, 'a rodada segue para retirar o pedido');
   assert.ok(pendente(e).esperaProva, 'a recuperação continua');
-  assert.equal(e.decisions.resolved.some((x) => x.key === PR.key && x.status === 'approval_not_needed'), false);
+  assert.equal(decisoesResolvidas(e).some((x) => x.key === PR.key && x.status === 'approval_not_needed'), false);
 });
 
 test('decisão de gente em outro head não resolve a recuperação deste', async () => {
@@ -155,7 +156,7 @@ test('decisão de gente em outro head não resolve a recuperação deste', async
   historico(e, { ...APROVOU, head: HEAD_NOVO });
   await e.launchReReviews();
   assert.ok(pendente(e).esperaProva, 'a espera continua: o commit novo tem caminho próprio');
-  assert.equal(e.decisions.resolved.some((x) => x.key === PR.key && x.status === 'approval_not_needed'), false);
+  assert.equal(decisoesResolvidas(e).some((x) => x.key === PR.key && x.status === 'approval_not_needed'), false);
   assert.deepEqual(envios, []);
 });
 

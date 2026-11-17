@@ -18,6 +18,7 @@ const BLOB = 'c'.repeat(40);
 const check = (name) => ({ name, status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-11-05T21:47:00Z' });
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 io.run = async (_cmd, args) => {
@@ -100,7 +101,7 @@ function motor() {
 }
 
 const PR = (n) => ({ key: `acme/app#${n}`, repo: 'acme/app', number: n, url: `https://github.com/acme/app/pull/${n}`, title: 'PR', author: 'dev', account: 'eu', requested: true });
-const decisao = (e, n) => [...e.decisions.pending, ...e.decisions.resolved].find((x) => x.key === `acme/app#${n}`);
+const decisao = (e, n) => [...e.decisions.pending, ...decisoesResolvidas(e)].find((x) => x.key === `acme/app#${n}`);
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 
 test('supressor sem motivo em linha que o PR não alterou: aprova pela política, com a dívida como ressalva, sem pedido de mudanças', async () => {

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-review-cancel-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const ioLabels = (await import('../lib/io.js')).default;
 const { ARQUIVO: labelsFile, tirarPendentes: retryLabels } = await import('../lib/engine/labels-a-tirar.js');
 const { limparLabelsOrfas } = await import('../lib/engine/review.js');
@@ -52,7 +53,7 @@ function cancelarAtiva(e) {
 function semResultado(e) {
   assert.equal(e.postados.length, 0);
   assert.equal(e.decisions.pending.length, 0);
-  assert.equal(e.decisions.resolved.length, 0);
+  assert.equal(decisoesResolvidas(e).length, 0);
   assert.equal(e.activeReviews.size, 0);
 }
 
@@ -117,7 +118,7 @@ test('envio já iniciado recusa cancelamento e mantém o desfecho verdadeiro', a
   };
   await e.runHeadlessReview({ ...PR });
   assert.equal(e.postados.length, 1);
-  assert.equal(e.decisions.resolved[0].status, 'auto_approved');
+  assert.equal(decisoesResolvidas(e)[0].status, 'auto_approved');
 });
 
 test('cancelamento no worker estaciona sem retry e mantém o PR na fila', async () => {

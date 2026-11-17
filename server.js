@@ -66,7 +66,7 @@ import esperaProvaMod from './lib/engine/espera-prova.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
-import { carregarConsumo, iniciarConsumo } from './lib/engine/telemetria-do-motor.js';
+import { carregarConsumo, iniciarTelemetria, historicoIndisponivel, chavesComDecisao } from './lib/engine/telemetria-do-motor.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
@@ -438,10 +438,8 @@ class Engine extends EventEmitter {
   // vazamento que isto conserta. Daqui pra frente a distinção é registrada.
   migrarIgnorados() {
     if (this.ignorados) return;                 // já existe: nada a migrar
-    const comDecisao = new Set([
-      ...(this.decisions?.pending || []).map(d => d.key),
-      ...(this.decisions?.resolved || []).map(d => d.key),
-    ]);
+    const comDecisao = chavesComDecisao(this);
+    if (!comDecisao) return;                    // histórico indisponível: a migração espera outra subida
     this.ignorados = new Set([...this.seen].filter(k => !comDecisao.has(k)));
     this.saveIgnorados();
     if (this.ignorados.size > 0) this.log('WARN', `migração: ${this.ignorados.size} PR(s) já vistos sem decisão tratados como descarte deliberado`);
@@ -888,7 +886,8 @@ class Engine extends EventEmitter {
     // pedido", e aí limpa como sempre. Sem essa distinção, um rate limit da API de
     // search apagava reReviewedKeys e ressuscitava PRs que o usuário ignorou.
     if (mineKeys === null) return new Set(this.reReviewedKeys);
-    const actions = this.reviewActions();
+    const actions = this.reviewActions(); // histórico indisponível: o rótulo do último ciclo, sem rearmar nem esquecer
+    if (historicoIndisponivel(this)) return new Set(this.reReviewedKeys);
     const reReq = new Set();
     const now = Date.now();
     for (const key of mineKeys) {
@@ -1302,8 +1301,8 @@ class Engine extends EventEmitter {
 
   async start() {
     // o start() só roda com a porta (a trava de instância única) já tomada: é a hora de abrir o
-    // banco da telemetria, importar os JSON e reconciliar as tentativas abertas
-    iniciarConsumo(this);
+    // banco da telemetria, importar os JSON (e o histórico de decisões) e reconciliar as tentativas
+    iniciarTelemetria(this);
     iniciarManutencaoDoEngine(this);
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();

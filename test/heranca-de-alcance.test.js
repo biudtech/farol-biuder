@@ -20,6 +20,7 @@ import { test, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let noHead = {};
 let lidos = [];
@@ -82,7 +83,7 @@ function motor(pr, rodadas) {
   return e;
 }
 // a decisão de cada rodada, pelo head que ela leu
-const daRodada = (e, pr, head) => [...e.decisions.pending, ...e.decisions.resolved].find((d) => d.key === pr.key && d.headSha === head);
+const daRodada = (e, pr, head) => [...e.decisions.pending, ...decisoesResolvidas(e)].find((d) => d.key === pr.key && d.headSha === head);
 const motivos = (d) => (d.reasons || []).map((r) => (typeof r === 'string' ? r : r.text)).join(' | ');
 
 test('re-revisão: arquivo inalterado com alcance conferido na rodada anterior herda a declaração, com a origem', async () => {

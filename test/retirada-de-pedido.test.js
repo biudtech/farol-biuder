@@ -20,6 +20,7 @@ const check = (name, conclusion, status = 'COMPLETED') => ({ name, status, concl
 const pedido = (extra) => ({ id: REVIEW_ID, state: 'CHANGES_REQUESTED', commit: HEAD_VELHO, at: '2026-11-05T03:38:29Z', ...extra });
 
 const { normalizeFindings } = await import('../lib/engine/review-findings.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const io = (await import('../lib/io.js')).default;
 const runReal = io.run;
 let envios = [];
@@ -125,7 +126,7 @@ async function rodadaQuePede(e, n) {
     }),
   });
   await e.runHeadlessReview(PR(n));
-  assert.equal(e.decisions.resolved.find((d) => d.key === KEY(n))?.status, 'auto_rejected', 'a primeira rodada pediu mudanças sozinha');
+  assert.equal(decisoesResolvidas(e).find((d) => d.key === KEY(n))?.status, 'auto_rejected', 'a primeira rodada pediu mudanças sozinha');
   envios = [];
   gh.head = HEAD;
 }
@@ -244,7 +245,7 @@ test('CI vermelho depois da prova da rodada: com o check verde saem o pedido nov
   const e = await duasRodadas(14, { checks: () => [{ nome: 'test', estado: 'vermelho' }] });
   assert.deepEqual(eventos(), ['REQUEST_CHANGES']);
   envios = [];
-  const pedidoPeloCi = e.decisions.resolved.find((d) => d.key === KEY(14) && d.headSha === HEAD);
+  const pedidoPeloCi = decisoesResolvidas(e).find((d) => d.key === KEY(14) && d.headSha === HEAD);
   assert.equal(pedidoPeloCi.status, 'auto_rejected');
   gh.meus = [pedido({ id: 1 }), pedido({ id: 2, commit: HEAD, at: '2026-11-05T04:00:00Z' })];
   await e.varrerEsperas();
@@ -316,7 +317,7 @@ test('retirada que falhou numa rodada dispensada pela decisão de gente fica mar
   gh.retiradaFalha = 'HTTP 502';
   await e.runHeadlessReview(PR(18));
   assert.deepEqual(eventos(), ['DISMISS'], 'tentou retirar e não aprovou por cima');
-  const item = e.decisions.resolved.find((d) => d.key === KEY(18) && d.status === 'approval_not_needed');
+  const item = decisoesResolvidas(e).find((d) => d.key === KEY(18) && d.status === 'approval_not_needed');
   assert.equal(item.retiradaPendente?.head, HEAD);
   gh.retiradaFalha = '';
   await e.varrerEsperas();

@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-protegido-fiacao-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { sourceRuntime } = await import('../lib/engine/analysis-source.js');
 const { observeReadEvent, observarLeitura } = await import('../lib/engine/read-evidence.js');
 const { ARQUIVO_DE_GUARDAS } = await import('../lib/engine/guardas-da-sessao.js');
@@ -108,7 +109,7 @@ test('a leitura observada da projeção chega ao gate da revisão (leiturasProva
     const e = setup();
     e.runClaudeStream = async (_prompt, opts) => { lerProjecao(e, opts, comRetorno); return { text: JSON.stringify(reviewResult()) }; };
     await e.runHeadlessReview({ ...pr });
-    const item = e.decisions.pending[0] || e.decisions.resolved[0];
+    const item = e.decisions.pending[0] || decisoesResolvidas(e)[0];
     assert.ok(item, 'a decisão foi registrada');
     if (comRetorno) assert.doesNotMatch(motivosDe(item), LACUNA, 'leitura conferida cobre o protegido');
     else assert.match(motivosDe(item), LACUNA, 'só o pedido, sem entrega conferida, é lacuna');
@@ -139,7 +140,7 @@ test('rename de .env.example para config.txt: a revisão só cobre o destino com
       return { text: JSON.stringify(reviewResult(['src/a.js', 'config.txt'])) };
     };
     await e.runHeadlessReview({ ...pr });
-    const item = e.decisions.pending[0] || e.decisions.resolved[0];
+    const item = e.decisions.pending[0] || decisoesResolvidas(e)[0];
     if (comRetorno) assert.doesNotMatch(motivosDe(item), LACUNA_DO_RENAME);
     else assert.match(motivosDe(item), LACUNA_DO_RENAME, 'só o pedido do Read no destino do rename é lacuna');
   }
@@ -167,7 +168,7 @@ test('rename de .env.example para config.txt: o inventário medido pelo gh guard
   e.runClaudeStream = async () => ({ text: JSON.stringify(reviewResult(['src/a.js', 'config.txt'])) });
   await e.runHeadlessReview({ ...pr });
   assert.ok(chamadas.some((c) => c.includes('pulls/1/files') && c.includes('previous_filename')), 'o jq pede o lado de antes do rename');
-  const item = e.decisions.pending[0] || e.decisions.resolved[0];
+  const item = e.decisions.pending[0] || decisoesResolvidas(e)[0];
   assert.match(motivosDe(item), LACUNA_DO_RENAME, 'declarado sem leitura observada, o destino do rename é lacuna');
 });
 
@@ -207,7 +208,7 @@ test('patch ausente ou truncado: na revisão, ler o marcador ou o fragmento inte
     return { text: JSON.stringify(reviewResult(SEM_PATCH.map((f) => f.path))) };
   };
   await e.runHeadlessReview({ ...pr });
-  const motivos = motivosDe(e.decisions.pending[0] || e.decisions.resolved[0]);
+  const motivos = motivosDe(e.decisions.pending[0] || decisoesResolvidas(e)[0]);
   assert.match(motivos, /caminho protegido sem leitura observada da projeção redigida: \.env\.example/, 'o marcador do protegido não é projeção');
   assert.match(motivos, /arquivo sem conteúdo integral no escopo \(patch ausente, binário ou truncado\): img\/logo\.png/);
   assert.match(motivos, /arquivo sem conteúdo integral no escopo \(patch ausente, binário ou truncado\): src\/grande\.js/);

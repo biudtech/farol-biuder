@@ -11,6 +11,7 @@ process.env.FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-decle
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const { readJson, writeJsonAtomic } = await import('../lib/io.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const dec = (await import('../lib/engine/decision.js')).default;
 
 function decisaoLegada(n, extra = {}) {
@@ -69,9 +70,9 @@ test('resolveIntoHistory aceita a decisão antiga e não lança', () => {
   const e = engineFake(lido);
   const [pendente] = lido.pending;
   assert.doesNotThrow(() => dec.resolveIntoHistory(e, { ...pendente, status: 'skipped', action: 'skip' }));
-  assert.equal(e.decisions.resolved[0].key, 'acme/app#1');
-  assert.equal(typeof e.decisions.resolved[0].resolvedAt, 'number');
+  assert.equal(decisoesResolvidas(e)[0].key, 'acme/app#1');
+  assert.equal(typeof decisoesResolvidas(e)[0].resolvedAt, 'number');
   // com memória de rodada apontada (roundId de uma rodada que este disco não tem), idem
   assert.doesNotThrow(() => dec.resolveIntoHistory(e, { ...pendente, roundId: 'r-que-nao-existe', status: 'posted', action: 'approve' }));
-  assert.equal(e.decisions.resolved.length, 3);
+  assert.equal(decisoesResolvidas(e).length, 3);
 });
