@@ -112,17 +112,20 @@ Ainda sem versão publicada.
 ### Container do motor (fase 5)
 
 - **Imagem do motor:** `Dockerfile` na raiz, sobre `node:24.22.1-bookworm-slim` fixado por
-  digest, com `git` 2.39.5, `gh` 2.104.0 (repositório apt oficial, chaveiro conferido por
-  sha256) e Claude Code 2.1.326 (pacote npm), cada um em versão exata. O processo roda como o
+  digest, com `gh` 2.104.0 (repositório apt oficial, chaveiro conferido por sha256) e Claude
+  Code 2.1.326 (pacote npm) em versão exata, e o `git` do Debian 12 no dia do build (a versão
+  que entrou fica em `/etc/farol-versoes`, na imagem). O processo roda como o
   usuário 10001, com o `tini` como PID 1, e a raiz do container pode ser somente leitura. Só
   entra o que o motor lê em execução: `web/`, `test/` e `docs/` ficam fora.
 - **A instância hospedada não sobe aberta:** com `FAROL_INSTANCIA_HOSPEDADA=1`, que a imagem
-  liga, o motor recusa o boot, com código 1 e sem criar nem alterar nada, quando não há
+  liga, o motor recusa o boot, com código 1 e sem criar nem tocar o `config.json`, quando não há
   `config.json` (o volume que não montou era tratado como instalação nova e subia sem
   autenticação, com a conta agindo sozinha), quando o `config.json` não exige autenticação e
-  quando ele não define `hostPublico` nem `origensPermitidas`. Valor da variável que não é `1`
-  nem `0` também recusa. Fora do container nada muda: sem a variável, a instalação nova sobe
-  como antes.
+  quando ele não define `hostPublico` nem `origensPermitidas`. A recusa vai para o stderr e, se
+  a pasta de estado já existir no volume, para o `farol.log`. Valor da variável que não é `1`
+  nem `0` também recusa, inclusive a variável vazia. A config que passa e não atende (`bind`
+  em loopback, ou `origensPermitidas` sem `hostPublico`) sobe com uma linha `WARN`. Fora do
+  container nada muda: sem a variável, a instalação nova sobe como antes.
 - **O volume é o HOME inteiro do usuário do motor** (`/home/farol`), porque o motor grava
   `~/.claude.json` e o `gh` e o Claude Code gravam em outros pontos do HOME. `FAROL_HOME`
   continua no padrão (`~/.farol`).
@@ -133,6 +136,11 @@ Ainda sem versão publicada.
   `config.json` de exemplo (`docs/exemplos/config.hospedagem.exemplo.json`), a primeira subida,
   o que o orquestrador precisa garantir, o fuso, os riscos conhecidos e o que falta decidir
   para publicar a imagem.
+- **Sem avaliação técnica na imagem:** hospedado hoje, o Farol revisa e publica, mas sem a
+  avaliação técnica: nenhuma aprovação sai como limpa. O cadastro dos repositórios e a
+  ferramenta moram no volume e não vêm na imagem; sem o cadastro, toda aprovação sai como com
+  ressalvas (decide o `onCaveats`), e com o cadastro e sem a ferramenta o APPROVE do
+  repositório declarado é recusado. Pendência aberta, descrita nos riscos do guia.
 - **Ainda não feito:** publicar a imagem (registro, disparo e credencial por decidir), o login
   real do `gh` e da assinatura dentro do container e uma revisão de verdade nele. O código de
   pareamento ainda pode ser invalidado por quem não pareou, e a sessão de revisão ainda alcança

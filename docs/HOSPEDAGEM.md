@@ -35,7 +35,7 @@ reconstruir a imagem.
 | peça | versão | de onde vem |
 |---|---|---|
 | base | `node:24.22.1-bookworm-slim`, fixada por digest | o contrato de Node do `package.json` e do `.nvmrc` |
-| `git` | 2.39.5 (`1:2.39.5-0+deb12u3`) | o pacote do Debian 12 |
+| `git` | a do Debian 12 no dia do build (2.39.5 em 16/11/2026) | o pacote do Debian, sem versão fixada: fixar o patch quebraria o build quando o Debian o trocasse por uma correção |
 | `gh` | 2.104.0 | o repositório apt oficial do GitHub CLI, com o chaveiro conferido por sha256 no build |
 | Claude Code | 2.1.326 | o pacote npm `@anthropic-ai/claude-code`, instalado em `/usr/local/bin` |
 | apoio | `ca-certificates`, `procps`, `tini`, `tzdata` | o Debian da base, sem versão fixada |
@@ -47,7 +47,8 @@ o Claude Code fica mais de três dias atrás da última versão publicada no npm
 ser reconstruída com o `ARG` novo.
 
 O build roda `apt-get upgrade`, então os pacotes do sistema trazem as correções de segurança
-publicadas até o dia do build.
+publicadas até o dia do build. As versões que entraram ficam escritas em `/etc/farol-versoes`,
+dentro da imagem, e `tools/provar-imagem.sh` as imprime.
 
 O que entra do repositório, em `/opt/farol`, com dono root e sem permissão de escrita para o
 usuário do motor: `server.js`, `package.json`, `LICENSE`, `lib/`, `workspace-template/`,
@@ -76,14 +77,15 @@ A imagem não tem `curl`, `wget`, `jq`, `ssh` nem `pnpm`.
 
 ## Variáveis de ambiente
 
-A imagem já define todas. Nenhuma é segredo.
+A imagem já define todas. Nenhuma é segredo. `NODE_ENV` não é definida: o motor não a lê, e
+`production` faria o `pnpm` da ferramenta da avaliação técnica pular as dependências de
+desenvolvimento.
 
 | variável | valor na imagem | para que serve |
 |---|---|---|
 | `HOME` | `/home/farol` | o HOME do usuário do motor, que é o volume |
 | `FAROL_HOME` | `/home/farol/.farol` | a pasta de dados. É o `~/.farol` do HOME acima de propósito: outro valor liga a instância isolada, que não escreve no GitHub (`lib/paths.js`) |
 | `FAROL_INSTANCIA_HOSPEDADA` | `1` | a trava abaixo |
-| `NODE_ENV` | `production` | o motor não a lê; vale para o que ele executa |
 | `TZ` | `America/Sao_Paulo` | [o fuso do processo](#o-fuso-do-processo) |
 | `DISABLE_AUTOUPDATER` | `1` | o Claude Code não tenta se atualizar: a versão é a da imagem |
 
@@ -96,11 +98,13 @@ Com a variável em `1`, o boot recusa (`lib/instancia-hospedada.js`):
 - `config.json` que não exige autenticação na API;
 - `config.json` sem `hostPublico` e sem `origensPermitidas`.
 
-Em cada caso o motor escreve o motivo no stderr, sai com código 1 e não cria nem altera nada
-no volume. As mensagens:
+Em cada caso o motor escreve o motivo no stderr e sai com código 1, e o `config.json` não é
+criado nem tocado. A linha da recusa também vai para o `farol.log` quando a pasta de estado
+(`.farol/workspace/state/`) já existe no volume, que é o caso de uma instância que já rodou;
+num volume vazio, nada é criado. As mensagens:
 
 ```
-[farol] instância hospedada (FAROL_INSTANCIA_HOSPEDADA=1), o motor não sobe: não há config.json em /home/farol/.farol/config.json. Sem ele o motor subiria com os padrões, sem autenticação e com a conta agindo sozinha. Confira se o volume de dados está montado e grave o config.json da instância (docs/HOSPEDAGEM.md). Nada foi criado.
+[farol] instância hospedada (FAROL_INSTANCIA_HOSPEDADA=1), o motor não sobe: não há config.json em /home/farol/.farol/config.json. Sem ele o motor subiria com os padrões, sem autenticação e com a conta agindo sozinha. Confira se o volume de dados está montado e grave o config.json da instância (docs/HOSPEDAGEM.md). O config.json não foi criado.
 [farol] instância hospedada (FAROL_INSTANCIA_HOSPEDADA=1), o motor não sobe: o config.json não exige autenticação na API. Grave "hostPublico" ou "origensPermitidas" (qualquer um dos dois liga a exigência, sem chave que desligue) e "localAuth": "exigir". Corrija /home/farol/.farol/config.json (o arquivo não foi alterado; docs/HOSPEDAGEM.md).
 [farol] instância hospedada (FAROL_INSTANCIA_HOSPEDADA=1), o motor não sobe: o config.json não define "hostPublico" nem "origensPermitidas". Grave o nome com que o proxy chega ao motor em "hostPublico" e a origem do front em "origensPermitidas". Corrija /home/farol/.farol/config.json (o arquivo não foi alterado; docs/HOSPEDAGEM.md).
 ```
@@ -112,9 +116,19 @@ de máquina local (sem nenhuma das duas) recebe as duas últimas mensagens junta
 [`CONFIGURATION.md`](CONFIGURATION.md#para-hospedar) continuam valendo antes destas: arquivo
 ilegível, nome de chave errado e valor inválido.
 
-Só `1` liga. Ausente, vazia e `0` desligam (`0` serve para rodar a imagem numa máquina de
-desenvolvimento). Qualquer outro valor (`true`, `sim`) impede o boot, para um erro de digitação
-não virar a trava desligada.
+Só `1` liga, e só ausente e `0` desligam (`0` serve para rodar a imagem numa máquina de
+desenvolvimento). Qualquer outro valor impede o boot, inclusive `true`, `sim` e a variável
+**vazia**: um manifesto com `value: ""` por cima do padrão da imagem não desliga a trava, faz o
+container sair com código 1.
+
+**Dois avisos, que não recusam.** A config passa pela trava e mesmo assim não atende ninguém; o
+motor sobe e grava uma linha `WARN` no `farol.log` e no stderr (`avisosDaHospedagem`):
+
+- `bind` em loopback ou ausente: dentro do container o motor escuta só para o próprio
+  container, e o proxy não conecta;
+- `origensPermitidas` sem `hostPublico`, com `bind` fora do loopback: a allowlist de Host
+  aceita só `127.0.0.1`, `localhost` e o próprio `bind`, com a porta. O pedido que o proxy
+  entregar com o nome público no `Host` recebe 403, a menos que o proxy reescreva o `Host`.
 
 ## O volume
 
@@ -152,10 +166,16 @@ segredo nenhum, e é o que o CI usa para subir a imagem. Troque os dois endereç
 |---|---|---|
 | `bind` | `"0.0.0.0"` | dentro do container o proxy chega pela rede do pod, não pelo loopback. O padrão do motor continua sendo `127.0.0.1` |
 | `port` | `47170` | a porta do `EXPOSE` e da sonda |
-| `hostPublico` | `"farol.exemplo.com"` | o nome com que o proxy TLS chega ao motor, sem porta |
-| `origensPermitidas` | `["https://painel.exemplo.com"]` | a origem do front na Vercel |
+| `hostPublico` | `"farol.exemplo.invalid"` | o nome com que o proxy TLS chega ao motor, sem porta |
+| `origensPermitidas` | `["https://painel.exemplo.invalid"]` | a origem do front na Vercel |
 | `localAuth` | `"exigir"` | a exigência de autenticação dita por extenso; as duas chaves acima já a ligam |
 | `conta` | `autoReview: false` e os três desfechos em `wait` | a primeira subida recomendada: o motor monitora, põe na fila e não posta nada sozinho |
+
+Os dois endereços do exemplo terminam em `.invalid`, um nome reservado que nunca resolve.
+**Subir o exemplo sem trocar não abre nada, e também não funciona:** o motor sobe, a saúde
+responde, e todo pedido que chegar com o nome de verdade no `Host` recebe
+`403 {"error":"forbidden","motivo":"host"}`, porque só `farol.exemplo.invalid` está na lista
+(`lib/http-guard.js`).
 
 O exemplo não traz o login da conta (`conta.user`): ele é detectado do `gh` no primeiro ciclo
 depois do login. Para fixá-lo desde o início, acrescente `"user": "<login>"` à conta.
@@ -292,6 +312,17 @@ Quem trocar `TZ` no orquestrador troca os quatro pontos acima.
    para a conta revisora um token com o menor escopo que a revisão permite e trate as duas
    credenciais como expostas a qualquer PR revisado.
 
+   **O `~/.profile` do volume é um ponto de persistência.** O motor chama o Claude Code sempre
+   por `/bin/sh -lc`: a sessão de revisão (`lib/engine/claude-child.js`), o login da assinatura
+   (`lib/engine/login-web.js`) e os comandos de versão, de teste de perfil e de uso do plano
+   (`runShell`, `lib/io.js`). O shell de login lê o `/etc/profile` e depois o `~/.profile`, e
+   aqui `~` é o volume, gravável pela própria sessão. Uma sessão induzida que grave nesse
+   arquivo passa a rodar código em todo shell que o motor abrir dali em diante, inclusive
+   depois de reiniciar o container e de trocar a imagem. A imagem não cria esse arquivo, e o
+   motor não confere se ele existe. O que mitigaria, sem estar feito: montar por cima um
+   `~/.profile` de dono root e somente leitura (um arquivo vazio basta), ou trocar as chamadas
+   para um shell sem login, já que na imagem o `claude` está no PATH padrão.
+
 2. **O código de pareamento pode ser queimado por quem não pareou.** `POST /api/auth/pair` é
    pública. Cada tentativa errada conta contra todos os códigos pendentes, e a quinta os tira
    do arquivo (`registrarErro`, `lib/local-auth/pareamento.js`). Quem alcança o proxy consegue,
@@ -299,18 +330,46 @@ Quem trocar `TZ` no orquestrador troca os quatro pontos acima.
    qualquer pareamento novo. Medido na imagem: cinco pedidos sem token, todos com a mesma
    resposta `codigo_invalido`, e o código pendente saiu do disco. Ninguém entra por aí: o código
    tem dez caracteres em base32 (cerca de 50 bits), vale dez minutos e uma vez, e a sessão já
-   pareada seguiu valendo. O motor grava uma linha `WARN` no `farol.log` a cada bloqueio. Não foi corrigido neste lote
-   (ver [o que falta](#o-que-não-foi-provado)). Até lá: limite a taxa de `POST /api/auth/pair`
-   no proxy, por endereço de origem, e use o código assim que gerar.
+   pareada seguiu valendo. Adivinhar o código não é viável: são cerca de 50 bits, cinco
+   tentativas por código e dez minutos. O motor grava uma linha `WARN` no `farol.log` a cada
+   bloqueio. Há ainda um sinal lateral: a tentativa errada só grava em disco quando existe
+   código pendente (`registrarErro` volta antes de gravar com a lista vazia), então o tempo da
+   resposta pode revelar a quem não pareou se há código esperando. É plausível pelo código e
+   não foi medido. Não foi corrigido neste lote (ver
+   [o que falta](#o-que-não-foi-provado)). Até lá: limite a taxa de `POST /api/auth/pair` no
+   proxy, por endereço de origem, e use o código assim que gerar.
 
-3. **Sem a ferramenta da avaliação técnica.** A imagem não traz `pnpm` nem a ferramenta fixada
-   em `lib/technical-review/tool.json`, que é instalada à parte no volume
-   (`node lib/technical-review/setup.js`, [a instalação](CONFIGURATION.md#avaliação-técnica-dos-prs-revisados))
-   a partir de um repositório privado. Sem ela a avaliação técnica registra a ferramenta como
-   indisponível (`lib/technical-review/verdict.js`). Na primeira subida, com tudo em `wait`,
-   nada é postado de qualquer forma. A instalação dentro do container não foi feita nem medida;
-   se for feita, atenção ao `NODE_ENV=production` da imagem, que faz o `pnpm install` deixar de
-   fora as dependências de desenvolvimento.
+3. **A avaliação técnica não roda nesta imagem.** Pendência aberta, não resolvida neste lote.
+   **Hospedado hoje, o Farol revisa e publica, mas sem a avaliação técnica: nenhuma aprovação
+   sai como limpa.** A avaliação depende de duas coisas que moram no volume, em `~/.farol`, e
+   nenhuma vem na imagem: o cadastro por repositório (`technical-review/repositories.json`,
+   `lib/technical-review/profiles.js`) e a ferramenta (`toolchains/eng-behaviour@<versão>`,
+   `lib/technical-review/toolchain.js`). São dois casos:
+
+   - **Volume novo, sem o cadastro.** Nenhum repositório tem declaração: `profileFor` devolve
+     `null` e `prepareTechnicalReview` sai com `semDeclaracao: true` antes de procurar a
+     ferramenta (`lib/technical-review/runtime.js`). A revisão roda e o resultado é publicado,
+     e nenhuma regra do catálogo `eng-behaviour` é avaliada. Todo resultado aprovável leva o
+     ponto "Este repositório não tem declaração técnica cadastrada" (`pontosDoApp`,
+     `lib/engine/ressalvas.js`), então sai como com ressalvas: quem decide é o `onCaveats` da
+     conta, e o `onClean` nunca se aplica. Na hora de publicar, o repositório sem declaração
+     não passa pela ferramenta: a aprovação é conferida só contra o commit, a prova e o
+     contexto da revisão (`provaEsgotadaRefusal`, `lib/technical-review/publication.js`).
+   - **Cadastro presente no volume e ferramenta ausente.** Para o repositório declarado a
+     avaliação falha com a causa `tool` ("A ferramenta de verificação técnica está indisponível
+     nesta máquina", `lib/technical-review/verdict.js`). A recuperação daquele PR fica pausada
+     até a ferramenta voltar (`lib/engine/recuperacao-prova.js`), e o APPROVE é recusado na
+     publicação com `technical_review` (`approvalRefusal`, `lib/technical-review/publication.js`).
+     É o caso de quem copia o `~/.farol` de uma máquina para o volume sem instalar a ferramenta.
+
+   Para ter a avaliação técnica hospedada é preciso, dentro do container e como o usuário do
+   motor: o `pnpm` (a imagem não traz), uma credencial do `git` com acesso ao repositório
+   privado da ferramenta (`origem` em `lib/technical-review/tool.json`), rodar
+   `node lib/technical-review/setup.js`, que clona, faz checkout do commit fixado, roda
+   `pnpm install --frozen-lockfile` e `pnpm build` e instala em
+   `~/.farol/toolchains/eng-behaviour@<versão>`, e gravar o cadastro dos repositórios. Nada
+   disso foi feito nem medido no container. Falta decidir se a ferramenta entra na imagem ou é
+   instalada no volume.
 
 4. **`/tmp` sem execução.** O `--tmpfs /tmp` do Docker monta com `noexec`. O motor subiu, e o
    Claude Code respondeu a `auth status` e a `auth login` assim, mas uma revisão de verdade não
@@ -352,7 +411,19 @@ decidir, com o tech lead:
   [O que o orquestrador precisa garantir](#o-que-o-orquestrador-precisa-garantir).
 
 Um esboço do job, para quando isso estiver decidido. Ele não existe no workflow, e as ações da
-AWS e o nome do papel são suposições a conferir:
+AWS e o nome do papel são suposições a conferir. O que ele pede além do que está escrito:
+
+- **um gatilho por tag.** O workflow de hoje só dispara em push na `main`, em pull request para
+  a `main` e à mão (`workflow_dispatch`): sem `on: push: tags`, a condição `if` do esboço nunca
+  é verdadeira;
+- **mudar a trava junto, por decisão.** `test/node-runtime.test.js` reprova hoje qualquer
+  `id-token: write`, `docker push`, `docker login`, `secrets.` e ação que não seja as duas já
+  usadas. O job de publicação muda esse teste no mesmo PR;
+- **a confiança do papel na AWS restrita à tag.** A política de confiança do papel deve aceitar
+  só o `sub` do OIDC deste repositório em referência de tag
+  (`repo:biudtech/farol-biuder:ref:refs/tags/v*`), e não qualquer branch ou pull request;
+- **ações fixadas por SHA de commit**, com a versão no comentário, e não por tag móvel. As duas
+  que o workflow já usa estão por tag de versão maior.
 
 ```yaml
 # publicar:
@@ -365,11 +436,11 @@ AWS e o nome do papel são suposições a conferir:
 #     id-token: write            # só para o OIDC da AWS
 #   steps:
 #     - uses: actions/checkout@v7
-#     - uses: aws-actions/configure-aws-credentials@<versão fixada>
+#     - uses: aws-actions/configure-aws-credentials@<SHA do commit>   # vX.Y.Z
 #       with:
 #         role-to-assume: arn:aws:iam::<conta>:role/<papel-de-push-do-farol>
 #         aws-region: <região>
-#     - uses: aws-actions/amazon-ecr-login@<versão fixada>
+#     - uses: aws-actions/amazon-ecr-login@<SHA do commit>             # vX.Y.Z
 #       id: ecr
 #     - name: Construir, provar e publicar
 #       run: |
@@ -412,5 +483,7 @@ O que falta fazer, além de publicar:
   ao motor com o endereço do proxy: limitar por origem pede confiar num cabeçalho que o proxy
   preencha. É decisão de quem responde pela autenticação, não um ajuste de empacotamento.
 - **Isolar a sessão de revisão das credenciais** (risco 1).
-- **Decidir como a ferramenta da avaliação técnica entra** (risco 3): na imagem, ou instalada
-  no volume.
+- **Pôr a avaliação técnica para rodar hospedada** (risco 3): decidir se a ferramenta entra na
+  imagem ou é instalada no volume, e como o cadastro dos repositórios chega ao volume. Até lá
+  nenhuma aprovação sai como limpa.
+- **Fechar o `~/.profile` do volume** (risco 1).

@@ -27,7 +27,7 @@ node server.js
 O motor escuta em `http://127.0.0.1:47170`. Fora de `/api/` ele responde 404: não há página.
 
 Para rodar em container há um [`Dockerfile`](Dockerfile) na raiz, com `git`, `gh` e Claude Code
-em versão fixada: `docker build -t farol-biuder-motor:dev .`. A imagem só sobe com um
+(os dois últimos em versão fixada): `docker build -t farol-biuder-motor:dev .`. A imagem só sobe com um
 `config.json` de instância hospedada no volume; o passo a passo está em
 [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md).
 
