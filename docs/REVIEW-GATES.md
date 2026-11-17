@@ -12,6 +12,8 @@ seção diz a regra e o arquivo em que ela mora.
 - [Ressalva e lacuna](#ressalva-e-lacuna)
 - [A decisão sem mesa](#a-decisão-sem-mesa)
 - [CI obrigatório antes da aprovação](#ci-obrigatório-antes-da-aprovação)
+- [Check herdado da base](#check-herdado-da-base)
+- [PR de sincronização](#pr-de-sincronização)
 - [Dedup por head](#dedup-por-head)
 - [Head que anda](#head-que-anda)
 - [PR da própria conta](#pr-da-própria-conta)
@@ -160,6 +162,8 @@ Duas listas diferentes, e é o motor que decide em qual cada coisa cai, nunca o 
 - **Ressalva** (`attentionPoints`, `lib/engine/ressalvas.js`) é a única coisa que separa um
   resultado limpo de um com ressalvas. Nenhuma ressalva: vale `onClean`. Uma ou mais: vale
   `onCaveats`. Nada dessa lista é escrito no PR, salvo o que é dirigido a quem decide o merge.
+  No PR de sincronização sem defeito a lista sai vazia ([PR de sincronização](#pr-de-sincronização)),
+  e a linha informativa do check herdado nunca entra nela ([Check herdado da base](#check-herdado-da-base)).
 - **Lacuna** (`approvalGaps`, `lib/technical-review/evidence.js`) é o que falta de prova para
   aprovar. `lacunasExigidas` (`lib/engine/busca-da-prova.js`) fica só com as duras (`ehLacunaDura`,
   `lib/technical-review/verdict.js`) e as do CI; as outras viram ressalva na rodada que as
@@ -271,8 +275,90 @@ Leitura que falha (sem token, `gh` fora, exigência da branch desconhecida) espe
 aqui a falta de dado segura. Uma espera armada antes de a chave ser desligada é liberada no ciclo
 seguinte sem olhar o CI, com o head ainda conferido (`liberarSemCi`).
 
+O check obrigatório herdado da base não segura nada disso: ver [Check herdado da base](#check-herdado-da-base).
+
 Começar a revisão só com os checks obrigatórios verdes é outra chave, `aguardarCiParaRevisar`,
 também desligada por padrão (`bloqueiaAutomatico`, `lib/engine/skip-review.js`).
+
+## Check herdado da base
+
+Regra do dono de 17/11/2026. Caso de origem: um PR de task para uma bancada `release_hmg_*`, em
+que a revisão escreveu que os checks obrigatórios `osv` estavam falhando no commit e que a
+aprovação seguia com eles verdes. O `osv` é obrigatório no ruleset da branch base, mas já falhava
+no commit atual da própria base: o PR herdou a falha. Nas palavras do dono, "não é momento de
+cobrar coisas que não são check required"; o GitHub segura o merge pelo ruleset de qualquer jeito,
+e a cobrança no review só gerava atrito.
+
+**Herdado** (`separarHerdados`, `lib/engine/checks-exigidos.js`) é o check obrigatório que falta
+no head do PR (vermelho, rodando ou ausente) e que está vermelho (falhou) no commit atual da branch
+base. Base sem o check (ausente, rollup vazio, check que só roda em `pull_request`) ou com ele ainda
+rodando nunca herda: a base não mostra falha nenhuma. O check que não está vermelho na base continua
+valendo exatamente como antes.
+
+**Onde vale.** O herdado sai da lista do que falta logo na leitura, nos dois lugares que leem os
+checks do PR: `bloqueadoPorChecks` (gate de entrada, `checksObrigatorios` do envelope, o clique e
+a publicação em `lib/technical-review/publication.js`) e `lerCi` (a espera do CI e a retirada do
+pedido, `lib/engine/espera-ci.js`). Com isso ele não segura a aprovação, nem com a espera do CI
+ligada; não vira lacuna de CI (`approvalGaps`), ressalva, motivo de espera, pedido de mudanças
+pelo CI (`payloadDoCiVermelho`) nem o aviso "aprovado com check obrigatório" do card
+(`avisoDaAprovacao`, `avisoDoCi`). Com a espera ligada, o pedido de mudanças que a sessão
+sustentou só pelo CI, quando o que falta no commit revisado é só herdado, vira aprovação pela
+política da conta (`estadosDoPedido`, `lib/engine/estado-desmentido.js`), e o prompt ganha o bloco
+`ciHerdadoBlock` (`lib/engine/review-prompt.js`) para a sessão não cobrar o herdado no texto.
+Check não obrigatório continua sem peso: nem chega a ser comparado com a base.
+
+**A leitura da base** (`checksDaBase`) é uma consulta GraphQL pelo `gh`: o commit atual da branch
+base e o `statusCheckRollup` dele, no mesmo formato que o `gh pr view` devolve para o PR, lido
+pela mesma régua (`checksExigidosVerdes`). Só acontece quando há check obrigatório fora do verde
+no head. Leitura que falha, commit sem SHA ou lista cortada (mais de 100 checks) valem como "não
+deu para ler", e o comportamento é o de antes: nada é herdado. O gate de lançamento e a leitura da
+revisão usam um cache por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA
+lido, que guarda também a falha. Os pontos que decidem postar leem a base fresca, sem o cache
+(`{ fresco: true }`): a espera do CI antes do APPROVE e a retirada do pedido (`lerCi`) e a
+publicação (`lib/technical-review/publication.js`).
+
+**O card.** Na mesa, o herdado aparece numa linha que só informa (`avisoDosHerdados`,
+`lib/engine/gate-espera.js`), com a marca `informativo`, que `attentionPoints` nunca conta como
+ressalva.
+
+Travado em `test/check-herdado-da-base.test.js`.
+
+## PR de sincronização
+
+Regra do dono de 17/11/2026: "merge-back também é pra ser algo sem atrito nenhum".
+
+**O critério** (`avaliarSincronizacao`, `lib/engine/pr-de-sincronizacao.js`), do app e
+conservador, numa consulta GraphQL só (`lerSincronizacao`, depois da sessão, junto da leitura dos
+checks em `checksEEstadoDoPr`, `lib/engine/estado-desmentido.js`):
+
+- origem (head) e destino (base) são branches contínuas do GitFlow da BIUD (`production`,
+  `homologation`, `development`, `main`, `master`) ou bancadas (`release_hmg_*`,
+  `release_prd_*`), diferentes entre si;
+- o head não é de fork: os commits do PR são os da branch de origem remota que o destino ainda não
+  tem;
+- nenhum commit do PR é exclusivo dele: cada um já entrou por outro PR mesclado numa branch
+  contínua ou bancada da mesma lista (`associatedPullRequests` com `states: [MERGED]` e o
+  `baseRefName` de cada um). PR mesclado numa branch de rascunho não conta;
+- a lista de commits veio inteira (até 100) e com a contagem fechando.
+
+Falta de dado nunca vira sincronização. PR de task para bancada não é sincronização, e commit
+empurrado direto numa branch contínua (sem PR mesclado) desfaz a marca. A marca vive em
+`result.sincronizacao` e na pendência; a que a sessão escrever no envelope é descartada.
+
+**O que muda.** Num PR de sincronização em que a revisão concluiu aprovar sem defeito (nenhum
+bloqueio vivo nos achados, nenhum `defeitosDoPr`), `attentionPoints` devolve lista vazia: a falta
+de card, o card não verificável e os itens de processo não são ressalva (a dependência aberta e o
+item para quem decide o merge também não; este segue no texto do APPROVE), e o resultado segue a
+política da conta para limpo. Zerar tudo é decisão do dono e só se sustenta porque cada commit já
+foi revisado num PR mesclado numa branch contínua, que é o que o critério acima confere. O check herdado não segura, pela regra acima. A admissibilidade não
+muda (lacuna exigida, análise, inventário, coerência), e com defeito real vale o de hoje. Os gates
+de postagem (credencial, linguagem, PR próprio, instância isolada, dedup por head, head que andou,
+PR mergeado ou fechado) não leem a marca.
+
+O prompt não muda: o protocolo da sessão já trata o "sync de linhagem" (item 3bis de
+`workspace-template/CLAUDE.md` e `prompts/pr-review-auto.md`), sem cobrar card.
+
+Travado em `test/pr-de-sincronizacao.test.js`.
 
 ## Dedup por head
 
