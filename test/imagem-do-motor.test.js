@@ -69,7 +69,7 @@ test('o pnpm tem a versão fixada, entra pelo npm e não pelo corepack, e a prov
   assert.ok(construcao.every(([binario]) => binario === 'pnpm'), 'a construção da ferramenta só chama o pnpm');
   // a loja, o cache e o estado do pnpm no volume, com a raiz somente leitura
   for (const [nome, valor] of [['XDG_DATA_HOME', '/home/farol/.local/share'], ['XDG_CACHE_HOME', '/home/farol/.cache'], ['XDG_STATE_HOME', '/home/farol/.local/state']]) {
-    assert.match(DOCKERFILE, new RegExp(`^\\s+${nome}=${valor.replace(/\./g, '\\.')} \\\\$`, 'm'), nome);
+    assert.match(DOCKERFILE, new RegExp(`^\\s+${nome}=${valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\\\$`, 'm'), nome);
   }
   const prova = ler('tools/provar-imagem.sh');
   assert.ok(prova.includes('PNPM_VERSION'), 'a prova lê a versão do Dockerfile');
