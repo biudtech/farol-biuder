@@ -111,6 +111,44 @@ export function comPerfil(cru: PessoasCruas, login: string, perfil: Pessoa): Pes
   return Object.fromEntries(Object.keys(pessoa).length ? [...resto, [chave, pessoa]] : resto);
 }
 
+// Antes de gravar `people` (que o motor troca inteiro), a tela relê o mapa atual do motor e monta
+// o corpo a partir dele, com só a pessoa editada ou a nova mudando: assim um perfil gravado por
+// outra aba depois do último estado que chegou aqui não é apagado. A releitura é a chave
+// `config.people` de GET /api/state, como o motor a manda.
+export const CAMINHO_DO_ESTADO = '/api/state';
+
+export function lerPessoasDoEstado(bruto: unknown): PessoasCruas | null {
+  if (!ehObjeto(bruto) || !ehObjeto(bruto.config)) return null;
+  const people = bruto.config.people;
+  if (people === undefined) return {};
+  return ehObjeto(people) ? people : null;
+}
+
+export type Releitura = { ok: true; pessoas: PessoasCruas } | { ok: false; texto: string };
+export type RelerPessoas = () => Promise<Releitura>;
+
+// O login do GitHub: letras, dígitos e hífen, até 39, sem hífen na ponta nem dois seguidos. É a
+// mesma regra com que o motor aceita uma pessoa sem papel (parsePeople, lib/parse.js na raiz).
+const LOGIN_DO_GITHUB = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+
+export function loginValido(login: string): boolean {
+  return LOGIN_DO_GITHUB.test(login);
+}
+
+// O login como a pessoa digitou, sem o @ da frente e sem espaço nas pontas.
+export function loginDigitado(texto: string): string {
+  return texto.trim().replace(/^@/, '');
+}
+
+// O corpo de `people` para pôr uma pessoa nova no Time: o mapa cru inteiro, como veio, mais ela,
+// com o papel quando escolhido e vazia sem ele (o motor guarda a pessoa sem perfil). Quem já
+// está no mapa não entra de novo: aí é editar o perfil.
+export function comPessoaNova(cru: PessoasCruas, login: string, papel: string): PessoasCruas | null {
+  const chave = chaveDaPessoa(login);
+  if (!loginValido(login) || Object.keys(cru).some((outro) => chaveDaPessoa(outro) === chave)) return null;
+  return Object.fromEntries([...Object.entries(cru), [chave, papel ? { papel } : {}]]);
+}
+
 // As outras pessoas (todas menos `login`) cujo perfil gravado difere do enviado: mudou, saiu
 // da lista ou apareceu sem ter sido enviada. É a conferência da resposta de um salvar.
 export function outrasQueDiferem(enviado: PessoasCruas, gravado: PessoasCruas, login: string): string[] {
@@ -286,4 +324,20 @@ export function motivoQueImpedeSalvar(estado: { cru: PessoasCruas | undefined; c
 export function avisoDeIlegiveis(ilegiveis: number): string | null {
   if (ilegiveis <= 0) return null;
   return `${ilegiveis} perfil(is) chegaram do motor com campo ou formato que esta tela não lê: ela mostra o que conseguiu ler. Salvar o perfil de outra pessoa reenvia esses como vieram, e o que o motor faz com eles vem no resultado do salvar.`;
+}
+
+// Os números de 30 dias como a tela os escreve: a taxa de aprovação de primeira e a média de
+// rodadas por PR saem das contagens que o motor manda, sem outra fonte.
+const UMA_CASA = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+export function taxaDePrimeira(n: { prs: number; aprovadosDePrimeira: number }): string {
+  return `${Math.round((n.aprovadosDePrimeira / n.prs) * 100)}%`;
+}
+
+export function rodadasPorPr(n: { prs: number; rodadas: number }): string {
+  return UMA_CASA.format(n.rodadas / n.prs);
+}
+
+export function textoDosNumeros(n: { janelaDias: number; prs: number; aprovadosDePrimeira: number }): string {
+  return `${n.prs === 1 ? '1 PR' : `${n.prs} PRs`} em ${n.janelaDias} dias · ${taxaDePrimeira(n)} aprovados de primeira`;
 }

@@ -188,6 +188,13 @@ const lerSomaComNome: LeitorDeItem<SomaComNome> = (v) => {
   return { name: v.name, ...lerSoma(v) };
 };
 
+// A quebra por repositório (aggregateRepos, lib/usage/report.js): as mesmas somas da quebra
+// por tipo. O nome vazio é o que não é de PR (ferramenta, conversa, registro antigo).
+const lerSomaDoRepo: LeitorDeItem<SomaComNome> = (v) => {
+  if (!ehObjeto(v) || !ehTexto(v.name)) return undefined;
+  return { name: v.name, ...lerSoma(v) };
+};
+
 // A quebra por modelo (aggregateModels): o motor soma execuções e tokens de entrada e de
 // saída. Não manda custo nem cache por modelo.
 export interface SomaDoModelo {
@@ -267,6 +274,8 @@ export interface Relatorio {
   // um por tipo, na ordem do motor, inclusive os zerados
   byKind: SomaComNome[];
   models: SomaDoModelo[];
+  // por repositório, na ordem do motor; ausente quando o motor não manda a quebra
+  repos?: SomaComNome[];
   history: PaginaDoDiario;
   options: OpcoesDeFiltro;
   // operações concluídas no período: revisões, e PRs distintos entre elas
@@ -278,7 +287,7 @@ export interface Relatorio {
   sinceDay?: string;
   // o diário tem menos sessões do que o agregado do motor contou
   incomplete?: boolean;
-  // Não vem do motor: quantos itens de `series`, `byKind` e `models` a tela não leu.
+  // Não vem do motor: quantos itens de `series`, `byKind`, `models` e `repos` a tela não leu.
   descartados: number;
 }
 
@@ -302,6 +311,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
   const series = lerItens(bruto.series, lerSomaComNome);
   const byKind = lerItens(bruto.byKind, lerSomaComNome);
   const models = lerItens(bruto.models, lerSomaDoModelo);
+  const repos = lerItens(bruto.repos, lerSomaDoRepo);
   const opcoes = ehObjeto(bruto.options) ? bruto.options : {};
   const relatorio: Relatorio = semAusentes({
     range: { start: bruto.range.start, end: bruto.range.end },
@@ -309,6 +319,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
     series: series?.itens ?? [],
     byKind: byKind?.itens ?? [],
     models: models?.itens ?? [],
+    repos: repos?.itens,
     history,
     options: { kind: textos(opcoes.kind), model: textos(opcoes.model), repo: textos(opcoes.repo) },
     completed: lerConcluidas(bruto.completed),
@@ -316,7 +327,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
     unidentified: campo(bruto.unidentified, ehContagem),
     sinceDay: campo(bruto.sinceDay, ehDia),
     incomplete: campo(bruto.incomplete, ehBooleano),
-    descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0),
+    descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0) + (repos?.descartados ?? 0),
   });
   return { ok: true, relatorio };
 }

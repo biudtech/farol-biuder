@@ -1,8 +1,8 @@
 'use client';
 
 // O dossiê de uma pessoa, aberto na própria página: o que o motor guarda sobre ela. No alto, o
-// avatar, o nome e uma linha com o papel e o que o motor sustenta (quantas entradas guarda e o
-// dia da mais recente: o motor não manda números por pessoa). Embaixo, uma linha por assunto:
+// avatar, o nome e uma linha com o papel e o que o motor sustenta (os números de 30 dias, quando
+// ele os manda, quantas entradas guarda e o dia da mais recente). Embaixo, uma linha por assunto:
 // "O que o Farol observa" aberta (os pontos que o motor anotou nas entradas, de markdown), e
 // fechadas, com o resumo na própria linha, a calibração (papel e competência), os números das
 // entradas listadas, as últimas revisões e as contestações. Remover a pessoa fica no fim,
@@ -17,7 +17,7 @@ import { textoDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import {
   CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
-  prDaEntrada, resumoDaCalibracao, type ContestacaoDoAutor,
+  prDaEntrada, resumoDaCalibracao, rodadasPorPr, taxaDePrimeira, textoDosNumeros, type ContestacaoDoAutor, type RelerPessoas,
 } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import { Markdown } from '../Markdown';
@@ -43,6 +43,7 @@ const pontos = (n: number): string => (n === 1 ? '1 ponto' : `${n} pontos`);
 // A frase sob o nome: o papel e o que o motor sustenta, sem número que ele não manda.
 function subDoDossie(login: string, autor: Autor | undefined, perfil: Pessoa | undefined): string {
   const partes = [`@${login}`, papelCurto(perfil)];
+  if (autor?.numeros) partes.push(textoDosNumeros(autor.numeros));
   if (!autor) partes.push('sem dossiê');
   else if (!autor.entries.length) partes.push('dossiê sem entradas');
   else {
@@ -88,6 +89,10 @@ function Observa({ login, autor }: { login: string; autor: Autor | undefined }) 
 
 function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }) {
   const contagem = contagemDosDesfechos(autor.entries);
+  const n = autor.numeros;
+  const dosDias: Array<[string, string]> = n
+    ? [['PRs revisados', String(n.prs)], ['De primeira', taxaDePrimeira(n)], ['Rodadas por PR', rodadasPorPr(n)]]
+    : [];
   const caixas: Array<[string, number]> = [
     ['Entradas guardadas', autor.entries.length],
     ['Aprovações', contagem.aprovacao],
@@ -97,7 +102,33 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
   if (contagem.outro) caixas.push(['Outros desfechos', contagem.outro]);
   if (contestacoes) caixas.push(['Contestações', contestacoes]);
   return (
-    <Linha rotulo="Números" resumo={<><span className={ui.t}>Números</span><span className={`${ui.r} ${ui.empurra}`}>{entradas(autor.entries.length)} · {contagem.aprovacao === 1 ? '1 aprovação' : `${contagem.aprovacao} aprovações`}</span></>}>
+    <Linha
+      rotulo="Números"
+      resumo={(
+        <>
+          <span className={ui.t}>Números</span>
+          <span className={`${ui.r} ${ui.empurra}`}>
+            {n ? `${rodadasPorPr(n)} rodada por PR` : `${entradas(autor.entries.length)} · ${contagem.aprovacao === 1 ? '1 aprovação' : `${contagem.aprovacao} aprovações`}`}
+          </span>
+        </>
+      )}
+    >
+      {n ? (
+        <>
+          <dl className={`${ui.grade4} ${estilos.numeros}`}>
+            {dosDias.map(([nome, valor]) => (
+              <div key={nome} className={estilos.numero}>
+                <dt>{nome}</dt>
+                <dd>{valor}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className={ui.mini}>
+            Dos últimos {n.janelaDias} dias, contados no histórico de revisões do motor: os PRs cuja primeira revisão publicada caiu na janela, quantos foram aprovados nessa primeira e quantas revisões publicadas eles somam.
+            {n.historicoNoTeto ? ' O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.' : ''}
+          </p>
+        </>
+      ) : null}
       <dl className={`${ui.grade4} ${estilos.numeros}`}>
         {caixas.map(([nome, valor]) => (
           <div key={nome} className={estilos.numero}>
@@ -107,7 +138,7 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
         ))}
       </dl>
       <p className={ui.mini}>
-        Contados nas entradas que o motor guarda (as {TETO_DE_ENTRADAS} mais recentes). O motor não manda números por pessoa: não há total de PRs nem taxa de aprovação.
+        Contados nas entradas que o motor guarda (as {TETO_DE_ENTRADAS} mais recentes).{n ? '' : ' Sem PR desta pessoa com primeira revisão publicada nos últimos 30 dias, o motor não manda os números do período.'}
       </p>
     </Linha>
   );
@@ -167,6 +198,7 @@ interface Props {
   emDia: boolean;
   contestacoes: readonly ContestacaoDoAutor[];
   controle: ControleDeAcoes;
+  relerPessoas: RelerPessoas;
   // a lista está sendo lida de novo: o que está na tela é da carga anterior
   ocupado: boolean;
   // o erro da carga e o aviso de lista velha, que valem também com o dossiê aberto
@@ -174,7 +206,7 @@ interface Props {
   aoFechar(): void;
 }
 
-export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, ocupado, avisos, aoFechar }: Props) {
+export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, relerPessoas, ocupado, avisos, aoFechar }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const continuar = useRef<HTMLButtonElement>(null);
   // onde o foco estava quando a pergunta de descarte abriu: é para lá que ele volta
@@ -289,9 +321,9 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
               rotulo="Como revisar os PRs desta pessoa"
               resumo={<><span className={ui.t}>Como revisar os PRs desta pessoa</span><span className={`${ui.r} ${ui.empurra}`}>{resumoDaCalibracao(pronto.perfil)}</span></>}
             >
-              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} aoMudar={setAlterado} />
+              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} relerPessoas={relerPessoas} aoMudar={setAlterado} />
             </Linha>
-            {pronto.autor?.entries.length ? <Numeros autor={pronto.autor} contestacoes={contestacoes.length} /> : null}
+            {pronto.autor?.entries.length || pronto.autor?.numeros ? <Numeros autor={pronto.autor} contestacoes={contestacoes.length} /> : null}
             {pronto.autor?.entries.length ? <Ultimas autor={pronto.autor} /> : null}
             <Contestacoes registros={contestacoes} />
           </div>

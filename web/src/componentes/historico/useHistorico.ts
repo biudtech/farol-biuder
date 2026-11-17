@@ -84,8 +84,20 @@ const AUSENTE: LeituraDoDetalhe = Object.freeze({ fase: 'ausente' });
 
 // A revisão aberta. Vem da página carregada quando está nela; fora dela (endereço colado, a
 // lista andou), é pedida ao motor pela chave do PR, que devolve a mais recente daquele PR.
+// Mesmo da página ela é pedida, pela chave e pelo id: os checks do head e a execução só vêm por
+// GET /api/decision (lib/engine/detalhe-da-decisao.js), e o id faz o motor devolver esta revisão e
+// não a mais recente do PR. Enquanto a resposta não chega, ou se ela falhar ou trouxer outra
+// revisão, a da página é mostrada sem as duas linhas.
 // `listaLida`: a página da lista já respondeu (com dados ou com falha); antes disso não dá
 // para saber se o item está nela.
+// Os checks e a execução da resposta por chave, quando ela é a mesma revisão da página.
+function comOComplemento(daPagina: Revisao, r: Resultado<DetalheDaRevisao> | null): Revisao {
+  if (!r?.ok || !r.dados.encontrada || r.dados.revisao.id !== daPagina.id) return daPagina;
+  const { checks, execucao } = r.dados.revisao;
+  if (!checks && !execucao) return daPagina;
+  return { ...daPagina, ...(checks ? { checks } : {}), ...(execucao ? { execucao } : {}) };
+}
+
 export function useDetalhe(
   cliente: Pick<Cliente, 'get'>,
   aberto: DetalheAberto | null,
@@ -97,21 +109,24 @@ export function useDetalhe(
   const id = aberto?.id ?? '';
   const chave = aberto?.chave ?? '';
   const daPagina = useMemo(() => (id ? itens?.find((item) => item.id === id) : undefined), [itens, id]);
-  const buscar = id !== '' && !daPagina && listaLida && chave !== '';
+  const buscar = id !== '' && chave !== '' && (daPagina !== undefined || listaLida);
+  // da página, a revisão é certa e vai pelo id; fora dela, o endereço pode ser velho, e vale a
+  // mais recente do PR (com o aviso de que é outra)
+  const comId = daPagina !== undefined;
   const pedido = `${tentativa}|${id}|${chave}`;
 
   useEffect(() => {
     if (!buscar) return undefined;
     const controle = new AbortController();
-    void cliente.get(caminhoDoDetalhe(chave), lerDetalheDaRevisao, { sinal: controle.signal }).then((r) => {
+    void cliente.get(caminhoDoDetalhe(chave, comId ? id : undefined), lerDetalheDaRevisao, { sinal: controle.signal }).then((r) => {
       if (!controle.signal.aborted) setBuscado({ pedido, r });
     });
     return () => controle.abort();
-  }, [cliente, buscar, chave, pedido]);
+  }, [cliente, buscar, chave, pedido, comId, id]);
 
   return useMemo<LeituraDoDetalhe | null>(() => {
     if (!id) return null;
-    if (daPagina) return { fase: 'pronto', revisao: daPagina, outra: false };
+    if (daPagina) return { fase: 'pronto', revisao: comOComplemento(daPagina, buscado?.pedido === pedido ? buscado.r : null), outra: false };
     if (!listaLida) return CARREGANDO;
     if (!chave) return AUSENTE;
     if (buscado?.pedido !== pedido) return CARREGANDO;

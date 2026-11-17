@@ -46,6 +46,37 @@ export interface Conferencia {
   conflictCount: number;
 }
 
+// Um check obrigatório do head como o motor o leu no fim da revisão.
+export interface CheckDoHead {
+  nome: string;
+  // vermelho, rodando ou ausente (checks-exigidos.js)
+  estado: string;
+}
+
+// Os checks obrigatórios do head (só em GET /api/decision, lib/engine/detalhe-da-decisao.js):
+// se a leitura foi no commit revisado, se a base exige check, o que faltava no head e o que
+// faltava por herança da base (falha também no commit atual da base, e não pesa). O motor não
+// guarda a lista dos verdes.
+export interface ChecksDoHead {
+  conferidoNoHead: boolean;
+  semExigencia: boolean;
+  naoVerdes: CheckDoHead[];
+  herdados: CheckDoHead[];
+}
+
+// O que o diário de consumo registrou da rodada desta revisão (só em GET /api/decision): as
+// tentativas de revisão do PR desde a revisão anterior dele até esta, inclusive a que caiu e foi
+// refeita. Duração e custo vêm só quando todas as tentativas os sabem. `inicioIncerto`: o histórico
+// está no teto e pode faltar tentativa do começo.
+export interface ExecucaoDaRevisao {
+  tentativas: number;
+  modelos: string[];
+  duracaoMs?: number;
+  custoUsd?: number;
+  custoEstimado?: boolean;
+  inicioIncerto?: true;
+}
+
 // Uma revisão do histórico. `status` e `action` são os valores que o motor grava ao resolver
 // (a tabela de rótulos está em src/historico/rotulos.ts); a revisão que ainda espera na mesa,
 // que só chega por GET /api/decision, vem sem `resolvedAt`.
@@ -68,6 +99,8 @@ export interface Revisao {
   rounds?: Rodadas;
   stages?: Etapas;
   verificationCheckpoint?: Conferencia;
+  checks?: ChecksDoHead;
+  execucao?: ExecucaoDaRevisao;
   // o texto do review do parecer, em markdown (reviewMarkdownForUi)
   reportMarkdown: string;
   reasons: Motivo[];
@@ -99,6 +132,31 @@ function lerConferencia(v: unknown): Conferencia | undefined {
   return { total: v.total, confirmedCount: campo(v.confirmedCount, ehNumero) ?? 0, conflictCount: campo(v.conflictCount, ehNumero) ?? 0 };
 }
 
+function lerChecksDaLista(v: unknown): CheckDoHead[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((c): c is { nome: string; estado?: unknown } => ehObjeto(c) && ehTexto(c.nome) && c.nome !== '')
+    .map((c) => ({ nome: c.nome, estado: campo(c.estado, ehTexto) ?? '' }));
+}
+
+function lerChecksDoHead(v: unknown): ChecksDoHead | undefined {
+  if (!ehObjeto(v) || !ehBooleano(v.conferidoNoHead)) return undefined;
+  return { conferidoNoHead: v.conferidoNoHead, semExigencia: v.semExigencia === true, naoVerdes: lerChecksDaLista(v.naoVerdes), herdados: lerChecksDaLista(v.herdados) };
+}
+
+const ehQuantia = (v: unknown): v is number => ehNumero(v) && v >= 0;
+
+function lerExecucaoDaRevisao(v: unknown): ExecucaoDaRevisao | undefined {
+  if (!ehObjeto(v) || !ehQuantia(v.tentativas) || !Number.isInteger(v.tentativas) || v.tentativas < 1) return undefined;
+  return semAusentes({
+    tentativas: v.tentativas,
+    modelos: Array.isArray(v.modelos) ? v.modelos.filter((m): m is string => ehTexto(m) && m !== '') : [],
+    duracaoMs: campo(v.duracaoMs, ehQuantia),
+    custoUsd: campo(v.custoUsd, ehQuantia),
+    custoEstimado: campo(v.custoEstimado, ehBooleano),
+    inicioIncerto: v.inicioIncerto === true ? (true as const) : undefined,
+  });
+}
+
 export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.id) || !v.id || !ehTexto(v.key) || !v.key) return undefined;
   return semAusentes({
@@ -117,6 +175,8 @@ export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
     rounds: lerRodadas(v.rounds),
     stages: lerEtapas(v.stages),
     verificationCheckpoint: lerConferencia(v.verificationCheckpoint),
+    checks: lerChecksDoHead(v.checks),
+    execucao: lerExecucaoDaRevisao(v.execucao),
     reportMarkdown: mascararSegredos(campo(v.reportMarkdown, ehTexto) ?? ''),
     reasons: lerMotivos(v.reasons),
     attention: lerMotivos(v.attention),

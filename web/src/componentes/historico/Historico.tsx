@@ -67,7 +67,7 @@ export function Historico({ app = appDoNavegador }: Props) {
   // o id do botão que abriu o detalhe: é para ele que o foco volta
   const abertoPor = useRef<string | null>(null);
   const aoBuscar = useCallback((q: string) => ir({ ...consulta, q, pagina: 1 }, null, 'trocar'), [consulta, ir]);
-  const aoFiltrar = useCallback((filtro: { veredito?: string; repo?: string }) => ir({ ...consulta, ...filtro, pagina: 1 }, null, 'empilhar'), [consulta, ir]);
+  const aoFiltrar = useCallback((filtro: { veredito?: string; repo?: string; periodo?: string }) => ir({ ...consulta, ...filtro, pagina: 1 }, null, 'empilhar'), [consulta, ir]);
   const aoLimpar = useCallback(() => ir(CONSULTA_VAZIA, null, 'empilhar'), [ir]);
   const aoIrParaPagina = useCallback((para: number) => {
     ir({ ...consulta, pagina: para }, null, 'empilhar');

@@ -16,10 +16,11 @@ import type { PessoasCruas, Time as Lista } from '@/contratos/time';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { marcaDasResolvidas, mensagemDaFalha } from '@/historico/consulta';
-import { chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, perfilDe, quantasPessoas, soComPerfil, textoDoResultado } from '@/time/time';
+import { CAMINHO_DO_ESTADO, chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, lerPessoasDoEstado, perfilDe, quantasPessoas, soComPerfil, textoDoResultado, type RelerPessoas } from '@/time/time';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
+import { AdicionarPessoa } from './AdicionarPessoa';
 import { Dossie, type LeituraDoDossie } from './Dossie';
 import { ListaDoTime, idDoBotao } from './ListaDoTime';
 import { useEnderecoDoTime, useTime } from './useTime';
@@ -62,8 +63,15 @@ export function Time({ app = appDoNavegador }: Props) {
   const [recarga, setRecarga] = useState(0);
   const [busca, setBusca] = useState('');
   const [removidas, setRemovidas] = useState<readonly Removida[]>([]);
+  const [adicionando, setAdicionando] = useState(false);
   const { carregando, time, falha, haNovas } = useTime(app.cliente, recarga, marca);
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
+  // a releitura de `people` logo antes de gravar (time.ts): o corpo sai do que o motor tem agora
+  const relerPessoas = useCallback<RelerPessoas>(async () => {
+    const r = await app.cliente.get(CAMINHO_DO_ESTADO, lerPessoasDoEstado);
+    if (r.ok) return { ok: true, pessoas: r.dados };
+    return { ok: false, texto: `Não deu para reler os perfis no motor antes de gravar, e nada foi enviado. ${mensagemDaFalha(r) || 'A leitura foi interrompida.'}` };
+  }, [app.cliente]);
 
   // o que a tela tem agora, para a ação que termina depois do desenho
   const agora = useRef({ aberto, time, cru });
@@ -166,8 +174,25 @@ export function Time({ app = appDoNavegador }: Props) {
   return (
     <div className={estilos.time}>
       <div className={estilos.listagem} hidden={aberto !== null}>
-        <Pagina titulo="Time" idDoTitulo={idDoTitulo} sub={time ? quantasPessoas(total) : undefined}>
+        <Pagina
+          titulo="Time"
+          idDoTitulo={idDoTitulo}
+          sub={time ? quantasPessoas(total) : undefined}
+          acoes={adicionando ? undefined : <Botao onClick={() => setAdicionando(true)}>Adicionar pessoa</Botao>}
+        >
           {aberto === null ? avisos : null}
+
+          {adicionando ? (
+            <AdicionarPessoa
+              cru={cru}
+              conhecidos={[...autores.map((a) => a.login), ...semDossie.map((p) => p.login)]}
+              conexao={conexao}
+              emDia={emDia}
+              controle={controle}
+              relerPessoas={relerPessoas}
+              aoFechar={() => setAdicionando(false)}
+            />
+          ) : null}
 
           <div className={estilos.busca} role="search" aria-label="Busca no Time">
             <label className={ui.soLeitor} htmlFor={idDaBusca}>Buscar por nome ou login</label>
@@ -229,6 +254,7 @@ export function Time({ app = appDoNavegador }: Props) {
           emDia={emDia}
           contestacoes={contestacoes}
           controle={controle}
+          relerPessoas={relerPessoas}
           ocupado={carregando && time !== null}
           avisos={avisos}
           aoFechar={aoFechar}

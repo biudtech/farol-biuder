@@ -34,16 +34,16 @@ test('sem parâmetro nenhum valem os padrões: página 1 de 30, sem filtro', () 
   assert.equal(PAGINA_PADRAO, 30);
   assert.equal(TETO_DA_PAGINA, 100);
   assert.equal(TETO_DA_BUSCA, 200);
-  assert.deepEqual(lerParametros(consulta('')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '' });
+  assert.deepEqual(lerParametros(consulta('')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '' });
 });
 
 test('parâmetro presente e vazio conta como ausente', () => {
-  assert.deepEqual(lerParametros(consulta('page=&pageSize=&q=&veredito=&repo=')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '' });
+  assert.deepEqual(lerParametros(consulta('page=&pageSize=&q=&veredito=&repo=')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '' });
 });
 
 test('parâmetros válidos são lidos, e o que a rota não conhece é ignorado', () => {
   const lido = lerParametros(consulta('page=3&pageSize=100&q=Login&veredito=request_changes&repo=Acme/App&outro=1'));
-  assert.deepEqual(lido, { ok: true, page: 3, pageSize: 100, q: 'Login', veredito: 'request_changes', repo: 'Acme/App' });
+  assert.deepEqual(lido, { ok: true, page: 3, pageSize: 100, q: 'Login', veredito: 'request_changes', repo: 'Acme/App', desde: '', ate: '' });
 });
 
 test('repo com espaço nas pontas é aparado, e só espaço conta como ausente', () => {
@@ -391,7 +391,7 @@ test('histórico congelado é lido sem erro, então nada é escrito nele', () =>
 
 test('paginaDoHistorico devolve os itens crus da página, para a rota projetar', () => {
   const todos = historico(5);
-  const pagina = paginaDoHistorico(todos, { page: 2, pageSize: 2, q: '', veredito: '', repo: '' });
+  const pagina = paginaDoHistorico(todos, { page: 2, pageSize: 2, q: '', veredito: '', repo: '', desde: '', ate: '' });
   assert.deepEqual([pagina.total, pagina.pages], [5, 3]);
   assert.equal(pagina.items[0], todos[2], 'o mesmo objeto, sem cópia');
 });

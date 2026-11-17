@@ -2,11 +2,11 @@
 
 // A busca e os filtros do Histórico. Quem filtra é o motor: aqui só se escolhe. A busca fica
 // sempre à vista e espera um instante depois da última tecla antes de ir ao endereço (e dali
-// ao motor); Enter manda na hora. Os filtros (repositório e o que foi publicado, os dois que
-// GET /api/decisions aceita) ficam atrás do botão Filtrar e mandam ao trocar; os que estão
+// ao motor); Enter manda na hora. Os filtros (repositório, o que foi publicado e o período,
+// que GET /api/decisions aceita) ficam atrás do botão Filtrar e mandam ao trocar; os que estão
 // valendo aparecem embaixo como chips, cada um com o seu X.
 import { useEffect, useId, useRef, useState } from 'react';
-import { TETO_DA_BUSCA, type Consulta } from '@/historico/consulta';
+import { PERIODOS, TETO_DA_BUSCA, rotuloDoPeriodo, type Consulta } from '@/historico/consulta';
 import { FILTROS_DE_DESFECHO } from '@/historico/rotulos';
 import { Chip, ui } from '../ui';
 import estilos from './Historico.module.css';
@@ -19,7 +19,7 @@ interface Props {
   // os repositórios de todo o histórico, como o motor os listou
   repos: readonly string[];
   aoBuscar(q: string): void;
-  aoFiltrar(filtro: { veredito?: string; repo?: string }): void;
+  aoFiltrar(filtro: { veredito?: string; repo?: string; periodo?: string }): void;
 }
 
 function rotuloDoDesfecho(valor: string): string {
@@ -58,10 +58,11 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
   const idDaDica = useId();
   const idDoDesfecho = useId();
   const idDoRepo = useId();
+  const idDoPeriodo = useId();
   const desfechoConhecido = consulta.veredito === '' || FILTROS_DE_DESFECHO.some(([valor]) => valor === consulta.veredito);
   const repoNaLista = consulta.repo === '' || repos.some((repo) => repo.toLowerCase() === consulta.repo.toLowerCase());
   const repoEscolhido = repos.find((repo) => repo.toLowerCase() === consulta.repo.toLowerCase()) ?? consulta.repo;
-  const ativos = (consulta.repo ? 1 : 0) + (consulta.veredito ? 1 : 0);
+  const ativos = (consulta.repo ? 1 : 0) + (consulta.veredito ? 1 : 0) + (consulta.periodo ? 1 : 0);
 
   return (
     <div className={estilos.consulta}>
@@ -112,7 +113,14 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
                 {desfechoConhecido ? null : <option value={consulta.veredito}>{consulta.veredito} (valor do endereço)</option>}
               </select>
             </div>
-            <p className={ui.mini}>O motor não filtra por período: a lista vai da revisão mais nova para a mais antiga.</p>
+            <div className={ui.rotulo}>
+              <label htmlFor={idDoPeriodo}>Período</label>
+              <select id={idDoPeriodo} className={ui.campo} value={consulta.periodo} onChange={(evento) => aoFiltrar({ periodo: evento.target.value })}>
+                <option value="">Todo o histórico</option>
+                {PERIODOS.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+              </select>
+            </div>
+            <p className={ui.mini}>O período conta a hora em que a revisão foi resolvida, com hoje incluído.</p>
           </div>
         </details>
       </form>
@@ -134,7 +142,12 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
               <Chip tom="marca">Publicado: {rotuloDoDesfecho(consulta.veredito)} <span aria-hidden="true">✕</span></Chip>
             </button>
           ) : null}
-          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', veredito: '' })}>
+          {consulta.periodo ? (
+            <button type="button" className={estilos.chipQueSai} aria-label={`Tirar o filtro Período: ${rotuloDoPeriodo(consulta.periodo)}`} onClick={() => tirar({ periodo: '' })}>
+              <Chip tom="marca">Período: {rotuloDoPeriodo(consulta.periodo)} <span aria-hidden="true">✕</span></Chip>
+            </button>
+          ) : null}
+          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', veredito: '', periodo: '' })}>
             Limpar filtros
           </button>
         </div>

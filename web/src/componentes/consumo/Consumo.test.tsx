@@ -915,3 +915,31 @@ describe('Consumo: as sessões recentes', () => {
     expect(resumoDa('Sessões recentes')).toBe('Sessões recentes3');
   });
 });
+
+describe('Consumo: por repositório', () => {
+  const repos = [
+    { name: 'dono/outro', ...somaDoMotor({ attempts: 1, costUsd: 2.5 }) },
+    { name: '', ...somaDoMotor({ attempts: 1, costUsd: 0.5 }) },
+    { name: 'dono/repo', ...somaDoMotor({ attempts: 3, costUsd: 9.5, unknownCost: 1 }) },
+  ];
+
+  it('a linha fechada traz o líder no resumo e a tabela do maior custo ao menor, com o sem PR por último', async () => {
+    montar({ responder: () => corpo(relatorioDoMotor({ repos })) });
+    await assentar();
+    const linhas = [...document.querySelectorAll('details:not([class*="gaveta"])')].map((d) => d.querySelector(':scope > summary span')?.textContent);
+    expect(linhas.slice(0, 4)).toEqual(['Detalhes do período', 'Por dia', 'Por repositório', 'Por tipo']);
+    expect(resumoDa('Por repositório')).toBe('Por repositóriorepo lidera');
+    expect(cabecalhosDa('Tabela do consumo por repositório')).toEqual(['Repositório', 'Custo estimado', 'Participação no custo', 'Execuções', 'Execuções de custo desconhecido']);
+    expect(linhasDa('Tabela do consumo por repositório')).toEqual([
+      ['dono/repo', 'US$ 9,50', '76%', '3', '1'],
+      ['dono/outro', 'US$ 2,50', '20%', '1', '0'],
+      ['Sem repositório', 'US$ 0,50', '4%', '1', '0'],
+    ]);
+  });
+
+  it('motor que não manda a quebra não ganha a linha', async () => {
+    montar();
+    await assentar();
+    expect(() => linha('Por repositório')).toThrow();
+  });
+});

@@ -10,6 +10,8 @@ import { useEffect, useId, useRef } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import type { Motivo } from '@/contratos/radar';
 import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
+import { resumoDaExecucao, resumoDosChecks, textoDoEstadoDoCheck } from '@/historico/detalhe';
+import { dolar } from '@/consumo/formato';
 import { foiPublicado, parecerQueDifere, rotuloDoDesfecho, textoDoPublicado, textoDoStatus, tomDoDesfecho } from '@/historico/rotulos';
 import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/radar/formato';
 import { Markdown } from '../Markdown';
@@ -109,22 +111,53 @@ function Etapas({ etapas }: { etapas: NonNullable<Revisao['stages']> }) {
   );
 }
 
+// Os checks obrigatórios do head como o motor os leu no fim da revisão. Só o que faltava vem
+// por nome: o motor não guarda a lista dos que estavam verdes.
+function ChecksDoHead({ checks: c }: { checks: NonNullable<Revisao['checks']> }) {
+  return (
+    <Linha
+      rotulo="Checks do head"
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Checks do head</span>
+          <span className={ui.r}>{resumoDosChecks(c)}</span>
+        </>
+      )}
+    >
+      {!c.conferidoNoHead ? <p className={ui.nota}>A leitura dos checks não foi feita no commit revisado: o que segue não fala do head desta revisão.</p> : null}
+      {c.semExigencia ? <p className={ui.texto}>O ruleset da branch de destino não exige check obrigatório.</p> : null}
+      {c.conferidoNoHead && !c.semExigencia && !c.naoVerdes.length ? <p className={ui.texto}>Todos os checks obrigatórios estavam verdes no commit revisado.</p> : null}
+      {c.naoVerdes.length || c.herdados.length ? (
+        <dl className={estilos.campos}>
+          {c.naoVerdes.map((check) => <Campo key={`n:${check.nome}`} nome={check.nome}>{textoDoEstadoDoCheck(check.estado)}</Campo>)}
+          {c.herdados.map((check) => <Campo key={`h:${check.nome}`} nome={check.nome}>Falha também na base (herdado, não pesa)</Campo>)}
+        </dl>
+      ) : null}
+    </Linha>
+  );
+}
+
 function Execucao({ revisao: r }: { revisao: Revisao }) {
   const parecer = parecerQueDifere(r);
   const resolvida = dataComAno(r.resolvedAt);
   const criada = dataComAno(r.createdAt);
   const conferencia = r.verificationCheckpoint;
+  const e = r.execucao;
   return (
     <Linha
       rotulo="Execução"
       resumo={(
         <>
           <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Execução</span>
-          <span className={ui.r}>{textoDoPublicado(r)}</span>
+          <span className={ui.r}>{e ? resumoDaExecucao(e) : textoDoPublicado(r)}</span>
         </>
       )}
     >
       <dl className={estilos.campos}>
+        {e?.duracaoMs !== undefined ? <Campo nome="Duração da rodada">{textoDaDuracao(e.duracaoMs)}</Campo> : null}
+        {e?.custoUsd !== undefined ? <Campo nome={e.custoEstimado ? 'Custo estimado (parte calculada pelo motor)' : 'Custo estimado'}>{dolar(e.custoUsd)}</Campo> : null}
+        {e?.modelos.length ? <Campo nome={e.modelos.length === 1 ? 'Modelo' : 'Modelos'}>{e.modelos.join(', ')}</Campo> : null}
+        {e ? <Campo nome="Tentativas de revisão na rodada">{String(e.tentativas)}</Campo> : null}
         <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
@@ -138,6 +171,12 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
           </Campo>
         ) : null}
       </dl>
+      {e ? (
+        <p className={ui.mini}>
+          A rodada são as tentativas de revisão deste PR desde a revisão anterior dele até esta, inclusive a que caiu e foi refeita.
+          {e.inicioIncerto ? ' O histórico guardado está no teto e a revisão anterior pode ter sido descartada: pode faltar tentativa do começo.' : ''}
+        </p>
+      ) : null}
     </Linha>
   );
 }
@@ -213,6 +252,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
       <Achados revisao={r} />
 
       <Secao titulo="Mais detalhes">
+        {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
         <Execucao revisao={r} />
         {r.rounds ? <Rodadas rodadas={r.rounds} /> : null}
         {r.stages ? <Etapas etapas={r.stages} /> : null}

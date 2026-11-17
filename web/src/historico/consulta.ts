@@ -13,6 +13,8 @@ export interface Consulta {
   // approve, request_changes, comment ou skip; vazio é sem filtro
   veredito: string;
   repo: string;
+  // os últimos N dias ('7' ou '30'); vazio é sem período
+  periodo: string;
 }
 
 // A revisão aberta no detalhe: o id do item e a chave do PR dele. A chave existe porque o
@@ -22,7 +24,28 @@ export interface DetalheAberto {
   chave: string;
 }
 
-export const CONSULTA_VAZIA: Consulta = Object.freeze({ pagina: 1, q: '', veredito: '', repo: '' });
+export const CONSULTA_VAZIA: Consulta = Object.freeze({ pagina: 1, q: '', veredito: '', repo: '', periodo: '' });
+
+// Os períodos que a tela oferece, em dias contados com hoje. O motor recebe o primeiro dia
+// (`desde`), no fuso dele: o mesmo dia de calendário com que ele separa o consumo
+// (FUSO_DO_DIA, lib/constants.js na raiz).
+export const PERIODOS: ReadonlyArray<readonly [string, string]> = [['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias']];
+const FUSO_DO_MOTOR = 'America/Sao_Paulo';
+const DIA_MS = 86_400_000;
+const DIA_NO_FUSO = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO_DO_MOTOR, year: 'numeric', month: '2-digit', day: '2-digit' });
+
+export function rotuloDoPeriodo(periodo: string): string {
+  return PERIODOS.find(([valor]) => valor === periodo)?.[1] ?? '';
+}
+
+// O primeiro dia (AAAA-MM-DD) dos últimos `periodo` dias, hoje incluído, no fuso do motor.
+export function desdeDoPeriodo(periodo: string, agora: number): string {
+  const dias = Number(periodo);
+  if (!rotuloDoPeriodo(periodo) || !Number.isInteger(dias)) return '';
+  // ao meio-dia de hoje no fuso, voltar dias inteiros não tropeça na troca de horário
+  const hoje = DIA_NO_FUSO.format(agora);
+  return new Date(Date.parse(`${hoje}T12:00:00Z`) - (dias - 1) * DIA_MS).toISOString().slice(0, 10);
+}
 
 // o mesmo teto do motor para `q` e `repo`
 export const TETO_DA_BUSCA = 200;
@@ -39,6 +62,8 @@ export function lerEndereco(params: Pick<URLSearchParams, 'get'>): { consulta: C
       q: params.get('q') ?? '',
       veredito: params.get('veredito') ?? '',
       repo: params.get('repo') ?? '',
+      // período que a tela não oferece é ignorado: não há o que mandar ao motor por ele
+      periodo: rotuloDoPeriodo(params.get('periodo') ?? '') ? (params.get('periodo') as string) : '',
     },
     detalhe: id ? { id, chave: params.get('pr') ?? '' } : null,
   };
@@ -50,6 +75,7 @@ export function enderecoDa(consulta: Consulta, detalhe: DetalheAberto | null): s
   if (consulta.q) params.set('q', consulta.q);
   if (consulta.veredito) params.set('veredito', consulta.veredito);
   if (consulta.repo) params.set('repo', consulta.repo);
+  if (consulta.periodo) params.set('periodo', consulta.periodo);
   if (consulta.pagina > 1) params.set('pagina', String(consulta.pagina));
   if (detalhe) {
     params.set('id', detalhe.id);
@@ -59,20 +85,24 @@ export function enderecoDa(consulta: Consulta, detalhe: DetalheAberto | null): s
 }
 
 export function temFiltro(consulta: Consulta): boolean {
-  return consulta.q !== '' || consulta.veredito !== '' || consulta.repo !== '';
+  return consulta.q !== '' || consulta.veredito !== '' || consulta.repo !== '' || consulta.periodo !== '';
 }
 
 // GET /api/decisions com os nomes da rota. O tamanho da página fica no padrão do motor (30).
-export function caminhoDaPagina(consulta: Consulta): string {
+export function caminhoDaPagina(consulta: Consulta, agora: number = Date.now()): string {
   const params = new URLSearchParams({ page: String(consulta.pagina) });
   if (consulta.q) params.set('q', consulta.q);
   if (consulta.veredito) params.set('veredito', consulta.veredito);
   if (consulta.repo) params.set('repo', consulta.repo);
+  const desde = desdeDoPeriodo(consulta.periodo, agora);
+  if (desde) params.set('desde', desde);
   return `/api/decisions?${params.toString()}`;
 }
 
-export function caminhoDoDetalhe(chave: string): string {
-  return `/api/decision?${new URLSearchParams({ key: chave }).toString()}`;
+// Com `id`, o motor devolve aquela revisão do PR (a rodada antiga, ou a resolvida quando há uma
+// pendente); sem ele, a mais recente do PR.
+export function caminhoDoDetalhe(chave: string, id?: string): string {
+  return `/api/decision?${new URLSearchParams(id ? { key: chave, id } : { key: chave }).toString()}`;
 }
 
 // O que a região viva anuncia depois de cada carga.
@@ -92,8 +122,11 @@ const CAMPO_RECUSADO: Record<string, string> = {
   page: 'a página pedida',
   pageSize: 'o tamanho da página',
   q: 'a busca',
+  id: 'a revisão pedida',
   veredito: 'o filtro de desfecho',
   repo: 'o filtro de repositório',
+  desde: 'o início do período',
+  ate: 'o fim do período',
 };
 
 type Falha = Extract<Resultado<never>, { ok: false }>;

@@ -303,7 +303,7 @@ só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o deta
 | Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
 | Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
 | Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
-| Detalhe da revisão | `Detalhe.tsx` | o item da página; fora dela, `GET /api/decision?key=` |
+| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
 Regras que valem para quem mexer nela:
@@ -312,12 +312,13 @@ Regras que valem para quem mexer nela:
   voltou; não filtra nem ordena nada. O filtro de desfecho olha o que foi publicado (`action`),
   e por isso os rótulos dele dizem isso: Aprovados, Mudanças pedidas, Comentados, Não
   publicados.
-- **Busca à vista, filtros atrás de Filtrar.** O campo de busca fica sempre na tela; repositório
-  e "O que foi publicado" (os dois filtros que a rota aceita) ficam no painel do botão Filtrar
+- **Busca à vista, filtros atrás de Filtrar.** O campo de busca fica sempre na tela; repositório,
+  "O que foi publicado" e "Período" (os filtros que a rota aceita) ficam no painel do botão Filtrar
   (`ui.gaveta`), que diz quantos estão valendo. Os que valem aparecem embaixo como chips; o X de
-  cada um tira só aquele, e "Limpar filtros" tira os dois e mantém a busca. Não há filtro de
-  período: a rota não aceita, e a tela não finge.
-- **A consulta mora no endereço.** `q`, `veredito`, `repo`, `pagina` e a revisão aberta (`id`
+  cada um tira só aquele, e "Limpar filtros" tira todos e mantém a busca. O período (últimos 7 ou
+  30 dias, hoje incluído) mora no endereço como `periodo`, e vai ao motor como `desde`, o primeiro
+  dia no fuso do motor (`desdeDoPeriodo`): a hora em que a revisão foi resolvida.
+- **A consulta mora no endereço.** `q`, `veredito`, `repo`, `periodo`, `pagina` e a revisão aberta (`id`
   e `pr`, a chave do PR) ficam na query string (`src/historico/consulta.ts`), lidos por
   `useSearchParams` e escritos pela History API, que o Next integra ao roteador (o endereço
   muda sem pedir a página ao servidor do front). Filtro, página e abrir ou fechar a revisão
@@ -385,7 +386,9 @@ Regras que valem para quem mexer nela:
   GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
   o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
   (`blockedReason`) aberto, os motivos (`reasons`) e os pontos de atenção (`attention`)
-  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Execução (publicado,
+  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Checks do head (`checks`, com
+  o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
+  duração, custo e modelo; sem ela, o que foi publicado; e sempre publicado,
   parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
   (`rounds`), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
   revisão ficou sem texto gravado."). Revisão que não postou nada diz isso logo abaixo do
@@ -403,17 +406,22 @@ Regras que valem para quem mexer nela:
 
 ### Lacunas do contrato
 
-- **Período.** `GET /api/decisions` não filtra por data: o desenho tem "Período" no Filtrar e
-  "nos últimos 7 dias" no topo, e a tela deixa os dois de fora. O topo diz só o total que o
-  motor manda.
+- **Período no topo.** O desenho diz "nos últimos 7 dias" no topo; o topo diz só o total que o
+  motor manda, e o período fica no Filtrar.
 - **Resumo curto do parecer e achados detalhados.** A projeção (`decisionForUi`) não traz um
   resumo de uma frase do parecer, nem arquivo, linha ou trecho de código de cada achado: a
   linha da lista fica sem resumo, a frase do detalhe é a da avaliação técnica, e cada achado é
   só o texto do motivo.
-- **Critérios do card, checks e custo.** O desenho tem "Critérios do card", "Checks do head" e o
-  custo da execução. O item não traz critério por critério nem os checks (o `cardMet` que a
-  projeção leva não é lido pelo contrato do front), e o custo da sessão não vem na revisão:
-  essas linhas ficam de fora.
+- **Critérios do card.** O desenho tem "Critérios do card" com o atendimento de cada um. A
+  sessão só declara o card inteiro (`cardMet`) e a parte deste PR, e nenhum registro do motor
+  guarda critério por critério: a linha fica de fora.
+- **Checks e execução só no detalhe.** `checks` e `execucao` vêm só em `GET /api/decision`
+  (`lib/engine/detalhe-da-decisao.js`). A revisão aberta da página é pedida também, pela chave e
+  pelo `id`, e ganha as duas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
+  endereço fora da página, vale a mais recente do PR, como antes. Os checks verdes não vêm por nome
+  (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem checks. A
+  execução é a da rodada (as tentativas do PR desde a revisão anterior), e a tela diz quando o
+  começo é incerto (`inicioIncerto`).
 - **Rodadas uma a uma.** `rounds` é o resumo da comparação entre rodadas (a ordem, as
   pendências), não a lista das rodadas com commit e desfecho de cada uma.
 - **Pendência sem filtro.** As pendências vêm do snapshot, que não sabe da busca nem dos
@@ -447,6 +455,7 @@ o login de quem está com o dossiê aberto (`?autor=`), que é o identificador q
 | Dossiê | `Dossie.tsx` | o item da lista, `config.people` e `pushbacks` do snapshot, pelo autor |
 | Papel e competência | `EditorDoPerfil.tsx` | `config.people`; grava com `POST /api/settings` |
 | Remover do Time | `RemoverDoTime.tsx` | grava com `POST /api/team/remove` |
+| Adicionar pessoa | `AdicionarPessoa.tsx` | grava com `people` em `POST /api/settings` |
 
 O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
 
@@ -470,11 +479,12 @@ O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
   sem a lista do Time e sem dossiê nem perfil.
 - **Botões ocupados.** Salvar diz "Salvando…" e Remover diz "Removendo…" (`Botao` com
   `ocupado`), com o spinner e desabilitados. O resultado vai à região de resultado de sempre.
-- **Sem "Adicionar".** O desenho tinha o botão, e ele ficou de fora: o motor não tem rota que
-  crie pessoa. Gravar um perfil em `config.people` para um login digitado seria possível, mas
-  o motor não confere o login (um erro de digitação vira entrada calada no mapa que vai ao
-  prompt), e abrir o editor para um login sem dossiê nem perfil desfaria a regra de que esse
-  dossiê não oferece Salvar nem Remover (é o caso de quem acabou de ser removido).
+- **Adicionar pessoa.** O botão do topo abre o formulário (`AdicionarPessoa.tsx`): login do
+  GitHub obrigatório, conferido na forma do GitHub, e papel opcional. Vai por `people` em
+  `POST /api/settings`, o mapa inteiro relido no motor logo antes (`GET /api/state`, `config.people`)
+  com a pessoa nova a mais (`comPessoaNova`), e o motor
+  guarda a pessoa sem papel quando a chave tem forma de login (`parsePeople`). Quem já está no
+  Time não entra de novo, e a resposta só é dada como certa quando a pessoa está no mapa gravado.
 
 O contrato, lido do motor:
 
@@ -518,12 +528,15 @@ Regras que valem para quem mexer nela:
   enquanto a lista carrega); Escape ou "Voltar à lista do Time" fecham, e o foco volta à linha
   que abriu (ou ao título da lista, se a pessoa não está mais nela). As entradas aparecem com o
   dia, o PR e o que foi publicado quando o motor diz; os pontos são desenhados de markdown,
-  que é como o motor os grava. "Números" conta só as entradas listadas e diz que o motor não
-  manda número por pessoa. As contestações dos PRs da pessoa aparecem só para leitura: o
+  que é como o motor os grava. "Números" traz os de 30 dias que o motor manda (`numeros`:
+  PRs, aprovação de primeira e rodadas por PR, com o resumo "1,6 rodada por PR") e a contagem
+  das entradas listadas. As contestações dos PRs da pessoa aparecem só para leitura: o
   desfecho se confirma no Histórico.
 - **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
-  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). O corpo do salvar
-  sai do cru que a aba tem no momento do clique, e só a pessoa editada muda (`comPerfil`):
+  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). No clique, a tela
+  relê o mapa no motor (`config.people` de `GET /api/state`, `relerPessoas` em `Time.tsx`) e o
+  corpo do salvar sai dele, com só a pessoa editada mudando (`comPerfil`); releitura que falha
+  não envia nada:
   as outras voltam como vieram, inclusive com campo que a tela não conhece ou valor que ela
   não lê. Na pessoa editada trocam-se o papel e os domínios; outro campo dela fica. A chave
   é o login em minúsculas, como o motor guarda.
@@ -571,17 +584,17 @@ Regras que valem para quem mexer nela:
 
 ### Lacunas do contrato
 
-- **Criar uma pessoa.** Não há rota: a pessoa nasce com o primeiro dossiê, e o perfil só se
-  grava pelo mapa inteiro de `config.people`, sem conferência do login. Por isso a tela não
-  tem o "Adicionar" do desenho.
+- **Criar uma pessoa é salvar o mapa inteiro.** Não há rota por pessoa: a pessoa nova vai no
+  mapa inteiro de `config.people`, com o mesmo risco do salvar de perfil (abaixo).
 - **Remover uma entrada só.** O motor só remove a pessoa inteira. Não há rota para apagar
   uma entrada do dossiê, nem cópia que permita desfazer.
 - **Os valores permitidos não vêm do motor.** Papéis, domínios e níveis não saem em rota
   nem no snapshot: a tela tem a cópia conferida por teste.
 - **O salvar de perfil não é por pessoa.** `people` vai e volta inteiro, sem versão: o motor
   não tem como recusar uma lista velha, e duas abas salvando ao mesmo tempo se sobrescrevem
-  sem que nenhuma fique sabendo. O que a tela faz (corpo do dado cru, salvar fechado sem o
-  estado da conexão, conferência da resposta) reduz a janela, não a fecha. A correção de
+  sem que nenhuma fique sabendo. O que a tela faz (releitura do mapa no motor logo antes do
+  envio, salvar fechado sem o estado da conexão, conferência da resposta) reduz a janela ao
+  intervalo entre a releitura e o envio, não a fecha. A correção de
   fundo é no motor: uma operação por pessoa sobre a config atual, como a conta já tem em
   `accounts/edit`.
 - **Remover não apaga o histórico nem o log.** `removeTeamMember` não toca em
@@ -592,8 +605,11 @@ Regras que valem para quem mexer nela:
 - **A lista não avisa que mudou.** Não há chave no snapshot nem evento para o Time. O aviso
   de Atualizar olha as revisões resolvidas, que não dizem se a memória de alguém mudou, e uma
   remoção feita em outra aba só aparece na próxima carga.
-- **Não há números por pessoa.** O motor não manda quantas revisões a pessoa teve nem os
-  desfechos somados: só as dez entradas mais recentes. A contagem da tela é a de entradas.
+- **Números no teto do histórico.** Com o histórico guardado no teto (3.000), o motor marca os
+  números (`historicoNoTeto`) e a tela diz que valem para os PRs com histórico completo.
+- **Números só de 30 dias e só de quem tem dossiê.** `numeros` vem no autor de `GET /api/team`
+  (`lib/engine/numeros-do-time.js`), só com PR cuja primeira revisão publicada caiu na janela;
+  quem só tem perfil não está na lista e fica sem números. Os bloqueios do desenho não vêm.
 - **A entrada não liga à revisão.** Vem o dia e a chave do PR, sem hora, sem endereço e sem
   o id da revisão: não dá para abrir a revisão no Histórico a partir dela. Entrada antiga traz
   só o nome curto do repositório, e aparece como veio.
@@ -616,7 +632,8 @@ personalizado (De e Até) e os filtros de tipo, modelo e repositório. O que est
 à vista em chips, cada um com o botão que o tira, e Limpar filtros. O cartão traz um número
 grande, o custo estimado do período, a frase das execuções, o gráfico por dia e de onde vem o
 custo, com a modalidade. Todo o resto fica fechado, uma linha por parte (`Linha`), com o
-destaque no resumo da própria linha: Detalhes do período, Por dia, Por tipo, Por modelo,
+destaque no resumo da própria linha: Detalhes do período, Por dia, Por repositório (quando o
+motor manda `repos`), Por tipo, Por modelo,
 Execuções (com a busca e a paginação dentro), Sessões recentes e Auditoria do registro.
 
 | Parte | Componente | De onde vem |
@@ -624,7 +641,7 @@ Execuções (com a busca e a paginação dentro), Sessões recentes e Auditoria 
 | Seletor de período, Filtrar, chips e busca | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
 | Número grande, frase e modalidade; Detalhes do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
 | Gráfico por dia; linha Por dia (a tabela) | `GraficoPorDia.tsx` | `series` |
-| Por tipo e por modelo | `Quebras.tsx` | `byKind` e `models` |
+| Por repositório, por tipo e por modelo | `Quebras.tsx` | `repos`, `byKind` e `models` |
 | Execuções (o diário) | `Diario.tsx`, `TabelaDeExecucoes.tsx` | `history` |
 | Sessões recentes | `SessoesRecentes.tsx` | `usage.recentSessions` do snapshot |
 | Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |
@@ -746,10 +763,9 @@ Regras que valem para quem mexer nela:
   as de custo desconhecido. A tela não tira a contagem por diferença.
 - **A tentativa de fora do filtro não vem marcada.** A tela marca a de fora do período
   comparando o dia dela com `range`; para o filtro teria de repetir a regra do motor.
-- **Sem quebra por repositório.** O desenho pede "Por repositório", mas `GET /api/usage` não
-  manda soma por repositório (só `options.repo`, a lista para o filtro). A tela mostra Por
-  tipo e Por modelo, e recortar por um repositório é o filtro. Somar o diário por
-  repositório seria soma da tela, e o diário vem paginado.
+- **Por repositório é o que o diário guarda.** `repos` soma pelo `ref` de cada linha
+  (`aggregateRepos`, `lib/usage/report.js`); o que não é de PR vem com o nome vazio, e a tela o
+  chama de "Sem repositório".
 - **Sem custo por revisão.** O motor conta as revisões concluídas (`completed.reviews`), mas
   não diz quanto elas custaram: o custo do período inclui erro, contestação e chat. A tela
   não divide o total por conta própria.
