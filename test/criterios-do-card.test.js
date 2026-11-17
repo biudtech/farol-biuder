@@ -171,6 +171,24 @@ test('a decisão grava os critérios declarados e o detalhe os entrega; sem o ca
   assert.equal('criterios' in torto.d.provas.card, false, 'lista que fica vazia não vira chave');
 });
 
+test('o token partido pelo corte não escapa da máscara: a credencial sai antes de cortar', async () => {
+  const segredo = 'ghp_' + 'Ab3dE6gH9jK2mN5pQ8sT1vW4yZ7bC0eF3hJ6';
+  const texto = `${'a'.repeat(284)} ${segredo} fim`;
+  assert.equal(texto.indexOf('ghp_'), 285);
+  // a prova de que o corte sozinho deixaria escapar: o pedaço que sobra não casa mais
+  const { hasCredential } = await import('../lib/sensitive-text.js');
+  assert.equal(hasCredential(texto.slice(0, TETO_DO_TEXTO)), false);
+
+  const e = motor();
+  const r = await revisar(e, { criteriosDoCard: [{ texto, atende: true }] });
+  const corpo = JSON.stringify(detalheDaDecisao(e, new URLSearchParams({ key: r.key })).body);
+  assert.doesNotMatch(corpo, /ghp_/);
+  assert.equal(corpo.includes(segredo.slice(4, 14)), false, 'nem um pedaço do segredo');
+  assert.match(corpo, /\[credencial/, 'a marca da retirada no lugar do token');
+  assert.doesNotMatch(JSON.stringify(r.d.provas), /ghp_/, 'nem na decisão gravada');
+  assert.ok(Array.from(criteriosDoCard([{ texto }])[0].texto).length <= TETO_DO_TEXTO);
+});
+
 test('o detalhe confere de novo o que vem do disco', () => {
   const e = motor();
   e.decisions.pending.push({ id: 'd1', key: 'acme/app#9', createdAt: 1, status: 'pending', pr: { repo: 'acme/app', number: 9 },
