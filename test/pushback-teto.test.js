@@ -11,10 +11,12 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
 const { classify } = await import('../lib/log-taxonomy.js');
 const pb = await import('../lib/engine/pushback.js');
 
-after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
+after(() => { fecharTodos(); try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
 function engineAlvo(marcador = '2026-08-01T09:00:00Z') {
   // o limite do plano fica em disco por assinatura: um caso não pode herdar o do anterior
@@ -65,7 +67,7 @@ test('resultado ilegível conta, registra falha e marca erro no consumo', async 
   };
   for (let i = 0; i < 5; i++) await e.scanPushbacks();
   assert.equal(sessoes, pb.MAX_FALHAS_PUSHBACK_POR_PR);
-  const ultima = e.usageSessions.sessions.at(-1);
+  const ultima = sessoesDoDiario(e).at(-1);
   assert.equal(ultima.status, 'erro');
   assert.equal(e.falhaDaSessao(ultima.id).kind, 'pushback');
 });

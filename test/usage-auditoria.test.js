@@ -194,6 +194,10 @@ test('a fachada existe no engine', () => {
 
 test('o resumo da aba Consumo carrega a auditoria', () => {
   const USAGE = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'usage.js'), 'utf8');
-  assert.match(USAGE, /auditoria: auditoriaDeConsumo\(sessions\)/,
-    'sem isso a auditoria existe no arquivo e não na tela');
+  // a auditoria vem do diário, onde ele morar: o banco (auditoriaDasSessoes) ou o array em memória
+  // (auditoriaDeConsumo), lib/engine/usage-diario.js
+  assert.match(USAGE, /auditoria: d\.auditoria\(\)/, 'sem isso a auditoria existe no arquivo e não na tela');
+  const DIARIO = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'usage-diario.js'), 'utf8');
+  assert.match(DIARIO, /auditoria: \(\) => auditoriaDeConsumo\(lista\(\)\)/);
+  assert.match(DIARIO, /auditoria: \(\) => consumo\.auditoriaDasSessoes\(h, VOCABULARIO\)/);
 });

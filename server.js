@@ -66,6 +66,7 @@ import esperaProvaMod from './lib/engine/espera-prova.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
+import { carregarConsumo } from './lib/engine/telemetria-do-motor.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
@@ -233,13 +234,10 @@ class Engine extends EventEmitter {
       this.log('INFO', `teto de gasto removido: ${parkedSalvo.soltos.length} PR(s) estacionado(s) por orçamento voltaram à fila automática: ${parkedSalvo.soltos.join(', ')}.`);
     }
     this.parkedPruneStrikes = new Map(); // key estacionada -> ausências SEGUIDAS do panorama (memória; reinício zera, lado seguro)
-    // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
-    // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
-    this.usage = { ...usageMod.defaultUsage(), ...readJson(usageMod.USAGE_FILE, {}, warn) };
-    // log individual de sessoes, permanente (sem poda, decisao consciente: e a fonte
-    // unica da aba Consumo, ver o papel de lib/engine/usage.js no CLAUDE.md). Separado
-    // do usage.json pra gravacao do agregado nao reserializar um array que so cresce.
-    this.usageSessions = { ...usageMod.defaultSessions(), ...readJson(usageMod.SESSIONS_FILE, {}, warn) };
+    // registro de consumo: o agregado (usage.json, por dia/tipo/conta/modelo) e o diário de
+    // sessões, permanente e sem poda, no banco da telemetria (this.telemetria), com a migração
+    // dos JSON antigos; banco que não abre deixa o diário no usage-sessions.json, como era
+    carregarConsumo(this, warn);
     this.seen = new Set();
     this.reviewedKeys = new Set(); // PRs abertos que eu ja revisei (gh --reviewed-by)
     this.reReviewedKeys = new Set(); // re-requests que ja voltaram pra fila (evita re-surgir todo ciclo)

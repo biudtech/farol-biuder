@@ -35,7 +35,9 @@ const { pushbackTargets } = await import('../lib/engine/pushback.js');
 const { pausaDaRecuperacao } = await import('../lib/engine/recuperacao-prova.js');
 const reviewMod = (await import('../lib/engine/review.js')).default;
 
-after(() => fs.rmSync(home, { recursive: true, force: true }));
+const { fecharTelemetria } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
+after(() => { fecharTodos(); fs.rmSync(home, { recursive: true, force: true }); });
 
 const PARKED_FILE = path.join(STATE_DIR, 'auto-review-parked.json');
 const PR = {
@@ -62,6 +64,9 @@ function motor({ comTeto = true } = {}) {
   e.token = 'tok-me';
   e.tokenFor = () => 'tok-me';
   e.usage.byProfileDay = { [`p1|${usage.localDay()}`]: gasto() };
+  // o diário do cenário fica em memória (o caminho de quando o banco não abre): o assunto aqui é
+  // o teto, e cada motor precisa nascer com as mesmas duas sessões
+  fecharTelemetria(e);
   e.usageSessions = { sessions: [
     { id: 'a1', at: Date.now(), day: usage.localDay(), kind: 'review', account: 'me', profileId: 'p1', costUsd: 500, costSource: 'medido', status: 'ok' },
     { id: 'a2', at: Date.now(), day: usage.localDay(), kind: 'review', account: 'me', profileId: 'p1', costUsd: 0, costSource: 'desconhecido', status: 'erro' },

@@ -48,7 +48,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 24, 'são 24 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo e a da linha do boot da avaliação técnica');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 25, 'são 25 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo, a da linha do boot da avaliação técnica e a do registro de consumo fora do banco');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -69,7 +69,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
   assert.deepEqual(CLASSES.map(c => c.id), [
     // limite-da-organizacao ANTES de limite-plano: várias frases de teto da organização
     // contêm "usage limit" e seriam lidas como limite de janela (test/limite-do-claude.test.js)
-    'restart-fila', 'console-fechado', 'limite-da-organizacao', 'limite-plano',
+    'restart-fila', 'console-fechado', 'telemetria-anormal', 'limite-da-organizacao', 'limite-plano',
     'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem',
@@ -753,6 +753,20 @@ test('a linha do boot da avaliação técnica só sai quebrada, e é permanente'
   }
   // ancorada: a frase no meio de outra mensagem não muda a classe dela
   assert.notEqual(classify('acme/api#1: falhou; avaliação técnica: x').id, 'avaliacao-tecnica-quebrada');
+});
+
+// A linha do boot do registro de consumo (lib/engine/telemetria-do-motor.js) só sai em estado
+// anormal, e a causa pode trazer ENOENT ou EACCES em workspace/state: a classe vence essas.
+test('a linha anormal da telemetria tem classe própria, permanente, antes de arquivo preso e ferramenta', () => {
+  for (const texto of [
+    'telemetria: o banco /home/farol/.farol/workspace/state/telemetria.db não abriu (EACCES: permission denied, open /home/farol/.farol/workspace/state/telemetria.db); o consumo segue nos arquivos JSON',
+    'telemetria: a migração do consumo para o banco falhou (ENOENT: no such file); nada foi renomeado',
+    'telemetria: usage-sessions.json presente com o banco já preenchido, não importado de novo',
+  ]) {
+    assert.equal(classify(texto).id, 'telemetria-anormal', texto);
+    assert.equal(classify(texto).kind, 'permanente');
+  }
+  assert.notEqual(classify('acme/api#1: falhou; telemetria: x').id, 'telemetria-anormal');
 });
 
 test('triage: WARN conhecido e ERROR desconhecido continuam contando', () => {

@@ -21,8 +21,11 @@ childProcess.spawn = function spawnFalso(...args) { return spawnImpl ? spawnImpl
 const { runClaudeStream, parseEnvelope } = await import('../lib/engine/session.js');
 const tentativas = await import('../lib/engine/usage-tentativas.js');
 const { Engine } = await import('../server.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
 
 after(() => {
+  fecharTodos();
   childProcess.spawn = realSpawn;
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ }
 });
@@ -102,7 +105,7 @@ test('falha no spawn (evento error) também fecha a tentativa', async () => {
 test('boot da Engine reconcilia a tentativa que sobrou', () => {
   tentativas.abrirTentativa({}, { sessionId: 'a-sobrou', account: 'eu', profileId: '', model: 'claude-opus-5', ref: 'o/r#3' });
   const e = new Engine();
-  const s = e.usageSessions.sessions.find((x) => x.id === 'a-sobrou');
+  const s = sessoesDoDiario(e).find((x) => x.id === 'a-sobrou');
   assert.equal(s.status, 'interrompida');
   assert.equal(s.costSource, 'desconhecido');
   assert.deepEqual(diario(), []);
