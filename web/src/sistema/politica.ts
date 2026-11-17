@@ -34,6 +34,18 @@ export const PUBLICA: Record<Desfecho, string> = { onClean: 'approve', onCaveats
 // e a tela só deixa trocar para publicar.
 export const OPCOES_DA_TELA: Record<Desfecho, readonly string[]> = { onClean: ['approve'], onCaveats: ['approve'], onReject: ['request_changes'] };
 
+// Duas regras do motor que valem sempre e que o desenho mostra junto da política (17/11/2026). Não
+// são configuração: nenhuma chave do config.json as desliga, e por isso a tela as escreve como
+// texto, nunca como caixa de marcar. A fonte de cada uma é o motor:
+//   - o check obrigatório que também falha no commit atual da base é herdado e não pesa, com ou
+//     sem a espera do CI (`separarHerdados`, lib/engine/checks-exigidos.js);
+//   - no PR de sincronização entre branches contínuas sem defeito, a falta de card e os itens de
+//     processo não são ressalva, e o resultado é limpo (lib/engine/pr-de-sincronizacao.js).
+export const REGRAS_FIXAS: readonly { titulo: string; efeito: string }[] = [
+  { titulo: 'Check que já falha na base não segura', efeito: 'O check obrigatório que também falha no commit atual da base é herdado e não pesa na decisão.' },
+  { titulo: 'Merge-back sem commit próprio sai limpo', efeito: 'No PR de sincronização entre branches contínuas, sem defeito, a falta de card e os itens de processo não viram ressalva.' },
+];
+
 export const ROTULO_DO_DESFECHO: Record<Desfecho, string> = {
   onClean: 'Quando a revisão sai limpa (aprovável sem ressalvas)',
   onCaveats: 'Quando a revisão sai com ressalvas (aprovável, com pontos de atenção)',

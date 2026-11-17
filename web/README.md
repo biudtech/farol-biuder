@@ -810,7 +810,7 @@ esqueleto.
 | Seção | Componente | De onde vem | O que edita |
 |---|---|---|---|
 | Saúde | `Saude.tsx` | `doctor`, `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
-| Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
+| Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot; as duas regras fixas do motor, como texto (`REGRAS_FIXAS`, `src/sistema/politica.ts`) | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
 | Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
 | Perfil do Claude | `PerfilDoClaude.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | nada |
 | Jira | `Jira.tsx` | `jiraSites` do snapshot; `POST /api/jira/test` | nada |
@@ -943,6 +943,10 @@ Regras que valem para quem mexer nela:
   ressalvas é mostrado em espera, desabilitado, sem mexer no rascunho, e não vai no corpo;
   trocar a limpa para publicar o libera. `DOMINIO_DA_POLITICA` continua a cópia conferida do
   domínio do motor (com `wait`); `OPCOES_DA_TELA` é o subconjunto que a tela oferece.
+- **Regras fixas são texto.** "Check que já falha na base não segura" (`separarHerdados`,
+  `lib/engine/checks-exigidos.js`) e "Merge-back sem commit próprio sai limpo"
+  (`lib/engine/pr-de-sincronizacao.js`) aparecem na linha da conta e da política como texto
+  informativo, não como caixa de marcar: nenhuma chave do motor as desliga.
 - **A tela não manda campo vazio da política.** Vazio faria o motor regravar o padrão.
   `camposAlterados` só manda valor de `OPCOES_DA_TELA`, nunca vazio nem `wait`.
 - **Valores permitidos.** Os modelos vêm do catálogo do motor (`modelos.claude`). Os níveis de

@@ -15,7 +15,7 @@ import type { ContaRevisora } from '@/contratos/sistema';
 import type { Acao } from '@/radar/acoes';
 import { dataHora } from '@/radar/formato';
 import {
-  OPCOES_DA_TELA, ROTULO_DO_DESFECHO, ampliacoesDaConta, camposAlterados, efeitoDaRevisaoAutomatica, efeitoDoDesfecho, marcaDaConta,
+  OPCOES_DA_TELA, REGRAS_FIXAS, ROTULO_DO_DESFECHO, ampliacoesDaConta, camposAlterados, efeitoDaRevisaoAutomatica, efeitoDoDesfecho, marcaDaConta,
   notaDasRessalvasTravadas, organizacaoValida, rascunhoDaConta, refazerConta, rotuloDoValor, temOrganizacao, textoDoToken, textosDosConflitos,
   type Desfecho, type RascunhoDaConta,
 } from '@/sistema/politica';
@@ -45,6 +45,7 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar, ultimo }: PropsD
   const idDoErroDaNova = useId();
   const idDaRevisao = useId();
   const idDosDesfechos = useId();
+  const idDasRegras = useId();
   useEffect(() => {
     aoMudar(alterado);
     return () => aoMudar(false);
@@ -172,6 +173,16 @@ function EditorDaConta({ conta, controle, impedimento, aoMudar, ultimo }: PropsD
           );
         })}
       </div>
+
+      <h3 className={estilos.subtitulo} id={idDasRegras}>Regras fixas do motor</h3>
+      <ul className={estilos.regrasFixas} aria-labelledby={idDasRegras}>
+        {REGRAS_FIXAS.map((regra) => (
+          <li key={regra.titulo}>
+            <strong>{regra.titulo}.</strong> {regra.efeito}
+          </li>
+        ))}
+      </ul>
+      <p className={ui.mini}>Não são configuração: valem sempre, e não mudam por aqui nem pelo arquivo do motor.</p>
 
       <PeDoFormulario
         oQue="a conta e a política"

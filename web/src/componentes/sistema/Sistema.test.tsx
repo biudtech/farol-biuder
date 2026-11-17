@@ -345,6 +345,19 @@ describe('Sistema: conta revisora e política', () => {
   const campo = (rotulo: string | RegExp) => na(CONTA_E_POLITICA).getByLabelText(rotulo) as HTMLSelectElement;
   const habilitadas = (select: HTMLSelectElement) => [...select.options].filter((o) => !o.disabled).map((o) => o.value);
 
+  it('as duas regras fixas do motor aparecem como texto, nunca como caixa de marcar', async () => {
+    montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
+    await assentar();
+    const s = na(CONTA_E_POLITICA);
+    expect(within(s.getByRole('list', { name: 'Regras fixas do motor' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Check que já falha na base não segura. O check obrigatório que também falha no commit atual da base é herdado e não pesa na decisão.',
+      'Merge-back sem commit próprio sai limpo. No PR de sincronização entre branches contínuas, sem defeito, a falta de card e os itens de processo não viram ressalva.',
+    ]);
+    expect(s.queryByRole('checkbox', { name: /falha na base|Merge-back/ })).toBeNull();
+    expect(s.getAllByRole('checkbox')).toEqual([s.getByLabelText('Revisão automática')]);
+    expect(s.getByText(/Não são configuração: valem sempre/)).toBeTruthy();
+  });
+
   it('mostra a conta, a presença do token e a política, com o efeito de cada valor', async () => {
     montar({ bruto: { ...BRUTO, accounts: [ABERTA] } });
     await assentar();
