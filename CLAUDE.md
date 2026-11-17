@@ -107,7 +107,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/review-context/` | Mapa sintático e seleção de contexto sobre a fonte fixada. Nunca concede prova de leitura |
 | `lib/technical-review/` | A avaliação técnica do PR revisado com a ferramenta fixada em `tool.json`: `setup.js` e `setup-falhas.js` (instalação, com a mensagem de cada falha), `estado.js` (o estado da ferramenta e do cadastro que o doctor e a linha do boot mostram), `runtime.js` e `worker.js` (execução), `evidence.js` (as lacunas que impedem APPROVE), `verdict.js`, `publication.js` (a conferência na hora de postar) |
 | `lib/usage/` | Leitura do diário de consumo para a rota `/api/usage` |
-| `lib/telemetria/` | O banco da telemetria (SQLite pelo `node:sqlite`, `TELEMETRIA_DB`): `banco.js` (abre uma vez, pragmas, migrações por `PRAGMA user_version`, a soma em ordem), `consumo.js`, `tentativas.js` e `falhas.js` (as tabelas e as consultas), `mapa.js` (registro para linha e de volta, sem perda) e `migracao.js` (a importação dos JSON antigos no boot, com conferência). Só esta pasta abre o banco e tem SQL, sempre com parâmetro |
+| `lib/telemetria/` | O banco da telemetria (SQLite pelo `node:sqlite`, `TELEMETRIA_DB`): `banco.js` (abre uma vez, pragmas, migrações por `PRAGMA user_version`, a soma em ordem), `consumo.js`, `tentativas.js` e `falhas.js` (as tabelas do consumo e as consultas), `historico.js` (a tabela das decisões resolvidas, o recorte leve e a página filtrada no SQL), `mapa.js` (registro para linha e de volta, sem perda) e `migracao.js` (a importação dos JSON antigos e do `resolved` do `decisions.json` no boot, com conferência). Só esta pasta abre o banco e tem SQL, sempre com parâmetro |
 
 ### `lib/engine/`: colaboradores da `Engine`
 
@@ -122,8 +122,8 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
-| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `usage-diario-banco.js` (o lado do banco: o cache da atividade e da auditoria e a leitura que não lança), `telemetria-pendentes.js` (a fila do que o banco recusou), `telemetria-do-motor.js` (a leitura no construtor, a abertura e a importação no `start()` e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
-| Histórico | `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
+| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `usage-diario-banco.js` (o lado do banco: o cache da atividade e da auditoria e a leitura que não lança), `telemetria-pendentes.js` (a fila do que o banco recusou), `telemetria-do-motor.js` (a leitura no construtor, a abertura e a importação do consumo e do histórico no `start()`, por `iniciarTelemetria`, e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
+| Histórico | `historico-decisoes.js` (o histórico das resolvidas atrás de uma interface só: no banco da telemetria ou no `resolved` do `decisions.json`, com o cache do recorte leve e a fila do que o banco recusou; todo leitor e escritor do histórico passa por aqui), `busca-do-historico.js` (a definição da busca e dos filtros, que o SQL também usa), `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
 | Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
 
 ### `tools/`
@@ -262,8 +262,8 @@ O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 |---|---|
 | `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`, `hostPublico`, `origensPermitidas`) |
 | `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot e prompt que falta é copiado (ver o mapa); o `.claude/settings.json` não |
-| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` (o agregado do consumo), dossiês em `authors/`, os materiais da avaliação técnica em `technical-review/` |
-| `workspace/state/telemetria.db` | O banco da telemetria (SQLite, com o `-wal` e o `-shm` ao lado): o diário de sessões, as tentativas abertas e os motivos de falha. Abre no `start()`, depois do listen. A cada subida todo JSON do consumo presente é importado (só o que falta) e fica como `<nome>.migrado-<dia>`; se o banco não abrir, o motor grava nos JSON, e o que gravou entra no banco quando ele voltar. Cópia segura e retenção em [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md#o-banco-da-telemetria) |
+| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (as pendências; o histórico só enquanto o banco não abre, ou a decisão que o banco recusou), `usage.json` (o agregado do consumo), dossiês em `authors/`, os materiais da avaliação técnica em `technical-review/` |
+| `workspace/state/telemetria.db` | O banco da telemetria (SQLite, com o `-wal` e o `-shm` ao lado): o diário de sessões, as tentativas abertas, os motivos de falha e o histórico das decisões resolvidas (até 3.000, a mais nova primeiro). Abre no `start()`, depois do listen. A cada subida todo JSON do consumo presente é importado (só o que falta) e fica como `<nome>.migrado-<dia>`; o `resolved` do `decisions.json` também é importado (só o que falta), o arquivo original fica copiado como `decisions.json.migrado-<dia>` e o `decisions.json` é regravado só com as pendências. Resolver uma decisão grava no banco antes de regravar o `decisions.json`; a pendência que a queda deixou nos dois sai das pendências na subida seguinte. Se o banco não abrir, o motor grava nos JSON (o histórico, no `resolved`), e o que gravou entra no banco quando ele voltar. Cópia segura e retenção em [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md#o-banco-da-telemetria) |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
 | `claude/<id>/` | A pasta de configuração de cada perfil de assinatura do Claude, com o login |
 | `jira-credentials.json` | A credencial do Jira, fora do `config.json` |
@@ -352,7 +352,8 @@ e num `config.json` antigo são descartadas na carga (`test/preferencias-sem-lei
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
-(`lib/engine/historico-paginado.js`). Todos os parâmetros são opcionais:
+(`lib/engine/historico-paginado.js`; no banco, filtrado e paginado no SQL pelas colunas que
+`lib/engine/busca-do-historico.js` calcula). Todos os parâmetros são opcionais:
 
 - `page` (a partir de 1) e `pageSize` (padrão 30, teto 100);
 - `q`, até 200 caracteres: busca sem caixa e sem acento em repositório, número, título, autor do
@@ -408,7 +409,10 @@ escreve no log, nem no 200 nem no 400.
   as tentativas é `iniciarConsumo` (`lib/engine/telemetria-do-motor.js`), que o `start()` chama
   depois do listen. Teste que quer o banco chama `iniciarConsumo(engine)` e o fecha no fim
   (`fecharTodos`, `lib/telemetria/banco.js`, no `after`); o banco também fecha sozinho no `exit`
-  do processo. Para ler o diário num teste, use `sessoesDoDiario`, que serve aos dois modos.
+  do processo. Para ler o diário num teste, use `sessoesDoDiario`, que serve aos dois modos. O
+  histórico das decisões abre no banco por `iniciarHistorico` (ou `iniciarTelemetria`, que faz os
+  dois); sem ele o histórico fica no `engine.decisions.resolved`, como antes. Para ler o histórico
+  num teste, use `decisoesResolvidas`, que serve aos dois modos.
 - As buscas do `gh` são só leitura; o que escreve no GitHub passa pelos gates do invariante 4.
 - **A trava dos guias**: `test/guias-navegaveis.test.js` confere o índice deste arquivo e dos dois
   guias de `docs/` contra as próprias seções, o mapa do código do README contra o `package.json`, e

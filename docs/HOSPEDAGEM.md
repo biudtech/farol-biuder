@@ -167,8 +167,8 @@ e os arquivos sentinela postos em `.farol/claude/<id>/.credentials.json` e em `.
 
 ## O banco da telemetria
 
-O registro de consumo (as sessões, as tentativas abertas e os motivos de falha) mora num arquivo
-SQLite no volume: `.farol/workspace/state/telemetria.db` (`TELEMETRIA_DB`, `lib/paths.js`),
+O registro de consumo (as sessões, as tentativas abertas e os motivos de falha) e o histórico das
+decisões resolvidas (até 3.000, a mais nova primeiro) moram num arquivo SQLite no volume: `.farol/workspace/state/telemetria.db` (`TELEMETRIA_DB`, `lib/paths.js`),
 aberto pelo `node:sqlite` do próprio Node, sem pacote. O agregado do consumo continua no
 `usage.json`, ao lado. O motor abre o arquivo uma vez, depois de tomar a porta (a trava de
 instância única: uma segunda instância no mesmo volume não chega a abri-lo), com WAL,
@@ -190,6 +190,25 @@ dobro. O detalhe está em [`docs/CONSUMO-REVIEWS.md`](CONSUMO-REVIEWS.md#onde-o-
 
 Medido com os dados da instância de desenvolvimento em 16/11/2026: 5.567 sessões, 3 tentativas
 abertas e 244 falhas viraram um `telemetria.db` de 3,9 MB, no lugar de 5,8 MB de JSON.
+
+**O histórico das decisões** (desde 17/11/2026). O `decisions.json` passa a guardar só as
+pendências; o histórico (`resolved`) vai para a tabela `resolvidas` do mesmo banco. Na primeira
+subida desta versão o motor importa o histórico que o arquivo tiver (só o que o banco ainda não
+tem), confere a contagem e cada decisão, copia o arquivo original para
+`decisions.json.migrado-<dia>` e só então regrava o `decisions.json` com `resolved: []`, com uma
+linha `INFO`. A cópia fica no volume até quem opera apagá-la. Resolver uma decisão grava no banco
+antes de regravar o `decisions.json`; se o processo cair entre os dois, a subida seguinte acha a
+pendência no histórico e a tira das pendências, sem gravar de novo. Banco que não abre,
+importação que não confere ou escrita que o banco recusa deixam o histórico no `decisions.json`,
+como antes, com uma linha `WARN` começando por `telemetria:`; ele entra no banco quando o banco
+voltar. Enquanto o motor estiver nessa subida sem banco, o histórico de antes (que está no banco)
+não aparece na tela nem nas regras que o leem.
+
+Medido com o histórico real em 17/11/2026 (2.596 decisões, `decisions.json` de 217 MB, numa cópia
+num disco Linux do WSL): a importação levou de 3,9 a 5,4 s, o processo chegou a 1,1 GB de memória
+(o construtor, que ainda lê o arquivo grande nessa subida, já ocupa 0,87 GB), o `decisions.json`
+ficou com 37 bytes e o banco com 202 MB (o `-wal` é zerado ao fim da importação). Na subida
+seguinte o construtor levou 0,12 s e o processo inteiro 106 MB, no lugar de 1,1 s e 0,87 GB.
 
 **Copiar com o motor de pé.** Com WAL, copiar só o `.db` não basta: parte das gravações ainda
 está no `-wal`, e copiar os três arquivos soltos pode pegar um no meio de uma gravação. O jeito
@@ -214,7 +233,10 @@ o WAL ao `.db`). O backup contínuo (Litestream ou cópia agendada para o S3) é
 ainda não feito: hoje a cópia do banco é a cópia do volume.
 
 **Retenção: decisão pendente.** As sessões não têm poda, como no JSON de antes: o banco cresce
-uns 700 bytes por sessão registrada. Os motivos de falha seguem com o teto de 500.
+uns 700 bytes por sessão registrada. Os motivos de falha seguem com o teto de 500. O histórico
+das decisões segue com o teto de 3.000 (a mais antiga sai quando entra uma nova), com uns 78 KB
+por decisão no histórico real, quase tudo o inventário do diff. Apagar linhas não encolhe o
+arquivo: o espaço é reaproveitado pelas próximas.
 
 ## O config.json da instância
 

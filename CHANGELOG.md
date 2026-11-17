@@ -220,6 +220,29 @@ Ainda sem versão publicada.
   o motor de pé por `VACUUM INTO`, a retenção como decisão pendente) e `docs/CONSUMO-REVIEWS.md`
   diz onde o registro mora. O backup contínuo fica para o lote de backup.
 
+### Telemetria em SQLite, lote 2: o histórico das decisões
+
+- **O histórico mora no banco:** o `resolved` do `decisions.json` (até 3.000 decisões, a mais
+  nova primeiro) passa para a tabela `resolvidas` do `telemetria.db`, uma linha por decisão,
+  com a decisão inteira em JSON e colunas para o que se filtra e procura. O `decisions.json`
+  fica só com as pendências: na instância real ele tinha 217 MB e era regravado inteiro a cada
+  mudança de pendência; ficou com 37 bytes.
+- **Gravação na ordem certa:** resolver uma decisão é um `INSERT` em transação que vem antes da
+  regravação do `decisions.json`. Uma queda entre os dois deixa a decisão nos dois lados, e a
+  subida seguinte a tira das pendências sem duplicar o histórico (`INFO`).
+- **Migração como a do consumo:** na subida, o histórico do arquivo entra no banco (só o que
+  falta), conferido (contagem e cada decisão) numa transação; só então o arquivo original é
+  copiado para `decisions.json.migrado-<dia>` e o `decisions.json` é regravado sem o histórico.
+  Banco que não abre, conferência que não fecha ou escrita recusada deixam o histórico no
+  `decisions.json` (`WARN`, classe `telemetria-anormal`), e ele entra no banco depois. Medido
+  com os dados reais: de 3,9 a 5,4 s e 1,1 GB de pico na subida da migração; na seguinte, 106 MB.
+- **Leitores sem mudança de resultado:** o snapshot, `GET /api/decisions` (agora filtrado e
+  paginado no SQL), `GET /api/decision` e as regras que leem o histórico (última ação por PR,
+  rodadas publicadas, retirada do pedido de mudanças, estimativa, retomada, material, destrave,
+  sessão anterior e vistos) devolvem o mesmo, provado com os dados reais em 304 consultas da rota
+  e 1.684 chaves, comparando o JSON de chaves ordenadas contra o código anterior. As regras leem
+  um recorte leve de cada decisão, mantido em memória. Nenhuma rota, chave ou campo novo.
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em
