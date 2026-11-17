@@ -256,6 +256,30 @@ Ainda sem versão publicada.
 - **Voltar a imagem para antes deste lote** exige restaurar o `decisions.json.migrado-<dia>`
   (`docs/HOSPEDAGEM.md`).
 
+### Hospedagem compartilhada, sem Docker
+
+- **O motor escuta num socket Unix:** a chave só de arquivo `socket` (caminho absoluto) troca a
+  porta TCP pelo socket, nunca os dois, com permissão 600. A trava de instância única continua
+  sendo o listen: socket vivo recusa a subida como a porta ocupada, socket órfão de uma queda é
+  removido, e o que não é socket no caminho nunca é apagado. A saída ordenada remove o socket que
+  o processo criou, e o banco da telemetria só abre depois do listen no socket. Recusa de boot
+  para valor inválido (caminho relativo, nulo, acima dos 107 bytes do socket Unix, pasta ausente
+  ou gravável pelo grupo ou pelos outros), nome parecido (`sock`, `socketPath`), `socket` com
+  `bind` e `socket` sem `hostPublico`: pelo socket só vale o Host público, e a autenticação é
+  sempre exigida.
+- **O front escuta num socket Unix:** `npm run start:socket` (`web/servidor.mjs`) serve o build
+  com o mesmo handler do `next start`, no socket de `FAROL_WEB_SOCKET`, com as mesmas regras; a
+  CSP por nonce continua saindo. `npm run test:servidor` prova sobre um build de verdade e entra
+  no job `web` do CI.
+- **A sessão pelo portão:** atrás de um portão de login na mesma origem que injeta o Bearer de
+  uma sessão do motor, o front entra sem token próprio quando o motor diz `autenticado: true` a
+  um pedido sem token; o 401 volta à raiz (uma vez por minuto, depois a tela de Entrar de novo),
+  o Sair chama `POST /auth/logout` do portão, e a casca diz que a sessão vem do login da frente.
+  Sem portão, o pareamento segue igual.
+- **O guia:** a seção "Hospedagem compartilhada, sem Docker" em `docs/HOSPEDAGEM.md`, com o
+  `config.json`, o `HOME` do processo do motor, o build do front na mesma origem, o que o proxy
+  e o portão precisam fazer.
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em

@@ -25,6 +25,7 @@ As regras da fronteira (Host, Origin, CORS, autenticação) estão em
 - [Riscos conhecidos](#riscos-conhecidos)
 - [Atualizar a versão](#atualizar-a-versão)
 - [Publicar a imagem](#publicar-a-imagem)
+- [Hospedagem compartilhada, sem Docker](#hospedagem-compartilhada-sem-docker)
 - [O que não foi provado](#o-que-não-foi-provado)
 
 <!-- indice:fim -->
@@ -767,6 +768,120 @@ AWS e o nome do papel são suposições a conferir. O que ele pede além do que 
 
 A imagem não leva segredo em camada, em `ARG` nem em variável: publicá-la num registro privado
 não expõe credencial. O `config.json`, o login do `gh` e o da assinatura só existem no volume.
+
+## Hospedagem compartilhada, sem Docker
+
+Quando não há container (uma hospedagem compartilhada com Node 24, sem root, em que vários
+clientes dividem a máquina), o motor e o front rodam como processos do usuário da hospedagem e
+escutam em **sockets Unix**, não em portas. Ali a porta em `127.0.0.1` é alcançável por qualquer
+usuário da máquina; o socket com permissão 600 só pelo próprio usuário. Um proxy da hospedagem
+(por exemplo, um app Node atrás do servidor web, com o login que a hospedagem oferecer) recebe o
+`https://` público e encaminha para os dois sockets, na **mesma origem**:
+
+| caminho público | vai para |
+|---|---|
+| `/api/*` | o socket do motor (`socket` no `config.json`) |
+| todo o resto | o socket do front (`FAROL_WEB_SOCKET`, `npm run start:socket`) |
+
+Nos exemplos, `<base>` é a pasta do usuário da hospedagem e `farol.exemplo.invalid` o domínio
+público: troque pelos de verdade, que não se versionam.
+
+**As pastas.** Os dados do motor em `<base>/dados` e os sockets em `<base>/run`, as duas com
+modo 700. O motor e o front recusam socket numa pasta que não existe ou que o grupo ou os
+outros gravam: quem grava na pasta troca o socket por outro e recebe os pedidos do proxy.
+
+**O motor.** Rode `node server.js` com `HOME=<base>/dados` e sem `FAROL_HOME`. Assim os dados
+ficam em `<base>/dados/.farol` (`lib/paths.js` resolve o `~/.farol` pelo `HOME`), o login do
+`gh` e o `~/.claude.json` ficam na mesma pasta, e a instância não conta como isolada: com
+`FAROL_HOME` fora do `~/.farol` ela não postaria no GitHub
+([instância isolada](#variáveis-de-ambiente)). Ligue também `FAROL_INSTANCIA_HOSPEDADA=1`, que
+recusa a subida sem `config.json` ou sem a fronteira. O `config.json`, em
+`<base>/dados/.farol/config.json`, gravado antes da primeira subida:
+
+```json
+{
+  "socket": "<base>/run/motor.sock",
+  "hostPublico": "farol.exemplo.invalid",
+  "origensPermitidas": ["https://farol.exemplo.invalid"],
+  "localAuth": "exigir",
+  "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" }
+}
+```
+
+- `socket`: o motor escuta **só** no socket, com permissão 600, e a porta TCP não abre. A trava
+  de instância única continua valendo: socket em uso por um processo vivo recusa a subida; o
+  arquivo órfão de uma queda (ninguém escuta nele) é removido e o motor sobe; o que não é socket
+  naquele caminho nunca é apagado. Na saída ordenada (SIGTERM, SIGINT, SIGHUP) o socket é
+  removido. O caminho tem de ser absoluto e caber em 107 bytes (o limite de socket Unix do
+  Linux). `socket` com `bind` é recusa de boot: com socket não há porta, e o `bind` escrito
+  espera uma;
+- `hostPublico`: **obrigatório com `socket`** (sem ele o motor não sobe). Pelo socket não há
+  porta nem endereço de origem, e o motor aceita só o Host público que o proxy repassa; nenhum
+  nome de loopback (`localhost`, `127.0.0.1:<porta>`) vale ali. Com ele a autenticação é sempre
+  exigida;
+- `origensPermitidas` com a própria origem pública: o navegador manda `Origin` nos `POST`, mesmo
+  na mesma origem, e o motor só aceita origem escrita na lista. A resposta ganha os cabeçalhos
+  CORS dessa origem, o que na mesma origem não muda nada;
+- `conta` em espera: a primeira subida monitora e não posta nada sozinha
+  ([receita](CONFIGURATION.md#receita-da-instância-que-sobe-sem-agir)).
+
+Pareie com `HOME=<base>/dados node tools/farol-parear.js` (o mesmo `HOME` do motor). Para olhar
+a API pelo socket, sem o proxy: `curl --unix-socket <base>/run/motor.sock -H 'Host:
+farol.exemplo.invalid' http://farol.exemplo.invalid/api/auth/status`.
+
+**O front.** O endereço do motor é lido no build e, na mesma origem, é a própria origem
+pública:
+
+```sh
+cd web
+npm ci
+NEXT_PUBLIC_FAROL_API=https://farol.exemplo.invalid npm run build
+FAROL_WEB_SOCKET=<base>/run/web.sock npm run start:socket
+```
+
+`npm run start:socket` (`web/servidor.mjs`) sobe o mesmo handler do `next start`, então a CSP
+por nonce de `web/src/proxy.ts` continua saindo, com `connect-src 'self'
+https://farol.exemplo.invalid`. O socket segue as regras do motor (600, órfão removido, vivo
+recusa, removido no SIGTERM e no SIGINT); sem `FAROL_WEB_SOCKET` o servidor recusa com a
+mensagem e `npm start` continua sendo a porta TCP.
+
+**O que o proxy precisa fazer.**
+
+- Repassar `Host` e `Origin` como chegaram do navegador, sem reescrevê-los para o loopback: o
+  motor confere o `Host` contra `hostPublico` e o `Origin` contra `origensPermitidas`, e recusa
+  com 403 o resto. Repassar também `x-farol`, `Authorization`, `Content-Type` e `Accept`. Um
+  proxy que só encaminha deixa o `Authorization: Bearer` do pareamento chegar intacto; um
+  portão de login que injeta a credencial é o caso abaixo.
+- Não bufferizar o SSE de `GET /api/events` (`text/event-stream`; o motor já manda
+  `X-Accel-Buffering: no`) e dar a ele tempo de leitura longo: a conexão fica aberta por horas,
+  com um evento de batimento a cada 25 segundos. Com o tempo curto a tela cai e reconecta.
+- Não guardar em cache nenhuma resposta de `/api/` (o motor manda `Cache-Control: no-store`).
+
+**A sessão pelo portão.** O proxy pode ser um portão de login (com o login de uma conta do
+Google, por exemplo) que dispensa o pareamento: para quem está logado nele, o portão emite uma
+sessão do próprio motor (`emitirSessao`, de `lib/local-auth/sessoes.js`, com o mesmo
+`FAROL_HOME` do motor) e a injeta como `Authorization: Bearer <token>` em todo pedido que
+repassa, sobrescrevendo o que o navegador mandar. O navegador nunca vê esse token. O front
+percebe o modo sozinho: sem token guardado, ele pergunta `GET /api/auth/status`, e só entra sem
+token quando o motor responde `"exigida": true` e `"autenticado": true` àquele pedido, o que só
+acontece com alguém injetando a credencial na frente. Sem portão a resposta é
+`"autenticado": false` e o caminho é o pareamento de sempre. O que o portão precisa fazer:
+
+- injetar o Bearer de uma sessão válida do motor em todo pedido de quem está logado, e nunca
+  repassar o `Authorization` que vier do navegador;
+- reconhecer quem está logado pelo cookie da própria origem (o front, nesse modo, manda o
+  cookie da mesma origem; fora dele, não manda cookie nenhum), com `SameSite=Lax` ou mais
+  estrito, `Secure` e `HttpOnly`: o cookie passa a valer como credencial;
+- bloquear `POST /api/auth/pair` para quem está logado (a sessão já existe);
+- responder `401` a pedido de `/api/` sem a sessão dele (o front recarrega a página na raiz uma
+  vez por minuto; o segundo `401` dentro desse tempo mostra uma tela com Entrar de novo) e servir
+  a página de login em `GET /` para quem não está logado;
+- ter `POST /auth/logout`, que revoga a sessão do motor e apaga o cookie. O Sair do front chama
+  essa rota (mesma origem, com `x-farol: 1`) e volta à raiz; revogar a sessão atual em Sistema
+  faz o mesmo.
+
+A casca do front mostra "Sessão do login da frente" nesse modo, para quem opera não procurar o
+pareamento.
 
 ## O que não foi provado
 

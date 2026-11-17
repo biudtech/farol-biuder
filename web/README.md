@@ -2,7 +2,8 @@
 
 A tela do Farol, em Next.js (App Router) e TypeScript estrito. O navegador fala direto com a
 API do motor: `fetch` com `Authorization: Bearer`, e `x-farol: 1` em todo POST. Aqui não há
-rota de API, cookie nem segredo.
+rota de API, cookie nem segredo. A exceção é a [sessão pelo portão](#sessão-pelo-portão), em
+que um login na frente injeta a credencial e o front manda o cookie da própria origem.
 
 Este pacote é independente do motor: tem `package.json`, `package-lock.json` e gate próprios.
 Na Vercel, o diretório raiz do projeto é `web/`.
@@ -63,6 +64,8 @@ prefixo `NEXT_PUBLIC_` vai para o navegador.
 | `npm run dev` | Servidor de desenvolvimento na porta 3100 |
 | `npm run build` | Build de produção |
 | `npm run start` | Serve o build na porta 3100 |
+| `npm run start:socket` | Serve o build num socket Unix (`servidor.mjs`), no caminho absoluto de `FAROL_WEB_SOCKET`, com permissão 600; sem a variável, recusa. É o caminho da hospedagem compartilhada atrás de um proxy ([`docs/HOSPEDAGEM.md`](../docs/HOSPEDAGEM.md#hospedagem-compartilhada-sem-docker)) |
+| `npm run test:servidor` | Prova o `start:socket` sobre o build (rode `npm run build` antes; só Linux): CSP por nonce, permissão 600, socket órfão, socket vivo e o encerramento |
 | `npm run typecheck` | Gera os tipos das rotas (`next typegen`) e roda o `tsc` |
 | `npm run lint` | ESLint, sem tolerar aviso |
 | `npm test` | Vitest, com no máximo 4 workers |
@@ -70,7 +73,7 @@ prefixo `NEXT_PUBLIC_` vai para o navegador.
 O gate, antes de qualquer entrega, é o que o job `web` do CI roda:
 
 ```sh
-npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build
+npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build && npm run test:servidor
 ```
 
 O `npm audit` cobre também as dependências de desenvolvimento: nada sobe com vulnerabilidade
@@ -932,3 +935,33 @@ O token da sessão fica no `localStorage` da origem do front, que é um só para
   vai ao pareamento com um token válido guardado: relê o armazenamento e segue pareada com o
   novo, quer o aviso do navegador (`storage`) tenha chegado antes, quer só o 401;
 - um 401 apaga só o token que foi recusado, nunca o que outra aba acabou de guardar.
+
+### Sessão pelo portão
+
+Atrás de um portão de login na mesma origem (a hospedagem compartilhada de
+[`docs/HOSPEDAGEM.md`](../docs/HOSPEDAGEM.md#hospedagem-compartilhada-sem-docker)), quem está
+logado no portão recebe dele uma sessão do motor, injetada como `Authorization: Bearer` em todo
+pedido que o portão repassa. O navegador não vê esse token, e o front não guarda nada
+(`src/estado/app.ts`):
+
+- **Entrar.** Com token guardado, o de sempre. Sem token, o front pergunta
+  `GET /api/auth/status` (com o cookie da própria origem, para o portão reconhecer o login) e
+  só entra sem token quando o motor responde `exigida: true` e `autenticado: true` àquele
+  pedido. Um motor sem portão responde `autenticado: false` a um pedido sem token, e a tela é o
+  pareamento. Resposta torta, falha de rede ou `exigida: false` também levam ao pareamento:
+  o front nunca se considera autenticado sem o motor dizer isso.
+- **Nesse modo** os pedidos não levam `Authorization` (quem manda é o portão) e levam o cookie
+  da mesma origem (`credentials: 'same-origin'`, que não vai a outra origem); fora dele,
+  `credentials: 'omit'`, como sempre. A casca mostra "Sessão do login da frente".
+- **401.** Não há token a apagar e o pareamento não adianta (o portão o bloqueia): a página
+  volta à raiz (`location.assign('/')`), onde o portão mostra o login. Uma vez por minuto
+  (`JANELA_DA_RECARGA_MS`, a hora fica no `sessionStorage`): o segundo 401 dentro desse tempo
+  mostra uma tela com a mensagem e o botão Entrar de novo, em vez do laço de recargas.
+- **Sair.** `POST /auth/logout` (rota do portão, mesma origem, com `x-farol: 1`, sem o motor no
+  caminho), que revoga a sessão do motor e apaga o cookie, e depois a raiz. Revogar a sessão
+  `atual` em Sistema, Sessões pareadas, faz o mesmo; a lista continua listando.
+- **Outra aba** que pareia passa esta aba para o token guardado; outra aba que apaga o token não
+  muda nada aqui.
+
+O que o portão precisa fazer está em
+[`docs/HOSPEDAGEM.md`](../docs/HOSPEDAGEM.md#hospedagem-compartilhada-sem-docker).
