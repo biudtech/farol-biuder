@@ -107,6 +107,7 @@ Para a lista inteira, `git ls-files lib`.
 | `lib/review-context/` | Mapa sintático e seleção de contexto sobre a fonte fixada. Nunca concede prova de leitura |
 | `lib/technical-review/` | A avaliação técnica do PR revisado com a ferramenta fixada em `tool.json`: `setup.js` e `setup-falhas.js` (instalação, com a mensagem de cada falha), `estado.js` (o estado da ferramenta e do cadastro que o doctor e a linha do boot mostram), `runtime.js` e `worker.js` (execução), `evidence.js` (as lacunas que impedem APPROVE), `verdict.js`, `publication.js` (a conferência na hora de postar) |
 | `lib/usage/` | Leitura do diário de consumo para a rota `/api/usage` |
+| `lib/telemetria/` | O banco da telemetria (SQLite pelo `node:sqlite`, `TELEMETRIA_DB`): `banco.js` (abre uma vez, pragmas, migrações por `PRAGMA user_version`, a soma em ordem), `consumo.js`, `tentativas.js` e `falhas.js` (as tabelas e as consultas), `mapa.js` (registro para linha e de volta, sem perda) e `migracao.js` (a importação dos JSON antigos no boot, com conferência). Só esta pasta abre o banco e tem SQL, sempre com parâmetro |
 
 ### `lib/engine/`: colaboradores da `Engine`
 
@@ -121,7 +122,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
-| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
+| Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `telemetria-do-motor.js` (a carga no boot, a migração e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
 | Histórico | `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`) |
 | Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
 
@@ -140,6 +141,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | `tools/replay-saida-review.js` | Replay offline da saída pública única, sem modelo ([`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md)) |
 | `tools/replay-contexto.js`, `tools/benchmark-contexto.js`, `tools/comparar-contexto-engine.js`, `tools/medir-parser-frontend.js` | Medição do mapa de contexto e do parser, sobre fontes sintéticas e sem modelo |
 | `tools/provar-fontes-github.js` | Prova de aquisição das fontes de um PR público, só leitura, com `FAROL_HOME` temporário |
+| `tools/comparar-consumo-sqlite.js` | Prova da migração do consumo para o banco sobre uma cópia dos JSON: grava o que `GET /api/usage` e a chave `usage` do snapshot devolvem (7, 30 e 90 dias, filtros e páginas) em JSON ordenado, lendo da memória (`--modo json`) ou do banco migrado (`--modo banco`), para comparar byte a byte, e mede a rota |
 | `tools/medicao/contagem-dobrada.js` | Compara, num stream capturado de sessão, a soma do acumulador de uso com a soma por mensagem |
 | `tools/git-env.js`, `tools/nao-e-fonte.js`, `tools/descoberta-de-testes.js` | Apoio das ferramentas: o ambiente do `git`, as pastas que nenhuma ferramenta abre, os padrões de teste do motor |
 
@@ -152,7 +154,8 @@ Não se negociam. Mudar um deles é decisão do dono, com teste junto.
    artefato que o motor usa é o de `assets/third-party/babel-parser/`, na versão do `manifest.json`
    de lá (7.28.5), conferido por hash (`lib/parser-runtime.js`). O pino em `devDependencies` existia
    para reproduzir esse artefato e hoje diverge dele (8.0.10, por um bump automático): é pendência
-   aberta, e não muda o que roda. Não adicione pacote.
+   aberta, e não muda o que roda. Não adicione pacote. O SQLite da telemetria é o `node:sqlite`,
+   do próprio Node, e não pacote.
 2. **Dados em `~/.farol`.** O estado do motor mora todo lá, e no container é o volume que
    persiste. O motor não escreve na pasta do código nem no diretório de trabalho, e no boot não
    escreve na pasta temporária (`test/boot-vazio.test.js`). As duas escritas fora de `~/.farol`
@@ -259,7 +262,8 @@ O estado mora em `~/.farol` (ou em `FAROL_HOME`, que liga a instância isolada):
 |---|---|
 | `config.json` | Preferências e a conta. Parte só se edita pelo arquivo, com reinício (`port`, `bind`, `localAuth`, `hostPublico`, `origensPermitidas`) |
 | `workspace/` | O diretório de trabalho de toda sessão de IA. Cinco arquivos do protocolo são regravados a cada boot e prompt que falta é copiado (ver o mapa); o `.claude/settings.json` não |
-| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` e `usage-sessions.json`, dossiês em `authors/`, os materiais da avaliação técnica em `technical-review/` |
+| `workspace/state/` | Estado do motor: `farol.log`, `decisions.json` (pendências e histórico), `usage.json` (o agregado do consumo), dossiês em `authors/`, os materiais da avaliação técnica em `technical-review/` |
+| `workspace/state/telemetria.db` | O banco da telemetria (SQLite, com o `-wal` e o `-shm` ao lado): o diário de sessões, as tentativas abertas e os motivos de falha. Na primeira subida os JSON antigos são importados e ficam como `<nome>.migrado-<dia>`; se o banco não abrir, o motor segue neles. Cópia segura e retenção em [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md#o-banco-da-telemetria) |
 | `local-auth/` | Sessões e códigos de pareamento da API, só hash |
 | `claude/<id>/` | A pasta de configuração de cada perfil de assinatura do Claude, com o login |
 | `jira-credentials.json` | A credencial do Jira, fora do `config.json` |
@@ -399,7 +403,11 @@ escreve no log, nem no 200 nem no 400.
 - **Stub da sessão**: `FAROL_HEADLESS_CMD` substitui o `claude` headless (imprima um envelope
   `{"result": "..."}` no stdout). É o que os testes usam.
 - **Teste novo que sobe a `Engine`** fixa `FAROL_HOME` numa pasta temporária antes de importar o
-  `server.js`: os caminhos são constantes de módulo, lidas na carga.
+  `server.js`: os caminhos são constantes de módulo, lidas na carga. A `Engine` abre o banco da
+  telemetria nessa pasta; feche-o no fim (`fecharTodos`, `lib/telemetria/banco.js`, no `after`).
+  O banco também fecha sozinho no `exit` do processo. Para ler o diário num teste, use
+  `sessoesDoDiario` (`lib/engine/telemetria-do-motor.js`), não `engine.usageSessions`, que só
+  existe quando o banco não abriu.
 - As buscas do `gh` são só leitura; o que escreve no GitHub passa pelos gates do invariante 4.
 - **A trava dos guias**: `test/guias-navegaveis.test.js` confere o índice deste arquivo e dos dois
   guias de `docs/` contra as próprias seções, o mapa do código do README contra o `package.json`, e

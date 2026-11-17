@@ -15,10 +15,48 @@ Config e estado antigos: os campos de teto de um perfil (`budgetDaily`, `budgetT
 sem erro, e o PR estacionado por orçamento num estado gravado volta a ser elegível no boot. O
 detalhe está em [`CONFIGURATION.md`](CONFIGURATION.md#sem-teto-de-gasto).
 
-O que continua medido: cada sessão no diário (`usage-sessions.json`), os agregados
+O que continua medido: cada sessão no diário (no banco da telemetria, abaixo), os agregados
 (`usage.json`, por dia, tipo, conta e modelo), o custo com a origem dele e a chave `usage` do
 snapshot, que não traz `budgets`. O agregado `byProfileDay` (gasto por perfil e dia) continua
 sendo gravado e hoje não tem leitor.
+
+## Onde o registro mora
+
+Desde 16/11/2026 o diário de sessões, as tentativas abertas e os motivos de falha moram num
+arquivo SQLite, `~/.farol/workspace/state/telemetria.db` (`lib/telemetria/`). O motor abre o
+banco uma vez, e só os módulos de `lib/telemetria/` têm SQL. Registrar uma sessão é um `INSERT`
+numa transação, e não mais a regravação do arquivo inteiro (5,5 MB na instância real, a cada
+sessão). A tentativa aberta é uma linha que o parcial atualiza e o fechamento apaga; o desfecho
+marcado depois (`marcarDesfecho`) atualiza a linha mais recente daquele id.
+
+| tabela | o que guarda |
+|---|---|
+| `sessoes` | uma linha por sessão, na ordem do diário (`seq`). Coluna para cada campo que o motor grava, `accounting` e `modelUsage` em JSON, e `extra` (JSON) para o resto, inclusive o que só registro antigo tem (`corrigidoEm`) e o valor de tipo inesperado. Índices por id, tentativa, cursor de retomada e modelo |
+| `tentativas` | as tentativas de sessão abertas, pela chave do attemptId |
+| `falhas` | os motivos de falha, na ordem, com o teto de 500 |
+
+O esquema tem versão (`PRAGMA user_version`, hoje 1) e migrações numeradas em
+`lib/telemetria/banco.js`.
+
+O agregado continua JSON: é pequeno (228 kB), podado em 120 dias, e não se deriva das sessões.
+Na instância real ele tem 5.568 sessões e 5,44 bilhões de tokens de entrada; o diário, 5.567
+linhas e 5,34 bilhões, porque o agregado vem de antes do diário. Uma consulta sobre as sessões
+mudaria os números da tela.
+
+As leituras filtram e contam no SQL: as sessões recentes do snapshot, a primeira sessão, a
+auditoria do registro, a linha anterior do cursor das retomadas e a amostra da taxa de custo. A
+soma do custo usa uma soma em ordem, sem compensação, porque o `SUM` do SQLite compensa o erro de
+arredondamento e mudaria os últimos dígitos do número da tela. `GET /api/usage` lê as linhas do
+banco (sem o `accounting`, que ele não usa) e agrupa no `lib/usage/`, porque a operação, a
+conclusão e as retentativas dependem do histórico inteiro de cada operação.
+
+Na primeira subida o motor migra os JSON antigos: importa numa transação, confere a contagem, as
+somas e cada linha, e só então renomeia cada JSON para `<nome>.migrado-<dia>`. Repetir não
+duplica. Se o banco não abrir ou a conferência falhar, o motor segue nos JSON como antes, com uma
+linha `WARN` (classe `telemetria-anormal`), e tenta de novo na próxima subida. A prova com os
+dados reais é `tools/comparar-consumo-sqlite.js`: a rota e o snapshot dão o mesmo JSON, byte a
+byte, antes e depois. A cópia segura do arquivo e o que falta decidir (retenção, backup) estão em
+[`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-banco-da-telemetria).
 
 ## De onde vem o custo
 

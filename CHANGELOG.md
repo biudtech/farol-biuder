@@ -187,6 +187,26 @@ Ainda sem versão publicada.
   aprovação sai como com ressalvas, nunca como limpa. Quem recusa o APPROVE é o cadastro
   ilegível.
 
+### Telemetria em SQLite, lote 1: o consumo
+
+- **O diário de consumo mora num banco:** as sessões (o `usage-sessions.json`), as tentativas
+  abertas (`usage-tentativas.json`) e os motivos de falha (`falhas-sessao.json`) passam para
+  `~/.farol/workspace/state/telemetria.db`, pelo `node:sqlite` do Node (sem pacote), com WAL e
+  permissão 600. Registrar uma sessão vira um `INSERT`, e não mais a regravação de um arquivo que
+  na instância real tinha 5,5 MB. O agregado (`usage.json`) continua JSON: não se deriva das
+  sessões, e uma consulta mudaria os números da tela.
+- **Migração no boot:** os JSON antigos são importados numa transação, conferidos (contagem,
+  somas e cada linha) e só então renomeados para `<nome>.migrado-<dia>`, com uma linha `INFO`.
+  Repetir não duplica. Banco que não abre ou conferência que não fecha não derrubam o motor: ele
+  segue nos JSON, com uma linha `WARN` (classe nova `telemetria-anormal`), e tenta de novo na
+  próxima subida.
+- **A tela não muda:** `GET /api/usage` e a chave `usage` do snapshot dão o mesmo JSON, byte a
+  byte, antes e depois da migração, provado com os dados reais em 217 consultas (7, 30 e 90 dias,
+  filtros e páginas) por `tools/comparar-consumo-sqlite.js`. Nenhuma rota, chave ou campo novo.
+- **Guia:** `docs/HOSPEDAGEM.md` ganha a seção do banco (o arquivo no volume, a cópia segura com
+  o motor de pé por `VACUUM INTO`, a retenção como decisão pendente) e `docs/CONSUMO-REVIEWS.md`
+  diz onde o registro mora. O backup contínuo fica para o lote de backup.
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em
