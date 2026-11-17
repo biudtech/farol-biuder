@@ -280,6 +280,25 @@ Ainda sem versão publicada.
   `config.json`, o `HOME` do processo do motor, o build do front na mesma origem, o que o proxy
   e o portão precisam fazer.
 
+### Check herdado e sincronização sem atrito
+
+Regras do dono de 17/11/2026, nascidas de um PR de task para uma bancada `release_hmg_*` em que
+a revisão cobrou o `osv` obrigatório vermelho, que já falhava no commit atual da base.
+
+- **Check herdado da base não pesa:** o check obrigatório que falta no head e também falha no
+  commit atual da branch base (ou que está sem resultado no head e sem verde na base) não segura
+  a aprovação, nem com "CI obrigatório antes da aprovação" ligado, não vira ressalva, pedido de
+  mudanças pelo CI nem aviso de CI no card. O que só falha no PR vale como antes. A base é lida
+  por uma consulta GraphQL do `gh` (o mesmo formato de checks do PR, a mesma régua), em cache de
+  um minuto por repositório e branch, e só quando há check obrigatório fora do verde; leitura
+  que falha não herda nada. Na mesa, uma linha informativa diz que o check falha também na base.
+  Com a espera do CI ligada, o prompt ganha um bloco curto para a sessão não cobrar o herdado.
+- **PR de sincronização sem atrito:** origem e destino em branches contínuas (`production`,
+  `homologation`, `development`, `main`, `master`) ou bancadas (`release_hmg_*`,
+  `release_prd_*`), sem fork, com todo commit já vindo de outro PR mesclado. Sem defeito no que
+  entrou, a falta de card e os itens de processo não são ressalva e o resultado sai limpo, pela
+  política da conta para limpo. Defeito real e os gates de postagem não mudam.
+
 ### O que voltou ou entrou
 
 - **Claude por assinatura:** o perfil de assinatura voltou, com uma pasta por perfil em

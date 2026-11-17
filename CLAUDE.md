@@ -117,7 +117,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Assunto | Arquivos |
 |---|---|
 | Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
-| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
+| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
 | Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
 | Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
@@ -210,6 +210,8 @@ inventário e rodada fechados, resultado coerente, texto público presente, orig
 lacuna de prova exigida) e só depois consultam a política da conta. As lacunas que impedem APPROVE
 saem de `lib/technical-review/evidence.js`; o que separa limpo de com ressalvas é só
 `lib/engine/ressalvas.js`. O que é ressalva e o que é lacuna quem decide é o motor, nunca o modelo.
+No PR de sincronização entre branches contínuas sem defeito (`lib/engine/pr-de-sincronizacao.js`,
+critério do app), a falta de card e os itens de processo não são ressalva e o resultado é limpo.
 
 **Decisão sem mesa, pela política da conta.** `config.conta` traz `autoReview`, `onClean`,
 `onCaveats` e `onReject` (`lib/engine/contas-config.js`). Fora de `wait` o motor decide e posta
@@ -239,7 +241,9 @@ recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta COMMENT
 (`aguardaCiParaAprovar`, `lib/engine/gate-espera.js`). Desligada, o estado do CI não segura nem barra
 a decisão: só é seguro onde o check é obrigatório no ruleset do repositório. Ligada, a aprovação
 espera os checks obrigatórios verdes no commit revisado e sai sozinha quando fecham
-(`lib/engine/espera-ci.js`); head diferente larga a espera.
+(`lib/engine/espera-ci.js`); head diferente larga a espera. Nos dois modos, o check obrigatório
+que também falha no commit atual da base é herdado e não pesa (`separarHerdados`,
+`lib/engine/checks-exigidos.js`).
 
 **Gente no PR segura o automático.** Aprovação ou reprovação de uma pessoa no head, e a label
 `<conta>:revisando` de outra conta, tiram o PR do caminho automático
