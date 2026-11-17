@@ -64,14 +64,17 @@ export interface ChecksDoHead {
   herdados: CheckDoHead[];
 }
 
-// O que o diário de consumo registrou da sessão da revisão (só em GET /api/decision). Duração e
-// custo vêm só quando todas as linhas do diário os sabem.
+// O que o diário de consumo registrou da rodada desta revisão (só em GET /api/decision): as
+// tentativas de revisão do PR desde a revisão anterior dele até esta, inclusive a que caiu e foi
+// refeita. Duração e custo vêm só quando todas as tentativas os sabem. `inicioIncerto`: o histórico
+// está no teto e pode faltar tentativa do começo.
 export interface ExecucaoDaRevisao {
-  sessoes: number;
+  tentativas: number;
   modelos: string[];
   duracaoMs?: number;
   custoUsd?: number;
   custoEstimado?: boolean;
+  inicioIncerto?: true;
 }
 
 // Uma revisão do histórico. `status` e `action` são os valores que o motor grava ao resolver
@@ -143,13 +146,14 @@ function lerChecksDoHead(v: unknown): ChecksDoHead | undefined {
 const ehQuantia = (v: unknown): v is number => ehNumero(v) && v >= 0;
 
 function lerExecucaoDaRevisao(v: unknown): ExecucaoDaRevisao | undefined {
-  if (!ehObjeto(v) || !ehQuantia(v.sessoes) || !Number.isInteger(v.sessoes) || v.sessoes < 1) return undefined;
+  if (!ehObjeto(v) || !ehQuantia(v.tentativas) || !Number.isInteger(v.tentativas) || v.tentativas < 1) return undefined;
   return semAusentes({
-    sessoes: v.sessoes,
+    tentativas: v.tentativas,
     modelos: Array.isArray(v.modelos) ? v.modelos.filter((m): m is string => ehTexto(m) && m !== '') : [],
     duracaoMs: campo(v.duracaoMs, ehQuantia),
     custoUsd: campo(v.custoUsd, ehQuantia),
     custoEstimado: campo(v.custoEstimado, ehBooleano),
+    inicioIncerto: v.inicioIncerto === true ? (true as const) : undefined,
   });
 }
 

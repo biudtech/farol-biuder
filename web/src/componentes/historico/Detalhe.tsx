@@ -154,10 +154,10 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
       )}
     >
       <dl className={estilos.campos}>
-        {e?.duracaoMs !== undefined ? <Campo nome="Duração da sessão">{textoDaDuracao(e.duracaoMs)}</Campo> : null}
+        {e?.duracaoMs !== undefined ? <Campo nome="Duração da rodada">{textoDaDuracao(e.duracaoMs)}</Campo> : null}
         {e?.custoUsd !== undefined ? <Campo nome={e.custoEstimado ? 'Custo estimado (parte calculada pelo motor)' : 'Custo estimado'}>{dolar(e.custoUsd)}</Campo> : null}
         {e?.modelos.length ? <Campo nome={e.modelos.length === 1 ? 'Modelo' : 'Modelos'}>{e.modelos.join(', ')}</Campo> : null}
-        {e && e.sessoes > 1 ? <Campo nome="Linhas no diário de consumo">{`${e.sessoes} (a sessão e as retomadas)`}</Campo> : null}
+        {e ? <Campo nome="Tentativas de revisão na rodada">{String(e.tentativas)}</Campo> : null}
         <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
@@ -171,6 +171,12 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
           </Campo>
         ) : null}
       </dl>
+      {e ? (
+        <p className={ui.mini}>
+          A rodada são as tentativas de revisão deste PR desde a revisão anterior dele até esta, inclusive a que caiu e foi refeita.
+          {e.inicioIncerto ? ' O histórico guardado está no teto e a revisão anterior pode ter sido descartada: pode faltar tentativa do começo.' : ''}
+        </p>
+      ) : null}
     </Linha>
   );
 }

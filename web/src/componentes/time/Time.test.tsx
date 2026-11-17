@@ -63,9 +63,12 @@ interface Montagem {
   snapshot?: Snapshot | null;
   conexao?: EstadoDoApp['conexao'];
   estadoEmDia?: boolean;
+  // o `config.people` que GET /api/state devolve na releitura antes de gravar; sem ele, o do
+  // snapshot do store (o motor igual ao que a tela tem)
+  pessoasNoMotor?: () => Resposta;
 }
 
-function montar({ url = '/time', responder = () => corpo(TIME), aoPostar = () => corpo({ ok: true }), snapshot = SNAPSHOT, conexao = 'conectado', estadoEmDia = true }: Montagem = {}) {
+function montar({ url = '/time', responder = () => corpo(TIME), aoPostar = () => corpo({ ok: true }), snapshot = SNAPSHOT, conexao = 'conectado', estadoEmDia = true, pessoasNoMotor }: Montagem = {}) {
   window.history.replaceState(null, '', url);
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao, estadoEmDia, snapshot });
   const ler = (r: Resposta, leitor: (bruto: unknown) => unknown) => {
@@ -76,6 +79,7 @@ function montar({ url = '/time', responder = () => corpo(TIME), aoPostar = () =>
   const sinais: AbortSignal[] = [];
   const get = vi.fn(async (caminho: string, leitor: (bruto: unknown) => unknown, opcoes?: { sinal?: AbortSignal }) => {
     if (opcoes?.sinal) sinais.push(opcoes.sinal);
+    if (caminho === '/api/state') return ler(pessoasNoMotor ? pessoasNoMotor() : corpo({ config: { people: store.ler().snapshot?.config?.peopleCru ?? {} } }), leitor);
     return ler(await responder(caminho), leitor);
   });
   const post = vi.fn(async (rota: string, enviado: unknown, leitor: (bruto: unknown) => unknown) => ler(await aoPostar(rota, enviado), leitor));
@@ -574,7 +578,7 @@ describe('Time: papel e competência', () => {
     montar({ url: '/time?autor=bruno' });
     await assentar();
     escolher('Papel', 'pleno');
-    expect(screen.getByText(/o salvar a substitui inteira/).textContent).toContain('Alteração de perfil feita em outra aba que ainda não chegou aqui é sobrescrita.');
+    expect(screen.getByText(/o salvar a substitui inteira/).textContent).toContain('a tela relê a lista no motor');
   });
 
   it('perfil que muda no motor com a edição aberta vira aviso, e dá para descartar a edição', async () => {
@@ -1003,5 +1007,48 @@ describe('Time: números de 30 dias', () => {
     await assentar();
     expect(subDoDossie()).not.toContain('PRs em 30 dias');
     expect(resumoDe('Números')).not.toContain('rodada por PR');
+  });
+});
+
+describe('Time: releitura antes de gravar', () => {
+  const NO_MOTOR = { ...PESSOAS, eva: { papel: 'senior' } };
+
+  it('salvar papel relê o motor e não apaga o perfil gravado por outra aba', async () => {
+    const t = montar({ url: '/time?autor=Ana-Souza', pessoasNoMotor: () => corpo({ config: { people: NO_MOTOR } }), aoPostar: () => corpo({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: NO_MOTOR } }) });
+    await assentar();
+    escolher('Papel', 'techlead');
+    await clicar('Salvar papel e competência de @Ana-Souza');
+    await assentar();
+    expect(t.pedidos()).toContain('/api/state');
+    expect(t.post.mock.calls[0]?.[1]).toEqual({ people: { bruno: { papel: 'junior' }, caio: { papel: 'pleno' }, eva: { papel: 'senior' }, 'ana-souza': { papel: 'techlead', dominios: { backend: 'avancado' } } } });
+  });
+
+  it('adicionar relê o motor, mescla e recusa quem já entrou por outra aba', async () => {
+    const t = montar({ pessoasNoMotor: () => corpo({ config: { people: NO_MOTOR } }), aoPostar: () => corpo({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: { ...NO_MOTOR, dani: {} } } }) });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    act(() => { fireEvent.change(screen.getByLabelText('Login do GitHub'), { target: { value: 'dani' } }); });
+    await clicar('Adicionar ao Time');
+    await assentar();
+    expect(t.post.mock.calls[0]?.[1]).toEqual({ people: { ...NO_MOTOR, dani: {} } });
+    cleanup();
+    const u = montar({ pessoasNoMotor: () => corpo({ config: { people: NO_MOTOR } }) });
+    await assentar();
+    await clicar('Adicionar pessoa');
+    act(() => { fireEvent.change(screen.getByLabelText('Login do GitHub'), { target: { value: 'eva' } }); });
+    await clicar('Adicionar ao Time');
+    await assentar();
+    expect(u.post).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('@eva já está no Time no motor: o papel dela se edita no dossiê.');
+  });
+
+  it('releitura que falha não envia nada e diz por quê', async () => {
+    const t = montar({ url: '/time?autor=Ana-Souza', pessoasNoMotor: () => REDE });
+    await assentar();
+    escolher('Papel', 'techlead');
+    await clicar('Salvar papel e competência de @Ana-Souza');
+    await assentar();
+    expect(t.post).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain('Não deu para reler os perfis no motor antes de gravar, e nada foi enviado.');
   });
 });

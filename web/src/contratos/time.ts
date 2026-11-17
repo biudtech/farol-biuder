@@ -27,6 +27,8 @@ export interface NumerosDoAutor {
   prs: number;
   aprovadosDePrimeira: number;
   rodadas: number;
+  // o histórico guardado está no teto: PR com rodada anterior já descartada pode contar como novo
+  historicoNoTeto?: true;
 }
 
 export interface Autor {
@@ -59,7 +61,7 @@ const ehContagem = (v: unknown): v is number => typeof v === 'number' && Number.
 function lerNumeros(v: unknown): NumerosDoAutor | undefined {
   if (!ehObjeto(v) || !ehContagem(v.janelaDias) || !ehContagem(v.prs) || v.prs < 1 || !ehContagem(v.aprovadosDePrimeira) || !ehContagem(v.rodadas)) return undefined;
   if (v.aprovadosDePrimeira > v.prs || v.rodadas < v.prs) return undefined;
-  return { janelaDias: v.janelaDias, prs: v.prs, aprovadosDePrimeira: v.aprovadosDePrimeira, rodadas: v.rodadas };
+  return semAusentes({ janelaDias: v.janelaDias, prs: v.prs, aprovadosDePrimeira: v.aprovadosDePrimeira, rodadas: v.rodadas, historicoNoTeto: v.historicoNoTeto === true ? (true as const) : undefined });
 }
 
 export const lerAutor: LeitorDeItem<Autor> = (v) => {

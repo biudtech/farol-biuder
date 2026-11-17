@@ -27,12 +27,12 @@ export function resumoDosChecks(c: ChecksDoHead): string {
   return base + herdadosNaLinha(c.herdados);
 }
 
-// "7 min · US$ 2,84": o que o diário sabe da sessão. Sem duração nem custo, diz quantas linhas
-// o diário tem dela.
+// "7 min · US$ 2,84": o que o diário sabe da rodada. Sem duração nem custo, diz quantas
+// tentativas o diário tem dela.
 export function resumoDaExecucao(e: ExecucaoDaRevisao): string {
   const partes: string[] = [];
   if (e.duracaoMs !== undefined) partes.push(textoDaDuracao(e.duracaoMs));
   if (e.custoUsd !== undefined) partes.push(`${dolar(e.custoUsd)}${e.custoEstimado ? ' (estimado)' : ''}`);
   if (partes.length) return partes.join(' · ');
-  return e.sessoes === 1 ? '1 sessão no diário' : `${e.sessoes} sessões no diário`;
+  return e.tentativas === 1 ? '1 tentativa no diário' : `${e.tentativas} tentativas no diário`;
 }

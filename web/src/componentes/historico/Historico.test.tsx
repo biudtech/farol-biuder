@@ -747,7 +747,7 @@ describe('Histórico: detalhe da revisão', () => {
     expect(screen.getByText('Carregando a revisão.').getAttribute('role')).toBe('status');
     await assentar();
     expect(screen.getByRole('group', { name: 'Review completo' })).toBeTruthy();
-    expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312']);
+    expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312&id=d12']);
   });
 
   it('revisão que não está na página é pedida pela chave do PR', async () => {
@@ -954,22 +954,25 @@ describe('Histórico: checks do head e execução', () => {
   const complemento = {
     ...daPagina,
     checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho' }] },
-    execucao: { sessoes: 2, modelos: ['Opus 4.1'], duracaoMs: 420_000, custoUsd: 2.84, custoEstimado: false },
+    execucao: { tentativas: 2, modelos: ['Opus 4.1'], duracaoMs: 420_000, custoUsd: 2.84, custoEstimado: false },
   };
   const responder = (decisao: unknown): Responder => (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([daPagina])) : corpo({ found: true, decision: decisao }));
+  const pedirAberta = `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`;
   const linhasDe = () => [...screen.getByRole('region', { name: 'Mais detalhes' }).querySelectorAll(':scope > details')] as HTMLDetailsElement[];
   const resumos = () => linhasDe().map((l) => [l.getAttribute('aria-label'), l.querySelector('summary')?.children[1]?.textContent]);
   const campos = (nome: string) => [...(linhasDe().find((l) => l.getAttribute('aria-label') === nome)?.querySelectorAll('dl > div') ?? [])]
     .map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
 
-  it('a revisão da página ganha as linhas com o que GET /api/decision traz', async () => {
-    montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder(complemento) });
+  it('a revisão da página ganha as linhas com o que GET /api/decision traz, pedida pelo id', async () => {
+    const t = montar({ url: pedirAberta, responder: responder(complemento) });
     await assentar();
     await assentar();
+    expect(t.pedidos().at(-1)).toBe('/api/decision?key=dono%2Frepo%2312&id=d12');
     expect(screen.getByRole('region', { name: `Revisão de ${NOME}` })).toBeTruthy();
     expect(resumos().slice(0, 2)).toEqual([['Checks do head', 'tudo verde · osv herdado'], ['Execução', '7 min · US$ 2,84']]);
     expect(campos('Checks do head')).toEqual(['osv: Falha também na base (herdado, não pesa)']);
-    expect(campos('Execução').slice(0, 4)).toEqual(['Duração da sessão: 7 min', 'Custo estimado: US$ 2,84', 'Modelo: Opus 4.1', 'Linhas no diário de consumo: 2 (a sessão e as retomadas)']);
+    expect(campos('Execução').slice(0, 4)).toEqual(['Duração da rodada: 7 min', 'Custo estimado: US$ 2,84', 'Modelo: Opus 4.1', 'Tentativas de revisão na rodada: 2']);
+    expect(screen.queryByText(/pode faltar tentativa do começo/)).toBeNull();
   });
 
   it('sem complemento (motor antigo, outra revisão ou falha) as linhas novas não aparecem', async () => {
@@ -983,12 +986,13 @@ describe('Histórico: checks do head e execução', () => {
   });
 
   it('o que falta no head vem por nome, e leitura fora do commit revisado é dita', async () => {
-    const naoVerdes = { ...complemento, checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [{ nome: 'e2e', estado: 'rodando' }], herdados: [] }, execucao: { sessoes: 1, modelos: [] } };
+    const naoVerdes = { ...complemento, checks: { conferidoNoHead: true, semExigencia: false, naoVerdes: [{ nome: 'e2e', estado: 'rodando' }], herdados: [] }, execucao: { tentativas: 1, modelos: [], inicioIncerto: true } };
     montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder(naoVerdes) });
     await assentar();
     await assentar();
-    expect(resumos().slice(0, 2)).toEqual([['Checks do head', '1 fora do verde'], ['Execução', '1 sessão no diário']]);
+    expect(resumos().slice(0, 2)).toEqual([['Checks do head', '1 fora do verde'], ['Execução', '1 tentativa no diário']]);
     expect(campos('Checks do head')).toEqual(['e2e: ainda rodando']);
+    expect(screen.getByText(/pode faltar tentativa do começo/)).toBeTruthy();
     cleanup();
     montar({ url: `/historico?id=d12&pr=${encodeURIComponent('dono/repo#12')}`, responder: responder({ ...complemento, checks: { ...complemento.checks, conferidoNoHead: false } }) });
     await assentar();

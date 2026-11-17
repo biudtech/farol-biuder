@@ -10,7 +10,7 @@ import { useEffect, useId, useState } from 'react';
 import type { Pessoa, PessoasCruas } from '@/contratos/time';
 import { idDa, type Acao } from '@/radar/acoes';
 import { DOMINIOS, NIVEIS, PAPEIS, ehConhecido, type Opcao } from '@/time/taxonomia';
-import { avisoDeIlegiveis, chaveDaPessoa, comPerfil, marcaDoPerfil, motivoQueImpedeSalvar } from '@/time/time';
+import { avisoDeIlegiveis, chaveDaPessoa, comPerfil, marcaDoPerfil, motivoQueImpedeSalvar, type RelerPessoas } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import type { ControleDeAcoes } from '../radar/useAcoes';
 import { Botao, ui } from '../ui';
@@ -51,12 +51,16 @@ interface Props {
   // o primeiro estado da conexão atual do fluxo já chegou
   emDia: boolean;
   controle: ControleDeAcoes;
+  // relê `people` no motor logo antes de gravar: o corpo sai dele, com só esta pessoa mudando
+  relerPessoas: RelerPessoas;
   // avisa quem está em volta se há edição por salvar
   aoMudar(alterado: boolean): void;
 }
 
-export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, controle, aoMudar }: Props) {
+export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, controle, relerPessoas, aoMudar }: Props) {
   const [rascunho, setRascunho] = useState(() => rascunhoDo(perfil));
+  const [relendo, setRelendo] = useState(false);
+  const [falhaDaReleitura, setFalhaDaReleitura] = useState('');
   const idDoPapel = useId();
   const idDosDominios = useId();
 
@@ -137,15 +141,29 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
       {!impedimento && acao ? (
         <>
           <p className={ui.mini}>
-            O motor guarda os perfis numa lista só, e o salvar a substitui inteira: vai a lista que esta aba tem agora, como o motor a mandou, com @{login} alterada. Alteração de perfil feita em outra aba que ainda não chegou aqui é sobrescrita.
+            O motor guarda os perfis numa lista só, e o salvar a substitui inteira: antes de enviar, a tela relê a lista no motor e manda ela como está lá, com só @{login} alterada. O perfil gravado por outra aba fica; o de @{login} vale o que está neste formulário.
           </p>
           <div className={ui.fila}>
-            <Botao primario ocupado={enviando === idDa(acao) ? 'Salvando…' : false} disabled={enviando !== null} onClick={() => { void controle.disparar(acao); }}>
+            <Botao
+              primario
+              ocupado={relendo || enviando === idDa(acao) ? 'Salvando…' : false}
+              disabled={enviando !== null || relendo}
+              onClick={() => {
+                setRelendo(true);
+                setFalhaDaReleitura('');
+                void relerPessoas().then((lido) => {
+                  setRelendo(false);
+                  if (!lido.ok) { setFalhaDaReleitura(lido.texto); return; }
+                  void controle.disparar({ ...acao, pessoas: comPerfil(lido.pessoas, login, { papel: rascunho.papel, dominios: rascunho.dominios }) });
+                });
+              }}
+            >
               Salvar <span className={ui.soLeitor}>papel e competência de @{login}</span>
             </Botao>
           </div>
         </>
       ) : null}
+      {falhaDaReleitura ? <p className={ui.erro} role="alert">{falhaDaReleitura}</p> : null}
       {!impedimento && !acao ? <p className={ui.mini}>Sem alteração por salvar.</p> : null}
     </>
   );

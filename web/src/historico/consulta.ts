@@ -99,8 +99,10 @@ export function caminhoDaPagina(consulta: Consulta, agora: number = Date.now()):
   return `/api/decisions?${params.toString()}`;
 }
 
-export function caminhoDoDetalhe(chave: string): string {
-  return `/api/decision?${new URLSearchParams({ key: chave }).toString()}`;
+// Com `id`, o motor devolve aquela revisão do PR (a rodada antiga, ou a resolvida quando há uma
+// pendente); sem ele, a mais recente do PR.
+export function caminhoDoDetalhe(chave: string, id?: string): string {
+  return `/api/decision?${new URLSearchParams(id ? { key: chave, id } : { key: chave }).toString()}`;
 }
 
 // O que a região viva anuncia depois de cada carga.
@@ -120,6 +122,7 @@ const CAMPO_RECUSADO: Record<string, string> = {
   page: 'a página pedida',
   pageSize: 'o tamanho da página',
   q: 'a busca',
+  id: 'a revisão pedida',
   veredito: 'o filtro de desfecho',
   repo: 'o filtro de repositório',
   desde: 'o início do período',

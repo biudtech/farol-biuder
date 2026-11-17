@@ -111,6 +111,22 @@ export function comPerfil(cru: PessoasCruas, login: string, perfil: Pessoa): Pes
   return Object.fromEntries(Object.keys(pessoa).length ? [...resto, [chave, pessoa]] : resto);
 }
 
+// Antes de gravar `people` (que o motor troca inteiro), a tela relê o mapa atual do motor e monta
+// o corpo a partir dele, com só a pessoa editada ou a nova mudando: assim um perfil gravado por
+// outra aba depois do último estado que chegou aqui não é apagado. A releitura é a chave
+// `config.people` de GET /api/state, como o motor a manda.
+export const CAMINHO_DO_ESTADO = '/api/state';
+
+export function lerPessoasDoEstado(bruto: unknown): PessoasCruas | null {
+  if (!ehObjeto(bruto) || !ehObjeto(bruto.config)) return null;
+  const people = bruto.config.people;
+  if (people === undefined) return {};
+  return ehObjeto(people) ? people : null;
+}
+
+export type Releitura = { ok: true; pessoas: PessoasCruas } | { ok: false; texto: string };
+export type RelerPessoas = () => Promise<Releitura>;
+
 // O login do GitHub: letras, dígitos e hífen, até 39, sem hífen na ponta nem dois seguidos. É a
 // mesma regra com que o motor aceita uma pessoa sem papel (parsePeople, lib/parse.js na raiz).
 const LOGIN_DO_GITHUB = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;

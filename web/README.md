@@ -415,11 +415,13 @@ Regras que valem para quem mexer nela:
 - **Critérios do card.** O desenho tem "Critérios do card" com o atendimento de cada um. A
   sessão só declara o card inteiro (`cardMet`) e a parte deste PR, e nenhum registro do motor
   guarda critério por critério: a linha fica de fora.
-- **Checks e execução só por chave.** `checks` e `execucao` vêm só em `GET /api/decision`
-  (`lib/engine/detalhe-da-decisao.js`). A revisão aberta da página é pedida também pela chave, e
-  ganha as duas linhas quando a resposta é a mesma revisão (`useDetalhe`). Os checks verdes não
-  vêm por nome (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem
-  checks.
+- **Checks e execução só no detalhe.** `checks` e `execucao` vêm só em `GET /api/decision`
+  (`lib/engine/detalhe-da-decisao.js`). A revisão aberta da página é pedida também, pela chave e
+  pelo `id`, e ganha as duas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
+  endereço fora da página, vale a mais recente do PR, como antes. Os checks verdes não vêm por nome
+  (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem checks. A
+  execução é a da rodada (as tentativas do PR desde a revisão anterior), e a tela diz quando o
+  começo é incerto (`inicioIncerto`).
 - **Rodadas uma a uma.** `rounds` é o resumo da comparação entre rodadas (a ordem, as
   pendências), não a lista das rodadas com commit e desfecho de cada uma.
 - **Pendência sem filtro.** As pendências vêm do snapshot, que não sabe da busca nem dos
@@ -479,7 +481,8 @@ O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
   `ocupado`), com o spinner e desabilitados. O resultado vai à região de resultado de sempre.
 - **Adicionar pessoa.** O botão do topo abre o formulário (`AdicionarPessoa.tsx`): login do
   GitHub obrigatório, conferido na forma do GitHub, e papel opcional. Vai por `people` em
-  `POST /api/settings`, o mapa cru inteiro com a pessoa nova a mais (`comPessoaNova`), e o motor
+  `POST /api/settings`, o mapa inteiro relido no motor logo antes (`GET /api/state`, `config.people`)
+  com a pessoa nova a mais (`comPessoaNova`), e o motor
   guarda a pessoa sem papel quando a chave tem forma de login (`parsePeople`). Quem já está no
   Time não entra de novo, e a resposta só é dada como certa quando a pessoa está no mapa gravado.
 
@@ -530,8 +533,10 @@ Regras que valem para quem mexer nela:
   das entradas listadas. As contestações dos PRs da pessoa aparecem só para leitura: o
   desfecho se confirma no Histórico.
 - **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
-  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). O corpo do salvar
-  sai do cru que a aba tem no momento do clique, e só a pessoa editada muda (`comPerfil`):
+  vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). No clique, a tela
+  relê o mapa no motor (`config.people` de `GET /api/state`, `relerPessoas` em `Time.tsx`) e o
+  corpo do salvar sai dele, com só a pessoa editada mudando (`comPerfil`); releitura que falha
+  não envia nada:
   as outras voltam como vieram, inclusive com campo que a tela não conhece ou valor que ela
   não lê. Na pessoa editada trocam-se o papel e os domínios; outro campo dela fica. A chave
   é o login em minúsculas, como o motor guarda.
@@ -587,8 +592,9 @@ Regras que valem para quem mexer nela:
   nem no snapshot: a tela tem a cópia conferida por teste.
 - **O salvar de perfil não é por pessoa.** `people` vai e volta inteiro, sem versão: o motor
   não tem como recusar uma lista velha, e duas abas salvando ao mesmo tempo se sobrescrevem
-  sem que nenhuma fique sabendo. O que a tela faz (corpo do dado cru, salvar fechado sem o
-  estado da conexão, conferência da resposta) reduz a janela, não a fecha. A correção de
+  sem que nenhuma fique sabendo. O que a tela faz (releitura do mapa no motor logo antes do
+  envio, salvar fechado sem o estado da conexão, conferência da resposta) reduz a janela ao
+  intervalo entre a releitura e o envio, não a fecha. A correção de
   fundo é no motor: uma operação por pessoa sobre a config atual, como a conta já tem em
   `accounts/edit`.
 - **Remover não apaga o histórico nem o log.** `removeTeamMember` não toca em
@@ -599,6 +605,8 @@ Regras que valem para quem mexer nela:
 - **A lista não avisa que mudou.** Não há chave no snapshot nem evento para o Time. O aviso
   de Atualizar olha as revisões resolvidas, que não dizem se a memória de alguém mudou, e uma
   remoção feita em outra aba só aparece na próxima carga.
+- **Números no teto do histórico.** Com o histórico guardado no teto (3.000), o motor marca os
+  números (`historicoNoTeto`) e a tela diz que valem para os PRs com histórico completo.
 - **Números só de 30 dias e só de quem tem dossiê.** `numeros` vem no autor de `GET /api/team`
   (`lib/engine/numeros-do-time.js`), só com PR cuja primeira revisão publicada caiu na janela;
   quem só tem perfil não está na lista e fica sem números. Os bloqueios do desenho não vêm.

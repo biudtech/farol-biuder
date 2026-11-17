@@ -16,7 +16,7 @@ import type { PessoasCruas, Time as Lista } from '@/contratos/time';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { marcaDasResolvidas, mensagemDaFalha } from '@/historico/consulta';
-import { chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, perfilDe, quantasPessoas, soComPerfil, textoDoResultado } from '@/time/time';
+import { CAMINHO_DO_ESTADO, chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, lerPessoasDoEstado, perfilDe, quantasPessoas, soComPerfil, textoDoResultado, type RelerPessoas } from '@/time/time';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
@@ -66,6 +66,12 @@ export function Time({ app = appDoNavegador }: Props) {
   const [adicionando, setAdicionando] = useState(false);
   const { carregando, time, falha, haNovas } = useTime(app.cliente, recarga, marca);
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
+  // a releitura de `people` logo antes de gravar (time.ts): o corpo sai do que o motor tem agora
+  const relerPessoas = useCallback<RelerPessoas>(async () => {
+    const r = await app.cliente.get(CAMINHO_DO_ESTADO, lerPessoasDoEstado);
+    if (r.ok) return { ok: true, pessoas: r.dados };
+    return { ok: false, texto: `Não deu para reler os perfis no motor antes de gravar, e nada foi enviado. ${mensagemDaFalha(r) || 'A leitura foi interrompida.'}` };
+  }, [app.cliente]);
 
   // o que a tela tem agora, para a ação que termina depois do desenho
   const agora = useRef({ aberto, time, cru });
@@ -183,6 +189,7 @@ export function Time({ app = appDoNavegador }: Props) {
               conexao={conexao}
               emDia={emDia}
               controle={controle}
+              relerPessoas={relerPessoas}
               aoFechar={() => setAdicionando(false)}
             />
           ) : null}
@@ -247,6 +254,7 @@ export function Time({ app = appDoNavegador }: Props) {
           emDia={emDia}
           contestacoes={contestacoes}
           controle={controle}
+          relerPessoas={relerPessoas}
           ocupado={carregando && time !== null}
           avisos={avisos}
           aoFechar={aoFechar}

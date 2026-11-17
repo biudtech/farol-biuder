@@ -2,14 +2,15 @@
 
 // Pôr uma pessoa no Time antes da primeira revisão de um PR dela: o login do GitHub (obrigatório)
 // e o papel (opcional). Vai pelo mesmo caminho do salvar de perfil, `people` em POST
-// /api/settings, que troca o mapa inteiro: o corpo sai do mapa cru do motor com a pessoa nova a
-// mais (comPessoaNova), e por isso só se oferece com o estado desta conexão já chegado. Quem já
-// está no mapa não entra de novo: o perfil dela se edita no dossiê.
+// /api/settings, que troca o mapa inteiro. Logo antes de enviar, a tela relê o mapa no motor e o
+// corpo sai dele com a pessoa nova a mais (comPessoaNova): o perfil que outra aba gravou depois
+// do último estado que chegou aqui fica. Só se oferece com o estado desta conexão já chegado. Quem
+// já está no mapa (o daqui ou o relido) não entra de novo: o perfil dela se edita no dossiê.
 import { useId, useState } from 'react';
 import type { PessoasCruas } from '@/contratos/time';
 import { idDa, type Acao } from '@/radar/acoes';
 import { PAPEIS } from '@/time/taxonomia';
-import { chaveDaPessoa, comPessoaNova, loginDigitado, loginValido, motivoQueImpedeSalvar } from '@/time/time';
+import { chaveDaPessoa, comPessoaNova, loginDigitado, loginValido, motivoQueImpedeSalvar, type RelerPessoas } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import type { ControleDeAcoes } from '../radar/useAcoes';
 import { Botao, ui } from '../ui';
@@ -25,6 +26,7 @@ interface Props {
   conexao: Conexao;
   emDia: boolean;
   controle: ControleDeAcoes;
+  relerPessoas: RelerPessoas;
   aoFechar(): void;
 }
 
@@ -38,8 +40,10 @@ function problemaDoLogin(login: string, cru: PessoasCruas | undefined, conhecido
   return null;
 }
 
-export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, aoFechar }: Props) {
+export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, relerPessoas, aoFechar }: Props) {
   const [texto, setTexto] = useState('');
+  const [relendo, setRelendo] = useState(false);
+  const [falhaDoEnvio, setFalhaDoEnvio] = useState('');
   const [papel, setPapel] = useState('');
   const [tentou, setTentou] = useState(false);
   const idDoLogin = useId();
@@ -61,8 +65,16 @@ export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, aoF
       onSubmit={(evento) => {
         evento.preventDefault();
         setTentou(true);
-        if (!acao || impedimento || enviando !== null) return;
-        void controle.disparar(acao).then((aceito) => { if (aceito) aoFechar(); });
+        if (!acao || impedimento || enviando !== null || relendo) return;
+        setRelendo(true);
+        setFalhaDoEnvio('');
+        void relerPessoas().then(async (lido) => {
+          setRelendo(false);
+          if (!lido.ok) { setFalhaDoEnvio(lido.texto); return; }
+          const atuais = comPessoaNova(lido.pessoas, login, papel);
+          if (!atuais) { setFalhaDoEnvio(`@${login} já está no Time no motor: o papel dela se edita no dossiê.`); return; }
+          if (await controle.disparar({ ...acao, pessoas: atuais })) aoFechar();
+        });
       }}
     >
       <h2 className={ui.grupo}>Adicionar pessoa</h2>
@@ -97,11 +109,12 @@ export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, aoF
       </div>
       {mostrarProblema ? <p id={idDoProblema} className={ui.erro}>{problema}</p> : null}
       {impedimento ? <p className={ui.erro}>Bloqueado: {impedimento}</p> : null}
+      {falhaDoEnvio ? <p className={ui.erro} role="alert">{falhaDoEnvio}</p> : null}
       <p className={ui.mini}>
-        O motor guarda as pessoas numa lista só, e o envio a substitui inteira: vai a lista que esta aba tem agora, como o motor a mandou, com a pessoa nova a mais.
+        O motor guarda as pessoas numa lista só, e o envio a substitui inteira: antes de enviar, a tela relê a lista no motor e manda ela como está lá, com a pessoa nova a mais.
       </p>
       <div className={ui.fila}>
-        <Botao type="submit" primario ocupado={acao && enviando === idDa(acao) ? 'Adicionando…' : false} disabled={impedimento !== null || enviando !== null}>
+        <Botao type="submit" primario ocupado={relendo || (acao && enviando === idDa(acao)) ? 'Adicionando…' : false} disabled={impedimento !== null || enviando !== null || relendo}>
           Adicionar ao Time
         </Botao>
         <Botao fantasma onClick={aoFechar}>Cancelar</Botao>

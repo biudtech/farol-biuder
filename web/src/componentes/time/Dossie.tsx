@@ -17,7 +17,7 @@ import { textoDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import {
   CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
-  prDaEntrada, resumoDaCalibracao, rodadasPorPr, taxaDePrimeira, textoDosNumeros, type ContestacaoDoAutor,
+  prDaEntrada, resumoDaCalibracao, rodadasPorPr, taxaDePrimeira, textoDosNumeros, type ContestacaoDoAutor, type RelerPessoas,
 } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import { Markdown } from '../Markdown';
@@ -125,6 +125,7 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
           </dl>
           <p className={ui.mini}>
             Dos últimos {n.janelaDias} dias, contados no histórico de revisões do motor: os PRs cuja primeira revisão publicada caiu na janela, quantos foram aprovados nessa primeira e quantas revisões publicadas eles somam.
+            {n.historicoNoTeto ? ' O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.' : ''}
           </p>
         </>
       ) : null}
@@ -197,6 +198,7 @@ interface Props {
   emDia: boolean;
   contestacoes: readonly ContestacaoDoAutor[];
   controle: ControleDeAcoes;
+  relerPessoas: RelerPessoas;
   // a lista está sendo lida de novo: o que está na tela é da carga anterior
   ocupado: boolean;
   // o erro da carga e o aviso de lista velha, que valem também com o dossiê aberto
@@ -204,7 +206,7 @@ interface Props {
   aoFechar(): void;
 }
 
-export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, ocupado, avisos, aoFechar }: Props) {
+export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, relerPessoas, ocupado, avisos, aoFechar }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const continuar = useRef<HTMLButtonElement>(null);
   // onde o foco estava quando a pergunta de descarte abriu: é para lá que ele volta
@@ -319,7 +321,7 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
               rotulo="Como revisar os PRs desta pessoa"
               resumo={<><span className={ui.t}>Como revisar os PRs desta pessoa</span><span className={`${ui.r} ${ui.empurra}`}>{resumoDaCalibracao(pronto.perfil)}</span></>}
             >
-              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} aoMudar={setAlterado} />
+              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} relerPessoas={relerPessoas} aoMudar={setAlterado} />
             </Linha>
             {pronto.autor?.entries.length || pronto.autor?.numeros ? <Numeros autor={pronto.autor} contestacoes={contestacoes.length} /> : null}
             {pronto.autor?.entries.length ? <Ultimas autor={pronto.autor} /> : null}
