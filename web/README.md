@@ -73,11 +73,14 @@ prefixo `NEXT_PUBLIC_` vai para o navegador.
 O gate, antes de qualquer entrega, é o que o job `web` do CI roda:
 
 ```sh
-npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build && npm run test:servidor
+npm ci && npm run audit && npm run typecheck && npm run lint && npm test && npm run build && npm run test:servidor
 ```
 
-O `npm audit` cobre também as dependências de desenvolvimento: nada sobe com vulnerabilidade
-conhecida. O `overrides` do `package.json` existe por isso (fixa o `minimatch` usado pelo
+O `npm run audit` (`auditoria.mjs`) roda o `npm audit` e cobre também as dependências de
+desenvolvimento: nada sobe com vulnerabilidade conhecida. A única saída é uma exceção em
+`auditoria-excecoes.json`, com motivo e prazo, para advisory sem versão corrigida que fica fora do
+build; exceção vencida e advisory nova reprovam. Hoje há uma: o `picomatch` (GHSA-fc5q-39xc-vjpf),
+até 31/12/2026. O `overrides` do `package.json` existe por isso (fixa o `minimatch` usado pelo
 `typescript-eslint` numa versão corrigida); quando o `typescript-eslint` passar a pedir a versão
 corrigida sozinho, o `overrides` sai.
 

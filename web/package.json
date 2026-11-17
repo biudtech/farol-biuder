@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start -p 3100",
     "start:socket": "node servidor.mjs",
-    "test:servidor": "node --test servidor.test.mjs",
+    "test:servidor": "node --test servidor.test.mjs auditoria.test.mjs",
+    "audit": "node auditoria.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"

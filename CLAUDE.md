@@ -389,7 +389,7 @@ escreve no log, nem no 200, nem no 400, nem no 503.
   ratchet: reprova contagem que sobe contra `tools/quality/baseline.json`. Corrigiu dívida?
   `npm run lint:update` trava o número mais baixo. A baseline nunca sobe à mão.
 - **Nunca passe de 4 de concorrência** na suíte (`FAROL_TEST_CONCORRENCIA`, de 1 a 4).
-- **Gate do front**, em `web/`: `npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build && npm run test:servidor`
+- **Gate do front**, em `web/`: `npm ci && npm run audit && npm run typecheck && npm run lint && npm test && npm run build && npm run test:servidor`
   (o que o job `web` do CI roda; o último só em Linux, sobre o build).
 - **Fora de Linux** o motor não roda (`lib/node-runtime.js` recusa): rode o gate num Linux com
   Node 24.22.1 (WSL, por exemplo). O CI roda em `ubuntu-latest`.
