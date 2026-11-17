@@ -6,7 +6,7 @@ import { calcularProgresso, progressoDaSessao, marcarEtapa, ETAPAS, CONCLUIDA } 
 import { projectSessions } from '../lib/engine/sessao-projecao.js';
 import { pushActivity } from '../lib/engine/session.js';
 import { marcarFase } from '../lib/engine/etapas-revisao.js';
-import { anotarEstimativa } from '../lib/engine/estimativa-sessao.js';
+import { anotarEstimativa, tempoTipico, etapasComTamanho } from '../lib/engine/estimativa-sessao.js';
 import { concluirRevisao } from '../lib/engine/desfecho-da-revisao.js';
 
 const MIN = 60000;
@@ -64,7 +64,42 @@ test('tempo restante: só com a mediana real do histórico, nunca chutado', () =
   assert.equal(calcularProgresso({ etapa: 'codigo', decorridoMs: MIN }).restanteEstimadoMs, undefined);
   assert.equal(calcularProgresso({ etapa: 'codigo', tipicoMs: 6 * MIN, decorridoMs: 2 * MIN }).restanteEstimadoMs, 4 * MIN);
   // já além da mediana: o motor não sabe quanto falta, e o campo sai
-  assert.equal(calcularProgresso({ etapa: 'conferencia', tipicoMs: 6 * MIN, decorridoMs: 7 * MIN }).restanteEstimadoMs, undefined);
+  assert.equal(calcularProgresso({ etapa: 'codigo', tipicoMs: 6 * MIN, decorridoMs: 7 * MIN }).restanteEstimadoMs, undefined);
+});
+
+test('tempo restante: a mediana até o modelo devolver não vale da conferência em diante', () => {
+  // ela para antes do gate e da postagem: a partir da conferência, sem a duração inteira, nada
+  for (const etapa of ['conferencia', 'postagem']) {
+    assert.equal(calcularProgresso({ etapa, tipicoMs: 10 * MIN, decorridoMs: 2 * MIN }).restanteEstimadoMs, undefined, etapa);
+  }
+  // com a duração até o fim do desfecho medida, ela é a base em toda etapa
+  assert.equal(calcularProgresso({ etapa: 'postagem', tipicoMs: 5 * MIN, ateOFimMs: 9 * MIN, decorridoMs: 6 * MIN }).restanteEstimadoMs, 3 * MIN);
+  assert.equal(calcularProgresso({ etapa: 'codigo', tipicoMs: 5 * MIN, ateOFimMs: 9 * MIN, decorridoMs: 2 * MIN }).restanteEstimadoMs, 7 * MIN);
+});
+
+test('tempo restante: em minuto inteiro, para cima, e estável dentro do minuto (o estado por diferença não reenvia à toa)', () => {
+  const rec = { etapa: 'codigo', startedAt: 0, estimativa: { tipicoMs: 10 * MIN } };
+  const vistos = new Set();
+  for (let t = 3 * MIN + 1; t <= 4 * MIN; t += 997) vistos.add(progressoDaSessao(rec, t).restanteEstimadoMs);
+  assert.deepEqual([...vistos], [7 * MIN]);
+  assert.equal(progressoDaSessao(rec, 10 * MIN - 1000).restanteEstimadoMs, MIN);
+  // a projeção de dois instantes do mesmo minuto é idêntica
+  const s = { id: 'a1', ...rec };
+  assert.deepEqual(projectSessions([s], 3 * MIN + 5000), projectSessions([s], 3 * MIN + 50000));
+});
+
+test('estimativa: a duração até o fim do desfecho sai do createdAt menos o início gravado nas etapas', () => {
+  const dec = (totalMs, inicio, fimMs) => ({ createdAt: inicio + fimMs, stages: { totalMs, stages: [], arquivos: 4, inicioEm: inicio } });
+  const hist = [1, 2, 3, 4, 5].map(i => dec(4 * MIN, i * 1e7, (4 + i) * MIN));
+  const est = tempoTipico(hist, 4);
+  assert.equal(est.tipicoMs, 4 * MIN);
+  assert.equal(est.ateOFimMs, 7 * MIN);
+  // decisão antiga, sem o início gravado: só a mediana até o modelo, sem inventar o resto
+  const antigas = [1, 2, 3, 4, 5].map(() => ({ createdAt: 9e12, stages: { totalMs: 4 * MIN, stages: [] } }));
+  assert.equal('ateOFimMs' in tempoTipico(antigas, 4), false);
+  // duração inteira menor que a do modelo é registro incoerente e fica de fora
+  const tortas = [1, 2, 3, 4, 5].map(i => dec(4 * MIN, i * 1e7, MIN));
+  assert.equal('ateOFimMs' in tempoTipico(tortas, 4), false);
 });
 
 test('sessão sem etapa (chat, ferramentas) não ganha progresso', () => {
@@ -125,14 +160,27 @@ test('projeção: o progresso vai no estado e o Set da rodada não', () => {
   assert.equal(s.lidos, 1);
 });
 
-test('SSE: a linha nova do feed leva o progresso, e a de verificação abre a conferência', () => {
-  const rec = { id: 'a1', etapa: 'codigo', startedAt: Date.now() };
+test('SSE: a linha nova do feed leva o progresso; a de verificação só abre a conferência com a leitura completa', () => {
+  const rec = { id: 'a1', etapa: 'codigo', startedAt: Date.now(), arquivosALer: new Set(['a', 'b', 'c', 'd']), filesRead: new Set(['a']) };
   const { engine, eventos } = engineCom(rec);
   pushActivity(engine, 'a1', 'tool', 'Read a.js', undefined, 'leitura');
-  assert.equal(eventos[0].dados.progresso.percentual, 20);
+  assert.equal(eventos[0].dados.progresso.percentual, 31);
+  // checkpoint no meio da leitura, ou verificador de um lote paralelo: segue no código
+  pushActivity(engine, 'a1', 'text', 'FAROL_CHECKPOINT', undefined, 'verificacao');
+  pushActivity(engine, 'a1', 'tool', 'Read', 'claim-verifier 1', 'verificacao');
+  assert.equal(rec.etapa, 'codigo');
+  assert.equal(eventos.at(-1).dados.progresso.percentual, 31);
+  // a leitura completa: a linha de verificação seguinte abre a conferência
+  for (const f of ['b', 'c', 'd']) rec.filesRead.add(f);
   pushActivity(engine, 'a1', 'text', 'FAROL_CHECKPOINT', undefined, 'verificacao');
   assert.equal(rec.etapa, 'conferencia');
   assert.equal(eventos.at(-1).dados.progresso.percentual, 65);
+  // sem o total medido, a linha de verificação nunca abre: só o modelo devolvendo
+  const semTotal = engineCom({ id: 'a1', etapa: 'codigo' });
+  pushActivity(semTotal.engine, 'a1', 'text', 'FAROL_CHECKPOINT', undefined, 'verificacao');
+  assert.equal(semTotal.engine.activeReviews.get('a1').etapa, 'codigo');
+  marcarFase(semTotal.engine, 'a1', 'fechando');
+  assert.equal(semTotal.engine.activeReviews.get('a1').etapa, 'conferencia');
   // sessão sem etapa: o evento sai como antes, sem o campo
   const chat = engineCom({ id: 'a1' });
   pushActivity(chat.engine, 'a1', 'text', 'oi');
@@ -148,4 +196,11 @@ test('desfecho: entra na postagem ao começar e conclui só quando termina sem l
   await assert.rejects(concluirRevisao(engine, { id: 'a1', pr: { key: 'o/r#1' }, result: {} }), /falhou/);
   assert.deepEqual(etapas, ['postagem']);
   assert.notEqual(progressoDaSessao(rec).percentual, 100);
+});
+
+test('as etapas da decisão gravam o início da sessão, que mede a próxima estimativa até o fim', () => {
+  const inicio = Date.now() - 2 * MIN;
+  const rec = { startedAt: inicio };
+  const engine = { activeReviews: new Map([['a1', rec]]), activity: new Map([['a1', [{ t: inicio + MIN, k: 'tool', s: 'leitura', text: 'Read' }]]]) };
+  assert.equal(etapasComTamanho(engine, 'a1', { changedFiles: 3, lines: 9 }).inicioEm, inicio);
 });

@@ -509,9 +509,13 @@ Ainda sem versão publicada.
   arquivosLidos?, arquivosTotais?, restanteEstimadoMs? }` (`lib/engine/progresso-revisao.js`).
   As etapas e os marcos: fontes (até 10), card (20), código (até 65, pelos arquivos da rodada já
   lidos), conferência dos achados (até 90) e postagem (100 só quando o desfecho termina). Fora
-  do código o número fica no marco de entrada da etapa, sem interpolar. O tempo restante sai da
-  mediana real das revisões anteriores e vai ausente sem histórico suficiente ou com a revisão
-  além dela. O número nunca regride. No Radar, "Analisando agora" mostra o número, a barra, a
+  do código o número fica no marco de entrada da etapa, sem interpolar. A conferência abre quando
+  o modelo devolve, ou antes numa linha de verificação só com a leitura da rodada completa. O
+  total de arquivos deixa de fora o que não tem conteúdo integral; a leitura em partes conta pela
+  entrega conferida; na retomada o "N de M" sai. O tempo restante, em minutos inteiros, sai da
+  duração real até o fim do desfecho (as etapas da decisão passam a gravar `inicioEm`) ou, sem
+  ela, da mediana até o modelo devolver, que só vale antes da conferência; sem histórico
+  suficiente, vai ausente. O número nunca regride. No Radar, "Analisando agora" mostra o número, a barra, a
   etapa, "N de M arquivos" e "faltam ~X min" quando o motor manda; sessão sem o campo fica como
   antes.
 
