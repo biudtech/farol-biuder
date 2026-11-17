@@ -944,7 +944,7 @@ class Engine extends EventEmitter {
   // 100% dos checks obrigatórios verdes antes de gastar sessão (31/08/2026). Fachada,
   // e não chamada direta do bloqueiaAutomatico, pelo mesmo motivo do gate acima: é
   // aqui que a suíte substitui a ida ao gh.
-  bloqueadoPorChecks(pr) { return checksMod.bloqueadoPorChecks(this, pr); }
+  bloqueadoPorChecks(pr, opcoes) { return checksMod.bloqueadoPorChecks(this, pr, opcoes); }
   bloqueiaAutomatico(pr) { return skipMod.bloqueiaAutomatico(this, pr); }
   podarHistoricoAvisado(abertos) { return skipMod.podarHistoricoAvisado(this, abertos); }
 
