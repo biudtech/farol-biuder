@@ -53,7 +53,7 @@ function recusa(codigo = 'INSTANCIA_HOSPEDADA') {
   assert.ok(erro, 'a Engine tem que lançar');
   assert.equal(erro.code, codigo, erro.message);
   assert.match(erro.message, /o motor não sobe/);
-  assert.doesNotMatch(erro.message, /—/, 'sem travessão');
+  assert.doesNotMatch(erro.message, /\u2014/, 'sem travessão');
   assert.deepEqual(retrato(), antes, 'nada foi criado nem alterado no HOME do Farol');
   return erro.message;
 }
