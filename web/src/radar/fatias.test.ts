@@ -1,56 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Pendencia } from '@/contratos/radar';
-import { acoesDaPendencia, avisosDoMotor, chavesAusentes, fatiarFila, fatiarPendencias, textoDaChecagem, textoDaFilaVazia } from './fatias';
+import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from './fatias';
 
-function pendencia(extra: Partial<Pendencia> = {}): Pendencia {
-  return { id: 'd1', key: 'dono/repo#1', reportMarkdown: '', reasons: [], attention: [], ...extra };
-}
-
-const PROVA = { desde: 1, tentativas: 0, aguardandoCi: false, proximaEm: 0, impedimento: '' };
 const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
-
-describe('pendências em dois blocos', () => {
-  it('a que espera o CI, ou a prova que o motor retoma sozinho, sai de Precisa de você', () => {
-    const comum = pendencia({ id: 'a' });
-    const ci = pendencia({ id: 'b', esperaCi: { desde: 1, checks: [] } });
-    const prova = pendencia({ id: 'c', esperaProva: { ...PROVA, pedeVoce: false } });
-    const pausada = pendencia({ id: 'd', esperaProva: { ...PROVA, pedeVoce: true } });
-    const { precisam, esperando } = fatiarPendencias([comum, ci, prova, pausada]);
-    expect(precisam.map((p) => p.id)).toEqual(['a', 'd']);
-    expect(esperando.map((p) => p.id)).toEqual(['b', 'c']);
-  });
-
-  it('mantém a ordem do motor e não altera a lista', () => {
-    const lista = [pendencia({ id: 'z' }), pendencia({ id: 'a' })];
-    expect(fatiarPendencias(lista).precisam.map((p) => p.id)).toEqual(['z', 'a']);
-    expect(lista).toHaveLength(2);
-    expect(fatiarPendencias([])).toEqual({ precisam: [], esperando: [] });
-  });
-});
-
-describe('os botões de uma pendência', () => {
-  it('pendência comum oferece os quatro', () => {
-    expect(acoesDaPendencia(pendencia())).toEqual({ aprovar: true, pedirMudancas: true, comentar: true, pular: true, revisar: false });
-  });
-
-  it('PR da própria conta não oferece Aprovar nem Pedir mudanças', () => {
-    expect(acoesDaPendencia(pendencia({ prProprio: true }))).toEqual({ aprovar: false, pedirMudancas: false, comentar: true, pular: true, revisar: false });
-  });
-
-  it('commit novo depois da revisão só deixa revisar de novo ou pular', () => {
-    const p = pendencia({ blockedKind: 'stale_head', pr: { url: 'https://github.com/dono/repo/pull/1' } });
-    expect(acoesDaPendencia(p)).toEqual({ aprovar: false, pedirMudancas: false, comentar: false, pular: true, revisar: true });
-  });
-
-  it('sem URL confiável não há como pedir a revisão de novo', () => {
-    expect(acoesDaPendencia(pendencia({ blockedKind: 'stale_head' })).revisar).toBe(false);
-    expect(acoesDaPendencia(pendencia({ blockedKind: 'stale_head', pr: { url: 'http://outro/pull/1' } })).revisar).toBe(false);
-  });
-
-  it('outro tipo de bloqueio não esconde botão: o motivo aparece e quem recusa é o motor', () => {
-    expect(acoesDaPendencia(pendencia({ blockedKind: 'technical_recheck', blockedReason: 'x' })).aprovar).toBe(true);
-  });
-});
 
 describe('avisos do motor', () => {
   it('motor em ordem não avisa nada', () => {
@@ -76,6 +27,9 @@ describe('avisos do motor', () => {
 
   it('checagem que falhou mostra a mensagem do motor; erro antigo com o ciclo em ordem não', () => {
     expect(avisosDoMotor({ status: 'error', error: 'gh: timeout' })[0]?.texto).toMatch(/A última checagem falhou: gh: timeout\./);
+    // só a checagem que falhou leva o Checar agora junto
+    expect(avisosDoMotor({ status: 'error', error: 'gh: timeout' })[0]?.checar).toBe(true);
+    expect(avisosDoMotor({ status: 'idle', account: { user: '', tokenOk: false } })[0]?.checar).toBeUndefined();
     expect(avisosDoMotor({ status: 'idle', error: 'gh: timeout' })).toEqual([]);
     expect(avisosDoMotor({ status: 'error', error: null })).toEqual([]);
   });
@@ -105,7 +59,7 @@ describe('estado da checagem e fila vazia', () => {
 describe('chaves de que os blocos dependem', () => {
   it('diz quais o estado não trouxe', () => {
     expect(chavesAusentes({ decisions: { pending: [], resolved: [], ilegiveis: 0 }, activeSessions: [], queue: [] })).toEqual([]);
-    expect(chavesAusentes({ activeSessions: [] })).toEqual(['as pendências', 'a fila']);
+    expect(chavesAusentes({ activeSessions: [] })).toEqual(['a fila', 'as revisões postadas']);
   });
 });
 
@@ -113,24 +67,41 @@ describe('fila sem PR repetido na tela', () => {
   const pr = (key: string) => ({ key, url: `https://github.com/${key.replace('#', '/pull/')}` });
 
   it('PR com sessão em curso sai da fila e da espera', () => {
-    const r = fatiarFila([pr('a/b#1'), pr('a/b#2')], [pr('a/b#1'), pr('a/b#3')], [{ id: 's1', keys: ['a/b#1'] }, { id: 's2', pr: { key: 'A/B#3' } }], []);
+    const r = fatiarFila([pr('a/b#1'), pr('a/b#2')], [pr('a/b#1'), pr('a/b#3')], [{ id: 's1', keys: ['a/b#1'] }, { id: 's2', pr: { key: 'A/B#3' } }]);
     expect(r.fila.map((p) => p.key)).toEqual(['a/b#2']);
     expect(r.emEspera).toEqual([]);
   });
 
-  it('PR em espera que está na fila, ou que tem pendência, aparece uma vez só', () => {
-    const r = fatiarFila([pr('a/b#1')], [pr('a/b#1'), pr('a/b#2'), pr('a/b#3'), pr('a/b#3')], [], [pendencia({ key: 'a/b#2' })]);
+  it('PR em espera que está na fila, ou repetido na espera, aparece uma vez só', () => {
+    const r = fatiarFila([pr('a/b#1')], [pr('a/b#1'), pr('a/b#2'), pr('a/b#3'), pr('a/b#3')], []);
     expect(r.fila.map((p) => p.key)).toEqual(['a/b#1']);
-    expect(r.emEspera.map((p) => p.key)).toEqual(['a/b#3']);
-  });
-
-  it('PR da fila com pendência continua na fila: quem manda na fila é o motor', () => {
-    expect(fatiarFila([pr('a/b#1')], [], [], [pendencia({ key: 'a/b#1' })]).fila).toHaveLength(1);
+    expect(r.emEspera.map((p) => p.key)).toEqual(['a/b#2', 'a/b#3']);
   });
 
   it('sem nada repetido, devolve tudo na ordem do motor', () => {
-    const r = fatiarFila([pr('z/z#9'), pr('a/b#1')], [pr('c/d#4'), pr('a/a#2')], [], []);
+    const r = fatiarFila([pr('z/z#9'), pr('a/b#1')], [pr('c/d#4'), pr('a/a#2')], []);
     expect(r.fila.map((p) => p.key)).toEqual(['z/z#9', 'a/b#1']);
     expect(r.emEspera.map((p) => p.key)).toEqual(['c/d#4', 'a/a#2']);
+  });
+});
+
+describe('o topo e o tudo em dia', () => {
+  it('a frase do topo conta o que está na tela', () => {
+    expect(resumoDoTopo(1, 3)).toBe('1 em análise · 3 na fila');
+    expect(resumoDoTopo(0, 0)).toBe('0 em análise · 0 na fila');
+  });
+
+  it('a próxima checagem de hoje diz só a hora; de outro dia, a data junto; sem ela, só a fila vazia', () => {
+    expect(textoDoTudoEmDia({ nextCheckAt: INSTANTE + 180000 }, INSTANTE, 'UTC')).toBe('Nenhum PR na fila. A próxima checagem é às 14:35.');
+    expect(textoDoTudoEmDia({ nextCheckAt: INSTANTE + 86400000 }, INSTANTE, 'UTC')).toBe('Nenhum PR na fila. A próxima checagem é em 17/11, 14:32.');
+    expect(textoDoTudoEmDia({ nextCheckAt: null }, INSTANTE, 'UTC')).toBe('Nenhum PR na fila.');
+    expect(textoDoTudoEmDia({}, INSTANTE, 'UTC')).toBe('Nenhum PR na fila.');
+  });
+});
+
+describe('a linha das pendências', () => {
+  it('conta as revisões sem nada postado, no singular e no plural', () => {
+    expect(textoDasPendencias(1)).toBe('1 revisão sem nada postado');
+    expect(textoDasPendencias(4)).toBe('4 revisões sem nada postado');
   });
 });

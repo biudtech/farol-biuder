@@ -5,8 +5,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { app, useApp } from '@/estado/instancia';
 import { Casca } from './Casca';
+import { Logo } from './Logo';
 import { Pareamento } from './Pareamento';
 import { PortaoExpirado } from './PortaoExpirado';
+import { Spinner } from './ui';
 import estilos from './Aplicacao.module.css';
 
 export function Aplicacao({ children }: { children: ReactNode }) {
@@ -25,7 +27,11 @@ export function Aplicacao({ children }: { children: ReactNode }) {
           Falta o endereço do motor: defina <code>NEXT_PUBLIC_FAROL_API</code> com a origem dele e gere o front de novo.
         </p>
       ) : (
-        <p role="status">Carregando.</p>
+        <div className={estilos.abrindo}>
+          <Logo />
+          <Spinner tamanho="g" />
+          <p role="status">Conectando ao motor…</p>
+        </div>
       )}
     </main>
   );

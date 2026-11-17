@@ -19,20 +19,20 @@ export interface PerguntaDeRevogar {
   confirmar: string;
 }
 
-// A pergunta antes de revogar. Revogar a sessão ATUAL derruba este navegador: a pergunta diz,
-// e depois do aceite a tela vai ao pareamento.
+// A pergunta antes de encerrar (revogar, no motor). Encerrar a sessão ATUAL derruba este
+// navegador: a pergunta diz, e depois do aceite a tela vai ao pareamento.
 export function perguntaDeRevogar(sessao: Pick<SessaoPareada, 'rotulo' | 'atual'>): PerguntaDeRevogar {
   if (sessao.atual) {
     return {
-      titulo: 'Revogar a sessão deste navegador?',
+      titulo: 'Encerrar a sessão deste navegador?',
       texto: `Esta é a sessão em uso agora. O token deste navegador deixa de valer no motor, e esta tela volta ao pareamento assim que o motor aceitar, junto com as outras abas abertas nele. Para entrar de novo é preciso um código novo, gerado no terminal do motor com ${COMANDO_DE_PAREAR}. Não dá para desfazer.`,
-      confirmar: 'Revogar e voltar ao pareamento',
+      confirmar: 'Encerrar e voltar ao pareamento',
     };
   }
   return {
-    titulo: `Revogar a sessão ${nomeDaSessao(sessao)}?`,
+    titulo: `Encerrar a sessão ${nomeDaSessao(sessao)}?`,
     texto: `O token dessa sessão deixa de valer no motor na hora: o navegador que a usa volta ao pareamento na próxima chamada, e o motor corta o fluxo de eventos que ele tiver aberto. Para voltar, ele precisa de um código novo, gerado com ${COMANDO_DE_PAREAR}. Não dá para desfazer. Este navegador continua pareado.`,
-    confirmar: 'Revogar a sessão',
+    confirmar: 'Encerrar a sessão',
   };
 }
 

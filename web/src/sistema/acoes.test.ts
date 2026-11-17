@@ -7,8 +7,8 @@ import { QUANDO_A_POLITICA_VALE, TIPOS_DO_SISTEMA, impedimentoDeSalvar } from '.
 
 const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
 
-const conta = (extra: Partial<Extract<Acao, { tipo: 'conta' }>> = {}): Acao => ({ tipo: 'conta', alvo: 'sistema:conta', nome: '@farol-bot', user: 'farol-bot', campos: { onClean: 'wait' }, ampliacoes: [], ...extra });
-const automacao = (extra: Partial<Extract<Acao, { tipo: 'automacao' }>> = {}): Acao => ({ tipo: 'automacao', alvo: 'sistema:automacao', nome: 'a automação', corpo: { parallelReviews: 3 }, ampliacoes: [], ...extra });
+const conta = (extra: Partial<Extract<Acao, { tipo: 'conta' }>> = {}): Acao => ({ tipo: 'conta', alvo: 'sistema:conta', nome: '@farol-bot', user: 'farol-bot', campos: { onReject: 'request_changes' }, ampliacoes: [], ...extra });
+const automacao = (extra: Partial<Extract<Acao, { tipo: 'automacao' }>> = {}): Acao => ({ tipo: 'automacao', alvo: 'sistema:automacao', nome: 'a automação', corpo: { parallelReviews: 3 }, ...extra });
 const revogar = (atual: boolean): Acao => ({ tipo: 'revogarSessao', alvo: 'sistema:sessao:0123456789abcdef', nome: atual ? '"Este" (este navegador)' : '"Outro"', id: '0123456789abcdef', rotulo: atual ? 'Este' : 'Outro', atual });
 
 // Um cliente de mentira: o corpo cru passa pelo leitor da borda, como no de verdade.
@@ -22,7 +22,7 @@ function cliente(corpo: unknown) {
 
 describe('o pedido de cada ação do Sistema', () => {
   it('a conta vai a accounts/edit, só com os campos alterados', () => {
-    expect(pedidoDa(conta())).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } } });
+    expect(pedidoDa(conta())).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'editar', user: 'farol-bot', campos: { onReject: 'request_changes' } } });
   });
 
   it('a automação vai a settings só com as chaves dela', () => {
@@ -51,8 +51,8 @@ describe('o pedido de cada ação do Sistema', () => {
   });
 
   it('rótulo, nome acessível e id', () => {
-    expect([conta(), automacao(), revogar(false)].map(rotuloDa)).toEqual(['Salvar conta e política', 'Salvar automação', 'Revogar']);
-    expect([conta(), automacao(), revogar(false)].map(nomeDa)).toEqual(['Salvar conta e política de @farol-bot', 'Salvar automação', 'Revogar a sessão "Outro"']);
+    expect([conta(), automacao(), revogar(false)].map(rotuloDa)).toEqual(['Salvar conta e política', 'Salvar automação', 'Encerrar']);
+    expect([conta(), automacao(), revogar(false)].map(nomeDa)).toEqual(['Salvar conta e política de @farol-bot', 'Salvar automação', 'Encerrar a sessão "Outro"']);
     expect([conta(), automacao(), revogar(false)].map(idDa)).toEqual(['conta', 'automacao', 'revogarSessao']);
   });
 });
@@ -65,8 +65,9 @@ describe('a pergunta antes do envio', () => {
     expect(pergunta?.texto).toContain('Revisão limpa: o motor passa a publicar sozinho a aprovação.');
     expect(pergunta?.texto).toContain('sem clique');
     expect(pergunta?.texto).toContain(QUANDO_A_POLITICA_VALE);
-    expect(pergunta?.texto).toContain('O que já está em "Precisa de você" não é reavaliado: continua esperando o seu clique.');
-    expect(pergunta?.texto).not.toContain('próximas decisões');
+    // o front não tem mesa: a pergunta não manda ninguém a "Precisa de você" nem promete clique
+    expect(pergunta?.texto).toContain('O PR que a política anterior deixou esperando não é reavaliado');
+    expect(pergunta?.texto).not.toMatch(/Precisa de você|seu clique|próximas decisões/);
     expect(pergunta?.confirmar).toBe('Salvar e ampliar a publicação automática');
   });
 
@@ -82,15 +83,13 @@ describe('a pergunta antes do envio', () => {
     expect(ouvintes).toEqual([]);
   });
 
-  it('a automação só pergunta ao desligar o CI antes de aprovar', () => {
+  it('a automação nunca pergunta: nenhuma das três chaves amplia o que o motor publica', () => {
     expect(confirmacaoDa(automacao())).toBeNull();
-    const pergunta = confirmacaoDa(automacao({ corpo: { aguardarCiParaAprovar: false }, ampliacoes: ['Efeito imediato: publica.', 'Daqui em diante: pode publicar APPROVE com o CI vermelho.'] }));
-    expect(pergunta?.titulo).toBe('Desligar o CI antes de aprovar?');
-    expect(pergunta?.texto).toContain('Efeito imediato: publica. Daqui em diante: pode publicar APPROVE com o CI vermelho.');
+    expect(confirmacaoDa(automacao({ corpo: { reviewModel: 'auto', reviewEffort: 'xhigh', parallelReviews: 4 } }))).toBeNull();
   });
 
-  it('revogar pergunta sempre, e a da sessão atual avisa do pareamento', () => {
-    expect(confirmacaoDa(revogar(false))?.confirmar).toBe('Revogar a sessão');
+  it('encerrar pergunta sempre, e a da sessão atual avisa do pareamento', () => {
+    expect(confirmacaoDa(revogar(false))?.confirmar).toBe('Encerrar a sessão');
     expect(confirmacaoDa(revogar(true))?.texto).toContain('volta ao pareamento');
   });
 });
@@ -120,13 +119,13 @@ describe('a leitura da resposta', () => {
 describe('o que a tela diz depois', () => {
   it('conta: o aceite diz o pedido e que a resposta não traz a conta gravada', async () => {
     const c = cliente({ ok: true, ignoradas: [], ignorados: [] });
-    expect(await executar(c, conta())).toEqual({ tipo: 'ok', texto: 'O motor aceitou a mudança em @farol-bot: revisão limpa: esperar você. A resposta dele não traz a conta gravada. O que ficou gravado aparece nesta tela quando o estado do motor chegar.' });
-    expect(c.post).toHaveBeenCalledWith('/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } }, lerRespostaDeAcao);
+    expect(await executar(c, conta())).toEqual({ tipo: 'ok', texto: 'O motor aceitou a mudança em @farol-bot: revisão reprovada: publicar sozinho. A resposta dele não traz a conta gravada. O que ficou gravado aparece nesta tela quando o estado do motor chegar.' });
+    expect(c.post).toHaveBeenCalledWith('/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { onReject: 'request_changes' } }, lerRespostaDeAcao);
   });
 
   it('conta: campo que o motor ignorou é erro, e a recusa mostra a frase do motor', async () => {
-    const ignorado = await executar(cliente({ ok: true, ignoradas: [], ignorados: ['onClean'] }), conta());
-    expect(ignorado).toEqual({ tipo: 'erro', texto: expect.stringContaining('ignorou revisão limpa') });
+    const ignorado = await executar(cliente({ ok: true, ignoradas: [], ignorados: ['onReject'] }), conta());
+    expect(ignorado).toEqual({ tipo: 'erro', texto: expect.stringContaining('ignorou revisão reprovada') });
     const recusa = await executar(cliente({ ok: false, erro: 'o "sem ressalvas" de @farol-bot espera você, então o "com ressalvas" também espera' }), conta());
     expect(recusa).toEqual({ tipo: 'erro', texto: 'O motor recusou: o "sem ressalvas" de @farol-bot espera você, então o "com ressalvas" também espera' });
   });
@@ -141,9 +140,9 @@ describe('o que a tela diz depois', () => {
     expect(await executar(cliente({ ok: true }), automacao())).toEqual({ tipo: 'ok', texto: expect.stringContaining('a resposta não trouxe a configuração gravada') });
   });
 
-  it('revogação: a de outra sessão, a deste navegador e a que o motor não tinha mais', async () => {
-    expect(await executar(cliente({ ok: true, eraAtual: false }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor revogou a sessão "Outro": o token dela não vale mais.' });
-    expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(true))).toEqual({ tipo: 'ok', texto: 'O motor revogou a sessão deste navegador. Voltando ao pareamento.' });
+  it('encerramento: a de outra sessão, a deste navegador e a que o motor não tinha mais', async () => {
+    expect(await executar(cliente({ ok: true, eraAtual: false }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão "Outro": o token dela não vale mais.' });
+    expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(true))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' });
     expect(await executar(cliente({ ok: false, code: 'sessao_inexistente' }), revogar(false))).toEqual({ tipo: 'erro', texto: expect.stringContaining('já foi revogada ou expirou') });
   });
 });

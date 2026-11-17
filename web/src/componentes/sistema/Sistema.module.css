@@ -1,173 +1,117 @@
-/* A tela Sistema. Botão, cartão, nota, campo de texto e a pergunta de confirmação vêm de
-   Radar.module.css; aqui fica só o que é desta tela. Só as variáveis de globals.css, nos
-   pares que src/tema/contraste.test.ts confere: texto e texto secundário sobre os três
-   fundos, e texto de estado sobre o fundo suave dele. */
-.sistema {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  min-width: 0;
-}
+/* A tela Sistema no desenho enxuto. A linha que abre, a bolinha, o chip, o botão, o campo, a
+   nota, o erro e o vazio vêm de ui.module.css; aqui fica só o arranjo desta tela. Só as
+   variáveis de globals.css (src/tema/contraste.test.ts confere): o estado é dito pelo Chip e
+   pela Bolinha de ui, e esta folha não pinta cor de estado. */
 
-.indice ul {
+/* o título da linha cresce, para o resumo e a seta ficarem à direita */
+.cabecaDaLinha { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; margin: 0; font-size: inherit; font-weight: inherit; }
+.tituloDaLinha { flex: 1 1 auto; }
+.resumoDaLinha { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
+
+.subtitulo { font-size: 14px; font-weight: 800; }
+
+/* pares rótulo e valor, uma linha cada */
+.pares { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.par {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 13px;
-}
-.indice a { color: var(--info-texto); }
-
-.secao {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13.5px;
-  /* o título não fica atrás do topo ao chegar pelo índice */
-  scroll-margin-top: 72px;
-}
-.tituloDaSecao { font-size: 16px; font-weight: 650; }
-.subtitulo { font-size: 14px; font-weight: 650; }
-
-.campos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px 18px;
-  margin: 0;
-}
-.par { min-width: 0; overflow-wrap: anywhere; }
-.par dt { color: var(--muted); font-size: 12px; font-weight: 600; }
-.par dd { margin: 0; }
-
-.verificacoes {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.verificacao {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 4px 10px;
-  padding: 8px 10px;
-  background: var(--bg);
-  border-radius: 8px;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
-/* o estado é dito em texto; a cor só acompanha */
-.estado {
-  justify-self: start;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 11.5px;
-  font-weight: 650;
-}
-.estado[data-estado="ok"] { background: var(--ok-soft); color: var(--ok-texto); }
-.estado[data-estado="atencao"] { background: var(--danger-soft); color: var(--danger-texto); }
-.nomeDaVerificacao { font-weight: 600; }
+.par dt { color: var(--muted); font-weight: 700; }
+.par dd { margin: 0; min-width: 0; text-align: right; }
 
-.campo {
+/* as listas de linhas: verificações e sessões */
+.linhas { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.verificacao, .sessao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borda-suave);
+  min-width: 0;
+}
+.verificacao:last-child, .sessao:last-child { border-bottom: 0; }
+.texto { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.nome { font-weight: 700; }
+.anuncio { display: flex; align-items: center; gap: 8px; }
+
+/* os itens com detalhe: perfis do Claude e sites do Jira */
+.itens { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--borda-suave);
+  border-radius: var(--radius-linha);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
-.campo select, .campo input { flex: none; width: 100%; max-width: 420px; }
-.opcao {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-width: 0;
-}
-.opcao input { flex: none; width: 18px; height: 18px; margin-top: 1px; accent-color: var(--accent); }
+.tituloDoItem { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; font-weight: 800; }
 
-.orgs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
+/* os formulários */
+.campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.grade, .desfechos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.opcao { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; min-width: 0; }
+.opcao input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+
+.orgs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .org {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 4px 6px 4px 12px;
-  background: var(--bg);
-  border-radius: 8px;
+  gap: 4px;
+  padding: 2px 4px 2px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .novaOrg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .novaOrg .campo { flex: 1 1 220px; max-width: 420px; }
 
-.itens {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  padding: 12px;
-  background: var(--bg);
-  border-radius: 8px;
-  overflow-wrap: anywhere;
-}
-.tituloDoItem {
+/* o pé do formulário: a contagem à esquerda, Descartar e Salvar à direita */
+.pe { display: flex; flex-direction: column; gap: 10px; }
+.rodape {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  font-size: 14px;
-  font-weight: 650;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda-suave);
 }
 
-.relatorio {
-  padding: 12px;
-  max-height: 480px;
-  overflow: auto;
-  background: var(--bg);
-  border-radius: 8px;
-}
-
-.erro {
+/* a pergunta antes do envio, no lugar do botão */
+.botaoDaAcao { display: inline-flex; }
+.pergunta {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--danger-soft);
-  color: var(--danger-texto);
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
+  gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-width: 560px;
+}
+.tituloDaPergunta { font-size: 15px; font-weight: 800; }
+.botoesDaPergunta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.relatorio {
+  padding: 12px 14px;
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--borda-suave);
+  border-radius: var(--radius-linha);
 }
 
-.carga { transition: opacity .15s; }
-.carga[data-esmaecida] { opacity: .55; }
-
 @media (max-width: 760px) {
-  .secao { padding: 12px; }
-  .campos { grid-template-columns: 1fr; }
-  .verificacao { grid-template-columns: 1fr; }
+  .grade, .desfechos { grid-template-columns: 1fr; }
+  .resumoDaLinha { max-width: 45%; }
+  .par dd { text-align: left; }
   .opcao input { width: 22px; height: 22px; }
 }

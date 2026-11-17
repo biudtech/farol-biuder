@@ -184,7 +184,72 @@ export function markdownDosPontos(pontos: readonly string[]): string {
   return pontos.map((ponto) => `- ${ponto.replace(/\s*\n\s*/g, ' ')}`).join('\n');
 }
 
-const pessoas = (n: number): string => (n === 1 ? '1 pessoa' : `${n} pessoas`);
+// O nome que a linha e o dossiê mostram: o do dossiê, quando o motor traz um; senão o login.
+export function nomeDaPessoa(login: string, autor: Pick<Autor, 'name'> | undefined): string {
+  return autor?.name?.trim() || login;
+}
+
+// As iniciais do avatar: a primeira letra da primeira e da última parte do nome (separado por
+// espaço, hífen, ponto, sublinhado ou troca de caixa, como em "arturReiman"); com uma parte
+// só, as duas primeiras letras. É enfeite: o nome vai escrito ao lado.
+export function iniciais(nome: string): string {
+  const partes = nome
+    .replace(/([a-zà-ÿ])([A-ZÀ-Þ])/g, '$1 $2')
+    .split(/[\s._\-[\]()@]+/)
+    .map((parte) => parte.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean);
+  const [primeira, ...resto] = partes;
+  if (!primeira) return '?';
+  const ultima = resto.at(-1);
+  const letras = ultima ? `${[...primeira][0]}${[...ultima][0]}` : [...primeira].slice(0, 2).join('');
+  return letras.toUpperCase();
+}
+
+// O papel numa palavra, para a linha da lista: sem papel gravado, "Sem papel".
+export function papelCurto(perfil: Pessoa | undefined): string {
+  return perfil?.papel ? rotuloDoPapel(perfil.papel) : 'Sem papel';
+}
+
+// O resumo da calibração na linha fechada de "Como revisar": o papel e as competências.
+export function resumoDaCalibracao(perfil: Pessoa | undefined): string {
+  const limpo = perfil ? perfilLimpo(perfil) : undefined;
+  if (!limpo) return 'sem papel nem competência';
+  const partes = [limpo.papel ? rotuloDoPapel(limpo.papel) : 'sem papel'];
+  for (const [d, nivel] of dominiosEmOrdem(limpo)) partes.push(`${rotuloDoDominio(d)}: ${rotuloDoNivel(nivel)}`);
+  return partes.join(' · ');
+}
+
+export type DesfechoDaEntrada = 'aprovacao' | 'mudancas' | 'comentario' | 'outro';
+
+// O desfecho de uma entrada, pela mesma leitura de desfechoDaEntrada.
+export function tipoDoDesfecho(veredito: string | undefined): DesfechoDaEntrada {
+  const chave = (veredito ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (chave === 'approve') return 'aprovacao';
+  if (chave === 'request_changes') return 'mudancas';
+  if (chave === 'comment') return 'comentario';
+  return 'outro';
+}
+
+// O `action` do Histórico que a entrada corresponde (`approve`, `request_changes`, `comment`),
+// para a cor sair da mesma fonte das duas telas (tomDoDesfecho, src/historico/rotulos.ts).
+const ACAO_DO_TIPO: Record<DesfechoDaEntrada, string | undefined> = { aprovacao: 'approve', mudancas: 'request_changes', comentario: 'comment', outro: undefined };
+
+export function acaoDaEntrada(veredito: string | undefined): string | undefined {
+  return ACAO_DO_TIPO[tipoDoDesfecho(veredito)];
+}
+
+export type ContagemDosDesfechos = Record<DesfechoDaEntrada, number>;
+
+// Os desfechos das entradas listadas, somados. Não é número da pessoa: o motor guarda só as
+// dez entradas mais recentes e não manda total nenhum.
+export function contagemDosDesfechos(entradas: readonly { verdict?: string }[]): ContagemDosDesfechos {
+  const contagem: ContagemDosDesfechos = { aprovacao: 0, mudancas: 0, comentario: 0, outro: 0 };
+  for (const entrada of entradas) contagem[tipoDoDesfecho(entrada.verdict)] += 1;
+  return contagem;
+}
+
+export const quantasPessoas = (n: number): string => (n === 1 ? '1 pessoa' : `${n} pessoas`);
+const pessoas = quantasPessoas;
 
 // O que a região viva anuncia depois de uma carga ou de uma busca.
 export function textoDoResultado(total: number, mostradas: number, busca: string): string {

@@ -6,6 +6,7 @@ import {
   CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, chaveDaPessoa, comPerfil, contestacoesDoAutor, dataDaEntrada, desfechoDaEntrada, enderecoDoTime, filtrarPorNome,
   avisoDeIlegiveis, lerEnderecoDoTime, marcaDoPerfil, markdownDosPontos, motivoQueImpedeSalvar, outrasQueDiferem, perfilDe, perfilLimpo,
   prDaEntrada, soComPerfil, textoDaCompetencia, textoDoPapel, textoDoPerfil, textoDoResultado,
+  contagemDosDesfechos, iniciais, nomeDaPessoa, papelCurto, quantasPessoas, resumoDaCalibracao, tipoDoDesfecho,
 } from './time';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
@@ -224,5 +225,66 @@ describe('frases', () => {
   it('perfil ilegível vira aviso, não trava', () => {
     expect(avisoDeIlegiveis(0)).toBeNull();
     expect(avisoDeIlegiveis(2)).toMatch(/^2 perfil\(is\) chegaram do motor com campo ou formato que esta tela não lê/);
+  });
+});
+
+describe('a linha e o dossiê no desenho enxuto', () => {
+  it('o nome é o do dossiê, ou o login quando o motor não traz nome', () => {
+    expect(nomeDaPessoa('ana-souza', { name: 'Ana Souza' })).toBe('Ana Souza');
+    expect(nomeDaPessoa('bruno', { name: '  ' })).toBe('bruno');
+    expect(nomeDaPessoa('caio', undefined)).toBe('caio');
+  });
+
+  it('as iniciais saem da primeira e da última parte do nome, ou das duas primeiras letras', () => {
+    expect(iniciais('Ana Souza')).toBe('AS');
+    expect(iniciais('Maria da Silva')).toBe('MS');
+    expect(iniciais('arturReiman')).toBe('AR');
+    expect(iniciais('thiagopcdev')).toBe('TH');
+    expect(iniciais('joao-oliveira-biud')).toBe('JB');
+    expect(iniciais('dependabot[bot]')).toBe('DB');
+    expect(iniciais('Érica')).toBe('ÉR');
+    expect(iniciais('x')).toBe('X');
+    expect(iniciais('---')).toBe('?');
+  });
+
+  it('o papel curto diz "Sem papel" quando não há', () => {
+    expect(papelCurto({ papel: 'senior' })).toBe('Sênior');
+    expect(papelCurto({ dominios: { backend: 'basico' } })).toBe('Sem papel');
+    expect(papelCurto(undefined)).toBe('Sem papel');
+  });
+
+  it('o resumo da calibração junta o papel e as competências', () => {
+    expect(resumoDaCalibracao({ papel: 'senior', dominios: { dados: 'basico', backend: 'avancado' } })).toBe('Sênior · Backend: Avançado · Dados: Básico');
+    expect(resumoDaCalibracao({ dominios: { backend: 'avancado' } })).toBe('sem papel · Backend: Avançado');
+    expect(resumoDaCalibracao(undefined)).toBe('sem papel nem competência');
+  });
+
+  it('os desfechos das entradas listadas são somados pela leitura do motor', () => {
+    expect(tipoDoDesfecho('APPROVE')).toBe('aprovacao');
+    expect(tipoDoDesfecho('REQUEST CHANGES')).toBe('mudancas');
+    expect(tipoDoDesfecho('REQUEST_CHANGES')).toBe('mudancas');
+    expect(tipoDoDesfecho('COMMENT')).toBe('comentario');
+    expect(tipoDoDesfecho('novo')).toBe('outro');
+    expect(tipoDoDesfecho(undefined)).toBe('outro');
+    expect(contagemDosDesfechos([{ verdict: 'APPROVE' }, { verdict: 'APPROVE' }, { verdict: 'REQUEST CHANGES' }, {}])).toEqual({ aprovacao: 2, mudancas: 1, comentario: 0, outro: 1 });
+  });
+
+  it('a contagem de pessoas', () => {
+    expect(quantasPessoas(1)).toBe('1 pessoa');
+    expect(quantasPessoas(10)).toBe('10 pessoas');
+  });
+});
+
+describe('a cor do desfecho da entrada é a do Histórico', () => {
+  it('cada veredito do dossiê vira o action do Histórico, e tomDoDesfecho dá a mesma cor nas duas telas', async () => {
+    const { acaoDaEntrada } = await import('./time');
+    const { tomDoDesfecho } = await import('@/historico/rotulos');
+    const cor = (v: string | undefined) => tomDoDesfecho({ action: acaoDaEntrada(v) });
+    expect(cor('APPROVE')).toBe(tomDoDesfecho({ action: 'approve' }));
+    expect(cor('REQUEST CHANGES')).toBe(tomDoDesfecho({ action: 'request_changes' }));
+    expect(cor('REQUEST_CHANGES')).toBe('ruim');
+    expect(cor('COMMENT')).toBe('aviso');
+    expect(cor('outra coisa')).toBe('neutro');
+    expect(cor(undefined)).toBe('neutro');
   });
 });

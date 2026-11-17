@@ -120,6 +120,14 @@ export function ehRecusaDeParametro(falha: Falha): boolean {
   return falha.falha === 'recusado' && falha.detalhe?.codigo === 'parametro_invalido';
 }
 
+// O histórico está fora no motor (503 com `historico_indisponivel`: o banco que o guarda não
+// abriu ou não respondeu). Tentar de novo pode resolver; mudar a busca, não.
+export function ehHistoricoIndisponivel(falha: Falha): boolean {
+  return falha.falha === 'recusado' && (falha.detalhe?.codigo === 'historico_indisponivel' || (falha.status === 503 && !falha.detalhe));
+}
+
+export const TEXTO_DO_INDISPONIVEL = 'O histórico está indisponível no motor agora: o banco que guarda as revisões não respondeu. Tente de novo em instantes.';
+
 export function textoDaDuracao(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '';
   if (ms < 1000) return 'menos de 1 s';

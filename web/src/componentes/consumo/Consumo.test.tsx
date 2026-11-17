@@ -8,7 +8,6 @@ import { criarStore } from '@/estado/store';
 import type { Resultado } from '@/transporte/cliente';
 import { voltarPara } from '../historico/apoio-de-teste';
 import { Consumo } from './Consumo';
-import { PERIODOS } from '@/consumo/consulta';
 import { ESPERA_DA_BUSCA_MS } from './Filtros';
 import { SESSOES_A_VISTA } from './SessoesRecentes';
 import { consumoDoMotor, operacaoDoMotor, relatorioDoMotor, sessaoDoMotor, somaDoMotor } from './apoio-de-teste';
@@ -50,13 +49,25 @@ function montar({ url = '/consumo', responder = () => corpo(relatorioDoMotor()),
 
 // deixa as promessas pendentes (a resposta do motor de mentira) assentarem
 const assentar = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); };
-const clicar = async (nome: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: nome })); }); };
+const clicar = async (nome: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: nome, hidden: true })); }); };
 const anuncio = () => screen.getByRole('status', { name: 'Resultado da consulta' }).textContent;
-const secao = (nome: string | RegExp) => screen.getByRole('region', { name: nome });
-const tabela = (nome: string) => within(screen.getByRole('region', { name: nome })).getByRole('table');
-const linhasDa = (nome: string): string[][] => within(tabela(nome)).getAllByRole('row').slice(1).map((linha) => [...linha.querySelectorAll('th,td')].map((celula) => celula.textContent ?? ''));
-const cabecalhosDa = (nome: string): string[] => within(tabela(nome)).getAllByRole('columnheader').map((th) => th.textContent ?? '');
+// As regiões e tabelas que moram dentro de uma linha fechada (<details>) continuam no
+// documento: o `hidden: true` deixa o teste achá-las sem abrir a linha.
+const secao = (nome: string | RegExp) => screen.getByRole('region', { name: nome, hidden: true });
+const tabela = (nome: string) => within(secao(nome)).getByRole('table', { hidden: true });
+const linhasDa = (nome: string): string[][] => within(tabela(nome)).getAllByRole('row', { hidden: true }).slice(1).map((linha) => [...linha.querySelectorAll('th,td')].map((celula) => celula.textContent ?? ''));
+const cabecalhosDa = (nome: string): string[] => within(tabela(nome)).getAllByRole('columnheader', { hidden: true }).map((th) => th.textContent ?? '');
 const pares = (): string[] => [...document.querySelectorAll('dl > div')].map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
+// o cartão do número grande
+const cartao = () => secao('Custo estimado');
+// A linha que abre, pelo título do resumo: o <details>, o resumo e o que diz à direita.
+function linha(titulo: string): HTMLDetailsElement {
+  const achada = [...document.querySelectorAll('details')].find((d) => d.querySelector(':scope > summary span')?.textContent === titulo);
+  if (!achada) throw new Error(`sem a linha ${titulo}`);
+  return achada;
+}
+const resumoDa = (titulo: string) => linha(titulo).querySelector(':scope > summary')?.textContent ?? '';
+const periodo = () => screen.getByLabelText('Período') as HTMLSelectElement;
 
 beforeEach(() => { window.history.replaceState(null, '', '/consumo'); });
 afterEach(() => {
@@ -64,22 +75,71 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('Consumo: o desenho enxuto', () => {
+  it('o número grande e o gráfico ficam à vista; quebras, execuções, sessões e auditoria, fechadas com resumo na linha', async () => {
+    montar();
+    await assentar();
+    expect(within(cartao()).getByText('US$ 12,50')).toBeTruthy();
+    expect(within(cartao()).getByRole('img')).toBeTruthy();
+    const linhas = [...document.querySelectorAll('details:not([class*="gaveta"])')];
+    expect(linhas.map((d) => d.querySelector(':scope > summary span')?.textContent)).toEqual([
+      'Detalhes do período', 'Por dia', 'Por tipo', 'Por modelo', 'Execuções', 'Sessões recentes', 'Auditoria do registro',
+    ]);
+    // nada nasce aberto
+    expect(linhas.filter((d) => (d as HTMLDetailsElement).open)).toEqual([]);
+    expect(resumoDa('Detalhes do período')).toBe('Detalhes do período3 revisões concluídas');
+    expect(resumoDa('Por dia')).toBe('Por dia3 dias com execução');
+    expect(resumoDa('Por tipo')).toBe('Por tipoRevisão é 80% do custo');
+    expect(resumoDa('Por modelo')).toBe('Por modeloSonnet 5 é 85% dos tokens');
+    expect(resumoDa('Execuções')).toBe('Execuções2 operações');
+    expect(resumoDa('Sessões recentes')).toBe('Sessões recentes2');
+    expect(resumoDa('Auditoria do registro')).toBe('Auditoria do registroUS$ 900,00 em 42 sessões');
+    // sem estilo em linha: a CSP de produção não aceita
+    expect(document.querySelector('[style]')).toBeNull();
+  });
+
+  it('o topo diz o período em dia de Brasília, e os filtros ficam atrás do botão Filtrar', async () => {
+    montar();
+    await assentar();
+    expect(screen.getByRole('heading', { level: 1, name: 'Consumo' })).toBeTruthy();
+    expect(screen.getByText('18/10/2026 a 16/11/2026 (30 dias), em dias de Brasília')).toBeTruthy();
+    const filtrar = screen.getByText('Filtrar').closest('details') as HTMLDetailsElement;
+    expect(filtrar.open).toBe(false);
+    for (const nome of ['De', 'Até', 'Tipo', 'Modelo', 'Repositório']) expect(filtrar.contains(screen.getByLabelText(nome))).toBe(true);
+    // a busca recorta só as execuções e mora dentro dessa linha
+    expect(linha('Execuções').contains(screen.getByLabelText('Buscar nas execuções'))).toBe(true);
+    // sem filtro, não há chips nem Limpar
+    expect(screen.queryByRole('group', { name: 'Filtros ativos' })).toBeNull();
+  });
+
+  it('a frase ao lado do número diz só as execuções que o motor contou, sem média feita pela tela', async () => {
+    montar();
+    await assentar();
+    expect(within(cartao()).getByText('5 execuções de IA')).toBeTruthy();
+    expect(cartao().textContent).not.toMatch(/média|por execução/);
+    cleanup();
+    montar({ responder: () => corpo(relatorioDoMotor({ totals: { attempts: 2 } })) });
+    await assentar();
+    expect(within(cartao()).getByText('2 execuções de IA')).toBeTruthy();
+    expect(within(cartao()).getByText('sem dado')).toBeTruthy();
+    expect(cartao().textContent).not.toMatch(/média|NaN/);
+  });
+});
+
 describe('Consumo: o período', () => {
   it('pede o relatório ao motor sem parâmetro, e anuncia o que voltou', async () => {
     const t = montar();
-    expect(screen.getByRole('heading', { level: 1, name: 'Consumo' })).toBeTruthy();
-    expect(anuncio()).toBe('Carregando o consumo.');
+    expect(anuncio()).toBe('');
     await assentar();
     expect(t.pedidos()).toEqual(['/api/usage']);
     expect(anuncio()).toBe('Período de 18/10/2026 a 16/11/2026 (30 dias): 5 execuções de IA, custo estimado de US$ 12,50. Diário: 2 operações, página 1 de 1.');
     expect(t.post).not.toHaveBeenCalled();
   });
 
-  it('o resumo mostra as somas do motor, com a unidade, e diz que o custo é estimado e de onde vem', async () => {
+  it('o detalhe do período mostra as somas do motor, com a unidade, e diz de onde vem o custo', async () => {
     montar();
     await assentar();
     expect(pares()).toEqual([
-      'Custo estimado: US$ 12,50',
       'Execuções de IA: 5',
       'Retentativas, já contadas nas execuções: 1',
       'Revisões concluídas: 3',
@@ -89,30 +149,27 @@ describe('Consumo: o período', () => {
       'Cache lido: 400.000 tokens',
       'Cache criado: 12.000 tokens',
     ]);
-    const resumo = secao('Resumo do período');
-    expect(within(resumo).getByText(/^De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar\. Em perfil de assinatura ninguém cobra esse valor por sessão: ele é uma estimativa/)).toBeTruthy();
-    expect(within(resumo).getByText('Por assinatura: 5 execuções. O valor em dólar delas não é cobrança.')).toBeTruthy();
-    // o dia do período é o de Brasília, e a tela diz
-    expect(within(resumo).getByText('18/10/2026 a 16/11/2026 (30 dias), em dias de Brasília: é nesse fuso que o motor agrupa o diário.')).toBeTruthy();
+    expect(within(linha('Detalhes do período')).getByText(/^De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar\. Em perfil de assinatura ninguém cobra esse valor por sessão/)).toBeTruthy();
+    expect(within(cartao()).getByText(/^É uma estimativa, que serve para comparar dias/)).toBeTruthy();
+    expect(within(cartao()).getByText('Por assinatura: 5 execuções. O valor em dólar delas não é cobrança.')).toBeTruthy();
   });
 
-  it('modalidade: uma por assinatura e duas sem registro não viram "1 de 3", que faria o resto parecer cobrado', async () => {
+  it('modalidade: uma por assinatura e duas sem registro não viram "1 de 3"; as sem modalidade viram nota', async () => {
     montar({ responder: () => corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 3, costUsd: 3, subscription: 1, unknownBilling: 2 }) })) });
     await assentar();
-    const resumo = secao('Resumo do período');
-    expect(within(resumo).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
-    expect(within(resumo).getByText('Sem modalidade registrada: 2 execuções. O motor não gravou se rodaram por assinatura ou por chave de API, e a tela não supõe.')).toBeTruthy();
-    expect(within(resumo).queryByText(/Por chave de API/)).toBeNull();
-    expect(resumo.textContent).not.toMatch(/\d+ de \d+ execuç/);
+    expect(within(cartao()).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
+    const nota = screen.getByText('Sem modalidade registrada: 2 execuções. O motor não gravou se rodaram por assinatura ou por chave de API, e a tela não supõe.');
+    expect(cartao().contains(nota)).toBe(false);
+    expect(within(cartao()).queryByText(/Por chave de API/)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\d+ de \d+ execuç/);
   });
 
   it('modalidade: a chave de API aparece com o dólar que o motor somou, sem contagem inventada', async () => {
     montar({ responder: () => corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 4, costUsd: 9, subscription: 1, apiUsd: 7.5, apiEstimatedUsd: 0.5, apiUnknown: 1 }) })) });
     await assentar();
-    const resumo = secao('Resumo do período');
-    expect(within(resumo).getByText('Por chave de API: US$ 7,50, dos quais US$ 0,50 calculados pelo motor. O motor soma o valor e não diz quantas execuções foram. Mais 1 execução de custo desconhecido.')).toBeTruthy();
-    expect(within(resumo).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
-    expect(within(resumo).queryByText(/Sem modalidade registrada/)).toBeNull();
+    expect(within(cartao()).getByText('Por chave de API: US$ 7,50, dos quais US$ 0,50 calculados pelo motor. O motor soma o valor e não diz quantas execuções foram. Mais 1 execução de custo desconhecido.')).toBeTruthy();
+    expect(within(cartao()).getByText('Por assinatura: 1 execução. O valor em dólar delas não é cobrança.')).toBeTruthy();
+    expect(screen.queryByText(/Sem modalidade registrada/)).toBeNull();
   });
 
   it('avisa o que o período tem de calculado, de desconhecido e de incompleto', async () => {
@@ -126,39 +183,42 @@ describe('Consumo: o período', () => {
       })),
     });
     await assentar();
-    const resumo = secao('Resumo do período');
-    expect(within(resumo).getByText(/^US\$ 0,75 do custo deste período foi calculado pelo motor, para sessão que morreu antes de informar o valor/)).toBeTruthy();
-    expect(within(resumo).getByText('1 execução tem custo desconhecido e não entra no valor em dólar.')).toBeTruthy();
-    expect(within(resumo).getByText(/^O diário tem menos sessões do que o agregado do motor contou/)).toBeTruthy();
-    expect(within(resumo).getByText(/^2 execuções sem identidade de operação/)).toBeTruthy();
-    expect(within(resumo).getByText('O período começa antes do primeiro registro do diário (01/10/2026): não há dado dos dias anteriores.')).toBeTruthy();
-    expect(within(resumo).queryByText(/Por assinatura/)).toBeNull();
+    const detalhes = linha('Detalhes do período');
+    expect(resumoDa('Detalhes do período')).toBe('Detalhes do período3 revisões concluídas · 3 avisos');
+    expect(within(detalhes).getByText(/^US\$ 0,75 do custo deste período foi calculado pelo motor, para sessão que morreu antes de informar o valor/)).toBeTruthy();
+    expect(within(detalhes).getByText('1 execução tem custo desconhecido e não entra no valor em dólar.')).toBeTruthy();
+    expect(within(detalhes).getByText(/^2 execuções sem identidade de operação/)).toBeTruthy();
+    // o incompleto e o histórico que não existe pesam no número grande: ficam à vista
+    expect(detalhes.contains(screen.getByText(/^O diário tem menos sessões do que o agregado do motor contou/))).toBe(false);
+    expect(detalhes.contains(screen.getByText('O período começa antes do primeiro registro do diário (01/10/2026): não há dado dos dias anteriores.'))).toBe(false);
+    expect(screen.queryByText(/Por assinatura/)).toBeNull();
   });
 });
 
 describe('Consumo: gasto por dia', () => {
-  it('o gráfico é uma imagem com um nome que o resume, e uma barra por dia com custo', async () => {
+  it('o gráfico é uma imagem com um nome que o resume, uma barra por dia com custo e os dias das pontas', async () => {
     const { container } = montar();
     await assentar();
     const grafico = screen.getByRole('img');
     expect(grafico.getAttribute('aria-label')).toBe('Custo estimado por dia de Brasília, em dólar, de 18/10/2026 a 16/11/2026 (30 dias). 3 dias com execução. Maior dia: 15/11/2026, com US$ 9,10. Custo estimado do período, somado pelo motor: US$ 12,50.');
     const barras = [...container.querySelectorAll('svg rect')];
     expect(barras.map((b) => b.querySelector('title')?.textContent)).toEqual(['14/11/2026: US$ 2,00 estimados', '15/11/2026: US$ 9,10 estimados', '16/11/2026: US$ 1,40 estimados']);
-    // a maior barra é a do maior dia, e nenhuma passa do topo do eixo (US$ 10,00)
     const alturas = barras.map((b) => Number(b.getAttribute('height')));
     expect(alturas[1]).toBeGreaterThan(alturas[0] as number);
     expect(alturas[0]).toBeGreaterThan(alturas[2] as number);
-    const rotulos = [...container.querySelectorAll('svg text')].map((t) => t.textContent);
-    expect(rotulos).toEqual(['US$ 0,00', 'US$ 2,50', 'US$ 5,00', 'US$ 7,50', 'US$ 10,00', '18/10', '24/10', '30/10', '05/11', '11/11', '16/11']);
-    // sem estilo em linha: a CSP de produção não aceita
-    expect(container.querySelector('[style]')).toBeNull();
-    // o gráfico rola dentro do próprio contêiner, que recebe foco e tem nome
-    expect(secao('Gráfico do custo estimado por dia').getAttribute('tabindex')).toBe('0');
+    // as barras usam a classe da primária (o CSS module põe prefixo e sufixo), e o SVG estica
+    // na largura do cartão
+    expect(barras.every((b) => /^_barra_/.test(b.getAttribute('class') ?? ''))).toBe(true);
+    expect(grafico.getAttribute('preserveAspectRatio')).toBe('none');
+    // sem texto dentro do SVG (esticaria com ele): os dias das pontas ficam embaixo
+    expect(container.querySelectorAll('svg text')).toHaveLength(0);
+    expect([...container.querySelectorAll('[class*="_pontas_"] span')].map((s) => s.textContent)).toEqual(['18/10', '16/11']);
   });
 
-  it('a tabela traz a mesma informação, com o dia como o motor o definiu e o fuso dito', async () => {
+  it('a tabela, fechada em Por dia, traz a mesma informação, com o dia como o motor o definiu e o fuso dito', async () => {
     montar();
     await assentar();
+    expect(linha('Por dia').contains(secao('Tabela do consumo por dia'))).toBe(true);
     expect(cabecalhosDa('Tabela do consumo por dia')).toEqual(['Dia', 'Custo estimado', 'Execuções', 'Execuções de custo desconhecido', 'Tokens de entrada', 'Tokens de saída', 'Tokens de cache lido', 'Tokens de cache criado']);
     expect(linhasDa('Tabela do consumo por dia')).toEqual([
       ['14/11/2026', 'US$ 2,00', '1', '0', '1.000', '300', '50.000', '2.000'],
@@ -166,6 +226,7 @@ describe('Consumo: gasto por dia', () => {
       ['16/11/2026', 'US$ 1,40', '1', '0', '1.000', '200', '50.000', '1.000'],
     ]);
     expect(tabela('Tabela do consumo por dia').querySelector('caption')?.textContent).toBe('Consumo por dia de Brasília (o fuso em que o motor agrupa o diário), só os dias com execução.');
+    // a tabela larga rola no próprio contêiner, que recebe foco e tem nome
     expect(secao('Tabela do consumo por dia').getAttribute('tabindex')).toBe('0');
   });
 
@@ -182,7 +243,7 @@ describe('Consumo: gasto por dia', () => {
     montar({ url: '/consumo?inicio=2026-01-01', responder: () => corpo(relatorioDoMotor({ range: { start: '2026-01-01', end: '2026-11-16' } })) });
     await assentar();
     expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByText('O período passa de 120 dias: o gráfico não é desenhado, e a tabela traz todos os dias com execução.')).toBeTruthy();
+    expect(screen.getByText('O período passa de 120 dias: o gráfico não é desenhado, e a tabela Por dia traz todos os dias com execução.')).toBeTruthy();
     expect(linhasDa('Tabela do consumo por dia')).toHaveLength(3);
   });
 
@@ -199,6 +260,7 @@ describe('Consumo: as quebras', () => {
   it('por tipo: a ordem é a do motor, e a participação é a fatia do custo que ele somou', async () => {
     montar();
     await assentar();
+    expect(linha('Por tipo').contains(secao('Tabela do consumo por tipo de sessão'))).toBe(true);
     expect(cabecalhosDa('Tabela do consumo por tipo de sessão').slice(0, 4)).toEqual(['Tipo', 'Custo estimado', 'Participação no custo', 'Execuções']);
     expect(linhasDa('Tabela do consumo por tipo de sessão')).toEqual([
       ['Revisão', 'US$ 10,00', '80%', '4', '5.000', '1.800', '390.000', '11.000'],
@@ -225,22 +287,25 @@ describe('Consumo: as quebras', () => {
     await assentar();
     expect(linhasDa('Tabela do consumo por tipo de sessão')[0]?.slice(0, 3)).toEqual(['tipo_novo', 'US$ 3,00', 'sem base']);
     expect(linhasDa('Tabela do consumo por modelo')).toEqual([['Modelo não informado', '2', 'sem dado', 'sem dado', 'sem base']]);
+    expect(resumoDa('Por tipo')).toBe('Por tipotipo_novo lidera');
+    expect(resumoDa('Por modelo')).toBe('Por modelo1 modelo');
   });
 });
 
-describe('Consumo: o diário', () => {
+describe('Consumo: as execuções', () => {
   const NOME = 'Tabela do diário de execuções';
 
   it('cada linha diz quando, o tipo, o modelo, o PR, os tokens, o custo e o desfecho', async () => {
     montar();
     await assentar();
+    expect(linha('Execuções').contains(secao(NOME))).toBe(true);
     expect(cabecalhosDa(NOME)).toEqual(['Quando', 'Tipo', 'Modelo', 'PR ou trabalho', 'Tokens de entrada', 'Tokens de saída', 'Tokens de cache lido', 'Tokens de cache criado', 'Custo estimado', 'Desfecho']);
     const [primeira, segunda] = linhasDa(NOME);
     expect(primeira?.[0]).toMatch(/^\d{2}\/11\/2026, \d{2}:\d{2}$/);
     expect(primeira?.slice(1)).toEqual(['Revisão', 'Sonnet 5', 'dono/repo#12 (abre em nova aba)', '1.200', '340', '90.000', '2.500', 'US$ 1,50', 'Concluída']);
     // custo desconhecido não mostra o zero que o motor grava
     expect(segunda?.slice(1)).toEqual(['Contestação', 'Opus 5', 'dono/repo#7 (abre em nova aba)', '1.200', '340', '90.000', '2.500', 'Desconhecido', 'Erro']);
-    const link = within(tabela(NOME)).getAllByRole('link')[0] as HTMLElement;
+    const link = within(tabela(NOME)).getAllByRole('link', { hidden: true })[0] as HTMLElement;
     expect(link.getAttribute('href')).toBe('https://github.com/dono/repo/pull/12');
     expect(link.getAttribute('rel')).toBe('noreferrer noopener');
     expect(link.getAttribute('target')).toBe('_blank');
@@ -268,7 +333,7 @@ describe('Consumo: o diário', () => {
       responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-15', end: '2026-11-15' }, history: { total: 2, page: 0, pages: 1, rows: [operacao, sozinha] } })),
     });
     await assentar();
-    const quando = linhasDa(NOME).map((linha) => linha[0]?.replace(/^[^(]*/, ''));
+    const quando = linhasDa(NOME).map((l) => l[0]?.replace(/^[^(]*/, ''));
     expect(quando).toEqual(['(tentativa 2 de 2 da mesma operação)', '(tentativa 1 de 2 da mesma operação, fora do período)', '(fora do período)']);
     expect(screen.getByText('As linhas não fecham com o total do período: cada operação traz todas as tentativas dela, inclusive as de fora do período ou do filtro, que as somas não contam. As de fora do período estão marcadas na coluna Quando; as de fora do filtro o motor não marca.')).toBeTruthy();
     expect(tabela(NOME).querySelector('caption')?.textContent).toBe('Operações com execução no período, a mais recente primeiro, 8 por página. A hora é a do fim de cada execução, no fuso deste navegador.');
@@ -278,7 +343,7 @@ describe('Consumo: o diário', () => {
     const operacao = operacaoDoMotor(13, { day: undefined }, [{ day: 'ontem' }]);
     montar({ responder: () => corpo(relatorioDoMotor({ history: { total: 1, page: 0, pages: 1, rows: [operacao] } })) });
     await assentar();
-    expect(linhasDa(NOME).map((linha) => linha[0]?.replace(/^[^(]*/, ''))).toEqual(['(tentativa 2 de 2 da mesma operação)', '(tentativa 1 de 2 da mesma operação)']);
+    expect(linhasDa(NOME).map((l) => l[0]?.replace(/^[^(]*/, ''))).toEqual(['(tentativa 2 de 2 da mesma operação)', '(tentativa 1 de 2 da mesma operação)']);
   });
 
   it('texto de fora é texto, e a referência só vira link quando é chave de PR', async () => {
@@ -295,7 +360,7 @@ describe('Consumo: o diário', () => {
     await assentar();
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
-    expect(within(tabela(NOME)).queryByRole('link')).toBeNull();
+    expect(within(tabela(NOME)).queryByRole('link', { hidden: true })).toBeNull();
     expect(within(tabela(NOME)).getAllByText(marcado)).toHaveLength(3);
     // a operação só com a chave aparece com o que há
     expect(linhasDa(NOME)[2]).toEqual(['Sem data registrada', 'Tipo não informado', 'Modelo não informado', 'Sem referência', 'sem dado', 'sem dado', 'sem dado', 'sem dado', 'sem dado', 'Não informado']);
@@ -308,20 +373,20 @@ describe('Consumo: o diário', () => {
     expect(screen.getByText(/1 operação\(ões\) desta página chegaram em formato que esta tela não lê/)).toBeTruthy();
   });
 
-  it('a paginação manda a página ao endereço e ao motor (que conta a partir de zero), e o foco vai ao título', async () => {
+  it('a paginação manda a página ao endereço e ao motor (que conta a partir de zero), e o foco vai ao resumo da linha', async () => {
     const t = montar({ responder: (caminho) => corpo(relatorioDoMotor({ history: { total: 20, page: caminho.includes('page=1') ? 1 : 0, pages: 3, rows: [operacaoDoMotor(1)] } })) });
     await assentar();
-    const navegacao = screen.getByRole('navigation', { name: 'Páginas do diário' });
+    const navegacao = screen.getByRole('navigation', { name: 'Páginas do diário', hidden: true });
     expect(navegacao.textContent).toContain('Página 1 de 3 · 20 operações');
-    expect((screen.getByRole('button', { name: 'Página anterior do diário' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Página anterior do diário', hidden: true }) as HTMLButtonElement).disabled).toBe(true);
     const entradas = window.history.length;
     await clicar('Próxima página do diário');
     expect(window.location.search).toBe('?pagina=2');
     expect(window.history.length).toBe(entradas + 1);
     expect(t.pedidos().at(-1)).toBe('/api/usage?page=1');
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Diário de execuções' }));
+    expect(document.activeElement).toBe(linha('Execuções').querySelector(':scope > summary'));
     await assentar();
-    expect(screen.getByRole('navigation', { name: 'Páginas do diário' }).textContent).toContain('Página 2 de 3');
+    expect(screen.getByRole('navigation', { name: 'Páginas do diário', hidden: true }).textContent).toContain('Página 2 de 3');
     expect(anuncio()).toMatch(/Diário: 20 operações, página 2 de 3\.$/);
   });
 
@@ -337,15 +402,19 @@ describe('Consumo: o diário', () => {
     expect(window.location.search).toBe('?pagina=3');
     // a correção troca a entrada do endereço, não empilha outra
     expect(window.history.length).toBe(entradas);
-    expect(screen.getByRole('navigation', { name: 'Páginas do diário' }).textContent).toContain('Página 3 de 3');
+    expect(screen.getByRole('navigation', { name: 'Páginas do diário', hidden: true }).textContent).toContain('Página 3 de 3');
+    // com página no endereço, a linha das execuções já nasce aberta
+    expect(linha('Execuções').open).toBe(true);
   });
 
-  it('diário vazio com busca diz que nada passa por ela, e as somas continuam na tela', async () => {
+  it('execuções vazias com busca dizem que nada passa por ela, a linha nasce aberta e o custo continua na tela', async () => {
     montar({ url: '/consumo?q=nada', responder: () => corpo(relatorioDoMotor({ history: { total: 0, page: 0, pages: 1, rows: [] } })) });
     await assentar();
+    expect(linha('Execuções').open).toBe(true);
+    expect(resumoDa('Execuções')).toBe('Execuçõesnenhuma operação');
     expect(screen.getByText('Nenhuma operação passa pela busca e pelos filtros escolhidos neste período.')).toBeTruthy();
-    expect(screen.queryByRole('navigation', { name: 'Páginas do diário' })).toBeNull();
-    expect(pares()[0]).toBe('Custo estimado: US$ 12,50');
+    expect(screen.queryByRole('navigation', { name: 'Páginas do diário', hidden: true })).toBeNull();
+    expect(within(cartao()).getByText('US$ 12,50')).toBeTruthy();
   });
 });
 
@@ -359,7 +428,46 @@ describe('Consumo: período e filtros no endereço', () => {
     expect((screen.getByLabelText('Tipo') as HTMLSelectElement).value).toBe('review');
     expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('Sonnet 5');
     expect((screen.getByLabelText('Repositório') as HTMLSelectElement).value).toBe('dono/repo');
-    expect((screen.getByLabelText('Buscar no diário') as HTMLInputElement).value).toBe('repo#12');
+    expect((screen.getByLabelText('Buscar nas execuções') as HTMLInputElement).value).toBe('repo#12');
+  });
+
+  it('os filtros ativos viram chips fora do painel, e o botão Filtrar diz quantos', async () => {
+    montar({ url: '/consumo?inicio=2026-11-01&fim=2026-11-16&tipo=review&repo=dono%2Frepo&q=x', responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-01', end: '2026-11-16' } })) });
+    await assentar();
+    const grupo = screen.getByRole('group', { name: 'Filtros ativos' });
+    expect(within(grupo).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+      'Tirar o filtro Período: de 01/11/2026 até 16/11/2026',
+      'Tirar o filtro Tipo: Revisão',
+      'Tirar o filtro Repositório: dono/repo',
+      'Tirar o filtro Busca: x',
+      'Limpar filtros',
+    ]);
+    expect(screen.getByText('Filtrar').closest('summary')?.textContent).toBe('Filtrar(4)');
+    // o período personalizado aparece no seletor do topo
+    expect(periodo().value).toBe('personalizado');
+  });
+
+  it('tirar um chip tira só aquele filtro, empilhando o endereço', async () => {
+    const t = montar({ url: '/consumo?tipo=review&repo=dono%2Frepo' });
+    await assentar();
+    const entradas = window.history.length;
+    await clicar('Tirar o filtro Tipo: Revisão');
+    expect(window.location.search).toBe('?repo=dono%2Frepo');
+    expect(window.history.length).toBe(entradas + 1);
+    expect(t.pedidos().at(-1)).toBe('/api/usage?repo=dono%2Frepo');
+    // o chip some com o clique: o foco vai ao Filtrar, que fica
+    const filtrar = screen.getByText(/^Filtrar/).closest('summary');
+    expect(document.activeElement).toBe(filtrar);
+    await clicar('Limpar filtros');
+    expect(screen.queryByRole('group', { name: 'Filtros ativos' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText(/^Filtrar/).closest('summary'));
+  });
+
+  it('o período pronto do seletor não vira chip: ele já está escrito no topo', async () => {
+    montar({ url: '/consumo?inicio=2026-11-10&fim=2026-11-16', responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-10', end: '2026-11-16' } })) });
+    await assentar();
+    expect(periodo().value).toBe('7');
+    expect(screen.queryByRole('group', { name: 'Filtros ativos' })).toBeNull();
   });
 
   it('as opções dos filtros são as que o motor listou, com o rótulo do tipo', async () => {
@@ -400,48 +508,50 @@ describe('Consumo: período e filtros no endereço', () => {
     const params = new URLSearchParams(caminho.split('?')[1] ?? '');
     return corpo(relatorioDoMotor({ range: { start: params.get('start') ?? '2026-10-18', end: params.get('end') ?? hoje } }));
   };
-  const marcados = () => PERIODOS.filter((dias) => screen.getByRole('button', { name: `${dias} dias` }).getAttribute('aria-pressed') === 'true');
-  const dica = () => screen.getByRole('note', { name: 'Como o período é lido' }).textContent;
+  const dica = () => screen.getByRole('note', { name: 'Como o período é lido', hidden: true }).textContent;
+  const escolher = async (valor: string) => { await act(async () => { fireEvent.change(periodo(), { target: { value: valor } }); }); };
 
-  it('os períodos prontos saem do último dia que o motor disse, gravam as duas datas e ficam marcados', async () => {
+  it('os períodos prontos saem do último dia que o motor disse, gravam as duas datas e ficam escolhidos', async () => {
     const t = montar({ responder: seguindo('2026-11-16') });
-    // antes da primeira resposta não há dia do motor: os botões esperam
-    expect((screen.getByRole('button', { name: '7 dias' }) as HTMLButtonElement).disabled).toBe(true);
+    // antes da primeira resposta não há dia do motor: o seletor espera
+    expect(periodo().disabled).toBe(true);
     await assentar();
     // sem datas, o padrão do motor são sempre 30 dias
-    expect(marcados()).toEqual([30]);
+    expect(periodo().value).toBe('30');
+    expect([...periodo().options].map((o) => o.textContent)).toEqual(['Últimos 7 dias', 'Últimos 30 dias', 'Últimos 90 dias']);
     expect(dica()).toBe('Sem datas, o motor mostra os 30 dias que terminam no hoje dele.');
-    await clicar('7 dias');
+    const entradas = window.history.length;
+    await escolher('7');
     expect(window.location.search).toBe('?inicio=2026-11-10&fim=2026-11-16');
+    expect(window.history.length).toBe(entradas + 1);
     expect(t.pedidos().at(-1)).toBe('/api/usage?start=2026-11-10&end=2026-11-16');
     await assentar();
-    expect(marcados()).toEqual([7]);
+    expect(periodo().value).toBe('7');
     expect(dica()).toBe('Período fixo nas duas datas: não acompanha o dia de hoje.');
-    await clicar('90 dias');
+    await escolher('90');
     expect(window.location.search).toBe('?inicio=2026-08-19&fim=2026-11-16');
     await assentar();
-    expect(marcados()).toEqual([90]);
+    expect(periodo().value).toBe('90');
   });
 
-  it('endereço só com o início, aberto no dia seguinte: a tela diz os 8 dias, e nenhum atalho fica marcado', async () => {
+  it('endereço só com o início, aberto no dia seguinte: a tela diz os 8 dias, e o seletor diz personalizado', async () => {
     montar({ url: '/consumo?inicio=2026-11-10', responder: seguindo('2026-11-17') });
     await assentar();
     expect(anuncio()).toMatch(/^Período de 10\/11\/2026 a 17\/11\/2026 \(8 dias\)/);
-    expect(marcados()).toEqual([]);
+    expect(periodo().value).toBe('personalizado');
     expect(dica()).toBe('Só com "De", o período vai dessa data até o hoje do motor e cresce a cada dia. Agora ele termina em 17/11/2026.');
     // no mesmo dia em que foi gravado (7 dias exatos) também não marca: o fim não está fixo
     cleanup();
     montar({ url: '/consumo?inicio=2026-11-10', responder: seguindo('2026-11-16') });
     await assentar();
-    expect(marcados()).toEqual([]);
+    expect(periodo().value).toBe('personalizado');
   });
 
-  it('fim do endereço diferente do fim do relatório não marca atalho', async () => {
-    // o endereço pede até o dia 17, e o motor de mentira entrega até o dia 16
+  it('fim do endereço diferente do fim do relatório não marca período pronto', async () => {
     montar({ url: '/consumo?inicio=2026-11-10&fim=2026-11-17', responder: () => corpo(relatorioDoMotor({ range: { start: '2026-11-10', end: '2026-11-16' } })) });
     await assentar();
     expect(anuncio()).toMatch(/^Período de 10\/11\/2026 a 16\/11\/2026 \(7 dias\)/);
-    expect(marcados()).toEqual([]);
+    expect(periodo().value).toBe('personalizado');
   });
 
   it('só "Até" preenchido: a dica avisa de onde o motor começa, e o que ele faz com data antiga', async () => {
@@ -464,10 +574,10 @@ describe('Consumo: período e filtros no endereço', () => {
     }
     expect(t.pedidos()).toEqual(['/api/usage']);
     expect(window.location.search).toBe('');
-    expect(screen.getByRole('alert').textContent).toBe('Data inválida: use um dia de 1970 em diante. Nada foi pedido ao motor.');
+    expect(screen.getByRole('alert', { hidden: true }).textContent).toBe('Data inválida: use um dia de 1970 em diante. Nada foi pedido ao motor.');
     await act(async () => { fireEvent.change(de, { target: { value: '2026-11-05' } }); });
     expect(de.getAttribute('aria-invalid')).toBe('false');
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('alert', { hidden: true })).toBeNull();
     expect(t.pedidos()).toEqual(['/api/usage', '/api/usage?start=2026-11-05']);
     // esvaziar o campo tira a data do endereço
     await act(async () => { fireEvent.change(de, { target: { value: '' } }); });
@@ -479,10 +589,10 @@ describe('Consumo: período e filtros no endereço', () => {
     await assentar();
     const modelo = screen.getByLabelText('Modelo');
     const idDaDica = modelo.getAttribute('aria-describedby') ?? '';
-    expect(document.getElementById(idDaDica)?.textContent).toBe('Recorta pelo modelo principal de cada execução. A tabela Por modelo ainda pode trazer outros, que são partes das mesmas execuções.');
+    expect(document.getElementById(idDaDica)?.textContent).toBe('Recorta pelo modelo principal de cada execução. A quebra Por modelo ainda pode trazer outros, que são partes das mesmas execuções.');
   });
 
-  it('as datas vão ao endereço trocando a entrada, e Limpar volta ao padrão do motor', async () => {
+  it('as datas vão ao endereço trocando a entrada, e Limpar filtros volta ao padrão do motor', async () => {
     const t = montar();
     await assentar();
     const entradas = window.history.length;
@@ -491,18 +601,25 @@ describe('Consumo: período e filtros no endereço', () => {
     expect(window.location.search).toBe('?inicio=2026-11-05&fim=2026-11-09');
     expect(window.history.length).toBe(entradas);
     expect(t.pedidos().at(-1)).toBe('/api/usage?start=2026-11-05&end=2026-11-09');
-    await clicar('Limpar período e filtros');
+    await clicar('Limpar filtros');
     expect(window.location.search).toBe('');
     expect(t.pedidos().at(-1)).toBe('/api/usage');
-    expect(screen.queryByRole('button', { name: 'Limpar período e filtros' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Limpar filtros' })).toBeNull();
   });
 
   it('a busca espera a pessoa parar de digitar, e o pedido anterior é abortado', async () => {
     vi.useFakeTimers();
     const pendentes: Array<(r: Resposta) => void> = [];
-    const t = montar({ responder: () => new Promise<Resposta>((resolver) => { pendentes.push(resolver); }) });
+    let primeira = true;
+    const t = montar({
+      responder: () => {
+        if (primeira) { primeira = false; return corpo(relatorioDoMotor()); }
+        return new Promise<Resposta>((resolver) => { pendentes.push(resolver); });
+      },
+    });
+    await assentar();
     const entradas = window.history.length;
-    const campo = screen.getByLabelText('Buscar no diário');
+    const campo = screen.getByLabelText('Buscar nas execuções');
     fireEvent.change(campo, { target: { value: 'a' } });
     await act(async () => { await vi.advanceTimersByTimeAsync(ESPERA_DA_BUSCA_MS - 1); });
     fireEvent.change(campo, { target: { value: 'ab' } });
@@ -514,11 +631,14 @@ describe('Consumo: período e filtros no endereço', () => {
     expect(window.location.search).toBe('?q=ab');
     // a busca troca a entrada do endereço, não empilha uma por tecla
     expect(window.history.length).toBe(entradas);
-    expect(t.sinais[0]?.aborted).toBe(true);
-    expect(t.sinais[1]?.aborted).toBe(false);
+    await act(async () => { fireEvent.change(campo, { target: { value: 'abc' } }); await vi.advanceTimersByTimeAsync(ESPERA_DA_BUSCA_MS); });
+    expect(t.pedidos().at(-1)).toBe('/api/usage?search=abc');
+    expect(t.sinais[1]?.aborted).toBe(true);
+    expect(t.sinais[2]?.aborted).toBe(false);
     // a resposta atrasada do pedido abortado não entra na tela
     await act(async () => { pendentes[0]?.(corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 99, costUsd: 99 }) }))); await Promise.resolve(); });
-    expect(anuncio()).toBe('Carregando o consumo.');
+    expect(anuncio()).toBe('');
+    expect(within(cartao()).queryByText('US$ 99,00')).toBeNull();
     await act(async () => { pendentes[1]?.(corpo(relatorioDoMotor())); await Promise.resolve(); await Promise.resolve(); });
     expect(anuncio()).toMatch(/5 execuções de IA/);
   });
@@ -527,8 +647,8 @@ describe('Consumo: período e filtros no endereço', () => {
     vi.useFakeTimers();
     const t = montar();
     await assentar();
-    fireEvent.change(screen.getByLabelText('Buscar no diário'), { target: { value: 'opus' } });
-    await act(async () => { fireEvent.submit(screen.getByRole('search', { name: 'Período e filtros do consumo' })); });
+    fireEvent.change(screen.getByLabelText('Buscar nas execuções'), { target: { value: 'opus' } });
+    await act(async () => { fireEvent.submit(screen.getByRole('search', { name: 'Busca nas execuções', hidden: true })); });
     expect(t.pedidos().at(-1)).toBe('/api/usage?search=opus');
     await act(async () => { await vi.advanceTimersByTimeAsync(ESPERA_DA_BUSCA_MS * 2); });
     expect(t.pedidos().filter((p) => p.includes('search=opus'))).toHaveLength(1);
@@ -541,47 +661,62 @@ describe('Consumo: período e filtros no endereço', () => {
     expect(window.location.search).toBe('?tipo=review&q=ana');
     await act(async () => { voltarPara('/consumo?q=bia'); });
     expect(t.pedidos().at(-1)).toBe('/api/usage?search=bia');
-    expect((screen.getByLabelText('Buscar no diário') as HTMLInputElement).value).toBe('bia');
+    expect((screen.getByLabelText('Buscar nas execuções') as HTMLInputElement).value).toBe('bia');
     expect((screen.getByLabelText('Tipo') as HTMLSelectElement).value).toBe('');
   });
+});
 
-  it('durante a carga o relatório anterior fica na tela, esmaecido e ocupado', async () => {
+describe('Consumo: estados', () => {
+  it('carregando: a página sem nada mostra o esqueleto, com a frase para o leitor', async () => {
+    montar({ responder: () => new Promise<Resposta>(() => {}) });
+    expect(screen.getByText('Carregando o consumo.').getAttribute('role')).toBe('status');
+    expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Custo estimado' })).toBeNull();
+    // as partes do snapshot não esperam o relatório
+    expect(resumoDa('Auditoria do registro')).toBe('Auditoria do registroUS$ 900,00 em 42 sessões');
+  });
+
+  it('trocar o período: barra no topo, o relatório anterior fica apagado e ocupado', async () => {
     const pendentes: Array<(r: Resposta) => void> = [];
     let primeira = true;
-    const { container } = montar({
+    montar({
       responder: () => {
         if (primeira) { primeira = false; return corpo(relatorioDoMotor()); }
         return new Promise<Resposta>((resolver) => { pendentes.push(resolver); });
       },
     });
     await assentar();
-    await act(async () => { fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'review' } }); });
-    const relatorio = container.querySelector('[aria-busy]');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    await act(async () => { fireEvent.change(periodo(), { target: { value: '7' } }); });
+    expect(screen.getByRole('progressbar', { name: 'Carregando o consumo do novo pedido' })).toBeTruthy();
+    const relatorio = cartao().closest('[aria-busy]');
     expect(relatorio?.getAttribute('aria-busy')).toBe('true');
-    expect(relatorio?.hasAttribute('data-esmaecida')).toBe(true);
-    expect(pares()[0]).toBe('Custo estimado: US$ 12,50');
+    expect(relatorio?.className).toContain('apagada');
+    expect(within(cartao()).getByText('US$ 12,50')).toBeTruthy();
     expect(anuncio()).toBe('');
     await act(async () => { pendentes[0]?.(corpo(relatorioDoMotor({ totals: somaDoMotor({ attempts: 4, costUsd: 10 }) }))); await Promise.resolve(); await Promise.resolve(); });
-    expect(container.querySelector('[aria-busy]')?.getAttribute('aria-busy')).toBe('false');
-    expect(pares()[0]).toBe('Custo estimado: US$ 10,00');
+    expect(cartao().closest('[aria-busy]')?.getAttribute('aria-busy')).toBe('false');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(within(cartao()).getByText('US$ 10,00')).toBeTruthy();
   });
-});
 
-describe('Consumo: estados', () => {
   it('sem consumo no período: diz isso, sem gráfico nem quebras, e com filtro a frase muda', async () => {
     const vazio = () => corpo(relatorioDoMotor({ totals: somaDoMotor(), series: [], models: [], history: { total: 0, page: 0, pages: 1, rows: [] } }));
     montar({ responder: vazio });
     await assentar();
     expect(anuncio()).toBe('Período de 18/10/2026 a 16/11/2026 (30 dias): nenhuma execução de IA.');
-    expect(screen.getByText('Nenhuma execução de IA neste período.')).toBeTruthy();
+    expect(within(cartao()).getByText('US$ 0,00')).toBeTruthy();
+    expect(within(cartao()).getByText('Nenhuma execução de IA neste período.')).toBeTruthy();
     expect(screen.getByText('Nenhuma operação neste período.')).toBeTruthy();
     expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Tabela do consumo por tipo de sessão' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Tabela do consumo por tipo de sessão', hidden: true })).toBeNull();
+    expect(() => linha('Por tipo')).toThrow();
     expect(pares()).toEqual([]);
     cleanup();
     montar({ url: '/consumo?repo=dono%2Fvazio', responder: vazio });
     await assentar();
     expect(screen.getByText('Nenhuma execução de IA neste período com os filtros escolhidos.')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Filtros ativos' })).toBeTruthy();
   });
 
   it('falha de rede: diz o erro, e Tentar de novo pede outra vez', async () => {
@@ -591,6 +726,8 @@ describe('Consumo: estados', () => {
     const alerta = screen.getByRole('alert');
     expect(alerta.textContent).toContain('Erro: Não deu para falar com o motor (falha de rede).');
     expect(anuncio()).toBe('');
+    // o erro não fica com o esqueleto por baixo
+    expect(screen.queryByText('Carregando o consumo.')).toBeNull();
     falhar = false;
     await clicar('Tentar de novo');
     await assentar();
@@ -606,7 +743,7 @@ describe('Consumo: estados', () => {
     });
     await assentar();
     expect(screen.getByRole('alert').textContent).toBe('Sem relatório: o motor respondeu que não entrega o consumo deste pedido. O que ele disse: Selecione um intervalo válido, sem datas futuras.Voltar ao período padrãoTentar de novo');
-    expect(pares()).toEqual([]);
+    expect(screen.queryByRole('region', { name: 'Custo estimado' })).toBeNull();
     await clicar('Voltar ao período padrão');
     // o período sai, o filtro fica
     expect(window.location.search).toBe('?tipo=review');
@@ -681,7 +818,7 @@ describe('Consumo: estados', () => {
 });
 
 describe('Consumo: a auditoria do registro', () => {
-  const auditoria = () => secao('Auditoria do registro');
+  const auditoria = () => linha('Auditoria do registro');
 
   it('diz em texto o total do registro e o que não virou resultado, com o custo dito estimado', async () => {
     montar();
@@ -691,9 +828,10 @@ describe('Consumo: a auditoria do registro', () => {
     expect(within(auditoria()).getByText(/^Custo calculado pelo motor.*US\$ 20,00 em 1 sessão\.$/)).toBeTruthy();
   });
 
-  it('sem a auditoria no snapshot a seção diz que ela ainda não chegou', async () => {
+  it('sem a auditoria no snapshot a linha diz que ela ainda não chegou', async () => {
     montar({ snapshot: {} });
     await assentar();
+    expect(resumoDa('Auditoria do registro')).toBe('Auditoria do registroainda não chegou');
     expect(within(auditoria()).getByText('A auditoria do registro ainda não chegou do motor.')).toBeTruthy();
   });
 
@@ -723,16 +861,16 @@ describe('Consumo: sem teto de gasto', () => {
 describe('Consumo: as sessões recentes', () => {
   const NOME = 'Tabela das sessões recentes';
 
-  it('vêm do snapshot, na ordem do motor, com as mesmas colunas do diário', async () => {
+  it('vêm do snapshot, na ordem do motor, com as mesmas colunas das execuções', async () => {
     montar();
     await assentar();
-    expect(screen.getByRole('heading', { level: 2, name: 'Sessões recentes (2)' })).toBeTruthy();
+    expect(linha('Sessões recentes').contains(secao(NOME))).toBe(true);
     const linhas = linhasDa(NOME);
     expect(linhas.map((l) => l.slice(1))).toEqual([
       ['Revisão', 'Sonnet 5', 'dono/repo#1 (abre em nova aba)', '101', '50', '1.000', '10', 'US$ 0,50', 'Concluída'],
       ['Revisão', 'Sonnet 5', 'dono/repo#2 (abre em nova aba)', '102', '50', '1.000', '10', 'US$ 0,50', 'Concluída'],
     ]);
-    expect(within(tabela(NOME)).getAllByRole('link')[0]?.getAttribute('href')).toBe('https://github.com/dono/repo/pull/1');
+    expect(within(tabela(NOME)).getAllByRole('link', { hidden: true })[0]?.getAttribute('href')).toBe('https://github.com/dono/repo/pull/1');
   });
 
   it('mostra as primeiras e deixa abrir as que o motor mandou', async () => {
@@ -740,7 +878,7 @@ describe('Consumo: as sessões recentes', () => {
     montar({ snapshot: snapshotCom(consumoDoMotor({ recentSessions: muitas })) });
     await assentar();
     expect(linhasDa(NOME)).toHaveLength(SESSOES_A_VISTA);
-    const botao = screen.getByRole('button', { name: 'Mostrar as 25 que o motor mandou' });
+    const botao = screen.getByRole('button', { name: 'Mostrar as 25 que o motor mandou', hidden: true });
     expect(botao.getAttribute('aria-expanded')).toBe('false');
     await clicar('Mostrar as 25 que o motor mandou');
     expect(linhasDa(NOME)).toHaveLength(25);
@@ -753,17 +891,19 @@ describe('Consumo: as sessões recentes', () => {
     await assentar();
     expect(linhasDa(NOME)[0]?.slice(1, 4)).toEqual(['Chat', 'Sonnet 5', 'conversa <b>x</b>']);
     expect(linhasDa(NOME)[0]?.[8]).toBe('US$ 0,50 (calculado pelo motor)');
-    expect(within(tabela(NOME)).queryByRole('link')).toBeNull();
+    expect(within(tabela(NOME)).queryByRole('link', { hidden: true })).toBeNull();
     expect(screen.getByText(/1 sessão\(ões\) chegaram em formato que esta tela não lê/)).toBeTruthy();
   });
 
-  it('sem a lista e com a lista vazia dizem coisas diferentes', async () => {
+  it('sem a lista e com a lista vazia dizem coisas diferentes, também no resumo da linha', async () => {
     montar({ snapshot: {} });
     await assentar();
+    expect(resumoDa('Sessões recentes')).toBe('Sessões recentesainda não chegaram');
     expect(screen.getByText('As sessões recentes ainda não chegaram do motor.')).toBeTruthy();
     cleanup();
     montar({ snapshot: snapshotCom(consumoDoMotor({ recentSessions: [] })) });
     await assentar();
+    expect(resumoDa('Sessões recentes')).toBe('Sessões recentesnenhuma');
     expect(screen.getByText('Nenhuma sessão registrada ainda.')).toBeTruthy();
   });
 
@@ -772,6 +912,6 @@ describe('Consumo: as sessões recentes', () => {
     await assentar();
     act(() => { t.store.trocar({ snapshot: snapshotCom(consumoDoMotor({ recentSessions: [sessaoDoMotor(0, { ref: 'dono/novo#9' }), sessaoDoMotor(1), sessaoDoMotor(2)] })) }); });
     expect(linhasDa(NOME)[0]?.[3]).toBe('dono/novo#9 (abre em nova aba)');
-    expect(screen.getByRole('heading', { level: 2, name: 'Sessões recentes (3)' })).toBeTruthy();
+    expect(resumoDa('Sessões recentes')).toBe('Sessões recentes3');
   });
 });

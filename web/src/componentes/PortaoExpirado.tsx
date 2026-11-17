@@ -5,15 +5,20 @@
 // à raiz, onde o login da frente aparece (src/estado/app.ts, perdeuOPortao).
 import type { App } from '@/estado/app';
 import { app as appDoNavegador } from '@/estado/instancia';
+import { Simbolo } from './Logo';
 import estilos from './Aplicacao.module.css';
 
 export function PortaoExpirado({ app = appDoNavegador }: { app?: App }) {
   return (
     <main className={estilos.aviso}>
+      <div className={estilos.cartao}>
+      <Simbolo grande />
+      <h1 className={estilos.titulo}>Sua sessão expirou</h1>
       <p role="alert">
         A sessão do login da frente acabou, e a página já foi recarregada uma vez sem resolver. Entre de novo para continuar.
       </p>
-      <button type="button" onClick={() => app.entrarDeNovo()}>Entrar de novo</button>
+      <button type="button" className={estilos.primario} onClick={() => app.entrarDeNovo()}>Entrar de novo</button>
+      </div>
     </main>
   );
 }

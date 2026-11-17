@@ -128,7 +128,9 @@ jq -Rs '{tipo: "editar", user: "login-da-conta", campos: {padroesRevisao: .}}' <
 ```
 
 No front, a seção Conta revisora e política da tela Sistema edita as organizações e os quatro
-campos da política. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API,
+campos da política, sem a opção `wait`: o revisor da tela não espera. Pôr um desfecho em espera
+é só pela API, como no exemplo acima, ou pelo arquivo; a tela mostra o valor `wait` que vier do
+motor e não o reenvia. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API,
 como acima, ou pelo arquivo.
 
 Toda mudança de política vai a `state/politica-historico.json` (dentro do workspace), com
@@ -193,7 +195,7 @@ no padrão.
 | chave | padrão | onde se muda |
 |---|---|---|
 | `conta` | `null` | Sistema (política e organizações, por `POST /api/accounts/edit`) e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
-| `aguardarCiParaAprovar` | `false` | Sistema, "CI obrigatório antes de aprovar" |
+| `aguardarCiParaAprovar` | `false` | API ou arquivo (o front não tem o controle desde o redesenho de 17/11/2026) |
 | `parallelReviews` | `1` (1 a 4) | Sistema, "Revisões ao mesmo tempo" |
 | `reviewModel`, `reviewEffort` | `""` | Sistema ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
 | `people` | `{}` | Time |

@@ -1,65 +1,112 @@
-/* Identidade do Farol: tema escuro por padrão, claro como alternativa. As cores vêm da tela
-   antiga (a `ui/app.css`, que saiu do motor). As variáveis terminadas em -texto, --foco, --borda-campo e
-   --borda-botao são daqui: existem para o contraste AA nos dois temas, e
-   src/tema/contraste.test.ts confere. No claro o --accent é mais escuro que o da tela antiga
-   (#e08700 dava 2,75:1 sobre o cartão branco): o botão primário pede 3:1 contra o fundo. */
+/* Identidade BIUD: tema claro por padrão, escuro como alternativa (a troca fica na casca).
+   A primária (#c7154b) é usada com parcimônia: botão principal, aba ativa e barra de progresso.
+   Estado se diz por bolinha e chip com texto, nunca só por cor.
+
+   As variáveis terminadas em -texto, --foco, --borda-campo e --borda-botao existem para o
+   contraste AA nos dois temas, e src/tema/contraste.test.ts confere. O contorno de campo e o
+   de botão são mais escuros que o cinza claro do desenho (#c6ccd8 dava 1,6:1 sobre o branco):
+   componente de interface pede 3:1. O texto apagado (--apagado) também é mais escuro que o
+   #8a9099 do desenho, que fica só para a bolinha cinza (--neutro). */
 :root {
-  --bg: #0b0e14;
-  --surface: #121722;
-  --surface-2: #1a2130;
-  --border: #232c3d;
-  --text: #e7ecf5;
-  --muted: #8b97ab;
-  --accent: #ffb454;
-  --accent-soft: rgba(255, 180, 84, .14);
-  --accent-ink: #201302;
-  --ok: #4cc38a;
-  --ok-soft: rgba(76, 195, 138, .14);
-  --danger: #f2707a;
-  --danger-soft: rgba(242, 112, 122, .12);
-  --info: #6ca8f2;
-  --info-soft: rgba(108, 168, 242, .12);
-  --logo-tower: #e7ecf5;
-  --shadow: 0 8px 24px rgba(0, 0, 0, .35);
-  --radius: 12px;
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f6;
+  --hover: #fafbfc;
+  --border: #e6ebf3;
+  --borda-suave: #f0f2f6;
+  --text: #2b2d30;
+  --muted: #4f5257;
+  --apagado: #666b74;
+  --accent: #c7154b;
+  --accent-soft: #fae7f0;
+  --accent-ink: #ffffff;
+  --accent-texto: #9d103b;
+  --link: #9d103b;
+  --link-hover: #730c2b;
+  --ok: #1f9d55;
+  --ok-soft: #e6f8ec;
+  --aviso: #d99a00;
+  --aviso-soft: #fff4dc;
+  --danger: #c62f3b;
+  --danger-soft: #fdecec;
+  --neutro: #8a9099;
+  --neutro-soft: #eef1f6;
+  --info: #3c4048;
+  --info-soft: #eef1f6;
+  --erro-fundo: #fff8f8;
+  --erro-borda: #f4c7cc;
+  --nota-fundo: #fffbf1;
+  --nota-borda: #f3dfb0;
+  --codigo-fundo: #2b2d30;
+  --codigo-texto: #f3f3f3;
+  --esqueleto: #eef1f6;
+  --esqueleto-brilho: #f7f8fb;
+  --divisor-marca: #d6dde8;
+  --shadow: 0 12px 32px rgba(43, 45, 48, .12);
+  --radius: 16px;
+  --radius-linha: 14px;
+  --radius-botao: 10px;
   /* cor de estado usada como TEXTO sobre o fundo suave dela */
-  --ok-texto: #4cc38a;
-  --danger-texto: #f2707a;
-  --info-texto: #6ca8f2;
-  /* anel de foco e marca da aba ativa: 3:1 contra o fundo */
-  --foco: #ffb454;
+  --ok-texto: #11683a;
+  --aviso-texto: #7a4b00;
+  --danger-texto: #a3212b;
+  --neutro-texto: #3c4048;
+  --info-texto: #3c4048;
+  /* anel de foco: 3:1 contra o fundo */
+  --foco: #c7154b;
   /* contorno de campo de formulário: 3:1 contra a superfície */
-  --borda-campo: #6b7a94;
-  /* contorno de botão sem preenchimento (Sair, troca de tema); no escuro é o tom de --border */
-  --borda-botao: #232c3d;
-  color-scheme: dark;
+  --borda-campo: #7d838c;
+  /* contorno de botão sem preenchimento */
+  --borda-botao: #7d838c;
+  --fonte: var(--fonte-mulish), "Mulish", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
 }
 
-:root[data-theme="light"] {
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --surface-2: #eef1f6;
-  --border: #dfe5ee;
-  --text: #1c2536;
-  --muted: #56637a;
-  --accent: #c47500;
-  --accent-soft: rgba(196, 117, 0, .12);
-  --accent-ink: #201302;
-  --ok: #1f9d63;
-  --ok-soft: rgba(31, 157, 99, .12);
-  --danger: #d64550;
-  --danger-soft: rgba(214, 69, 80, .1);
-  --info: #2f6fd6;
-  --info-soft: rgba(47, 111, 214, .1);
-  --logo-tower: #33415c;
-  --shadow: 0 8px 24px rgba(23, 34, 56, .1);
-  --ok-texto: #126b41;
-  --danger-texto: #b12c39;
-  --info-texto: #2459b3;
-  --foco: #a35f00;
-  --borda-campo: #77849a;
-  --borda-botao: #77849a;
-  color-scheme: light;
+:root[data-theme="dark"] {
+  --bg: #121316;
+  --surface: #1b1d21;
+  --surface-2: #24272c;
+  --hover: #212429;
+  --border: #2e3238;
+  --borda-suave: #262a2f;
+  --text: #eceef2;
+  --muted: #b1b6be;
+  --apagado: #969ca6;
+  --accent: #f0628f;
+  --accent-soft: rgba(240, 98, 143, .16);
+  --accent-ink: #1a0610;
+  --accent-texto: #f7a1bd;
+  --link: #f7a1bd;
+  --link-hover: #fbc4d6;
+  --ok: #4cc38a;
+  --ok-soft: rgba(76, 195, 138, .14);
+  --aviso: #e8b030;
+  --aviso-soft: rgba(232, 176, 48, .14);
+  --danger: #f2707a;
+  --danger-soft: rgba(242, 112, 122, .14);
+  --neutro: #8f95a0;
+  --neutro-soft: rgba(143, 149, 160, .16);
+  --info: #c9cdd4;
+  --info-soft: rgba(143, 149, 160, .16);
+  --erro-fundo: #2a1c1e;
+  --erro-borda: #5a2c32;
+  --nota-fundo: #2a2416;
+  --nota-borda: #5a4a22;
+  --codigo-fundo: #0d0e10;
+  --codigo-texto: #eceef2;
+  --esqueleto: #24272c;
+  --esqueleto-brilho: #2c3036;
+  --divisor-marca: #3a3f46;
+  --shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  --ok-texto: #6fdaa6;
+  --aviso-texto: #f2c766;
+  --danger-texto: #f8959c;
+  --neutro-texto: #d3d6dc;
+  --info-texto: #d3d6dc;
+  --foco: #f0628f;
+  --borda-campo: #77808c;
+  --borda-botao: #3a3f46;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -69,12 +116,15 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font: 15px/1.5 var(--fonte);
   -webkit-font-smoothing: antialiased;
 }
 
-code {
+code, pre {
   font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+}
+
+code {
   font-size: .92em;
   background: var(--surface-2);
   padding: 1px 5px;
@@ -82,9 +132,10 @@ code {
   overflow-wrap: anywhere;
 }
 
-a { color: var(--info-texto); }
-button, input { font: inherit; }
-h1, h2, p { margin: 0; }
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }
+button, input, select, textarea { font: inherit; }
+h1, h2, h3, p { margin: 0; }
 
 :focus-visible {
   outline: 2px solid var(--foco);

@@ -3,8 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ContaRevisora } from '@/contratos/sistema';
 import {
-  DOMINIO_DA_POLITICA, PUBLICA, ampliacoesDaConta, camposAlterados, corpoDaConta, efeitoDaRevisaoAutomatica, efeitoDoDesfecho,
-  marcaDaConta, nomeDoCampoDaConta, notaDasRessalvasTravadas, organizacaoValida, organizacoesMescladas, rascunhoDaConta, refazerConta, rotuloDoValor,
+  DOMINIO_DA_POLITICA, OPCOES_DA_TELA, PUBLICA, ampliacoesDaConta, camposAlterados, corpoDaConta, efeitoDaRevisaoAutomatica, efeitoDoDesfecho,
+  marcaDaConta, nomeDoCampoDaConta, notaDasRessalvasTravadas, organizacaoValida, organizacoesMescladas, rascunhoDaConta, refazerConta, resumoDaPolitica, rotuloDoValor,
   temOrganizacao, textoDoToken, textoDosCampos, textosDosConflitos, type RascunhoDaConta,
 } from './politica';
 
@@ -38,6 +38,14 @@ describe('a política é a do motor', () => {
   it('o valor que publica sozinho, por desfecho', () => {
     expect(PUBLICA).toEqual({ onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' });
   });
+
+  it('a tela só oferece publicar: nenhuma opção é esperar, e toda opção está no domínio do motor', () => {
+    expect(OPCOES_DA_TELA).toEqual({ onClean: ['approve'], onCaveats: ['approve'], onReject: ['request_changes'] });
+    for (const campo of ['onClean', 'onCaveats', 'onReject'] as const) {
+      expect(OPCOES_DA_TELA[campo]).not.toContain('wait');
+      for (const opcao of OPCOES_DA_TELA[campo]) expect(DOMINIO_DA_POLITICA[campo] as readonly string[]).toContain(opcao);
+    }
+  });
 });
 
 // `visto` é o que a pessoa tinha na tela ao começar a editar; `conta` é o motor de agora.
@@ -49,8 +57,14 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
   });
 
   it('um campo editado vai sozinho', () => {
-    expect(editar(ABERTA, { onReject: 'wait' })).toEqual({ onReject: 'wait' });
+    expect(editar(CONTA, { onReject: 'request_changes' })).toEqual({ onReject: 'request_changes' });
     expect(editar(CONTA, { autoReview: true })).toEqual({ autoReview: true });
+  });
+
+  it('esperar nunca vai, nem quando o formulário o tem (a tela não oferece; o revisor nunca espera)', () => {
+    expect(editar(ABERTA, { onClean: 'wait' })).toEqual({});
+    expect(editar(ABERTA, { onReject: 'wait', onCaveats: 'wait' })).toEqual({});
+    expect(editar(ABERTA, { onReject: 'wait', autoReview: false })).toEqual({ autoReview: false });
   });
 
   it('as organizações vão como lista inteira', () => {
@@ -58,9 +72,10 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
     expect(editar(CONTA, { owners: [] })).toEqual({ owners: [] });
   });
 
-  it('com o limpo em espera, o com ressalvas não vai: o motor o põe em espera sozinho', () => {
-    expect(editar(ABERTA, { onClean: 'wait' })).toEqual({ onClean: 'wait' });
+  it('com o limpo em espera (vindo do motor), o com ressalvas não vai: o motor o põe em espera sozinho', () => {
     expect(editar(CONTA, { onCaveats: 'approve' })).toEqual({});
+    // trocar o limpo para publicar libera o com ressalvas
+    expect(editar(CONTA, { onClean: 'approve', onCaveats: 'approve' })).toEqual({ onClean: 'approve', onCaveats: 'approve' });
   });
 
   it('valor fora do domínio, ou vazio, nunca vai (vazio faria o motor regravar o padrão, que publica)', () => {
@@ -70,15 +85,15 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
   });
 
   it('campo que OUTRA pessoa mudou no motor não vai no corpo, e por isso não é revertido', () => {
-    const visto = rascunhoDaConta(ABERTA);
-    // ela só mexeu na reprovada; nesse meio alguém pôs a limpa em espera e tirou a revisão automática
-    const agora: ContaRevisora = { ...ABERTA, onClean: 'wait', onCaveats: 'wait', autoReview: false };
-    expect(camposAlterados(visto, { ...visto, onReject: 'wait' }, agora)).toEqual({ onReject: 'wait' });
+    const visto = rascunhoDaConta(CONTA);
+    // ela só mexeu na reprovada; nesse meio alguém pôs a limpa para publicar e ligou a revisão automática
+    const agora: ContaRevisora = { ...CONTA, onClean: 'approve', autoReview: true };
+    expect(camposAlterados(visto, { ...visto, onReject: 'request_changes' }, agora)).toEqual({ onReject: 'request_changes' });
   });
 
   it('o que ela alterou e o motor já tem igual não vai de novo', () => {
-    const visto = rascunhoDaConta(ABERTA);
-    expect(camposAlterados(visto, { ...visto, onReject: 'wait' }, { ...ABERTA, onReject: 'wait' })).toEqual({});
+    const visto = rascunhoDaConta(CONTA);
+    expect(camposAlterados(visto, { ...visto, onReject: 'request_changes' }, { ...CONTA, onReject: 'request_changes' })).toEqual({});
   });
 
   it('organização que outra pessoa pôs ou tirou nesse meio fica como o motor a tem', () => {
@@ -93,7 +108,7 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
   });
 
   it('o corpo é a operação de editar, com a conta e os campos', () => {
-    expect(corpoDaConta('farol-bot', { onClean: 'wait' })).toEqual({ tipo: 'editar', user: 'farol-bot', campos: { onClean: 'wait' } });
+    expect(corpoDaConta('farol-bot', { onClean: 'approve' })).toEqual({ tipo: 'editar', user: 'farol-bot', campos: { onClean: 'approve' } });
   });
 });
 
@@ -120,7 +135,7 @@ describe('refazerConta: o rascunho sobre o valor novo do motor', () => {
     const rascunho = { ...visto, onClean: 'approve', autoReview: true };
     expect(textosDosConflitos(['onClean', 'autoReview'], conta, rascunho)).toEqual([
       'Revisão automática: no motor agora está "desligada", e no seu formulário, "ligada". Salvar grava o seu.',
-      'Revisão limpa: no motor agora está "esperar você", e no seu formulário, "publicar a aprovação sozinho". Salvar grava o seu.',
+      'Revisão limpa: no motor agora está "esperar (definido no motor)", e no seu formulário, "publicar a aprovação sozinho". Salvar grava o seu.',
     ]);
     expect(textosDosConflitos(['onClean'], conta, { ...rascunho, onClean: 'wait' })).toEqual([]);
     expect(textosDosConflitos([], conta, rascunho)).toEqual([]);
@@ -128,11 +143,9 @@ describe('refazerConta: o rascunho sobre o valor novo do motor', () => {
 });
 
 describe('o com ressalvas quando o limpo espera', () => {
-  it('a nota diz o ajuste da tela quando o campo estava em publicar, e só a regra quando já esperava', () => {
-    const aberto = rascunhoDaConta(ABERTA);
-    expect(notaDasRessalvasTravadas({ ...aberto, onClean: 'wait' })).toContain('Ajuste da tela: este campo estava em "publicar a aprovação sozinho"');
-    expect(notaDasRessalvasTravadas({ ...aberto, onClean: 'wait' })).toContain('ele volta a "publicar a aprovação sozinho"');
-    expect(notaDasRessalvasTravadas(rascunhoDaConta(CONTA))).toBe('Espera você: com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo).');
+  it('a nota diz a regra do motor e como liberar, e o valor do formulário quando ele difere', () => {
+    expect(notaDasRessalvasTravadas(rascunhoDaConta(CONTA))).toBe('Esperar (definido no motor): com a revisão limpa em espera, o motor põe esta em espera também (o com ressalvas nunca é mais permissivo que o limpo). Troque a limpa para publicar para liberar este campo.');
+    expect(notaDasRessalvasTravadas({ ...rascunhoDaConta(CONTA), onCaveats: 'approve' })).toContain('Este campo está em "publicar a aprovação sozinho" no formulário');
   });
 });
 
@@ -167,12 +180,14 @@ describe('textos', () => {
     expect(efeitoDoDesfecho('onClean', 'approve')).toContain('APPROVE');
     expect(efeitoDoDesfecho('onCaveats', 'approve')).toContain('mesmo com ressalvas');
     expect(efeitoDoDesfecho('onReject', 'request_changes')).toContain('REQUEST_CHANGES');
-    expect(efeitoDoDesfecho('onReject', 'wait')).toContain('Precisa de você');
+    // o esperar só existe quando vem do motor: o texto diz isso e não promete mesa nem clique
+    expect(efeitoDoDesfecho('onReject', 'wait')).toContain('definido no motor');
+    expect(efeitoDoDesfecho('onReject', 'wait')).not.toMatch(/Precisa de você|seu clique/);
     expect(efeitoDoDesfecho('onClean', 'merge')).toContain('não conhece');
     expect(efeitoDoDesfecho('onClean', undefined)).toContain('não conhece');
     expect(rotuloDoValor('onClean', 'approve')).toBe('Publicar a aprovação sozinho');
     expect(rotuloDoValor('onReject', 'request_changes')).toBe('Publicar o pedido de mudanças sozinho');
-    expect(rotuloDoValor('onReject', 'wait')).toBe('Esperar você');
+    expect(rotuloDoValor('onReject', 'wait')).toBe('Esperar (definido no motor)');
     expect(rotuloDoValor('onClean', 'merge')).toBe('merge (valor que esta tela não conhece)');
   });
 
@@ -183,10 +198,18 @@ describe('textos', () => {
     expect(textoDoToken(true)).toContain('Presente');
     expect(textoDoToken(false)).toContain('Ausente');
     expect(textoDoToken(undefined)).toBe('O motor não informou.');
-    expect(textoDosCampos({ onClean: 'wait', owners: ['biudtech', 'acme'], autoReview: true })).toBe('organizações monitoradas: biudtech, acme; revisão automática: ligada; revisão limpa: esperar você');
+    expect(textoDosCampos({ onClean: 'approve', owners: ['biudtech', 'acme'], autoReview: true })).toBe('organizações monitoradas: biudtech, acme; revisão automática: ligada; revisão limpa: publicar sozinho');
     expect(textoDosCampos({ owners: [] })).toBe('organizações monitoradas: nenhuma');
     expect(nomeDoCampoDaConta('onCaveats')).toBe('revisão com ressalvas');
     expect(nomeDoCampoDaConta('constructor')).toBe('constructor');
+  });
+
+  it('o resumo da política na linha fechada', () => {
+    expect(resumoDaPolitica(ABERTA)).toBe('publica sozinho');
+    expect(resumoDaPolitica({ ...ABERTA, autoReview: false })).toBe('revisão automática desligada');
+    expect(resumoDaPolitica({ ...ABERTA, onClean: 'wait', onCaveats: 'wait' })).toBe('2 desfechos esperam, definido no motor');
+    expect(resumoDaPolitica({ ...ABERTA, onReject: 'wait' })).toBe('1 desfecho espera, definido no motor');
+    expect(resumoDaPolitica({ autoReview: true })).toBe('política incompleta');
   });
 
   it('nome de organização: letras, dígitos e hífen, sem hífen nas pontas, até 39', () => {

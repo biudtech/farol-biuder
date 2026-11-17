@@ -1,17 +1,17 @@
 'use client';
 
 // A seção Perfil do Claude: os perfis que o motor tem, o tipo de cada um, se a credencial está
-// presente (só a presença: chave e login nunca saem do motor) e o teste do perfil. Só leitura:
+// presente (só a presença: chave e login nunca saem do motor) e o teste do perfil. É só o
+// miolo: a linha que abre é do Sistema.tsx. Só leitura:
 // esta tela não cria perfil, não digita chave, não faz login e não tem teto de gasto. Nenhum
 // POST /api/settings com `claudeProfiles` sai daqui.
 //
 // Decisão de 16/11/2026: o revisor não trava por gasto. O motor não tem teto, e a tela não
 // mostra, não edita nem avisa teto: o campo que um config antigo ainda traga é ignorado.
-import { useId } from 'react';
+import { Botao, Chip, ui } from '@/componentes/ui';
 import { lerTesteDePerfil, type CampoDoTeste, type ConfigDoSistema, type PerfilDoClaude as Perfil, type PerfisDoClaude, type Saude, type TesteDePerfil, type UsoDoPlano } from '@/contratos/sistema';
 import { dataHora } from '@/radar/formato';
 import type { Cliente } from '@/transporte/cliente';
-import comuns from '../radar/Radar.module.css';
 import { Par } from './Formulario';
 import { useChamada } from './useChamada';
 import estilos from './Sistema.module.css';
@@ -53,11 +53,11 @@ function textoDoCampo(campo: CampoDoTeste): string {
 }
 
 function ResultadoDoTeste({ teste }: { teste: TesteDePerfil }) {
-  if (!teste.ok) return <p className={comuns.erroDoCampo}>Erro: o motor não testou o perfil{teste.motivo ? `: ${teste.motivo}` : teste.code ? ` (${teste.code})` : ' e não disse o motivo'}.</p>;
+  if (!teste.ok) return <p className={ui.erro}>Erro: o motor não testou o perfil{teste.motivo ? `: ${teste.motivo}` : teste.code ? ` (${teste.code})` : ' e não disse o motivo'}.</p>;
   return (
     <>
-      <p className={comuns.nota}>O motor testou o perfil e não gravou nada.{teste.aviso ? ` Aviso: ${teste.aviso}.` : ''}</p>
-      <dl className={estilos.campos}>
+      <p className={ui.mini}>O motor testou o perfil e não gravou nada.{teste.aviso ? ` Aviso: ${teste.aviso}.` : ''}</p>
+      <dl className={estilos.pares}>
         {Object.entries(teste.campos).map(([nome, campo]) => <Par key={nome} nome={NOME_DO_CAMPO[nome] ?? nome}>{textoDoCampo(campo)}</Par>)}
       </dl>
     </>
@@ -78,14 +78,19 @@ function CartaoDoPerfil({ perfil, cliente, padrao, pronto, uso }: PropsDoPerfil)
   const login = textoDoLogin(uso);
   const deChave = perfil.kind === 'apikey';
 
+  const estado = deChave
+    ? (perfil.temChave === true ? { tom: 'ok' as const, texto: 'Chave presente' } : { tom: 'ruim' as const, texto: perfil.temChave === false ? 'Sem chave' : 'Sem dado' })
+    : (pronto === true ? { tom: 'ok' as const, texto: 'Login presente' } : { tom: pronto === false ? 'ruim' as const : 'neutro' as const, texto: pronto === false ? 'Sem login' : 'Sem dado' });
+
   return (
     <li className={estilos.item}>
       <h3 className={estilos.tituloDoItem}>
         <span>{nome}</span>
-        <span className={comuns.selo}>{TIPO[perfil.kind ?? ''] ?? 'Tipo que esta tela não conhece'}</span>
-        {padrao ? <span className={comuns.selo}>Perfil padrão</span> : null}
+        <Chip pequeno>{TIPO[perfil.kind ?? ''] ?? 'Tipo que esta tela não conhece'}</Chip>
+        {padrao ? <Chip pequeno tom="marca">Perfil padrão</Chip> : null}
+        <span className={ui.empurra}><Chip pequeno tom={estado.tom}>{estado.texto}</Chip></span>
       </h3>
-      <dl className={estilos.campos}>
+      <dl className={estilos.pares}>
         <Par nome="Credencial">{textoDaCredencial(perfil, pronto)}</Par>
         {login ? <Par nome="Validade do login">{login}</Par> : null}
         {perfil.baseUrl ? <Par nome="Endereço para onde a chave vai">{perfil.baseUrl}</Par> : null}
@@ -97,25 +102,24 @@ function CartaoDoPerfil({ perfil, cliente, padrao, pronto, uso }: PropsDoPerfil)
         )) : null}
       </dl>
 
-      <p className={comuns.meta}>
+      <p className={ui.mini}>
         {deChave
           ? 'Testar confere só que o perfil existe e que tem chave preenchida. Não chama a Anthropic: não consome nada, e por isso não prova que a chave vale. Nada é gravado.'
           : 'Testar roda a verificação de login do Claude Code no motor, contra uma cópia da configuração do perfil: diz se há login e de quem. Não chama modelo, não consome o plano e não grava nada.'}
       </p>
-      <div className={comuns.botoes}>
-        <button
-          type="button"
-          className={comuns.botao}
-          disabled={teste.carregando}
+      <div className={ui.fila}>
+        <Botao
+          pequeno
+          ocupado={teste.carregando ? 'Testando…' : false}
           aria-label={teste.carregando ? `Testando o perfil ${nome}` : `Testar o perfil ${nome}`}
           onClick={() => { void teste.chamar((sinal) => cliente.post(ROTA_DO_TESTE_DE_PERFIL, { profileId: perfil.id }, lerTesteDePerfil, { sinal })); }}
         >
-          {teste.carregando ? 'Testando…' : 'Testar perfil'}
-        </button>
+          Testar perfil
+        </Botao>
       </div>
       <div role="status" aria-live="polite" aria-label={`Resultado do teste do perfil ${nome}`}>
-        {teste.carregando ? <p className={comuns.meta}>O motor está testando o perfil.</p> : null}
-        {!teste.carregando && teste.erro ? <p className={comuns.erroDoCampo}>Erro: {teste.erro}</p> : null}
+        {teste.carregando ? <p className={ui.mini}>O motor está testando o perfil.</p> : null}
+        {!teste.carregando && teste.erro ? <p className={ui.erro}>Erro: {teste.erro}</p> : null}
         {!teste.carregando && !teste.erro && teste.dados ? <ResultadoDoTeste teste={teste.dados} /> : null}
       </div>
     </li>
@@ -130,23 +134,21 @@ interface Props {
 }
 
 export function PerfilDoClaude({ cliente, config, perfis, saude }: Props) {
-  const idDoTitulo = useId();
   const lista = config?.claudeProfiles;
   const segredos = config?.segredosDescartados ?? 0;
 
   return (
-    <section id="claude" className={estilos.secao} aria-labelledby={idDoTitulo}>
-      <h2 id={idDoTitulo} className={estilos.tituloDaSecao}>Perfil do Claude</h2>
-      <p className={comuns.meta}>
+    <>
+      <p className={ui.mini}>
         O motor roda as sessões de revisão com o perfil padrão, se ele estiver utilizável; senão, com o primeiro utilizável da lista. Esta seção é só leitura: criar ou tirar perfil, digitar chave de API e fazer o login da assinatura não se fazem por esta tela, que não tem campo para segredo.
       </p>
       {segredos > 0 ? (
-        <p className={`${comuns.nota} ${comuns.bloqueio}`} role="alert">
+        <p className={ui.erro} role="alert">
           Atenção: o motor mandou {segredos} campo(s) com cara de segredo junto dos perfis. Esta tela os descartou sem guardar nem mostrar, mas isso é defeito do motor: avise quem o mantém.
         </p>
       ) : null}
-      {!lista ? <p className={`${comuns.nota} ${comuns.bloqueio}`}>Atenção: o motor não mandou a lista de perfis do Claude a esta tela.</p> : null}
-      {lista && !lista.length ? <p className={comuns.vazio}>O motor não tem perfil do Claude: nenhuma sessão de revisão abre até um perfil ser criado no motor.</p> : null}
+      {!lista ? <p className={ui.nota}>Atenção: o motor não mandou a lista de perfis do Claude a esta tela.</p> : null}
+      {lista && !lista.length ? <p className={ui.vazio}>O motor não tem perfil do Claude: nenhuma sessão de revisão abre até um perfil ser criado no motor.</p> : null}
       {lista?.length ? (
         <ul className={estilos.itens} aria-label="Perfis do Claude">
           {lista.map((perfil) => (
@@ -161,6 +163,6 @@ export function PerfilDoClaude({ cliente, config, perfis, saude }: Props) {
           ))}
         </ul>
       ) : null}
-    </section>
+    </>
   );
 }

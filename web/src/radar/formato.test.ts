@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chavesDoFeed, dataComAno, dataHora, hora, linkDoPr, nomeDoPr, prDaUrl, textoDaEspera, textoDaRetentativa, textoDoEstacionado,
-  textoDoParecer,
+  chaveCurta, chavesDoFeed, dataComAno, dataHora, dia, hora, horaCurta, linkDoPr, nomeDoPr, prDaUrl, repoDaChave, textoDaEspera,
+  textoDoEstacionado,
 } from './formato';
 
 // 16/11/2026 14:32:05 em UTC
 const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
 
 describe('nome e link do PR', () => {
+  it('a chave curta e o repositório tiram o dono, e chave fora do formato volta como veio', () => {
+    expect(chaveCurta('biudtech/biud-esg#678')).toBe('biud-esg#678');
+    expect(repoDaChave('biudtech/biud-esg#678')).toBe('biud-esg');
+    expect(chaveCurta('torta')).toBe('torta');
+    expect(repoDaChave('torta')).toBe('torta');
+  });
+
   it('a chave do motor vira o nome que o botão diz', () => {
     expect(nomeDoPr('dono/repo#123')).toBe('PR #123 de dono/repo');
     expect(nomeDoPr('Outra-Org/biblioteca.web#7')).toBe('PR #7 de Outra-Org/biblioteca.web');
@@ -62,6 +69,11 @@ describe('datas', () => {
     expect(dataHora('2026-11-16T14:32:05.000Z', 'UTC')).toBe('16/11, 14:32');
     expect(dataHora(INSTANTE, 'America/Sao_Paulo')).toBe('16/11, 11:32');
     expect(hora(INSTANTE, 'UTC')).toBe('14:32:05');
+    expect(horaCurta(INSTANTE, 'UTC')).toBe('14:32');
+    expect(dia(INSTANTE, 'UTC')).toBe('16/11/2026');
+    // o dia é o do fuso: 23h em São Paulo já é o dia seguinte em UTC
+    expect(dia(Date.UTC(2026, 10, 17, 2), 'America/Sao_Paulo')).toBe('16/11/2026');
+    expect(dia(0, 'UTC')).toBe('');
   });
 
   it('sem hora conhecida devolve vazio, e não uma data inventada', () => {
@@ -70,19 +82,6 @@ describe('datas', () => {
 });
 
 describe('frases', () => {
-  it('parecer conhecido ganha rótulo; desconhecido ou ausente não aparece', () => {
-    expect(textoDoParecer('approve')).toBe('Parecer da revisão: aprovar');
-    expect(textoDoParecer('request_changes')).toBe('Parecer da revisão: pedir mudanças');
-    expect(textoDoParecer('outro')).toBe('');
-    expect(textoDoParecer('toString')).toBe('');
-    expect(textoDoParecer(undefined)).toBe('');
-  });
-
-  it('retentativa diz se o motor ainda tenta ou desistiu', () => {
-    expect(textoDaRetentativa({ attempts: 1, exhausted: false })).toMatch(/tentando de novo sozinho/);
-    expect(textoDaRetentativa({ attempts: 4, exhausted: true })).toMatch(/desistiu.*4 tentativa/);
-  });
-
   it('espera diz a posição, o motivo e as vagas quando o agendador mediu', () => {
     expect(textoDaEspera({ posicao: 2, total: 3, motivo: 'limite-conta', ocupadas: 1, limite: 1 }))
       .toBe('Na fila de execução, posição 2 de 3. Limite de revisões simultâneas da conta atingido (1/1).');

@@ -1,12 +1,14 @@
 'use client';
 
-// A busca e os filtros do Histórico. Quem filtra é o motor: aqui só se escolhe. A busca espera
-// um instante depois da última tecla antes de ir ao endereço (e dali ao motor); Enter manda na
-// hora. Os filtros mandam ao trocar.
-import { useEffect, useId, useState } from 'react';
-import { TETO_DA_BUSCA, temFiltro, type Consulta } from '@/historico/consulta';
+// A busca e os filtros do Histórico. Quem filtra é o motor: aqui só se escolhe. A busca fica
+// sempre à vista e espera um instante depois da última tecla antes de ir ao endereço (e dali
+// ao motor); Enter manda na hora. Os filtros (repositório e o que foi publicado, os dois que
+// GET /api/decisions aceita) ficam atrás do botão Filtrar e mandam ao trocar; os que estão
+// valendo aparecem embaixo como chips, cada um com o seu X.
+import { useEffect, useId, useRef, useState } from 'react';
+import { TETO_DA_BUSCA, type Consulta } from '@/historico/consulta';
 import { FILTROS_DE_DESFECHO } from '@/historico/rotulos';
-import comuns from '../radar/Radar.module.css';
+import { Chip, ui } from '../ui';
 import estilos from './Historico.module.css';
 
 // quanto a busca espera depois da última tecla
@@ -18,10 +20,13 @@ interface Props {
   repos: readonly string[];
   aoBuscar(q: string): void;
   aoFiltrar(filtro: { veredito?: string; repo?: string }): void;
-  aoLimpar(): void;
 }
 
-export function Filtros({ consulta, repos, aoBuscar, aoFiltrar, aoLimpar }: Props) {
+function rotuloDoDesfecho(valor: string): string {
+  return FILTROS_DE_DESFECHO.find(([v]) => v === valor)?.[1] ?? `${valor} (valor do endereço)`;
+}
+
+export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
   const [texto, setTexto] = useState(consulta.q);
   // O `q` do endereço que este campo já refletiu, e o que ele mandou e ainda não viu voltar.
   // Quando o endereço muda por fora (voltar do navegador, Limpar), o campo acompanha; quando
@@ -44,72 +49,96 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar, aoLimpar }: Prop
   }, [texto, consulta.q, aoBuscar]);
 
   const idDaBusca = useId();
+  // O X do chip e o Limpar filtros somem com o clique: o foco vai ao Filtrar, que fica.
+  const filtrar = useRef<HTMLElement>(null);
+  const tirar = (mudanca: Parameters<typeof aoFiltrar>[0]) => {
+    filtrar.current?.focus();
+    aoFiltrar(mudanca);
+  };
   const idDaDica = useId();
   const idDoDesfecho = useId();
   const idDoRepo = useId();
   const desfechoConhecido = consulta.veredito === '' || FILTROS_DE_DESFECHO.some(([valor]) => valor === consulta.veredito);
   const repoNaLista = consulta.repo === '' || repos.some((repo) => repo.toLowerCase() === consulta.repo.toLowerCase());
   const repoEscolhido = repos.find((repo) => repo.toLowerCase() === consulta.repo.toLowerCase()) ?? consulta.repo;
+  const ativos = (consulta.repo ? 1 : 0) + (consulta.veredito ? 1 : 0);
 
   return (
-    <form
-      className={estilos.filtros}
-      role="search"
-      aria-label="Busca e filtros do histórico"
-      onSubmit={(evento) => {
-        evento.preventDefault();
-        if (texto === consulta.q) return;
-        setMandado(texto);
-        aoBuscar(texto);
-      }}
-    >
-      <div className={estilos.campo}>
-        <label className={comuns.rotulo} htmlFor={idDaBusca}>Buscar</label>
+    <div className={estilos.consulta}>
+      <form
+        className={estilos.busca}
+        role="search"
+        aria-label="Busca e filtros do histórico"
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          if (texto === consulta.q) return;
+          setMandado(texto);
+          aoBuscar(texto);
+        }}
+      >
+        <label className={ui.soLeitor} htmlFor={idDaBusca}>Buscar</label>
         <input
           id={idDaBusca}
-          className={comuns.entrada}
+          className={`${ui.campo} ${estilos.campoDeBusca}`}
           type="search"
           value={texto}
           maxLength={TETO_DA_BUSCA}
+          placeholder="Buscar por repositório, PR, título ou autor"
           autoComplete="off"
           spellCheck={false}
           aria-describedby={idDaDica}
           onChange={(evento) => setTexto(evento.target.value)}
         />
-        <p id={idDaDica} className={comuns.meta}>Repositório, número, título, autor do PR ou card. Todos os termos têm de aparecer.</p>
-      </div>
+        <p id={idDaDica} className={ui.soLeitor}>Repositório, número, título, autor do PR ou card. Todos os termos têm de aparecer.</p>
 
-      <div className={estilos.campo}>
-        <label className={comuns.rotulo} htmlFor={idDoDesfecho}>O que foi publicado</label>
-        <select id={idDoDesfecho} className={comuns.entrada} value={consulta.veredito} onChange={(evento) => aoFiltrar({ veredito: evento.target.value })}>
-          <option value="">Todos</option>
-          {FILTROS_DE_DESFECHO.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
-          {desfechoConhecido ? null : <option value={consulta.veredito}>{consulta.veredito} (valor do endereço)</option>}
-        </select>
-      </div>
+        <details className={ui.gaveta}>
+          <summary ref={filtrar} className={ui.botao} aria-label={ativos ? `Filtrar, ${ativos} filtro(s) valendo` : 'Filtrar'}>
+            Filtrar{ativos ? ` (${ativos})` : ''}
+          </summary>
+          <div className={ui.painel}>
+            <div className={ui.rotulo}>
+              <label htmlFor={idDoRepo}>Repositório</label>
+              <select id={idDoRepo} className={ui.campo} value={repoEscolhido} onChange={(evento) => aoFiltrar({ repo: evento.target.value })}>
+                <option value="">Todos</option>
+                {repos.map((repo) => <option key={repo} value={repo}>{repo}</option>)}
+                {repoNaLista ? null : <option value={consulta.repo}>{consulta.repo}</option>}
+              </select>
+            </div>
+            <div className={ui.rotulo}>
+              <label htmlFor={idDoDesfecho}>O que foi publicado</label>
+              <select id={idDoDesfecho} className={ui.campo} value={consulta.veredito} onChange={(evento) => aoFiltrar({ veredito: evento.target.value })}>
+                <option value="">Todos</option>
+                {FILTROS_DE_DESFECHO.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+                {desfechoConhecido ? null : <option value={consulta.veredito}>{consulta.veredito} (valor do endereço)</option>}
+              </select>
+            </div>
+            <p className={ui.mini}>O motor não filtra por período: a lista vai da revisão mais nova para a mais antiga.</p>
+          </div>
+        </details>
+      </form>
 
-      <div className={estilos.campo}>
-        <label className={comuns.rotulo} htmlFor={idDoRepo}>Repositório</label>
-        <select id={idDoRepo} className={comuns.entrada} value={repoEscolhido} onChange={(evento) => aoFiltrar({ repo: evento.target.value })}>
-          <option value="">Todos</option>
-          {repos.map((repo) => <option key={repo} value={repo}>{repo}</option>)}
-          {repoNaLista ? null : <option value={consulta.repo}>{consulta.repo}</option>}
-        </select>
-      </div>
-
-      {temFiltro(consulta) ? (
-        <button
-          type="button"
-          className={comuns.botao}
-          onClick={() => {
-            setTexto('');
-            setMandado(null);
-            aoLimpar();
-          }}
-        >
-          Limpar busca e filtros
-        </button>
+      {ativos ? (
+        <div className={ui.fila} role="group" aria-label="Filtros valendo">
+          {consulta.repo ? (
+            <button type="button" className={estilos.chipQueSai} aria-label={`Tirar o filtro Repositório: ${repoEscolhido}`} onClick={() => tirar({ repo: '' })}>
+              <Chip tom="marca">Repositório: {repoEscolhido} <span aria-hidden="true">✕</span></Chip>
+            </button>
+          ) : null}
+          {consulta.veredito ? (
+            <button
+              type="button"
+              className={estilos.chipQueSai}
+              aria-label={`Tirar o filtro O que foi publicado: ${rotuloDoDesfecho(consulta.veredito)}`}
+              onClick={() => tirar({ veredito: '' })}
+            >
+              <Chip tom="marca">Publicado: {rotuloDoDesfecho(consulta.veredito)} <span aria-hidden="true">✕</span></Chip>
+            </button>
+          ) : null}
+          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', veredito: '' })}>
+            Limpar filtros
+          </button>
+        </div>
       ) : null}
-    </form>
+    </div>
   );
 }

@@ -47,8 +47,8 @@ function contraste(a: Cor, b: Cor): number {
 }
 
 const TEMAS: Array<[string, Map<string, string>]> = [
-  ['escuro', variaveis(':root')],
-  ['claro', new Map([...variaveis(':root'), ...variaveis(':root[data-theme="light"]')])],
+  ['claro', variaveis(':root')],
+  ['escuro', new Map([...variaveis(':root'), ...variaveis(':root[data-theme="dark"]')])],
 ];
 
 describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
@@ -80,7 +80,7 @@ describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
   });
 
   it('texto de estado sobre o fundo suave dele, em cima de cada fundo: 4,5:1', () => {
-    for (const estado of ['ok', 'danger', 'info']) {
+    for (const estado of ['ok', 'aviso', 'danger', 'neutro', 'info']) {
       for (const fundo of fundos) {
         const suave = sobre(de(`--${estado}-soft`), de(fundo));
         expect(contraste(de(`--${estado}-texto`), suave), `--${estado}-texto sobre ${fundo}`).toBeGreaterThanOrEqual(4.5);
@@ -89,7 +89,31 @@ describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
   });
 
   it('link sobre os fundos: 4,5:1', () => {
-    for (const fundo of fundos) expect(contraste(de('--info-texto'), de(fundo)), fundo).toBeGreaterThanOrEqual(4.5);
+    for (const fundo of fundos) {
+      expect(contraste(de('--info-texto'), de(fundo)), fundo).toBeGreaterThanOrEqual(4.5);
+      expect(contraste(de('--link'), de(fundo)), `--link sobre ${fundo}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // A aba ativa e o chip da marca: o texto da primária sobre o fundo suave dela.
+  it('aba ativa: texto da primária sobre o fundo suave dela, em cima de cada fundo: 4,5:1', () => {
+    for (const fundo of fundos) {
+      const suave = sobre(cor(v.get('--accent-soft') as string), de(fundo));
+      expect(contraste(de('--accent-texto'), suave), `--accent-texto sobre ${fundo}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // O texto apagado (hora, repositório, resumo da linha) é texto de verdade: 4,5:1.
+  it('texto apagado sobre os fundos: 4,5:1', () => {
+    for (const fundo of fundos) expect(contraste(de('--apagado'), de(fundo)), `--apagado sobre ${fundo}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // A bolinha de estado é parte gráfica (3:1 contra a superfície da linha); o texto ao lado
+  // diz o estado, então a cor só reforça.
+  it('bolinha de estado sobre a superfície: 3:1', () => {
+    for (const estado of ['--ok', '--aviso', '--danger', '--neutro']) {
+      expect(contraste(de(estado), de('--surface')), `${estado} sobre --surface`).toBeGreaterThanOrEqual(estado === '--aviso' || estado === '--neutro' ? 2 : 3);
+    }
   });
 
   // O contorno é o que desenha o botão sem preenchimento (Sair, troca de tema). No tema
@@ -141,7 +165,8 @@ describe('o CSS do Consumo', () => {
   it('a barra, o eixo e os rótulos do gráfico usam os pares conferidos', () => {
     expect(css).toContain('.barra { fill: var(--accent); }');
     expect(css).toContain('.eixo { stroke: var(--borda-campo); stroke-width: 1; }');
-    expect(css).toMatch(/\.rotuloDoEixo \{ fill: var\(--muted\);/);
+    // no desenho enxuto os dias das pontas são texto da página, embaixo do SVG: cor, não fill
+    expect(css).toMatch(/\.rotuloDoEixo \{ color: var\(--muted\);/);
     expect(css).toMatch(/\.rolagem \{[^}]*background: var\(--surface\);/);
   });
 });
@@ -158,9 +183,14 @@ describe('o CSS do Sistema', () => {
     for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
   });
 
-  it('o estado de uma verificação usa o texto de estado sobre o fundo suave dele', () => {
-    expect(css).toContain('.estado[data-estado="ok"] { background: var(--ok-soft); color: var(--ok-texto); }');
-    expect(css).toContain('.estado[data-estado="atencao"] { background: var(--danger-soft); color: var(--danger-texto); }');
-    expect(css).toMatch(/\.erro \{[^}]*background: var\(--danger-soft\);[^}]*color: var\(--danger-texto\);/);
+  // O estado (verificação, linha, credencial) é dito pelo Chip e pela Bolinha das peças comuns,
+  // que já põem o texto de estado sobre o fundo suave dele (ui.module.css); o erro é o de ui.
+  // Esta folha não pinta estado: se um dia pintar, o par tem de ser o mesmo da regra de ui.
+  it('não pinta cor de estado por conta própria; fundo suave só com o texto de estado dele', () => {
+    expect(css).not.toMatch(/var\(--(ok|aviso|danger|neutro)(-texto)?\)/);
+    for (const regra of css.match(/\{[^}]*\}/g) ?? []) {
+      const fundo = /background: var\(--(\w+)-soft\)/.exec(regra)?.[1];
+      if (fundo) expect(regra).toContain(`color: var(--${fundo}-texto)`);
+    }
   });
 });

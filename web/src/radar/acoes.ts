@@ -2,6 +2,9 @@
 // leitura da resposta e a frase que a tela mostra depois. Sem React: quem liga isto aos botões
 // é o gancho useAcoes. As do Sistema moram em src/sistema/acoes.ts e entram aqui pela união.
 //
+// O front não tem mesa: aprovar, pedir mudanças, comentar e pular uma pendência
+// (POST /api/decide) saíram com o redesenho de 17/11/2026. O revisor publica sozinho.
+//
 // As rotas respondem 200 com `{ ok }` (lib/http-server.js, na raiz). A recusa do motor
 // vem como `{ ok: false, blocked?, error? }`: `blocked` é o código do portão que recusou
 // (lib/engine/decision.js e os colaboradores de postagem) e `error` a frase do motor. A de
@@ -19,9 +22,6 @@ import {
 import { marcaDoPerfil, outrasQueDiferem, perfilDe, textoDoPerfil } from '@/time/time';
 import type { Cliente, Leitor } from '@/transporte/cliente';
 
-// O que POST /api/decide aceita em `action`.
-export type Decisao = 'approve' | 'request_changes' | 'comment' | 'skip';
-
 interface Base {
   // de quem é a ação na tela (a chave do PR, o id da sessão): enquanto uma ação do alvo
   // está no ar, os botões dele ficam desabilitados
@@ -35,16 +35,6 @@ export type Acao =
   // `deNovo`: o PR já tem revisão (o botão do Histórico); muda só o rótulo
   | (Base & { tipo: 'revisar'; url: string; deNovo?: true })
   | (Base & { tipo: 'cancelar'; id: string })
-  | (Base & {
-    tipo: 'decidir';
-    id: string;
-    decisao: Decisao;
-    // o parecer da revisão (`verdict` da pendência): diz se o texto que a tela mostra é o
-    // que esta decisão publica
-    parecer?: string;
-    // a pendência está em "Esperando o CI": pular descarta o que o motor faria sozinho
-    espera?: 'ci' | 'prova';
-  })
   | (Base & { tipo: 'ignorar'; chave: string })
   | (Base & { tipo: 'restaurar'; chave: string })
   // O desfecho da contestação de um PR (recordPushback, lib/engine/pushback.js). `desfecho`
@@ -79,7 +69,6 @@ export function pedidoDa(acao: Acao): { rota: string; corpo: Objeto } {
     // a lista vai sempre explícita, e só existe a revisão headless (mode "auto" é o padrão)
     case 'revisar': return { rota: '/api/review', corpo: { urls: [acao.url] } };
     case 'cancelar': return { rota: '/api/cancel', corpo: { id: acao.id } };
-    case 'decidir': return { rota: '/api/decide', corpo: { id: acao.id, action: acao.decisao } };
     case 'ignorar': return { rota: '/api/ignore', corpo: { key: acao.chave } };
     case 'restaurar': return { rota: '/api/restore', corpo: { key: acao.chave } };
     // a nota só acompanha um desfecho: apagar o registro apaga a nota junto
@@ -90,13 +79,6 @@ export function pedidoDa(acao: Acao): { rota: string; corpo: Objeto } {
   }
 }
 
-const ROTULO_DA_DECISAO: Record<Decisao, string> = {
-  approve: 'Aprovar',
-  request_changes: 'Pedir mudanças',
-  comment: 'Comentar',
-  skip: 'Pular',
-};
-
 // O texto do botão.
 export function rotuloDa(acao: Acao): string {
   if (ehDoSistema(acao)) return rotuloDoSistema(acao);
@@ -104,7 +86,6 @@ export function rotuloDa(acao: Acao): string {
     case 'checar': return 'Checar agora';
     case 'revisar': return acao.deNovo ? 'Revisar de novo' : 'Revisar agora';
     case 'cancelar': return 'Cancelar';
-    case 'decidir': return ROTULO_DA_DECISAO[acao.decisao];
     case 'ignorar': return 'Ignorar';
     case 'restaurar': return 'Restaurar';
     case 'contestacao': return acao.desfecho ? 'Gravar o desfecho' : 'Apagar a contestação';
@@ -113,7 +94,7 @@ export function rotuloDa(acao: Acao): string {
   }
 }
 
-// O nome acessível do botão: a ação e o alvo ("Aprovar PR #12 de dono/repo").
+// O nome acessível do botão: a ação e o alvo ("Revisar agora PR #12 de dono/repo").
 export function nomeDa(acao: Acao): string {
   if (ehDoSistema(acao)) return nomeDoSistema(acao);
   if (acao.tipo === 'contestacao') return acao.desfecho ? `Gravar o desfecho da contestação de ${acao.nome}` : `Apagar a contestação de ${acao.nome}`;
@@ -125,7 +106,7 @@ export function nomeDa(acao: Acao): string {
 // Identifica a ação dentro do alvo, para a tela saber qual botão está enviando.
 export function idDa(acao: Acao): string {
   if (acao.tipo === 'contestacao') return acao.desfecho ? 'contestacao:gravar' : 'contestacao:apagar';
-  return acao.tipo === 'decidir' ? `decidir:${acao.decisao}` : acao.tipo;
+  return acao.tipo;
 }
 
 export interface Confirmacao {
@@ -134,43 +115,10 @@ export interface Confirmacao {
   confirmar: string;
 }
 
-// O que cada decisão publica no GitHub, para a pergunta de confirmação.
-const PUBLICACAO: Record<Exclude<Decisao, 'skip'>, { titulo: (nome: string) => string; oQue: string; depois: string; confirmar: string }> = {
-  approve: {
-    titulo: (nome) => `Aprovar ${nome}?`,
-    oQue: 'uma aprovação (APPROVE)',
-    depois: 'Fica visível para todos no PR.',
-    confirmar: 'Publicar a aprovação',
-  },
-  request_changes: {
-    titulo: (nome) => `Pedir mudanças em ${nome}?`,
-    oQue: 'um pedido de mudanças (REQUEST CHANGES)',
-    depois: 'Fica visível para todos, e o PR fica bloqueado até o autor tratar.',
-    confirmar: 'Publicar o pedido de mudanças',
-  },
-  comment: {
-    titulo: (nome) => `Comentar em ${nome}?`,
-    oQue: 'um review de comentário (COMMENT)',
-    depois: 'Fica visível para todos no PR, sem aprovar nem bloquear.',
-    confirmar: 'Publicar o comentário',
-  },
-};
-
-// O motor guarda um texto por ação (corpo e comentários em linha) e publica o da ação
-// clicada (`item.payloads[action]`, lib/engine/decision.js). A tela só recebe o texto do
-// parecer. Então a pergunta só diz "o review mostrado acima" quando a ação é a do parecer.
-function textoQueSai(acao: Extract<Acao, { tipo: 'decidir' }>): string {
-  if (acao.parecer !== undefined && acao.parecer === acao.decisao) {
-    return 'O texto é o do review mostrado acima, e o motor pode publicar junto comentários em linha, que esta tela não mostra.';
-  }
-  return 'O texto que sai NÃO é o mostrado acima: o motor publica o que ele preparou para esta ação, que esta tela não mostra e que pode trazer comentários em linha.';
-}
-
-// Ação que pede confirmação antes do POST: as três que publicam no GitHub (Aprovar, Pedir
-// mudanças e Comentar), o Pular de uma pendência que o motor resolveria sozinho, o
-// cancelamento, que joga fora a sessão em curso, e a contestação: gravar o desfecho muda o
-// prompt de revisões futuras (do autor e, conforme o desfecho, do repositório), e apagar joga
-// o registro fora. A pergunta diz o que sai e em qual PR.
+// Ação que pede confirmação antes do POST: o cancelamento, que joga fora a sessão em curso, a
+// contestação (gravar o desfecho muda o prompt de revisões futuras, do autor e, conforme o
+// desfecho, do repositório, e apagar joga o registro fora), a remoção de uma pessoa do Time e
+// as do Sistema. A pergunta diz o que acontece e com quem.
 export function confirmacaoDa(acao: Acao): Confirmacao | null {
   if (ehDoSistema(acao)) return confirmacaoDoSistema(acao);
   if (acao.tipo === 'cancelar') {
@@ -221,23 +169,7 @@ export function confirmacaoDa(acao: Acao): Confirmacao | null {
       confirmar: 'Apagar o dossiê, o perfil e as contestações',
     };
   }
-  if (acao.tipo !== 'decidir') return null;
-  if (acao.decisao === 'skip') {
-    if (!acao.espera) return null;
-    return {
-      titulo: `Pular ${acao.nome}?`,
-      texto: acao.espera === 'ci'
-        ? `Pular tira ${acao.nome} da mesa e descarta a aprovação que sairia sozinha quando os checks fechassem. Nada é publicado.`
-        : `Pular tira ${acao.nome} da mesa e descarta a análise que o motor está recuperando sozinho. Nada é publicado.`,
-      confirmar: 'Pular e descartar a espera',
-    };
-  }
-  const p = PUBLICACAO[acao.decisao];
-  return {
-    titulo: p.titulo(acao.nome),
-    texto: `Isto publica ${p.oQue} no GitHub, em ${acao.nome}, pela conta revisora do motor. ${textoQueSai(acao)} ${p.depois}`,
-    confirmar: p.confirmar,
-  };
+  return null;
 }
 
 // No aceite, os campos que só algumas rotas mandam: `removed` (POST /api/team/remove: havia
@@ -352,15 +284,12 @@ export type Desfecho =
   | { tipo: 'erro'; texto: string }
   | { tipo: 'cancelado' };
 
-// Depois de `{ ok: true }` a tela só diz que o motor aceitou o pedido. O `ok` de uma decisão
-// não quer dizer que algo foi publicado (o motor responde ok também quando já havia um review
-// igual e ele não publicou de novo): o desfecho vem no aviso do motor, pelo evento `toast`.
+// Depois de `{ ok: true }` a tela só diz que o motor aceitou o pedido: o que aconteceu de fato
+// (a revisão que começou, o review que saiu) vem no estado e no aviso do motor (`toast`).
 function textoDoAceite(acao: Acao): string {
   if (acao.tipo === 'checar') return 'O motor aceitou o pedido: checar agora.';
   const pedido = nomeDa(acao).replace(/^./, (letra) => letra.toLowerCase());
-  return acao.tipo === 'decidir'
-    ? `O motor aceitou o pedido: ${pedido}. O desfecho vem no aviso do motor.`
-    : `O motor aceitou o pedido: ${pedido}.`;
+  return `O motor aceitou o pedido: ${pedido}.`;
 }
 
 // O que a região viva diz enquanto o pedido está no ar.

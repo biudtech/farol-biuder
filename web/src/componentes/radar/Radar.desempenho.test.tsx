@@ -1,26 +1,36 @@
 // @vitest-environment jsdom
-// O que cada mudança do snapshot redesenha. Os blocos são `memo` e a tela lê cada chave por
-// um seletor próprio: a linha nova de um feed não pode custar a fila nem as pendências.
+// O que cada mudança do snapshot redesenha. As seções são `memo` e a tela lê cada chave por
+// um seletor próprio: a linha nova de um feed não pode custar a fila nem as postadas.
+// Mudou com o redesenho de 17/11/2026: o espião das pendências (textoDoParecer, de "Precisa de
+// você") saiu com a mesa, e entrou o de "Postadas hoje" (postadasDeHoje).
 import { act, cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '@/contratos/snapshot';
 import { ESTADO_INICIAL, type App, type EstadoDoApp } from '@/estado/app';
 import { criarStore } from '@/estado/store';
 import * as formato from '@/radar/formato';
+import * as postadas from '@/radar/postadas';
 import { aplicarAtividade } from '@/transporte/estado';
 import { Radar } from './Radar';
 import { pendencia } from './apoio-de-teste';
 
-// Espiões sobre funções que só um bloco chama ao desenhar: cada chamada é um desenho dele.
+// Espiões sobre funções que só uma seção chama ao desenhar: cada chamada é um desenho dela.
 vi.mock('@/radar/formato', async (importar) => {
   const real = await importar<typeof import('@/radar/formato')>();
   return {
     ...real,
     textoDoEstacionado: vi.fn(real.textoDoEstacionado), // só a Fila
-    textoDoParecer: vi.fn(real.textoDoParecer), // só Precisa de você
     chavesDoFeed: vi.fn(real.chavesDoFeed), // só o feed de uma sessão
   };
 });
+vi.mock('@/radar/postadas', async (importar) => {
+  const real = await importar<typeof import('@/radar/postadas')>();
+  return { ...real, postadasDeHoje: vi.fn(real.postadasDeHoje) }; // só Postadas hoje
+});
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...resto }: { href: string; children: ReactNode }) => <a href={href} {...resto}>{children}</a>,
+}));
 
 afterEach(cleanup);
 
@@ -40,31 +50,34 @@ function estado(): Snapshot {
   };
 }
 
+function montar() {
+  const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot: estado() });
+  const app = { store, cliente: { post: vi.fn() }, dispensarRecados: vi.fn() } as unknown as App;
+  render(<Radar app={app} />);
+  return store;
+}
+
 describe('o que uma linha de feed redesenha', () => {
-  it('só o feed da sessão dela: a fila, as pendências e a outra sessão ficam como estavam', () => {
-    const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot: estado() });
-    const app = { store, cliente: { post: vi.fn() }, dispensarRecados: vi.fn() } as unknown as App;
-    render(<Radar app={app} />);
+  it('só o feed da sessão dela: a fila, as postadas e a outra sessão ficam como estavam', () => {
+    const store = montar();
     const daFila = vi.mocked(formato.textoDoEstacionado);
-    const dasPendencias = vi.mocked(formato.textoDoParecer);
+    const dasPostadas = vi.mocked(postadas.postadasDeHoje);
     const dosFeeds = vi.mocked(formato.chavesDoFeed);
     expect(daFila).toHaveBeenCalledTimes(1);
-    expect(dasPendencias).toHaveBeenCalledTimes(1);
+    expect(dasPostadas).toHaveBeenCalledTimes(1);
     expect(dosFeeds).toHaveBeenCalledTimes(2);
 
     act(() => { store.trocar({ snapshot: aplicarAtividade(store.ler().snapshot, { id: 'a1', item: linha(2) }, () => {}) }); });
     expect(screen.getByText('linha 2')).toBeTruthy();
     expect(daFila).toHaveBeenCalledTimes(1);
-    expect(dasPendencias).toHaveBeenCalledTimes(1);
+    expect(dasPostadas).toHaveBeenCalledTimes(1);
     // o feed da sessão a1 de novo; o da a2 não
     expect(dosFeeds).toHaveBeenCalledTimes(3);
   });
 
-  it('um aviso do motor não redesenha bloco nenhum', () => {
-    const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot: estado() });
-    const app = { store, cliente: { post: vi.fn() }, dispensarRecados: vi.fn() } as unknown as App;
-    render(<Radar app={app} />);
-    const chamadas = () => [formato.textoDoEstacionado, formato.textoDoParecer, formato.chavesDoFeed].map((f) => vi.mocked(f).mock.calls.length);
+  it('um aviso do motor não redesenha seção nenhuma', () => {
+    const store = montar();
+    const chamadas = () => [formato.textoDoEstacionado, postadas.postadasDeHoje, formato.chavesDoFeed].map((f) => vi.mocked(f).mock.calls.length);
     const antes = chamadas();
     act(() => { store.trocar({ recados: [{ n: 1, tom: 'ok', texto: 'aprovado' }] }); });
     expect(screen.getByText('aprovado')).toBeTruthy();

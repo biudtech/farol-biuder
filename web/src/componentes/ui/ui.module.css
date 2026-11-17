@@ -1,0 +1,294 @@
+/* As peças comuns das telas, no desenho enxuto: uma linha por item, o resto sob demanda.
+   Cores só das variáveis de globals.css (src/tema/contraste.test.ts confere este arquivo). */
+
+/* ---------- página ---------- */
+.pagina {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.paginaEstreita { max-width: 880px; }
+
+.cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cabecalhoTexto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.titulo { font-size: 32px; font-weight: 800; letter-spacing: -.5px; line-height: 1.2; }
+.tituloMenor { font-size: 26px; line-height: 1.25; }
+.sub { font-size: 15px; color: var(--muted); }
+.cabecalhoAcoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; position: relative; }
+
+.secao { display: flex; flex-direction: column; gap: 10px; }
+.secaoCabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.secaoTitulo { font-size: 16px; font-weight: 800; color: var(--muted); }
+.lista { display: flex; flex-direction: column; gap: 8px; }
+.grupo { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--apagado); }
+.grupo:first-child { margin-top: 4px; }
+
+/* ---------- a linha que abre ---------- */
+.linha {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-linha);
+}
+.resumo {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: var(--radius-linha);
+  min-width: 0;
+}
+.resumo::-webkit-details-marker { display: none; }
+.resumo:hover { background: var(--hover); }
+.resumo::after {
+  content: "";
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--apagado);
+  border-bottom: 2px solid var(--apagado);
+  transform: rotate(45deg);
+  transition: transform .15s;
+  flex: none;
+}
+/* quem já empurra a meta para a direita fica com o espaço; a seta vem logo depois dela */
+.resumo:has(.empurra)::after { margin-left: 4px; }
+.linha[open] > .resumo::after { transform: rotate(-135deg); }
+.linha[open] > .resumo { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.corpo {
+  padding: 14px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--borda-suave);
+  min-width: 0;
+}
+/* a linha que só leva a outro lugar (Time): mesmo desenho, sem seta de abrir */
+.linhaLink {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-linha);
+  color: inherit;
+  text-decoration: none;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.linhaLink:hover { background: var(--hover); color: inherit; }
+
+.t {
+  font-weight: 700;
+  font-size: 15px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.r { font-size: 12px; font-weight: 700; color: var(--apagado); white-space: nowrap; }
+.empurra { margin-left: auto; }
+.mini { font-size: 13px; color: var(--muted); }
+.texto { font-size: 14px; line-height: 1.55; }
+.linhaDeValor { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+.fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.grade3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.grade4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) {
+  .grade3, .grade4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .grade3 { grid-template-columns: 1fr; }
+}
+
+/* ---------- estado: bolinha e chip ---------- */
+.bolinha { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--neutro); }
+.bolinha[data-tom="ok"] { background: var(--ok); }
+.bolinha[data-tom="aviso"] { background: var(--aviso); }
+.bolinha[data-tom="ruim"] { background: var(--danger); }
+.bolinha[data-tom="neutro"] { background: var(--neutro); }
+.bolinha[data-tom="marca"] { background: var(--accent); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+}
+.chip[data-tom="ok"] { background: var(--ok-soft); color: var(--ok-texto); }
+.chip[data-tom="aviso"] { background: var(--aviso-soft); color: var(--aviso-texto); }
+.chip[data-tom="ruim"] { background: var(--danger-soft); color: var(--danger-texto); }
+.chip[data-tom="marca"] { background: var(--accent-soft); color: var(--accent-texto); }
+.chipPequeno { padding: 2px 8px; font-size: 12px; }
+
+/* ---------- botões e campos ---------- */
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-botao);
+  border: 1px solid var(--borda-botao);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.botao:hover { background: var(--hover); color: var(--text); }
+.botao:disabled { opacity: .6; cursor: default; }
+.primario { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.primario:hover { background: var(--accent); color: var(--accent-ink); filter: brightness(1.08); }
+.fantasma { border-color: transparent; background: transparent; color: var(--muted); }
+.fantasma:hover { background: var(--surface-2); color: var(--text); }
+.pequeno { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.link {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--link);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.link:hover { color: var(--link-hover); text-decoration: underline; }
+
+.rotulo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.campo {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-botao);
+  border: 1px solid var(--borda-campo);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+}
+.campo:disabled { opacity: .7; }
+.marcador { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+
+/* ---------- caixas ---------- */
+.cartao { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.vazio {
+  margin: 0;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px dashed var(--borda-campo);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--muted);
+}
+.erro {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  background: var(--erro-fundo);
+  border: 1px solid var(--erro-borda);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--text);
+}
+.nota {
+  padding: 16px 20px;
+  background: var(--nota-fundo);
+  border: 1px solid var(--nota-borda);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* o painel que abre de um botão (Revisar um PR, Filtrar) */
+.gaveta { position: relative; }
+.gaveta > summary { list-style: none; cursor: pointer; }
+.gaveta > summary::-webkit-details-marker { display: none; }
+.painel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 5;
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- carregamento ---------- */
+@keyframes gira { to { transform: rotate(360deg); } }
+@keyframes brilho { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes corre { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  animation: gira .8s linear infinite;
+  flex: none;
+}
+.spinner[data-tamanho="p"] { width: 14px; height: 14px; border-width: 2px; }
+.spinner[data-tamanho="g"] { width: 32px; height: 32px; border-width: 3px; }
+/* dentro do botão primário: a cor do texto dele */
+.primario .spinner { border-color: color-mix(in srgb, var(--accent-ink) 35%, transparent); border-top-color: var(--accent-ink); }
+
+.esqueleto {
+  display: block;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--esqueleto) 0, var(--esqueleto-brilho) 200px, var(--esqueleto) 400px);
+  background-size: 800px 100%;
+  animation: brilho 1.4s linear infinite;
+}
+.esqueletoLinha { height: 52px; border-radius: var(--radius-linha); }
+.esqueletoBloco { height: 120px; border-radius: var(--radius); }
+.esqueletos { display: flex; flex-direction: column; gap: 8px; }
+
+.barra { position: relative; height: 4px; border-radius: 999px; background: var(--borda-suave); overflow: hidden; }
+.barra > i { position: absolute; inset: 0; width: 40%; background: var(--accent); border-radius: 999px; animation: corre 1.3s ease-in-out infinite; }
+/* a lista anterior que fica na tela, apagada, enquanto a nova não chega */
+.apagada { opacity: .55; transition: opacity .15s; }
+
+.carregandoPagina { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 48px 20px; color: var(--muted); }
+
+.soLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

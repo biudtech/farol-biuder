@@ -1,6 +1,6 @@
 // Como o Radar escreve o que o motor manda: nomes, datas, rótulos e frases. Só formata: a
 // ordem, a elegibilidade, o veredito e o motivo chegam prontos no snapshot.
-import type { DetalheDaEspera, Estacionado, Pendencia, TipoDeMotivo } from '@/contratos/radar';
+import type { DetalheDaEspera, Estacionado, TipoDeMotivo } from '@/contratos/radar';
 
 // Lê um mapa de rótulos por um valor que veio do motor: só propriedade própria vale, para um
 // valor como "constructor" não achar o que o protótipo tem.
@@ -14,6 +14,19 @@ const CHAVE_DE_PR = /^([^#\s]+\/[^#\s]+)#(\d+)$/;
 export function nomeDoPr(chave: string): string {
   const partes = CHAVE_DE_PR.exec(chave);
   return partes ? `PR #${partes[2]} de ${partes[1]}` : `PR ${chave}`;
+}
+
+// 'dono/repo#12' vira 'repo#12': o nome curto da linha, sem o dono. Chave fora do formato
+// volta como veio.
+export function chaveCurta(chave: string): string {
+  const partes = CHAVE_DE_PR.exec(chave);
+  return partes ? `${(partes[1] ?? '').split('/').pop() ?? ''}#${partes[2]}` : chave;
+}
+
+// 'dono/repo#12' vira 'repo': o repositório, à direita da linha da Fila.
+export function repoDaChave(chave: string): string {
+  const partes = CHAVE_DE_PR.exec(chave);
+  return partes ? ((partes[1] ?? '').split('/').pop() ?? chave) : chave;
 }
 
 // A URL só vira link quando aponta para o GitHub por HTTPS. Qualquer outra coisa (outro
@@ -57,6 +70,8 @@ function formatador(nome: string, opcoes: Intl.DateTimeFormatOptions, fuso: stri
 const DIA_E_HORA: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
 const COM_ANO: Intl.DateTimeFormatOptions = { ...DIA_E_HORA, year: 'numeric' };
 const SO_HORA: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+const HORA_E_MINUTO: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+const SO_DIA: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
 
 function formatar(valor: number | string | null | undefined, nome: string, opcoes: Intl.DateTimeFormatOptions, fuso?: string): string {
   const ms = instante(valor);
@@ -80,6 +95,16 @@ export function hora(valor: number | string | null | undefined, fuso?: string): 
   return formatar(valor, 'hora', SO_HORA, fuso);
 }
 
+// Hora e minuto, sem o dia: o que a linha mostra de um fato do dia (Postadas hoje).
+export function horaCurta(valor: number | string | null | undefined, fuso?: string): string {
+  return formatar(valor, 'minuto', HORA_E_MINUTO, fuso);
+}
+
+// O dia do calendário, no fuso do navegador: é por ele que se diz se um fato é de hoje.
+export function dia(valor: number | string | null | undefined, fuso?: string): string {
+  return formatar(valor, 'calendario', SO_DIA, fuso);
+}
+
 // A chave de cada linha do feed na lista da tela: a hora da linha e a ordem dela entre as
 // que têm a mesma hora. Não usa a posição no feed, que muda quando o motor corta as linhas
 // antigas: com ela, toda linha trocaria de chave a cada linha nova.
@@ -98,21 +123,6 @@ export const ROTULO_DO_MOTIVO: Record<TipoDeMotivo, string> = {
   content: 'Ponto da revisão',
   infra: 'Falha ao publicar',
 };
-
-const PARECER: Record<string, string> = {
-  approve: 'Parecer da revisão: aprovar',
-  request_changes: 'Parecer da revisão: pedir mudanças',
-};
-
-export function textoDoParecer(veredito: string | undefined): string {
-  return proprio(PARECER, veredito) ?? '';
-}
-
-export function textoDaRetentativa(tentativa: NonNullable<Pendencia['postRetry']>): string {
-  return tentativa.exhausted
-    ? `A publicação falhou e o motor desistiu de tentar sozinho depois de ${tentativa.attempts} tentativa(s).`
-    : 'A publicação falhou e o motor está tentando de novo sozinho.';
-}
 
 // Os motivos de espera que o agendador grava (esperaParaTela, lib/engine/headless-fila.js).
 const MOTIVO_DA_ESPERA: Record<string, string> = {

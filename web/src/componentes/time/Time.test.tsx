@@ -8,6 +8,7 @@ import { registrarNoConsole } from '@/estado/instancia';
 import { criarStore } from '@/estado/store';
 import type { Resultado } from '@/transporte/cliente';
 import { voltarPara } from '../historico/apoio-de-teste';
+import { idDoBotao } from './ListaDoTime';
 import { Time } from './Time';
 
 vi.mock('next/navigation', async () => (await import('../historico/apoio-de-teste')).navegacaoDeMentira);
@@ -91,11 +92,24 @@ const clicar = async (nome: string | RegExp) => { await act(async () => { fireEv
 const escolher = (rotulo: string, valor: string) => { act(() => { fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } }); }); };
 const anuncio = () => screen.getByRole('status', { name: 'Resultado da lista' }).textContent;
 const regiao = () => screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
-const titulosDosCartoes = () => screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-const campos = (item: Element | null | undefined) => [...(item?.querySelectorAll('dl > div') ?? [])].map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
+// o texto de cada linha da lista, sem o avatar (que é enfeite, escondido do leitor de tela)
+const textoSemAvatar = (botao: Element) => [...botao.childNodes].filter((n) => !(n instanceof Element && n.getAttribute('aria-hidden'))).map((n) => n.textContent).join('');
+const linhas = () => {
+  const lista = screen.queryByRole('list', { name: 'Pessoas do Time' });
+  return lista ? within(lista).getAllByRole('button').map(textoSemAvatar) : [];
+};
+const nomes = () => linhas().map((linha) => linha.split(/ \(@|, /)[0]);
+const botaoDe = (login: string) => document.getElementById(idDoBotao(login)) as HTMLButtonElement;
+const abrir = async (login: string) => { await act(async () => { fireEvent.click(botaoDe(login)); }); };
 const dossie = () => screen.getByRole('region', { name: /^Dossiê de @/ });
-const semDossie = () => screen.queryByRole('heading', { level: 2, name: /Dossiê/ }) === null;
+const dossieDe = (login: string) => screen.queryByRole('region', { name: `Dossiê de @${login}` });
+const tituloDoDossie = () => within(dossie()).getByRole('heading', { level: 1 });
+const subDoDossie = () => dossie().querySelector('h1 + p')?.textContent;
+const secao = (nome: string) => within(dossie()).getByRole('group', { name: nome }) as HTMLDetailsElement;
+const resumoDe = (nome: string) => secao(nome).querySelector('summary')?.textContent;
+const semDossie = () => screen.queryByRole('region', { name: /^Dossiê de @/ }) === null;
 const CONFIRMAR = 'Apagar o dossiê, o perfil e as contestações';
+const VOLTAR = 'Voltar à lista do Time';
 
 beforeEach(() => { window.history.replaceState(null, '', '/time'); });
 afterEach(() => {
@@ -107,48 +121,57 @@ describe('Time: a lista', () => {
   it('carrega a lista inteira de GET /api/team e mostra na ordem do motor', async () => {
     const t = montar();
     expect(screen.getByRole('heading', { level: 1, name: 'Time' })).toBeTruthy();
-    expect(anuncio()).toBe('Carregando o Time.');
+    // sem nada ainda, o esqueleto, com a frase para o leitor
+    expect(screen.getByText('Carregando o Time.').getAttribute('role')).toBe('status');
     await assentar();
+    expect(screen.queryByText('Carregando o Time.')).toBeNull();
     expect(t.pedidos()).toEqual(['/api/team']);
     expect(anuncio()).toBe('3 pessoas');
+    // a frase sob o título
+    expect(screen.getByText('3 pessoas', { selector: 'p:not([role])' })).toBeTruthy();
     // quem só tem perfil gravado vem depois dos dossiês
-    expect(titulosDosCartoes()).toEqual(['@Ana-SouzaAna Souza', '@bruno', '@caio']);
+    expect(nomes()).toEqual(['Ana Souza', 'bruno', 'caio']);
   });
 
-  it('cada cartão diz as entradas, a última, o papel e a competência, com o que o motor trouxe', async () => {
+  it('uma linha por pessoa: avatar com as iniciais, o nome e o papel à direita; a linha é o botão do dossiê', async () => {
     montar();
     await assentar();
-    const [ana, bruno, caio] = screen.getAllByRole('listitem');
-    expect(campos(ana)).toEqual([
-      'Entradas de memória: 2',
-      'Última entrada: 16/11/2026, PR #12 de dono/repo, Aprovação',
-      'Papel: Sênior',
-      'Competência: Backend: Avançado',
-    ]);
-    expect(campos(bruno)).toEqual(['Entradas de memória: 1', 'Última entrada: 02/11/2026, PR #3 de dono/outro, Comentário', 'Papel: Júnior', 'Competência: Não informada']);
-    // sem dossiê não há contagem de entradas a afirmar
-    expect(campos(caio)).toEqual(['Papel: Pleno', 'Competência: Não informada']);
-    expect(within(ana as HTMLElement).getByRole('button', { name: 'Ver o dossiê de @Ana-Souza' })).toBeTruthy();
+    // o login vai ao leitor de tela quando o nome é outro
+    expect(linhas()).toEqual(['Ana Souza (@Ana-Souza), Sênior', 'bruno, Júnior', 'caio, Pleno']);
+    const ana = botaoDe('Ana-Souza');
+    expect(ana.tagName).toBe('BUTTON');
+    expect(ana.closest('details')).toBeNull();
+    expect(ana.querySelector('[aria-hidden="true"]')?.textContent).toBe('AS');
+    expect(screen.getByRole('button', { name: 'Ana Souza (@Ana-Souza), Sênior' })).toBe(ana);
   });
 
-  it('autor só com login aparece com o que há, e sem o snapshot dos perfis o papel fica não informado', async () => {
+  it('a linha leva ao dossiê', async () => {
+    montar();
+    await assentar();
+    await abrir('bruno');
+    expect(window.location.search).toBe('?autor=bruno');
+    expect(dossieDe('bruno')).toBeTruthy();
+  });
+
+  it('sem papel a linha diz "Sem papel", e autor só com login aparece com o que há', async () => {
     montar({ responder: () => corpo([{ login: 'dora' }]), snapshot: { decisions: resolvidas('d1') } });
     await assentar();
-    expect(campos(screen.getByRole('listitem'))).toEqual(['Entradas de memória: Nenhuma', 'Papel: Não informado', 'Competência: Não informada']);
+    expect(linhas()).toEqual(['dora, Sem papel']);
+    expect(botaoDe('dora').textContent).toBe('DOdora, Sem papel');
   });
 
   it('pessoa que chega sem login fica de fora, contada e avisada', async () => {
     montar({ responder: () => corpo([ANA, { name: 'sem login' }, 7]) });
     await assentar();
     expect(screen.getByText(/2 pessoa\(s\) chegaram do motor em formato que esta tela não lê/)).toBeTruthy();
-    expect(titulosDosCartoes()).toContain('@Ana-SouzaAna Souza');
+    expect(nomes()).toContain('Ana Souza');
   });
 
   it('a busca filtra nesta página, sem pedir nada ao motor e sem ir ao endereço', async () => {
     const t = montar();
     await assentar();
     act(() => { fireEvent.change(screen.getByLabelText('Buscar por nome ou login'), { target: { value: 'souza' } }); });
-    expect(titulosDosCartoes()).toEqual(['@Ana-SouzaAna Souza']);
+    expect(nomes()).toEqual(['Ana Souza']);
     expect(anuncio()).toBe('1 de 3 pessoas passa pela busca');
     expect(t.pedidos()).toEqual(['/api/team']);
     expect(window.location.search).toBe('');
@@ -161,15 +184,38 @@ describe('Time: a lista', () => {
     expect(screen.getByText('Ninguém do Time passa pela busca.')).toBeTruthy();
     expect(anuncio()).toBe('Ninguém passa pela busca, de 3 pessoas');
     await clicar('Limpar a busca');
-    expect(titulosDosCartoes()).toHaveLength(3);
+    expect(nomes()).toHaveLength(3);
   });
 
   it('Time vazio diz que o motor ainda não tem ninguém', async () => {
     montar({ responder: () => corpo([]), snapshot: { decisions: resolvidas(), config: config({}) } });
     await assentar();
     expect(anuncio()).toBe('Ninguém no Time');
-    expect(screen.getByText(/O motor ainda não tem ninguém no Time/)).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Ninguém no Time ainda' })).toBeTruthy();
+    expect(screen.getByText(/quando a primeira revisão de um PR dela é resolvida/)).toBeTruthy();
     expect(screen.queryByText('Ninguém do Time passa pela busca.')).toBeNull();
+  });
+
+  it('a recarga mantém a lista anterior apagada, com a barra no topo', async () => {
+    let soltar!: (r: Resposta) => void;
+    let primeira = true;
+    const t = montar({
+      responder: () => {
+        if (primeira) { primeira = false; return corpo(TIME); }
+        return new Promise<Resposta>((resolver) => { soltar = resolver; });
+      },
+    });
+    await assentar();
+    t.trocarSnapshot({ ...SNAPSHOT, decisions: resolvidas('d2', 'd1') });
+    await clicar('Atualizar');
+    expect(screen.getByRole('progressbar', { name: 'Atualizando o Time' })).toBeTruthy();
+    expect(nomes()).toEqual(['Ana Souza', 'bruno', 'caio']);
+    expect(screen.getByRole('list', { name: 'Pessoas do Time' }).closest('[aria-busy="true"]')).toBeTruthy();
+    await act(async () => { soltar(corpo([BRUNO])); });
+    await assentar();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    // quem saiu dos dossiês e tem perfil passa a vir depois, pelo login
+    expect(nomes()).toEqual(['bruno', 'ana-souza', 'caio']);
   });
 
   it('falha de rede tem Tentar de novo, que pede a lista outra vez', async () => {
@@ -177,13 +223,13 @@ describe('Time: a lista', () => {
     const t = montar({ responder: () => (falhar ? REDE : corpo(TIME)) });
     await assentar();
     expect(screen.getByRole('alert').textContent).toContain('Erro: Não deu para falar com o motor (falha de rede).');
-    expect(titulosDosCartoes()).toEqual([]);
+    expect(nomes()).toEqual([]);
     falhar = false;
     await clicar('Tentar de novo');
     await assentar();
     expect(t.pedidos()).toEqual(['/api/team', '/api/team']);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(titulosDosCartoes()).toHaveLength(3);
+    expect(nomes()).toHaveLength(3);
   });
 
   it('recusa do motor aparece com o código, e resposta fora do formato também é erro', async () => {
@@ -212,7 +258,7 @@ describe('Time: a lista', () => {
     const marcado = '<img src=x onerror=alert(1)><b>negrito</b>';
     const { container } = montar({ responder: () => corpo([{ login: 'ana', name: marcado, entries: [{ date: marcado, ref: marcado, verdict: marcado, bullets: [marcado] }] }]) });
     await assentar();
-    await clicar('Ver o dossiê de @ana');
+    await abrir('ana');
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
     expect(screen.getAllByText(marcado, { exact: false }).length).toBeGreaterThan(0);
@@ -225,7 +271,7 @@ describe('Time: a lista', () => {
     const snapshot = comPerfis({ ...PESSOAS, 'zeca-torto': { papel: 4, squad: 'plataforma' }, 'yara-torta': 'x' });
     montar({ responder: () => corpo([ANA, { name: 'Nome Sem Login' }]), snapshot });
     await assentar();
-    await clicar('Ver o dossiê de @Ana-Souza');
+    await abrir('Ana-Souza');
     escolher('Papel', 'techlead');
     await clicar('Salvar papel e competência de @Ana-Souza');
     await assentar();
@@ -250,60 +296,103 @@ describe('Time: o dossiê', () => {
   it('abre na própria página, com o login no endereço e o foco no título', async () => {
     montar();
     await assentar();
-    await clicar('Ver o dossiê de @Ana-Souza');
+    await abrir('Ana-Souza');
     expect(window.location.search).toBe('?autor=Ana-Souza');
-    const titulo = screen.getByRole('heading', { level: 2, name: 'Dossiê de @Ana-Souza' });
+    expect(dossieDe('Ana-Souza')).toBeTruthy();
+    const titulo = tituloDoDossie();
+    expect(titulo.textContent).toBe('Ana Souza');
     expect(document.activeElement).toBe(titulo);
-    expect(campos(dossie())).toEqual(['Nome: Ana Souza', 'Login no GitHub: Ana-Souza', 'Entradas de memória: 2', 'Papel: Sênior', 'Competência: Backend: Avançado']);
+    // o papel e o que o motor sustenta: as entradas guardadas, sem número que ele não manda
+    expect(subDoDossie()).toBe('@Ana-Souza · Sênior · 2 entradas na memória · a mais recente em 16/11/2026');
+    expect(within(dossie()).getByRole('button', { name: VOLTAR }).textContent).toBe('← Time');
     // a lista continua montada, escondida
-    expect(screen.queryByRole('button', { name: 'Ver o dossiê de @bruno' })).toBeNull();
+    expect(botaoDe('bruno')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Pessoas do Time' })).toBeNull();
   });
 
-  it('lista as entradas de memória uma a uma, com o dia, o PR e o que foi publicado, e os pontos em markdown', async () => {
+  it('as seções: "O que o Farol observa" aberta, as outras fechadas com o resumo na linha', async () => {
+    montar({ url: '/time?autor=Ana-Souza', snapshot: { ...SNAPSHOT, pushbacks: { 'dono/repo#12': { outcome: 'we_right', status: 'confirmed', author: 'ana-souza' } } } });
+    await assentar();
+    const nomesDasSecoes = [...dossie().querySelectorAll('details')].map((d) => d.getAttribute('aria-label') ?? '');
+    expect(nomesDasSecoes).toEqual(['O que o Farol observa', 'Como revisar os PRs desta pessoa', 'Números', 'Últimas revisões', 'Contestações']);
+    expect(secao('O que o Farol observa').open).toBe(true);
+    for (const nome of nomesDasSecoes.slice(1)) expect(secao(nome).open, nome).toBe(false);
+    expect(resumoDe('O que o Farol observa')).toBe('O que o Farol observa2 pontos');
+    expect(resumoDe('Como revisar os PRs desta pessoa')).toBe('Como revisar os PRs desta pessoaSênior · Backend: Avançado');
+    expect(resumoDe('Números')).toBe('Números2 entradas · 1 aprovação');
+    expect(resumoDe('Últimas revisões')).toBe('Últimas revisões2');
+    expect(resumoDe('Contestações')).toBe('Contestações1');
+  });
+
+  it('"O que o Farol observa" traz os pontos das entradas, de markdown, com o dia e o PR', async () => {
     montar({ url: '/time?autor=Ana-Souza' });
     await assentar();
-    const entradas = within(dossie()).getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
-    expect(entradas).toEqual(['16/11/2026, PR #12 de dono/repo, Aprovação', '10/11/2026, PR #7 de dono/repo, Pedido de mudanças']);
-    const primeira = within(dossie()).getAllByRole('listitem').find((li) => li.textContent?.includes('caso de borda')) as HTMLElement;
-    expect(primeira.querySelector('code')?.textContent).toBe('Map');
-    expect(primeira.querySelector('strong')?.textContent).toBe('limite');
-    expect(within(dossie()).getByText('Sem pontos anotados nesta revisão.')).toBeTruthy();
+    const observa = secao('O que o Farol observa');
+    // só a entrada com pontos aparece aqui; a outra está nas últimas revisões
+    expect(within(observa).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['16/11/2026, PR #12 de dono/repo, Aprovação']);
+    expect(within(observa).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Cobriu o caso de borda com Map.', 'Teste novo para o limite.']);
+    expect(observa.querySelector('li code')?.textContent).toBe('Map');
+    expect(observa.querySelector('li strong')?.textContent).toBe('limite');
+  });
+
+  it('"Números" conta só as entradas listadas, e diz que o motor não manda número por pessoa', async () => {
+    montar({ url: '/time?autor=Ana-Souza' });
+    await assentar();
+    const numeros = secao('Números');
+    const caixas = [...numeros.querySelectorAll('dl > div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`);
+    expect(caixas).toEqual(['Entradas guardadas: 2', 'Aprovações: 1', 'Pedidos de mudança: 1', 'Comentários: 0']);
+    expect(numeros.textContent).toContain('O motor não manda números por pessoa');
+  });
+
+  it('"Últimas revisões" mostra uma entrada por linha, com a bolinha do desfecho e o dia', async () => {
+    montar({ url: '/time?autor=Ana-Souza' });
+    await assentar();
+    const itens = within(secao('Últimas revisões')).getAllByRole('listitem');
+    expect(itens.map((li) => li.textContent)).toEqual(['Aprovação: PR #12 de dono/repo · 16/11/2026', 'Pedido de mudanças: PR #7 de dono/repo · 10/11/2026']);
+    // a cor é a mesma do Histórico (tomDoDesfecho): aprovação verde, pedido de mudanças vermelho
+    expect(itens.map((li) => li.querySelector('[data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'ruim']);
   });
 
   it('Escape e Voltar à lista fecham, e o foco volta ao botão que abriu', async () => {
     montar();
     await assentar();
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     act(() => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
     expect(window.location.search).toBe('');
     expect(semDossie()).toBe(true);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ver o dossiê de @bruno' }));
-    await clicar('Ver o dossiê de @bruno');
-    await clicar('Voltar à lista');
+    expect(document.activeElement).toBe(botaoDe('bruno'));
+    await abrir('bruno');
+    await clicar(VOLTAR);
     expect(window.location.search).toBe('');
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ver o dossiê de @bruno' }));
+    expect(document.activeElement).toBe(botaoDe('bruno'));
   });
 
   it('Escape dentro de um seletor é do seletor, e não fecha o dossiê', async () => {
     montar({ url: '/time?autor=bruno' });
     await assentar();
     act(() => { fireEvent.keyDown(screen.getByLabelText('Papel'), { key: 'Escape' }); });
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
   });
 
   it('o voltar do navegador fecha o dossiê', async () => {
     montar();
     await assentar();
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     act(() => { voltarPara('/time'); });
     expect(semDossie()).toBe(true);
   });
 
   it('endereço colado abre o dossiê, sem diferenciar a caixa do login', async () => {
     montar({ url: '/time?autor=ana-souza' });
-    expect(screen.getByText('Carregando o dossiê.')).toBeTruthy();
+    // carregando: o esqueleto, e o título já é o lugar do foco
+    expect(screen.getByText('Carregando o dossiê.').getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(tituloDoDossie());
     await assentar();
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @Ana-Souza' })).toBeTruthy();
+    expect(dossieDe('Ana-Souza')).toBeTruthy();
+    expect(screen.queryByText('Carregando o dossiê.')).toBeNull();
+    // o foco fica no título, que agora diz o nome
+    expect(document.activeElement).toBe(tituloDoDossie());
+    expect(tituloDoDossie().textContent).toBe('Ana Souza');
   });
 
   it('login que o motor não conhece diz que não há dossiê nem perfil, e o que uma remoção deixa', async () => {
@@ -318,11 +407,15 @@ describe('Time: o dossiê', () => {
   it('sem dossiê e sem entradas têm textos diferentes', async () => {
     montar({ url: '/time?autor=caio' });
     await assentar();
-    expect(screen.getByText(/O motor não tem dossiê de @caio/)).toBeTruthy();
+    expect(within(secao('O que o Farol observa')).getByText(/O motor não tem dossiê de @caio/)).toBeTruthy();
+    expect(subDoDossie()).toBe('@caio · Pleno · sem dossiê');
+    // sem entradas, não há números nem últimas revisões a mostrar
+    expect(within(dossie()).queryByRole('group', { name: 'Números' })).toBeNull();
     cleanup();
     montar({ url: '/time?autor=dora', responder: () => corpo([{ login: 'dora', entries: [] }]) });
     await assentar();
-    expect(screen.getByText('O dossiê de @dora existe, mas está sem entradas.')).toBeTruthy();
+    expect(within(secao('O que o Farol observa')).getByText('O dossiê de @dora existe, mas está sem entradas.')).toBeTruthy();
+    expect(within(dossie()).queryByRole('group', { name: 'Últimas revisões' })).toBeNull();
   });
 
   it('se a lista falha com o dossiê aberto, o erro aparece com o Tentar de novo', async () => {
@@ -335,7 +428,7 @@ describe('Time: o dossiê', () => {
     await clicar('Tentar de novo');
     await assentar();
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(campos(dossie())).toContain('Papel: Júnior');
+    expect(subDoDossie()).toContain('Júnior');
   });
 
   it('recarga que falha com o dossiê aberto não fica muda: o erro aparece e diz que a tela é da carga anterior', async () => {
@@ -348,8 +441,8 @@ describe('Time: o dossiê', () => {
     await clicar('Atualizar');
     await assentar();
     expect(screen.getByRole('alert').textContent).toContain('Erro: Não deu para falar com o motor (falha de rede). O que está na tela é da última carga que deu certo.');
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
+    expect(within(dossie()).getByRole('button', { name: 'Tentar de novo' })).toBeTruthy();
   });
 
   it('mostra as contestações que o motor guarda dos PRs da pessoa, e diz quantas entram no prompt', async () => {
@@ -365,12 +458,13 @@ describe('Time: o dossiê', () => {
       },
     });
     await assentar();
-    const secao = screen.getByRole('region', { name: 'Contestações registradas' });
-    expect(within(secao).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    const contestacoes = secao('Contestações');
+    expect(contestacoes.open).toBe(false);
+    expect(within(contestacoes).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'PR #3 de dono/outro: O autor tinha razão. Nota: era intencional',
       'PR #4 de dono/outro: suspeita do motor, ainda sem confirmação',
     ]);
-    expect(secao.textContent).toContain('entram só as 5 confirmadas mais recentes; suspeita sem confirmação não entra');
+    expect(contestacoes.textContent).toContain('entram só as 5 confirmadas mais recentes; suspeita sem confirmação não entra');
   });
 });
 
@@ -418,9 +512,10 @@ describe('Time: papel e competência', () => {
     expect(regiao().textContent).not.toContain('Atenção');
     expect(document.activeElement).toBe(regiao());
     // a tela não muda por conta própria: o perfil mostrado só troca com o estado do motor
-    expect(campos(dossie())).toContain('Papel: Sênior');
+    expect(subDoDossie()).toContain('Sênior');
     t.trocarSnapshot(comPerfis(gravado));
-    expect(campos(dossie())).toContain('Papel: Tech Lead');
+    expect(subDoDossie()).toContain('Tech Lead');
+    expect(resumoDe('Como revisar os PRs desta pessoa')).toContain('Tech Lead · Backend: Avançado · Dados: Básico');
     expect(screen.getByText('Sem alteração por salvar.')).toBeTruthy();
   });
 
@@ -555,7 +650,10 @@ describe('Time: papel e competência', () => {
     await assentar();
     escolher('Papel', 'pleno');
     await clicar('Salvar papel e competência de @bruno');
-    expect((screen.getByRole('button', { name: 'Enviando: Salvar papel e competência de @bruno' }) as HTMLButtonElement).disabled).toBe(true);
+    // o botão ocupado diz o processo, com o spinner, e fica desabilitado
+    const salvando = screen.getByRole('button', { name: 'Salvando…' }) as HTMLButtonElement;
+    expect(salvando.disabled).toBe(true);
+    expect(salvando.querySelector('[data-tamanho="p"]')).toBeTruthy();
     const remover = screen.getByRole('button', { name: 'Remover @bruno do Time' }) as HTMLButtonElement;
     expect(remover.disabled).toBe(true);
     await act(async () => { soltar(corpo({ ok: true })); });
@@ -569,7 +667,7 @@ describe('Time: edição não salva', () => {
   const abrirEditando = async () => {
     const t = montar();
     await assentar();
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     escolher('Papel', 'pleno');
     return t;
   };
@@ -577,7 +675,7 @@ describe('Time: edição não salva', () => {
 
   it('Voltar à lista com edição por salvar pergunta antes, e o foco vai a Continuar editando', async () => {
     const t = await abrirEditando();
-    await clicar('Voltar à lista');
+    await clicar(VOLTAR);
     expect(pergunta()?.textContent).toContain('não foram salvos');
     expect(pergunta()?.textContent).toContain('nada foi enviado ao motor');
     expect(window.location.search).toBe('?autor=bruno');
@@ -587,9 +685,9 @@ describe('Time: edição não salva', () => {
 
   it('Continuar editando fecha a pergunta, mantém a edição e devolve o foco', async () => {
     await abrirEditando();
-    const voltar = screen.getByRole('button', { name: 'Voltar à lista' });
+    const voltar = screen.getByRole('button', { name: VOLTAR });
     voltar.focus();
-    await clicar('Voltar à lista');
+    await clicar(VOLTAR);
     await clicar('Continuar editando');
     expect(pergunta()).toBeNull();
     expect((screen.getByLabelText('Papel') as HTMLSelectElement).value).toBe('pleno');
@@ -600,28 +698,28 @@ describe('Time: edição não salva', () => {
     await abrirEditando();
     act(() => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
     expect(pergunta()).not.toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
     act(() => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
     expect(pergunta()).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
     expect((screen.getByLabelText('Papel') as HTMLSelectElement).value).toBe('pleno');
   });
 
   it('Descartar fecha o dossiê sem enviar nada, e a edição não volta ao reabrir', async () => {
     const t = await abrirEditando();
-    await clicar('Voltar à lista');
+    await clicar(VOLTAR);
     await clicar('Descartar a edição do perfil de @bruno e voltar à lista');
     expect(semDossie()).toBe(true);
     expect(window.location.search).toBe('');
     expect(t.post).not.toHaveBeenCalled();
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     expect((screen.getByLabelText('Papel') as HTMLSelectElement).value).toBe('junior');
   });
 
   it('sem edição por salvar, ou com a edição desfeita à mão, não há pergunta', async () => {
     await abrirEditando();
     escolher('Papel', 'junior');
-    await clicar('Voltar à lista');
+    await clicar(VOLTAR);
     expect(semDossie()).toBe(true);
   });
 
@@ -634,10 +732,10 @@ describe('Time: edição não salva', () => {
 
   it('trocar de pessoa pelo endereço com a pergunta de descarte aberta não leva a pergunta nem a edição', async () => {
     const t = await abrirEditando();
-    await clicar('Voltar à lista');
+    await clicar(VOLTAR);
     expect(pergunta()).not.toBeNull();
     act(() => { voltarPara('/time?autor=Ana-Souza'); });
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @Ana-Souza' })).toBeTruthy();
+    expect(dossieDe('Ana-Souza')).toBeTruthy();
     expect(screen.queryByRole('group', { name: /Descartar a edição/ })).toBeNull();
     expect((screen.getByLabelText('Papel') as HTMLSelectElement).value).toBe('senior');
     expect(screen.getByText('Sem alteração por salvar.')).toBeTruthy();
@@ -651,7 +749,6 @@ describe('Time: remover do Time', () => {
   it('pergunta antes, dizendo as três coisas apagadas, o que continua, que não desfaz e o efeito', async () => {
     const t = montar({ url: '/time?autor=Ana-Souza', snapshot: comContestacao });
     await assentar();
-    expect(screen.getByRole('region', { name: 'Remover do Time' }).textContent).toContain('As revisões dos PRs dela continuam no Histórico e no log do motor');
     await clicar('Remover @Ana-Souza do Time');
     const pergunta = screen.getByRole('group', { name: 'Remover @Ana-Souza do Time?' });
     expect(pergunta.textContent).toContain('O motor apaga três coisas de @Ana-Souza: o dossiê (2 entradas de memória nesta tela), o papel e a competência configurados e todos os registros de contestação dos PRs dela (1 nesta tela).');
@@ -679,7 +776,7 @@ describe('Time: remover do Time', () => {
     await clicar('Remover @bruno do Time');
     act(() => { fireEvent.keyDown(screen.getByRole('button', { name: 'Voltar sem enviar' }), { key: 'Escape' }); });
     expect(screen.queryByRole('group', { name: /Remover @bruno/ })).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
     expect(t.post).not.toHaveBeenCalled();
   });
 
@@ -688,7 +785,7 @@ describe('Time: remover do Time', () => {
     await assentar();
     await clicar('Remover @bruno do Time');
     act(() => { voltarPara('/time?autor=Ana-Souza'); });
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @Ana-Souza' })).toBeTruthy();
+    expect(dossieDe('Ana-Souza')).toBeTruthy();
     expect(screen.queryByRole('group', { name: /^Remover @/ })).toBeNull();
     expect(screen.queryByRole('button', { name: new RegExp(`^${CONFIRMAR}`) })).toBeNull();
     expect(screen.getByRole('button', { name: 'Remover @Ana-Souza do Time' })).toBeTruthy();
@@ -698,15 +795,31 @@ describe('Time: remover do Time', () => {
   it('o voltar do navegador com a confirmação aberta fecha tudo sem enviar', async () => {
     const t = montar();
     await assentar();
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     await clicar('Remover @bruno do Time');
     act(() => { voltarPara('/time'); });
     expect(semDossie()).toBe(true);
     expect(screen.queryByRole('group', { name: /^Remover @/ })).toBeNull();
     expect(t.post).not.toHaveBeenCalled();
     // reabrir não traz a confirmação de volta
-    await clicar('Ver o dossiê de @bruno');
+    await abrir('bruno');
     expect(screen.queryByRole('group', { name: /^Remover @/ })).toBeNull();
+  });
+
+  it('com a remoção no ar o botão diz "Removendo…", ocupado, e o salvar da mesma pessoa espera', async () => {
+    let soltar!: (r: Resposta) => void;
+    montar({ url: '/time?autor=bruno', aoPostar: () => new Promise<Resposta>((resolver) => { soltar = resolver; }) });
+    await assentar();
+    escolher('Papel', 'pleno');
+    await clicar('Remover @bruno do Time');
+    await clicar(`${CONFIRMAR}: @bruno`);
+    const removendo = screen.getByRole('button', { name: 'Removendo…' }) as HTMLButtonElement;
+    expect(removendo.disabled).toBe(true);
+    expect(removendo.querySelector('[data-tamanho="p"]')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Salvar papel e competência de @bruno' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { soltar(corpo({ ok: false, error: 'login inválido' })); });
+    await assentar();
+    expect(screen.queryByRole('button', { name: 'Removendo…' })).toBeNull();
   });
 
   it('duplo clique no confirmar manda um pedido só', async () => {
@@ -746,9 +859,9 @@ describe('Time: remover do Time', () => {
     expect(window.location.search).toBe('');
     expect(document.activeElement).toBe(regiao());
     // o perfil dela ainda está no snapshot que a tela tem: mesmo assim ela não reaparece
-    expect(titulosDosCartoes()).toEqual(['@bruno', '@caio']);
+    expect(nomes()).toEqual(['bruno', 'caio']);
     t.trocarSnapshot(comPerfis({ bruno: PESSOAS.bruno, caio: PESSOAS.caio }));
-    expect(titulosDosCartoes()).toEqual(['@bruno', '@caio']);
+    expect(nomes()).toEqual(['bruno', 'caio']);
   });
 
   it('remoção aceita com a recarga falhando: o dossiê fecha, o erro aparece, e a pessoa não fica na lista com ações', async () => {
@@ -766,7 +879,7 @@ describe('Time: remover do Time', () => {
     expect(screen.getByRole('alert').textContent).toContain('falha de rede');
     expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeTruthy();
     // a lista é a da carga anterior, sem quem foi removido
-    expect(titulosDosCartoes()).toEqual(['@bruno', '@caio']);
+    expect(nomes()).toEqual(['bruno', 'caio']);
     expect(screen.queryByRole('button', { name: /Ana-Souza/ })).toBeNull();
     // o endereço dela, colado, não reabre Salvar nem Remover
     act(() => { voltarPara('/time?autor=Ana-Souza'); });
@@ -789,7 +902,7 @@ describe('Time: remover do Time', () => {
     await assentar();
     expect(regiao().textContent).toContain('Erro: O motor recusou: login inválido');
     expect(t.pedidos()).toEqual(['/api/team']);
-    expect(screen.getByRole('heading', { level: 2, name: 'Dossiê de @bruno' })).toBeTruthy();
+    expect(dossieDe('bruno')).toBeTruthy();
   });
 
   it('quando o motor não tinha nada, a tela diz isso em vez de afirmar que apagou', async () => {

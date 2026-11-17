@@ -1,53 +1,23 @@
-// Como o Radar fatia o snapshot nos blocos da tela. Nada aqui decide: cada corte lê um campo
-// que o motor já mandou pronto.
-import type { ItemDaFila, Pendencia, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
+// Como o Radar fatia o snapshot nas seções da tela. Nada aqui decide: cada corte lê um campo
+// que o motor já mandou pronto. As pendências da mesa (`decisions.pending`) não entram no
+// Radar: o revisor é autônomo, e a revisão que não publicou nada aparece no Histórico.
+import type { ItemDaFila, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Snapshot } from '@/contratos/snapshot';
-import { dataHora, linkDoPr } from './formato';
-
-// As pendências em dois blocos. A que o motor marcou com a espera do CI (`esperaCi`), ou com a
-// recuperação da prova que ele mesmo retoma (`esperaProva` sem `pedeVoce`), não espera
-// clique: vai para "Esperando o CI". O resto é "Precisa de você". A ordem é a do motor.
-export function fatiarPendencias(pendentes: readonly Pendencia[]): { precisam: Pendencia[]; esperando: Pendencia[] } {
-  const espera = (p: Pendencia): boolean => p.esperaCi !== undefined || (p.esperaProva !== undefined && !p.esperaProva.pedeVoce);
-  return { precisam: pendentes.filter((p) => !espera(p)), esperando: pendentes.filter(espera) };
-}
-
-export interface AcoesDaPendencia {
-  aprovar: boolean;
-  pedirMudancas: boolean;
-  comentar: boolean;
-  pular: boolean;
-  revisar: boolean;
-}
-
-// Os botões de uma pendência, pelos dois campos com que o motor diz o que não pode sair:
-// - `prProprio`: o GitHub recusa a revisão decisiva do autor, então só Comentar e Pular;
-// - `blockedKind: "stale_head"`: o texto fala de um commit anterior e não sai por clique
-//   nenhum; o que cabe é revisar de novo, ou pular.
-// Fora desses dois, a tela oferece tudo e quem recusa é o motor, com o motivo.
-export function acoesDaPendencia(p: Pendencia): AcoesDaPendencia {
-  if (p.blockedKind === 'stale_head') {
-    return { aprovar: false, pedirMudancas: false, comentar: false, pular: true, revisar: linkDoPr(p.pr?.url) !== null };
-  }
-  const decisivos = p.prProprio !== true;
-  return { aprovar: decisivos, pedirMudancas: decisivos, comentar: true, pular: true, revisar: false };
-}
+import { dataHora, dia, horaCurta } from './formato';
 
 // O que a Fila mostra, sem repetir PR que já aparece em outro lugar da tela. É só exibição:
-// - PR com sessão em curso está em "Analisando agora", e sai da fila e da espera;
-// - PR em espera de execução que ainda está na fila aparece uma vez, na fila;
-// - PR em espera que tem pendência está em "Precisa de você" ou em "Esperando o CI".
+// - PR com sessão em curso está em "Em análise", e sai da fila e da espera;
+// - PR em espera de execução que ainda está na fila aparece uma vez, na fila.
 // A ordem é a do motor, e a chave do PR é comparada sem diferenciar caixa.
 export function fatiarFila(
   fila: readonly ItemDaFila[],
   emEspera: readonly PrEmEspera[],
   sessoes: readonly SessaoAtiva[],
-  pendentes: readonly Pendencia[],
 ): { fila: ItemDaFila[]; emEspera: PrEmEspera[] } {
   const igual = (chave: string): string => chave.toLowerCase();
   const emSessao = new Set(sessoes.flatMap((s) => [...(s.keys ?? []), ...(s.pr?.key ? [s.pr.key] : [])]).map(igual));
   const naFila = fila.filter((pr) => !emSessao.has(igual(pr.key)));
-  const jaNaTela = new Set([...emSessao, ...naFila.map((pr) => igual(pr.key)), ...pendentes.map((p) => igual(p.key))]);
+  const jaNaTela = new Set([...emSessao, ...naFila.map((pr) => igual(pr.key))]);
   const vistos = new Set<string>();
   const esperando = emEspera.filter((pr) => {
     const chave = igual(pr.key);
@@ -58,9 +28,23 @@ export function fatiarFila(
   return { fila: naFila, emEspera: esperando };
 }
 
+// A linha das pendências: revisões que o motor guardou sem publicar (política em espera
+// definida no motor, publicação que desistiu). Não há mesa: a linha só conta e leva ao
+// Histórico, que mostra cada uma como "nada postado".
+export function textoDasPendencias(n: number): string {
+  return n === 1 ? '1 revisão sem nada postado' : `${n} revisões sem nada postado`;
+}
+
+// A frase de baixo do título: o que está na tela agora, contado depois de fatiarFila.
+export function resumoDoTopo(emAnalise: number, naFila: number): string {
+  return `${emAnalise} em análise · ${naFila} na fila`;
+}
+
 export interface AvisoDoMotor {
   tom: 'erro' | 'info';
   texto: string;
+  // o aviso leva o Checar agora junto: a checagem que falhou
+  checar?: true;
 }
 
 // O que o snapshot diz que impede o motor de trabalhar: sem conta, sem token do gh, a
@@ -77,7 +61,7 @@ export function avisosDoMotor(s: Snapshot, fuso?: string): AvisoDoMotor[] {
     }
   }
   if (s.status === 'error' && s.error) {
-    avisos.push({ tom: 'erro', texto: `A última checagem falhou: ${s.error}. O motor tenta de novo no próximo ciclo.` });
+    avisos.push({ tom: 'erro', texto: `A última checagem falhou: ${s.error}. O motor tenta de novo no próximo ciclo.`, checar: true });
   }
   if (s.buscasPausadas?.length) {
     const quais = s.buscasPausadas.map((b) => `${b.conta || 'conta do motor'} até ${dataHora(b.ate, fuso)}`).join('; ');
@@ -86,9 +70,9 @@ export function avisosDoMotor(s: Snapshot, fuso?: string): AvisoDoMotor[] {
   return avisos;
 }
 
-// As chaves de que os blocos dependem e que o estado não trouxe (ou trouxe com forma errada,
-// sem valor anterior para manter). O bloco aparece vazio, e a tela diz por quê.
-const BLOCOS = [['decisions', 'as pendências'], ['activeSessions', 'as sessões em curso'], ['queue', 'a fila']] as const;
+// As chaves de que as seções dependem e que o estado não trouxe (ou trouxe com forma errada,
+// sem valor anterior para manter). A seção aparece vazia, e a tela diz por quê.
+const BLOCOS = [['activeSessions', 'as sessões em curso'], ['queue', 'a fila'], ['decisions', 'as revisões postadas']] as const;
 
 export function chavesAusentes(s: Snapshot): string[] {
   return BLOCOS.filter(([chave]) => s[chave] === undefined).map(([, nome]) => nome);
@@ -112,4 +96,15 @@ export function textoDaFilaVazia(s: Snapshot): string {
   return s.status === 'error'
     ? 'A primeira checagem falhou: ainda não dá para dizer o que está na fila.'
     : 'A primeira checagem ainda não terminou.';
+}
+
+// A frase do "Tudo revisado": a fila vazia e, quando o motor manda, a próxima checagem. A hora
+// basta quando a checagem é hoje; noutro dia vai a data junto. `agora` e `fuso` existem para o
+// teste: a tela usa o relógio e o fuso do navegador.
+export function textoDoTudoEmDia(s: Snapshot, agora: number = Date.now(), fuso?: string): string {
+  const proxima = s.nextCheckAt;
+  if (!proxima) return 'Nenhum PR na fila.';
+  const hoje = dia(proxima, fuso) === dia(agora, fuso);
+  const quando = hoje ? `às ${horaCurta(proxima, fuso)}` : `em ${dataHora(proxima, fuso)}`;
+  return `Nenhum PR na fila. A próxima checagem é ${quando}.`;
 }

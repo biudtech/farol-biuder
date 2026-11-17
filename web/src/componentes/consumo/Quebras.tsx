@@ -1,11 +1,13 @@
 'use client';
 
-// As quebras do período: por tipo de sessão e por modelo. As somas são do motor. A
-// participação é a fatia de cada linha no total que o motor mandou, calculada só para exibir.
-import { memo, useId, useMemo } from 'react';
+// As quebras do período: por tipo de sessão e por modelo, cada uma fechada numa linha com o
+// destaque no resumo. As somas são do motor. A participação é a fatia de cada linha no total
+// que o motor mandou, calculada só para exibir. O motor não manda quebra por repositório.
+import { memo, useMemo } from 'react';
 import type { Relatorio } from '@/contratos/consumo';
 import { dolar, inteiro, participacao, rotuloDoModelo, rotuloDoTipo } from '@/consumo/formato';
-import comuns from '../radar/Radar.module.css';
+import { maiorDia } from '@/consumo/grafico';
+import { Linha, ui } from '../ui';
 import estilos from './Consumo.module.css';
 
 interface Props {
@@ -17,13 +19,31 @@ function entradaESaida(item: { inputTokens?: number; outputTokens?: number }): n
   return item.inputTokens === undefined || item.outputTokens === undefined ? undefined : item.inputTokens + item.outputTokens;
 }
 
+function Resumo({ titulo, destaque }: { titulo: string; destaque: string }) {
+  return (
+    <>
+      <span className={ui.t}>{titulo}</span>
+      {destaque ? <span className={`${ui.r} ${ui.empurra}`}>{destaque}</span> : null}
+    </>
+  );
+}
+
+// O destaque do resumo: o tipo de maior custo e a fatia dele no total do motor. É comparação
+// e formatação, não soma.
+export function destaqueDoTipo(relatorio: Relatorio): string {
+  const { byKind, totals } = relatorio;
+  if (!byKind.length) return 'o motor não mandou';
+  const maior = maiorDia(byKind, (tipo) => tipo.costUsd);
+  if (!maior) return `${inteiro(byKind.length)} ${byKind.length === 1 ? 'tipo' : 'tipos'}, sem custo`;
+  const fatia = participacao(maior.costUsd, totals.costUsd);
+  return fatia ? `${rotuloDoTipo(maior.name)} é ${fatia} do custo` : `${rotuloDoTipo(maior.name)} lidera`;
+}
+
 export const PorTipo = memo(function PorTipo({ relatorio }: Props) {
-  const id = useId();
   const { byKind, totals } = relatorio;
   return (
-    <section className={comuns.bloco} aria-labelledby={id}>
-      <h2 id={id} className={comuns.tituloDoBloco}>Por tipo de sessão</h2>
-      {byKind.length === 0 ? <p className={comuns.vazio}>O motor não mandou a quebra por tipo.</p> : (
+    <Linha resumo={<Resumo titulo="Por tipo" destaque={destaqueDoTipo(relatorio)} />}>
+      {byKind.length === 0 ? <p className={ui.mini}>O motor não mandou a quebra por tipo.</p> : (
         <div className={estilos.rolagem} role="region" aria-label="Tabela do consumo por tipo de sessão" tabIndex={0}>
           <table className={estilos.tabela}>
             <caption>Consumo do período por tipo de sessão, na ordem do motor.</caption>
@@ -56,21 +76,25 @@ export const PorTipo = memo(function PorTipo({ relatorio }: Props) {
           </table>
         </div>
       )}
-    </section>
+    </Linha>
   );
 });
 
 export const PorModelo = memo(function PorModelo({ relatorio }: Props) {
-  const id = useId();
   const { models, totals } = relatorio;
   // O motor manda os modelos na ordem em que apareceram no diário, que não é ordem de valor:
   // a tela ordena pelos tokens de entrada e saída, do maior para o menor (é formatação).
   const ordenados = useMemo(() => [...models].sort((a, b) => (entradaESaida(b) ?? -1) - (entradaESaida(a) ?? -1)), [models]);
   const todo = entradaESaida(totals);
+  const primeiro = ordenados[0];
+  let destaque = 'nenhum modelo';
+  if (primeiro) {
+    const fatia = participacao(entradaESaida(primeiro), todo);
+    destaque = fatia ? `${rotuloDoModelo(primeiro.name)} é ${fatia} dos tokens` : `${inteiro(ordenados.length)} ${ordenados.length === 1 ? 'modelo' : 'modelos'}`;
+  }
   return (
-    <section className={comuns.bloco} aria-labelledby={id}>
-      <h2 id={id} className={comuns.tituloDoBloco}>Por modelo</h2>
-      {ordenados.length === 0 ? <p className={comuns.vazio}>Nenhum modelo com execução neste período.</p> : (
+    <Linha resumo={<Resumo titulo="Por modelo" destaque={destaque} />}>
+      {ordenados.length === 0 ? <p className={ui.mini}>Nenhum modelo com execução neste período.</p> : (
         <div className={estilos.rolagem} role="region" aria-label="Tabela do consumo por modelo" tabIndex={0}>
           <table className={estilos.tabela}>
             <caption>Consumo do período por modelo, do que mais usou tokens de entrada e saída ao que menos usou.</caption>
@@ -97,7 +121,7 @@ export const PorModelo = memo(function PorModelo({ relatorio }: Props) {
           </table>
         </div>
       )}
-      <p className={comuns.meta}>O motor não manda custo nem cache por modelo neste relatório. Uma execução que usou dois modelos conta nos dois.</p>
-    </section>
+      <p className={ui.mini}>O motor não manda custo nem cache por modelo neste relatório. Uma execução que usou dois modelos conta nos dois.</p>
+    </Linha>
   );
 });

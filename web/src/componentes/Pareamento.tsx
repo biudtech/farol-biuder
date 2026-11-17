@@ -16,6 +16,7 @@ import type { App, MotivoDoPareamento } from '@/estado/app';
 import { BASE_DO_MOTOR, app as appDoNavegador, useApp } from '@/estado/instancia';
 import { textoDaSaida } from '@/sistema/sessoes';
 import { Logo } from './Logo';
+import { Spinner } from './ui';
 import estilos from './Pareamento.module.css';
 
 const COMANDO = 'node tools/farol-parear.js';
@@ -79,6 +80,7 @@ export function Pareamento({ app = appDoNavegador, base = BASE_DO_MOTOR }: Props
     <main className={estilos.pagina}>
       <div className={estilos.marca}>
         <Logo />
+        <i className={estilos.divisor} aria-hidden="true" />
         <span className={estilos.nome}>Farol</span>
       </div>
 
@@ -144,7 +146,7 @@ export function Pareamento({ app = appDoNavegador, base = BASE_DO_MOTOR }: Props
 
         <div className={estilos.acoes}>
           <button type="submit" className={`${estilos.botao} ${estilos.primario}`} disabled={enviando}>
-            Parear
+            {enviando ? <><Spinner tamanho="p" />Pareando…</> : 'Parear'}
           </button>
           <span className={estilos.dica}>Nenhum cookie é criado: o token fica guardado só neste navegador.</span>
         </div>

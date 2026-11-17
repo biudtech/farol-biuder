@@ -4,7 +4,7 @@
 //
 // Cada ação mexe numa seção só: a da conta vai a POST /api/accounts/edit com os campos que a
 // pessoa alterou; a da automação vai a POST /api/settings só com as chaves de automação que
-// ela alterou; a de sessão vai a POST /api/auth/revoke. Nenhuma ação manda `claudeProfiles`:
+// ela alterou; a de sessão (Encerrar) vai a POST /api/auth/revoke. Nenhuma ação manda `claudeProfiles`:
 // a tela não edita perfil nem teto de gasto.
 import type { Objeto } from '@/contratos/formas';
 import type { ConfigDoSistema } from '@/contratos/sistema';
@@ -25,9 +25,10 @@ export type AcaoDoSistema =
   // motor publica sozinho, já por extenso e calculadas contra o valor atual do motor: havendo
   // alguma, a ação pergunta antes.
   | (Base & { tipo: 'conta'; user: string; campos: CamposDaConta; ampliacoes: readonly string[] })
-  // As chaves de automação que a pessoa alterou, e só elas.
-  | (Base & { tipo: 'automacao'; corpo: CorpoDaAutomacao; ampliacoes: readonly string[] })
-  // Revoga uma sessão pareada pelo `id`. `atual`: é a deste navegador.
+  // As chaves de automação que a pessoa alterou, e só elas. Nenhuma amplia o que o motor
+  // publica: a espera do CI, cuja mudança ampliava, saiu da tela.
+  | (Base & { tipo: 'automacao'; corpo: CorpoDaAutomacao })
+  // Encerra (revoga) uma sessão pareada pelo `id`. `atual`: é a deste navegador.
   | (Base & { tipo: 'revogarSessao'; id: string; rotulo: string; atual: boolean });
 
 export const TIPOS_DO_SISTEMA = ['conta', 'automacao', 'revogarSessao'] as const;
@@ -44,7 +45,7 @@ export function rotuloDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return 'Salvar conta e política';
     case 'automacao': return 'Salvar automação';
-    case 'revogarSessao': return 'Revogar';
+    case 'revogarSessao': return 'Encerrar';
   }
 }
 
@@ -52,7 +53,7 @@ export function nomeDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return `Salvar conta e política de ${acao.nome}`;
     case 'automacao': return 'Salvar automação';
-    case 'revogarSessao': return `Revogar a sessão ${acao.nome}`;
+    case 'revogarSessao': return `Encerrar a sessão ${acao.nome}`;
   }
 }
 
@@ -69,13 +70,13 @@ const REGISTRO_DA_POLITICA = 'O motor registra a mudança de política com a dat
 // lib/engine/approval-policy.js; caminhoNovo, lib/engine/desfecho-da-revisao.js), na hora de
 // começar cada revisão (politicaDeInicio, lib/engine/review-scope.js) e quando uma espera do
 // CI já armada fecha (politicaAindaAprova, lib/engine/espera-ci.js). Ninguém ouve a mudança
-// de configuração para reavaliar a mesa: a pendência que foi a "Precisa de você" porque a
-// política mandava esperar continua lá.
-export const QUANDO_A_POLITICA_VALE = 'Quando passa a valer: o motor lê a política ao começar cada revisão, ao decidir o resultado de cada uma e quando uma espera do CI fecha. Então vale para os PRs da fila a partir da próxima checagem, para as revisões que terminarem daqui em diante e para as aprovações que estão esperando o CI. O que já está em "Precisa de você" não é reavaliado: continua esperando o seu clique.';
+// de configuração para reavaliar o que já foi decidido: o PR que a política anterior deixou
+// esperando continua esperando no motor, e esta tela não tem decisão sobre ele.
+export const QUANDO_A_POLITICA_VALE = 'Quando passa a valer: o motor lê a política ao começar cada revisão, ao decidir o resultado de cada uma e quando uma espera do CI fecha. Então vale para os PRs da fila a partir da próxima checagem e para as revisões que terminarem daqui em diante. O PR que a política anterior deixou esperando não é reavaliado: continua esperando no motor, e esta tela não tem decisão sobre ele.';
 
-// A pergunta antes do POST. A conta e a automação só perguntam quando a mudança AMPLIA o que
-// o motor publica sozinho, dizendo o efeito de cada item; a que reduz vai direto. Revogar
-// sessão pergunta sempre.
+// A pergunta antes do POST. A conta só pergunta quando a mudança AMPLIA o que o motor publica
+// sozinho, dizendo o efeito de cada item; a que reduz vai direto. A automação não pergunta:
+// nenhuma das três chaves muda o que é publicado. Encerrar sessão pergunta sempre.
 export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | null {
   switch (acao.tipo) {
     case 'conta':
@@ -85,13 +86,7 @@ export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | n
         texto: `Esta mudança amplia o que o motor faz e publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} ${QUANDO_A_POLITICA_VALE} Toda publicação continua passando pelos gates do motor. ${REGISTRO_DA_POLITICA}`,
         confirmar: 'Salvar e ampliar a publicação automática',
       };
-    case 'automacao':
-      if (!acao.ampliacoes.length) return null;
-      return {
-        titulo: 'Desligar o CI antes de aprovar?',
-        texto: `Esta mudança amplia o que o motor publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} ${REGISTRO_DA_POLITICA}`,
-        confirmar: 'Salvar e desligar a espera do CI',
-      };
+    case 'automacao': return null;
     case 'revogarSessao': return perguntaDeRevogar({ rotulo: acao.rotulo, atual: acao.atual });
   }
 }
@@ -132,8 +127,8 @@ function desfechoDaAutomacao(acao: Extract<AcaoDoSistema, { tipo: 'automacao' }>
 }
 
 function desfechoDaRevogacao(acao: Extract<AcaoDoSistema, { tipo: 'revogarSessao' }>, dados: AceiteDoSistema): DesfechoDoSistema {
-  if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor revogou a sessão deste navegador. Voltando ao pareamento.' };
-  return { tipo: 'ok', texto: `O motor revogou a sessão ${acao.nome}: o token dela não vale mais.` };
+  if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' };
+  return { tipo: 'ok', texto: `O motor encerrou a sessão ${acao.nome}: o token dela não vale mais.` };
 }
 
 // O que a tela diz depois de `{ ok: true }`. O `ok` não é o desfecho: a frase sai do que a

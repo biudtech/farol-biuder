@@ -1,29 +1,31 @@
 'use client';
 
-// O dossiê de uma pessoa, aberto na própria página: o que o motor guarda sobre ela. As
-// entradas de memória vêm de GET /api/team, uma a uma, com o dia, o PR e o que foi publicado
-// quando o motor diz; o perfil vem de `config.people`, e as contestações, de `pushbacks`. O
-// foco vai ao título ao abrir, e Escape fecha. As ações são duas: salvar papel e competência
-// e remover a pessoa do Time, que apaga o dossiê, o perfil e as contestações e pergunta antes.
+// O dossiê de uma pessoa, aberto na própria página: o que o motor guarda sobre ela. No alto, o
+// avatar, o nome e uma linha com o papel e o que o motor sustenta (quantas entradas guarda e o
+// dia da mais recente: o motor não manda números por pessoa). Embaixo, uma linha por assunto:
+// "O que o Farol observa" aberta (os pontos que o motor anotou nas entradas, de markdown), e
+// fechadas, com o resumo na própria linha, a calibração (papel e competência), os números das
+// entradas listadas, as últimas revisões e as contestações. Remover a pessoa fica no fim,
+// discreto, e pergunta antes.
 //
-// Fechar com edição de perfil por salvar pergunta antes de descartar (Escape e "Voltar à
-// lista"). O voltar do navegador não passa por aqui: ele troca o endereço, e a edição vai
-// embora sem pergunta.
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { Autor, Pessoa, PessoasCruas } from '@/contratos/time';
-import { textoDoDesfecho } from '@/historico/rotulos';
+// O foco vai ao título ao abrir, e Escape fecha. Fechar com edição de perfil por salvar
+// pergunta antes de descartar (Escape e "Voltar à lista do Time"). O voltar do navegador não
+// passa por aqui: ele troca o endereço, e a edição vai embora sem pergunta.
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import type { Autor, EntradaDeMemoria, Pessoa, PessoasCruas } from '@/contratos/time';
+import { textoDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import {
-  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, prDaEntrada, textoDaCompetencia, textoDoPapel,
-  type ContestacaoDoAutor,
+  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
+  prDaEntrada, resumoDaCalibracao, type ContestacaoDoAutor,
 } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import { Markdown } from '../Markdown';
-import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import comuns from '../radar/Radar.module.css';
+import { Bolinha, Botao, Linha, ui } from '../ui';
 import { EditorDoPerfil, alvoDaPessoa } from './EditorDoPerfil';
-import { Campo } from './ListaDoTime';
+import { Avatar } from './ListaDoTime';
+import { RemoverDoTime } from './RemoverDoTime';
 import estilos from './Time.module.css';
 
 // carregando: a lista ainda não respondeu. ausente: o motor não tem dossiê nem perfil deste
@@ -35,52 +37,111 @@ export type LeituraDoDossie =
   | { fase: 'ausente' }
   | { fase: 'semLista' };
 
-function Memoria({ login, autor }: { login: string; autor: Autor | undefined }) {
-  const id = useId();
+const entradas = (n: number): string => (n === 1 ? '1 entrada' : `${n} entradas`);
+const pontos = (n: number): string => (n === 1 ? '1 ponto' : `${n} pontos`);
+
+// A frase sob o nome: o papel e o que o motor sustenta, sem número que ele não manda.
+function subDoDossie(login: string, autor: Autor | undefined, perfil: Pessoa | undefined): string {
+  const partes = [`@${login}`, papelCurto(perfil)];
+  if (!autor) partes.push('sem dossiê');
+  else if (!autor.entries.length) partes.push('dossiê sem entradas');
+  else {
+    partes.push(`${entradas(autor.entries.length)} na memória`);
+    const dia = dataDaEntrada(autor.entries[0]?.date);
+    if (dia) partes.push(`a mais recente em ${dia}`);
+  }
+  return partes.join(' · ');
+}
+
+// O dia, o PR e o que foi publicado, o que houver.
+function tituloDaEntrada(entrada: EntradaDeMemoria): string {
+  return [dataDaEntrada(entrada.date), prDaEntrada(entrada.ref), desfechoDaEntrada(entrada.verdict)].filter(Boolean).join(', ');
+}
+
+function Observa({ login, autor }: { login: string; autor: Autor | undefined }) {
+  const comPontos = autor?.entries.filter((e) => e.bullets.length) ?? [];
+  const total = comPontos.reduce((soma, e) => soma + e.bullets.length, 0);
+  let resumo = 'sem dossiê';
+  if (autor) resumo = autor.entries.length ? pontos(total) : 'sem entradas';
   return (
-    <section className={estilos.secao} aria-labelledby={id}>
-      <h3 id={id} className={estilos.tituloDaSecao}>Memória de revisões</h3>
-      {!autor ? <p className={comuns.vazio}>O motor não tem dossiê de @{login}: nenhuma revisão de PR desta pessoa ficou registrada na memória.</p> : null}
-      {autor && !autor.entries.length ? <p className={comuns.vazio}>O dossiê de @{login} existe, mas está sem entradas.</p> : null}
-      {autor?.entries.length ? (
+    <Linha aberta rotulo="O que o Farol observa" resumo={<><span className={ui.t}>O que o Farol observa</span><span className={`${ui.r} ${ui.empurra}`}>{resumo}</span></>}>
+      {!autor ? <p className={ui.vazio}>O motor não tem dossiê de @{login}: nenhuma revisão de PR desta pessoa ficou registrada na memória.</p> : null}
+      {autor && !autor.entries.length ? <p className={ui.vazio}>O dossiê de @{login} existe, mas está sem entradas.</p> : null}
+      {autor?.entries.length && !comPontos.length ? <p className={ui.mini}>As revisões guardadas não têm pontos anotados.</p> : null}
+      {comPontos.length ? (
         <>
-          <p className={comuns.meta}>
-            Uma entrada por revisão resolvida, a mais recente primeiro, com o que o motor anotou sobre o trabalho. Ele guarda as {TETO_DE_ENTRADAS} mais recentes, e o protocolo da sessão de revisão manda ler este dossiê ao revisar um PR novo desta pessoa.
+          {/* a ordem é a do motor: a entrada mais recente primeiro */}
+          {comPontos.map((entrada, i) => (
+            <div key={i} className={estilos.observacao}>
+              <h2 className={ui.grupo}>{tituloDaEntrada(entrada) || 'Entrada sem data, PR nem desfecho registrados'}</h2>
+              <Markdown texto={markdownDosPontos(entrada.bullets)} nivelBase={3} />
+            </div>
+          ))}
+          <p className={ui.mini}>
+            O que o motor anotou em cada revisão resolvida. Ele guarda as {TETO_DE_ENTRADAS} mais recentes, e a sessão lê este dossiê ao revisar um PR novo desta pessoa.
           </p>
-          <ol className={estilos.entradas}>
-            {autor.entries.map((entrada, i) => {
-              const titulo = [dataDaEntrada(entrada.date), prDaEntrada(entrada.ref), desfechoDaEntrada(entrada.verdict)].filter(Boolean).join(', ');
-              return (
-                <li key={i} className={estilos.entrada}>
-                  <h4 className={estilos.tituloDaEntrada}>{titulo || 'Entrada sem data, PR nem desfecho registrados'}</h4>
-                  {entrada.bullets.length
-                    ? <Markdown texto={markdownDosPontos(entrada.bullets)} nivelBase={5} />
-                    : <p className={comuns.meta}>Sem pontos anotados nesta revisão.</p>}
-                </li>
-              );
-            })}
-          </ol>
         </>
       ) : null}
-    </section>
+    </Linha>
+  );
+}
+
+function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }) {
+  const contagem = contagemDosDesfechos(autor.entries);
+  const caixas: Array<[string, number]> = [
+    ['Entradas guardadas', autor.entries.length],
+    ['Aprovações', contagem.aprovacao],
+    ['Pedidos de mudança', contagem.mudancas],
+    ['Comentários', contagem.comentario],
+  ];
+  if (contagem.outro) caixas.push(['Outros desfechos', contagem.outro]);
+  if (contestacoes) caixas.push(['Contestações', contestacoes]);
+  return (
+    <Linha rotulo="Números" resumo={<><span className={ui.t}>Números</span><span className={`${ui.r} ${ui.empurra}`}>{entradas(autor.entries.length)} · {contagem.aprovacao === 1 ? '1 aprovação' : `${contagem.aprovacao} aprovações`}</span></>}>
+      <dl className={`${ui.grade4} ${estilos.numeros}`}>
+        {caixas.map(([nome, valor]) => (
+          <div key={nome} className={estilos.numero}>
+            <dt>{nome}</dt>
+            <dd>{valor}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className={ui.mini}>
+        Contados nas entradas que o motor guarda (as {TETO_DE_ENTRADAS} mais recentes). O motor não manda números por pessoa: não há total de PRs nem taxa de aprovação.
+      </p>
+    </Linha>
+  );
+}
+
+function Ultimas({ autor }: { autor: Autor }) {
+  return (
+    <Linha rotulo="Últimas revisões" resumo={<><span className={ui.t}>Últimas revisões</span><span className={`${ui.r} ${ui.empurra}`}>{autor.entries.length}</span></>}>
+      <ul className={estilos.ultimas}>
+        {autor.entries.map((entrada, i) => {
+          const desfecho = desfechoDaEntrada(entrada.verdict);
+          const texto = [prDaEntrada(entrada.ref) || 'PR não registrado', dataDaEntrada(entrada.date)].filter(Boolean).join(' · ');
+          return (
+            <li key={i} className={estilos.ultima}>
+              <Bolinha tom={tomDoDesfecho({ action: acaoDaEntrada(entrada.verdict) })} rotulo={desfecho ? `${desfecho}: ` : 'Sem desfecho registrado: '} />
+              <span>{texto}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </Linha>
   );
 }
 
 function Contestacoes({ registros }: { registros: readonly ContestacaoDoAutor[] }) {
-  const id = useId();
   if (!registros.length) return null;
   return (
-    <section className={estilos.secao} aria-labelledby={id}>
-      <h3 id={id} className={estilos.tituloDaSecao}>Contestações registradas</h3>
-      <p className={comuns.meta}>
-        O que o motor guarda de quando esta pessoa contestou uma revisão. No prompt das próximas revisões dos PRs dela entram só as {CONTESTACOES_NO_PROMPT} confirmadas mais recentes; suspeita sem confirmação não entra. O desfecho se confirma ou se apaga no detalhe da revisão, no Histórico.
-      </p>
-      <ul className={comuns.motivos}>
+    <Linha rotulo="Contestações" resumo={<><span className={ui.t}>Contestações</span><span className={`${ui.r} ${ui.empurra}`}>{registros.length}</span></>}>
+      <ul className={estilos.ultimas}>
         {registros.map(({ chave, registro }) => {
           const quando = dataComAno(registro.at);
           return (
             <li key={chave}>
-              <span className={comuns.tipoDoMotivo}>{nomeDoPr(chave)}:</span>{' '}
+              <strong>{nomeDoPr(chave)}:</strong>{' '}
               {registro.status === 'pending' ? 'suspeita do motor, ainda sem confirmação' : textoDoDesfecho(registro.outcome)}
               {quando ? `, em ${quando}` : ''}
               {registro.note ? `. Nota: ${registro.note}` : ''}
@@ -88,7 +149,10 @@ function Contestacoes({ registros }: { registros: readonly ContestacaoDoAutor[] 
           );
         })}
       </ul>
-    </section>
+      <p className={ui.mini}>
+        Só leitura. No prompt das próximas revisões dos PRs desta pessoa entram só as {CONTESTACOES_NO_PROMPT} confirmadas mais recentes; suspeita sem confirmação não entra. O desfecho se confirma ou se apaga no detalhe da revisão, no Histórico.
+      </p>
+    </Linha>
   );
 }
 
@@ -105,26 +169,26 @@ interface Props {
   controle: ControleDeAcoes;
   // a lista está sendo lida de novo: o que está na tela é da carga anterior
   ocupado: boolean;
+  // o erro da carga e o aviso de lista velha, que valem também com o dossiê aberto
+  avisos?: ReactNode;
   aoFechar(): void;
 }
 
-export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, ocupado, aoFechar }: Props) {
+export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, ocupado, avisos, aoFechar }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const continuar = useRef<HTMLButtonElement>(null);
   // onde o foco estava quando a pergunta de descarte abriu: é para lá que ele volta
   const antesDaPergunta = useRef<HTMLElement | null>(null);
-  const idDoTitulo = useId();
-  const idDoPerfil = useId();
-  const idDaRemocao = useId();
   const idDaPergunta = useId();
   const idDoTextoDaPergunta = useId();
   // há papel ou competência editados e não salvos (quem diz é o editor)
   const [alterado, setAlterado] = useState(false);
   const [perguntando, setPerguntando] = useState(false);
+  const pronto = leitura.fase === 'pronto' ? leitura : null;
   // o login como o motor o listou, quando há dossiê: é ele que vai no pedido de remoção
-  const doMotor = leitura.fase === 'pronto' && leitura.autor ? leitura.autor.login : login;
+  const doMotor = pronto?.autor ? pronto.autor.login : login;
   // a pergunta só existe com edição por salvar: se o estado do motor igualou o rascunho, some
-  const pergunta = perguntando && alterado && leitura.fase === 'pronto';
+  const pergunta = perguntando && alterado && pronto !== null;
 
   useEffect(() => { titulo.current?.focus(); }, []);
 
@@ -149,8 +213,7 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
 
   // Escape fecha de qualquer lugar da página, menos de dentro de um campo de texto ou de um
   // seletor: ali Escape é do campo. Com a pergunta de descarte aberta, Escape é "continuar
-  // editando". A pergunta de confirmação de uma ação trata o próprio Escape e não deixa o
-  // evento chegar aqui.
+  // editando". A pergunta de remoção trata o próprio Escape e não deixa o evento chegar aqui.
   useEffect(() => {
     const aoTeclar = (evento: KeyboardEvent): void => {
       if (evento.key !== 'Escape' || evento.defaultPrevented) return;
@@ -166,74 +229,85 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
     return () => document.removeEventListener('keydown', aoTeclar);
   }, [pergunta, pedirFechar, seguirEditando]);
 
+  const nome = nomeDaPessoa(doMotor, pronto?.autor);
+
   return (
-    <section className={estilos.dossie} aria-labelledby={idDoTitulo} aria-busy={ocupado} data-esmaecida={ocupado ? '' : undefined}>
-      <div className={estilos.topoDoDossie}>
-        <h2 id={idDoTitulo} ref={titulo} className={estilos.tituloDoDossie} tabIndex={-1}>Dossiê de @{doMotor}</h2>
-        <button type="button" className={comuns.botao} onClick={pedirFechar}>Voltar à lista</button>
+    <section
+      className={`${ui.pagina} ${ui.paginaEstreita} ${estilos.dossie}${ocupado ? ` ${ui.apagada}` : ''}`}
+      aria-label={`Dossiê de @${doMotor}`}
+      aria-busy={ocupado}
+    >
+      <button type="button" className={`${ui.link} ${estilos.voltar}`} onClick={pedirFechar} aria-label="Voltar à lista do Time">
+        <span aria-hidden="true">←</span> Time
+      </button>
+
+      <div className={estilos.cabecalho}>
+        {pronto ? <Avatar nome={nome} grande /> : <span className={`${ui.esqueleto} ${estilos.avatarEsqueleto}`} aria-hidden="true" />}
+        <div className={estilos.cabecalhoTexto}>
+          <h1 ref={titulo} className={`${ui.titulo} ${ui.tituloMenor}`} tabIndex={-1}>{pronto ? nome : `@${login}`}</h1>
+          {pronto ? <p className={ui.sub}>{subDoDossie(doMotor, pronto.autor, pronto.perfil)}</p> : null}
+        </div>
       </div>
 
+      {avisos}
+
       {pergunta ? (
-        <div className={comuns.confirmacao} role="group" aria-labelledby={idDaPergunta} aria-describedby={idDoTextoDaPergunta}>
-          <p id={idDaPergunta} className={comuns.confirmacaoTitulo}>Descartar a edição do perfil de @{doMotor}?</p>
-          <p id={idDoTextoDaPergunta}>
+        <div className={`${ui.nota} ${estilos.pergunta}`} role="group" aria-labelledby={idDaPergunta} aria-describedby={idDoTextoDaPergunta}>
+          <p id={idDaPergunta} className={estilos.tituloDaPergunta}>Descartar a edição do perfil de @{doMotor}?</p>
+          <p id={idDoTextoDaPergunta} className={ui.texto}>
             O papel e a competência que você alterou não foram salvos. Voltar à lista descarta a edição: nada foi enviado ao motor, e o perfil dele continua como está.
           </p>
-          <div className={comuns.botoes}>
-            <button ref={continuar} type="button" className={comuns.botao} onClick={seguirEditando}>Continuar editando</button>
-            <button type="button" className={`${comuns.botao} ${comuns.primario}`} aria-label={`Descartar a edição do perfil de @${doMotor} e voltar à lista`} onClick={aoFechar}>
+          <div className={ui.fila}>
+            <button ref={continuar} type="button" className={ui.botao} onClick={seguirEditando}>Continuar editando</button>
+            <Botao primario aria-label={`Descartar a edição do perfil de @${doMotor} e voltar à lista`} onClick={aoFechar}>
               Descartar e voltar à lista
-            </button>
+            </Botao>
           </div>
         </div>
       ) : null}
 
-      {leitura.fase === 'carregando' ? <p className={comuns.vazio} role="status">Carregando o dossiê.</p> : null}
-      {leitura.fase === 'semLista' ? <p className={comuns.nota} role="status">Sem a lista do Time não dá para mostrar o dossiê de @{login}. O erro e o Tentar de novo estão no topo da página.</p> : null}
+      {leitura.fase === 'carregando' ? (
+        <div className={estilos.esqueletoDoDossie} aria-busy="true">
+          <p className={ui.mini} role="status">Carregando o dossiê.</p>
+          <div className={ui.grade4} aria-hidden="true">
+            {[0, 1, 2, 3].map((i) => <span key={i} className={`${ui.esqueleto} ${estilos.blocoEsqueleto}`} />)}
+          </div>
+        </div>
+      ) : null}
+      {leitura.fase === 'semLista' ? <p className={ui.nota} role="status">Sem a lista do Time não dá para mostrar o dossiê de @{login}. O erro e o Tentar de novo estão no topo da página.</p> : null}
       {leitura.fase === 'ausente' ? (
-        <p className={comuns.nota} role="status">
+        <p className={ui.nota} role="status">
           O motor não tem dossiê nem perfil de @{login}. Se a pessoa acabou de ser removida do Time, é o esperado: a remoção apaga o dossiê, o perfil e as contestações. As revisões dos PRs dela continuam no Histórico e no log do motor.
         </p>
       ) : null}
 
-      {leitura.fase === 'pronto' ? (
+      {pronto ? (
         <>
-          <dl className={estilos.campos}>
-            {leitura.autor?.name ? <Campo nome="Nome">{leitura.autor.name}</Campo> : null}
-            <Campo nome="Login no GitHub">{doMotor}</Campo>
-            <Campo nome="Entradas de memória">{leitura.autor?.entries.length ? String(leitura.autor.entries.length) : 'Nenhuma'}</Campo>
-            <Campo nome="Papel">{textoDoPapel(leitura.perfil)}</Campo>
-            <Campo nome="Competência">{textoDaCompetencia(leitura.perfil)}</Campo>
-          </dl>
+          <div className={ui.lista}>
+            <Observa login={doMotor} autor={pronto.autor} />
+            <Linha
+              rotulo="Como revisar os PRs desta pessoa"
+              resumo={<><span className={ui.t}>Como revisar os PRs desta pessoa</span><span className={`${ui.r} ${ui.empurra}`}>{resumoDaCalibracao(pronto.perfil)}</span></>}
+            >
+              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} aoMudar={setAlterado} />
+            </Linha>
+            {pronto.autor?.entries.length ? <Numeros autor={pronto.autor} contestacoes={contestacoes.length} /> : null}
+            {pronto.autor?.entries.length ? <Ultimas autor={pronto.autor} /> : null}
+            <Contestacoes registros={contestacoes} />
+          </div>
 
-          <section className={estilos.secao} aria-labelledby={idDoPerfil}>
-            <h3 id={idDoPerfil} className={estilos.tituloDaSecao}>Papel e competência</h3>
-            <EditorDoPerfil login={doMotor} perfil={leitura.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} aoMudar={setAlterado} />
-          </section>
-
-          <Memoria login={doMotor} autor={leitura.autor} />
-          <Contestacoes registros={contestacoes} />
-
-          <section className={estilos.secao} aria-labelledby={idDaRemocao}>
-            <h3 id={idDaRemocao} className={estilos.tituloDaSecao}>Remover do Time</h3>
-            <p className={comuns.meta}>
-              Apaga do motor três coisas desta pessoa, de uma vez e sem volta: o dossiê, o papel e a competência, e as contestações. O motor não apaga uma entrada só. As revisões dos PRs dela continuam no Histórico e no log do motor, e nada muda no GitHub.
-            </p>
-            <AcoesDoItem
-              botoes={[{
-                acao: {
-                  tipo: 'removerAutor',
-                  alvo: alvoDaPessoa(doMotor),
-                  nome: `@${doMotor}`,
-                  login: doMotor,
-                  entradas: leitura.autor?.entries.length ?? 0,
-                  temPerfil: marcaDoPerfil(leitura.perfil) !== '',
-                  contestacoes: contestacoes.length,
-                },
-              }]}
-              controle={controle}
-            />
-          </section>
+          <RemoverDoTime
+            controle={controle}
+            acao={{
+              tipo: 'removerAutor',
+              alvo: alvoDaPessoa(doMotor),
+              nome: `@${doMotor}`,
+              login: doMotor,
+              entradas: pronto.autor?.entries.length ?? 0,
+              temPerfil: marcaDoPerfil(pronto.perfil) !== '',
+              contestacoes: contestacoes.length,
+            }}
+          />
         </>
       ) : null}
     </section>

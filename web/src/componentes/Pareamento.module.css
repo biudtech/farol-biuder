@@ -1,49 +1,50 @@
 .pagina {
-  max-width: 560px;
+  max-width: 520px;
   margin: 0 auto;
-  padding: 48px 20px 60px;
+  padding: 56px 20px 60px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.marca { display: flex; align-items: center; gap: 9px; }
-.nome { font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+.marca { display: flex; align-items: center; gap: 12px; }
+.divisor { width: 1px; height: 24px; background: var(--divisor-marca); }
+.nome { font-size: 18px; font-weight: 800; }
 
 .cartao {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 22px 24px;
+  padding: 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 
-.titulo { font-size: 20px; font-weight: 700; }
-.texto { color: var(--muted); font-size: 13.5px; text-wrap: pretty; }
+.titulo { font-size: 20px; font-weight: 800; }
+.texto { color: var(--muted); font-size: 14px; text-wrap: pretty; }
 
 .aviso {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--info-soft);
-  color: var(--info-texto);
-  font-size: 13px;
+  padding: 14px 18px;
+  border-radius: var(--radius-botao);
+  background: var(--erro-fundo);
+  border: 1px solid var(--erro-borda);
+  color: var(--text);
+  font-size: 14px;
   text-wrap: pretty;
 }
 
 .campo { display: flex; flex-direction: column; gap: 6px; }
-.campo label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.campo label { font-size: 13px; font-weight: 700; color: var(--muted); }
 
 .entrada {
   width: 100%;
   min-height: 44px;
-  padding: 10px 12px;
-  background: var(--surface-2);
+  padding: 0 14px;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--borda-campo);
-  border-radius: 8px;
+  border-radius: var(--radius-botao);
   font-size: 14px;
 }
 .entrada[aria-invalid="true"] { border-color: var(--danger-texto); }
@@ -60,36 +61,40 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--danger-soft);
+  padding: 14px 18px;
+  border-radius: var(--radius-botao);
+  background: var(--erro-fundo);
+  border: 1px solid var(--erro-borda);
   color: var(--danger-texto);
-  font-size: 13px;
+  font-size: 14px;
   text-wrap: pretty;
 }
 .erro code { background: transparent; padding: 0; }
 
 .acoes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.dica { flex: 1 1 200px; font-size: 12px; color: var(--muted); text-wrap: pretty; }
+.dica { flex: 1 1 200px; font-size: 13px; color: var(--muted); text-wrap: pretty; }
 
 .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
-  padding: 8px 16px;
-  border: 1px solid var(--borda-campo);
-  border-radius: 9px;
+  padding: 0 18px;
+  border: 1px solid var(--borda-botao);
+  border-radius: var(--radius-botao);
   background: var(--surface);
   color: var(--text);
-  font-weight: 550;
+  font-weight: 700;
   cursor: pointer;
 }
-.botao:hover { background: var(--surface-2); }
-.botao:disabled { opacity: .6; cursor: default; }
+.botao:hover { background: var(--hover); }
+.botao:disabled { opacity: .7; cursor: default; }
 
 .primario {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
-  font-weight: 650;
+  font-weight: 800;
 }
 .primario:hover { background: var(--accent); filter: brightness(1.08); }
 
