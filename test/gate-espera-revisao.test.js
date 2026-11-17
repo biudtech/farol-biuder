@@ -183,11 +183,12 @@ test('CI VERMELHO: espera, nunca aprova por cima e nunca pede clique, por quanto
   assert.ok(pendente(e, 3).esperaCi, 'segue esperando');
   assert.deepEqual(e.eventos, [], 'e segue sem pedir você');
   assert.equal(leiturasDoCi, 5, 'uma leitura do PR por ciclo');
-  // 5 leituras do PR + 1 da exigência da branch (que fica em cache) + 1 dos checks do commit atual
-  // da base (17/11/2026: o check herdado da base não segura a espera, checks-exigidos.js; a base só
-  // é lida com check obrigatório fora do verde, e a leitura, que aqui falha, fica no cache curto
-  // em vez de repetir a cada ciclo): nada além disso
-  assert.equal(chamadas - e.chamadasAntes, 7);
+  // 5 leituras do PR + 1 da exigência da branch (que fica em cache) + 5 dos checks do commit atual
+  // da base, uma por ciclo (17/11/2026: o check herdado da base não segura a espera,
+  // checks-exigidos.js; a base só é lida com check obrigatório fora do verde, e a espera decide o
+  // APPROVE, então lê a base fresca a cada ciclo, sem o cache, pela revisão independente do mesmo
+  // dia): nada além disso
+  assert.equal(chamadas - e.chamadasAntes, 11);
   // a pipe foi relançada e fechou: a rodada mais recente do check é a que vale
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'FAILURE'), { ...check('audit', 'SUCCESS'), startedAt: '2026-09-30T13:00:00Z' }];
   assert.equal(await e.varrerEsperas(), 1);

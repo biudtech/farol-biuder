@@ -8,9 +8,10 @@ import { criteriaFixture } from './helpers/criteria-fixture.js';
 // momento de cobrar coisas que não são check required" e "merge-back também é pra ser algo sem
 // atrito nenhum". O GitHub segura o merge pelo ruleset de qualquer jeito.
 //
-// A regra: check obrigatório que falha (ou está sem resultado) no head do PR e que também falha no
-// commit atual da base é herdado; sem resultado no head e sem resultado verde na base, idem. O
-// herdado não segura a aprovação (nem com a espera do CI ligada), não vira ressalva, nem motivo de
+// A regra: check obrigatório que falha (ou está sem resultado) no head do PR e que está VERMELHO no
+// commit atual da base é herdado. Base sem o check (ausente, rollup vazio, check que só roda em
+// pull_request) ou com ele ainda rodando nunca herda: a base não mostra falha nenhuma (correção da
+// revisão independente, 17/11/2026). O herdado não segura a aprovação (nem com a espera do CI ligada), não vira ressalva, nem motivo de
 // reprovação, nem texto de cobrança no card. O check que só falha no PR continua valendo como
 // antes, e a leitura da base que falha é conservadora: trata como não herdado.
 import os from 'node:os';
@@ -67,6 +68,7 @@ const checksMod = await import('../lib/engine/checks-exigidos.js');
 const { avisoDosHerdados, avisoDaAprovacao, avisoDoCi, motivoDeEspera } = await import('../lib/engine/gate-espera.js');
 const { ciHerdadoBlock } = await import('../lib/engine/review-prompt.js');
 const { attentionPoints } = await import('../lib/engine/ressalvas.js');
+const { reviewActions } = await import('../lib/engine/decision.js');
 
 after(() => {
   io.run = runReal;
@@ -142,13 +144,28 @@ test('separarHerdados: vermelho só no PR (verde ou ausente na base) continua va
     [{ nome: 'osv', estado: 'vermelho' }], 'rodando na base: ainda não falhou lá');
 });
 
-test('separarHerdados: sem resultado no head e sem resultado verde na base é herdado', () => {
-  for (const base of [[], [check('osv', null, 'IN_PROGRESS')], [check('osv', 'FAILURE')]]) {
-    for (const estado of ['rodando', 'ausente']) {
-      const r = checksMod.separarHerdados([{ nome: 'osv', estado }], base);
-      assert.deepEqual(r.faltando, [], `${estado} no head com a base ${JSON.stringify(base)}`);
-      assert.equal(r.herdados.length, 1);
+// Até a revisão independente (17/11/2026) este caso gravava o contrário: sem resultado no head e
+// sem resultado verde na base contava como herdado. Corrigido: só a base VERMELHA herda. Sem
+// resultado nos dois lados não prova falha nenhuma, e soltava a aprovação sem CI.
+test('separarHerdados: sem resultado no head só é herdado com a base vermelha', () => {
+  for (const estado of ['rodando', 'ausente']) {
+    const r = checksMod.separarHerdados([{ nome: 'osv', estado }], [check('osv', 'FAILURE')]);
+    assert.deepEqual(r.faltando, [], `${estado} no head com a base vermelha`);
+    assert.equal(r.herdados.length, 1);
+    for (const base of [[], [check('osv', null, 'IN_PROGRESS')]]) {
+      const segue = checksMod.separarHerdados([{ nome: 'osv', estado }], base);
+      assert.deepEqual(segue.faltando, [{ nome: 'osv', estado }], `${estado} no head com a base ${JSON.stringify(base)}: continua faltando`);
+      assert.deepEqual(segue.herdados, []);
     }
+  }
+});
+
+test('separarHerdados: check que só roda em pull_request (ausente na base) nunca é herdado', () => {
+  const base = [check('test', 'SUCCESS'), check('build', 'SUCCESS')];
+  for (const estado of ['vermelho', 'rodando', 'ausente']) {
+    const r = checksMod.separarHerdados([{ nome: 'pr-title', estado }], base);
+    assert.deepEqual(r.faltando, [{ nome: 'pr-title', estado }], estado);
+    assert.deepEqual(r.herdados, []);
   }
 });
 
@@ -265,16 +282,63 @@ test('espera ligada: a leitura da base que falha deixa o check valendo como hoje
   assert.deepEqual(pendente(e, 19).esperaCi.checks, [{ nome: 'osv', estado: 'vermelho' }]);
 });
 
-test('espera ligada: sem resultado no head e sem verde na base é herdado; com verde na base segura', async () => {
+// Até a revisão independente (17/11/2026) a primeira metade gravava o contrário: o osv rodando no
+// head e ausente na base saía como herdado e a aprovação ia sem esperar. Agora só a base vermelha
+// herda; ausente ou verde na base, a espera do CI de sempre.
+test('espera ligada: sem resultado no head só é herdado com a base vermelha; ausente ou verde na base segura', async () => {
   gh.rollup = [check('osv', null, 'IN_PROGRESS'), check('test', 'SUCCESS')];
-  gh.rollupBase = [check('test', 'SUCCESS')];
-  const e = await revisar(13);
-  assert.equal(envios.length, 1, 'o osv nunca ficou verde na base: não segura');
+  gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
+  await revisar(13);
+  assert.equal(envios.length, 1, 'o osv falha na base: não segura');
+  for (const [n, base] of [[14, [check('osv', 'SUCCESS'), check('test', 'SUCCESS')]], [24, [check('test', 'SUCCESS')]]]) {
+    gh.rollupBase = base;
+    envios = [];
+    const outro = await revisar(n, { reprova: 'wait' });
+    assert.deepEqual(envios, [], JSON.stringify(base));
+    assert.deepEqual(pendente(outro, n).esperaCi.checks, [{ nome: 'osv', estado: 'rodando' }]);
+  }
+});
+
+// Os pontos que decidem postar leem a base fresca (correção da revisão independente): a espera do
+// CI antes do APPROVE e a retirada do pedido (lerCi) e a publicação (bloqueadoPorChecks com
+// fresco). Só o gate de lançamento usa o cache de um minuto.
+test('a espera do CI lê a base fresca: o rollup em cache não decide o APPROVE', async () => {
   gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  envios = [];
-  const outro = await revisar(14);
+  const e = await revisar(25, { reprova: 'wait' });
+  assert.ok(pendente(e, 25).esperaCi, 'só no PR: espera armada');
+  // o cache ainda guarda a base verde; sem ler fresco, a falha nova da base não apareceria
+  gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
+  assert.equal(await e.varrerEsperas(), 1);
+  assert.equal(resolvida(e, 25).status, 'auto_approved');
+});
+
+test('leitura fresca no sentido que importa: o herdado em cache que deixou de ser não libera a publicação', async () => {
+  const e = motor({ reprova: 'wait' });
+  await e.bloqueadoPorChecks(PR(26));
+  assert.ok(e.checksDaBaseCache.size, 'o cache guarda a base vermelha');
+  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
+  const lancamento = await e.bloqueadoPorChecks(PR(26));
+  assert.deepEqual(lancamento.faltando, [], 'o gate de lançamento pode usar o cache de um minuto');
+  const fresco = await e.bloqueadoPorChecks(PR(26), { fresco: true });
+  assert.deepEqual(fresco.faltando, [{ nome: 'osv', estado: 'vermelho' }], 'a publicação lê fresco');
+});
+
+test('a espera do CI com a base corrigida depois do cache: o check volta a segurar', async () => {
+  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
+  const e = await revisar(27, { reprova: 'wait' });
+  // a revisão armou a espera; agora a base passa a falhar e o cache é trocado por uma leitura
+  // velha de base vermelha, que diria "herdado" se fosse usada
+  e.checksDaBaseCache.set(`acme/api@${BASE}`, { lido: { sha: BASE_SHA, rollup: [check('osv', 'FAILURE'), check('test', 'SUCCESS')] }, at: Date.now() });
+  assert.equal(await e.varrerEsperas(), 0, 'a base fresca está verde: o osv é do PR e segue segurando');
   assert.deepEqual(envios, []);
-  assert.deepEqual(pendente(outro, 14).esperaCi.checks, [{ nome: 'osv', estado: 'rodando' }]);
+  assert.ok(pendente(e, 27).esperaCi);
+});
+
+test('a publicação pede a leitura fresca dos checks', () => {
+  const fonte = fs.readFileSync(new URL('../lib/technical-review/publication.js', import.meta.url), 'utf8');
+  const chamadas = fonte.match(/engine.bloqueadoPorChecks([^)]*)/g) || [];
+  assert.ok(chamadas.length >= 2, chamadas.join(' | '));
+  for (const c of chamadas) assert.match(c, /fresco: true/, c);
 });
 
 test('espera armada pelo PR: quando a base passa a falhar no mesmo check, a falha vira herdada e a aprovação sai', async () => {
@@ -282,8 +346,7 @@ test('espera armada pelo PR: quando a base passa a falhar no mesmo check, a falh
   const e = await revisar(15, { reprova: 'wait' });
   assert.ok(pendente(e, 15).esperaCi);
   gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
-  e.checksDaBaseCache = new Map();
-  assert.equal(await e.varrerEsperas(), 1);
+  assert.equal(await e.varrerEsperas(), 1, 'a espera lê a base fresca, sem esperar o cache vencer');
   assert.equal(envios.length, 1);
   assert.equal(resolvida(e, 15).status, 'auto_approved');
 });
@@ -327,6 +390,17 @@ test('card na mesa: o herdado aparece numa linha informativa, que não é ressal
   assert.doesNotMatch(linha.text, /precisa|corrij|antes do merge|esper/i, 'informa, não cobra');
   assert.deepEqual(attentionPoints(null, d).filter((p) => /branch base/.test(p.text)), [], 'a linha nunca conta como ressalva');
   assert.match(textos(d.reasons)[0], /sem ressalvas/, 'a classe é limpa: a política é a do limpo');
+});
+
+test('Panorama: a linha informativa do herdado não marca a decisão como aprovada com ressalva', async () => {
+  const e = await revisar(31, { ciObrigatorio: false, politica: ['wait', 'wait'] });
+  const d = pendente(e, 31);
+  assert.ok((d.reasons || []).some((r) => r.informativo === true));
+  // a pendência resolvida pelo clique leva as mesmas reasons para o histórico
+  const so = { ...d, reasons: d.reasons.filter((r) => r.informativo === true), status: 'posted', action: 'approve', resolvedAt: Date.now(), cardMet: true, attention: [], key: 'acme/api#931' };
+  assert.equal(reviewActions(e, [so])['acme/api#931'].caveats, false);
+  const com = { ...so, reasons: [...so.reasons, { text: 'ressalva de verdade', kind: 'content' }] };
+  assert.equal(reviewActions(e, [com])['acme/api#931'].caveats, true, 'ressalva de verdade continua marcando');
 });
 
 test('os textos do CI só falam do check que pesa', () => {
