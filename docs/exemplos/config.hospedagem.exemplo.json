@@ -1,8 +1,8 @@
 {
   "bind": "0.0.0.0",
   "port": 47170,
-  "hostPublico": "farol.exemplo.com",
-  "origensPermitidas": ["https://painel.exemplo.com"],
+  "hostPublico": "farol.exemplo.invalid",
+  "origensPermitidas": ["https://painel.exemplo.invalid"],
   "localAuth": "exigir",
   "conta": {
     "owners": ["biudtech"],

@@ -22,9 +22,10 @@ import { test, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
-const { CONFIG_FILE } = await import('../lib/paths.js');
+const { CONFIG_FILE, STATE_DIR, LOG_FILE } = await import('../lib/paths.js');
 const { exigeAutenticacao } = await import('../lib/local-auth/modo.js');
-const { VARIAVEL, modoHospedado, recusasDaHospedagem } = await import('../lib/instancia-hospedada.js');
+const { validarHostEOrigem } = await import('../lib/http-guard.js');
+const { VARIAVEL, modoHospedado, recusasDaHospedagem, avisosDaHospedagem } = await import('../lib/instancia-hospedada.js');
 
 const CONTA_EM_ESPERA = { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' };
 const HOSPEDADO = { bind: '0.0.0.0', hostPublico: 'farol.exemplo.com', origensPermitidas: ['https://painel.exemplo.com'], localAuth: 'exigir', conta: CONTA_EM_ESPERA };
@@ -58,7 +59,12 @@ function recusa(codigo = 'INSTANCIA_HOSPEDADA') {
   return erro.message;
 }
 
-beforeEach(() => {
+// O aviso da config que sobe e não atende é gravado no turno seguinte do laço
+// (avisarDepoisDoBoot, lib/fronteira-hospedada.js): cada teste começa com os do anterior já escritos.
+const proximoTurno = () => new Promise((resolve) => setImmediate(resolve));
+
+beforeEach(async () => {
+  await proximoTurno();
   fs.rmSync(HOME, { recursive: true, force: true });
   delete process.env[VARIAVEL];
 });
@@ -69,16 +75,28 @@ after(() => {
 
 /* ---------- a variável ---------- */
 
-test('a variável segue o padrão FAROL_* e só "1" liga; ausente, vazia e "0" desligam', () => {
+test('a variável segue o padrão FAROL_* e só "1" liga; só ausente e "0" desligam', () => {
   assert.equal(VARIAVEL, 'FAROL_INSTANCIA_HOSPEDADA');
   assert.deepEqual(modoHospedado('1'), { ligada: true, invalido: false });
-  for (const valor of [undefined, '', '0']) assert.deepEqual(modoHospedado(valor), { ligada: false, invalido: false }, String(valor));
+  for (const valor of [undefined, '0']) assert.deepEqual(modoHospedado(valor), { ligada: false, invalido: false }, String(valor));
 });
 
-test('valor que não é "1" nem "0" não vira desligado calado: é inválido', () => {
-  for (const valor of ['true', 'sim', 'TRUE', 'on', ' 1', '1 ', '2', 'false']) {
-    assert.deepEqual(modoHospedado(valor), { ligada: false, invalido: true }, valor);
+test('valor que não é "1" nem "0" não vira desligado calado: é inválido, inclusive o vazio', () => {
+  for (const valor of ['', ' ', 'true', 'sim', 'TRUE', 'on', ' 1', '1 ', '2', 'false']) {
+    assert.deepEqual(modoHospedado(valor), { ligada: false, invalido: true }, JSON.stringify(valor));
   }
+});
+
+// Um manifesto com `value: ""` na variável não pode desligar a trava em silêncio.
+test('variável vazia impede o boot, com ou sem config.json, e a mensagem mostra o vazio', () => {
+  ligar('');
+  let mensagem = recusa();
+  assert.match(mensagem, /FAROL_INSTANCIA_HOSPEDADA inválida, o motor não sobe: o valor "" não é aceito/);
+  assert.equal(fs.existsSync(HOME), false, 'nem o HOME do Farol foi criado');
+  gravar(HOSPEDADO);
+  ligar('');
+  mensagem = recusa();
+  assert.match(mensagem, /o valor "" não é aceito/);
 });
 
 test('valor inválido na variável impede o boot, com ou sem config.json, e não cria nada', () => {
@@ -124,12 +142,9 @@ test('controle: sem a variável, a instalação nova continua subindo sem config
   assert.equal(fs.existsSync(CONFIG_FILE), true, 'fora do modo hospedado o boot grava o config.json, como sempre');
 });
 
-test('controle: com a variável em "0" ou vazia, a instalação nova também sobe', () => {
-  for (const valor of ['0', '']) {
-    fs.rmSync(HOME, { recursive: true, force: true });
-    ligar(valor);
-    assert.equal(new Engine().config.hostPublico, '', JSON.stringify(valor));
-  }
+test('controle: com a variável em "0", a instalação nova também sobe', () => {
+  ligar('0');
+  assert.equal(new Engine().config.hostPublico, '');
 });
 
 /* ---------- config.json ilegível ---------- */
@@ -229,12 +244,100 @@ test('o config.json de exemplo de docs/exemplos sobe na instância hospedada, se
   const engine = new Engine();
   assert.equal(engine.config.bind, '0.0.0.0');
   assert.equal(engine.config.port, 47170);
-  assert.equal(engine.config.hostPublico, 'farol.exemplo.com');
-  assert.deepEqual(engine.config.origensPermitidas, ['https://painel.exemplo.com']);
+  // nomes reservados que nunca resolvem: o exemplo subido sem trocar não aponta para ninguém
+  assert.equal(engine.config.hostPublico, 'farol.exemplo.invalid');
+  assert.deepEqual(engine.config.origensPermitidas, ['https://painel.exemplo.invalid']);
   assert.equal(engine.config.localAuth, 'exigir');
+  assert.deepEqual(avisosDaHospedagem(engine.config, { ligada: true }), [], 'o exemplo não acende aviso');
   // a primeira subida recomendada: monitora, põe na fila e não posta nada sozinha
   const { autoReview, onClean, onCaveats, onReject } = engine.config.conta;
   assert.deepEqual({ autoReview, onClean, onCaveats, onReject }, { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' });
+});
+
+/* ---------- config que sobe e não atende: aviso, não recusa ---------- */
+
+const linhasDoLog = () => (fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8').split('\n').filter(Boolean) : []);
+
+test('avisosDaHospedagem: nada fora do modo hospedado, e nada com bind fora do loopback e hostPublico', () => {
+  assert.deepEqual(avisosDaHospedagem({ bind: '127.0.0.1', hostPublico: 'farol.exemplo.com' }, { ligada: false }), []);
+  assert.deepEqual(avisosDaHospedagem({ bind: '0.0.0.0', hostPublico: 'farol.exemplo.com', origensPermitidas: ['https://painel.exemplo.com'] }, { ligada: true }), []);
+  assert.deepEqual(avisosDaHospedagem({ bind: '0.0.0.0', hostPublico: 'farol.exemplo.com' }, { ligada: true }), []);
+});
+
+test('avisosDaHospedagem: bind em loopback ou ausente avisa que o motor só escuta dentro do container', () => {
+  for (const bind of [undefined, '', '127.0.0.1', 'localhost', '[::1]']) {
+    const avisos = avisosDaHospedagem({ bind, hostPublico: 'farol.exemplo.com' }, { ligada: true });
+    assert.equal(avisos.length, 1, String(bind));
+    assert.match(avisos[0], /escuta só dentro do container/);
+    assert.match(avisos[0], /"bind": "0\.0\.0\.0"/);
+    assert.doesNotMatch(avisos[0], /\n|—/);
+  }
+});
+
+test('avisosDaHospedagem: origensPermitidas sem hostPublico, com bind fora do loopback, avisa que o Host do proxy será recusado', () => {
+  const avisos = avisosDaHospedagem({ bind: '0.0.0.0', port: 47170, hostPublico: '', origensPermitidas: ['https://painel.exemplo.com'] }, { ligada: true });
+  assert.equal(avisos.length, 1);
+  assert.match(avisos[0], /sem "hostPublico"/);
+  assert.match(avisos[0], /403/);
+  // a frase tem de ser verdade: sem hostPublico a allowlist recusa o nome público e aceita o loopback
+  const base = { porta: 47170, bind: '0.0.0.0', hostPublico: '', origensPermitidas: ['https://painel.exemplo.com'] };
+  assert.equal(validarHostEOrigem({ ...base, host: 'farol.exemplo.com' }).ok, false);
+  assert.equal(validarHostEOrigem({ ...base, host: '127.0.0.1:47170' }).ok, true);
+  assert.equal(validarHostEOrigem({ ...base, host: '0.0.0.0:47170' }).ok, true);
+  for (const host of ['127.0.0.1:47170', 'localhost:47170', '0.0.0.0:47170']) assert.ok(avisos[0].includes(host), host);
+});
+
+test('a instância que sobe com bind em loopback grava UMA linha WARN no farol.log e não recusa', async () => {
+  gravar({ hostPublico: 'farol.exemplo.com', conta: CONTA_EM_ESPERA });
+  ligar();
+  const engine = new Engine();
+  assert.equal(engine.config.hostPublico, 'farol.exemplo.com');
+  await proximoTurno();
+  const avisos = linhasDoLog().filter((l) => l.includes('instância hospedada'));
+  assert.equal(avisos.length, 1, linhasDoLog().join('\n'));
+  assert.match(avisos[0], /\[WARN\] .*escuta só dentro do container/);
+});
+
+test('a instância com origensPermitidas, sem hostPublico e com bind aberto grava o aviso do Host', async () => {
+  gravar({ bind: '0.0.0.0', origensPermitidas: ['https://painel.exemplo.com'], conta: CONTA_EM_ESPERA });
+  ligar();
+  new Engine();
+  await proximoTurno();
+  const avisos = linhasDoLog().filter((l) => l.includes('instância hospedada'));
+  assert.equal(avisos.length, 1, linhasDoLog().join('\n'));
+  assert.match(avisos[0], /\[WARN\] .*sem "hostPublico"/);
+});
+
+test('controle: a config completa e a instância fora do modo hospedado não gravam aviso', async () => {
+  gravar(HOSPEDADO);
+  ligar();
+  new Engine();
+  await proximoTurno();
+  assert.deepEqual(linhasDoLog().filter((l) => l.includes('instância hospedada')), []);
+  fs.rmSync(HOME, { recursive: true, force: true });
+  delete process.env[VARIAVEL];
+  gravar({ hostPublico: 'farol.exemplo.com' });
+  new Engine();
+  await proximoTurno();
+  assert.deepEqual(linhasDoLog().filter((l) => l.includes('instância hospedada')), []);
+});
+
+/* ---------- a recusa e o farol.log ---------- */
+
+// O config.json nunca é tocado. A linha da recusa vai ao farol.log quando a pasta de estado já
+// existe (o volume de uma instância que já rodou); sem a pasta, nada é criado.
+test('com a pasta de estado no volume, a recusa de config grava a linha no farol.log e não toca o config.json', () => {
+  gravar({ bind: '0.0.0.0', localAuth: 'exigir' });
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  const antes = fs.readFileSync(CONFIG_FILE);
+  ligar();
+  let erro = null;
+  try { new Engine(); } catch (e) { erro = e; }
+  assert.equal(erro && erro.code, 'INSTANCIA_HOSPEDADA');
+  assert.deepEqual(fs.readFileSync(CONFIG_FILE), antes);
+  const linhas = linhasDoLog();
+  assert.equal(linhas.length, 1);
+  assert.match(linhas[0], /\[ERROR\] .*não define "hostPublico" nem "origensPermitidas"/);
 });
 
 /* ---------- a regra, pura ---------- */

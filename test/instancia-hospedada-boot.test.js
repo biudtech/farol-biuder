@@ -107,6 +107,15 @@ test('valor inválido na variável: sai com código 1 e não cria nada', async (
   assert.deepEqual(fs.readdirSync(path.join(casa, 'home')), []);
 });
 
+test('variável vazia (o `value: ""` de um manifesto): sai com código 1 em vez de desligar a trava', async () => {
+  const casa = casaNova();
+  const t = rodar(casa, '');
+  assert.equal(await t.escutando, false, 'vazia não pode subir como instalação nova');
+  assert.equal((await t.fim).code, 1, t.erros);
+  assert.match(t.erros, /FAROL_INSTANCIA_HOSPEDADA inválida, o motor não sobe: o valor "" não é aceito/);
+  assert.deepEqual(fs.readdirSync(path.join(casa, 'home')), []);
+});
+
 test('hospedada com a fronteira definida: sobe, responde a saúde, exige autenticação e sai com 0 no SIGTERM', async () => {
   const casa = casaNova();
   const porta = await portaLivre();
@@ -122,6 +131,9 @@ test('hospedada com a fronteira definida: sobe, responde a saúde, exige autenti
   assert.equal((await pedir(porta, '/api/state')).status, 401);
   const status = await pedir(porta, '/api/auth/status');
   assert.equal(JSON.parse(status.corpo).exigida, true);
+  // sem "bind" o motor fica em loopback: sobe, e avisa no stderr e no farol.log que só escuta dentro do container
+  assert.match(t.erros, /instância hospedada \(FAROL_INSTANCIA_HOSPEDADA=1\): "bind" está em loopback/);
+  assert.match(fs.readFileSync(path.join(dados, 'workspace', 'state', 'farol.log'), 'utf8'), /\[WARN\] .*escuta só dentro do container/);
   t.filho.kill('SIGTERM');
   assert.deepEqual(await t.fim, { code: 0, signal: null });
 });
