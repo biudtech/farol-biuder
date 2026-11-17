@@ -349,7 +349,8 @@ describe('Time: o dossiê', () => {
     await assentar();
     const itens = within(secao('Últimas revisões')).getAllByRole('listitem');
     expect(itens.map((li) => li.textContent)).toEqual(['Aprovação: PR #12 de dono/repo · 16/11/2026', 'Pedido de mudanças: PR #7 de dono/repo · 10/11/2026']);
-    expect(itens.map((li) => li.querySelector('[data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'aviso']);
+    // a cor é a mesma do Histórico (tomDoDesfecho): aprovação verde, pedido de mudanças vermelho
+    expect(itens.map((li) => li.querySelector('[data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'ruim']);
   });
 
   it('Escape e Voltar à lista fecham, e o foco volta ao botão que abriu', async () => {

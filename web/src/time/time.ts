@@ -230,6 +230,14 @@ export function tipoDoDesfecho(veredito: string | undefined): DesfechoDaEntrada 
   return 'outro';
 }
 
+// O `action` do Histórico que a entrada corresponde (`approve`, `request_changes`, `comment`),
+// para a cor sair da mesma fonte das duas telas (tomDoDesfecho, src/historico/rotulos.ts).
+const ACAO_DO_TIPO: Record<DesfechoDaEntrada, string | undefined> = { aprovacao: 'approve', mudancas: 'request_changes', comentario: 'comment', outro: undefined };
+
+export function acaoDaEntrada(veredito: string | undefined): string | undefined {
+  return ACAO_DO_TIPO[tipoDoDesfecho(veredito)];
+}
+
 export type ContagemDosDesfechos = Record<DesfechoDaEntrada, number>;
 
 // Os desfechos das entradas listadas, somados. Não é número da pessoa: o motor guarda só as

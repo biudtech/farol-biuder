@@ -274,3 +274,17 @@ describe('a linha e o dossiê no desenho enxuto', () => {
     expect(quantasPessoas(10)).toBe('10 pessoas');
   });
 });
+
+describe('a cor do desfecho da entrada é a do Histórico', () => {
+  it('cada veredito do dossiê vira o action do Histórico, e tomDoDesfecho dá a mesma cor nas duas telas', async () => {
+    const { acaoDaEntrada } = await import('./time');
+    const { tomDoDesfecho } = await import('@/historico/rotulos');
+    const cor = (v: string | undefined) => tomDoDesfecho({ action: acaoDaEntrada(v) });
+    expect(cor('APPROVE')).toBe(tomDoDesfecho({ action: 'approve' }));
+    expect(cor('REQUEST CHANGES')).toBe(tomDoDesfecho({ action: 'request_changes' }));
+    expect(cor('REQUEST_CHANGES')).toBe('ruim');
+    expect(cor('COMMENT')).toBe('aviso');
+    expect(cor('outra coisa')).toBe('neutro');
+    expect(cor(undefined)).toBe('neutro');
+  });
+});

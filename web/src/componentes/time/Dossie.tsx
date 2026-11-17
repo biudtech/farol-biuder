@@ -13,16 +13,16 @@
 // passa por aqui: ele troca o endereço, e a edição vai embora sem pergunta.
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { Autor, EntradaDeMemoria, Pessoa, PessoasCruas } from '@/contratos/time';
-import { textoDoDesfecho } from '@/historico/rotulos';
+import { textoDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import {
-  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
-  prDaEntrada, resumoDaCalibracao, tipoDoDesfecho, type ContestacaoDoAutor, type DesfechoDaEntrada,
+  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
+  prDaEntrada, resumoDaCalibracao, type ContestacaoDoAutor,
 } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
 import { Markdown } from '../Markdown';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import { Bolinha, Botao, Linha, ui, type Tom } from '../ui';
+import { Bolinha, Botao, Linha, ui } from '../ui';
 import { EditorDoPerfil, alvoDaPessoa } from './EditorDoPerfil';
 import { Avatar } from './ListaDoTime';
 import { RemoverDoTime } from './RemoverDoTime';
@@ -36,8 +36,6 @@ export type LeituraDoDossie =
   | { fase: 'pronto'; autor: Autor | undefined; perfil: Pessoa | undefined }
   | { fase: 'ausente' }
   | { fase: 'semLista' };
-
-const TOM_DO_DESFECHO: Record<DesfechoDaEntrada, Tom> = { aprovacao: 'ok', mudancas: 'aviso', comentario: 'neutro', outro: 'neutro' };
 
 const entradas = (n: number): string => (n === 1 ? '1 entrada' : `${n} entradas`);
 const pontos = (n: number): string => (n === 1 ? '1 ponto' : `${n} pontos`);
@@ -124,7 +122,7 @@ function Ultimas({ autor }: { autor: Autor }) {
           const texto = [prDaEntrada(entrada.ref) || 'PR não registrado', dataDaEntrada(entrada.date)].filter(Boolean).join(' · ');
           return (
             <li key={i} className={estilos.ultima}>
-              <Bolinha tom={TOM_DO_DESFECHO[tipoDoDesfecho(entrada.verdict)]} rotulo={desfecho ? `${desfecho}: ` : 'Sem desfecho registrado: '} />
+              <Bolinha tom={tomDoDesfecho({ action: acaoDaEntrada(entrada.verdict) })} rotulo={desfecho ? `${desfecho}: ` : 'Sem desfecho registrado: '} />
               <span>{texto}</span>
             </li>
           );
