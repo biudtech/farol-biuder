@@ -75,7 +75,7 @@ function apiRequest(args) {
   const route = args[hostname === 1 ? 3 : 1];
   let method = args.includes('--input') ? 'POST' : 'GET';
   if (args.indexOf('-X') >= 0) method = args[args.indexOf('-X') + 1];
-  return { route, mutation: method !== 'GET' };
+  return { route, mutation: method !== 'GET', args };
 }
 function assertOnlyQueuedPr(number) {
   const requests = chamadas.map(c => apiRequest(c.args)).filter(Boolean);
@@ -84,7 +84,14 @@ function assertOnlyQueuedPr(number) {
   for (const request of requests) {
     assert.doesNotMatch(request.route, /evil\/repo/, 'nem leitura nem escrita usa identidade do envelope');
     if (request.mutation) assert.match(request.route, new RegExp(`^repos/acme/app/pulls/${number}/`));
-    else assert.ok(request.route === 'user' || request.route === 'repos/acme/app'
+    // a consulta GraphQL do PR de sincronização (17/11/2026, pr-de-sincronizacao.js) entrou como
+    // leitura nova: a rota é sempre `graphql`, então a identidade é conferida nas variáveis, que
+    // têm de ser as do PR da fila (dono, nome e número), nunca as do envelope
+    else if (request.route === 'graphql') {
+      const vars = request.args.join(' ');
+      assert.match(vars, /-F owner=acme -F name=app/, `leitura GraphQL fora do PR da fila: ${vars}`);
+      assert.match(vars, new RegExp(`-F number=${number} `), `leitura GraphQL fora do PR da fila: ${vars}`);
+    } else assert.ok(request.route === 'user' || request.route === 'repos/acme/app'
       || request.route.startsWith(`repos/acme/app/pulls/${number}`)
       || request.route === `repos/acme/app/issues/${number}/timeline?per_page=100`, `leitura inesperada: ${request.route}`);
   }
