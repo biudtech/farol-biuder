@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-accounting-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
-after(() => fs.rmSync(home, { recursive: true, force: true }));
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
+after(() => { fecharTodos(); fs.rmSync(home, { recursive: true, force: true }); });
 const one = { inputTokens: 10, outputTokens: 100, cacheReadInputTokens: 1000, cacheCreationInputTokens: 20, costUSD: 1 };
 const two = Object.fromEntries(Object.entries(one).map(([k, n]) => [k, n * 2]));
 const ev = n => ({ session_id: 'provider-session', usage: { output_tokens: 5 }, total_cost_usd: n,
@@ -19,10 +21,10 @@ test('cursor persiste no registro de sessões e retomada após reiniciar soma ap
   second.recordUsage('a-next', 'Dev', { ...ev(2), farol_resumed: true }, 'claude-opus-5-5', 'profile');
   assert.equal(second.usage.totals.costUsd, 2);
   assert.equal(second.usage.totals.outputTokens, 200);
-  assert.equal(second.usageSessions.sessions.at(-1).accounting.scope, 'tree-delta');
-  assert.equal(second.usageSessions.sessions.at(-1).costUsd, 1);
+  assert.equal(sessoesDoDiario(second).at(-1).accounting.scope, 'tree-delta');
+  assert.equal(sessoesDoDiario(second).at(-1).costUsd, 1);
   second.recordUsage('a-next', 'Dev', { ...ev(2), farol_resumed: true }, 'claude-opus-5-5', 'profile');
-  assert.equal(second.usageSessions.sessions.length, 2, 'mesma tentativa não entra duas vezes');
+  assert.equal(sessoesDoDiario(second).length, 2, 'mesma tentativa não entra duas vezes');
   assert.equal(second.usage.totals.costUsd, 2);
 });
 
@@ -45,7 +47,7 @@ test('primeira retomada legada não lança custo cumulativo inteiro como gasto n
   const start = e.usage.totals.costUsd;
   e.recordUsage('a-legacy-resume', 'Dev', { ...ev(2), session_id: 'old-session', farol_attempt: 'legacy-attempt', farol_resumed: true }, 'claude-opus-5-5', 'profile');
   assert.equal(e.usage.totals.costUsd, start);
-  const recorded = e.usageSessions.sessions.at(-1);
+  const recorded = sessoesDoDiario(e).at(-1);
   assert.equal(recorded.costSource, 'desconhecido');
   assert.equal(recorded.accounting.reason, 'missing-baseline');
   assert.equal(recorded.outputTokens, 5);

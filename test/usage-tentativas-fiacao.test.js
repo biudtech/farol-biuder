@@ -21,8 +21,12 @@ childProcess.spawn = function spawnFalso(...args) { return spawnImpl ? spawnImpl
 const { runClaudeStream, parseEnvelope } = await import('../lib/engine/session.js');
 const tentativas = await import('../lib/engine/usage-tentativas.js');
 const { Engine } = await import('../server.js');
+const { sessoesDoDiario, iniciarConsumo } = await import('../lib/engine/telemetria-do-motor.js');
+const { todasAsTentativas } = await import('../lib/telemetria/tentativas.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
 
 after(() => {
+  fecharTodos();
   childProcess.spawn = realSpawn;
   try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ }
 });
@@ -102,8 +106,12 @@ test('falha no spawn (evento error) também fecha a tentativa', async () => {
 test('boot da Engine reconcilia a tentativa que sobrou', () => {
   tentativas.abrirTentativa({}, { sessionId: 'a-sobrou', account: 'eu', profileId: '', model: 'claude-opus-5', ref: 'o/r#3' });
   const e = new Engine();
-  const s = e.usageSessions.sessions.find((x) => x.id === 'a-sobrou');
+  iniciarConsumo(e); // a subida: o banco abre, importa o JSON e reconcilia depois do listen
+  assert.ok(e.telemetria);
+  const s = sessoesDoDiario(e).find((x) => x.id === 'a-sobrou');
   assert.equal(s.status, 'interrompida');
   assert.equal(s.costSource, 'desconhecido');
-  assert.deepEqual(diario(), []);
+  // o JSON foi importado e renomeado; quem prova que a tentativa saiu é o banco
+  assert.deepEqual(todasAsTentativas(e.telemetria), {});
+  assert.equal(fs.existsSync(tentativas.arquivoDeTentativas()), false);
 });

@@ -66,6 +66,7 @@ import esperaProvaMod from './lib/engine/espera-prova.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
+import { carregarConsumo, iniciarConsumo } from './lib/engine/telemetria-do-motor.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
@@ -233,13 +234,10 @@ class Engine extends EventEmitter {
       this.log('INFO', `teto de gasto removido: ${parkedSalvo.soltos.length} PR(s) estacionado(s) por orçamento voltaram à fila automática: ${parkedSalvo.soltos.join(', ')}.`);
     }
     this.parkedPruneStrikes = new Map(); // key estacionada -> ausências SEGUIDAS do panorama (memória; reinício zera, lado seguro)
-    // registro de consumo de tokens (agregado por dia/tipo/conta/modelo); merge com o
-    // default garante que arquivos antigos ganhem os eixos novos sem quebrar.
-    this.usage = { ...usageMod.defaultUsage(), ...readJson(usageMod.USAGE_FILE, {}, warn) };
-    // log individual de sessoes, permanente (sem poda, decisao consciente: e a fonte
-    // unica da aba Consumo, ver o papel de lib/engine/usage.js no CLAUDE.md). Separado
-    // do usage.json pra gravacao do agregado nao reserializar um array que so cresce.
-    this.usageSessions = { ...usageMod.defaultSessions(), ...readJson(usageMod.SESSIONS_FILE, {}, warn) };
+    // registro de consumo: o agregado (usage.json, por dia/tipo/conta/modelo) e o diário de
+    // sessões, permanente e sem poda. Aqui só se lê; o banco da telemetria (this.telemetria) abre,
+    // importa os JSON e passa a guardar o diário no start(), depois do listen (iniciarConsumo)
+    carregarConsumo(this, warn);
     this.seen = new Set();
     this.reviewedKeys = new Set(); // PRs abertos que eu ja revisei (gh --reviewed-by)
     this.reReviewedKeys = new Set(); // re-requests que ja voltaram pra fila (evita re-surgir todo ciclo)
@@ -258,10 +256,9 @@ class Engine extends EventEmitter {
     this.loadSeen();
     this.loadIgnorados();
     this.recoverInflight();
-    // tentativa de sessão que o processo anterior deixou aberta (queda, saída pela
-    // bandeja) vira linha `interrompida` no Consumo, nunca some (A1, item 9)
-    try { tentativasMod.reconciliarInterrompidas(this); }
-    catch (err) { this.log('WARN', `reconciliar tentativas interrompidas: ${err.message}`); }
+    // a tentativa de sessão que o processo anterior deixou aberta vira linha `interrompida` no
+    // Consumo (A1, item 9), mas só no start(), depois do listen: aqui uma segunda instância no
+    // mesmo FAROL_HOME fecharia as tentativas vivas da primeira (iniciarConsumo)
     // prova por arquivo de PR morto há semanas não serve pra nada (G20, best-effort):
     // podar só custa uma revisão cheia na próxima vez, nunca postagem errada
     try { fileProofMod.pruneFileProofs(); } catch { /* best-effort */ }
@@ -1304,6 +1301,9 @@ class Engine extends EventEmitter {
   focusPr(url) { if (url) this.emit('focus-pr', { url }); }
 
   async start() {
+    // o start() só roda com a porta (a trava de instância única) já tomada: é a hora de abrir o
+    // banco da telemetria, importar os JSON e reconciliar as tentativas abertas
+    iniciarConsumo(this);
     iniciarManutencaoDoEngine(this);
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();

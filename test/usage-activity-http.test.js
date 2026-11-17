@@ -1,16 +1,29 @@
-import test from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+
+const FAROL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-usage-http-'));
+process.env.FAROL_HOME = FAROL_HOME;
+
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { Engine } from '../server.js';
-import { startServer } from '../lib/http-server.js';
-import { emitirSessao } from '../lib/local-auth/sessoes.js';
+
+const { Engine } = await import('../server.js');
+const { startServer } = await import('../lib/http-server.js');
+const { emitirSessao } = await import('../lib/local-auth/sessoes.js');
+const { diario } = await import('../lib/engine/usage-diario.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
+
+after(() => { fecharTodos(); fs.rmSync(FAROL_HOME, { recursive: true, force: true }); });
 
 test('rota real do consumo exige sessão e origem local e não altera o diário', async () => {
   const engine = new Engine();
   engine.config.port = 0;
   engine.config.localAuth = 'exigir';
-  engine.usageSessions = { sessions: [{ id: 'a-00000000-0000-4000-8000-000000000001', kind: 'review', status: 'ok', at: Date.now(), ref: 'org/repo#1', account: 'dev', inputTokens: 3, outputTokens: 2 }] };
-  const before = structuredClone(engine.usageSessions);
+  diario(engine).inserir({ id: 'a-00000000-0000-4000-8000-000000000001', kind: 'review', status: 'ok', at: Date.now(), ref: 'org/repo#1', account: 'dev', inputTokens: 3, outputTokens: 2 });
+  const before = structuredClone(sessoesDoDiario(engine));
   const server = startServer(engine);
   await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}/api/usage`;
@@ -23,7 +36,7 @@ test('rota real do consumo exige sessão e origem local e não altera o diário'
     const report = await response.json();
     assert.equal(report.completed.reviews, 1);
     assert.equal(report.totals.inputTokens + report.totals.outputTokens, 5);
-    assert.deepEqual(engine.usageSessions, before);
+    assert.deepEqual(sessoesDoDiario(engine), before);
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
@@ -32,10 +45,10 @@ test('rota real do consumo exige sessão e origem local e não altera o diário'
 
 test('modalidade e provedor são registrados na execução e não seguem mudanças do perfil', () => {
   const engine = new Engine();
-  engine.usageSessions = { sessions: [] };
   engine.config.claudeProfiles = [{ id: 'api-history', kind: 'apikey', label: 'Teste' }];
   engine.recordUsage('a-record', 'dev', { usage: { input_tokens: 3, output_tokens: 2 }, total_cost_usd: .1, farol_provider: 'claude', farol_billing_kind: 'apikey' }, 'Sonnet 5', 'api-history', 'org/repo#1');
   engine.config.claudeProfiles[0].kind = 'assinatura';
-  assert.equal(engine.usageSessions.sessions[0].billingKind, 'apikey');
-  assert.equal(engine.usageSessions.sessions[0].provider, 'claude');
+  const linha = sessoesDoDiario(engine).find((s) => s.id === 'a-record');
+  assert.equal(linha.billingKind, 'apikey');
+  assert.equal(linha.provider, 'claude');
 });

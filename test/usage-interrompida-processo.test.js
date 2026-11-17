@@ -11,7 +11,14 @@ import assert from 'node:assert/strict';
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const SERVER_URL = pathToFileURL(path.join(RAIZ, 'server.js')).href;
+const MOTOR_URL = pathToFileURL(path.join(RAIZ, 'lib', 'engine', 'telemetria-do-motor.js')).href;
 const BASE = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-interrompida-'));
+// o próprio teste lê o banco do filho (somente leitura) pelos módulos da telemetria, que
+// carregam os caminhos: o FAROL_HOME dele fica numa pasta própria, nunca o ~/.farol
+process.env.FAROL_HOME = path.join(BASE, 'leitor');
+fs.mkdirSync(process.env.FAROL_HOME);
+const banco = await import('../lib/telemetria/banco.js');
+const { todasAsTentativas } = await import('../lib/telemetria/tentativas.js');
 const STUB = path.join(BASE, 'provedor-falso.mjs');
 const MARCA = '@@RESULTADO@@';
 const orfaos = [];
@@ -52,16 +59,22 @@ function ambiente(home, extra = {}) {
   };
 }
 
+// o filho faz a subida inteira (construtor e iniciarConsumo, que o start() chama depois do listen),
+// para gravar as tentativas no banco como o motor de verdade
 const SESSAO = [
   `const { Engine } = await import(${JSON.stringify(SERVER_URL)});`,
+  `const { iniciarConsumo } = await import(${JSON.stringify(MOTOR_URL)});`,
   'const e = new Engine();',
+  'iniciarConsumo(e);',
   "e.runClaudeStream('prompt', { id: 'a-filho', account: '', ref: 'o/r#1' }).then(() => process.exit(0), () => process.exit(3));",
 ].join('\n');
 
 const BOOT = [
   `const { Engine } = await import(${JSON.stringify(SERVER_URL)});`,
+  `const { sessoesDoDiario, iniciarConsumo } = await import(${JSON.stringify(MOTOR_URL)});`,
   'const e = new Engine();',
-  `process.stdout.write('\\n${MARCA}' + JSON.stringify(e.usageSessions.sessions));`,
+  'iniciarConsumo(e);',
+  `process.stdout.write('\\n${MARCA}' + JSON.stringify(sessoesDoDiario(e)));`,
   'process.exit(0);',
 ].join('\n');
 
@@ -75,10 +88,16 @@ function boot(home) {
   return JSON.parse(r.stdout.slice(r.stdout.lastIndexOf(MARCA) + MARCA.length)).filter((s) => s.id === 'a-filho');
 }
 
+// As tentativas abertas moram no telemetria.db do filho (16/11/2026): o teste abre o banco só
+// para leitura enquanto o filho escreve, o que o WAL permite.
 function tentativas(home) {
-  const arquivo = path.join(home, 'workspace', 'state', 'usage-tentativas.json');
+  const arquivo = path.join(home, 'workspace', 'state', 'telemetria.db');
   if (!fs.existsSync(arquivo)) return [];
-  try { return Object.values(JSON.parse(fs.readFileSync(arquivo, 'utf8')).tentativas); } catch { return []; }
+  let h = null;
+  try {
+    h = banco.abrirBanco(arquivo, { somenteLeitura: true });
+    return Object.values(todasAsTentativas(h));
+  } catch { return []; } finally { if (h) banco.fecharBanco(h); }
 }
 
 function esperar(cond, ms = 20000) {

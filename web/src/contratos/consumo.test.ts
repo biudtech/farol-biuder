@@ -233,7 +233,8 @@ describe('a chave usage do snapshot', () => {
     // a tela diz que o motor manda no máximo as 100 sessões mais recentes
     expect(fonte('lib/engine/usage.js')).toContain('function recentSessionsFrom(engine, limit = 100) {');
     const resumo = fonte('lib/engine/usage.js');
-    for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: auditoriaDeConsumo(sessions)', 'sessionsSince:']) expect(resumo, nome).toContain(nome);
+    // a auditoria vem do diário, onde ele morar (o banco da telemetria ou o JSON): lib/engine/usage-diario.js
+    for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: d.auditoria()', 'sessionsSince:']) expect(resumo, nome).toContain(nome);
     // o motor não tem teto de gasto: nem a lista por perfil, nem o gate
     expect(resumo).not.toMatch(/budgets|budgetBlockedFor|profileBudgetStatus/);
   });

@@ -10,7 +10,10 @@ const { Engine } = await import('../server.js');
 const usage = await import('../lib/engine/usage.js');
 const { snapshotUsage } = await import('../lib/engine/snapshot-usage.js');
 const { snapshotReviewActions } = await import('../lib/engine/snapshot-decisions.js');
-after(() => fs.rmSync(home, { recursive: true, force: true }));
+const { diario } = await import('../lib/engine/usage-diario.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
+after(() => { fecharTodos(); fs.rmSync(home, { recursive: true, force: true }); });
 
 function consumoSintetico() {
   const e = { usage: usage.defaultUsage(), usageSessions: { sessions: [] }, config: { claudeProfiles: [] } };
@@ -154,9 +157,12 @@ test('API de estado limita ações ao que a tela conhece sem perder revisão ant
 
 test('snapshot da Engine aplica a projeção de consumo e mantém os registros para consulta completa', () => {
   const e = new Engine();
-  Object.assign(e, consumoSintetico());
+  const sintetico = consumoSintetico();
+  e.usage = sintetico.usage;
+  // o diário da Engine mora no banco da telemetria: as linhas entram por ele
+  for (const linha of sintetico.usageSessions.sessions) diario(e).inserir(linha);
   const snapshot = e.snapshot();
   assert.equal('modelUsage' in snapshot.usage.recentSessions[0], false);
-  assert.ok(e.usageSessions.sessions.at(-1).modelUsage);
+  assert.ok(sessoesDoDiario(e).at(-1).modelUsage);
   assert.equal(snapshot.usage.totals.sessions, 120);
 });

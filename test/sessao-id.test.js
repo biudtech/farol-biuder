@@ -12,10 +12,12 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
 const { novoIdDeSessao } = await import('../lib/engine/sessao-id.js');
 const { kindFromId } = await import('../lib/engine/usage.js');
 
-after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
+after(() => { fecharTodos(); try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const RESULTADO = { usage: { input_tokens: 5, output_tokens: 7 }, total_cost_usd: 0.5 };
@@ -37,7 +39,7 @@ test('marcarDesfecho corrige a sessão certa depois de um reinício', () => {
   const novo = novoIdDeSessao(segundo, 'a').id;
   segundo.recordUsage(novo, 'eu', RESULTADO, 'claude-opus-5', '', 'o/r#2');
   assert.equal(segundo.marcarDesfecho(velho, 'descartada'), true);
-  const linhas = segundo.usageSessions.sessions;
+  const linhas = sessoesDoDiario(segundo);
   assert.equal(linhas.find((s) => s.id === velho).status, 'descartada');
   assert.equal(linhas.find((s) => s.id === novo).status, 'ok', 'a sessão nova não herda o desfecho da antiga');
 });

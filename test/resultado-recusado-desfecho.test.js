@@ -12,9 +12,11 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
+const { sessoesDoDiario } = await import('../lib/engine/telemetria-do-motor.js');
+const { fecharTodos } = await import('../lib/telemetria/banco.js');
 const { lerResultadoDaRevisao } = await import('../lib/engine/review.js');
 
-after(() => { try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
+after(() => { fecharTodos(); try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
 const RAIZ = path.join(import.meta.dirname, '..');
 const USO = { usage: { output_tokens: 10 }, total_cost_usd: 0.1 };
@@ -44,7 +46,7 @@ test('pushback ilegível marca erro na linha da sessão', async () => {
     return { text: 'sem json nenhum', sessionId: null };
   };
   assert.equal(await e.classifyPushback({ key: 'o/r#5', url: 'u', author: 'a' }, 'm'), null);
-  const s = e.usageSessions.sessions.at(-1);
+  const s = sessoesDoDiario(e).at(-1);
   assert.match(s.id, /^pb-/);
   assert.equal(s.status, 'erro');
 });
