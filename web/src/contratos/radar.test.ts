@@ -89,6 +89,16 @@ describe('listas do Radar: só o que identifica o item é exigido', () => {
     expect(lerProgresso({ ...base, restanteEstimadoMs: null })).toEqual(base);
   });
 
+  it('os nomes das etapas só entram quando fecham com o total e com a etapa atual', () => {
+    const p = { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' };
+    const nomes = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];
+    expect(lerProgresso({ ...p, etapas: nomes })).toEqual({ ...p, etapas: nomes });
+    expect(lerProgresso({ ...p, etapas: nomes.slice(0, 4) })).toEqual(p);
+    expect(lerProgresso({ ...p, etapas: ['a', 'b', 'c', 'd', 'e'] })).toEqual(p);
+    expect(lerProgresso({ ...p, etapas: [...nomes.slice(0, 4), 5] })).toEqual(p);
+    expect(lerProgresso({ ...p, etapas: 'código' })).toEqual(p);
+  });
+
   it('buscasPausadas e headlessWaitingPrs conferem cada item', () => {
     const { registrar } = coletor();
     expect(LEITORES.buscasPausadas([{ conta: 'rev', ate: 9 }, { conta: 'rev' }], registrar)).toEqual([{ conta: 'rev', ate: 9 }]);

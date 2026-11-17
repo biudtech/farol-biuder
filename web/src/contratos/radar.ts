@@ -145,6 +145,9 @@ export interface ProgressoDaRevisao {
   etapa: number;
   totalEtapas: number;
   rotuloDaEtapa: string;
+  // os nomes das etapas, na ordem (lib/engine/progresso-revisao.js); só quando a lista fecha
+  // com o total e com a etapa atual
+  etapas?: string[];
   arquivosLidos?: number;
   arquivosTotais?: number;
   restanteEstimadoMs?: number;
@@ -163,6 +166,8 @@ export function lerProgresso(v: unknown): ProgressoDaRevisao | undefined {
   const { arquivosLidos: lidos, arquivosTotais: totais, restanteEstimadoMs: restante } = v;
   if (ehInteiro(lidos) && ehInteiro(totais) && totais > 0 && lidos >= 0 && lidos <= totais) Object.assign(progresso, { arquivosLidos: lidos, arquivosTotais: totais });
   if (ehNumero(restante) && restante > 0) progresso.restanteEstimadoMs = restante;
+  const nomes = v.etapas;
+  if (Array.isArray(nomes) && nomes.length === v.totalEtapas && nomes.every(ehTexto) && nomes[v.etapa - 1] === v.rotuloDaEtapa) progresso.etapas = [...nomes];
   return progresso;
 }
 

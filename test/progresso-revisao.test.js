@@ -26,7 +26,7 @@ function engineCom(rec, extra = {}) {
 
 test('marcos: cada etapa fica no marco de entrada, sem interpolar onde não há sinal', () => {
   assert.deepEqual(ETAPAS.map(e => e.ate), [10, 20, 65, 90, 100]);
-  assert.deepEqual(calcularProgresso({ etapa: 'fontes' }), { percentual: 0, etapa: 1, totalEtapas: 5, rotuloDaEtapa: 'fontes' });
+  assert.deepEqual(calcularProgresso({ etapa: 'fontes' }), { percentual: 0, etapa: 1, totalEtapas: 5, rotuloDaEtapa: 'fontes', etapas: ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'] });
   assert.equal(calcularProgresso({ etapa: 'card' }).percentual, 10);
   assert.equal(calcularProgresso({ etapa: 'codigo' }).percentual, 20);
   assert.equal(calcularProgresso({ etapa: 'conferencia' }).percentual, 65);
@@ -40,7 +40,7 @@ test('100 só com o desfecho concluído, e sem tempo restante', () => {
     assert.ok(calcularProgresso({ etapa, lidos: 99, arquivos: 1 }).percentual < 100, etapa);
   }
   const fim = calcularProgresso({ etapa: CONCLUIDA, tipicoMs: 10 * MIN, decorridoMs: MIN });
-  assert.deepEqual(fim, { percentual: 100, etapa: 5, totalEtapas: 5, rotuloDaEtapa: 'postagem' });
+  assert.deepEqual(fim, { percentual: 100, etapa: 5, totalEtapas: 5, rotuloDaEtapa: 'postagem', etapas: ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'] });
 });
 
 test('código: arquivos lidos sobre os arquivos da rodada, entre 20 e 65', () => {
@@ -156,6 +156,7 @@ test('projeção: o progresso vai no estado e o Set da rodada não', () => {
   const [s] = projectSessions([rec], 4 * MIN);
   assert.equal('arquivosALer' in s, false);
   assert.deepEqual(s.progresso, { percentual: 42, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código',
+    etapas: ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'],
     arquivosLidos: 1, arquivosTotais: 2, restanteEstimadoMs: 6 * MIN });
   assert.equal(s.lidos, 1);
 });
@@ -203,4 +204,13 @@ test('as etapas da decisão gravam o início da sessão, que mede a próxima est
   const rec = { startedAt: inicio };
   const engine = { activeReviews: new Map([['a1', rec]]), activity: new Map([['a1', [{ t: inicio + MIN, k: 'tool', s: 'leitura', text: 'Read' }]]]) };
   assert.equal(etapasComTamanho(engine, 'a1', { changedFiles: 3, lines: 9 }).inicioEm, inicio);
+});
+
+test('os nomes das etapas vão em ordem em todo progresso, e o total é o tamanho da lista', () => {
+  for (const etapa of ['fontes', 'card', 'codigo', 'conferencia', 'postagem', 'concluida']) {
+    const p = calcularProgresso({ etapa });
+    assert.deepEqual(p.etapas, ['fontes', 'card', 'código', 'conferência dos achados', 'postagem']);
+    assert.equal(p.totalEtapas, p.etapas.length);
+    assert.equal(p.etapas[p.etapa - 1], p.rotuloDaEtapa);
+  }
 });

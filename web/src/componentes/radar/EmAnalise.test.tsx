@@ -75,6 +75,24 @@ describe('seção Em análise', () => {
     expect(screen.getByRole('button', { name: `Cancelar ${NOME}` })).toBeTruthy();
   });
 
+  it('com os nomes das etapas, o detalhe lista as feitas, a atual com os arquivos e as que faltam', () => {
+    const { controle } = controleFalso();
+    const etapas = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];
+    const { rerender } = render(<EmAnalise sessoes={[sessao({ progresso: { ...PROGRESSO, rotuloDaEtapa: 'código', etapas } })]} feeds={{}} controle={controle} />);
+    const itens = () => within(screen.getByRole('list', { name: 'Etapas da revisão' })).getAllByRole('listitem');
+    expect(itens().map((li) => li.textContent)).toEqual([
+      '✓Fontes (feita)', '✓Card (feita)', 'Código: 9 de 20 arquivos (agora)', 'Conferência dos achados (falta)', 'Postagem (falta)',
+    ]);
+    rerender(<EmAnalise sessoes={[sessao({ progresso: { percentual: 100, etapa: 5, totalEtapas: 5, rotuloDaEtapa: 'postagem', etapas } })]} feeds={{}} controle={controle} />);
+    expect(itens().every((li) => li.getAttribute('data-estado') === 'feita')).toBe(true);
+  });
+
+  it('sem os nomes das etapas não há lista: só a linha da etapa atual', () => {
+    const { controle } = controleFalso();
+    render(<EmAnalise sessoes={[sessao({ progresso: PROGRESSO })]} feeds={{}} controle={controle} />);
+    expect(screen.queryByRole('list', { name: 'Etapas da revisão' })).toBeNull();
+  });
+
   it('sem estimativa nem contagem de arquivos, não inventa: só o número e a etapa', () => {
     const { controle } = controleFalso();
     render(<EmAnalise sessoes={[sessao({ progresso: { percentual: 65, etapa: 4, totalEtapas: 5, rotuloDaEtapa: 'conferência dos achados' } })]} feeds={{}} controle={controle} />);

@@ -202,7 +202,7 @@ item, e o detalhe num clique (`Linha`, de `src/componentes/ui`):
 |---|---|---|
 | Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt`) |
 | Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
-| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), quem e quando, o feed, Abrir no GitHub e Cancelar |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), as etapas pelo nome (feitas, a atual e as que faltam, de `progresso.etapas`), quem e quando, o feed, Abrir no GitHub e Cancelar |
 | Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A linha: título, marcas (rascunho, parada, em conflito, esperando vaga) e repositório. O detalhe: chave, autor, hora, posição, o motivo do motor, Revisar agora, Ignorar e Abrir no GitHub |
 | Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`). A linha: bolinha (aprovado verde, pediu mudanças vermelho, comentado âmbar), título e hora. O detalhe: chave, desfecho em texto, "Ver a revisão" (o Histórico com a revisão aberta) e Abrir no GitHub |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
@@ -268,8 +268,10 @@ Regras que valem para quem mexer nela:
 O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
 do motor, não com regra na tela:
 
-- **As etapas da revisão.** O `progresso` traz só a etapa atual (número, total e rótulo): o
-  detalhe não lista pelo nome as etapas feitas e as que faltam.
+- **O que acontece dentro da etapa.** O `progresso` traz os nomes das cinco etapas
+  (`etapas`) e, no código, quantos arquivos foram lidos: o detalhe lista as feitas, a atual e as
+  que faltam, mas não diz qual arquivo está sendo lido agora nem qual review vai sair na
+  postagem (aprovação ou pedido de mudanças só se sabe no desfecho).
 - **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
   na aba aberta.
 - **Item ilegível da fila.** `queue` e `activeSessions` descartam o item torto com registro no
