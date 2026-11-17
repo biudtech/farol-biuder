@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDoTudoEmDia } from './fatias';
+import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from './fatias';
 
 const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
 
@@ -96,5 +96,12 @@ describe('o topo e o tudo em dia', () => {
     expect(textoDoTudoEmDia({ nextCheckAt: INSTANTE + 86400000 }, INSTANTE, 'UTC')).toBe('Nenhum PR na fila. A próxima checagem é em 17/11, 14:32.');
     expect(textoDoTudoEmDia({ nextCheckAt: null }, INSTANTE, 'UTC')).toBe('Nenhum PR na fila.');
     expect(textoDoTudoEmDia({}, INSTANTE, 'UTC')).toBe('Nenhum PR na fila.');
+  });
+});
+
+describe('a linha das pendências', () => {
+  it('conta as revisões sem nada postado, no singular e no plural', () => {
+    expect(textoDasPendencias(1)).toBe('1 revisão sem nada postado');
+    expect(textoDasPendencias(4)).toBe('4 revisões sem nada postado');
   });
 });

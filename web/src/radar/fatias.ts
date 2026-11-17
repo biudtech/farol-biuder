@@ -28,6 +28,13 @@ export function fatiarFila(
   return { fila: naFila, emEspera: esperando };
 }
 
+// A linha das pendências: revisões que o motor guardou sem publicar (política em espera
+// definida no motor, publicação que desistiu). Não há mesa: a linha só conta e leva ao
+// Histórico, que mostra cada uma como "nada postado".
+export function textoDasPendencias(n: number): string {
+  return n === 1 ? '1 revisão sem nada postado' : `${n} revisões sem nada postado`;
+}
+
 // A frase de baixo do título: o que está na tela agora, contado depois de fatiarFila.
 export function resumoDoTopo(emAnalise: number, naFila: number): string {
   return `${emAnalise} em análise · ${naFila} na fila`;

@@ -2,21 +2,22 @@
 
 // A tela Radar: o que o revisor autônomo está fazendo agora. No topo, a contagem do que está
 // na tela e o "Revisar um PR"; depois "Em análise", "Fila", "Postadas hoje" e os ignorados
-// desta aba. Não há mesa: o front não aprova, não pede mudanças e não pula pendência, e as
-// pendências (`decisions.pending`) não aparecem aqui (o Histórico mostra a revisão que não
-// publicou nada). A tela não recalcula regra do motor e não muda nada por conta própria depois
+// desta aba. Não há mesa: o front não aprova, não pede mudanças e não pula pendência. As
+// pendências (`decisions.pending`) viram uma linha só, "N sem nada postado", com o link para o
+// Histórico, que mostra cada uma; com pendência a tela não diz "Tudo revisado". A tela não recalcula regra do motor e não muda nada por conta própria depois
 // de um POST: quem muda a tela é o snapshot que chega pelo fluxo.
 //
 // Cada chave do snapshot é lida por um seletor próprio, e as seções são `memo`: a seção só é
 // redesenhada quando a fatia dela muda de referência. Uma linha nova de feed troca só
 // `activity`, e não redesenha a fila nem as postadas.
+import Link from 'next/link';
 import { useId, useMemo } from 'react';
 import { Simbolo } from '@/componentes/Logo';
 import { Esqueleto, Pagina, ui } from '@/componentes/ui';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { CHECAR } from '@/radar/acoes';
-import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDoTudoEmDia } from '@/radar/fatias';
+import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from '@/radar/fatias';
 import { AcoesDoItem } from './AcoesDoItem';
 import { EmAnalise } from './EmAnalise';
 import { Fila } from './Fila';
@@ -76,9 +77,10 @@ export function Radar({ app = appDoNavegador }: Props) {
   const ausentes = temEstado ? chavesAusentes({ activeSessions: sessoes, queue: filaDoMotor, decisions: decisoes }) : [];
   const emAnalise = sessoes?.length ?? 0;
   const naFila = fila.length + emEspera.length;
+  const pendentes = decisoes?.pending.length ?? 0;
   // Tudo em dia: a primeira checagem já terminou, o estado chegou inteiro e não há nada em
-  // análise nem na fila.
-  const tudoEmDia = temEstado && !ausentes.length && Boolean(ultimaChecagem) && emAnalise === 0 && naFila === 0;
+  // análise, na fila nem guardado sem publicar.
+  const tudoEmDia = temEstado && !ausentes.length && Boolean(ultimaChecagem) && emAnalise === 0 && naFila === 0 && pendentes === 0;
   // "Hoje" é lido quando a próxima checagem muda: a tela não tem relógio próprio.
   const fraseDoTudoEmDia = useMemo(() => textoDoTudoEmDia({ nextCheckAt: proximaChecagem }), [proximaChecagem]);
 
@@ -104,6 +106,13 @@ export function Radar({ app = appDoNavegador }: Props) {
                 </li>
               ) : null}
             </ul>
+          ) : null}
+
+          {pendentes > 0 ? (
+            <p className={`${ui.nota} ${estilos.pendentes}`}>
+              <span>{textoDasPendencias(pendentes)}</span>
+              <Link className={ui.link} href="/historico">Ver no Histórico</Link>
+            </p>
           ) : null}
 
           {tudoEmDia ? (

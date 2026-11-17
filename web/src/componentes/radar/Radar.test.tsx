@@ -156,7 +156,22 @@ describe('tela Radar: sem mesa e sem espera do CI', () => {
     expect(screen.queryByText('Corrige o cálculo')).toBeNull();
     expect(screen.queryByRole('button', { name: /^(Aprovar|Pedir mudanças|Comentar|Pular)\b/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/Aprovar|Pedir mudanças|Pular/);
-    // a pendência não esconde o tudo em dia: quem cuida dela é o motor, e o Histórico a mostra
+  });
+
+  it('com pendência guardada sem publicar não diz "Tudo revisado": uma linha conta e leva ao Histórico, sem botão', () => {
+    montar(estado({ decisions: decisoes(PENDENCIAS) }));
+    expect(screen.queryByText('Tudo revisado')).toBeNull();
+    const linha = screen.getByText('3 revisões sem nada postado').parentElement as HTMLElement;
+    expect(within(linha).getByRole('link', { name: 'Ver no Histórico' }).getAttribute('href')).toBe('/historico');
+    expect(within(linha).queryByRole('button')).toBeNull();
+  });
+
+  it('uma pendência só fala no singular; sem pendência a linha não aparece e o tudo em dia volta', () => {
+    montar(estado({ decisions: decisoes([pendencia()]) }));
+    expect(screen.getByText('1 revisão sem nada postado')).toBeTruthy();
+    cleanup();
+    montar(estado());
+    expect(screen.queryByText(/sem nada postado/)).toBeNull();
     expect(screen.getByText('Tudo revisado')).toBeTruthy();
   });
 

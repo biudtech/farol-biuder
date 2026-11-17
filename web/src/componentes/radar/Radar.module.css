@@ -237,3 +237,6 @@
   .botao, .entrada { min-height: 44px; }
   .cartao { padding: 12px; }
 }
+
+/* a linha das revisões guardadas sem publicar: discreta, com o link para o Histórico */
+.pendentes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0; }
