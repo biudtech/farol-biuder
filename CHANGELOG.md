@@ -286,16 +286,18 @@ Regras do dono de 17/11/2026, nascidas de um PR de task para uma bancada `releas
 a revisão cobrou o `osv` obrigatório vermelho, que já falhava no commit atual da base.
 
 - **Check herdado da base não pesa:** o check obrigatório que falta no head e também falha no
-  commit atual da branch base (ou que está sem resultado no head e sem verde na base) não segura
+  commit atual da branch base (vermelho lá; ausente ou rodando na base nunca herda) não segura
   a aprovação, nem com "CI obrigatório antes da aprovação" ligado, não vira ressalva, pedido de
   mudanças pelo CI nem aviso de CI no card. O que só falha no PR vale como antes. A base é lida
-  por uma consulta GraphQL do `gh` (o mesmo formato de checks do PR, a mesma régua), em cache de
-  um minuto por repositório e branch, e só quando há check obrigatório fora do verde; leitura
-  que falha não herda nada. Na mesa, uma linha informativa diz que o check falha também na base.
+  por uma consulta GraphQL do `gh` (o mesmo formato de checks do PR, a mesma régua), só quando
+  há check obrigatório fora do verde: fresca nos pontos que decidem postar (espera do CI,
+  retirada do pedido e publicação) e em cache de um minuto no lançamento; leitura que falha não
+  herda nada, e a linha informativa não conta como ressalva no Panorama. Na mesa, uma linha informativa diz que o check falha também na base.
   Com a espera do CI ligada, o prompt ganha um bloco curto para a sessão não cobrar o herdado.
 - **PR de sincronização sem atrito:** origem e destino em branches contínuas (`production`,
   `homologation`, `development`, `main`, `master`) ou bancadas (`release_hmg_*`,
-  `release_prd_*`), sem fork, com todo commit já vindo de outro PR mesclado. Sem defeito no que
+  `release_prd_*`), sem fork, com todo commit já vindo de outro PR mesclado numa dessas branches.
+  Sem defeito no que
   entrou, a falta de card e os itens de processo não são ressalva e o resultado sai limpo, pela
   política da conta para limpo. Defeito real e os gates de postagem não mudam.
 

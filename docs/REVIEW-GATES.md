@@ -290,9 +290,10 @@ cobrar coisas que não são check required"; o GitHub segura o merge pelo rulese
 e a cobrança no review só gerava atrito.
 
 **Herdado** (`separarHerdados`, `lib/engine/checks-exigidos.js`) é o check obrigatório que falta
-no head do PR (vermelho, rodando ou ausente) e que também falha no commit atual da branch base, ou
-o que está sem resultado no head e sem resultado verde na base. O vermelho só no PR (verde, rodando
-ou ausente na base) continua valendo exatamente como antes.
+no head do PR (vermelho, rodando ou ausente) e que está vermelho (falhou) no commit atual da branch
+base. Base sem o check (ausente, rollup vazio, check que só roda em `pull_request`) ou com ele ainda
+rodando nunca herda: a base não mostra falha nenhuma. O check que não está vermelho na base continua
+valendo exatamente como antes.
 
 **Onde vale.** O herdado sai da lista do que falta logo na leitura, nos dois lugares que leem os
 checks do PR: `bloqueadoPorChecks` (gate de entrada, `checksObrigatorios` do envelope, o clique e
@@ -309,9 +310,12 @@ Check não obrigatório continua sem peso: nem chega a ser comparado com a base.
 **A leitura da base** (`checksDaBase`) é uma consulta GraphQL pelo `gh`: o commit atual da branch
 base e o `statusCheckRollup` dele, no mesmo formato que o `gh pr view` devolve para o PR, lido
 pela mesma régua (`checksExigidosVerdes`). Só acontece quando há check obrigatório fora do verde
-no head. Fica em cache por `repo@base` por `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA
-lido. Leitura que falha, commit sem SHA ou lista cortada (mais de 100 checks) valem como "não deu
-para ler", e o comportamento é o de antes: nada é herdado. A falha fica no cache pelo mesmo prazo.
+no head. Leitura que falha, commit sem SHA ou lista cortada (mais de 100 checks) valem como "não
+deu para ler", e o comportamento é o de antes: nada é herdado. O gate de lançamento e a leitura da
+revisão usam um cache por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA
+lido, que guarda também a falha. Os pontos que decidem postar leem a base fresca, sem o cache
+(`{ fresco: true }`): a espera do CI antes do APPROVE e a retirada do pedido (`lerCi`) e a
+publicação (`lib/technical-review/publication.js`).
 
 **O card.** Na mesa, o herdado aparece numa linha que só informa (`avisoDosHerdados`,
 `lib/engine/gate-espera.js`), com a marca `informativo`, que `attentionPoints` nunca conta como
@@ -332,8 +336,9 @@ checks em `checksEEstadoDoPr`, `lib/engine/estado-desmentido.js`):
   `release_prd_*`), diferentes entre si;
 - o head não é de fork: os commits do PR são os da branch de origem remota que o destino ainda não
   tem;
-- nenhum commit do PR é exclusivo dele: cada um já entrou por outro PR mesclado
-  (`associatedPullRequests` com `states: [MERGED]`);
+- nenhum commit do PR é exclusivo dele: cada um já entrou por outro PR mesclado numa branch
+  contínua ou bancada da mesma lista (`associatedPullRequests` com `states: [MERGED]` e o
+  `baseRefName` de cada um). PR mesclado numa branch de rascunho não conta;
 - a lista de commits veio inteira (até 100) e com a contagem fechando.
 
 Falta de dado nunca vira sincronização. PR de task para bancada não é sincronização, e commit
@@ -342,8 +347,10 @@ empurrado direto numa branch contínua (sem PR mesclado) desfaz a marca. A marca
 
 **O que muda.** Num PR de sincronização em que a revisão concluiu aprovar sem defeito (nenhum
 bloqueio vivo nos achados, nenhum `defeitosDoPr`), `attentionPoints` devolve lista vazia: a falta
-de card, o card não verificável e os itens de processo não são ressalva, e o resultado segue a
-política da conta para limpo. O check herdado não segura, pela regra acima. A admissibilidade não
+de card, o card não verificável e os itens de processo não são ressalva (a dependência aberta e o
+item para quem decide o merge também não; este segue no texto do APPROVE), e o resultado segue a
+política da conta para limpo. Zerar tudo é decisão do dono e só se sustenta porque cada commit já
+foi revisado num PR mesclado numa branch contínua, que é o que o critério acima confere. O check herdado não segura, pela regra acima. A admissibilidade não
 muda (lacuna exigida, análise, inventário, coerência), e com defeito real vale o de hoje. Os gates
 de postagem (credencial, linguagem, PR próprio, instância isolada, dedup por head, head que andou,
 PR mergeado ou fechado) não leem a marca.
