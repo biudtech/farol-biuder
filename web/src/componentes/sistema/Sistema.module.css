@@ -4,6 +4,7 @@
    pela Bolinha de ui, e esta folha não pinta cor de estado. */
 
 /* o título da linha cresce, para o resumo e a seta ficarem à direita */
+.cabecaDaLinha { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; margin: 0; font-size: inherit; font-weight: inherit; }
 .tituloDaLinha { flex: 1 1 auto; }
 .resumoDaLinha { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
 

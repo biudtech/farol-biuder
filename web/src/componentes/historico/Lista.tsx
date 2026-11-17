@@ -132,7 +132,7 @@ export const Pendencias = memo(function Pendencias({ pendencias, ilegiveis, aoAb
   if (!pendencias.length && !ilegiveis) return null;
   return (
     <section className={ui.lista} aria-label="Sem nada postado ainda">
-      <h3 className={ui.grupo}>Sem nada postado ainda</h3>
+      <h2 className={ui.grupo}>Sem nada postado ainda</h2>
       <p className={ui.mini}>
         Revisões que o motor guardou sem publicar. Vêm do estado ao vivo do motor: não passam pela busca, pelos filtros nem pelas páginas.
       </p>

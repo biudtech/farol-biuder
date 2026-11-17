@@ -43,14 +43,16 @@ function nomeDaEdicao(chave: string): string {
 }
 
 // O resumo da linha fechada: a bolinha (com o estado escrito para o leitor), o título e o
-// resumo à direita. Só texto: nada clicável dentro do <summary>.
+// resumo à direita. Só texto: nada clicável dentro do <summary>. Tudo vai num h2 só (o
+// <summary> aceita um título como conteúdo), para as sete seções serem títulos de nível 2
+// abaixo do h1 da tela, e os subtítulos de dentro (h3) não pularem nível.
 function Resumo({ titulo, estado, porSalvar }: { titulo: string; estado: EstadoDaLinha; porSalvar?: boolean }) {
   return (
-    <>
+    <h2 className={estilos.cabecaDaLinha}>
       <Bolinha tom={estado.tom} rotulo={`${ROTULO_DO_TOM[estado.tom]}:`} />
       <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{titulo}</span>
       <span className={`${ui.r} ${estilos.resumoDaLinha}`}>{porSalvar ? `${estado.resumo}, alteração por salvar` : estado.resumo}</span>
-    </>
+    </h2>
   );
 }
 

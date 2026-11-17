@@ -489,6 +489,11 @@ describe('Histórico: pendências da mesa', () => {
     const g = grupo();
     // antes da lista paginada
     expect(g.compareDocumentPosition(revisoes()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // os títulos não pulam nível: o grupo é h2, como "Revisões", e os dias vêm em h3 depois
+    const niveis = screen.getAllByRole('heading').map((h) => Number(h.tagName.slice(1)));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) expect((niveis[i] as number) - (niveis[i - 1] as number)).toBeLessThanOrEqual(1);
+    expect(within(g).getByRole('heading', { level: 2, name: 'Sem nada postado ainda' })).toBeTruthy();
     const [primeira, segunda] = [...g.querySelectorAll('details')];
     expect(primeira?.querySelector('summary')?.textContent).toMatch(/^Nada postado:Pendente 40\d{2}:\d{2}$/);
     expect(primeira?.querySelector('summary [aria-hidden]')?.getAttribute('data-tom')).toBe('neutro');

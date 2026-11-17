@@ -167,6 +167,18 @@ describe('Sistema: a página', () => {
     expect(linhas(t).map((d) => d.querySelector('summary [data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
     // o índice do topo saiu: cada seção já é uma linha
     expect(screen.queryByRole('navigation', { name: 'Seções do Sistema' })).toBeNull();
+    // cada linha é um h2 dentro do <summary>, logo abaixo do h1
+    expect(linhas(t).map((d) => d.querySelector('summary > h2') !== null)).toEqual([true, true, true, true, true, true, true]);
+  });
+
+  it('os títulos não pulam nível: h1 da tela, h2 de cada linha e h3 dentro dela', async () => {
+    const t = montar();
+    await assentar();
+    for (const d of linhas(t)) d.open = true;
+    const niveis = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => Number(h.tagName.slice(1)));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) expect((niveis[i] as number) - (niveis[i - 1] as number)).toBeLessThanOrEqual(1);
+    expect(niveis).toContain(3);
   });
 
   it('a frase do topo conta as linhas em âmbar e vermelho, e a bolinha diz o estado de cada uma', async () => {
