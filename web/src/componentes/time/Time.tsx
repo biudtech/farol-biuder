@@ -16,10 +16,10 @@ import type { PessoasCruas, Time as Lista } from '@/contratos/time';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { marcaDasResolvidas, mensagemDaFalha } from '@/historico/consulta';
-import { chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, perfilDe, soComPerfil, textoDoResultado } from '@/time/time';
+import { chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, perfilDe, quantasPessoas, soComPerfil, textoDoResultado } from '@/time/time';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
-import comuns from '../radar/Radar.module.css';
+import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { Dossie, type LeituraDoDossie } from './Dossie';
 import { ListaDoTime, idDoBotao } from './ListaDoTime';
 import { useEnderecoDoTime, useTime } from './useTime';
@@ -94,8 +94,7 @@ export function Time({ app = appDoNavegador }: Props) {
     },
   }), [acoes, ir]);
 
-  const tituloDaLista = useRef<HTMLHeadingElement>(null);
-  const idDaLista = useId();
+  const idDoTitulo = useId();
   const idDaBusca = useId();
   const idDaDica = useId();
 
@@ -128,8 +127,8 @@ export function Time({ app = appDoNavegador }: Props) {
       focoNoResultado.current = false;
       return;
     }
-    (document.getElementById(idDoBotao(fechado)) ?? tituloDaLista.current)?.focus();
-  }, [aberto]);
+    (document.getElementById(idDoBotao(fechado)) ?? document.getElementById(idDoTitulo))?.focus();
+  }, [aberto, idDoTitulo]);
 
   // O dossiê aberto: a pessoa da lista com este login (sem diferenciar caixa, como o motor
   // faz com o perfil), ou só o perfil de quem não tem dossiê.
@@ -145,75 +144,78 @@ export function Time({ app = appDoNavegador }: Props) {
 
   let anuncio = '';
   if (time && !carregando) anuncio = textoDoResultado(total, mostradas, busca);
-  else if (carregando && !time) anuncio = 'Carregando o Time.';
 
-  return (
-    <div className={estilos.time}>
-      <h1 className={comuns.titulo}>Time</h1>
-
-      {/* O erro da carga e o aviso de lista velha valem com a lista ou com o dossiê na tela. */}
+  // O erro da carga e o aviso de lista velha valem com a lista ou com o dossiê na tela.
+  const avisos = (
+    <>
       {falha ? (
-        <div className={estilos.erro} role="alert">
-          <p><strong>Erro:</strong> {mensagemDaFalha(falha) || 'A carga do Time foi interrompida.'}{time ? ' O que está na tela é da última carga que deu certo.' : ''}</p>
-          <button type="button" className={comuns.botao} onClick={aoRecarregar}>Tentar de novo</button>
+        <div className={ui.erro} role="alert">
+          <span><strong>Erro:</strong> {mensagemDaFalha(falha) || 'A carga do Time foi interrompida.'}{time ? ' O que está na tela é da última carga que deu certo.' : ''}</span>
+          <Botao onClick={aoRecarregar}>Tentar de novo</Botao>
         </div>
       ) : null}
       {haNovas ? (
-        <p className={estilos.novas} role="status">
-          O motor resolveu revisão depois da última carga do Time: a memória de alguém pode ter mudado.{' '}
-          <button type="button" className={comuns.botao} onClick={aoRecarregar}>Atualizar</button>
-        </p>
-      ) : null}
-
-      <div className={estilos.listagem} hidden={aberto !== null}>
-        <p className={comuns.meta}>
-          O que o motor guarda sobre cada pessoa que teve PR revisado: o dossiê com a memória das revisões, e o papel e a competência que moldam o tom das próximas. São anotações sobre colegas: ficam no motor, e esta tela não as guarda no navegador.
-        </p>
-
-        <div className={estilos.busca} role="search" aria-label="Busca no Time">
-          <label className={comuns.rotulo} htmlFor={idDaBusca}>Buscar por nome ou login</label>
-          <input
-            id={idDaBusca}
-            className={comuns.entrada}
-            type="search"
-            value={busca}
-            maxLength={TETO_DA_BUSCA}
-            autoComplete="off"
-            spellCheck={false}
-            aria-describedby={idDaDica}
-            onChange={(evento) => setBusca(evento.target.value)}
-          />
-          <p id={idDaDica} className={comuns.meta}>A busca é feita nesta página, sobre a lista que o motor mandou inteira, e não vai para o endereço.</p>
+        <div className={`${ui.nota} ${estilos.novas}`} role="status">
+          <span>O motor resolveu revisão depois da última carga do Time: a memória de alguém pode ter mudado.</span>
+          <Botao pequeno onClick={aoRecarregar}>Atualizar</Botao>
         </div>
+      ) : null}
+    </>
+  );
 
-        <section className={comuns.bloco} aria-labelledby={idDaLista}>
-          <h2 id={idDaLista} ref={tituloDaLista} className={comuns.tituloDoBloco} tabIndex={-1}>Pessoas</h2>
-          <p className={comuns.meta} role="status" aria-live="polite" aria-label="Resultado da lista">{anuncio}</p>
+  return (
+    <div className={estilos.time}>
+      <div className={estilos.listagem} hidden={aberto !== null}>
+        <Pagina titulo="Time" idDoTitulo={idDoTitulo} sub={time ? quantasPessoas(total) : undefined}>
+          {aberto === null ? avisos : null}
+
+          <div className={estilos.busca} role="search" aria-label="Busca no Time">
+            <label className={ui.soLeitor} htmlFor={idDaBusca}>Buscar por nome ou login</label>
+            <input
+              id={idDaBusca}
+              className={ui.campo}
+              type="search"
+              placeholder="Buscar pessoa"
+              value={busca}
+              maxLength={TETO_DA_BUSCA}
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby={idDaDica}
+              onChange={(evento) => setBusca(evento.target.value)}
+            />
+            <p id={idDaDica} className={ui.soLeitor}>A busca é feita nesta página, sobre a lista que o motor mandou inteira, e não vai para o endereço.</p>
+          </div>
+
+          <p className={ui.soLeitor} role="status" aria-live="polite" aria-label="Resultado da lista">{anuncio}</p>
+
+          {!time && carregando ? <Esqueleto texto="Carregando o Time." linhas={5} /> : null}
 
           {time ? (
-            <div className={estilos.carga} aria-busy={carregando} data-esmaecida={carregando ? '' : undefined}>
-              {time.descartados ? (
-                <p className={`${comuns.nota} ${comuns.bloqueio}`}>
-                  Atenção: {time.descartados} pessoa(s) chegaram do motor em formato que esta tela não lê e ficaram de fora.
-                </p>
-              ) : null}
-              {mostradas ? <ListaDoTime autores={autoresMostrados} soComPerfil={semDossieMostrados} pessoas={pessoas} aoAbrir={aoAbrir} /> : null}
-              {total === 0 ? (
-                <p className={comuns.vazio}>
-                  O motor ainda não tem ninguém no Time: o dossiê de uma pessoa nasce quando a primeira revisão de um PR dela é resolvida.
-                </p>
-              ) : null}
-              {total > 0 && mostradas === 0 ? (
-                <>
-                  <p className={comuns.vazio}>Ninguém do Time passa pela busca.</p>
-                  <div className={comuns.botoes}>
-                    <button type="button" className={comuns.botao} onClick={() => setBusca('')}>Limpar a busca</button>
+            <div className={estilos.carga} aria-busy={carregando}>
+              {carregando ? <BarraDeCarga rotulo="Atualizando o Time" /> : null}
+              <div className={`${estilos.carga}${carregando ? ` ${ui.apagada}` : ''}`}>
+                {time.descartados ? (
+                  <p className={ui.nota}>
+                    Atenção: {time.descartados} pessoa(s) chegaram do motor em formato que esta tela não lê e ficaram de fora.
+                  </p>
+                ) : null}
+                {mostradas ? <ListaDoTime autores={autoresMostrados} soComPerfil={semDossieMostrados} pessoas={pessoas} aoAbrir={aoAbrir} /> : null}
+                {total === 0 ? (
+                  <div className={`${ui.cartao} ${estilos.vazioDoTime}`}>
+                    <h2 className={estilos.tituloDoVazio}>Ninguém no Time ainda</h2>
+                    <p className={ui.mini}>Uma pessoa aparece aqui quando a primeira revisão de um PR dela é resolvida: é aí que o motor abre o dossiê.</p>
                   </div>
-                </>
-              ) : null}
+                ) : null}
+                {total > 0 && mostradas === 0 ? (
+                  <div className={estilos.semResultado}>
+                    <p className={ui.vazio}>Ninguém do Time passa pela busca.</p>
+                    <Botao pequeno onClick={() => setBusca('')}>Limpar a busca</Botao>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
-        </section>
+        </Pagina>
       </div>
 
       {aberto !== null && leitura ? (
@@ -228,6 +230,7 @@ export function Time({ app = appDoNavegador }: Props) {
           contestacoes={contestacoes}
           controle={controle}
           ocupado={carregando && time !== null}
+          avisos={avisos}
           aoFechar={aoFechar}
         />
       ) : null}

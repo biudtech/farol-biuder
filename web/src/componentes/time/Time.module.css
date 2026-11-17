@@ -1,133 +1,97 @@
-/* A tela Time. Botão, cartão, nota e campo de texto vêm de Radar.module.css; aqui fica só o
-   que é desta tela. Só as variáveis de globals.css, nos pares que
-   src/tema/contraste.test.ts confere. */
+/* A tela Time no desenho enxuto. Página, linha, botão, nota, erro e carregamento vêm de
+   ui.module.css (src/componentes/ui); aqui fica só o que é desta tela. Só as variáveis de
+   globals.css. */
 .time {
   display: flex;
   flex-direction: column;
   gap: 22px;
   min-width: 0;
 }
-
-.listagem {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
-}
+.listagem { min-width: 0; }
 .listagem[hidden] { display: none; }
 
-.busca {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.busca input { flex: none; width: 100%; max-width: 420px; }
+.busca { display: flex; flex-direction: column; min-width: 0; }
 
 .novas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--info-soft);
-  color: var(--info-texto);
-  font-size: 13px;
-}
-
-.carga {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
-  transition: opacity .15s;
-}
-/* a lista anterior fica na tela, esmaecida, enquanto a nova não chega */
-.carga[data-esmaecida] { opacity: .55; }
-
-.campos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px 18px;
-  margin: 0;
-  font-size: 13px;
-}
-.par { min-width: 0; overflow-wrap: anywhere; }
-.par dt { color: var(--muted); font-size: 12px; font-weight: 600; }
-.par dd { margin: 0; }
-
-.nome { color: var(--muted); font-weight: 550; }
-
-.erro {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--danger-soft);
-  color: var(--danger-texto);
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
-}
-
-.dossie {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13.5px;
-  transition: opacity .15s;
-}
-.dossie[data-esmaecida] { opacity: .55; }
-.topoDoDossie {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
 }
-.tituloDoDossie { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
 
-.secao {
+.carga { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.semMarcador { margin: 0; padding: 0; list-style: none; }
+
+/* o avatar das iniciais (o "av" do desenho) */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-texto);
+  font-size: 14px;
+  font-weight: 800;
+}
+.avatarGrande { width: 56px; height: 56px; font-size: 18px; }
+
+/* "Sem papel", em âmbar (a classe dobrada vence o .r da linha, de outro módulo) */
+.semPapel.semPapel { color: var(--aviso-texto); }
+
+.vazioDoTime {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.tituloDoVazio { font-size: 18px; font-weight: 800; }
+.semResultado { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+
+/* ---------- o dossiê ---------- */
+.dossie { gap: 20px; }
+.voltar { align-self: flex-start; }
+.cabecalho { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.cabecalhoTexto { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+
+.observacao { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+
+.numeros { margin: 0; }
+.numero {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.numero dt { font-size: 12px; font-weight: 700; color: var(--muted); }
+.numero dd { margin: 0; font-size: 22px; font-weight: 800; }
+
+.ultimas {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.tituloDaSecao { font-size: 14px; font-weight: 650; }
-
-.entradas {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.entrada {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 10px 12px;
-  background: var(--bg);
-  border-radius: 8px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
-.tituloDaEntrada { font-size: 13px; font-weight: 650; }
+.ultima { display: flex; align-items: center; gap: 10px; }
 
+.pergunta { display: flex; flex-direction: column; gap: 10px; }
+.tituloDaPergunta { font-weight: 800; }
+
+.remover { display: flex; justify-content: flex-end; }
+
+/* o perfil (papel e competência) */
 .perfil {
   display: flex;
   flex-direction: column;
@@ -137,21 +101,18 @@
   padding: 0;
   border: 0;
 }
-.perfil legend { padding: 0; font-weight: 600; }
 .seletores {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px 16px;
 }
-.seletor {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.seletor select { flex: none; width: 100%; }
+.seletor { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* carregando o dossiê: o avatar e os blocos dos números */
+.avatarEsqueleto { width: 56px; height: 56px; flex: none; border-radius: 50%; }
+.esqueletoDoDossie { display: flex; flex-direction: column; gap: 12px; }
+.blocoEsqueleto { height: 64px; border-radius: 12px; }
 
 @media (max-width: 760px) {
-  .busca, .dossie { padding: 12px; }
-  .campos, .seletores { grid-template-columns: 1fr; }
+  .seletores { grid-template-columns: 1fr; }
 }

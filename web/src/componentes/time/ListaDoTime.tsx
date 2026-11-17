@@ -1,12 +1,12 @@
 'use client';
 
-// A lista do Time: um cartão por pessoa, na ordem em que o motor mandou. Cada campo diz o
-// próprio nome, e o botão diz de quem é o dossiê que abre. Nada aqui é calculado: a contagem
-// é o tamanho da lista de entradas, e a última entrada é a primeira que o motor listou.
-import { memo, type ReactNode } from 'react';
+// A lista do Time: uma linha por pessoa, na ordem em que o motor mandou, com o avatar das
+// iniciais, o nome e o papel à direita ("Sem papel", em âmbar, quando não há). A linha é um
+// botão que abre o dossiê na própria página. Nada aqui é calculado.
+import { memo } from 'react';
 import type { Autor, Pessoa, Pessoas } from '@/contratos/time';
-import { dataDaEntrada, desfechoDaEntrada, perfilDe, prDaEntrada, textoDaCompetencia, textoDoPapel } from '@/time/time';
-import comuns from '../radar/Radar.module.css';
+import { iniciais, nomeDaPessoa, papelCurto, perfilDe } from '@/time/time';
+import { ui } from '../ui';
 import estilos from './Time.module.css';
 
 // O id do botão que abre o dossiê: é para ele que o foco volta quando o dossiê fecha.
@@ -14,23 +14,12 @@ export function idDoBotao(login: string): string {
   return `ver-dossie-${encodeURIComponent(login.toLowerCase())}`;
 }
 
-export function Campo({ nome, children }: { nome: string; children: ReactNode }) {
-  return (
-    <div className={estilos.par}>
-      <dt>{nome}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
+// O avatar com as iniciais. É enfeite: o nome vai escrito ao lado.
+export function Avatar({ nome, grande }: { nome: string; grande?: boolean }) {
+  return <span className={grande ? `${estilos.avatar} ${estilos.avatarGrande}` : estilos.avatar} aria-hidden="true">{iniciais(nome)}</span>;
 }
 
-// A entrada mais recente numa linha: o dia, o PR e o que foi publicado, o que houver.
-function textoDaUltima(autor: Autor): string {
-  const ultima = autor.entries[0];
-  if (!ultima) return 'Nenhuma';
-  return [dataDaEntrada(ultima.date), prDaEntrada(ultima.ref), desfechoDaEntrada(ultima.verdict)].filter(Boolean).join(', ') || 'Sem data registrada';
-}
-
-interface PropsDoCartao {
+interface PropsDaLinha {
   login: string;
   // ausente em quem só tem perfil gravado
   autor?: Autor;
@@ -38,24 +27,19 @@ interface PropsDoCartao {
   aoAbrir(login: string): void;
 }
 
-const Cartao = memo(function Cartao({ login, autor, perfil, aoAbrir }: PropsDoCartao) {
+const LinhaDaPessoa = memo(function LinhaDaPessoa({ login, autor, perfil, aoAbrir }: PropsDaLinha) {
+  const nome = nomeDaPessoa(login, autor);
   return (
-    <li className={comuns.cartao}>
-      <h3 className={comuns.tituloDoCartao}>
-        <span className={comuns.referencia}>@{login}</span>
-        {autor?.name ? <span className={estilos.nome}>{autor.name}</span> : null}
-      </h3>
-      <dl className={estilos.campos}>
-        {autor ? <Campo nome="Entradas de memória">{autor.entries.length ? String(autor.entries.length) : 'Nenhuma'}</Campo> : null}
-        {autor?.entries.length ? <Campo nome="Última entrada">{textoDaUltima(autor)}</Campo> : null}
-        <Campo nome="Papel">{textoDoPapel(perfil)}</Campo>
-        <Campo nome="Competência">{textoDaCompetencia(perfil)}</Campo>
-      </dl>
-      <div className={comuns.botoes}>
-        <button id={idDoBotao(login)} type="button" className={comuns.botao} aria-label={`Ver o dossiê de @${login}`} onClick={() => aoAbrir(login)}>
-          Ver o dossiê
-        </button>
-      </div>
+    <li>
+      <button id={idDoBotao(login)} type="button" className={ui.linhaLink} onClick={() => aoAbrir(login)}>
+        <Avatar nome={nome} />
+        <span className={ui.t}>{nome}</span>
+        {/* O login vai ao leitor de tela quando o nome é outro: é ele que identifica a pessoa.
+            Os espaços ficam fora dos spans: o nome acessível não guarda espaço da borda de um. */}
+        {nome !== login ? <>{' '}<span className={ui.soLeitor}>(@{login}),</span></> : <span className={ui.soLeitor}>,</span>}
+        {' '}
+        <span className={`${ui.r} ${ui.empurra}${perfil?.papel ? '' : ` ${estilos.semPapel}`}`}>{papelCurto(perfil)}</span>
+      </button>
     </li>
   );
 });
@@ -70,9 +54,9 @@ interface Props {
 
 export const ListaDoTime = memo(function ListaDoTime({ autores, soComPerfil, pessoas, aoAbrir }: Props) {
   return (
-    <ul className={comuns.lista}>
-      {autores.map((autor) => <Cartao key={`d:${autor.login}`} login={autor.login} autor={autor} perfil={perfilDe(pessoas, autor.login)} aoAbrir={aoAbrir} />)}
-      {soComPerfil.map((login) => <Cartao key={`p:${login}`} login={login} perfil={perfilDe(pessoas, login)} aoAbrir={aoAbrir} />)}
+    <ul className={`${ui.lista} ${estilos.semMarcador}`} aria-label="Pessoas do Time">
+      {autores.map((autor) => <LinhaDaPessoa key={`d:${autor.login}`} login={autor.login} autor={autor} perfil={perfilDe(pessoas, autor.login)} aoAbrir={aoAbrir} />)}
+      {soComPerfil.map((login) => <LinhaDaPessoa key={`p:${login}`} login={login} perfil={perfilDe(pessoas, login)} aoAbrir={aoAbrir} />)}
     </ul>
   );
 });
