@@ -207,8 +207,8 @@ describe('textos', () => {
   it('o resumo da política na linha fechada', () => {
     expect(resumoDaPolitica(ABERTA)).toBe('publica sozinho');
     expect(resumoDaPolitica({ ...ABERTA, autoReview: false })).toBe('revisão automática desligada');
-    expect(resumoDaPolitica({ ...ABERTA, onClean: 'wait', onCaveats: 'wait' })).toBe('2 desfechos esperam (definido no motor)');
-    expect(resumoDaPolitica({ ...ABERTA, onReject: 'wait' })).toBe('1 desfecho espera (definido no motor)');
+    expect(resumoDaPolitica({ ...ABERTA, onClean: 'wait', onCaveats: 'wait' })).toBe('2 desfechos esperam, definido no motor');
+    expect(resumoDaPolitica({ ...ABERTA, onReject: 'wait' })).toBe('1 desfecho espera, definido no motor');
     expect(resumoDaPolitica({ autoReview: true })).toBe('política incompleta');
   });
 

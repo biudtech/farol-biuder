@@ -26,7 +26,10 @@ describe('a linha da saúde', () => {
 describe('a linha da conta', () => {
   it('diz a conta e a política, e o que falta', () => {
     expect(linhaDaConta(CONTA)).toEqual({ tom: 'ok', resumo: '@farol-bot, publica sozinho' });
-    expect(linhaDaConta({ ...CONTA, onReject: 'wait' })).toEqual({ tom: 'ok', resumo: '@farol-bot, 1 desfecho espera (definido no motor)' });
+    // desfecho em espera não posta sozinho: pede atenção, e o resumo diz que veio do motor
+    expect(linhaDaConta({ ...CONTA, onReject: 'wait' })).toEqual({ tom: 'aviso', resumo: '@farol-bot, 1 desfecho espera, definido no motor' });
+    expect(fraseDoTopo([linhaDaConta({ ...CONTA, onClean: 'wait', onCaveats: 'wait' })])).toBe('1 ponto pede atenção');
+    expect(linhaDaConta({ ...CONTA, onClean: 'wait', onCaveats: 'wait' }).resumo).toBe('@farol-bot, 2 desfechos esperam, definido no motor');
     expect(linhaDaConta(undefined).tom).toBe('neutro');
     expect(linhaDaConta({ ...CONTA, user: '' })).toEqual({ tom: 'ruim', resumo: 'sem conta revisora' });
     expect(linhaDaConta({ ...CONTA, tokenOk: false }).tom).toBe('ruim');

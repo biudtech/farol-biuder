@@ -4,7 +4,7 @@
 // assim por diante): nada é medido aqui. O topo conta quantas linhas pedem atenção.
 import type { ConfigDoSistema, ContaRevisora, Modelos, PerfisDoClaude, Saude, SessoesPareadas, SiteDoJira } from '@/contratos/sistema';
 import { automacaoDe, resumoDaAutomacao } from './automacao';
-import { resumoDaPolitica } from './politica';
+import { desfechosEmEspera, resumoDaPolitica } from './politica';
 import { ehGrave, type Verificacao } from './saude';
 
 // ok: verde. aviso: âmbar. ruim: vermelho. neutro: cinza (sem dado, desligado, carregando).
@@ -42,6 +42,9 @@ export function linhaDaConta(conta: ContaRevisora | undefined): EstadoDaLinha {
   if (!conta.owners.length) return { tom: 'aviso', resumo: `${quem}, sem organização monitorada` };
   if (conta.limiteGhAte && conta.limiteGhAte > 0) return { tom: 'aviso', resumo: `${quem}, no limite do GitHub` };
   if (conta.limitePlanoAte && conta.limitePlanoAte > 0) return { tom: 'aviso', resumo: `${quem}, no limite do plano do Claude` };
+  // Desfecho em espera não posta nada sozinho: o PR fica sem nada postado, e o revisor da
+  // tela nunca espera. Pede atenção, e o resumo diz que veio do motor.
+  if (conta.autoReview !== false && desfechosEmEspera(conta)) return { tom: 'aviso', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
   return { tom: 'ok', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
 }
 

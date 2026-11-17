@@ -194,10 +194,15 @@ export function notaDasRessalvasTravadas(rascunho: RascunhoDaConta): string {
 }
 
 // O resumo da política na linha fechada: o que o motor faz sozinho hoje.
+// Quantos dos três desfechos estão em espera (`wait`, que só se põe por arquivo ou API).
+export function desfechosEmEspera(conta: Pick<ContaRevisora, 'onClean' | 'onCaveats' | 'onReject'>): number {
+  return DESFECHOS_EM_ORDEM.filter((campo) => conta[campo] === 'wait').length;
+}
+
 export function resumoDaPolitica(conta: Pick<ContaRevisora, 'autoReview' | 'onClean' | 'onCaveats' | 'onReject'>): string {
   if (conta.autoReview === false) return 'revisão automática desligada';
-  const esperando = DESFECHOS_EM_ORDEM.filter((campo) => conta[campo] === 'wait').length;
-  if (esperando) return `${esperando} ${esperando === 1 ? 'desfecho espera' : 'desfechos esperam'} (definido no motor)`;
+  const esperando = desfechosEmEspera(conta);
+  if (esperando) return `${esperando} ${esperando === 1 ? 'desfecho espera' : 'desfechos esperam'}, definido no motor`;
   if (conta.autoReview === true && DESFECHOS_EM_ORDEM.every((campo) => conta[campo] === PUBLICA[campo])) return 'publica sozinho';
   return 'política incompleta';
 }
