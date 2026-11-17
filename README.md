@@ -3,8 +3,8 @@
 Revisor autônomo de pull requests da BIUD. Monitora os PRs pedidos a uma conta revisora do
 GitHub, revisa cada um numa sessão headless do Claude Code (com o card do Jira lido e o diff em
 disco), passa o resultado pelos gates e posta aprovação, pedido de mudanças ou comentário. O
-que a política da conta não decide sozinha fica na mesa ("Precisa de você"), esperando uma
-pessoa.
+que a política da conta manda esperar (`wait`, só por arquivo ou API) fica como pendência, sem
+nada postado; o front não tem mesa e mostra essa pendência no Histórico.
 
 São duas partes, no mesmo repositório:
 

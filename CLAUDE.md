@@ -47,7 +47,9 @@ instância, uma conta revisora do GitHub, só Linux. Ele:
 2. abre, para cada PR, uma sessão headless do Claude Code no workspace `~/.farol/workspace`, com o
    protocolo de `workspace-template/`, o card do Jira já lido e o diff já gravado em disco;
 3. recebe o envelope JSON da sessão, passa pelos gates e posta APPROVE, REQUEST_CHANGES ou COMMENT,
-   ou leva o PR à mesa ("Precisa de você") quando a política da conta manda esperar;
+   ou guarda o PR como pendência quando a política da conta manda esperar (`wait`, que só se põe
+   por arquivo ou API: o front não oferece esperar, não tem mesa e mostra a pendência no Histórico
+   como "nada postado");
 4. serve a API por HTTP e SSE. A tela é o front de `web/`, que fala com essa API de outra origem.
 
 A sessão de IA nunca posta: quem escreve no GitHub é o motor, pela conta revisora.
@@ -348,8 +350,9 @@ pareamento e `x-farol: 1`). Os corpos estão em
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#chamar-a-api-sem-tela) e nas lacunas do
 [`web/README.md`](web/README.md).
 
-Das preferências de `POST /api/settings`, o front edita `aguardarCiParaAprovar`,
-`parallelReviews`, `reviewModel`, `reviewEffort` e `people`. Só mudam pela API ou pelo arquivo:
+Das preferências de `POST /api/settings`, o front edita `parallelReviews`, `reviewModel`,
+`reviewEffort` e `people`. Só mudam pela API ou pelo arquivo: `aguardarCiParaAprovar` (o revisor
+não espera o CI pela tela desde o redesenho de 17/11/2026),
 `jiraSites`, `claudeProfiles`, `claudeProfileId`, `intervalSeconds`, `globalParallelReviews`,
 `reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`.
 `soundEnabled`, `theme` e `autostart`, da tela antiga, saíram da tabela: voltam em `ignoradas`,

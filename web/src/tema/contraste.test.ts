@@ -165,7 +165,8 @@ describe('o CSS do Consumo', () => {
   it('a barra, o eixo e os rótulos do gráfico usam os pares conferidos', () => {
     expect(css).toContain('.barra { fill: var(--accent); }');
     expect(css).toContain('.eixo { stroke: var(--borda-campo); stroke-width: 1; }');
-    expect(css).toMatch(/\.rotuloDoEixo \{ fill: var\(--muted\);/);
+    // no desenho enxuto os dias das pontas são texto da página, embaixo do SVG: cor, não fill
+    expect(css).toMatch(/\.rotuloDoEixo \{ color: var\(--muted\);/);
     expect(css).toMatch(/\.rolagem \{[^}]*background: var\(--surface\);/);
   });
 });
@@ -182,9 +183,14 @@ describe('o CSS do Sistema', () => {
     for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
   });
 
-  it('o estado de uma verificação usa o texto de estado sobre o fundo suave dele', () => {
-    expect(css).toContain('.estado[data-estado="ok"] { background: var(--ok-soft); color: var(--ok-texto); }');
-    expect(css).toContain('.estado[data-estado="atencao"] { background: var(--danger-soft); color: var(--danger-texto); }');
-    expect(css).toMatch(/\.erro \{[^}]*background: var\(--danger-soft\);[^}]*color: var\(--danger-texto\);/);
+  // O estado (verificação, linha, credencial) é dito pelo Chip e pela Bolinha das peças comuns,
+  // que já põem o texto de estado sobre o fundo suave dele (ui.module.css); o erro é o de ui.
+  // Esta folha não pinta estado: se um dia pintar, o par tem de ser o mesmo da regra de ui.
+  it('não pinta cor de estado por conta própria; fundo suave só com o texto de estado dele', () => {
+    expect(css).not.toMatch(/var\(--(ok|aviso|danger|neutro)(-texto)?\)/);
+    for (const regra of css.match(/\{[^}]*\}/g) ?? []) {
+      const fundo = /background: var\(--(\w+)-soft\)/.exec(regra)?.[1];
+      if (fundo) expect(regra).toContain(`color: var(--${fundo}-texto)`);
+    }
   });
 });

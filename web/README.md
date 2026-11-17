@@ -91,11 +91,11 @@ corrigida sozinho, o `overrides` sai.
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
 | `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
 | `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
-| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nos blocos (`fatias.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das três telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
-| `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action` (`rotulos.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action`, com o tom e o chip de cada desfecho (`rotulos.ts`), os dias da lista (`dias.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e a auditoria do registro em frases (`auditoria.ts`) |
-| `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`) e as ações, com corpo, pergunta e conferência (`acoes.ts`) |
+| `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`), as ações, com corpo, pergunta e conferência (`acoes.ts`), e o estado e o resumo de cada linha da tela (`linhas.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
@@ -187,80 +187,92 @@ prompt).
 
 ## A tela Radar
 
-A aba `/radar` é `src/componentes/radar/Radar.tsx`. Ela lê o snapshot do store, fatia nos
-blocos e liga os botões às ações:
+A aba `/radar` é `src/componentes/radar/Radar.tsx`: o que o revisor autônomo está fazendo
+agora. Ela lê o snapshot do store, fatia nas seções e liga os botões às ações. Uma linha por
+item, e o detalhe num clique (`Linha`, de `src/componentes/ui`):
 
-| Bloco | Componente | De onde vem |
+| Seção | Componente | De onde vem |
 |---|---|---|
-| Ações gerais (Checar agora, revisar pela URL de um PR) | `AcoesGerais.tsx` | `status`, `lastCheckAt`, `nextCheckAt` |
-| Precisa de você | `PrecisaDeVoce.tsx` | `decisions.pending` sem espera |
-| Analisando agora | `AnalisandoAgora.tsx` | `activeSessions` (com `progresso`, a porcentagem da revisão) e `activity` (cada linha traz o `progresso` atualizado da sessão) |
-| Esperando o CI | `EsperandoOCi.tsx` | `decisions.pending` com `esperaCi`, ou com `esperaProva` que o motor retoma sozinho |
-| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails` |
-| Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista) |
+| Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt`) |
+| Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), quem e quando, o feed, Abrir no GitHub e Cancelar |
+| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A linha: título, marcas (rascunho, parada, em conflito, esperando vaga) e repositório. O detalhe: chave, autor, hora, posição, o motivo do motor, Revisar agora, Ignorar e Abrir no GitHub |
+| Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`). A linha: bolinha (aprovado verde, pediu mudanças vermelho, comentado âmbar), título e hora. O detalhe: chave, desfecho em texto, "Ver a revisão" (o Histórico com a revisão aberta) e Abrir no GitHub |
+| Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
 
-Os avisos do topo saem de `account`, `status`, `error` e `buscasPausadas`. No pé da tela fica
-a região de resultado (`aria-live`): o envio em curso, o que o motor respondeu ao pedido e os
-avisos dele (evento `toast`).
+Estados: antes do primeiro estado, o esqueleto com "Carregando o estado do motor."
+(`role="status"`); tudo em dia (primeira checagem terminada, estado inteiro, nada em análise
+nem na fila), o símbolo da BIUD, "Tudo revisado" e a próxima checagem quando o motor manda
+`nextCheckAt`; primeira checagem em curso, a Fila diz que ainda não terminou, com o spinner;
+primeira checagem que falhou, o erro com o Checar agora, e a Fila não diz que não há nada; chave
+ausente, o erro diz qual, e a seção desenha vazia. No pé da tela fica a região de resultado
+(`aria-live`): o envio em curso, o que o motor respondeu ao pedido e os avisos dele (evento
+`toast`).
+
+**Sem mesa e sem espera do CI.** O revisor é autônomo: o front não aprova, não pede mudanças,
+não comenta e não pula pendência (`POST /api/decide` saiu do front), e não há bloco "Precisa de
+você" nem "Esperando o CI". As pendências de `decisions.pending` não aparecem no Radar, não
+contam no topo e não seguram o "Tudo revisado": o Histórico as mostra como "nada postado". O
+leitor de `decisions.pending` continua em `src/contratos/radar.ts`, porque o Histórico o usa.
 
 Regras que valem para quem mexer nela:
 
-- **A tela não decide.** Os botões de uma pendência saem de `acoesDaPendencia`
-  (`src/radar/fatias.ts`), que lê só `prProprio` e `blockedKind: "stale_head"`. Fora disso a
-  tela oferece a ação e mostra a recusa do motor. Não acrescente regra de elegibilidade aqui:
-  se faltar um campo, ele entra no snapshot do motor.
 - **Um PR aparece uma vez.** `fatiarFila` tira da Fila o PR com sessão em curso, e da espera
-  de execução o que ainda está na fila ou já tem pendência. É só exibição: a lista do motor
-  não muda, e a contagem do título conta o que está na tela.
+  de execução o que ainda está na fila. É só exibição: a lista do motor não muda, e a contagem
+  do topo conta o que está na tela.
 - **Ação.** Todo POST passa por `executar` (`src/radar/acoes.ts`) e pelo gancho `useAcoes`,
   que guarda o que está no ar por alvo (o PR ou a sessão), desabilita os botões do alvo e
-  publica o envio e o resultado na região viva. A recusa do motor chega em
-  `{ ok: false, blocked, error }`: `blocked` é o código, e a frase de cada código está na
+  publica o envio e o resultado na região viva. O botão clicado mostra o spinner e o texto do
+  processo ("Enviando…", "Cancelando…", "Checando…", "Lendo o PR…"). A recusa do motor chega
+  em `{ ok: false, blocked, error }`: `blocked` é o código, e a frase de cada código está na
   tabela `RECUSAS`. Código novo do motor entra ali; sem entrada, a tela mostra a frase que o
   motor mandou.
 - **O `ok` do motor não é o desfecho.** Depois de `{ ok: true }` a tela só diz "O motor
-  aceitou o pedido". Numa decisão o motor responde `ok` também quando já havia um review
-  igual e ele não publicou de novo: o que aconteceu de fato vem no aviso dele (`toast`), que
-  a tela mostra como texto. Não escreva frase que afirme publicação a partir do `ok`.
-- **Confirmação.** `confirmacaoDa` diz quais ações perguntam antes e com que texto: as três
-  que publicam no GitHub (Aprovar, Pedir mudanças e Comentar), o Pular de uma pendência de
-  "Esperando o CI" (descarta o que o motor faria sozinho) e o Cancelar. A pergunta abre no
-  próprio cartão, fecha com Escape, e fecha sozinha, dizendo por quê, se o motor mudar o item
-  e a ação deixar de ser oferecida. Ao confirmar, o foco vai à região de resultado.
-- **O texto mostrado é o do parecer.** `reportMarkdown` é o review do parecer da sessão. O
-  motor publica o texto que guardou para a ação clicada, com comentários em linha. Por isso a
-  pergunta só diz "o review mostrado acima" quando a ação é a do parecer; nas outras ela
-  avisa que sai um texto que a tela não mostra.
-- **Texto de fora é texto.** Título, autor, motivo, feed, aviso do motor e review entram como
-  filho de texto do React, nunca por `dangerouslySetInnerHTML`. O review vem em markdown e
-  é desenhado pelo componente `Markdown` (veja "O renderizador de markdown"). O link do PR passa
-  por `linkDoPr`: só `https://github.com/`, com `rel="noreferrer noopener"` e
-  `target="_blank"`. A revisão sob demanda manda a URL canônica do PR (`prDaUrl`), não o que
-  foi digitado.
-- **Cor não é o único sinal.** Erro e aviso começam dizendo o que são ("Erro:", "Aviso:",
-  "Bloqueado:").
-- **Hora.** As datas saem de `dataHora`, no fuso do navegador, sempre absolutas: a tela não
-  tem relógio próprio, e os testes não dependem da hora.
-- **Desenho.** A tela lê cada chave do snapshot por um seletor próprio, e os blocos são
-  `memo`: o bloco só é redesenhado quando a fatia dele muda de referência
-  (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a um bloco, use `useMemo`.
+  aceitou o pedido": o que aconteceu de fato vem no estado e no aviso dele (`toast`), que a tela
+  mostra como texto. Não escreva frase que afirme publicação a partir do `ok`.
+- **Confirmação.** `confirmacaoDa` diz quais ações perguntam antes e com que texto; no Radar,
+  só o Cancelar. A pergunta abre no próprio item, fecha com Escape, e fecha sozinha, dizendo por
+  quê, se o motor mudar o item e a ação deixar de ser oferecida. Ao confirmar, o foco vai à
+  região de resultado. Sessão com o cancelamento aceito mostra "Cancelando…" ocupado.
+- **Postadas hoje é recorte, não regra.** Entra a resolvida com `action` publicado (`approve`,
+  `request_changes`, `comment`: a régua `foiPublicado` do Histórico e do motor) e `resolvedAt`
+  no dia de hoje, no fuso do navegador. O desfecho em texto sai de `ROTULO_DA_ACAO` e
+  `textoDoStatus` (`src/historico/rotulos.ts`), então um `already_reviewed` aparece dizendo que
+  nada foi publicado de novo. O link da revisão é o endereço que o Histórico lê
+  (`/historico?id=…&pr=…`, `enderecoDa` de `src/historico/consulta.ts`). Item que o leitor
+  descarta vira nota, para a lista vazia não esconder nada.
+- **Texto de fora é texto.** Título, autor, motivo, feed e aviso do motor entram como filho de
+  texto do React, nunca por `dangerouslySetInnerHTML`. O link do PR passa por `linkDoPr`: só
+  `https://github.com/`, com `rel="noreferrer noopener"` e `target="_blank"`. A revisão sob
+  demanda manda a URL canônica do PR (`prDaUrl`), não o que foi digitado.
+- **Cor não é o único sinal.** Erro e aviso começam dizendo o que são ("Erro:", "Aviso:"), e a
+  bolinha das postadas tem o rótulo escondido para o leitor de tela.
+- **Hora.** As datas saem de `dataHora` e `horaCurta`, no fuso do navegador, sempre absolutas.
+  A tela não tem relógio próprio: "hoje" é lido quando a lista das resolvidas (ou a próxima
+  checagem) muda, e as funções sem React recebem o instante, para os testes não dependerem da
+  hora.
+- **Desenho.** A tela lê cada chave do snapshot por um seletor próprio, e as seções são
+  `memo`: a seção só é redesenhada quando a fatia dela muda de referência
+  (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a uma seção, use `useMemo`. A
+  barra da porcentagem é SVG com a largura em atributo: a CSP recusa estilo em linha.
 
 ### Lacunas do contrato
 
 O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
 do motor, não com regra na tela:
 
-- **O texto de cada ação.** A projeção da pendência (`decisionForUi`) traz só o review do
-  parecer. O texto e os comentários em linha que o motor publica em Aprovar, Pedir mudanças e
-  Comentar (`payloads`) não saem do motor, então a tela não consegue mostrá-los antes do
-  clique.
-- **As ações permitidas por pendência.** Não há campo que diga o que cada pendência aceita
-  (por exemplo, Aprovar barrado pela avaliação técnica). A tela oferece o botão e o motor
-  recusa.
+- **As etapas da revisão.** O `progresso` traz só a etapa atual (número, total e rótulo): o
+  detalhe não lista pelo nome as etapas feitas e as que faltam.
 - **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
   na aba aberta.
-- **O bloco de cada pendência.** Não há campo que diga se a pendência espera clique ou se
-  resolve sozinha: a tela corta pela presença de `esperaCi` e de `esperaProva` sem `pedeVoce`.
+- **Item ilegível da fila.** `queue` e `activeSessions` descartam o item torto com registro no
+  console, sem contagem no estado: a Fila não consegue avisar "1 item ficou de fora" como as
+  Postadas hoje avisam.
+- **Postadas de um dia cheio.** O snapshot leva só as 30 resolvidas mais recentes: num dia com
+  mais que isso, as mais antigas do dia ficam só no Histórico (o link "Ver histórico" leva
+  para lá).
+- **Quem vigia o dia.** Uma aba aberta da véspera troca de dia quando chega a próxima
+  resolvida ou muda a próxima checagem.
 
 ### O que o front ainda não usa do que o motor manda
 
@@ -268,9 +280,8 @@ Cinco chaves do snapshot continuam sem tipo em `src/contratos/snapshot.ts` (`unk
 ao store e nenhuma tela as lê. Aqui a lacuna é do front.
 
 - **`reRounds`** (`reRoundParaUi`, `lib/engine/review.js`): por pendência de commit novo, o que
-  a rodada automática vai fazer e a partir de quando, ou por que não vai. Sem ler a chave, o
-  cartão mostra o motivo do bloqueio e o Revisar agora, e não diz se e quando o motor revisa de
-  novo sozinho.
+  a rodada automática vai fazer e a partir de quando, ou por que não vai. Sem ler a chave, a
+  tela não diz se e quando o motor revisa de novo sozinho um PR que recebeu commit novo.
 - **`baseline`**: desde quando o motor vigia e quantos PRs ficaram fora da fila na primeira
   checagem (`lib/engine/baseline.js`).
 - **`filaJusta`**: o rodízio entre organizações e o teto de revisões simultâneas, como estão
@@ -282,13 +293,16 @@ ao store e nenhuma tela as lê. Aqui a lacuna é do front.
 ## A tela Histórico
 
 A aba `/historico` é `src/componentes/historico/Historico.tsx`. Ela mostra as revisões que o
-motor já resolveu (até 3.000), uma página de 30 por vez, lidas de `GET /api/decisions`. Não
-lê a lista do snapshot, que só leva as 30 mais recentes.
+motor já resolveu (até 3.000), uma página de 30 por vez, lidas de `GET /api/decisions`, e, antes
+delas, as pendências da mesa que o snapshot traz. Não lê a lista das resolvidas do snapshot, que
+só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o detalhe num clique.
 
 | Parte | Componente | De onde vem |
 |---|---|---|
+| Topo | `Historico.tsx` (`Pagina`) | "Histórico" e a frase do resultado: `total`, `page` e `pages` da resposta |
 | Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
-| Lista e paginação | `Lista.tsx`, `Paginacao.tsx` | `items`, `page`, `pages` e `total` da resposta |
+| Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
+| Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
 | Detalhe da revisão | `Detalhe.tsx` | o item da página; fora dela, `GET /api/decision?key=` |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
@@ -298,11 +312,21 @@ Regras que valem para quem mexer nela:
   voltou; não filtra nem ordena nada. O filtro de desfecho olha o que foi publicado (`action`),
   e por isso os rótulos dele dizem isso: Aprovados, Mudanças pedidas, Comentados, Não
   publicados.
+- **Busca à vista, filtros atrás de Filtrar.** O campo de busca fica sempre na tela; repositório
+  e "O que foi publicado" (os dois filtros que a rota aceita) ficam no painel do botão Filtrar
+  (`ui.gaveta`), que diz quantos estão valendo. Os que valem aparecem embaixo como chips; o X de
+  cada um tira só aquele, e "Limpar filtros" tira os dois e mantém a busca. Não há filtro de
+  período: a rota não aceita, e a tela não finge.
 - **A consulta mora no endereço.** `q`, `veredito`, `repo`, `pagina` e a revisão aberta (`id`
   e `pr`, a chave do PR) ficam na query string (`src/historico/consulta.ts`), lidos por
   `useSearchParams` e escritos pela History API, que o Next integra ao roteador (o endereço
   muda sem pedir a página ao servidor do front). Filtro, página e abrir ou fechar a revisão
   empilham uma entrada; a busca digitada e a correção de página trocam a entrada atual.
+- **Paginação, e não "Carregar mais".** O desenho mostra "Carregar mais", mas a página mora no
+  endereço e uma página é um pedido ao motor: acumulando, o endereço da terceira carga teria de
+  refazer três pedidos, o voltar do navegador não desfaria nada e o Atualizar do aviso de
+  revisões novas não teria uma página para pedir. Anterior e Próxima levam o foco ao título da
+  lista.
 - **Busca com espera, pedido anterior abortado.** O campo espera 300 ms depois da última tecla
   (`ESPERA_DA_BUSCA_MS`); Enter manda na hora. Cada pedido novo aborta o anterior pelo
   `AbortSignal` do cliente, e resposta de pedido abortado não entra na tela.
@@ -310,35 +334,67 @@ Regras que valem para quem mexer nela:
   400 e o nome do campo, e a tela diz qual campo foi recusado. Só a página é saneada aqui
   (inteiro a partir de 1). Página além do fim (200 com `items` vazio e `pages` maior que zero)
   volta para a última.
-- **Rótulos numa tabela só.** `src/historico/rotulos.ts` traduz `status` e `action`. O teste
-  ao lado varre `lib/engine/*.js`, pega todo arquivo que chama `resolveIntoHistory` ou
-  `recordDecision` e reprova se um literal escrito num `status:` desses arquivos não tiver
-  rótulo. É uma leitura de texto: status montado de outro jeito escapa dela, e na tela
-  aparece cru. O parecer da sessão (`verdict`) só aparece quando difere do que foi publicado.
+- **Lista por dia.** As revisões da página são agrupadas pelo dia de `resolvedAt` no fuso do
+  navegador (`src/historico/dias.ts`): Hoje, Ontem, depois o dia da semana e a data (com o ano,
+  se não é o de agora); sem hora, "Sem data registrada". O "hoje" é o da hora em que a página
+  chegou. A ordem é a do motor: itens seguidos do mesmo dia formam um grupo.
+- **Uma linha por revisão.** Fechada: a bolinha do que foi publicado (aprovação verde,
+  comentário âmbar, pedido de mudanças vermelho, nada postado cinza, com o texto escondido
+  para o leitor e a legenda das cores no pé), o título do PR (ou a chave) e a hora. Aberta: o
+  motivo fixo do motor (`blockedReason`), quando há; "repo#n · autor · o que foi publicado";
+  a situação, o parecer quando difere, o card e a data; e "Abrir a revisão". O motor não manda
+  resumo curto do parecer, e a linha não inventa um. Revisão que não publicou nada oferece
+  "Revisar de novo" ali mesmo.
+- **Pendências da mesa: "Sem nada postado ainda".** O front não tem mais mesa (aprovar, pedir
+  mudanças, comentar, pular), e o motor não mudou: o que ele deixa em `decisions.pending`
+  aparece no topo da aba, num grupo próprio antes da lista paginada, fora da busca, dos filtros
+  e das páginas (vem do estado ao vivo, não da rota), e o grupo diz isso. Cada pendência é uma
+  linha com a bolinha cinza ("Nada postado"), o título e a hora da análise; aberta, "O motor não
+  postou nada ainda." seguido do motivo que ele manda (`blockedReason` e, se a publicação
+  falhou, se ele ainda tenta sozinho, de `postRetry`), "repo#n · autor · nada postado", "Abrir a
+  revisão" (o detalhe pela chave, `GET /api/decision?key=`) e "Revisar de novo" quando há URL
+  de PR do GitHub. Nenhum botão de mesa. Pendência que a borda descartou é contada e avisada.
+- **Rótulos numa tabela só.** `src/historico/rotulos.ts` traduz `status` e `action`, e dá o tom
+  e o chip de cada desfecho. O teste ao lado varre `lib/engine/*.js`, pega todo arquivo que
+  chama `resolveIntoHistory` ou `recordDecision` e reprova se um literal escrito num `status:`
+  desses arquivos não tiver rótulo. É uma leitura de texto: status montado de outro jeito
+  escapa dela, e na tela aparece cru. O parecer da sessão (`verdict`) só aparece quando difere
+  do que foi publicado.
 - **Publicado é o que o motor conta como publicado.** Só `approve`, `request_changes` e
   `comment` (`PUBLICADOS`, em `lib/engine/historico-paginado.js`). `action` ausente ou de
   valor desconhecido aparece como "Nada publicado" (o desconhecido, com o valor cru ao lado),
-  que é como o filtro do motor o trata. A pendência da mesa, que só chega pelo detalhe por
-  chave, mostra "Nada publicado ainda".
+  que é como o filtro do motor o trata. A pendência da mesa mostra "Nada publicado ainda".
 - **A lista não se refaz sozinha.** Quando o snapshot passa a ter revisão resolvida mais nova
   que a da última carga (`marcaDasResolvidas`: o id e a hora do topo de `decisions.resolved`),
   aparece o aviso "Há revisões novas" com o botão Atualizar, que pede a mesma página de novo.
-- **Estados.** Durante uma carga a página anterior fica na tela, esmaecida e com `aria-busy`.
-  Vazio sem filtro e vazio com filtro têm textos diferentes. Falha de rede tem Tentar de
-  novo; recusa de parâmetro tem Limpar busca e filtros. Item sem `id` ou sem `key` é
-  descartado, contado e avisado. O resultado ("61 revisões, página 2 de 3") sai numa região
-  viva educada.
+- **Carregamentos.** Sem nada ainda, esqueleto ("Carregando as revisões."). Ao trocar filtro,
+  busca ou página, a barra no topo da lista (`BarraDeCarga`) e a página anterior na tela,
+  apagada (`ui.apagada`) e com `aria-busy`. O detalhe que espera o motor mostra esqueleto
+  ("Carregando a revisão.").
+- **Estados.** Nada revisado ainda: "Nenhuma revisão ainda", com o link para o Radar. Filtro
+  sem resultado: a frase e "Limpar busca e filtros". Falha de rede tem Tentar de novo; com uma
+  lista anterior, ela fica na tela e o erro diz que ela é da última carga que deu certo. Recusa
+  de parâmetro tem "Limpar busca e filtros". Histórico indisponível (503,
+  `historico_indisponivel`) diz isso e tem Tentar de novo. Item sem `id` ou sem `key` é
+  descartado, contado e avisado. O resultado ("61 revisões, página 2 de 3") é a frase do topo,
+  numa região viva educada.
 - **Detalhe.** Abre na própria página, no lugar da lista (que continua montada), com o foco
-  no título; Escape ou "Voltar à lista" fecham, e o foco volta ao botão que abriu. Escape
-  dentro de um campo de texto ou de um seletor é do campo, e não fecha o detalhe. Mostra o
-  que foi publicado, os motivos (`reasons`), os pontos de atenção (`attention`), o resumo
-  técnico (`technical`), as rodadas (`rounds`), as etapas (`stages`), a conferência de
-  afirmações e o texto do parecer, desenhado de markdown.
-- **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo" manda
-  `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o clique não
-  publica, mas a análise que ele abre termina pela política da conta, que pode publicar
-  sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR, e as
-  duas ações dela (`POST /api/pushback`) perguntam antes. Nenhuma publica no GitHub, mas
+  no título (o do PR); Escape ou "← Histórico" fecham, e o foco volta ao botão que abriu.
+  Escape dentro de um campo de texto ou de um seletor é do campo, e não fecha o detalhe. Mostra
+  "repo#n · autor · Nª rodada · card", o título, o chip do que foi publicado, a hora e "Ver no
+  GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
+  o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
+  (`blockedReason`) aberto, os motivos (`reasons`) e os pontos de atenção (`attention`)
+  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Execução (publicado,
+  parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
+  (`rounds`), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
+  revisão ficou sem texto gravado."). Revisão que não postou nada diz isso logo abaixo do
+  chip.
+- **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo", no pé do
+  detalhe, manda `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o
+  clique não publica, mas a análise que ele abre termina pela política da conta, que pode
+  publicar sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR, e
+  as duas ações dela (`POST /api/pushback`) perguntam antes. Nenhuma publica no GitHub, mas
   gravar um desfecho tem efeito além da tela (`lib/engine/pushback.js`): o registro fica
   confirmado e marcado como manual, entra no prompt das próximas revisões dos PRs do autor
   e, com o desfecho `author_right` ou `mixed`, no das revisões de outros autores do mesmo
@@ -347,6 +403,21 @@ Regras que valem para quem mexer nela:
 
 ### Lacunas do contrato
 
+- **Período.** `GET /api/decisions` não filtra por data: o desenho tem "Período" no Filtrar e
+  "nos últimos 7 dias" no topo, e a tela deixa os dois de fora. O topo diz só o total que o
+  motor manda.
+- **Resumo curto do parecer e achados detalhados.** A projeção (`decisionForUi`) não traz um
+  resumo de uma frase do parecer, nem arquivo, linha ou trecho de código de cada achado: a
+  linha da lista fica sem resumo, a frase do detalhe é a da avaliação técnica, e cada achado é
+  só o texto do motivo.
+- **Critérios do card, checks e custo.** O desenho tem "Critérios do card", "Checks do head" e o
+  custo da execução. O item não traz critério por critério nem os checks (o `cardMet` que a
+  projeção leva não é lido pelo contrato do front), e o custo da sessão não vem na revisão:
+  essas linhas ficam de fora.
+- **Rodadas uma a uma.** `rounds` é o resumo da comparação entre rodadas (a ordem, as
+  pendências), não a lista das rodadas com commit e desfecho de cada uma.
+- **Pendência sem filtro.** As pendências vêm do snapshot, que não sabe da busca nem dos
+  filtros: elas aparecem com qualquer consulta, e o grupo diz isso.
 - **Revisão por id.** O motor só busca uma revisão pela chave do PR (`GET /api/decision?key=`),
   e devolve a pendência do PR ou, sem ela, a resolvida mais recente. Um endereço que aponta
   para uma revisão antiga de um PR com várias só abre se ela estiver na página carregada;
@@ -375,6 +446,35 @@ o login de quem está com o dossiê aberto (`?autor=`), que é o identificador q
 | Lista e busca | `Time.tsx`, `ListaDoTime.tsx` | `GET /api/team` (a lista inteira) e `config.people` do snapshot |
 | Dossiê | `Dossie.tsx` | o item da lista, `config.people` e `pushbacks` do snapshot, pelo autor |
 | Papel e competência | `EditorDoPerfil.tsx` | `config.people`; grava com `POST /api/settings` |
+| Remover do Time | `RemoverDoTime.tsx` | grava com `POST /api/team/remove` |
+
+O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
+
+- **Lista.** "Time" e "N pessoas" no alto, a busca e uma linha por pessoa: o avatar com as
+  iniciais (`iniciais`, enfeite escondido do leitor de tela), o nome (o do dossiê, ou o login)
+  e o papel à direita, ou "Sem papel" em âmbar. A linha é um botão (`ui.linhaLink`) que abre o
+  dossiê; o nome acessível leva também o login quando o nome é outro. Estados: esqueleto na
+  primeira carga, barra no topo com a lista anterior apagada na recarga, "Ninguém do Time passa
+  pela busca." com o Limpar, o cartão "Ninguém no Time ainda" e o erro com o Tentar de novo
+  (com a lista anterior, quando há).
+- **Dossiê.** "← Time" (nome acessível "Voltar à lista do Time"), o avatar, o nome e, sob ele,
+  o login, o papel e o que o motor sustenta: quantas entradas guarda e o dia da mais recente.
+  O desenho pedia "PRs em 30 dias" e "aprovados de primeira", que o motor não manda. Embaixo,
+  uma `Linha` por assunto: "O que o Farol observa" aberta (os pontos das entradas, de
+  markdown, agrupados pelo dia e PR da entrada); fechadas, com o resumo na linha, "Como
+  revisar os PRs desta pessoa" (o editor; resumo com o papel e as competências), "Números"
+  (os desfechos somados das entradas listadas, mais as contestações), "Últimas revisões" (uma
+  entrada por linha, com a bolinha do desfecho, o PR e o dia) e "Contestações" (só leitura,
+  quando há). Remover fica no fim, discreto. Estados: esqueleto ao abrir pelo endereço antes
+  da lista chegar, sem dossiê, dossiê sem entradas (sem "Números" nem "Últimas revisões"),
+  sem a lista do Time e sem dossiê nem perfil.
+- **Botões ocupados.** Salvar diz "Salvando…" e Remover diz "Removendo…" (`Botao` com
+  `ocupado`), com o spinner e desabilitados. O resultado vai à região de resultado de sempre.
+- **Sem "Adicionar".** O desenho tinha o botão, e ele ficou de fora: o motor não tem rota que
+  crie pessoa. Gravar um perfil em `config.people` para um login digitado seria possível, mas
+  o motor não confere o login (um erro de digitação vira entrada calada no mapa que vai ao
+  prompt), e abrir o editor para um login sem dossiê nem perfil desfaria a regra de que esse
+  dossiê não oferece Salvar nem Remover (é o caso de quem acabou de ser removido).
 
 O contrato, lido do motor:
 
@@ -414,11 +514,13 @@ Regras que valem para quem mexer nela:
 - **A taxonomia é cópia conferida.** `src/time/taxonomia.ts` repete os papéis, os domínios e
   os níveis de `lib/taxonomy.js`, com os rótulos; `taxonomia.test.ts` lê aquele arquivo e
   reprova se uma chave ou um rótulo divergir.
-- **Dossiê.** Abre na própria página, com o foco no título; Escape ou "Voltar à lista" fecham,
-  e o foco volta ao botão que abriu. As entradas aparecem uma a uma, com o dia, o PR e o que
-  foi publicado quando o motor diz; os pontos são desenhados de markdown, que é como o motor
-  os grava. As contestações dos PRs da pessoa aparecem só para leitura: o desfecho se
-  confirma no Histórico.
+- **Dossiê.** Abre na própria página, com o foco no título (o h1 do dossiê, que já existe
+  enquanto a lista carrega); Escape ou "Voltar à lista do Time" fecham, e o foco volta à linha
+  que abriu (ou ao título da lista, se a pessoa não está mais nela). As entradas aparecem com o
+  dia, o PR e o que foi publicado quando o motor diz; os pontos são desenhados de markdown,
+  que é como o motor os grava. "Números" conta só as entradas listadas e diz que o motor não
+  manda número por pessoa. As contestações dos PRs da pessoa aparecem só para leitura: o
+  desfecho se confirma no Histórico.
 - **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
   vezes: lido (`people`, para mostrar) e como o motor mandou (`peopleCru`). O corpo do salvar
   sai do cru que a aba tem no momento do clique, e só a pessoa editada muda (`comPerfil`):
@@ -469,6 +571,9 @@ Regras que valem para quem mexer nela:
 
 ### Lacunas do contrato
 
+- **Criar uma pessoa.** Não há rota: a pessoa nasce com o primeiro dossiê, e o perfil só se
+  grava pelo mapa inteiro de `config.people`, sem conferência do login. Por isso a tela não
+  tem o "Adicionar" do desenho.
 - **Remover uma entrada só.** O motor só remove a pessoa inteira. Não há rota para apagar
   uma entrada do dossiê, nem cópia que permita desfazer.
 - **Os valores permitidos não vêm do motor.** Papéis, domínios e níveis não saem em rota
@@ -504,15 +609,25 @@ A aba `/consumo` é `src/componentes/consumo/Consumo.tsx`. Ela mostra quanto as 
 motor consumiram: tokens e custo em dólar. Só lê: não há ação nela. E só mede: o motor não tem
 teto de gasto (decisão de 16/11/2026), então a tela não mostra teto, bloqueio nem pausa.
 
+No desenho enxuto (17/11/2026) a tela tem, à vista, só o topo e um cartão. O topo é o título, a
+frase com o período (em dia de Brasília) e, à direita, o seletor de período (últimos 7, 30 ou
+90 dias) e o botão Filtrar, que abre o painel (`ui.gaveta` e `ui.painel`) com o período
+personalizado (De e Até) e os filtros de tipo, modelo e repositório. O que está escolhido fica
+à vista em chips, cada um com o botão que o tira, e Limpar filtros. O cartão traz um número
+grande, o custo estimado do período, a frase das execuções, o gráfico por dia e de onde vem o
+custo, com a modalidade. Todo o resto fica fechado, uma linha por parte (`Linha`), com o
+destaque no resumo da própria linha: Detalhes do período, Por dia, Por tipo, Por modelo,
+Execuções (com a busca e a paginação dentro), Sessões recentes e Auditoria do registro.
+
 | Parte | Componente | De onde vem |
 |---|---|---|
-| Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |
-| Período e filtros | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
-| Resumo do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
-| Gasto por dia | `GraficoPorDia.tsx` | `series` |
+| Seletor de período, Filtrar, chips e busca | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
+| Número grande, frase e modalidade; Detalhes do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
+| Gráfico por dia; linha Por dia (a tabela) | `GraficoPorDia.tsx` | `series` |
 | Por tipo e por modelo | `Quebras.tsx` | `byKind` e `models` |
-| Diário de execuções | `Diario.tsx`, `TabelaDeExecucoes.tsx` | `history` |
+| Execuções (o diário) | `Diario.tsx`, `TabelaDeExecucoes.tsx` | `history` |
 | Sessões recentes | `SessoesRecentes.tsx` | `usage.recentSessions` do snapshot |
+| Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |
 
 O contrato, lido do motor:
 
@@ -542,14 +657,19 @@ Regras que valem para quem mexer nela:
 - **A tela não soma.** Toda soma é do motor: `totals` para o período, `series` por dia,
   `byKind` por tipo, `models` por modelo, `auditoria` para o registro inteiro. A tela não soma
   linhas de uma página nem tentativas de uma operação. As contas daqui são de exibição e
-  estão ditas: a participação percentual (a fatia de uma linha no total do motor) e entrada
-  mais saída da mesma linha (para ordenar os modelos).
+  estão ditas: a participação percentual (a fatia de uma linha no total do motor, também no
+  resumo das linhas Por tipo e Por modelo), entrada mais saída da mesma linha (para ordenar
+  os modelos) e a média por execução ao lado do número grande (`fraseDasExecucoes`): o
+  `totals.costUsd` do motor dividido pelo `totals.attempts` do motor, só quando os dois vêm e
+  `totals.unknownCost` é zero (execução de custo desconhecido entraria no divisor e não no
+  dividendo, e a média sairia baixa). Não é custo por revisão: o motor não manda esse número.
 - **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
   informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
-  esse valor, e a tela diz isso junto do resumo. A modalidade aparece nas três parcelas em
-  que o motor a separa, sem "N de M": as execuções por assinatura (`subscription`), o dólar
-  das de chave de API (`apiUsd`, `apiEstimatedUsd`, `apiUnknown`) e as sem modalidade
-  registrada (`unknownBilling`). Cada execução mostra a origem do custo
+  esse valor, e a tela diz isso no cartão do número grande ("É uma estimativa...") e, por
+  extenso, em Detalhes do período. A modalidade aparece nas três parcelas em que o motor a
+  separa, sem "N de M": as execuções por assinatura (`subscription`) e o dólar das de chave
+  de API (`apiUsd`, `apiEstimatedUsd`, `apiUnknown`) no cartão, e as sem modalidade
+  registrada (`unknownBilling`) numa nota à vista. Cada execução mostra a origem do custo
   (`costSource`): informado pela sessão, "calculado pelo motor" (a sessão morreu antes de
   informar, e o motor usa a mediana do custo por token de saída das sessões concluídas do
   mesmo modelo) ou "Desconhecido", que não mostra o zero gravado.
@@ -562,13 +682,15 @@ Regras que valem para quem mexer nela:
   revisão. A lista de teto por perfil que um motor antigo ainda mande em `usage` não é lida.
 - **A consulta mora no endereço.** `inicio`, `fim`, `tipo`, `modelo`, `repo`, `q` e `pagina`
   (`src/consumo/consulta.ts`), no molde do Histórico: filtro, período pronto e página
-  empilham; busca, datas e página corrigida trocam a entrada. A busca espera 300 ms, e cada
-  pedido novo aborta o anterior. Valor que a tela não conhece vai ao motor como veio.
-- **O hoje é o do motor.** Os períodos prontos (7, 30 e 90 dias) terminam no `range.end` do
-  relatório na tela e gravam as duas datas no endereço; antes da primeira resposta ficam
-  desabilitados. A tela não lê o relógio. O atalho só fica marcado quando as duas datas do
-  endereço são as do relatório, ou quando não há data nenhuma (o padrão do motor, sempre 30
-  dias). Com uma data só, a dica diz o que o motor faz: só "De" cresce a cada dia; só "Até"
+  empilham; busca, datas e página corrigida trocam a entrada. Tirar um chip empilha. A busca
+  espera 300 ms, e cada pedido novo aborta o anterior. Valor que a tela não conhece vai ao
+  motor como veio. Com `q` ou página no endereço, a linha Execuções já abre aberta.
+- **O hoje é o do motor.** Os períodos prontos do seletor do topo (últimos 7, 30 e 90 dias)
+  terminam no `range.end` do relatório na tela e gravam as duas datas no endereço; antes da
+  primeira resposta o seletor fica desabilitado. A tela não lê o relógio. O seletor só mostra
+  um período pronto quando as duas datas do endereço são as do relatório, ou quando não há
+  data nenhuma (o padrão do motor, sempre 30 dias); fora disso diz "Período personalizado", e
+  o período vira chip. Com uma data só, a dica diz o que o motor faz: só "De" cresce a cada dia; só "Até"
   começa 30 dias antes do hoje do motor, e com data mais antiga ele não entrega o relatório.
 - **Data digitada só vira pedido quando serve.** O campo guarda o que se digita e só manda ao
   endereço um dia que existe, de 1970 em diante (`dataAceita`): enquanto se digita o ano, o
@@ -576,25 +698,40 @@ Regras que valem para quem mexer nela:
 - **O diário mostra as tentativas de fora.** As de fora do período saem marcadas com "fora
   do período" na coluna Quando, e a tela diz por que as linhas não fecham com o total.
 - **O gráfico é complemento.** SVG próprio, sem biblioteca, com `role="img"` e um nome que
-  resume o período, o maior dia e o total do motor. A mesma informação está na tabela logo
-  abaixo. A geometria é função pura (`src/consumo/grafico.ts`): escala de passo redondo, até
-  seis rótulos no eixo horizontal, dia sem execução com barra vazia. Período com mais de 120
-  dias não é desenhado. Cores só das variáveis de `globals.css`.
+  resume o período, o maior dia e o total do motor. A mesma informação está na tabela da
+  linha Por dia. No desenho enxuto são só as barras (na primária, `--accent`) e a linha de
+  base, sem eixo vertical escrito: o SVG estica na largura do cartão
+  (`preserveAspectRatio="none"`, área `AREA_ENXUTA`), e os dias do começo e do fim do período
+  ficam embaixo, em texto da página, para não esticar com ele. Cada barra tem um `<title>` com
+  o dia e o valor. A geometria é função pura (`src/consumo/grafico.ts`): escala de passo
+  redondo, dia sem execução com barra vazia. Período com mais de 120 dias não é desenhado.
+  Cores só das variáveis de `globals.css`.
 - **Tabela larga rola no próprio contêiner,** que tem nome e recebe foco. A página não rola
   para o lado em 375 px.
 - **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda,
   aparece o aviso de sessão nova com o botão Atualizar, dizendo que ela pode não entrar no
   recorte (o aviso não olha período nem filtro). A auditoria e as sessões recentes vêm do
   snapshot e andam sozinhas.
-- **Estados.** Durante uma carga o relatório anterior fica na tela, esmaecido e com
-  `aria-busy`. Sem execução no período, a tela diz isso (com filtro a frase muda) e não
-  desenha gráfico nem quebras. Falha de rede tem Tentar de novo. `{ ok: false, motivo }`
-  mostra a frase do motor e oferece voltar ao período padrão. Item sem o que o identifica é
-  descartado, contado e avisado; número que não veio aparece como "sem dado", não como zero.
+- **Estados.** Na primeira carga, sem relatório nenhum, a tela mostra o esqueleto
+  (`Esqueleto`, com "Carregando o consumo." para o leitor); as linhas do snapshot (sessões e
+  auditoria) não esperam. Ao trocar período, filtro ou página, a barra de carga aparece no
+  topo e o relatório anterior fica na tela, apagado (`ui.apagada`) e com `aria-busy`. Sem
+  execução no período, o cartão mostra o zero do motor e a frase (com filtro ela muda), sem
+  gráfico, detalhes nem quebras. Filtro sem resultado deixa os chips à vista, com Limpar
+  filtros. Falha de rede tem Tentar de novo; recusa que nomeia um campo oferece limpar.
+  `{ ok: false, motivo }` mostra a frase do motor e oferece voltar ao período padrão. Parte
+  do snapshot que ainda não chegou diz isso no resumo da linha ("ainda não chegou"). As sem
+  modalidade, o diário incompleto e o período anterior ao primeiro registro (histórico que
+  não existe) viram nota à vista; o calculado pelo motor, o custo desconhecido e as sem
+  identidade ficam em Detalhes do período, contados no resumo da linha. Item sem o que o
+  identifica é descartado, contado e avisado; número que não veio aparece como "sem dado",
+  não como zero. A região viva ("Resultado da consulta", escondida da vista) anuncia o
+  resultado de cada carga.
 - **Número torto não vira "US$ NaN".** Negativo, infinito ou que não é número aparece como
   "valor inválido"; fracionário onde se espera inteiro aparece com as casas que tem;
-  participação acima de 100% aparece como veio. O rótulo do eixo do gráfico tem as casas que
-  o passo pede (0,025 pede três), para a marca não ser arredondada. As funções puras não
+  participação acima de 100% aparece como veio. A média por execução só sai com os dois
+  números servindo. `dolarDoEixo` (as casas que o passo pede, 0,025 pede três) continua em
+  `formato.ts`, sem uso na tela enxuta, que não escreve o eixo vertical. As funções puras não
   lançam com valor denormal, enorme ou `NaN`.
 
 ### Lacunas do contrato
@@ -612,6 +749,13 @@ Regras que valem para quem mexer nela:
   as de custo desconhecido. A tela não tira a contagem por diferença.
 - **A tentativa de fora do filtro não vem marcada.** A tela marca a de fora do período
   comparando o dia dela com `range`; para o filtro teria de repetir a regra do motor.
+- **Sem quebra por repositório.** O desenho pede "Por repositório", mas `GET /api/usage` não
+  manda soma por repositório (só `options.repo`, a lista para o filtro). A tela mostra Por
+  tipo e Por modelo, e recortar por um repositório é o filtro. Somar o diário por
+  repositório seria soma da tela, e o diário vem paginado.
+- **Sem custo por revisão.** O motor conta as revisões concluídas (`completed.reviews`), mas
+  não diz quanto elas custaram: o custo do período inclui erro, contestação e chat. A frase do
+  número grande dá a média por execução, conta de exibição dita acima.
 - **Sem custo nem cache por modelo no período.** `models` traz execuções e tokens de entrada
   e de saída. O custo por modelo existe só nas séries diárias do snapshot, que a tela teria
   de somar.
@@ -635,17 +779,26 @@ Regras que valem para quem mexer nela:
 ## A tela Sistema
 
 A aba `/sistema` é `src/componentes/sistema/Sistema.tsx`. É a tela que mais pode fazer estrago:
-muda o que o motor publica sozinho no GitHub e quem tem acesso a ele. Sete seções, cada uma com
-título próprio e um índice no topo:
+muda o que o motor publica sozinho no GitHub e quem tem acesso a ele. No desenho enxuto
+(17/11/2026) ela é o título, uma frase com quantos pontos pedem atenção e sete linhas (`Linha`,
+o `<details>` das peças comuns), cada uma com a bolinha de estado (verde OK, âmbar atenção,
+vermelho problema, cinza sem dado ou desligado), o título e um resumo à direita; o formulário ou
+o detalhe abre num clique, e nada abre sozinho. O estado e o resumo de cada linha saem do que a
+seção já calcula (`src/sistema/linhas.ts`): a saúde pelas verificações (vermelho quando a que
+falha para a revisão de vez: gh, autenticação do GitHub, Claude Code, root, perfil em uso), a
+conta pela conta, o token e as organizações, o perfil pelo perfil em uso, o Jira pelos sites e
+pela credencial, as sessões pela lista. A frase do topo conta as linhas em âmbar e vermelho. Não
+há mais índice no topo: cada seção já é uma linha. Sem o estado do motor a página mostra o
+esqueleto.
 
 | Seção | Componente | De onde vem | O que edita |
 |---|---|---|---|
 | Saúde | `Saude.tsx` | `doctor`, `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
 | Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
-| Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `aguardarCiParaAprovar`, `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
+| Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
 | Perfil do Claude | `PerfilDoClaude.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | nada |
 | Jira | `Jira.tsx` | `jiraSites` do snapshot; `POST /api/jira/test` | nada |
-| Sessões pareadas | `Sessoes.tsx` | `POST /api/auth/sessions` | revoga uma sessão, por `POST /api/auth/revoke` |
+| Sessões pareadas | `Sessoes.tsx` (a carga da lista fica no `Sistema.tsx`, porque o resumo da linha depende dela) | `POST /api/auth/sessions` | encerra (revoga) uma sessão, por `POST /api/auth/revoke` |
 | Rede e acesso | `Sistema.tsx` | `bind`, `port`, `hostPublico`, `origensPermitidas` e `localAuth` de `config` | nada |
 
 **A tela não tem teto de gasto** (decisão de 16/11/2026): o revisor é autônomo e não trava por
@@ -664,7 +817,7 @@ O contrato, lido do motor:
 
   | chave | o corpo | o que o motor faz com valor inválido | onde é usada |
   |---|---|---|---|
-  | `aguardarCiParaAprovar` | o booleano | só `true` liga; o resto vira `false` | `aguardaCiParaAprovar`, `lib/engine/gate-espera.js` |
+  | `aguardarCiParaAprovar` | o booleano (o front não manda: só por arquivo ou API) | só `true` liga; o resto vira `false` | `aguardaCiParaAprovar`, `lib/engine/gate-espera.js` |
   | `parallelReviews` | o número | fora de 1 a 4 vai para a ponta; o que não é número mantém o anterior | `parallelLimit`, `lib/engine/headless-fila.js` |
   | `reviewModel` | o texto (vazio é o padrão do Claude Code) | fora do catálogo e do formato de nome completo mantém o anterior | `buildModelFlags`, `lib/engine/session.js`, e o roteador do Auto |
   | `reviewEffort` | o texto (vazio não manda a flag) | fora de `low`, `medium`, `high`, `xhigh` mantém o anterior | `buildModelFlags`, `lib/engine/session.js` |
@@ -684,18 +837,21 @@ O contrato, lido do motor:
   valor, e `owners` troca a lista inteira de organizações. Campo que não vai não muda. Campo
   vazio apaga o valor, e o motor regrava o padrão, que publica sozinho. Responde
   `{ ok: true, ignoradas, ignorados }` (sem a conta gravada), ou `{ ok: false, erro }`. Com
-  `onClean` em `wait` o motor põe `onCaveats` em `wait`, e recusa o pedido de `approve`.
+  `onClean` em `wait` o motor põe `onCaveats` em `wait`, e recusa o pedido de `approve`. O
+  motor ainda aceita `wait` nos três desfechos; a tela nunca o manda (veja "O revisor nunca
+  espera", abaixo).
 - **Quando a política nova vale.** O motor lê a política ao começar cada revisão
   (`politicaDeInicio`, `lib/engine/review-scope.js`), ao decidir o resultado de cada uma
   (`shouldAutoApprove` e `shouldAutoReject`, `lib/engine/approval-policy.js`) e quando uma
   espera do CI já armada fecha (`politicaAindaAprova`, `lib/engine/espera-ci.js`). O evento
-  `settings-changed` é emitido e ninguém o ouve: a pendência que já está em "Precisa de você"
-  porque a política mandava esperar não é reavaliada, e continua esperando o clique.
-- **Desligar `aguardarCiParaAprovar` tem efeito imediato.** Na varredura seguinte, toda
-  aprovação que estava esperando o CI é publicada sem esperar os checks, mesmo com o CI
-  vermelho, se o commit ainda é o revisado e a política ainda manda aprovar; a pendência que
-  pediu mudanças só pelo CI vai para a mesa (`umaEspera` e `liberarSemCi`,
-  `lib/engine/espera-ci.js`).
+  `settings-changed` é emitido e ninguém o ouve: o PR que a política anterior deixou esperando
+  não é reavaliado, e o front não tem mesa para decidi-lo.
+- **A espera do CI não tem controle na tela.** `aguardarCiParaAprovar` continua no motor, e só
+  muda pelo arquivo de configuração ou por `POST /api/settings` chamado direto. Desligá-la por
+  lá tem efeito imediato: na varredura seguinte, toda aprovação que estava esperando o CI é
+  publicada sem esperar os checks, mesmo com o CI vermelho, se o commit ainda é o revisado e a
+  política ainda manda aprovar; a pendência que pediu mudanças só pelo CI fica esperando
+  (`umaEspera` e `liberarSemCi`, `lib/engine/espera-ci.js`).
 - **`POST /api/auth/sessions`** responde `{ ok, sessoes: [{ id, rotulo, criadoEm, ultimoUsoEm,
   atual }] }`; `id` é um pedaço do hash do token. **`POST /api/auth/revoke`** recebe `{ id }` e
   responde `{ ok: true, eraAtual }` ou `{ ok: false, code: "sessao_inexistente" }`.
@@ -755,22 +911,36 @@ Regras que valem para quem mexer nela:
   e manda conferir no estado que chega.
 - **Só salva com o estado em dia.** `impedimentoDeSalvar`: conectado e com o primeiro `state`
   da conexão atual (`estadoEmDia`). Vale para a conta e a automação.
-- **Ampliar a publicação pergunta antes.** `ampliacoesDaConta` e `ampliacoesDaAutomacao` listam,
-  com o efeito exato, o que amplia o que o motor faz ou publica sem clique: ligar a revisão
-  automática, trocar esperar por publicar em qualquer dos três desfechos, acrescentar
-  organização e desligar o CI antes de aprovar. A pergunta da conta diz quando a política nova
-  vale e que a mesa não é reavaliada; a do CI diz primeiro o efeito imediato. O que reduz vai
-  direto. Revogar sessão pergunta sempre.
+- **Ampliar a publicação pergunta antes.** `ampliacoesDaConta` lista, com o efeito exato, o que
+  amplia o que o motor faz ou publica sem clique: ligar a revisão automática, trocar o esperar
+  que veio do motor por publicar em qualquer dos três desfechos e acrescentar organização. A
+  pergunta diz quando a política nova vale e que o PR que já esperava não é reavaliado. O que
+  reduz vai direto. A automação não pergunta: nenhuma das três chaves dela muda o que é
+  publicado. Encerrar sessão pergunta sempre. A pergunta abre no lugar do botão
+  (`AcaoComPergunta.tsx`), com o foco no "Voltar sem enviar"; cancelar devolve o foco ao botão.
+- **O revisor nunca espera** (desenho de 17/11/2026). Os seletores da política oferecem só
+  publicar (`OPCOES_DA_TELA`, `src/sistema/politica.ts`), e `camposAlterados` nunca manda
+  `wait`. Uma conta que chega com `wait` (posto por arquivo ou API) mostra o valor como está, numa
+  opção desabilitada "Esperar (definido no motor)" que só aparece quando é o valor atual, e o
+  efeito diz que daqui só dá para trocar para publicar. A regra do motor "o com ressalvas nunca
+  é mais permissivo que o limpo" continua: com a limpa em `wait` (vinda do motor), o com
+  ressalvas é mostrado em espera, desabilitado, sem mexer no rascunho, e não vai no corpo;
+  trocar a limpa para publicar o libera. `DOMINIO_DA_POLITICA` continua a cópia conferida do
+  domínio do motor (com `wait`); `OPCOES_DA_TELA` é o subconjunto que a tela oferece.
 - **A tela não manda campo vazio da política.** Vazio faria o motor regravar o padrão.
-  `camposAlterados` só manda valor do domínio (`DOMINIO_DA_POLITICA`, conferido por teste
-  contra `lib/settings.js`), e não manda `onCaveats` com `onClean` em espera. Nesse caso o
-  campo é mostrado em espera sem mexer no rascunho, e a nota diz o ajuste: voltar a limpa para
-  publicar devolve o com ressalvas ao valor que estava.
+  `camposAlterados` só manda valor de `OPCOES_DA_TELA`, nunca vazio nem `wait`.
 - **Valores permitidos.** Os modelos vêm do catálogo do motor (`modelos.claude`). Os níveis de
   `effort` e a faixa do paralelismo são cópia conferida por teste contra `lib/parse.js`
   (`automacao.test.ts`).
-- **Edição por salvar.** A tela avisa no topo e segura o fechar e o recarregar da página
-  (`beforeunload`).
+- **Edição por salvar.** A tela avisa no topo, a linha diz "alteração por salvar" no resumo, e
+  a página segura o fechar e o recarregar (`beforeunload`). O pé de cada formulário diz quantas
+  alterações o salvar leva, com Descartar e Salvar; depois do aceite, "Salvo às" (chip); se o
+  motor não gravou, o erro ao salvar fica no pé, e o que ele disse, na região de resultado.
+- **Carregamentos por processo.** Salvar mostra "Salvando…" e encerrar "Encerrando…" no próprio
+  botão (`Botao` com `ocupado`); rodar o diagnóstico de novo põe as linhas que ele refaz em
+  "Conferindo" (chip com spinner pequeno) e o botão em "Rodando o diagnóstico…"; carregar o
+  relatório, "Carregando o relatório…"; testar perfil e site, "Testando…"; a lista de sessões
+  carregando diz isso com spinner pequeno, e a recarga apaga a lista anterior.
 - **Acessibilidade.** O efeito de cada seletor e de cada checkbox está ligado ao campo por
   `aria-describedby`. Depois de "Tirar" uma organização o foco vai ao campo de acrescentar.
   Depois de um salvar o foco vai à região de resultado.
@@ -778,9 +948,10 @@ Regras que valem para quem mexer nela:
   o estado em texto ("OK", "Atenção", "Sem dado"); os rótulos são os de `ambienteDoDoctor`
   (`lib/engine/diagnostico.js`), conferidos por teste. Rodar o diagnóstico de novo não abre
   sessão de IA. Os caminhos de pasta que o `doctor` traz não são lidos.
-- **Sessão atual.** Revogar a sessão `atual` avisa que este navegador volta ao pareamento, e
+- **Sessão atual.** Encerrar a sessão `atual` avisa que este navegador volta ao pareamento, e
   depois do aceite a tela chama `app.esquecerSessao('revogada')`: o token sai daqui e a tela
-  vai ao pareamento. Revogar outra pede a lista de novo.
+  vai ao pareamento. Encerrar outra pede a lista de novo. Na tela a ação se chama Encerrar; no
+  motor é a revogação (`POST /api/auth/revoke`).
 - **Só leitura.** Os perfis do Claude (criar, tirar, chave de API, login da assinatura, perfil
   padrão), o Jira (sites e credencial), o login e o token do GitHub, e as cinco chaves de
   rede. `bind`, `hostPublico` e `origensPermitidas` mudam só pelo arquivo: tirar a própria
@@ -822,8 +993,14 @@ Regras que valem para quem mexer nela:
   do motor com a diferença da pessoa, o que fecha o caso de quem viu a mudança chegar; a
   mudança de outra aba que ainda não chegou a esta é sobrescrita. A correção é no motor:
   operação de acrescentar e de tirar organização.
-- **A política nova não reavalia a mesa.** Trocar esperar por publicar não publica o que já
-  está em "Precisa de você", e a tela diz isso na pergunta. Não há rota para reavaliar.
+- **A política nova não reavalia o que já esperava.** Trocar esperar por publicar não publica o
+  PR que a política anterior deixou esperando no motor, e o front não tem mesa nem rota para
+  decidi-lo; a tela diz isso na pergunta.
+- **A espera do CI e o `wait` da política só mudam por arquivo ou API.** A tela não tem o
+  controle `aguardarCiParaAprovar` nem oferece `wait`: quem precisar ligar a espera do CI ou pôr
+  um desfecho em espera faz pelo `config.json` (com o motor parado) ou por `POST /api/settings`
+  e `POST /api/accounts/edit` chamados direto. A tela mostra o `wait` que encontrar, mas não o
+  devolve, e não mostra a espera do CI.
 - **A lista de sessões não está no snapshot nem tem evento.** Sessão criada ou revogada em
   outro navegador só aparece ao atualizar a lista.
 - **As regras de review por organização e autor** (`reviewRules`) não são mostradas nem
