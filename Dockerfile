@@ -5,14 +5,17 @@
 #   NODE_VERSION e NODE_DIGEST  o contrato do package.json (engines.node) e do .nvmrc; o digest é o do
 #                               índice multiarquitetura de node:24.22.1-bookworm-slim, lido com
 #                               "docker buildx imagetools inspect" em 16/11/2026
-#   GIT_VERSION                 o pacote git do Debian 12 (bookworm) naquela data
-#   GH_VERSION                  o pacote gh do repositório apt oficial (cli.github.com/packages)
+#   GH_VERSION                 o pacote gh do repositório apt oficial (cli.github.com/packages)
 #   GH_KEYRING_SHA256           o sha256 do chaveiro desse repositório; as chaves dentro dele são
 #                               2C6106201985B60E6C7AC87323F3D4EA75716059 (de 2022, vencida em 09/2026) e
 #                               7F38BBB59D064DBCB3D84D725612B36462313325 (de 2026). Chaveiro diferente
 #                               quebra o build de propósito: confira as chaves antes de trocar o hash
 #   CLAUDE_CODE_VERSION         o pacote npm @anthropic-ai/claude-code, o mesmo que o motor consulta
 #                               para dizer se o CLI está atrasado (lib/engine/versao-claude.js)
+# O git NÃO tem versão fixada: é o do Debian 12 (bookworm) no dia do build. Fixar o patch do
+# Debian quebraria o build no dia em que o Debian trocasse o pacote por uma correção, que é
+# justamente a versão que se quer. A versão que entrou fica escrita em /etc/farol-versoes, que
+# tools/provar-imagem.sh imprime.
 # O motor não exige versão mínima de git, de gh nem do Claude Code: o diagnóstico confere que
 # existem e avisa quando o Claude Code fica mais de três dias atrás da última versão publicada.
 ARG NODE_VERSION=24.22.1
@@ -20,16 +23,16 @@ ARG NODE_DIGEST=sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9
 
 FROM node:${NODE_VERSION}-bookworm-slim@${NODE_DIGEST}
 
-ARG GIT_VERSION=1:2.39.5-0+deb12u3
 ARG GH_VERSION=2.104.0
 ARG GH_KEYRING_SHA256=6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b
 ARG CLAUDE_CODE_VERSION=2.1.326
 ARG FAROL_UID=10001
 ARG FAROL_GID=10001
 
-# git e gh com a versão fixada. O chaveiro do repositório do gh é baixado com o próprio Node (a
-# imagem não tem curl) e conferido contra o sha256 acima antes de o apt confiar nele.
-# Os pacotes de apoio vêm do Debian da base, sem versão fixada: ca-certificates (TLS do git),
+# gh com a versão fixada e git na versão do Debian da base. O chaveiro do repositório do gh é
+# baixado com o próprio Node (a imagem não tem curl) e conferido contra o sha256 acima antes de
+# o apt confiar nele.
+# Os pacotes de apoio também vêm do Debian, sem versão fixada: ca-certificates (TLS do git),
 # procps (o motor chama "ps" para saber se um processo de fonte ainda vive), tini (o init, veja
 # o ENTRYPOINT) e tzdata (o fuso, veja TZ).
 # O "apt-get upgrade" traz as correções de segurança que o Debian publicou depois do digest da
@@ -39,7 +42,7 @@ RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
     apt-get upgrade -y --no-install-recommends; \
-    apt-get install -y --no-install-recommends ca-certificates "git=${GIT_VERSION}" procps tini tzdata; \
+    apt-get install -y --no-install-recommends ca-certificates git procps tini tzdata; \
     install -d -m 0755 /etc/apt/keyrings; \
     node -e "fetch('https://cli.github.com/packages/githubcli-archive-keyring.gpg').then((r) => { if (!r.ok) throw new Error('chaveiro do gh: HTTP ' + r.status); return r.arrayBuffer(); }).then((b) => require('node:fs').writeFileSync('/etc/apt/keyrings/githubcli-archive-keyring.gpg', Buffer.from(b)))"; \
     echo "${GH_KEYRING_SHA256}  /etc/apt/keyrings/githubcli-archive-keyring.gpg" | sha256sum -c -; \
@@ -58,7 +61,10 @@ RUN set -eux; \
     npm install --global --no-fund --no-audit --no-update-notifier "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; \
     npm cache clean --force; \
     rm -rf /root/.npm /tmp/*; \
-    claude --version | grep -F "${CLAUDE_CODE_VERSION}"
+    claude --version | grep -F "${CLAUDE_CODE_VERSION}"; \
+    { echo "node $(node --version)"; git --version; gh --version | head -n 1; echo "claude $(claude --version)"; } > /etc/farol-versoes; \
+    chmod 0644 /etc/farol-versoes; \
+    cat /etc/farol-versoes
 
 # Usuário comum com UID e GID fixos: com uid 0 o Claude Code recusa a revisão headless. O HOME
 # dele é o volume, e nasce vazio e só dele.
@@ -84,8 +90,9 @@ RUN chmod -R a+rX,go-w /opt/farol
 # exigida e config sem hostPublico nem origensPermitidas (lib/instancia-hospedada.js).
 # TZ: o motor corta o dia do consumo e mostra horas no fuso do processo; sem TZ seria UTC.
 # DISABLE_AUTOUPDATER: o Claude Code não tenta se atualizar; a versão é a da imagem.
-ENV NODE_ENV=production \
-    HOME=/home/farol \
+# NODE_ENV fica de fora de propósito: o motor não a lê, e "production" faria o pnpm da
+# ferramenta da avaliação técnica deixar de instalar as dependências de desenvolvimento.
+ENV HOME=/home/farol \
     FAROL_HOME=/home/farol/.farol \
     FAROL_INSTANCIA_HOSPEDADA=1 \
     TZ=America/Sao_Paulo \
