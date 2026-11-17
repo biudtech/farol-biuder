@@ -55,4 +55,16 @@ describe('casca', () => {
     fireEvent.click(botao);
     expect(sair).not.toHaveBeenCalled();
   });
+
+  it('com a sessão do portão, diz de onde vem a sessão, e o Sair segue chamando a sessão', () => {
+    const { app, sair, store } = appFalso(false);
+    render(<Casca app={app}><h1>Radar</h1></Casca>);
+    expect(screen.queryByText('Sessão do login da frente')).toBeNull();
+    act(() => { store.trocar({ viaPortao: true }); });
+    expect(screen.getByText('Sessão do login da frente')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(sair).toHaveBeenCalledTimes(1);
+    act(() => { store.trocar({ saindo: true }); });
+    expect(screen.getByText('Saindo: encerrando o login da frente.').getAttribute('role')).toBe('status');
+  });
 });

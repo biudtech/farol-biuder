@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from 'react';
 import { app, useApp } from '@/estado/instancia';
 import { Casca } from './Casca';
 import { Pareamento } from './Pareamento';
+import { PortaoExpirado } from './PortaoExpirado';
 import estilos from './Aplicacao.module.css';
 
 export function Aplicacao({ children }: { children: ReactNode }) {
@@ -16,6 +17,7 @@ export function Aplicacao({ children }: { children: ReactNode }) {
 
   if (sessao === 'pareado') return <Casca>{children}</Casca>;
   if (sessao === 'pareamento') return <Pareamento />;
+  if (sessao === 'portao-expirado') return <PortaoExpirado />;
   return (
     <main className={estilos.aviso}>
       {sessao === 'sem-endereco' ? (

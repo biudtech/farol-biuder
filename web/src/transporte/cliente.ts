@@ -1,6 +1,13 @@
 // O cliente único do motor: toda chamada do front passa por aqui. O navegador fala direto com
 // a API do motor, com `Authorization: Bearer` quando há token e `x-farol: 1` em todo POST. Não
-// há cookie nem rota de API no Next.
+// há rota de API no Next, e o motor não lê cookie.
+//
+// A sessão pelo portão (um login na frente, na mesma origem, que injeta o Bearer de uma sessão do
+// motor em todo pedido que repassa; ver web/README.md): o portão reconhece quem está logado pelo
+// cookie DELE, então nesse modo, e na sondagem que descobre o modo, o pedido leva o cookie da
+// própria origem (`same-origin`, que nunca vai a outra origem). Fora disso, `omit`. E o 401 de um
+// pedido sem token, que no modo do pareamento não avisa ninguém, no modo do portão avisa: é a
+// sessão do login da frente que acabou.
 //
 // Nada aqui lança: get e post devolvem um Resultado, e o corpo só chega a quem chamou depois
 // de passar pelo leitor da borda (um dos leitores de src/contratos).
@@ -30,6 +37,8 @@ export type Leitor<T> = (bruto: unknown) => T | null;
 export interface OpcoesDaChamada {
   // aborta só esta chamada
   sinal?: AbortSignal;
+  // leva o cookie da própria origem mesmo fora do modo do portão (a sondagem que descobre o modo)
+  comCookie?: boolean;
 }
 
 // conectando: primeira tentativa. reconectando: caiu e vai tentar. sem-motor: tentou e o
@@ -61,6 +70,8 @@ export interface DependenciasDoCliente {
   // o registro da borda (console do navegador); nunca recebe dado de evento nem token
   registrar?: (aviso: string) => void;
   buscar?: typeof fetch;
+  // true quando a sessão vem do portão: os pedidos levam o cookie da origem e o 401 sem token avisa
+  viaPortao?: () => boolean;
 }
 
 type Desfecho = 'caiu' | 'falhou' | 'nao_autenticado' | 'outro_token';
@@ -127,7 +138,7 @@ async function detalheDaRecusa(resposta: Response): Promise<DetalheDaRecusa | un
 
 const CANCELADO = Object.freeze({ ok: false, falha: 'cancelado', status: 0 }) satisfies Resultado<never>;
 
-export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => {}, buscar = (u, i) => globalThis.fetch(u, i) }: DependenciasDoCliente): Cliente {
+export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => {}, buscar = (u, i) => globalThis.fetch(u, i), viaPortao = () => false }: DependenciasDoCliente): Cliente {
   // o sinal comum a todo get e post em curso; cancelarChamadas aborta este e abre outro
   let chamadas = new AbortController();
 
@@ -141,10 +152,17 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
   //   sonda /api/auth/status, e um proxy que respondesse 401 ali chamaria o pareamento de novo);
   // - o cofre já tem outro token: é a resposta atrasada de um token antigo;
   // - depois de esquecer, o cofre ainda tem token (o que outra aba guardou): a sessão segue.
+  // No modo do portão o pedido vai sem token, e o 401 é a sessão do login da frente que acabou:
+  // avisa sempre (quem ouve protege contra o laço).
   function perderCredencial(tokenDoPedido: string): void {
+    if (!tokenDoPedido && viaPortao()) { aoNaoAutenticado(); return; }
     if (!tokenDoPedido || cofre.ler() !== tokenDoPedido) return;
     cofre.esquecer(tokenDoPedido);
     if (!cofre.ler()) aoNaoAutenticado();
+  }
+
+  function credenciais(comCookie = false): RequestCredentials {
+    return comCookie || viaPortao() ? 'same-origin' : 'omit';
   }
 
   async function chamar<T>(caminho: string, init: RequestInit, extras: Record<string, string>, ler: Leitor<T>, opcoes?: OpcoesDaChamada): Promise<Resultado<T>> {
@@ -162,7 +180,7 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
       const token = cofre.ler();
       let resposta: Response;
       try {
-        resposta = await buscar(`${base}${caminho}`, { ...init, headers: cabecalhos(token, extras), credentials: 'omit', cache: 'no-store', signal: controle.signal });
+        resposta = await buscar(`${base}${caminho}`, { ...init, headers: cabecalhos(token, extras), credentials: credenciais(opcoes?.comCookie), cache: 'no-store', signal: controle.signal });
       } catch {
         return cancelado() ? CANCELADO : { ok: false, falha: 'rede', status: 0 };
       }
@@ -229,7 +247,7 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
           resposta = await buscar(`${base}/api/events`, {
             method: 'GET',
             headers: cabecalhos(token, { Accept: 'text/event-stream' }),
-            credentials: 'omit',
+            credentials: credenciais(),
             cache: 'no-store',
             signal: sinal,
           });

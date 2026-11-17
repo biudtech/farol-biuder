@@ -11,7 +11,9 @@ import { criarStore, type Store } from './store';
 
 // carregando: antes de ler o token (o servidor e o primeiro desenho do navegador).
 // sem-endereco: NEXT_PUBLIC_FAROL_API ausente ou inválida no build.
-export type Sessao = 'carregando' | 'sem-endereco' | 'pareamento' | 'pareado';
+// portao-expirado: a sessão do login da frente acabou duas vezes seguidas na mesma janela de
+// tempo; em vez de recarregar de novo (laço), a tela pede o clique em Entrar de novo.
+export type Sessao = 'carregando' | 'sem-endereco' | 'pareamento' | 'pareado' | 'portao-expirado';
 // o que a tela de pareamento sabe do motor
 export type Motor = 'verificando' | 'alcancavel' | 'inalcancavel';
 // cancelado: a sessão mudou enquanto o pedido estava no ar (a tela não mostra nada por isso)
@@ -31,6 +33,13 @@ export type Saida = 'revogada' | 'nao-confirmada' | 'sem-resposta' | 'recusada' 
 
 // Quanto o Sair espera pelo motor antes de sair só deste navegador.
 export const PRAZO_DO_SAIR_MS = 5000;
+
+// Na sessão pelo portão, o 401 recarrega a página na raiz (onde o portão mostra o login) no
+// máximo uma vez por esta janela; o segundo 401 dentro dela leva à tela de Entrar de novo.
+export const JANELA_DA_RECARGA_MS = 60000;
+// A rota do portão que encerra o login da frente (revoga a sessão do motor e apaga o cookie).
+// Mesma origem da página, sem o motor no caminho.
+export const ROTA_DE_SAIDA_DO_PORTAO = '/auth/logout';
 
 // Um aviso do motor (evento `toast`) como a tela o guarda: `n` é a ordem de chegada, e
 // serve de chave.
@@ -62,6 +71,9 @@ export interface EstadoDoApp {
   saindo: boolean;
   // o desfecho do último Sair deste navegador; null quando a tela de pareamento não veio dele
   saida: Saida | null;
+  // a sessão vem do portão (o login da frente injeta a credencial): este navegador não guarda
+  // token, e a casca diz de onde vem a sessão
+  viaPortao: boolean;
 }
 
 export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
@@ -75,6 +87,7 @@ export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
   recados: SEM_RECADOS,
   saindo: false,
   saida: null,
+  viaPortao: false,
 });
 
 export interface App {
@@ -98,6 +111,16 @@ export interface App {
   esquecerSessao(saida: Saida): void;
   // Tira da tela os avisos do motor.
   dispensarRecados(): void;
+  // Na tela de sessão do portão expirada: volta à raiz, onde o portão mostra o login.
+  entrarDeNovo(): void;
+}
+
+// O que a sessão pelo portão usa da janela: ir à raiz (location.assign) e lembrar, nesta janela
+// (sessionStorage), quando foi a última recarga causada por 401.
+export interface JanelaDoPortao {
+  irParaARaiz(): void;
+  lerUltimaRecarga(): number;
+  gravarUltimaRecarga(quando: number): void;
 }
 
 // O pedaço da janela que a sessão usa: o evento `storage`, que o navegador dispara nas OUTRAS
@@ -114,9 +137,12 @@ export interface DependenciasDoApp {
   // ausente no servidor e em quem não quer ouvir as outras abas
   janela?: JanelaDoArmazenamento;
   buscar?: typeof fetch;
+  // ausente no servidor; sem ela a sessão pelo portão não recarrega nada
+  portao?: JanelaDoPortao;
+  agora?: () => number;
 }
 
-export function criarApp({ base, cofre, registrar, janela, buscar }: DependenciasDoApp): App {
+export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora = () => Date.now() }: DependenciasDoApp): App {
   const store = criarStore<EstadoDoApp>(ESTADO_INICIAL);
   let fecharFluxo: (() => void) | null = null;
   // o token com que esta aba abriu o fluxo: é com ele que se compara o que outra aba gravou
@@ -127,7 +153,11 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   // o Sair em curso: o segundo clique recebe o mesmo desfecho
   let saindo: Promise<Saida | null> | null = null;
 
-  const cliente = criarCliente({ base, cofre, buscar, registrar, aoNaoAutenticado: () => voltarAoPareamento('nao-autenticado') });
+  const cliente = criarCliente({
+    base, cofre, buscar, registrar,
+    viaPortao: () => store.ler().viaPortao,
+    aoNaoAutenticado: () => (store.ler().viaPortao ? perdeuOPortao() : voltarAoPareamento('nao-autenticado')),
+  });
 
   function fechar(): void {
     fecharFluxo?.();
@@ -181,8 +211,77 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     fechar();
     cliente.cancelarChamadas();
     tokenDaSessao = '';
-    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', estadoEmDia: false, motivo, entrouAgora: false, recados: SEM_RECADOS, saindo: false, saida });
+    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', estadoEmDia: false, motivo, entrouAgora: false, recados: SEM_RECADOS, saindo: false, saida, viaPortao: false });
     void verificarMotor();
+  }
+
+  /* ---------- a sessão pelo portão ----------
+     Um login na frente do motor e do front, na mesma origem, injeta o Bearer de uma sessão do
+     motor em todo pedido que repassa. O navegador não vê esse token e não guarda nada. A única
+     prova de que há alguém na frente é o motor dizer `autenticado: true` a um pedido que saiu
+     daqui SEM token: sem portão, o motor responde `autenticado: false`, e o caminho é o
+     pareamento de sempre. */
+
+  // Sem token guardado: pergunta ao motor. Só entra sem token com `exigida` e `autenticado`
+  // verdadeiros naquela resposta, e se nenhum token apareceu no meio (outra aba pareou).
+  async function sondarAEntrada(): Promise<void> {
+    const minha = ++sondagem;
+    store.trocar({ motor: 'verificando' });
+    const r = await cliente.get('/api/auth/status', lerStatusDaAutenticacao, { comCookie: true });
+    if (minha !== sondagem || (!r.ok && r.falha === 'cancelado') || store.ler().sessao !== 'carregando') return;
+    const outro = cofre.ler();
+    if (outro) { entrar(outro, false); return; }
+    if (r.ok && r.dados.exigida && r.dados.autenticado) { entrarPeloPortao(); return; }
+    // Sem o voltarAoPareamento: não há sessão a desfazer, e cancelar as chamadas mataria um
+    // pareamento que alguém já tenha disparado.
+    store.trocar({ sessao: 'pareamento', motivo: 'nenhum', motor: r.ok ? 'alcancavel' : 'inalcancavel' });
+  }
+
+  function entrarPeloPortao(): void {
+    tokenDaSessao = '';
+    store.trocar({ sessao: 'pareado', viaPortao: true, motor: 'alcancavel', motivo: 'nenhum', entrouAgora: false, saindo: false, saida: null });
+    abrirFluxo();
+  }
+
+  // O 401 na sessão pelo portão: não há token a apagar, e o pareamento não adianta (o portão o
+  // bloqueia). A página volta à raiz, onde o portão mostra o login, uma vez por janela de tempo;
+  // o segundo 401 dentro dela mostra a tela de Entrar de novo, em vez do laço de recargas.
+  function perdeuOPortao(): void {
+    if (store.ler().sessao !== 'pareado') return;
+    fechar();
+    cliente.cancelarChamadas();
+    const ultima = portao?.lerUltimaRecarga() ?? 0;
+    const quando = agora();
+    const base = { snapshot: null, conexao: 'conectando' as const, estadoEmDia: false, recados: SEM_RECADOS, saindo: false };
+    if (!portao || (ultima > 0 && quando - ultima < JANELA_DA_RECARGA_MS)) {
+      store.trocar({ ...base, sessao: 'portao-expirado' });
+      return;
+    }
+    store.trocar({ ...base, sessao: 'carregando' });
+    portao.gravarUltimaRecarga(quando);
+    portao.irParaARaiz();
+  }
+
+  // O Sair na sessão pelo portão: a rota de saída do portão (mesma origem, sem o motor), que
+  // revoga a sessão do motor e apaga o cookie, e depois a raiz. A ida à raiz acontece com
+  // qualquer resposta: se o portão não encerrou, ele mesmo decide o que mostrar lá.
+  async function sairDoPortao(): Promise<Saida> {
+    cliente.cancelarChamadas();
+    store.trocar({ saindo: true });
+    const prazo = new AbortController();
+    const relogio = setTimeout(() => prazo.abort(), PRAZO_DO_SAIR_MS);
+    let saida: Saida = 'nao-confirmada';
+    try {
+      const resposta = await (buscar ?? ((u, i) => globalThis.fetch(u, i)))(ROTA_DE_SAIDA_DO_PORTAO, {
+        method: 'POST', headers: { 'x-farol': '1' }, credentials: 'same-origin', cache: 'no-store', signal: prazo.signal,
+      });
+      saida = resposta.ok ? 'revogada' : 'recusada';
+    } catch { /* rede ou prazo: não dá para dizer se o portão encerrou */ } finally {
+      clearTimeout(relogio);
+    }
+    fechar();
+    portao?.irParaARaiz();
+    return saida;
   }
 
   // Pede ao motor que revogue a sessão deste navegador: a lista diz qual é a `atual`, e a
@@ -270,7 +369,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
 
   function entrar(token: string, entrouAgora: boolean): void {
     tokenDaSessao = token;
-    store.trocar({ sessao: 'pareado', motivo: 'nenhum', entrouAgora, saindo: false, saida: null });
+    store.trocar({ sessao: 'pareado', motivo: 'nenhum', entrouAgora, saindo: false, saida: null, viaPortao: false });
     abrirFluxo();
   }
 
@@ -279,11 +378,12 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
   function aoMudarOArmazenamento(evento: { key: string | null }): void {
     // chave nula é o localStorage.clear()
     if (evento.key !== null && evento.key !== CHAVE_DO_TOKEN) return;
-    const { sessao, entrouAgora } = store.ler();
+    const { sessao, entrouAgora, viaPortao } = store.ler();
     if (sessao !== 'pareado' && sessao !== 'pareamento') return;
     const atual = cofre.sincronizar();
     if (!atual) {
-      if (sessao === 'pareado') voltarAoPareamento('outra-aba');
+      // na sessão pelo portão não há token daqui a perder: o que outra aba apagou não muda nada
+      if (sessao === 'pareado' && !viaPortao) voltarAoPareamento('outra-aba');
       return;
     }
     if (sessao === 'pareado' && atual === tokenDaSessao) return;
@@ -310,8 +410,9 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
       }
       janela?.addEventListener('storage', aoMudarOArmazenamento);
       const token = cofre.ler();
+      // com token guardado, o de sempre; sem token, o motor diz se há um portão na frente
       if (token) entrar(token, false);
-      else voltarAoPareamento('nenhum');
+      else void sondarAEntrada();
       return encerrar;
     },
     async parear(codigo, rotulo) {
@@ -329,17 +430,30 @@ export function criarApp({ base, cofre, registrar, janela, buscar }: Dependencia
     },
     sair() {
       if (store.ler().sessao !== 'pareado') return Promise.resolve(null);
+      if (store.ler().viaPortao) {
+        saindo ??= sairDoPortao().finally(() => { saindo = null; });
+        return saindo;
+      }
       // a exceção já foi tratada no finally de lá: quem clicou recebe o desfecho, não um erro
       saindo ??= sairDoMotorEDaqui().catch((): Saida => 'nao-confirmada').finally(() => { saindo = null; });
       return saindo;
     },
     esquecerSessao(saida) {
       if (store.ler().sessao !== 'pareado') return;
+      // na sessão pelo portão, revogar a sessão atual é sair: o login da frente também acaba
+      if (store.ler().viaPortao) {
+        saindo ??= sairDoPortao().finally(() => { saindo = null; });
+        return;
+      }
       cofre.esquecer(tokenDaSessao);
       voltarAoPareamento('saiu', saida);
     },
     dispensarRecados() {
       store.trocar({ recados: SEM_RECADOS });
+    },
+    entrarDeNovo() {
+      portao?.gravarUltimaRecarga(agora());
+      portao?.irParaARaiz();
     },
   };
 }

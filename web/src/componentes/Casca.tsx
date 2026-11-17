@@ -26,6 +26,7 @@ export function Casca({ children, app = appDoNavegador }: Props) {
   const conexao = useApp((e) => e.conexao, app);
   const versao = useApp((e) => e.snapshot?.app?.version ?? '', app);
   const saindo = useApp((e) => e.saindo, app);
+  const viaPortao = useApp((e) => e.viaPortao, app);
   const conteudo = useRef<HTMLElement>(null);
 
   // Quem acabou de parear estava com o foco no formulário, que sumiu: o foco vai ao conteúdo
@@ -62,11 +63,12 @@ export function Casca({ children, app = appDoNavegador }: Props) {
 
         <div className={estilos.acoes}>
           <IndicadorDeConexao conexao={conexao} />
+          {viaPortao ? <span className={estilos.origemDaSessao} title="Este navegador não foi pareado: a credencial vem do login na frente do Farol.">Sessão do login da frente</span> : null}
           <TrocaDeTema />
           <button type="button" className={estilos.botao} disabled={saindo} onClick={() => { void app.sair(); }}>
             {saindo ? 'Saindo…' : 'Sair'}
           </button>
-          <span className={estilos.soLeitor} role="status">{saindo ? 'Saindo: pedindo ao motor que revogue a sessão deste navegador.' : ''}</span>
+          <span className={estilos.soLeitor} role="status">{saindo ? (viaPortao ? 'Saindo: encerrando o login da frente.' : 'Saindo: pedindo ao motor que revogue a sessão deste navegador.') : ''}</span>
         </div>
       </header>
 
