@@ -551,10 +551,48 @@ A avaliação técnica de cada PR revisado usa a cópia da BIUD do catálogo de 
 (`pnpm install --frozen-lockfile` e `pnpm build`).
 
 A instalação é explícita: `node lib/technical-review/setup.js`, opcionalmente com
-`--source <origem>`. Ela clona a origem, faz checkout do commit, constrói, confere e só então
-troca a pasta em `~/.farol/toolchains/eng-behaviour@<versão>` (`lib/technical-review/toolchain.js`).
-O repositório é privado da organização: no servidor, o `git clone` precisa da credencial de
-uma conta com acesso a ele, e o `pnpm` precisa estar instalado.
+`--source <caminho ou URL>`. Ela clona a origem numa pasta de preparo (`.install-*`, ao lado),
+confere que o commit do pino existe nela, faz checkout dele, constrói, grava o carimbo de
+construção, confere e só então troca a pasta em `~/.farol/toolchains/eng-behaviour@<versão>`
+(`lib/technical-review/toolchain.js`). Pede `git` e `pnpm` no PATH; a imagem do container traz
+os dois, com o `pnpm` na versão que o `Dockerfile` fixa.
+
+- **O clone do repositório privado usa o login do `gh`.** Para a origem HTTPS do GitHub (a do
+  pino), o clone roda com o `git` isolado do motor e a credencial do `gh`
+  (`credential.helper=!gh auth git-credential`), a mesma lista da busca das fontes de revisão
+  (`FLAGS_CREDENCIAL_DO_GH`, `lib/git-isolado.js`). O token não vai em argumento, em URL nem no
+  log: o `git` o pede ao `gh` na hora. Pré-requisito: a conta logada no `gh` enxerga
+  `biudtech/eng-behaviour` (`gh repo view biudtech/eng-behaviour`). Origem com usuário ou
+  token na URL é recusada antes de rodar qualquer comando. Caminho local e origem fora do
+  GitHub seguem com o `git` comum, sem credencial.
+- **Cada falha diz a causa** (`lib/technical-review/setup-falhas.js`) e sai com código 2: sem
+  acesso ao repositório (o `gh` não está logado ou a conta não enxerga o repositório), falha de
+  rede no clone, `git` ausente, commit do pino que não existe na origem, gerenciador de pacotes
+  ausente, falha de rede no `pnpm install`, passo que passou do prazo (dez minutos), instalação
+  interrompida (`SIGINT` ou `SIGTERM`) e passo morto por sinal de fora. Saída que não casa com
+  nenhuma causa conhecida vira a mensagem do passo, com o código de saída.
+- **Idempotente**: instalação válida não é refeita, e o comando sai na hora.
+- **Atômica**: a falha em qualquer passo remove a pasta de preparo, e a pasta válida, se havia,
+  não é tocada. A instalação morta sem chance de limpar (`SIGKILL` no próprio `setup.js`) deixa
+  a pasta de preparo, que a próxima instalação remove quando tem mais de vinte minutos. Uma
+  pasta anterior que deixou de validar (pino trocado no mesmo número de versão) é guardada como
+  `eng-behaviour@<versão>.incomplete-<id>` quando a nova fica pronta, e sai só à mão.
+
+Quais repositórios são avaliados vem do cadastro privado,
+`~/.farol/technical-review/repositories.json` (`lib/technical-review/profiles.js`). Este
+repositório é público e não versiona cadastro real: o exemplo, com um repositório fictício e
+cada campo que o motor lê, está em
+[`exemplos/repositories.exemplo.json`](exemplos/repositories.exemplo.json), e os campos estão
+explicados em [`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-cadastro-dos-repositórios).
+
+O estado das duas partes aparece em `GET /api/doctor`, na chave `avaliacaoTecnica`, e na linha
+"Avaliação técnica" de Sistema > Saúde: a ferramenta (instalada e íntegra, ausente ou com
+identidade não comprovada, com a versão e o commit do pino) e o cadastro (quantos repositórios
+declarados, ausente ou ilegível), com o efeito do que falta. A conferência é o mesmo
+`requireTool` que a avaliação usa, e por isso respeita `FAROL_ENG_BEHAVIOUR_HOME` (`lib/env.js`)
+quando a variável aponta outra pasta; a instalação grava sempre no lugar padrão. No boot, uma
+linha no `farol.log` diz o mesmo estado (`lib/technical-review/estado.js`), em `WARN` quando há
+repositório declarado sem a ferramenta íntegra ou o cadastro não abre.
 
 Esse nome `eng-behaviour` aqui é só a ferramenta que avalia os PRs revisados
 (`lib/technical-review/`). O motor não roda mais a doutrina como gate do próprio repositório.

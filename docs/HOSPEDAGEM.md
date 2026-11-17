@@ -18,6 +18,7 @@ As regras da fronteira (Host, Origin, CORS, autenticação) estão em
 - [O volume](#o-volume)
 - [O config.json da instância](#o-configjson-da-instância)
 - [Primeira subida](#primeira-subida)
+- [Avaliação técnica](#avaliação-técnica)
 - [O que o orquestrador precisa garantir](#o-que-o-orquestrador-precisa-garantir)
 - [O fuso do processo](#o-fuso-do-processo)
 - [Riscos conhecidos](#riscos-conhecidos)
@@ -38,6 +39,7 @@ reconstruir a imagem.
 | `git` | a do Debian 12 no dia do build (2.39.5 em 16/11/2026) | o pacote do Debian, sem versão fixada: fixar o patch quebraria o build quando o Debian o trocasse por uma correção |
 | `gh` | 2.104.0 | o repositório apt oficial do GitHub CLI, com o chaveiro conferido por sha256 no build |
 | Claude Code | 2.1.326 | o pacote npm `@anthropic-ai/claude-code`, instalado em `/usr/local/bin` |
+| `pnpm` | 10.34.9 | o pacote npm `pnpm`, instalado em `/usr/local/bin`; constrói a ferramenta da [avaliação técnica](#avaliação-técnica) |
 | apoio | `ca-certificates`, `procps`, `tini`, `tzdata` | o Debian da base, sem versão fixada |
 
 O motor não exige versão mínima de `git`, de `gh` nem do Claude Code. `GET /api/doctor` diz se
@@ -73,7 +75,8 @@ O processo:
   `/tmp`, só `/run/lock` e `/var/tmp` são graváveis na imagem, e com a raiz somente leitura
   nem eles.
 
-A imagem não tem `curl`, `wget`, `jq`, `ssh` nem `pnpm`.
+A imagem não tem `curl`, `wget`, `jq` nem `ssh`. Traz o `pnpm`, mas não a ferramenta da avaliação
+técnica: o código dela é privado, e ela é instalada no volume ([Avaliação técnica](#avaliação-técnica)).
 
 ## Variáveis de ambiente
 
@@ -88,6 +91,8 @@ desenvolvimento.
 | `FAROL_INSTANCIA_HOSPEDADA` | `1` | a trava abaixo |
 | `TZ` | `America/Sao_Paulo` | [o fuso do processo](#o-fuso-do-processo) |
 | `DISABLE_AUTOUPDATER` | `1` | o Claude Code não tenta se atualizar: a versão é a da imagem |
+| `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME` | `/home/farol/.local/share`, `/home/farol/.cache`, `/home/farol/.local/state` | a loja de pacotes, o cache e o estado do `pnpm` no volume, com a raiz somente leitura. São os padrões do HOME escritos por extenso: o `gh` e o Claude Code continuam gravando onde já gravavam |
+| `npm_config_update_notifier` | `false` | o `pnpm` e o `npm` não consultam o registro atrás de versão nova |
 
 **`FAROL_INSTANCIA_HOSPEDADA=1` impede o motor de subir aberto.** Para o motor, `config.json`
 ausente é instalação nova: ele sobe em loopback, sem autenticação, com a conta detectada pelo
@@ -142,9 +147,14 @@ Um volume só, montado em `/home/farol`, o HOME inteiro do usuário do motor. N�
 | `.claude.json` | o motor | a confiança do Claude Code no workspace (`ensureWorkspaceTrusted`, `server.js`) |
 | `.config/gh/`, `.local/state/gh/` | o `gh` | o login da conta revisora e o estado do `gh` |
 | `.claude/`, `.cache/`, `.npm/` | o Claude Code e o npm | configuração padrão e caches, quando usados |
+| `.farol/toolchains/eng-behaviour@<versão>/` | `setup.js` | a ferramenta da avaliação técnica, instalada por quem opera |
+| `.farol/technical-review/repositories.json` | quem opera | o cadastro dos repositórios avaliados |
+| `.local/share/pnpm/` | o `pnpm` | a loja de pacotes da instalação da ferramenta |
 
 Fora do volume o motor só grava na pasta temporária (`/tmp`): a cópia efêmera da configuração
-do perfil de assinatura, apagada no fim de cada uso (`lib/engine/perfil-assinatura.js`). `/tmp`
+do perfil de assinatura, apagada no fim de cada uso (`lib/engine/perfil-assinatura.js`). A
+instalação da ferramenta da avaliação técnica também só grava no volume e em `/tmp` (medido na
+prova com a raiz somente leitura). `/tmp`
 pode ser `tmpfs`: nada ali precisa sobreviver ao reinício.
 
 O volume tem de ser gravável pelo UID 10001. O volume nomeado do Docker nasce assim, porque
@@ -246,6 +256,215 @@ Os comandos são os do Docker; no orquestrador, o equivalente. `IMAGEM` é a ima
    aja, mude a política pela tela Sistema ou por `POST /api/accounts/edit`
    ([a conta e a política](CONFIGURATION.md#a-conta-revisora-e-a-política)).
 
+8. **Instale a avaliação técnica**, antes de deixar o motor aprovar sozinho: a ferramenta e o
+   cadastro dos repositórios, como em [Avaliação técnica](#avaliação-técnica). Sem as duas, nenhuma
+   aprovação sai como limpa.
+
+## Avaliação técnica
+
+Cada PR revisado de um repositório cadastrado passa pela avaliação técnica, com a ferramenta
+`eng-behaviour` no commit fixado em `lib/technical-review/tool.json` (hoje a 0.17.0, commit
+`ed3e1535cb84`). São duas peças, e as duas moram no volume, em `~/.farol`: a ferramenta, que é
+código privado da BIUD e por isso não entra na imagem (o build não leva segredo), e o cadastro
+dos repositórios. Postas uma vez, sobrevivem a reinício e a troca de imagem: na prova, o
+`docker restart` e um container novo de uma imagem reconstruída, sobre o mesmo volume, acharam
+a ferramenta íntegra.
+
+### O que a imagem traz
+
+O `git`, o `gh` e o `pnpm` 10.34.9, com a loja, o cache e o estado do `pnpm` apontados para o
+volume (`XDG_DATA_HOME`, `XDG_CACHE_HOME` e `XDG_STATE_HOME`, em
+[Variáveis de ambiente](#variáveis-de-ambiente)). A versão do `pnpm` vem do lock da ferramenta: o
+`package.json` dela no pino não declara `packageManager`, e o `pnpm-lock.yaml` é
+`lockfileVersion: '9.0'`, o formato da linha 10 do `pnpm`. Não há compilador nem python na
+imagem, e a construção não precisa: nenhuma dependência do lock compila módulo nativo, e o
+`pnpm` 10 não roda script de instalação de dependência (na prova ele avisou
+`Ignored build scripts: esbuild@0.21.5`, e a construção, que é só o `tsc`, terminou). A imagem
+cresceu cerca de 30 MB com o `pnpm` (de 1,08 GB para 1,12 GB).
+
+### Instalar a ferramenta
+
+Pré-requisito: o `gh` do container logado na conta revisora (passo 5 da
+[Primeira subida](#primeira-subida)), e essa conta enxerga o repositório privado da ferramenta.
+Confira e instale, como o usuário do motor (o `docker exec` já entra como ele):
+
+```sh
+docker exec farol gh repo view biudtech/eng-behaviour --json name
+docker exec farol node lib/technical-review/setup.js
+```
+
+O `setup.js` clona `https://github.com/biudtech/eng-behaviour.git` com o `git` isolado do motor
+e a credencial do `gh` (`credential.helper=!gh auth git-credential`, a mesma da busca das fontes
+de revisão), confere que o commit do pino existe, faz checkout dele, roda
+`pnpm install --frozen-lockfile` e `pnpm build`, e só então põe a pasta pronta em
+`~/.farol/toolchains/eng-behaviour@0.17.0`. O token não vai em argumento, em URL nem no log: o
+`git` o pede ao `gh` na hora, pela entrada padrão. O detalhe está em
+[`CONFIGURATION.md`](CONFIGURATION.md#avaliação-técnica-dos-prs-revisados).
+
+Medido na prova (clone de uma cópia local montada somente leitura, com a raiz do container
+somente leitura): 13,6 segundos do começo ao fim, dos quais 5,4 do `pnpm install` com a loja
+vazia; a ferramenta ocupa 62 MB no volume (54 MB de `node_modules`), e a loja do `pnpm`, 59 MB,
+quase toda nos mesmos arquivos, ligados por hard link. Rodar o `setup.js` de novo com a
+ferramenta íntegra não refaz nada e sai em menos de 0,1 segundo.
+
+Cada falha sai com código 2, diz a causa e termina com "nada foi instalado, e a instalação
+anterior, se havia, ficou como estava". As que quem opera vai encontrar:
+
+| causa | começo da mensagem |
+|---|---|
+| o `gh` sem login, ou a conta sem acesso ao repositório | `sem acesso ao repositório da ferramenta técnica (https://github.com/biudtech/eng-behaviour.git): o gh não está logado, ou a conta logada não enxerga esse repositório. Confira com "gh auth status" e "gh repo view biudtech/eng-behaviour", como o usuário do motor.` |
+| sem rede até o GitHub | `falha de rede no clone da ferramenta técnica: https://github.com/biudtech/eng-behaviour.git não respondeu.` |
+| commit do pino fora da origem | `o commit do pino (ed3e1535..., em lib/technical-review/tool.json) não existe em <origem>` |
+| `pnpm` ausente | `o gerenciador de pacotes "pnpm" não está instalado ou não está no PATH` |
+| sem rede até o registro de pacotes | `falha de rede em "pnpm install --frozen-lockfile": o registro de pacotes não respondeu` |
+| passo morto de fora | `o passo "pnpm" foi encerrado pelo sinal SIGKILL antes de terminar.` |
+
+As duas primeiras foram medidas na imagem, num volume sem login do `gh` (a segunda com
+`--network none`), e são o que `tools/provar-imagem.sh` confere no CI; as outras são travadas por
+teste com dublê (`test/avaliacao-tecnica-instalacao.test.js`). Origem com usuário ou token na
+URL é recusada antes de qualquer comando.
+
+A instalação é atômica. Na prova, o `pnpm install` morto com `SIGKILL` no meio do download
+deixou `~/.farol/toolchains` vazia num volume novo (a ferramenta continuou "não instalada", e a
+pasta de preparo saiu), e, sobre uma ferramenta já presente, deixou a pasta anterior no lugar,
+intacta. A instalação seguinte terminou normalmente, com a loja do `pnpm` pela metade.
+
+### O cadastro dos repositórios
+
+Só os repositórios do cadastro são avaliados. O arquivo é
+`~/.farol/technical-review/repositories.json`, e este repositório não versiona cadastro real
+(é público). O exemplo, com um repositório fictício, está em
+[`exemplos/repositories.exemplo.json`](exemplos/repositories.exemplo.json). Cada campo que o
+motor lê:
+
+- `repositories`: um objeto com uma entrada por repositório, com a chave `dono/nome` igual à do
+  PR, caixa inclusa (`profileFor`, `lib/technical-review/profiles.js`).
+- `declaration`: obrigatório. Sem ele a entrada conta como fora do cadastro. O motor confere as
+  pastas e entrega o resto à ferramenta, que recusa chave que ela não conhece.
+- `declaration.scopes`: lista não vazia entre `core`, `frontend` e `backend`, os grupos de regras
+  do catálogo que valem para o repositório.
+- `declaration.sourceDirs`, `testDirs`, `e2eDirs` e `componentDirs`: pastas relativas à raiz, de
+  código de produção, de teste, de teste de ponta a ponta e de componentes. Lista com itens,
+  `null` (o repositório não tem aquele material) ou ausente (a regra que depende do campo não
+  roda); lista vazia é recusada. O motor confere, antes da ferramenta, que cada pasta existe no
+  commit com a caixa exata: a que falta fica de fora e vira ressalva, e o campo que fica sem
+  pasta nenhuma trava a avaliação (`lib/technical-review/declaracao.js`).
+- `declaration.deliveryMayRepeat`: booleano, se o transporte que o repositório consome admite
+  entrega repetida (liga a regra de idempotência).
+- `declaration.isolationScope`: texto, o nome do escopo de isolamento (`tenant`, `conta`); a
+  presença declara o repositório como de vários contextos.
+- `declaration.componentEntryPointOnlyReexports`: booleano, se o ponto de entrada de uma pasta de
+  componente só reexporta.
+- `baselines`: a dívida conhecida por regra, conferida pela ferramenta (`repositoryId`,
+  `catalogVersion`, `rule`, `openedAt`, `initialFindings`, `currentFindings`,
+  `closureCondition` e `known`); `[]` quando não há (`lib/technical-review/debt.js`).
+- `instrucaoDeProduto`: texto ou `null`, a instrução do projeto que vai à ferramenta e ao prompt
+  da sessão de revisão (`lib/technical-review/worker.js`, `lib/technical-review/prompt.js`).
+
+A impressão da entrada inteira vai no relatório: mudar a entrada de um repositório depois de uma
+revisão faz a aprovação pendente dele pedir revisão nova ("declaração técnica mudou").
+
+Para pôr o arquivo no volume, pela entrada padrão, que já cria a pasta e o arquivo com o dono
+do motor (10001) e só para ele (700 e 600):
+
+```sh
+docker exec -i farol sh -c 'umask 077; mkdir -p ~/.farol/technical-review && cat > ~/.farol/technical-review/repositories.json' < repositories.json
+```
+
+Com `docker cp`, o arquivo chega com dono root (medido: `0:0`, modo 755); acerte o dono e o
+modo como root:
+
+```sh
+docker cp repositories.json farol:/home/farol/.farol/technical-review/repositories.json
+docker exec -u 0 farol sh -c 'chown 10001:10001 /home/farol/.farol/technical-review/repositories.json && chmod 600 /home/farol/.farol/technical-review/repositories.json'
+```
+
+Em Kubernetes, `kubectl cp` roda o `tar` dentro do container, como o usuário dele; confira com
+`kubectl exec <pod> -- ls -ln /home/farol/.farol/technical-review` e ajuste o modo com
+`chmod 600` pelo `kubectl exec` (não exercitado aqui). A pasta `technical-review` tem de existir
+antes do `cp`. O motor lê o arquivo a cada avaliação: não precisa reiniciar.
+
+Repositório fora do cadastro é revisado e publicado sem avaliação técnica: o resultado aprovável
+leva o ponto "Este repositório não tem declaração técnica cadastrada, então a avaliação técnica
+automática não rodou." (`pontosDoApp`, `lib/engine/ressalvas.js`) e sai como com ressalvas, decidido
+pelo `onCaveats` da conta. Cadastro presente e ilegível não vira "fora do cadastro": a avaliação
+falha para todo repositório, e a publicação recusa o APPROVE com `technical_review`
+(`lib/technical-review/publication.js`).
+
+### Conferir
+
+`GET /api/doctor` traz a chave `avaliacaoTecnica`. Medido na prova, com a ferramenta instalada
+e o cadastro do exemplo:
+
+```json
+{ "ferramenta": "integra", "versao": "0.17.0", "commit": "ed3e1535cb84faf572fe66c6dc13a1af441588ee",
+  "cadastro": "legivel", "repositorios": 1, "pronta": true,
+  "detalhe": "ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado" }
+```
+
+`ferramenta` é `integra`, `ausente` ou `nao-comprovada` (a pasta existe, mas não é o checkout
+limpo do commit do pino com o carimbo de construção); `cadastro` é `legivel`, `ausente` ou
+`ilegivel`. A tela mostra o mesmo `detalhe` na linha "Avaliação técnica" de Sistema > Saúde, com
+o estado em texto: OK quando ela roda para alguém (ferramenta íntegra e pelo menos um
+repositório declarado), Atenção nos outros casos. Nenhum caminho de arquivo sai no diagnóstico.
+
+No boot, uma linha no `farol.log` diz o mesmo estado, em `INFO`. Repositório declarado sem a
+ferramenta íntegra vira `WARN`, com o comando da instalação, e com a instância hospedada ligada
+a linha vai também ao stderr (o `docker logs`). Medido na prova, com o cadastro do exemplo e sem a
+ferramenta:
+
+```
+[farol] avaliação técnica: ferramenta ausente (eng-behaviour 0.17.0, commit ed3e1535cb84 não instalada); 1 repositório declarado: a avaliação técnica dos repositórios declarados falha: nenhuma regra é avaliada, a sessão de revisão é orientada a não aprovar e nenhuma aprovação deles sai como limpa, até a ferramenta íntegra ser instalada. Instale no volume, dentro do container e como o usuário do motor: node lib/technical-review/setup.js (docs/HOSPEDAGEM.md).
+```
+
+Cadastro ilegível também vira `WARN`. O resumo do log no diagnóstico classifica a linha como
+"Estado da avaliação técnica no boot" (sem falha) ou, quebrada, como "Avaliação técnica sem a
+ferramenta íntegra ou com o cadastro ilegível" (`lib/log-taxonomy.js`).
+
+### Atualizar quando o pino mudar
+
+A imagem nova traz o `tool.json` novo, e a ferramenta do volume deixa de valer. Versão nova
+muda a pasta (`eng-behaviour@<versão>`), e o diagnóstico passa a dizer `ausente`; o mesmo número
+de versão com outro commit passa a dizer `nao-comprovada`. Nos dois casos, rode a instalação de
+novo, com o mesmo pré-requisito do `gh`. A pasta da versão anterior fica no volume e sai à mão
+(`docker exec farol rm -rf ~/.farol/toolchains/eng-behaviour@<versão antiga>`); a do mesmo número
+de versão é guardada como `eng-behaviour@<versão>.incomplete-<id>` quando a nova fica pronta, e
+também sai à mão. Se o lock da ferramenta mudar de formato, o `pnpm` da imagem muda junto
+(`ARG PNPM_VERSION` e `test/imagem-do-motor.test.js`).
+
+### Quando falta uma parte
+
+- **Sem o cadastro, ou com o repositório fora dele**: nenhuma regra do catálogo é avaliada para
+  ele, a revisão roda e publica, e toda aprovação leva a ressalva de repositório sem declaração
+  técnica: o `onClean` nunca se aplica. Na hora de publicar, a aprovação é conferida contra o
+  commit, a prova e o contexto da revisão (`provaEsgotadaRefusal`,
+  `lib/technical-review/publication.js`).
+- **Com o cadastro e sem a ferramenta íntegra**: para o repositório declarado a avaliação falha
+  com a causa `tool`, e nenhuma regra é avaliada. A sessão de revisão recebe "Verificação
+  técnica pendente" com a ordem de não concluir pela aprovação (`lib/technical-review/prompt.js`).
+  Se a revisão aprovar mesmo assim, a falha vira ressalva da rodada ("execução da avaliação
+  técnica não concluída; segue como ressalva desta revisão") e a aprovação sai como com
+  ressalvas, nunca como limpa; a publicação a aceita enquanto o perfil e o pino forem os da
+  rodada (`test/publicacao-prova-atual.test.js`). PR que estiver na recuperação durável por
+  outro motivo fica pausado com "Ferramenta de verificação técnica indisponível"
+  (`lib/engine/recuperacao-prova.js`) até a ferramenta voltar. O diagnóstico e o `WARN` do boot
+  apontam a instalação.
+
+### A avaliação de verdade, medida
+
+Na prova, dentro do container, sem rede (`--network none`) e com a raiz somente leitura, a
+avaliação foi chamada como o runtime a chama (`audit`, que abre o `worker.js` com a ferramenta
+instalada, e `finishTechnicalReview`, que monta o relatório que a decisão lê), com o cadastro do
+exemplo lido do volume, sobre um repositório de teste em `/tmp` com dois commits (a base com
+`src/pedido.ts` e um teste; o head acrescentando `src/cupom.ts`). Resultado, em 320 ms: 15 regras no
+relatório; as duas automáticas aplicáveis rodaram e passaram
+(`core.javascript.no-nested-ternary` e `core.suppression.declared`); as 13 de julgamento ficaram
+`not-run` com a causa `sem-avaliacao`, porque quem as avalia é a sessão do Claude
+(`technicalAssessments` no envelope), que a prova não abriu. Nenhum achado. O relatório saiu
+`not-run`, a lacuna foi "avaliação técnica inconclusiva" e o resumo da tela, ressalva. Nada foi
+gravado fora de `/tmp` e do volume; no volume, só o índice do `git` da ferramenta, que a
+conferência de identidade (`git status`) atualiza.
+
 ## O que o orquestrador precisa garantir
 
 - **Uma réplica, sempre.** O estado é arquivo em disco, e a trava de instância única é o
@@ -271,7 +490,11 @@ Os comandos são os do Docker; no orquestrador, o equivalente. `IMAGEM` é a ima
   quando der.
 - **Saída para a internet**: `api.github.com` e `github.com` (o `gh` e o `git`), a API da
   Anthropic e `claude.com` (o Claude Code), `registry.npmjs.org` (a conferência de versão do
-  Claude Code) e o Jira da organização, se houver site cadastrado.
+  Claude Code) e o Jira da organização, se houver site cadastrado. A instalação da ferramenta
+  da avaliação técnica, quando roda, vai a `github.com` (o clone) e a `registry.npmjs.org` (o
+  `pnpm install`). Na avaliação de cada PR, o preparo do material usa o mesmo GitHub da
+  revisão, e o avaliador (`lib/technical-review/worker.js`) roda sem rede (medido na prova, com
+  `--network none`).
 
 ## O fuso do processo
 
@@ -339,37 +562,13 @@ Quem trocar `TZ` no orquestrador troca os quatro pontos acima.
    [o que falta](#o-que-não-foi-provado)). Até lá: limite a taxa de `POST /api/auth/pair` no
    proxy, por endereço de origem, e use o código assim que gerar.
 
-3. **A avaliação técnica não roda nesta imagem.** Pendência aberta, não resolvida neste lote.
-   **Hospedado hoje, o Farol revisa e publica, mas sem a avaliação técnica: nenhuma aprovação
-   sai como limpa.** A avaliação depende de duas coisas que moram no volume, em `~/.farol`, e
-   nenhuma vem na imagem: o cadastro por repositório (`technical-review/repositories.json`,
-   `lib/technical-review/profiles.js`) e a ferramenta (`toolchains/eng-behaviour@<versão>`,
-   `lib/technical-review/toolchain.js`). São dois casos:
-
-   - **Volume novo, sem o cadastro.** Nenhum repositório tem declaração: `profileFor` devolve
-     `null` e `prepareTechnicalReview` sai com `semDeclaracao: true` antes de procurar a
-     ferramenta (`lib/technical-review/runtime.js`). A revisão roda e o resultado é publicado,
-     e nenhuma regra do catálogo `eng-behaviour` é avaliada. Todo resultado aprovável leva o
-     ponto "Este repositório não tem declaração técnica cadastrada" (`pontosDoApp`,
-     `lib/engine/ressalvas.js`), então sai como com ressalvas: quem decide é o `onCaveats` da
-     conta, e o `onClean` nunca se aplica. Na hora de publicar, o repositório sem declaração
-     não passa pela ferramenta: a aprovação é conferida só contra o commit, a prova e o
-     contexto da revisão (`provaEsgotadaRefusal`, `lib/technical-review/publication.js`).
-   - **Cadastro presente no volume e ferramenta ausente.** Para o repositório declarado a
-     avaliação falha com a causa `tool` ("A ferramenta de verificação técnica está indisponível
-     nesta máquina", `lib/technical-review/verdict.js`). A recuperação daquele PR fica pausada
-     até a ferramenta voltar (`lib/engine/recuperacao-prova.js`), e o APPROVE é recusado na
-     publicação com `technical_review` (`approvalRefusal`, `lib/technical-review/publication.js`).
-     É o caso de quem copia o `~/.farol` de uma máquina para o volume sem instalar a ferramenta.
-
-   Para ter a avaliação técnica hospedada é preciso, dentro do container e como o usuário do
-   motor: o `pnpm` (a imagem não traz), uma credencial do `git` com acesso ao repositório
-   privado da ferramenta (`origem` em `lib/technical-review/tool.json`), rodar
-   `node lib/technical-review/setup.js`, que clona, faz checkout do commit fixado, roda
-   `pnpm install --frozen-lockfile` e `pnpm build` e instala em
-   `~/.farol/toolchains/eng-behaviour@<versão>`, e gravar o cadastro dos repositórios. Nada
-   disso foi feito nem medido no container. Falta decidir se a ferramenta entra na imagem ou é
-   instalada no volume.
+3. **A ferramenta da avaliação técnica não acompanha a imagem.** Ela mora no volume e é
+   instalada por quem opera ([Avaliação técnica](#avaliação-técnica)). Volume novo, ou imagem
+   nova com outro pino em `lib/technical-review/tool.json`, fica sem a ferramenta íntegra até
+   alguém rodar `node lib/technical-review/setup.js` no container, e nesse intervalo os
+   repositórios cadastrados não têm regra avaliada e nenhuma aprovação deles sai como limpa. O
+   diagnóstico e a linha do boot dizem quando isso acontece; nada reinstala sozinho, porque a
+   instalação pede o login do `gh` com acesso ao repositório privado.
 
 4. **`/tmp` sem execução.** O `--tmpfs /tmp` do Docker monta com `noexec`. O motor subiu, e o
    Claude Code respondeu a `auth status` e a `auth login` assim, mas uma revisão de verdade não
@@ -387,7 +586,8 @@ Quem trocar `TZ` no orquestrador troca os quatro pontos acima.
 
 Troque a imagem e mantenha o volume: pare o container, suba o novo com o mesmo volume. Na
 prova, uma imagem reconstruída subiu sobre o volume da anterior com a sessão pareada, a
-configuração e os perfis no lugar.
+configuração e os perfis no lugar, e a ferramenta da avaliação técnica íntegra. Se a imagem nova
+mudou o pino da ferramenta, reinstale-a ([Atualizar quando o pino mudar](#atualizar-quando-o-pino-mudar)).
 
 No boot o motor regrava cinco arquivos do protocolo no workspace do volume e copia o prompt que
 faltar; o `.claude/settings.json` do workspace não é atualizado
@@ -465,6 +665,15 @@ não expõe credencial. O `config.json`, o login do `gh` e o da assinatura só e
   código e a credencial gravada pedem uma conta de verdade.
 - **Uma revisão de verdade dentro do container**: sessão headless, leitura das fontes pelo
   `git`, postagem. Nem o uso do plano lido com um login real.
+- **O clone da ferramenta da avaliação técnica pelo login do `gh`.** Sem conta logada no
+  container, a prova clonou de uma cópia local montada somente leitura. O caminho do
+  repositório privado está provado por teste com dublê (os argumentos do `git`, o ambiente
+  isolado e o helper do `gh`, sem token em argumento) e, na imagem, até onde vai sem conta: o
+  `setup.js` sem login do `gh` chega ao GitHub e sai com a mensagem de sem acesso.
+- **As regras de julgamento da avaliação técnica.** A prova executou a ferramenta de verdade,
+  sem rede, e só as regras automáticas rodaram: as de julgamento pedem a avaliação da sessão do
+  Claude (`technicalAssessments`), que não foi aberta.
+- **O cadastro posto por `kubectl cp`** e o dono que ele deixa num pod.
 - **A imagem em `linux/arm64`**: a base é multiarquitetura, e o build e a prova foram só em
   `linux/amd64`.
 - **A imagem num orquestrador** (Kubernetes, `fsGroup`, sondas, proxy com TLS e SSE). A prova
@@ -483,7 +692,4 @@ O que falta fazer, além de publicar:
   ao motor com o endereço do proxy: limitar por origem pede confiar num cabeçalho que o proxy
   preencha. É decisão de quem responde pela autenticação, não um ajuste de empacotamento.
 - **Isolar a sessão de revisão das credenciais** (risco 1).
-- **Pôr a avaliação técnica para rodar hospedada** (risco 3): decidir se a ferramenta entra na
-  imagem ou é instalada no volume, e como o cadastro dos repositórios chega ao volume. Até lá
-  nenhuma aprovação sai como limpa.
 - **Fechar o `~/.profile` do volume** (risco 1).
