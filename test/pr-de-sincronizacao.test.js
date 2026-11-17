@@ -58,11 +58,14 @@ const sync = await import('../lib/engine/pr-de-sincronizacao.js');
 const { attentionPoints } = await import('../lib/engine/ressalvas.js');
 const { LACUNA_DE_VIOLACAO } = await import('../lib/technical-review/verdict.js');
 
+// um PR mesclado associado a um commit, com a branch em que ele foi mesclado
+const mesclado = (number, base) => ({ number, base });
+
 // o que a consulta devolve depois do --jq: um PR de merge-back da production na development
 function dados(over = {}) {
   return {
     number: 40, headRefName: 'production', baseRefName: 'development', isCrossRepository: false, total: 2,
-    commits: [{ oid: sha(1), prs: [31] }, { oid: sha(2), prs: [32] }], ...over,
+    commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [mesclado(32, 'production')] }], ...over,
   };
 }
 
@@ -96,10 +99,19 @@ test('PR de task para bancada NÃO é sincronização', () => {
 });
 
 test('PR com commit exclusivo entre branches contínuas NÃO é sincronização', () => {
-  const exclusivo = dados({ commits: [{ oid: sha(1), prs: [31] }, { oid: sha(2), prs: [] }] });
+  const exclusivo = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [] }] });
   assert.equal(sync.avaliarSincronizacao(exclusivo, 40), null, 'commit sem PR mesclado é trabalho novo');
-  const soEste = dados({ commits: [{ oid: sha(1), prs: [31] }, { oid: sha(2), prs: [40] }] });
+  const soEste = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [mesclado(40, 'production')] }] });
   assert.equal(sync.avaliarSincronizacao(soEste, 40), null, 'o próprio PR não conta como origem do commit');
+});
+
+test('o PR mesclado que traz o commit precisa ter sido mesclado numa branch contínua ou bancada', () => {
+  const rascunho = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [mesclado(32, 'feat/rascunho')] }] });
+  assert.equal(sync.avaliarSincronizacao(rascunho, 40), null, 'PR mesclado em branch de rascunho não revisou o commit para a linhagem');
+  const semBase = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [{ number: 32 }] }] });
+  assert.equal(sync.avaliarSincronizacao(semBase, 40), null, 'sem a base do PR mesclado não há prova');
+  const umDosDois = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [mesclado(32, 'feat/rascunho'), mesclado(33, 'release_hmg_17')] }] });
+  assert.ok(sync.avaliarSincronizacao(umDosDois, 40), 'basta um PR mesclado numa branch contínua ou bancada');
 });
 
 test('o critério é conservador: fork, mesma branch, lista cortada, dado torto ou outro PR não são sincronização', () => {
@@ -108,7 +120,7 @@ test('o critério é conservador: fork, mesma branch, lista cortada, dado torto 
   assert.equal(sync.avaliarSincronizacao(dados({ total: 101 }), 40), null, 'mais commits que a consulta traz');
   assert.equal(sync.avaliarSincronizacao(dados({ total: 3 }), 40), null, 'contagem que não fecha com a lista');
   assert.equal(sync.avaliarSincronizacao(dados({ commits: [], total: 0 }), 40), null);
-  assert.equal(sync.avaliarSincronizacao(dados({ commits: [{ oid: 'x', prs: [31] }], total: 1 }), 40), null);
+  assert.equal(sync.avaliarSincronizacao(dados({ commits: [{ oid: 'x', prs: [mesclado(31, 'production')] }], total: 1 }), 40), null);
   assert.equal(sync.avaliarSincronizacao(dados(), 41), null, 'a resposta é de outro PR');
   assert.equal(sync.avaliarSincronizacao(null, 40), null);
 });
@@ -127,6 +139,19 @@ const aprovavel = (over = {}) => ({ verdict: 'approve', decision: 'needs_decisio
 
 test('sincronização sem defeito: card ausente e itens de processo não viram ressalva, o resultado é limpo', () => {
   assert.deepEqual(attentionPoints(null, aprovavel({ sincronizacao: { origem: 'production', destino: 'development', commits: 2 } })), []);
+});
+
+// O zerar de todas as ressalvas é decisão do dono ("merge-back também é pra ser algo sem atrito
+// nenhum") e só se sustenta porque cada commit já foi revisado num PR mesclado numa branch contínua
+// (avaliarSincronizacao). Por isso nem a dependência aberta nem o item para quem decide o merge
+// viram ressalva numa sincronização reconhecida; o item para quem mergeia segue no texto do APPROVE.
+test('sincronização reconhecida: dependência aberta e item para quem mergeia não viram ressalva', () => {
+  const s = { origem: 'production', destino: 'development', commits: 2 };
+  const r = aprovavel({ sincronizacao: s, dependenciasAbertas: ['acme/infra#9 ainda aberto'], paraQuemMergeia: ['liga em produção sem passo humano'] });
+  assert.deepEqual(attentionPoints(null, r), []);
+  const fora = attentionPoints(null, aprovavel({ dependenciasAbertas: ['acme/infra#9 ainda aberto'], paraQuemMergeia: ['liga em produção sem passo humano'] }));
+  assert.ok(fora.some((p) => /depende de algo que estava em aberto/.test(p.text)), 'fora de sincronização, como hoje');
+  assert.ok(fora.some((p) => /Para quem decide o merge/.test(p.text)));
 });
 
 test('fora de sincronização, a falta de card continua sendo ressalva, como hoje', () => {
@@ -207,7 +232,7 @@ test('o mesmo resultado num PR de task para bancada continua com ressalvas e vai
 });
 
 test('o mesmo resultado entre branches contínuas com commit exclusivo também continua com ressalvas', async () => {
-  gh.pr = dados({ commits: [{ oid: sha(1), prs: [31] }, { oid: sha(2), prs: [] }] });
+  gh.pr = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [] }] });
   const e = await revisar(42);
   assert.deepEqual(envios, []);
   assert.ok(pendente(e, 42));
