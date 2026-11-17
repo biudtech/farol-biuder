@@ -1,62 +1,12 @@
-/* A tela Radar. Só as variáveis de globals.css: texto sobre os três fundos, texto de estado
-   sobre o fundo suave dele, botão primário e contornos são os pares que
-   src/tema/contraste.test.ts confere nos dois temas. */
-.radar {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  min-width: 0;
-}
+/* A tela Radar, e as peças que outras telas ainda importam daqui (botão, nota, meta, a
+   pergunta de confirmação e a região de resultado). Só as variáveis de globals.css: texto
+   sobre os três fundos, texto de estado sobre o fundo suave dele, botão primário e contornos
+   são os pares que src/tema/contraste.test.ts confere nos dois temas. As peças do desenho
+   enxuto vêm de src/componentes/ui; aqui fica só o que é do Radar. */
 
 .titulo { font-size: 20px; font-weight: 700; }
 
-.avisos {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.aviso {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--info-soft);
-  color: var(--info-texto);
-  font-size: 13px;
-  text-wrap: pretty;
-  overflow-wrap: anywhere;
-}
-.aviso[data-tom="erro"] {
-  background: var(--danger-soft);
-  color: var(--danger-texto);
-}
-
-.gerais {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 28px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.checagem {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-.sobDemanda {
-  flex: 1 1 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
 .rotulo { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.campoComBotao { display: flex; flex-wrap: wrap; gap: 8px; }
 .entrada {
   flex: 1 1 220px;
   min-width: 0;
@@ -85,7 +35,6 @@
   gap: 10px;
   min-width: 0;
 }
-.tituloDoBloco { font-size: 15px; font-weight: 650; }
 .contagem { color: var(--muted); font-weight: 550; }
 .vazio { color: var(--muted); font-size: 13.5px; text-wrap: pretty; }
 
@@ -108,35 +57,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.linha {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-}
 
-.tituloDoCartao {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
 .referencia { overflow-wrap: anywhere; }
-.tituloDoPr { font-size: 14px; overflow-wrap: anywhere; }
 .meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; text-wrap: pretty; }
 
-.selo {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 11.5px;
-  font-weight: 600;
-}
 
 .nota {
   padding: 8px 12px;
@@ -147,53 +71,22 @@
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-.bloqueio {
-  background: var(--danger-soft);
-  color: var(--danger-texto);
-}
 
-.motivos {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-.tipoDoMotivo { color: var(--muted); font-weight: 600; }
 
-.review summary { cursor: pointer; font-size: 13px; color: var(--muted); }
-.textoDoReview {
-  margin: 8px 0 0;
-  padding: 12px;
-  max-height: 420px;
-  overflow: auto;
-  background: var(--bg);
-  border-radius: 8px;
-}
-
-/* a porcentagem da revisão em andamento: número grande, etapa ao lado e a barra determinada */
-.progresso { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-
-.cabecaDoProgresso {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-}
+/* a linha de uma sessão em análise: título e porcentagem, a barra e a meta embaixo */
+.resumoDaSessao { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.cabecaDaSessao { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
 
 .percentual {
-  font-size: 28px;
-  font-weight: 650;
+  flex: none;
+  font-size: 20px;
+  font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
-.etapaDoProgresso { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-
-.barraDoProgresso { line-height: 0; }
+.barraDoProgresso { display: block; line-height: 0; }
 
 .barraDoProgresso svg { display: block; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; }
 
@@ -260,6 +153,43 @@
 }
 .confirmacaoTitulo { font-weight: 650; }
 
+/* o painel do Revisar um PR: o campo e o Revisar, e embaixo o Checar agora */
+.formDoPainel { display: flex; flex-direction: column; gap: 10px; }
+.formDoPainel > button { align-self: flex-start; }
+.checagemDoPainel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda-suave);
+}
+
+/* lista sem marcador: os avisos do topo e os ignorados */
+.semMarcador { margin: 0; padding: 0; list-style: none; }
+.ignorado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-linha);
+}
+
+/* o estado vazio: o símbolo da BIUD, "Tudo revisado" e a próxima checagem */
+.tudoEmDia {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.tituloDoTudoEmDia { font-size: 20px; font-weight: 800; }
+
 /* O resultado da última ação fica preso ao pé da janela: quem clicou num cartão lá embaixo
    vê a resposta sem rolar. O fundo é opaco (a cor suave pintada sobre a superfície). */
 .resultado {
@@ -305,6 +235,5 @@
 /* Janela estreita: alvo de toque maior, e o cartão com menos margem. */
 @media (max-width: 760px) {
   .botao, .entrada { min-height: 44px; }
-  .cartao, .gerais { padding: 12px; }
-  .campoComBotao .botao { flex: 1 1 auto; }
+  .cartao { padding: 12px; }
 }

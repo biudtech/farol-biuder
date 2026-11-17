@@ -1,10 +1,12 @@
 'use client';
 
-// Os botões de um item do Radar. Enquanto uma ação do item está no ar, todos ficam
-// desabilitados e o que foi clicado diz "Enviando". A ação que publica (Aprovar, Pedir
-// mudanças, Comentar) ou que joga trabalho fora (Cancelar, Pular uma espera) troca os botões
-// por uma pergunta, no próprio cartão, antes de enviar.
+// Os botões de um item (Radar, Histórico, Time e Sistema). Enquanto uma ação do item está no
+// ar, todos ficam desabilitados e o que foi clicado mostra o spinner e diz "Enviando" (ou o
+// texto do processo, como "Cancelando…"). A ação que joga trabalho fora ou apaga (Cancelar,
+// contestação, remover do Time, as do Sistema que pedem) troca os botões por uma pergunta, no
+// próprio item, antes de enviar.
 import { useEffect, useId, useRef, useState } from 'react';
+import { Spinner, ui } from '@/componentes/ui';
 import { confirmacaoDa, idDa, nomeDa, rotuloDa, type Acao } from '@/radar/acoes';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
@@ -12,15 +14,25 @@ import estilos from './Radar.module.css';
 export interface BotaoDoItem {
   acao: Acao;
   primario?: boolean;
+  // botão sem contorno (Ignorar, Cancelar)
+  fantasma?: boolean;
+  // o que o botão diz enquanto a ação dele está no ar; sem isto, "Enviando…"
+  ocupado?: string;
 }
 
 interface Props {
   // todos com o mesmo alvo
   botoes: readonly BotaoDoItem[];
   controle: ControleDeAcoes;
+  // os botões no tamanho de dentro de uma linha
+  pequeno?: boolean;
 }
 
-export function AcoesDoItem({ botoes, controle }: Props) {
+function classes(...nomes: Array<string | false | undefined>): string {
+  return nomes.filter(Boolean).join(' ');
+}
+
+export function AcoesDoItem({ botoes, controle, pequeno }: Props) {
   // O id (idDa) da ação que está perguntando. A ação em si é lida dos botões a cada desenho:
   // se o motor mudou o item com a pergunta aberta, vale o item de agora, não o do clique.
   const [pergunta, setPergunta] = useState<string | null>(null);
@@ -77,12 +89,12 @@ export function AcoesDoItem({ botoes, controle }: Props) {
         <p id={idDoTitulo} className={estilos.confirmacaoTitulo}>{confirmacao.titulo}</p>
         <p id={idDoTexto}>{confirmacao.texto}</p>
         <div className={estilos.botoes}>
-          <button ref={voltar} type="button" className={estilos.botao} onClick={() => setPergunta(null)}>
+          <button ref={voltar} type="button" className={classes(ui.botao, pequeno && ui.pequeno)} onClick={() => setPergunta(null)}>
             Voltar sem enviar
           </button>
           <button
             type="button"
-            className={`${estilos.botao} ${estilos.primario}`}
+            className={classes(ui.botao, ui.primario, pequeno && ui.pequeno)}
             aria-label={`${confirmacao.confirmar}: ${perguntando.nome}`}
             onClick={() => {
               // enviou: o botão de origem vai estar desabilitado, e o foco vai à região que
@@ -109,7 +121,7 @@ export function AcoesDoItem({ botoes, controle }: Props) {
       ) : null}
       {botoes.length ? (
         <div className={estilos.botoes}>
-          {botoes.map(({ acao, primario }) => {
+          {botoes.map(({ acao, primario, fantasma, ocupado }) => {
             const esteEnvia = enviando === idDa(acao);
             return (
               <button
@@ -119,7 +131,7 @@ export function AcoesDoItem({ botoes, controle }: Props) {
                   else botoesNaTela.current.delete(idDa(acao));
                 }}
                 type="button"
-                className={primario ? `${estilos.botao} ${estilos.primario}` : estilos.botao}
+                className={classes(ui.botao, primario && ui.primario, fantasma && ui.fantasma, pequeno && ui.pequeno)}
                 disabled={enviando !== null}
                 aria-label={esteEnvia ? `Enviando: ${nomeDa(acao)}` : nomeDa(acao)}
                 onClick={() => {
@@ -132,7 +144,7 @@ export function AcoesDoItem({ botoes, controle }: Props) {
                   void controle.disparar(acao);
                 }}
               >
-                {esteEnvia ? 'Enviando…' : rotuloDa(acao)}
+                {esteEnvia ? <><Spinner tamanho="p" />{ocupado ?? 'Enviando…'}</> : rotuloDa(acao)}
               </button>
             );
           })}

@@ -7,7 +7,8 @@ import {
 
 const NOME = 'PR #12 de dono/repo';
 const base = { alvo: 'dono/repo#12', nome: NOME };
-const aprovar: Acao = { ...base, tipo: 'decidir', id: 'd1', decisao: 'approve' };
+const URL = 'https://github.com/dono/repo/pull/12';
+const revisar: Acao = { ...base, tipo: 'revisar', url: URL };
 
 function clienteQueResponde(resultado: Resultado<RespostaDeAcao>) {
   const post = vi.fn(async () => resultado);
@@ -19,10 +20,6 @@ describe('rota e corpo de cada ação, como lib/http-server.js espera', () => {
     [CHECAR, '/api/check', {}],
     [{ ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12' }, '/api/review', { urls: ['https://github.com/dono/repo/pull/12'] }],
     [{ ...base, tipo: 'cancelar', id: 'a7' }, '/api/cancel', { id: 'a7' }],
-    [aprovar, '/api/decide', { id: 'd1', action: 'approve' }],
-    [{ ...base, tipo: 'decidir', id: 'd1', decisao: 'request_changes' }, '/api/decide', { id: 'd1', action: 'request_changes' }],
-    [{ ...base, tipo: 'decidir', id: 'd1', decisao: 'comment' }, '/api/decide', { id: 'd1', action: 'comment' }],
-    [{ ...base, tipo: 'decidir', id: 'd1', decisao: 'skip' }, '/api/decide', { id: 'd1', action: 'skip' }],
     [{ ...base, tipo: 'ignorar', chave: 'dono/repo#12' }, '/api/ignore', { key: 'dono/repo#12' }],
     [{ ...base, tipo: 'restaurar', chave: 'dono/repo#12' }, '/api/restore', { key: 'dono/repo#12' }],
     [{ ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', deNovo: true }, '/api/review', { urls: ['https://github.com/dono/repo/pull/12'] }],
@@ -93,52 +90,18 @@ describe('ações do Histórico: revisar de novo e contestação', () => {
 
 describe('rótulo, nome e confirmação', () => {
   it('o nome do botão diz a ação e o alvo', () => {
-    expect(rotuloDa(aprovar)).toBe('Aprovar');
-    expect(nomeDa(aprovar)).toBe('Aprovar PR #12 de dono/repo');
-    expect(nomeDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'request_changes' })).toBe('Pedir mudanças PR #12 de dono/repo');
+    expect(rotuloDa(revisar)).toBe('Revisar agora');
+    expect(nomeDa(revisar)).toBe('Revisar agora PR #12 de dono/repo');
+    expect(nomeDa({ ...base, tipo: 'ignorar', chave: 'x' })).toBe('Ignorar PR #12 de dono/repo');
     expect(nomeDa(CHECAR)).toBe('Checar agora');
-    expect(idDa(aprovar)).toBe('decidir:approve');
+    expect(idDa(revisar)).toBe('revisar');
     expect(idDa({ ...base, tipo: 'ignorar', chave: 'x' })).toBe('ignorar');
   });
 
-  it('as três ações que publicam pedem confirmação dizendo o que sai e em qual PR', () => {
-    const a = confirmacaoDa(aprovar);
-    expect(a?.titulo).toBe('Aprovar PR #12 de dono/repo?');
-    expect(a?.texto).toMatch(/publica uma aprovação \(APPROVE\) no GitHub, em PR #12 de dono\/repo/);
-    const rc = confirmacaoDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'request_changes' });
-    expect(rc?.texto).toMatch(/pedido de mudanças \(REQUEST CHANGES\) no GitHub, em PR #12 de dono\/repo/);
-    const c = confirmacaoDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'comment' });
-    expect(c?.titulo).toBe('Comentar em PR #12 de dono/repo?');
-    expect(c?.texto).toMatch(/review de comentário \(COMMENT\) no GitHub, em PR #12 de dono\/repo/);
-    expect(c?.confirmar).toBe('Publicar o comentário');
-  });
-
-  // O motor publica item.payloads[action] (lib/engine/decision.js), e a tela só tem o texto
-  // do parecer: a pergunta não pode prometer um texto que não é o que sai.
-  it('só diz "o review mostrado acima" quando a ação é a do parecer', () => {
-    const mesmo = confirmacaoDa({ ...aprovar, parecer: 'approve' });
-    expect(mesmo?.texto).toMatch(/O texto é o do review mostrado acima/);
-    expect(mesmo?.texto).toMatch(/comentários em linha, que esta tela não mostra/);
-    expect(mesmo?.texto).not.toMatch(/NÃO é o mostrado/);
-  });
-
-  it.each<[string, Acao]>([
-    ['pedir mudanças com parecer de aprovar', { ...base, tipo: 'decidir', id: 'd1', decisao: 'request_changes', parecer: 'approve' }],
-    ['aprovar com parecer de pedir mudanças', { ...aprovar, parecer: 'request_changes' }],
-    ['comentar, que nunca é o parecer', { ...base, tipo: 'decidir', id: 'd1', decisao: 'comment', parecer: 'approve' }],
-    ['parecer desconhecido', aprovar],
-  ])('ação diferente do parecer (%s) avisa que sai um texto que a tela não mostra', (_caso, acao) => {
-    const texto = confirmacaoDa(acao)?.texto ?? '';
-    expect(texto).toMatch(/O texto que sai NÃO é o mostrado acima: o motor publica o que ele preparou para esta ação, que esta tela não mostra e que pode trazer comentários em linha\./);
-    expect(texto).not.toMatch(/O texto é o do review mostrado acima/);
-  });
-
-  it('Pular vai direto na mesa, e pergunta quando descarta o que o motor faria sozinho', () => {
-    expect(confirmacaoDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'skip' })).toBeNull();
-    const ci = confirmacaoDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'skip', espera: 'ci' });
-    expect(ci?.titulo).toBe('Pular PR #12 de dono/repo?');
-    expect(ci?.texto).toMatch(/descarta a aprovação que sairia sozinha quando os checks fechassem\. Nada é publicado\./);
-    expect(confirmacaoDa({ ...base, tipo: 'decidir', id: 'd1', decisao: 'skip', espera: 'prova' })?.texto).toMatch(/descarta a análise que o motor está recuperando/);
+  // O redesenho de 17/11/2026 tirou a mesa do front: nenhuma ação do Radar decide uma pendência.
+  it('nenhuma ação do Radar vai a POST /api/decide', () => {
+    const doRadar: Acao[] = [CHECAR, revisar, { ...base, tipo: 'cancelar', id: 'a1' }, { ...base, tipo: 'ignorar', chave: 'x' }, { ...base, tipo: 'restaurar', chave: 'x' }];
+    for (const acao of doRadar) expect(pedidoDa(acao).rota).not.toBe('/api/decide');
   });
 
   it('Cancelar a sessão também pergunta; o resto vai direto', () => {
@@ -204,21 +167,12 @@ describe('mensagem da recusa, pelo código do motor', () => {
 });
 
 describe('executar', () => {
-  it('manda o POST da ação pelo cliente e diz o aceite', async () => {
+  it('manda o POST da ação pelo cliente e diz o aceite, sem afirmar o desfecho', async () => {
     const { cliente, post } = clienteQueResponde({ ok: true, dados: { ok: true } });
-    expect(await executar(cliente, aprovar)).toEqual({ tipo: 'ok', texto: 'O motor aceitou o pedido: aprovar PR #12 de dono/repo. O desfecho vem no aviso do motor.' });
-    expect(post).toHaveBeenCalledWith('/api/decide', { id: 'd1', action: 'approve' }, lerRespostaDeAcao);
-  });
-
-  // { ok: true } numa decisão não quer dizer publicação: o motor responde ok também quando
-  // já havia um review igual e ele não postou de novo
-  it('o aceite de uma decisão não afirma que algo foi publicado nem que não foi', async () => {
-    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: true } });
-    for (const decisao of ['approve', 'request_changes', 'comment', 'skip'] as const) {
-      const r = await executar(cliente, { ...base, tipo: 'decidir', id: 'd1', decisao });
-      expect(r).toEqual({ tipo: 'ok', texto: expect.stringMatching(/^O motor aceitou o pedido: .* PR #12 de dono\/repo\. O desfecho vem no aviso do motor\.$/) });
-      expect(r.tipo === 'ok' ? r.texto : '').not.toMatch(/publicad|postad|enviad/i);
-    }
+    const r = await executar(cliente, revisar);
+    expect(r).toEqual({ tipo: 'ok', texto: 'O motor aceitou o pedido: revisar agora PR #12 de dono/repo.' });
+    expect(r.tipo === 'ok' ? r.texto : '').not.toMatch(/publicad|postad/i);
+    expect(post).toHaveBeenCalledWith('/api/review', { urls: [URL] }, lerRespostaDeAcao);
   });
 
   it('as outras ações dizem só que o motor aceitou o pedido', async () => {
@@ -228,13 +182,13 @@ describe('executar', () => {
   });
 
   it('enquanto o pedido está no ar, o texto diz o que está sendo enviado', () => {
-    expect(textoDoEnvio(aprovar)).toBe('Enviando: Aprovar PR #12 de dono/repo.');
+    expect(textoDoEnvio(revisar)).toBe('Enviando: Revisar agora PR #12 de dono/repo.');
     expect(textoDoEnvio(CHECAR)).toBe('Enviando: Checar agora.');
   });
 
   it('recusa do motor vira a mensagem do código', async () => {
-    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: false, blocked: 'pr_proprio', error: 'x' } });
-    expect(await executar(cliente, aprovar)).toEqual({ tipo: 'erro', texto: expect.stringMatching(/própria conta revisora/) });
+    const { cliente } = clienteQueResponde({ ok: true, dados: { ok: false, blocked: 'instancia_isolada', error: 'x' } });
+    expect(await executar(cliente, revisar)).toEqual({ tipo: 'erro', texto: expect.stringMatching(/instância isolada/) });
   });
 
   it.each<[Resultado<RespostaDeAcao>, RegExp]>([
@@ -244,12 +198,12 @@ describe('executar', () => {
     [{ ok: false, falha: 'nao_autenticado', status: 401 }, /Pareie de novo/],
   ])('falha do transporte %o', async (resultado, texto) => {
     const { cliente } = clienteQueResponde(resultado);
-    expect(await executar(cliente, aprovar)).toEqual({ tipo: 'erro', texto: expect.stringMatching(texto) });
+    expect(await executar(cliente, revisar)).toEqual({ tipo: 'erro', texto: expect.stringMatching(texto) });
   });
 
   it('chamada abortada não vira mensagem', async () => {
     const { cliente } = clienteQueResponde({ ok: false, falha: 'cancelado', status: 0 });
-    expect(await executar(cliente, aprovar)).toEqual({ tipo: 'cancelado' });
+    expect(await executar(cliente, revisar)).toEqual({ tipo: 'cancelado' });
   });
 });
 

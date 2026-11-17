@@ -6,18 +6,19 @@ import { controleFalso } from './apoio-de-teste';
 
 afterEach(cleanup);
 
-describe('bloco Ignorados', () => {
-  it('vazio diz que só mostra o que for ignorado nesta aba', () => {
+describe('seção Ignorados', () => {
+  it('sem nada ignorado nesta aba, a seção não aparece', () => {
     const { controle } = controleFalso();
-    render(<Ignorados ignorados={[]} controle={controle} />);
-    expect(screen.getByRole('heading', { level: 2, name: 'Ignorados (0)' })).toBeTruthy();
-    expect(screen.getByText(/Nenhum PR ignorado nesta aba\. O motor não manda a lista/)).toBeTruthy();
+    const { container } = render(<Ignorados ignorados={[]} controle={controle} />);
+    expect(container.textContent).toBe('');
   });
 
-  it('cada ignorado tem o Restaurar com o alvo no nome', () => {
+  it('cada ignorado tem o Restaurar com o alvo no nome, e a seção diz que é só desta aba', () => {
     const { controle, disparar } = controleFalso();
     render(<Ignorados ignorados={[{ chave: 'dono/repo#12', nome: 'PR #12 de dono/repo' }]} controle={controle} />);
-    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('dono/repo#12');
+    expect(screen.getByRole('heading', { level: 2, name: 'Ignorados' })).toBeTruthy();
+    expect(screen.getByText(/Só o que foi ignorado nesta aba/)).toBeTruthy();
+    expect(screen.getByText('dono/repo#12')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Restaurar PR #12 de dono/repo' }));
     expect(disparar).toHaveBeenCalledWith({ tipo: 'restaurar', chave: 'dono/repo#12', alvo: 'dono/repo#12', nome: 'PR #12 de dono/repo' });
   });
