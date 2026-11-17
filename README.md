@@ -78,7 +78,7 @@ está em [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 ```sh
 npm run check && npm run lint && npm test     # o motor, em Linux
-cd web && npm ci && npm audit && npm run typecheck && npm run lint && npm test && npm run build
+cd web && npm ci && npm run audit && npm run typecheck && npm run lint && npm test && npm run build
 ```
 
 O CI roda os dois. O motor recusa plataforma que não é Linux: em outra máquina, rode o gate
