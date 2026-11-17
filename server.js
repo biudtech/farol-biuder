@@ -66,7 +66,7 @@ import esperaProvaMod from './lib/engine/espera-prova.js';
 import usageMod from './lib/engine/usage.js';
 import falhasMod from './lib/engine/falhas.js';
 import tentativasMod from './lib/engine/usage-tentativas.js';
-import { carregarConsumo, iniciarConsumo } from './lib/engine/telemetria-do-motor.js';
+import { carregarConsumo, iniciarTelemetria, historico } from './lib/engine/telemetria-do-motor.js';
 import diagnosticoMod from './lib/engine/diagnostico.js';
 import { EDITAVEIS, defaults as settingsDefaults, sanear, paraGravar, normalizarConfig } from './lib/settings.js';
 import { sanearSoDeArquivo, lerConfigOuRecusar, subirOuRecusar } from './lib/fronteira-hospedada.js';
@@ -440,7 +440,7 @@ class Engine extends EventEmitter {
     if (this.ignorados) return;                 // já existe: nada a migrar
     const comDecisao = new Set([
       ...(this.decisions?.pending || []).map(d => d.key),
-      ...(this.decisions?.resolved || []).map(d => d.key),
+      ...historico(this).leves().map(d => d.key),
     ]);
     this.ignorados = new Set([...this.seen].filter(k => !comDecisao.has(k)));
     this.saveIgnorados();
@@ -1302,8 +1302,8 @@ class Engine extends EventEmitter {
 
   async start() {
     // o start() só roda com a porta (a trava de instância única) já tomada: é a hora de abrir o
-    // banco da telemetria, importar os JSON e reconciliar as tentativas abertas
-    iniciarConsumo(this);
+    // banco da telemetria, importar os JSON (e o histórico de decisões) e reconciliar as tentativas
+    iniciarTelemetria(this);
     iniciarManutencaoDoEngine(this);
     // depois do loadDecisions do construtor: a migração precisa saber quem tem decisão
     this.migrarIgnorados();
