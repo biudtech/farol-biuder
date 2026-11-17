@@ -32,7 +32,7 @@ import {
   parsePeople, migrateSeniorityToPeople,
   normalizeClaudeProfiles, normalizeClaudeProfileId, workspaceTrust, applyClaudeAuthEnv,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind, sanearHostPublico, sanearOrigensPermitidas } from './lib/parse.js';
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind, sanearHostPublico, sanearOrigensPermitidas, sanearSocket } from './lib/parse.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
 import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
@@ -105,7 +105,7 @@ const DEFAULTS = settingsDefaults(DEFAULT_PORT);
 const PARSERS = {
   parsePeople, normalizeClaudeProfiles, normalizeClaudeProfileId,
   sanitizeClaudeModel, sanitizeClaudeEffort,
-  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind, sanearHostPublico, sanearOrigensPermitidas,
+  sanitizeParallelReviews, sanitizeGlobalParallelReviews, parseJiraSites, sanearBind, sanearHostPublico, sanearOrigensPermitidas, sanearSocket,
 };
 
 // carência anti-lag do índice de busca do GitHub: logo após EU postar um review, o PR
