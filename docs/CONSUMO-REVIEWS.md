@@ -24,7 +24,7 @@ sendo gravado e hoje não tem leitor.
 
 Desde 16/11/2026 o diário de sessões, as tentativas abertas e os motivos de falha moram num
 arquivo SQLite, `~/.farol/workspace/state/telemetria.db` (`lib/telemetria/`). O motor abre o
-banco uma vez, e só os módulos de `lib/telemetria/` têm SQL. Registrar uma sessão é um `INSERT`
+banco uma vez, com WAL e `synchronous=FULL`, e só os módulos de `lib/telemetria/` têm SQL. Registrar uma sessão é um `INSERT`
 numa transação, e não mais a regravação do arquivo inteiro (5,5 MB na instância real, a cada
 sessão). A tentativa aberta é uma linha que o parcial atualiza e o fechamento apaga; o desfecho
 marcado depois (`marcarDesfecho`) atualiza a linha mais recente daquele id.
@@ -46,17 +46,38 @@ mudaria os números da tela.
 As leituras filtram e contam no SQL: as sessões recentes do snapshot, a primeira sessão, a
 auditoria do registro, a linha anterior do cursor das retomadas e a amostra da taxa de custo. A
 soma do custo usa uma soma em ordem, sem compensação, porque o `SUM` do SQLite compensa o erro de
-arredondamento e mudaria os últimos dígitos do número da tela. `GET /api/usage` lê as linhas do
-banco (sem o `accounting`, que ele não usa) e agrupa no `lib/usage/`, porque a operação, a
-conclusão e as retentativas dependem do histórico inteiro de cada operação.
+arredondamento e mudaria os últimos dígitos do número da tela. `GET /api/usage` agrupa no
+`lib/usage/`, porque a operação, a conclusão e as retentativas dependem do histórico inteiro de
+cada operação, sobre as linhas do banco (sem o `accounting`, que ele não usa). Essas linhas e a
+auditoria ficam em cache depois da primeira leitura e crescem com cada sessão registrada, sem
+reler o diário (`lib/engine/usage-diario-banco.js`). Medido com 50 mil sessões sintéticas em
+17/11/2026: a primeira consulta custa uns 580 ms (a leitura do banco), as seguintes uns 300 ms,
+quase tudo no agrupamento de `lib/usage/`, que custa o mesmo lendo da memória (320 ms no caminho
+de antes); registrar uma sessão custa uns 5 ms.
 
-Na primeira subida o motor migra os JSON antigos: importa numa transação, confere a contagem, as
-somas e cada linha, e só então renomeia cada JSON para `<nome>.migrado-<dia>`. Repetir não
-duplica. Se o banco não abrir ou a conferência falhar, o motor segue nos JSON como antes, com uma
-linha `WARN` (classe `telemetria-anormal`), e tenta de novo na próxima subida. A prova com os
-dados reais é `tools/comparar-consumo-sqlite.js`: a rota e o snapshot dão o mesmo JSON, byte a
-byte, antes e depois. A cópia segura do arquivo e o que falta decidir (retenção, backup) estão em
-[`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-banco-da-telemetria).
+Escrita que o banco recusa (disco cheio, erro de I/O) não perde a linha: ela fica em memória, as
+leituras a enxergam e a próxima gravação a grava, com um `WARN` quando passa a falhar e um `INFO`
+quando volta. Leitura que falha não derruba o snapshot: o consumo sai sem a parte que não leu.
+
+O banco abre no `start()`, depois que o motor tomou a porta (a trava de instância única), e não no
+construtor: uma segunda instância no mesmo `FAROL_HOME`, que vai perder a porta, não abre o banco,
+não importa nada e não fecha as tentativas vivas da primeira. Nessa abertura, todo JSON do
+consumo presente é importado numa transação, só com as linhas que o banco ainda não tem (a chave
+da sessão é `at`, `id`, `attemptId`, tipo e conta; a da tentativa, o attemptId; a da falha, o id),
+conferido (o banco depois é o de antes mais as linhas que faltavam, linha a linha, com a
+contagem e as somas batendo) e só então renomeado para `<nome>.migrado-<dia>`. A linha `INFO`
+diz quantas entraram, quantas já estavam e quantas linhas ilegíveis (que não são objeto) ficaram
+de fora. Isso cobre a primeira subida, a queda entre o COMMIT e o rename, e a subida em que o banco
+não abriu: o motor gravou num JSON novo, com uma linha `WARN` (classe `telemetria-anormal`), e o
+que ele gravou entra no banco quando ele voltar. Nessa subida sem banco o diário começa vazio: a
+tela mostra só o consumo dela, e a retomada de uma sessão cuja linha anterior está no banco não
+acha o cursor e sai com custo desconhecido (`missing-baseline`), sem contar em dobro no agregado.
+
+A prova com os dados reais é `tools/comparar-consumo-sqlite.js`: a rota e o snapshot dão o mesmo
+JSON, comparado com as chaves ordenadas, antes e depois. O "antes" do teste de paridade é o
+caminho JSON desta versão, que passa às mesmas funções do código anterior; a prova com os dados
+reais rodou também contra o código anterior, com o mesmo resultado. A cópia segura do arquivo e o
+que falta decidir (retenção, backup) estão em [`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-banco-da-telemetria).
 
 ## De onde vem o custo
 

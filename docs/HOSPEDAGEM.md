@@ -170,17 +170,23 @@ e os arquivos sentinela postos em `.farol/claude/<id>/.credentials.json` e em `.
 O registro de consumo (as sessões, as tentativas abertas e os motivos de falha) mora num arquivo
 SQLite no volume: `.farol/workspace/state/telemetria.db` (`TELEMETRIA_DB`, `lib/paths.js`),
 aberto pelo `node:sqlite` do próprio Node, sem pacote. O agregado do consumo continua no
-`usage.json`, ao lado. O motor abre o arquivo uma vez, com WAL e permissão 600, e o fecha na
-saída ordenada (SIGTERM). Ao lado dele ficam o `telemetria.db-wal` e o `telemetria.db-shm`, que
-fazem parte do banco enquanto o motor está de pé.
+`usage.json`, ao lado. O motor abre o arquivo uma vez, depois de tomar a porta (a trava de
+instância única: uma segunda instância no mesmo volume não chega a abri-lo), com WAL,
+`synchronous=FULL` (cada gravação vai ao disco antes de o motor seguir, como o `fsync` do JSON de
+antes) e permissão 600, e o fecha na saída ordenada (SIGTERM). Ao lado dele ficam o
+`telemetria.db-wal` e o `telemetria.db-shm`, que fazem parte do banco enquanto o motor está de pé.
 
 Na primeira subida desta versão o motor importa os JSON antigos (`usage-sessions.json`,
 `usage-tentativas.json` e `falhas-sessao.json`), confere a contagem, as somas e cada linha, e
 renomeia cada um para `<nome>.migrado-<dia>` (nada é apagado; quando der por certo, quem opera
-pode apagá-los). Isso dá uma linha `INFO` no `farol.log`. Se o banco não abrir ou a migração
-falhar, o motor sobe assim mesmo, segue gravando nos JSON como antes, escreve uma linha `WARN`
-começando por `telemetria:` com a causa e tenta de novo na próxima subida. O detalhe está em
-[`docs/CONSUMO-REVIEWS.md`](CONSUMO-REVIEWS.md#onde-o-registro-mora).
+pode apagá-los). Isso dá uma linha `INFO` no `farol.log`. Se o banco não abrir (o arquivo
+existe e está corrompido, é de uma versão mais nova do motor ou de outro dono, ou não pôde ser
+criado) ou a importação falhar, o motor sobe assim mesmo, grava nos JSON como antes e escreve uma
+linha `WARN` começando por `telemetria:` com a causa. O que ele gravar nos JSON nessa subida
+entra no banco quando ele voltar a abrir: a importação de toda subida traz só as linhas que o
+banco ainda não tem. Durante a subida sem banco, a tela mostra só o consumo dessa subida, e uma
+retomada de sessão cuja linha anterior está no banco sai com custo desconhecido, sem contar em
+dobro. O detalhe está em [`docs/CONSUMO-REVIEWS.md`](CONSUMO-REVIEWS.md#onde-o-registro-mora).
 
 Medido com os dados da instância de desenvolvimento em 16/11/2026: 5.567 sessões, 3 tentativas
 abertas e 244 falhas viraram um `telemetria.db` de 3,9 MB, no lugar de 5,8 MB de JSON.
@@ -188,17 +194,24 @@ abertas e 244 falhas viraram um `telemetria.db` de 3,9 MB, no lugar de 5,8 MB de
 **Copiar com o motor de pé.** Com WAL, copiar só o `.db` não basta: parte das gravações ainda
 está no `-wal`, e copiar os três arquivos soltos pode pegar um no meio de uma gravação. O jeito
 seguro é pedir ao próprio SQLite uma cópia consistente. A imagem não traz o `sqlite3`; o Node
-dela faz o mesmo, por uma conexão só de leitura, que não atrapalha o motor:
+dela faz o mesmo, por uma conexão só de leitura, que não atrapalha o motor. O destino abaixo fica
+no volume (`/home/farol`) e o `umask 077` faz a cópia nascer com 600 (sem ele, nasceria 644 e
+legível por outros usuários do host que enxergam o volume). Tire-a com `docker cp` e apague:
 
 ```
-docker exec <container> node -e "new (require('node:sqlite').DatabaseSync)(process.argv[1], { readOnly: true }).prepare('VACUUM INTO ?').run(process.argv[2])" \
-  /home/farol/.farol/workspace/state/telemetria.db /home/farol/telemetria-copia.db
+docker exec <container> sh -c 'umask 077; node -e "new (require(\"node:sqlite\").DatabaseSync)(process.argv[1], { readOnly: true }).prepare(\"VACUUM INTO ?\").run(process.argv[2])" \
+  /home/farol/.farol/workspace/state/telemetria.db /home/farol/telemetria-copia.db'
+docker cp <container>:/home/farol/telemetria-copia.db ./telemetria-copia.db
+docker exec <container> rm /home/farol/telemetria-copia.db
 ```
 
 O destino não pode existir. O resultado é um arquivo só, sem `-wal`, que se abre em qualquer
-SQLite. Com o motor parado, os arquivos podem ser copiados como estão (o fechamento ordenado já
-devolve o WAL ao `.db`). O backup contínuo (Litestream ou cópia agendada para o S3) é o lote de
-backup, ainda não feito: hoje a cópia do banco é a cópia do volume.
+SQLite. O mesmo comando funciona com o motor parado (provado no WSL em 17/11/2026: banco
+fechado, sem `-wal` nem `-shm`, cópia íntegra com 600); nesse caso a conexão só de leitura deixa
+um `-wal` vazio e um `-shm` ao lado do banco, que o motor reaproveita na próxima subida. Com o
+motor parado, os arquivos também podem ser copiados como estão (o fechamento ordenado já devolve
+o WAL ao `.db`). O backup contínuo (Litestream ou cópia agendada para o S3) é o lote de backup,
+ainda não feito: hoje a cópia do banco é a cópia do volume.
 
 **Retenção: decisão pendente.** As sessões não têm poda, como no JSON de antes: o banco cresce
 uns 700 bytes por sessão registrada. Os motivos de falha seguem com o teto de 500.

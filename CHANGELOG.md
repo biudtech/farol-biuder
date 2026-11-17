@@ -191,18 +191,31 @@ Ainda sem versão publicada.
 
 - **O diário de consumo mora num banco:** as sessões (o `usage-sessions.json`), as tentativas
   abertas (`usage-tentativas.json`) e os motivos de falha (`falhas-sessao.json`) passam para
-  `~/.farol/workspace/state/telemetria.db`, pelo `node:sqlite` do Node (sem pacote), com WAL e
-  permissão 600. Registrar uma sessão vira um `INSERT`, e não mais a regravação de um arquivo que
-  na instância real tinha 5,5 MB. O agregado (`usage.json`) continua JSON: não se deriva das
-  sessões, e uma consulta mudaria os números da tela.
-- **Migração no boot:** os JSON antigos são importados numa transação, conferidos (contagem,
-  somas e cada linha) e só então renomeados para `<nome>.migrado-<dia>`, com uma linha `INFO`.
-  Repetir não duplica. Banco que não abre ou conferência que não fecha não derrubam o motor: ele
-  segue nos JSON, com uma linha `WARN` (classe nova `telemetria-anormal`), e tenta de novo na
-  próxima subida.
-- **A tela não muda:** `GET /api/usage` e a chave `usage` do snapshot dão o mesmo JSON, byte a
-  byte, antes e depois da migração, provado com os dados reais em 217 consultas (7, 30 e 90 dias,
-  filtros e páginas) por `tools/comparar-consumo-sqlite.js`. Nenhuma rota, chave ou campo novo.
+  `~/.farol/workspace/state/telemetria.db`, pelo `node:sqlite` do Node (sem pacote), com WAL,
+  `synchronous=FULL` e permissão 600. Registrar uma sessão vira um `INSERT`, e não mais a
+  regravação de um arquivo que na instância real tinha 5,5 MB. O agregado (`usage.json`)
+  continua JSON: não se deriva das sessões, e uma consulta mudaria os números da tela.
+- **O banco abre depois da porta:** no `start()`, com a trava de instância única já tomada. O
+  construtor só lê. Uma segunda instância no mesmo `FAROL_HOME`, que perde a porta, não abre o
+  banco, não importa nada e não fecha as tentativas vivas da primeira (antes do banco, a
+  reconciliação das tentativas rodava no construtor).
+- **Importação a cada subida:** todo JSON do consumo presente é importado numa transação, só com
+  as linhas que o banco ainda não tem, conferido (contagem, somas e cada linha) e só então
+  renomeado para `<nome>.migrado-<dia>`, com uma linha `INFO` que diz quantas entraram, quantas
+  já estavam e quantas linhas ilegíveis ficaram de fora. Repetir não duplica. Banco que não abre
+  (inclusive o que existe e está corrompido ou é de versão mais nova) ou conferência que não
+  fecha não derrubam o motor: ele grava nos JSON, com uma linha `WARN` (classe nova
+  `telemetria-anormal`), e o que gravou entra no banco quando ele voltar.
+- **Falha do banco não perde linha:** escrita recusada fica em memória, visível, e entra na
+  próxima gravação (`WARN` quando passa a falhar, `INFO` quando volta); leitura que falha não
+  derruba o snapshot; inteiro acima do `MAX_SAFE_INTEGER` vai para o JSON da linha em vez de
+  quebrar a leitura.
+- **Cache do consumo:** as linhas de `GET /api/usage` e a auditoria ficam em memória depois da
+  primeira leitura e crescem com cada sessão, sem reler o diário.
+- **A tela não muda:** `GET /api/usage` e a chave `usage` do snapshot dão o mesmo JSON (comparado
+  com as chaves ordenadas) antes e depois da migração, provado com os dados reais em 217
+  consultas (7, 30 e 90 dias, filtros e páginas) por `tools/comparar-consumo-sqlite.js`, contra o
+  código anterior e contra o caminho JSON desta versão. Nenhuma rota, chave ou campo novo.
 - **Guia:** `docs/HOSPEDAGEM.md` ganha a seção do banco (o arquivo no volume, a cópia segura com
   o motor de pé por `VACUUM INTO`, a retenção como decisão pendente) e `docs/CONSUMO-REVIEWS.md`
   diz onde o registro mora. O backup contínuo fica para o lote de backup.
