@@ -135,6 +135,37 @@ export interface PrDaSessao {
   author?: string;
 }
 
+// `progresso`: a porcentagem da revisão em andamento (progressoDaSessao,
+// lib/engine/progresso-revisao.js), no estado e em cada evento `activity`. Só sessão de revisão
+// tem; sessão sem o campo aparece como sempre apareceu. `percentual` nunca regride e só é 100
+// com a postagem concluída. A contagem de arquivos só vem na etapa de código e quando o motor
+// mediu o total; o tempo restante só vem com histórico de revisões suficiente.
+export interface ProgressoDaRevisao {
+  percentual: number;
+  etapa: number;
+  totalEtapas: number;
+  rotuloDaEtapa: string;
+  arquivosLidos?: number;
+  arquivosTotais?: number;
+  restanteEstimadoMs?: number;
+}
+
+function ehInteiro(valor: unknown): valor is number {
+  return ehNumero(valor) && Number.isInteger(valor);
+}
+
+// Inteiro ou nada: o que não fecha (porcentagem fora de 0 a 100, etapa além do total) faz o
+// progresso inteiro ficar de fora, e o cartão fica como sem ele.
+export function lerProgresso(v: unknown): ProgressoDaRevisao | undefined {
+  if (!ehObjeto(v) || !ehNumero(v.percentual) || v.percentual < 0 || v.percentual > 100) return undefined;
+  if (!ehInteiro(v.totalEtapas) || !ehInteiro(v.etapa) || v.etapa < 1 || v.etapa > v.totalEtapas || !ehTexto(v.rotuloDaEtapa)) return undefined;
+  const progresso: ProgressoDaRevisao = { percentual: v.percentual, etapa: v.etapa, totalEtapas: v.totalEtapas, rotuloDaEtapa: v.rotuloDaEtapa };
+  const { arquivosLidos: lidos, arquivosTotais: totais, restanteEstimadoMs: restante } = v;
+  if (ehInteiro(lidos) && ehInteiro(totais) && totais > 0 && lidos >= 0 && lidos <= totais) Object.assign(progresso, { arquivosLidos: lidos, arquivosTotais: totais });
+  if (ehNumero(restante) && restante > 0) progresso.restanteEstimadoMs = restante;
+  return progresso;
+}
+
 export interface SessaoAtiva {
   id: string;
   label?: string;
@@ -145,6 +176,7 @@ export interface SessaoAtiva {
   // true depois que o cancelamento foi aceito e a sessão ainda está encerrando
   cancelled?: boolean;
   pr?: PrDaSessao;
+  progresso?: ProgressoDaRevisao;
 }
 
 function lerPrDaSessao(v: unknown): PrDaSessao | undefined {
@@ -157,6 +189,7 @@ const lerSessaoAtiva: LeitorDeItem<SessaoAtiva> = (v) => {
   return semAusentes({
     id: v.id, label: campo(v.label, ehTexto), startedAt: campo(v.startedAt, ehNumero), keys: campo(v.keys, ehListaDeTextos),
     cancellable: campo(v.cancellable, ehBooleano), cancelled: campo(v.cancelled, ehBooleano), pr: lerPrDaSessao(v.pr),
+    progresso: lerProgresso(v.progresso),
   });
 };
 

@@ -504,6 +504,17 @@ Ainda sem versão publicada.
   cartão "Orçamento por perfil", o editor de teto dos perfis, o selo de orçamento estourado, a
   fila vazia de "Revisão automática pausada" e a cota por conta do painel da fila.
 
+- **A porcentagem da revisão em andamento:** cada sessão de revisão em `activeSessions`, e cada
+  evento `activity` dela, leva `progresso: { percentual, etapa, totalEtapas, rotuloDaEtapa,
+  arquivosLidos?, arquivosTotais?, restanteEstimadoMs? }` (`lib/engine/progresso-revisao.js`).
+  As etapas e os marcos: fontes (até 10), card (20), código (até 65, pelos arquivos da rodada já
+  lidos), conferência dos achados (até 90) e postagem (100 só quando o desfecho termina). Fora
+  do código o número fica no marco de entrada da etapa, sem interpolar. O tempo restante sai da
+  mediana real das revisões anteriores e vai ausente sem histórico suficiente ou com a revisão
+  além dela. O número nunca regride. No Radar, "Analisando agora" mostra o número, a barra, a
+  etapa, "N de M arquivos" e "faltam ~X min" quando o motor manda; sessão sem o campo fica como
+  antes.
+
 ### Correções
 
 - **Pedido malformado derrubava o motor:** um alvo que não é URL (`GET //`) lançava fora do

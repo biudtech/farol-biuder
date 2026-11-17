@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEITORES } from './snapshot';
-import { lerPendencia } from './radar';
+import { lerPendencia, lerProgresso } from './radar';
 
 function coletor() {
   const avisos: string[] = [];
@@ -64,6 +64,29 @@ describe('listas do Radar: só o que identifica o item é exigido', () => {
     const lidas = LEITORES.activeSessions([{ ...boa, fase: 'modelo' }, { label: 'x', startedAt: 1 }, { id: 'a2', label: null, startedAt: 'já', pr: 'a/b#2', cancelled: null }], registrar);
     expect(lidas).toEqual([boa, { id: 'a2' }]);
     expect(avisos).toHaveLength(1);
+  });
+
+  it('activeSessions lê o progresso da revisão quando ele vem inteiro, e ignora o torto', () => {
+    const { registrar } = coletor();
+    const progresso = { percentual: 42, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 9, arquivosTotais: 20, restanteEstimadoMs: 240000 };
+    const tortos = [
+      null, 'x', { ...progresso, percentual: 101 }, { ...progresso, percentual: -1 }, { ...progresso, etapa: 6 },
+      { ...progresso, etapa: 0 }, { ...progresso, rotuloDaEtapa: 3 }, { ...progresso, totalEtapas: 2.5 },
+    ];
+    const lidas = LEITORES.activeSessions([{ id: 'a1', progresso }, ...tortos.map((p, i) => ({ id: `t${i}`, progresso: p }))], registrar);
+    expect(lidas?.[0]).toEqual({ id: 'a1', progresso });
+    for (const s of lidas?.slice(1) ?? []) expect(s).not.toHaveProperty('progresso');
+  });
+
+  it('progresso: a contagem de arquivos só vale inteira e coerente, e o tempo restante só positivo', () => {
+    const base = { percentual: 20, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' };
+    expect(lerProgresso(base)).toEqual(base);
+    expect(lerProgresso({ ...base, arquivosLidos: 3 })).toEqual(base);
+    expect(lerProgresso({ ...base, arquivosLidos: 30, arquivosTotais: 20 })).toEqual(base);
+    expect(lerProgresso({ ...base, arquivosLidos: 0, arquivosTotais: 0 })).toEqual(base);
+    expect(lerProgresso({ ...base, arquivosLidos: 0, arquivosTotais: 4 })).toEqual({ ...base, arquivosLidos: 0, arquivosTotais: 4 });
+    expect(lerProgresso({ ...base, restanteEstimadoMs: 0 })).toEqual(base);
+    expect(lerProgresso({ ...base, restanteEstimadoMs: null })).toEqual(base);
   });
 
   it('buscasPausadas e headlessWaitingPrs conferem cada item', () => {

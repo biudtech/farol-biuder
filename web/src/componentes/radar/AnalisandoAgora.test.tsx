@@ -60,6 +60,44 @@ describe('bloco Analisando agora', () => {
     expect(screen.getByText('O feed desta sessão ainda não tem linha.')).toBeTruthy();
   });
 
+  it('com o progresso, mostra o número, a barra, a etapa, os arquivos e quanto falta', () => {
+    const { controle } = controleFalso();
+    const progresso = { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 9, arquivosTotais: 20, restanteEstimadoMs: 4 * 60000 };
+    render(<AnalisandoAgora sessoes={[sessao({ progresso })]} feeds={{}} controle={controle} />);
+    const barra = screen.getByRole('progressbar', { name: 'Andamento de PR #12 de dono/repo' });
+    expect(barra.getAttribute('aria-valuenow')).toBe('45');
+    expect(barra.getAttribute('aria-valuemin')).toBe('0');
+    expect(barra.getAttribute('aria-valuemax')).toBe('100');
+    expect(barra.getAttribute('aria-valuetext')).toBe('45%, etapa 3 de 5: código');
+    expect(screen.getByText('45%')).toBeTruthy();
+    expect(screen.getByText('etapa 3 de 5: código')).toBeTruthy();
+    expect(screen.getByText('9 de 20 arquivos')).toBeTruthy();
+    expect(screen.getByText('faltam ~4 min')).toBeTruthy();
+  });
+
+  it('sem estimativa nem contagem de arquivos, não inventa: só o número e a etapa', () => {
+    const { controle } = controleFalso();
+    render(<AnalisandoAgora sessoes={[sessao({ progresso: { percentual: 65, etapa: 4, totalEtapas: 5, rotuloDaEtapa: 'conferência dos achados' } })]} feeds={{}} controle={controle} />);
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('65');
+    expect(screen.getByText('etapa 4 de 5: conferência dos achados')).toBeTruthy();
+    expect(screen.queryByText(/faltam/)).toBeNull();
+    expect(screen.queryByText(/arquivos/)).toBeNull();
+  });
+
+  it('falta de menos de um minuto se diz como menos de 1 min', () => {
+    const { controle } = controleFalso();
+    render(<AnalisandoAgora sessoes={[sessao({ progresso: { percentual: 90, etapa: 5, totalEtapas: 5, rotuloDaEtapa: 'postagem', restanteEstimadoMs: 20000 } })]} feeds={{}} controle={controle} />);
+    expect(screen.getByText('faltam menos de 1 min')).toBeTruthy();
+  });
+
+  it('sem o progresso, o cartão fica como antes: sem barra nem porcentagem', () => {
+    const { controle } = controleFalso();
+    render(<AnalisandoAgora sessoes={[sessao()]} feeds={{}} controle={controle} />);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.queryByText(/etapa/)).toBeNull();
+  });
+
   it('Cancelar pergunta antes e só envia na confirmação', () => {
     const { controle, disparar } = controleFalso();
     render(<AnalisandoAgora sessoes={[sessao()]} feeds={{}} controle={controle} />);

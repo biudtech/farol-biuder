@@ -9,7 +9,7 @@
 // conhecida não derruba a tela, só é registrada e o valor anterior fica.
 import { CHAVES_DO_SNAPSHOT, LEITORES, type ChaveDoSnapshot, type Snapshot } from '@/contratos/snapshot';
 import { ehListaDeTextos, ehObjeto, ehTexto, type Objeto, type Registrar } from '@/contratos/formas';
-import { TETO_DO_FEED, lerLinhaDoFeed, type LinhaDoFeed } from '@/contratos/radar';
+import { TETO_DO_FEED, lerLinhaDoFeed, lerProgresso, type LinhaDoFeed, type SessaoAtiva } from '@/contratos/radar';
 
 export type { Registrar };
 
@@ -85,5 +85,14 @@ export function aplicarAtividade(anterior: Snapshot | null, bruto: unknown, regi
   const feed = feeds.find(([sessao]) => sessao === id)?.[1] ?? [];
   const novo = [...feed, item].slice(-TETO_DO_FEED);
   // fromEntries define propriedade própria: um id "__proto__" não mexe no protótipo
-  return { ...anterior, activity: Object.fromEntries([...feeds.filter(([sessao]) => sessao !== id), [id, novo]]) };
+  const activity = Object.fromEntries([...feeds.filter(([sessao]) => sessao !== id), [id, novo]]);
+  return { ...anterior, activity, ...comProgresso(anterior.activeSessions, id, lerProgresso(bruto.progresso)) };
+}
+
+// O progresso que veio com a linha (progressoDaSessao, lib/engine/progresso-revisao.js) troca o da
+// sessão dela; os arquivos lidos não publicam estado, e sem isto a barra esperaria o próximo
+// `state-patch`. Ausente ou torto, as sessões ficam como estavam.
+function comProgresso(sessoes: SessaoAtiva[] | undefined, id: string, progresso: SessaoAtiva['progresso']): { activeSessions?: SessaoAtiva[] } {
+  if (!progresso || !sessoes?.some((s) => s.id === id)) return {};
+  return { activeSessions: sessoes.map((s) => (s.id === id ? { ...s, progresso } : s)) };
 }
