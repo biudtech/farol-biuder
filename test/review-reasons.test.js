@@ -17,6 +17,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 
@@ -104,7 +105,7 @@ test('contestação com a conta aprovando com ressalvas: o APPROVE sai e a disco
   assert.equal(e.decisions.pending.some((d) => d.key === PR.key), false, 'nada na mesa para este PR');
   assert.equal(postados.length, 1);
   assert.doesNotMatch(JSON.stringify(postados[0]), /Acrity|Discordância|falso positivo/i, 'a discordância não entra no texto do PR');
-  const item = e.decisions.resolved[0];
+  const item = decisoesResolvidas(e)[0];
   assert.equal(item.status, 'auto_approved');
   assert.equal(item.attention.length, 1);
   assert.match(texto(item.attention[0]), /Discordância de outro review \(falso positivo\): ref não é setado/);

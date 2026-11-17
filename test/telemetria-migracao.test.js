@@ -173,7 +173,7 @@ test('subida 1 migra, subida 2 o banco não abre (versão mais nova), subida 3 i
   e2.recordUsage('a-00000000-0000-4000-8000-000000000009', 'dev', uso(3), 'claude-opus-5-5', 'p1', 'o/r#9');
   e2.registrarFalha({ sessionId: 'a-f2', kind: 'review', motivo: 'na subida sem banco' });
   const aviso = linhasDeTelemetria().at(-1);
-  assert.match(aviso, /\[WARN\] telemetria: o banco .*telemetria\.db existe e não abriu \(banco na versão 2 do esquema/);
+  assert.match(aviso, new RegExp(`\\[WARN\\] telemetria: o banco .*telemetria\\.db existe e não abriu \\(banco na versão ${banco.VERSAO_DO_ESQUEMA + 1} do esquema`));
   assert.match(aviso, /as sessões desta subida vão para os arquivos JSON e entram no banco quando ele voltar a abrir/);
   assert.equal(classe(aviso), 'telemetria-anormal');
   fecharMotores();

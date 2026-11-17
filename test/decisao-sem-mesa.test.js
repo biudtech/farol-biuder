@@ -28,6 +28,7 @@ const HEAD_NOVO = 'b8722a3f09f3cef5043ec47e5eebbc5e8c44eb9c';
 const check = (name, conclusion, status = 'COMPLETED') => ({ name, status, conclusion, startedAt: '2026-10-18T12:00:00Z' });
 
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let gh;
@@ -120,7 +121,7 @@ function sessao(e, extra) {
 
 const PR = (n, marcas = { requested: true }) => ({ key: `acme/app#${n}`, repo: 'acme/app', number: n, url: `https://github.com/acme/app/pull/${n}`, title: 'PR', author: 'dev', account: 'eu', ...marcas });
 const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/app#${n}`);
-const resolvida = (e, n) => e.decisions.resolved.find((x) => x.key === `acme/app#${n}`);
+const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/app#${n}`);
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 const semMesa = (e) => assert.equal(e.eventos.some(([t]) => t === 'needs-decision'), false, JSON.stringify(e.eventos));
 

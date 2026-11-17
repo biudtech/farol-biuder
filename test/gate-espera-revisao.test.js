@@ -26,6 +26,7 @@ const check = (name, conclusion, status = 'COMPLETED') => ({ name, status, concl
 // o gh é a fronteira de rede. `gh` guarda o que o GitHub responderia AGORA; os testes mudam
 // isso entre um ciclo e outro, que é como a pipe anda.
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let leiturasDoCi = 0;
@@ -120,7 +121,7 @@ function sessao(e, extra) {
 
 const PR = (n) => ({ key: `acme/app#${n}`, repo: 'acme/app', number: n, url: `https://github.com/acme/app/pull/${n}`, title: 'PR', author: 'dev', requested: true });
 const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/app#${n}`);
-const resolvida = (e, n) => e.decisions.resolved.find((x) => x.key === `acme/app#${n}`);
+const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/app#${n}`);
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 
 // a revisão termina com um check obrigatório ainda rodando: é o ponto de partida de quase tudo

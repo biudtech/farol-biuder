@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-legacy-proof-'));
 process.env.FAROL_HOME = root;
 const { PROFILE_FILE, profileFor } = await import('../lib/technical-review/profiles.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { VERSAO_DAS_REGRAS, technicalSummary } = await import('../lib/technical-review/verdict.js');
 const { approvalRefusal } = await import('../lib/technical-review/publication.js');
 const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
@@ -73,7 +74,7 @@ test('nova revisão substitui a decisão esgotada e persiste a versão para a pu
   const current = e.recordDecision(pr, { headSha: head, technicalReview: report, approvalEvidence: [],
     approvalEvidenceVersion: VERSAO_DAS_REGRAS, provaEsgotada: true }, { status: 'pending' });
   assert.deepEqual(e.decisions.pending, [current]);
-  assert.equal(e.decisions.resolved[0].status, 'superseded');
+  assert.equal(decisoesResolvidas(e)[0].status, 'superseded');
   assert.equal(publicationEvidence(e, pr).evidenceVersion, VERSAO_DAS_REGRAS);
 });
 

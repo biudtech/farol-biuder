@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 // espião no lugar do run, instalado antes do primeiro require de decision
 // (mesma técnica do merge-gates.test.js: a desestruturação captura a referência no load)
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let runImpl = null;
 const chamadas = [];
@@ -183,7 +184,7 @@ test('caminho automático: auto-approve grava decisão e memória com a identida
     })), sessionId: 'sess1'
   });
   await engine.runHeadlessReview(meuPR);
-  const d = engine.decisions.resolved[0];
+  const d = decisoesResolvidas(engine)[0];
   assert.equal(d.status, 'auto_approved', 'o gate aprovou sozinho (review pedido a mim, envelope aprovável)');
   assert.equal(d.pr.repo, 'acme/app', 'a decisão registrada aponta o PR da fila, não o do envelope');
   assert.equal(d.pr.number, 43);
@@ -208,7 +209,7 @@ test('caminho automático: auto-reject também atribui a memória pela fila', as
     }), sessionId: 'sess1'
   });
   await engine.runHeadlessReview(meuPR);
-  const d = engine.decisions.resolved[0];
+  const d = decisoesResolvidas(engine)[0];
   assert.equal(d.status, 'auto_rejected', 'a conta optou por reprovar sozinha');
   assert.equal(d.pr.repo, 'acme/app', 'a decisão registrada aponta o PR da fila');
   assert.equal(fs.existsSync(arquivoAutor('hera')), false, 'memory.author mentiroso não ganha dossiê');

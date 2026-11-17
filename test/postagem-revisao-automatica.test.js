@@ -12,6 +12,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 
@@ -127,7 +128,7 @@ test('request_changes com lacuna de cobertura e contestação: posta, e o card r
   assert.equal(e.chamadas.length, 1, 'o REQUEST_CHANGES foi postado');
   assert.equal(e.chamadas[0].payload.event, 'REQUEST_CHANGES');
   assert.equal(e.decisions.pending.some((d) => d.key === 'o/r#7'), false, 'não foi para a mesa');
-  const item = e.decisions.resolved.find((d) => d.key === 'o/r#7');
+  const item = decisoesResolvidas(e).find((d) => d.key === 'o/r#7');
   assert.equal(item.status, 'auto_rejected');
   const textos = (item.reasons || []).map((r) => r.text).join(' | ');
   assert.match(textos, /a reprovação sai com a cobertura da leitura incompleta/);

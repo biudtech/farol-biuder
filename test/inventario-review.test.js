@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-inventario-review-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const realInventory = Engine.prototype.fetchPrInventory;
 const io = (await import('../lib/io.js')).default;
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
@@ -63,7 +64,7 @@ test('revisão real: os 132 arquivos paginados chegam aos lotes, à cobertura e 
   await e.runHeadlessReview({ ...PR });
   assert.match(e.promptMedido, /src\/f131\.ts/);
   assert.match(e.promptMedido, /cobrindo 132 arquivos/);
-  const d = [...e.decisions.pending, ...e.decisions.resolved][0];
+  const d = [...e.decisions.pending, ...decisoesResolvidas(e)][0];
   assert.equal(d.inventarioDiff.status, 'complete');
   assert.equal(d.inventarioDiff.headSha, HEAD);
   assert.equal(d.inventarioDiff.changedFiles, 132);

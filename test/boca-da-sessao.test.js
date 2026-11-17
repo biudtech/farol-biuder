@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 const HEAD = '7a01c80578a4dfd492e96dfe83b8bcf77fe1309b';
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let gh;
 let sessoes;
@@ -189,7 +190,7 @@ test('rodada liberada só para retirar o meu pedido não aprova por cima de quem
   await e.runOneHeadless(PR(16), 'eu');
   assert.equal(sessoes, 1, 'a rodada roda');
   assert.equal(postados, 0, 'nada de APPROVE');
-  assert.equal(e.decisions.resolved.find((d) => d.key === 'acme/app#16' && d.status === 'approval_not_needed')?.action, 'skip');
+  assert.equal(decisoesResolvidas(e).find((d) => d.key === 'acme/app#16' && d.status === 'approval_not_needed')?.action, 'skip');
 });
 
 test('fila: PR segurado não gasta gh enquanto o updatedAt não muda', async () => {

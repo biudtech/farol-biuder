@@ -75,6 +75,11 @@ RUN set -eux; \
 # instalação de dependência que não esteja numa lista de permissão.
 RUN set -eux; \
     npm install --global --no-fund --no-audit --no-update-notifier "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "pnpm@${PNPM_VERSION}"; \
+    # O postinstall do Claude Code é o que põe o binário nativo no lugar. O npm passou a pular
+    # script de instalação fora de uma lista de permissão (aviso "install-scripts", visto no CI em
+    # 17/11/2026), e aí o "claude" falha com "native binary not installed". O script roda aqui de
+    # forma explícita, e só o dele: a versão é a fixada acima.
+    node "$(npm root --global)/@anthropic-ai/claude-code/install.cjs"; \
     npm cache clean --force; \
     rm -rf /root/.npm /root/.cache /tmp/*; \
     claude --version | grep -F "${CLAUDE_CODE_VERSION}"; \

@@ -18,6 +18,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 
 function pendencia(id, key) {
   return {
@@ -45,8 +46,8 @@ test('decide(): pendência criada DURANTE o post não é engolida pelo splice', 
   assert.equal(r.ok, true);
   const ids = engine.decisions.pending.map(d => d.id);
   assert.deepEqual(ids, ['nova'], 'a pendência nova sobrevive; a decidida sai');
-  assert.equal(engine.decisions.resolved.some(d => d.id === 'alvo' && d.status === 'posted'), true);
-  assert.equal(engine.decisions.resolved.some(d => d.id === 'nova'), false, 'a nova não foi resolvida por engano');
+  assert.equal(decisoesResolvidas(engine).some(d => d.id === 'alvo' && d.status === 'posted'), true);
+  assert.equal(decisoesResolvidas(engine).some(d => d.id === 'nova'), false, 'a nova não foi resolvida por engano');
 });
 
 test('decide(): ramo dedup com a pendência já resolvida por fora não duplica o histórico', async () => {
@@ -70,7 +71,7 @@ test('decide(): ramo dedup com a pendência já resolvida por fora não duplica 
   const r = await engine.decide('alvo', 'approve');
   assert.equal(r.ok, true);
   assert.deepEqual(engine.decisions.pending.map(d => d.id), ['nova'], 'a pendência nova sobrevive ao dedup');
-  assert.equal(engine.decisions.resolved.filter(d => d.id === 'alvo').length, 1, 'uma única entrada de alvo no histórico');
+  assert.equal(decisoesResolvidas(engine).filter(d => d.id === 'alvo').length, 1, 'uma única entrada de alvo no histórico');
 });
 
 test('decide(): bloqueio internal_language grava blockedReason persistente na pendência', async () => {

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-round-engine-'));
 process.env.FAROL_HOME = home;
 const { Engine } = await import('../server.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const io = (await import('../lib/io.js')).default;
 const originalRun = io.run;
 io.run = async () => ({ ok: true, stdout: '[]', stderr: '' });
@@ -48,7 +49,7 @@ function motor(mode = 'enforce') {
       alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'entrypoint sintético' }],
       payloads: { [verdict]: { event: verdict === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES', body: 'O contrato foi conferido.' } }, ...extra };
     await e.runHeadlessReview({ ...pr });
-    return [...e.decisions.pending, ...e.decisions.resolved].sort((a, b) => b.createdAt - a.createdAt)[0];
+    return [...e.decisions.pending, ...decisoesResolvidas(e)].sort((a, b) => b.createdAt - a.createdAt)[0];
   };
   return { e, pr, run, scope: scopeFor(pr.key, 'eu') };
 }
@@ -128,7 +129,7 @@ test('postagem manual após falha transitória limpa retry e passa a definir com
   assert.ok(d.postRetry);
   e.postReview = async (_pr, payload) => { e.postados.push(payload); return { ok: true }; };
   assert.equal((await e.decide(d.id, 'request_changes')).ok, true);
-  const saved = e.decisions.resolved.find(x => x.id === d.id);
+  const saved = decisoesResolvidas(e).find(x => x.id === d.id);
   assert.equal(saved.status, 'posted');
   assert.equal(saved.postRetry, null);
   assert.ok(readRounds(scope).rounds.some(r => r.id === saved.roundId));

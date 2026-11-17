@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 
 // o gh é a fronteira de rede: nada aqui pode chegar ao GitHub
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 io.run = function runDuble(cmd, args) {
   const sub = (args || []).join(' ');
@@ -67,7 +68,7 @@ function motor(diffMedido, coverage, ressalvas = 'wait') {
 }
 
 function decisaoDe(e) {
-  return [...e.decisions.pending, ...e.decisions.resolved].find((d) => d.key === PR.key);
+  return [...e.decisions.pending, ...decisoesResolvidas(e)].find((d) => d.key === PR.key);
 }
 
 test('a sessão diz que leu tudo, mas o diff medido tem um arquivo a mais: conta que espera nas ressalvas espera, e o card diz qual', async () => {

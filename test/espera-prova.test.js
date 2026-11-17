@@ -14,6 +14,7 @@ const HEAD_NOVO = 'b8722a3f09f3cef5043ec47e5eebbc5e8c44eb9c';
 
 // o gh é a fronteira de rede: `gh` guarda o que o GitHub responderia AGORA
 const io = (await import('../lib/io.js')).default;
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const runReal = io.run;
 let envios = [];
 let leiturasDoPr = 0;
@@ -548,7 +549,7 @@ for (const origem of ['fila', 'sessao', 'retry']) {
     conta(e, { onClean: 'approve', onCaveats: 'approve' });
     await revisado(e, {});
     assert.equal(pendente(e), undefined, 'a nova decisão substitui a antiga');
-    assert.ok(e.decisions.resolved.some(x => x.id === d.id && x.status === 'superseded'));
+    assert.ok(decisoesResolvidas(e).some(x => x.id === d.id && x.status === 'superseded'));
     assert.equal(envios.length, 1);
     assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0, 'não inicia outra rodada órfã');
   });
@@ -567,7 +568,7 @@ test('sessão aparece durante a recuperação e ainda substitui a decisão anter
   conta(e, { onClean: 'approve', onCaveats: 'approve' });
   await revisado(e, {});
   assert.equal(pendente(e), undefined, 'a sessão em preparação precisa substituir a decisão antiga');
-  assert.ok(e.decisions.resolved.some(x => x.id === d.id && x.status === 'superseded'));
+  assert.ok(decisoesResolvidas(e).some(x => x.id === d.id && x.status === 'superseded'));
   assert.equal(envios.length, 1);
 });
 
