@@ -51,12 +51,11 @@ function envelope(extra) {
 
 // engine com a sessão stubada devolvendo o envelope dado; nada toca rede nem posta.
 // postReview LANÇA de propósito: se algum gate deixar postar, o teste explode.
-// `ressalvas` é a política para aprovável COM ressalvas; por padrão segue a mesma do limpo
-function engineComEnvelope(data, { policy = 'approve', ressalvas = policy } = {}) {
+function engineComEnvelope(data) {
   const e = new Engine();
   e.accountForPr = () => 'trabalho';
-  e.approvePolicyFor = (_conta, limpo) => (limpo ? policy : ressalvas);
-  e.rejectPolicyFor = () => 'wait';
+  e.approvePolicyFor = () => 'approve';
+  e.rejectPolicyFor = () => 'request_changes';
   e.scopeLabel = () => 'Conta Trabalho';
   e.myReviewStates = async () => null;
   e.headSha = async () => 'a'.repeat(40);
@@ -67,27 +66,29 @@ function engineComEnvelope(data, { policy = 'approve', ressalvas = policy } = {}
 }
 
 
-test('recusa por política da conta lidera as reasons com a explicação da política', async () => {
-  const e = engineComEnvelope(envelope(), { policy: 'wait' });
-  await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
-  assert.ok(item, 'caiu na sua mesa (needs decision)');
-  assert.match(texto(item.reasons[0]), /política da conta Conta Trabalho/, 'a recusa é da política, e diz isso');
-  assert.equal(item.reasons[0].kind, 'gate', 'política é regra do app, não achado da revisão');
-});
+// Até 17/11/2026 a política da conta podia mandar esperar (`wait`), e estes testes conferiam a
+// recusa da política no card. O `wait` saiu (regra do dono: o revisor nunca espera decisão de
+// gente): com ou sem ressalvas o APPROVE sai, e o que se confere agora é a ressalva no card da
+// aprovação, uma vez, com rótulo e prova. Os dois testes que provavam só o texto da política em
+// espera (limpo e com ressalvas) saíram junto com ela.
+function engineQueAprova(data) {
+  const e = engineComEnvelope(data);
+  const postados = [];
+  e.myReviewStates = async () => [];
+  e.postReview = async (_pr, payload) => { postados.push(payload); return { ok: true }; };
+  e.writeMemory = () => { };
+  return { e, postados };
+}
 
-// Até 30/09/2026 estes três testes afirmavam o contrário: contestação e cobertura SEMPRE caíam
-// na mesa, com motivo próprio e sem culpar a política (M7), porque eram gate. Viraram
-// ressalva: quem segura agora É a política, o card diz isso, e a ressalva vem junto.
-test('contestação com a conta esperando nas ressalvas: a recusa é da política e a discordância aparece no card', async () => {
-  const e = engineComEnvelope(envelope({
+test('contestação com a ressalva: o APPROVE sai e a discordância aparece no card uma vez', async () => {
+  const { e, postados } = engineQueAprova(envelope({
     contested: [{ source: 'Acrity', claim: 'ref não é setado', label: 'falso_positivo', evidence: 'Arquivo.tsx:172 seta o ref' }]
-  }), { policy: 'approve', ressalvas: 'wait' });
+  }));
   await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
-  assert.ok(item, 'a conta mandou esperar nas ressalvas');
-  assert.match(texto(item.reasons[0]), /aprovável com ressalvas, e a política da conta .+ é aguardar você/, 'quem segurou foi a política de ressalvas');
-  const discordancia = item.reasons.filter(r => /Discordância de outro review \(falso positivo\)/.test(texto(r)));
+  assert.equal(postados.length, 1);
+  const item = decisoesResolvidas(e)[0];
+  assert.equal(item.status, 'auto_approved');
+  const discordancia = item.attention.filter(r => /Discordância de outro review \(falso positivo\)/.test(texto(r)));
   assert.equal(discordancia.length, 1, 'a ressalva aparece uma vez, com rótulo e prova');
   assert.equal(discordancia[0].kind, 'gate');
 });
@@ -95,7 +96,7 @@ test('contestação com a conta esperando nas ressalvas: a recusa é da polític
 test('contestação com a conta aprovando com ressalvas: o APPROVE sai e a discordância fica só no app', async () => {
   const e = engineComEnvelope(envelope({
     contested: [{ source: 'Acrity', claim: 'ref não é setado', label: 'falso_positivo', evidence: 'Arquivo.tsx:172 seta o ref' }]
-  }), { policy: 'approve' });
+  }));
   const postados = [];
   e.myReviewStates = async () => [];
   e.postReview = async (_pr, payload) => { postados.push(payload); return { ok: true }; };
@@ -111,19 +112,20 @@ test('contestação com a conta aprovando com ressalvas: o APPROVE sai e a disco
   assert.match(texto(item.attention[0]), /Discordância de outro review \(falso positivo\): ref não é setado/);
 });
 
-test('lacuna de cobertura entra UMA vez nas reasons, como ressalva, com a amostra dos arquivos (B5)', async () => {
-  const e = engineComEnvelope(envelope({
+test('lacuna de cobertura entra UMA vez nas ressalvas da aprovação, com a amostra dos arquivos (B5)', async () => {
+  const { e, postados } = engineQueAprova(envelope({
     coverage: { total: 3, reviewed: ['a.ts'], missing: ['b.ts', 'c.ts'] }
-  }), { policy: 'approve', ressalvas: 'wait' });
+  }));
   await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
-  // desde 06/11/2026 a cobertura vira ressalva na própria rodada (decidir na 1ª rodada): a política decide
-  assert.match(texto(item.reasons[0]), /aprovável com ressalvas/, 'quem segura é a política da conta');
+  // desde 06/11/2026 a cobertura vira ressalva na própria rodada (decidir na 1ª rodada)
+  assert.equal(postados.length, 1, 'ressalva não segura o APPROVE');
+  const item = decisoesResolvidas(e)[0];
+  assert.equal(item.status, 'auto_approved');
   assert.equal(item.esperaProva, undefined, 'sem recuperação no mesmo commit para lacuna que não é dura');
-  const deCobertura = textos(item.reasons).filter(r => /cobertura da leitura/.test(r));
+  const deCobertura = textos(item.attention).filter(r => /cobertura da leitura/.test(r));
   assert.equal(deCobertura.length, 1, `cobertura virou ${deCobertura.length} motivo(s): ${deCobertura.join(' | ')}`);
   assert.match(deCobertura[0], /b\.ts/, 'a redação que fica é a que mostra a amostra');
-  assert.doesNotMatch(deCobertura[0], /não posto sozinho/, 'ressalva não promete recusa: quem decide é a política');
+  assert.doesNotMatch(deCobertura[0], /não posto sozinho/, 'ressalva não promete recusa');
 });
 
 // A lacuna continua explicando a recusa onde o resultado NÃO chega à política: revisão de
@@ -131,7 +133,7 @@ test('lacuna de cobertura entra UMA vez nas reasons, como ressalva, com a amostr
 test('fora da política (origem desconhecida), a lacuna de cobertura segue explicando por que nada saiu sozinho', async () => {
   const e = engineComEnvelope(envelope({
     coverage: { total: 3, reviewed: ['a.ts'], missing: ['b.ts', 'c.ts'] }
-  }), { policy: 'approve' });
+  }));
   await e.runHeadlessReview({ ...PR, requested: false });
   const item = e.decisions.pending[0];
   const deCobertura = textos(item.reasons).filter(r => /cobertura da leitura/.test(r));
@@ -143,29 +145,21 @@ test('fora da política (origem desconhecida), a lacuna de cobertura segue expli
 // A classe escondida: zero ponto de atenção com `decision` diferente de auto_approve caía em
 // "com ressalvas" sem mostrar nada no card. Agora o rebaixamento tem ressalva própria.
 test('sessão que não decidiu auto_approve e não escreveu motivo: o card mostra a ressalva que rebaixou', async () => {
-  const e = engineComEnvelope(envelope({ decision: 'needs_decision', cardMet: null }), { policy: 'approve', ressalvas: 'wait' });
+  const { e } = engineQueAprova(envelope({ decision: 'needs_decision', cardMet: null }));
   await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
-  assert.match(texto(item.reasons[0]), /aprovável com ressalvas/);
-  assert.equal(item.reasons.length, 2, 'política + a ressalva que explica a classe');
-  assert.match(texto(item.reasons[1]), /não marcou o PR como aprovável sem ressalvas nem escreveu o motivo/);
+  const item = decisoesResolvidas(e)[0];
+  assert.equal(item.status, 'auto_approved');
+  assert.equal(item.attention.length, 1, 'só a ressalva que explica a classe');
+  assert.match(texto(item.attention[0]), /não marcou o PR como aprovável sem ressalvas nem escreveu o motivo/);
 });
 
-test('card não comprovado: o card mostra a ressalva do card ao lado da política', async () => {
-  const e = engineComEnvelope(envelope({ decision: 'needs_decision', cardMet: false }), { policy: 'approve', ressalvas: 'wait' });
+test('card não comprovado: o card mostra a ressalva do card', async () => {
+  const { e } = engineQueAprova(envelope({ decision: 'needs_decision', cardMet: false }));
   await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
+  const item = decisoesResolvidas(e)[0];
   // de 16 a 17/10/2026 (PR #244) o card não comprovado era lacuna obrigatória; voltou a ser ressalva
-  assert.match(texto(item.reasons[0]), /aprovável com ressalvas/);
-  assert.ok(textos(item.reasons).some(r => /card não foi totalmente comprovado/.test(r)), JSON.stringify(item.reasons));
-});
-
-test('zero ponto de atenção é limpo: a política do limpo decide, e a recusa diz "sem ressalvas"', async () => {
-  const e = engineComEnvelope(envelope(), { policy: 'wait', ressalvas: 'approve' });
-  await e.runHeadlessReview(PR);
-  const item = e.decisions.pending[0];
-  assert.match(texto(item.reasons[0]), /aprovável sem ressalvas/);
-  assert.equal(item.reasons.length, 1, 'limpo não tem ressalva a mostrar');
+  assert.equal(item.status, 'auto_approved');
+  assert.ok(textos(item.attention).some(r => /card não foi totalmente comprovado/.test(r)), JSON.stringify(item.attention));
 });
 
 /* ---------- falha de postagem: infra, não julgamento (biud-frontend#774) ----------
@@ -177,7 +171,7 @@ test('zero ponto de atenção é limpo: a política do limpo decide, e a recusa 
 
 // engine cujo postReview FALHA com a mensagem dada (o resto igual ao harness acima)
 function engineComPostQuebrado(erro, data = envelope()) {
-  const e = engineComEnvelope(data, { policy: 'approve' });
+  const e = engineComEnvelope(data);
   e.postReview = async () => ({ ok: false, attempted: true, error: erro });
   return e;
 }

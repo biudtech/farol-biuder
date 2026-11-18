@@ -6,9 +6,6 @@
   "localAuth": "exigir",
   "conta": {
     "owners": ["biudtech"],
-    "autoReview": false,
-    "onClean": "wait",
-    "onCaveats": "wait",
-    "onReject": "wait"
+    "autoReview": false
   }
 }

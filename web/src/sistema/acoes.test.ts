@@ -72,11 +72,11 @@ describe('a pergunta antes do envio', () => {
   });
 
   // O que a pergunta afirma sobre o motor, conferido no fonte dele.
-  it('o motor lê a política ao decidir, ao começar e na espera do CI, e ninguém reavalia a mesa', () => {
-    expect(raiz('lib/engine/approval-policy.js')).toContain("if (engine.approvePolicyFor(engine.accountForPr(pr), clean) !== 'approve') {");
-    expect(raiz('lib/engine/approval-policy.js')).toContain("return engine.rejectPolicyFor(engine.accountForPr(pr)) === 'request_changes';");
+  // 17/11/2026: os desfechos não esperam ninguém (sem `wait`), e só o liga e desliga da revisão
+  // (autoReview) é lido ao começar; não há mesa para reavaliar.
+  it('o motor lê o liga e desliga da revisão ao começar, e a política não segura a decisão', () => {
+    expect(raiz('lib/engine/approval-policy.js')).not.toContain("motivo: 'politica'");
     expect(raiz('lib/engine/review-scope.js')).toContain('if (!retry && !engine.autoReviewFor(engine.accountForPr(pr))) return { automatic: false');
-    expect(raiz('lib/engine/espera-ci.js')).toContain("if (engine.approvePolicyFor(conta, limpo) === 'approve') return true;");
     // a mudança de configuração é emitida, e nenhum arquivo do motor a ouve
     const motor = ['server.js', ...(fs.readdirSync(path.resolve(import.meta.dirname, '../../../lib'), { recursive: true }) as string[]).filter((n) => n.endsWith('.js')).map((n) => `lib/${n}`)];
     const ouvintes = motor.filter((arquivo) => /\.on\(\s*['"]settings-changed['"]/.test(raiz(arquivo)));

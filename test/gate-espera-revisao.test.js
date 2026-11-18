@@ -1,14 +1,13 @@
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 // A aprovação automática com CI obrigatório vermelho ou em andamento, na revisão de verdade.
 //
-// De 27 a 30/09/2026 este arquivo provava que o card ia para a mesa e pedia o clique "quando
-// a pipe fechar". Pedido do dono em 30/09/2026: "A configuração tem de cumprir o que promete,
-// sem exceção: se é pra aprovar automaticamente, ele realmente aprova, sem desculpas pra
-// passar por um approve humano." Agora a prova é a da ESPERA AUTOMÁTICA, ponta a ponta:
-// o runHeadlessReview guarda o resultado dizendo que espera o CI, e a varredura do ciclo
-// (lib/engine/espera-ci.js) relê os checks e posta sozinha quando fecham verdes no MESMO
-// head. Nunca aprova por cima de CI vermelho (biud-frontend#896) nem em head que não leu.
-// Dependência em aberto saiu da espera: é ressalva, e a política da conta decide.
+// De 30/09 a 17/11/2026 este arquivo provava a ESPERA AUTOMÁTICA do CI: o resultado aprovável
+// ficava guardado esperando o CI e saía sozinho quando ele fechava verde no mesmo head. Regra do
+// dono de 17/11/2026: o revisor nunca espera o CI, nem para começar nem para aprovar. Agora a prova
+// é a de que o CI não segura nada (a aprovação sai na hora, com o estado da pipe como nota no app)
+// e a de que a espera gravada antes termina sozinha (lib/engine/espera-ci.js): a aprovação sai pelo
+// caminho de sempre, nunca em head que a sessão não leu, e o gate de consciência vale na hora do post.
+// Dependência em aberto é ressalva, e a política da conta decide.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -67,6 +66,7 @@ isolateTechnicalTool();
 const { technicalRuntime } = await import('../lib/technical-review/runtime.js');
 const { cleanup, criarMaterial } = await import('../lib/technical-review/cleanup.js');
 const { STATE_DIR } = await import('../lib/paths.js');
+const { avisoDoCi } = await import('../lib/engine/gate-espera.js');
 
 
 after(() => {
@@ -87,11 +87,9 @@ function motor(checks, politica = ['approve', 'approve']) {
   const e = new Engine();
   e.token = 'token-falso';
   // A política é a da conta, gravada por extenso e lida pelos métodos reais do motor
-  // (contas-config.js). A conta não reprova sozinha: com ela reprovando, o CI vermelho vira
-  // REQUEST_CHANGES automático e a espera continua (test/decisao-sem-mesa.test.js, 18/10/2026)
-  e.config.conta = { user: 'eu', owners: ['acme'], onClean: politica[0], onCaveats: politica[1], onReject: 'wait' };
-  // "CI obrigatório antes da aprovação" é opt-in (de novo desde 06/11/2026): estes casos testam a chave LIGADA
-  e.config.aguardarCiParaAprovar = true;
+  // (contas-config.js). Até 17/11/2026 a conta daqui não reprovava sozinha (onReject: wait); o
+  // `wait` saiu, e o pedido de mudanças só pelo CI também não sai (o CI não decide)
+  e.config.conta = { user: 'eu', owners: ['acme'], onClean: politica[0], onCaveats: politica[1], onReject: 'request_changes' };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.pushState = () => { };
@@ -124,38 +122,34 @@ const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/app#$
 const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/app#${n}`);
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 
-// a revisão termina com um check obrigatório ainda rodando: é o ponto de partida de quase tudo
+// A espera do CI gravada antes de 17/11/2026: é o ponto de partida de quase tudo. Nenhuma revisão
+// arma essa marca hoje, então a pendência nasce de uma revisão real cuja postagem falhou por
+// instabilidade, e a marca é posta como o decisions.json de uma instalação antiga a traria.
 async function emEspera(n, { politica, extra, checks = [{ nome: 'test', estado: 'rodando' }] } = {}) {
   const e = motor(checks, politica);
   sessao(e, extra);
+  gh.postFalha = 'HTTP 502: Bad Gateway';
   await e.runHeadlessReview(PR(n));
+  gh.postFalha = '';
+  envios = [];
+  const d = pendente(e, n);
+  assert.ok(d, 'a revisão deixou a pendência que vira a espera antiga');
+  // os pontos da espera são as ressalvas que a revisão leu: sem a falha da postagem e sem a nota do
+  // CI que o desfecho acrescentou às reasons da pendência (a nota volta na liberação, pelo estado lido)
+  const doCi = new Set(avisoDoCi({ checksObrigatorios: checks }).map((r) => r.text));
+  const pontos = (d.reasons || []).filter((r) => r && r.kind !== 'infra' && !doCi.has(r.text));
+  Object.assign(d, { postRetry: null, reasons: [], esperaCi: { desde: Date.now(), checks, pontos } });
+  e.eventos.length = 0;
+  e.toasts.length = 0;
   // o que a revisão em si consultou fica fora da conta de "uma leitura por ciclo"
   e.chamadasAntes = chamadas;
+  leiturasDoCi = 0;
   return e;
 }
 
 
-test('check obrigatório ainda rodando: nada é postado, e o resultado fica ESPERANDO O CI, não pedindo você', async () => {
-  const e = await emEspera(1);
-  assert.deepEqual(envios, [], 'nenhum APPROVE foi enviado');
-  const d = pendente(e, 1);
-  assert.ok(d, 'o resultado ficou guardado');
-  assert.deepEqual(d.esperaCi.checks, [{ nome: 'test', estado: 'rodando' }]);
-  assert.equal(d.headSha, HEAD, 'ancorado no head que a sessão leu');
-  assert.match(textos(d)[0], /ainda sem resultado no head \(test\): a aprovação está esperando o CI e sai sozinha quando a pipe fechar verde neste commit/);
-  assert.deepEqual(e.eventos, [], 'não avisa "precisa de você"');
-  assert.ok(e.toasts.some((t) => /esperando o CI obrigatório; aprovo sozinho/.test(t)), e.toasts.join(' | '));
-  assert.equal(e.toasts.some((t) => /precisa da sua atenção/.test(t)), false);
-  const tela = e.decisionForUi(d);
-  assert.deepEqual(tela.esperaCi.checks, [{ nome: 'test', estado: 'rodando' }], 'a tela recebe os checks que faltam');
-  assert.equal(tela.esperaCi.pontos, undefined, 'e só isso: as ressalvas guardadas não vão cruas');
-  assert.equal(e.reviewActions()['acme/app#1'].esperaCi, true, 'o Panorama sabe que esta pendência não espera você');
-});
-
-test('CI fecha verde no mesmo head: a aprovação sai sozinha, ancorada no head lido, sem clique', async () => {
+test('espera gravada antes: a aprovação sai no ciclo seguinte, ancorada no head lido, sem clique', async () => {
   const e = await emEspera(2);
-  assert.equal(await e.varrerEsperas(), 0, 'pipe ainda rodando: segue esperando');
-  assert.deepEqual(envios, []);
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
   assert.equal(await e.varrerEsperas(), 1);
   assert.equal(envios.length, 1, 'um APPROVE, e só um');
@@ -169,41 +163,19 @@ test('CI fecha verde no mesmo head: a aprovação sai sozinha, ancorada no head 
   assert.deepEqual(r.attention, [], 'limpo: sem ressalva');
   assert.deepEqual(textos(r), [], 'o motivo da espera sai do registro');
   assert.deepEqual(e.eventos, [['auto-approved', 'acme/app#2', 0]]);
-  assert.ok(e.toasts.some((t) => /o CI fechou verde e a aprovação saiu sozinha, sem ressalvas/.test(t)));
+  assert.ok(e.toasts.some((t) => /a espera do CI saiu, então a aprovação que esperava saiu sozinha/.test(t)), e.toasts.join(' | '));
   assert.equal(await e.varrerEsperas(), 0, 'ciclo seguinte não tem o que fazer');
   assert.equal(envios.length, 1, 'nunca posta duas vezes');
 });
 
-test('CI VERMELHO: espera, nunca aprova por cima e nunca pede clique, por quantos ciclos forem', async () => {
+test('espera gravada antes com o CI VERMELHO: a aprovação sai do mesmo jeito, com o CI como nota', async () => {
   const e = await emEspera(3, { checks: [{ nome: 'audit', estado: 'vermelho' }] });
-  assert.match(textos(pendente(e, 3))[0], /check obrigatório vermelho no head \(audit\)/);
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'FAILURE')];
-  for (let ciclo = 0; ciclo < 5; ciclo++) assert.equal(await e.varrerEsperas(), 0);
-  assert.deepEqual(envios, [], 'CI vermelho nunca vira APPROVE');
-  assert.ok(pendente(e, 3).esperaCi, 'segue esperando');
-  assert.deepEqual(e.eventos, [], 'e segue sem pedir você');
-  assert.equal(leiturasDoCi, 5, 'uma leitura do PR por ciclo');
-  // 5 leituras do PR + 1 da exigência da branch (que fica em cache) + 5 dos checks do commit atual
-  // da base, uma por ciclo (17/11/2026: o check herdado da base não segura a espera,
-  // checks-exigidos.js; a base só é lida com check obrigatório fora do verde, e a espera decide o
-  // APPROVE, então lê a base fresca a cada ciclo, sem o cache, pela revisão independente do mesmo
-  // dia): nada além disso
-  assert.equal(chamadas - e.chamadasAntes, 11);
-  // a pipe foi relançada e fechou: a rodada mais recente do check é a que vale
-  gh.rollup = [check('test', 'SUCCESS'), check('audit', 'FAILURE'), { ...check('audit', 'SUCCESS'), startedAt: '2026-09-30T13:00:00Z' }];
   assert.equal(await e.varrerEsperas(), 1);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.match(resolvida(e, 3).attention.map((p) => p.text).join(' | '), /vermelho no head \(audit\)/);
+  assert.equal(await e.varrerEsperas(), 0, 'sem laço');
   assert.equal(envios.length, 1);
-});
-
-test('o card acompanha a pipe: rodando vira vermelho, e continua sendo espera', async () => {
-  const e = await emEspera(4);
-  gh.rollup = [check('test', 'FAILURE'), check('audit', 'SUCCESS')];
-  await e.varrerEsperas();
-  const d = pendente(e, 4);
-  assert.deepEqual(d.esperaCi.checks, [{ nome: 'test', estado: 'vermelho' }]);
-  assert.equal(textos(d).filter((t) => /check obrigatório/.test(t)).length, 1, 'um motivo de CI só, trocado e não empilhado');
-  assert.match(textos(d)[0], /check obrigatório vermelho no head \(test\)/);
-  assert.deepEqual(envios, []);
 });
 
 test('head andou durante a espera: NÃO posta, larga a espera e devolve o PR ao round automático', async () => {
@@ -221,25 +193,18 @@ test('head andou durante a espera: NÃO posta, larga a espera e devolve o PR ao 
   assert.equal(leiturasDoCi, 1, 'pendência sem espera não custa leitura');
 });
 
-test('leitura que falha NÃO libera: sem prova do CI e do head, espera o próximo ciclo', async () => {
+test('leitura do PR que falha NÃO libera: sem prova do head, espera o próximo ciclo', async () => {
   const e = await emEspera(6);
-  gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
   gh.leituraFalha = true;
   assert.equal(await e.varrerEsperas(), 0);
-  gh.leituraFalha = false;
-  gh.rollup = null;
-  assert.equal(await e.varrerEsperas(), 0, 'rollup ilegível não é CI verde');
-  gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
-  gh.exigidos = { message: 'Not Found' };
-  e.checksExigidosCache = new Map();
-  assert.equal(await e.varrerEsperas(), 0, 'exigência da branch desconhecida não é CI verde');
   assert.deepEqual(envios, []);
   assert.ok(pendente(e, 6).esperaCi, 'continua esperando, sem ir para a mesa');
-  gh.exigidos = ['test', 'audit'];
-  assert.equal(await e.varrerEsperas(), 1);
+  gh.leituraFalha = false;
+  gh.rollup = null;
+  assert.equal(await e.varrerEsperas(), 1, 'o CI ilegível não segura: só o head precisava ser conferido');
 });
 
-test('com ressalvas e conta que aprova com ressalvas: espera o CI e aprova, com a ressalva visível', async () => {
+test('com ressalvas e conta que aprova com ressalvas: a espera gravada antes aprova, com a ressalva visível', async () => {
   const e = await emEspera(7, { extra: { decision: 'needs_decision', reasons: ['vale olhar a validação do upload'] } });
   const d = pendente(e, 7);
   assert.equal(d.esperaCi.pontos.length, 1);
@@ -251,32 +216,18 @@ test('com ressalvas e conta que aprova com ressalvas: espera o CI e aprova, com 
   assert.deepEqual(e.eventos, [['auto-approved', 'acme/app#7', 1]]);
 });
 
-test('conta que manda esperar você: vai para a mesa pela POLÍTICA, não entra em espera do CI', async () => {
-  const e = await emEspera(8, { politica: ['approve', 'wait'], extra: { reasons: ['ressalva da revisão'] } });
-  const d = pendente(e, 8);
-  assert.equal(d.esperaCi, undefined);
-  assert.match(textos(d)[0], /aprovável com ressalvas, e a política da conta .+ é aguardar você/);
-  assert.ok(textos(d).includes('check obrigatório ainda sem resultado no head (test)'), 'quem vai clicar fica sabendo da pipe');
-  assert.ok(textos(d).includes('ressalva da revisão'));
-  assert.deepEqual(e.eventos, [['needs-decision', 'acme/app#8']]);
-  gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
-  assert.equal(await e.varrerEsperas(), 0);
-  assert.deepEqual(envios, [], 'a política mandou esperar você: CI verde não aprova');
-  assert.equal(leiturasDoCi, 0);
-});
-
-test('a política mudou para "esperar você" durante a espera: larga a espera e avisa, sem postar', async () => {
+// Até 17/11/2026 a política mudada para "esperar você" durante a espera largava a espera e ia à
+// mesa. O `wait` saiu (o revisor nunca espera decisão de gente): gravado na conta, é lido como o
+// padrão autônomo, e a espera gravada antes aprova do mesmo jeito.
+test('o wait gravado na conta durante a espera não segura: a aprovação sai no ciclo seguinte', async () => {
   const e = await emEspera(9);
   Object.assign(e.config.conta, { onClean: 'wait', onCaveats: 'wait' });
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
-  assert.equal(await e.varrerEsperas(), 0);
-  assert.deepEqual(envios, []);
-  const d = pendente(e, 9);
-  assert.equal(d.esperaCi, null);
-  assert.match(textos(d)[0], /aprovável sem ressalvas, mas a política da conta .* manda aguardar sua aprovação/);
-  assert.equal(textos(d).some((t) => /esperando o CI/.test(t)), false, 'o motivo da espera saiu');
-  assert.deepEqual(e.eventos, [['needs-decision', 'acme/app#9']]);
-  assert.equal(leiturasDoCi, 0, 'a política é conferida antes de gastar a leitura');
+  assert.equal(await e.varrerEsperas(), 1);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.equal(pendente(e, 9), undefined);
+  assert.equal(resolvida(e, 9).status, 'auto_approved');
+  assert.equal(e.eventos.some((x) => x[0] === 'needs-decision'), false, 'ninguém foi chamado');
 });
 
 // O GitHub tira a conta de reviewRequests quando ela posta um review. No round 2 (pedi
@@ -356,7 +307,10 @@ test('a postagem falhou depois do CI verde: passageira vai para o reenvio de sem
   assert.equal(p.esperaCi, null);
   assert.equal(p.postRetry, null);
   assert.match(textos(p)[0], /falha ao postar o APPROVE/);
-  assert.deepEqual(f.eventos, [['needs-decision', 'acme/app#16']]);
+  // desde 17/11/2026 a falha permanente não vai à mesa: vai ao desfecho sem mesa, que posta o
+  // COMMENT neutro numa varredura seguinte, sem chamar ninguém
+  assert.equal(p.semMesa?.motivo, 'nao_aprovavel');
+  assert.deepEqual(f.eventos, []);
 });
 
 /* ---------- gate de consciência na hora do post atrasado (30/09/2026) ----------
@@ -371,8 +325,7 @@ const review = (quem, state, extra = {}) => ({ quem, tipo: 'User', state, commit
 test('uma pessoa pediu mudanças no mesmo commit durante a espera: nada é postado, sem mesa', async () => {
   const e = await emEspera(20);
   gh.reviewsAlheios = [review('ana', 'CHANGES_REQUESTED')];
-  for (let ciclo = 0; ciclo < 3; ciclo++) assert.equal(await e.varrerEsperas(), 0);
-  assert.equal(leiturasDeReviewsAlheios, 0, 'com a pipe ainda rodando, nenhuma leitura de reviews: o custo é só na hora do post');
+  leiturasDeReviewsAlheios = 0;
   gh.rollup = VERDE();
   assert.equal(await e.varrerEsperas(), 1);
   assert.equal(leiturasDeReviewsAlheios, 1);
@@ -430,16 +383,8 @@ test('a regra é a de skip-review.js, sem cópia: o espera-ci só chama bloquead
   assert.doesNotMatch(fonte, /ehFerramenta|reviewsDeOutros\(/, 'nenhuma segunda versão da regra');
 });
 
-test('dependência em aberto declarada pela revisão é ressalva: a conta que espera nas ressalvas não posta, e o card nomeia a dependência', async () => {
-  const e = motor([], ['approve', 'wait']);
-  sessao(e, { dependenciasAbertas: ['acme/infra#189 ainda aberto'] });
-  await e.runHeadlessReview(PR(17));
-  assert.deepEqual(envios, []);
-  const d = pendente(e, 17);
-  assert.equal(d.esperaCi, undefined, 'dependência não é espera automática');
-  assert.match(textos(d)[0], /aprovável com ressalvas/);
-  assert.ok(textos(d).some((t) => /acme\/infra#189 ainda aberto/.test(t)), JSON.stringify(d.reasons));
-});
+// "dependência em aberto ... a conta que espera nas ressalvas não posta" saiu em 17/11/2026 com o
+// `wait`: a conta sempre aprova com ressalvas, e o teste abaixo prova o card com a dependência.
 
 // De 16 a 17/10/2026 (PR #244) a dependência era lacuna obrigatória e este caso não aprovava em
 // política nenhuma. Decisão do dono de 17/10/2026: volta a ser ressalva, porque a dependência
@@ -469,18 +414,17 @@ test('check() roda a espera do CI depois do reconcilePending e antes do retryFai
   assert.ok(pend > 0 && pend < espera && espera < retry);
 });
 
-/* ---------- "CI obrigatório antes da aprovação" é opt-in (de novo desde 06/11/2026) ---------- */
-// Pedido do dono: "isso aqui tem que ter como desativar no Farol ... e deve vir por default como
-// desabilitado". Desligada, a aprovação sai na hora, com o estado da pipe guardado como nota no
-// app, e nada dele vai ao PR. Ligada (o motor() acima), vale tudo o que os casos anteriores travam.
+/* ---------- o revisor nunca espera o CI (17/11/2026) ---------- */
+// A aprovação sai na hora, com o estado da pipe guardado como nota no app, e nada dele vai ao PR.
+// Nem um config.json antigo com a chave ligada religa a espera.
 
 function motorPadrao(checks, politica) {
   const e = motor(checks, politica);
-  delete e.config.aguardarCiParaAprovar;
+  e.config.aguardarCiParaAprovar = true;
   return e;
 }
 
-test('padrão (chave ausente): check obrigatório rodando não segura, a aprovação sai na hora com o CI como nota', async () => {
+test('check obrigatório rodando não segura, a aprovação sai na hora com o CI como nota', async () => {
   const e = motorPadrao([{ nome: 'test', estado: 'rodando' }]);
   sessao(e);
   await e.runHeadlessReview(PR(30));
@@ -494,7 +438,7 @@ test('padrão (chave ausente): check obrigatório rodando não segura, a aprova�
   assert.equal(e.toasts.some((t) => /esperando o CI/.test(t)), false);
 });
 
-test('padrão: CI VERMELHO também não segura nem vira pedido de mudanças, e a nota nomeia o check', async () => {
+test('CI VERMELHO também não segura nem vira pedido de mudanças, e a nota nomeia o check', async () => {
   const e = motorPadrao([{ nome: 'audit', estado: 'vermelho' }]);
   sessao(e);
   await e.runHeadlessReview(PR(31));
@@ -502,7 +446,7 @@ test('padrão: CI VERMELHO também não segura nem vira pedido de mudanças, e a
   assert.match(resolvida(e, 31).attention.map((p) => p.text).join(' | '), /check obrigatório vermelho no head \(audit\)/);
 });
 
-test('padrão: checks que não deu para ler no commit revisado também não seguram', async () => {
+test('checks que não deu para ler no commit revisado também não seguram', async () => {
   const e = motorPadrao([]);
   e.bloqueadoPorChecks = async () => ({ faltando: [] }); // sem verifiedHead: leitura não confirmada
   sessao(e);
@@ -511,67 +455,66 @@ test('padrão: checks que não deu para ler no commit revisado também não segu
   assert.equal(resolvida(e, 35).status, 'auto_approved');
 });
 
-test('padrão: conta que manda esperar você continua indo para a mesa pela política, com o aviso do CI', async () => {
+// Até 17/11/2026 a conta que mandava esperar você ia à mesa pela política, com o aviso do CI. O
+// `wait` saiu: gravado na conta, é lido como o padrão autônomo, e a aprovação sai com a nota do CI.
+test('o wait gravado na conta não segura: a aprovação sai na hora, com o aviso do CI', async () => {
   const e = motorPadrao([{ nome: 'test', estado: 'rodando' }], ['wait', 'wait']);
   sessao(e);
   await e.runHeadlessReview(PR(32));
-  assert.deepEqual(envios, []);
-  const d = pendente(e, 32);
-  assert.equal(d.esperaCi, undefined, 'pela política, não pela espera');
-  assert.ok(textos(d).some((t) => /check obrigatório ainda sem resultado/.test(t)));
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.equal(pendente(e, 32), undefined);
+  const r = resolvida(e, 32);
+  assert.equal(r.esperaCi, undefined);
+  assert.ok(r.attention.some((p) => /check obrigatório ainda sem resultado/.test(p.text)));
 });
 
-test('espera armada e depois desligada: o próximo ciclo posta no mesmo head sem olhar o CI, uma vez só', async () => {
+test('espera gravada antes: o próximo ciclo posta no mesmo head sem olhar o CI, uma vez só', async () => {
   const e = await emEspera(33, { checks: [{ nome: 'audit', estado: 'vermelho' }] });
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'FAILURE')];
-  assert.equal(await e.varrerEsperas(), 0, 'ligada: CI vermelho segura');
-  e.config.aguardarCiParaAprovar = false;
-  assert.equal(await e.varrerEsperas(), 1, 'desligada: sai');
+  assert.equal(await e.varrerEsperas(), 1, 'sai no primeiro ciclo');
   assert.equal(envios.length, 1);
   assert.equal(envios[0].event, 'APPROVE');
   assert.equal(envios[0].commit_id, HEAD);
   const r = resolvida(e, 33);
   assert.equal(r.status, 'auto_approved');
   assert.match(r.attention.map((p) => p.text).join(' | '), /vermelho no head \(audit\)/);
-  assert.ok(e.toasts.some((t) => /a espera do CI está desligada, então a aprovação que esperava saiu sozinha/.test(t)), e.toasts.join(' | '));
+  assert.ok(e.toasts.some((t) => /a espera do CI saiu, então a aprovação que esperava saiu sozinha/.test(t)), e.toasts.join(' | '));
   assert.equal(await e.varrerEsperas(), 0, 'sem laço: nada volta a esperar');
   assert.equal(envios.length, 1);
 });
 
-test('espera desligada não afrouxa o head: commit novo na espera continua largando, sem postar', async () => {
+test('a liberação da espera gravada antes não afrouxa o head: commit novo continua largando, sem postar', async () => {
   const e = await emEspera(34);
-  e.config.aguardarCiParaAprovar = false;
   gh.head = HEAD_NOVO;
   assert.equal(await e.varrerEsperas(), 0);
   assert.deepEqual(envios, []);
   assert.equal(pendente(e, 34).blockedKind, 'stale_head');
 });
 
-test('desligada: a pendência não carrega a marca da espera do CI, e a armada antes sai no ciclo seguinte', async () => {
-  // revisão nova com a chave desligada: a conta espera você pela política, e nada fala do CI como espera
-  const e = motorPadrao([{ nome: 'test', estado: 'rodando' }], ['wait', 'wait']);
+test('a pendência nova não carrega a marca da espera do CI, e a gravada antes sai no ciclo seguinte', async () => {
+  // revisão nova cuja postagem falhou de passagem (até 17/11/2026 era a conta esperando você pela
+  // política): a pendência do reenvio não fala do CI como espera
+  const e = motorPadrao([{ nome: 'test', estado: 'rodando' }]);
   sessao(e);
+  gh.postFalha = 'HTTP 502: Bad Gateway';
   await e.runHeadlessReview(PR(36));
+  gh.postFalha = '';
   assert.equal(pendente(e, 36).esperaCi, undefined);
   assert.equal(e.decisionForUi(pendente(e, 36)).esperaCi, undefined);
-  // espera armada com a chave ligada e depois desligada: sai no ciclo seguinte
+  // espera gravada antes: sai no ciclo seguinte
   const a = await emEspera(37);
-  assert.ok(pendente(a, 37).esperaCi, 'armada com a chave ligada');
+  assert.ok(pendente(a, 37).esperaCi, 'gravada antes');
   assert.ok(a.decisionForUi(pendente(a, 37)).esperaCi);
-  a.config.aguardarCiParaAprovar = false;
   assert.equal(await a.varrerEsperas(), 1);
   assert.equal(pendente(a, 37), undefined, 'aprovada e resolvida: não fica mais como pendência');
 });
 
-test('o padrão da preferência é desligado e só o booleano verdadeiro liga', async () => {
-  const { SETTINGS, EDITAVEIS, sanear } = await import('../lib/settings.js');
-  const { aguardaCiParaAprovar } = await import('../lib/engine/gate-espera.js');
-  assert.equal(SETTINGS.find((x) => x.key === 'aguardarCiParaAprovar').def, false);
-  assert.ok(EDITAVEIS.has('aguardarCiParaAprovar'));
-  assert.equal(sanear('aguardarCiParaAprovar', true), true);
-  for (const v of [false, 'true', 1, null, undefined]) assert.equal(sanear('aguardarCiParaAprovar', v), false, String(v));
-  for (const c of [{}, null, { aguardarCiParaAprovar: 'true' }, { aguardarCiParaAprovar: 1 }]) assert.equal(aguardaCiParaAprovar(c), false, JSON.stringify(c));
-  assert.equal(aguardaCiParaAprovar({ aguardarCiParaAprovar: true }), true);
+test('a preferência de esperar o CI para aprovar saiu da tabela e não tem leitor', async () => {
+  const { SETTINGS, EDITAVEIS } = await import('../lib/settings.js');
+  const gate = await import('../lib/engine/gate-espera.js');
+  assert.equal(SETTINGS.some((x) => x.key === 'aguardarCiParaAprovar'), false);
+  assert.equal(EDITAVEIS.has('aguardarCiParaAprovar'), false);
+  assert.equal('aguardaCiParaAprovar' in gate, false);
 });
 
 test('falha da sessão antes do resultado limpa o material privado e libera a revisão ativa', async () => {
@@ -595,20 +538,4 @@ test('falha da sessão antes do resultado limpa o material privado e libera a re
     assert.equal(fs.existsSync(snapshot), false);
     assert.equal(e.activeReviews.size, 0);
   } finally { technicalRuntime.prepareTechnicalReview = prepare; technicalRuntime.cleanup = clean; }
-});
-
-test('consulta de CI que perde a prova imediatamente antes de postar mantém a espera automática', async () => {
-  const e = motor([]);
-  sessao(e);
-  const originalPost = e.postReview.bind(e);
-  e.postReview = async () => ({ ok: false, waitForCi: true, error: 'CI obrigatório não confirmado' });
-  await e.runHeadlessReview(PR(501));
-  assert.ok(pendente(e, 501).esperaCi);
-  assert.deepEqual(envios, []);
-  gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
-  assert.equal(await e.varrerEsperas(), 0);
-  assert.ok(pendente(e, 501).esperaCi, 'a falha transitória da reconferência não larga a espera');
-  e.postReview = originalPost;
-  assert.equal(await e.varrerEsperas(), 1);
-  assert.equal(envios.length, 1);
 });

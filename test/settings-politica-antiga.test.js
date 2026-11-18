@@ -1,13 +1,15 @@
-// LER UMA CONFIG ANTIGA NUNCA DEIXA A CONTA MAIS PERMISSIVA DO QUE ELA ERA.
+// A leitura de uma config antiga: só o liga e desliga da revisão atravessa.
 //
-// É a regra que test/contas-migracao.test.js travava até o corte para uma conta (lote 14), e
-// que a primeira versão do normalizarConfig afrouxou em três lugares: a receita de instância
-// de teste (`{"port": 47180, "autoReview": false}`), a config de antes da primeira migração
-// (sem `esquemaConfig`, conta sem os quatro campos) e a lista só de contas silenciadas.
+// Até 17/11/2026 a regra aqui era "ler uma config antiga nunca deixa a conta mais permissiva do
+// que ela era", nos quatro campos da política. A regra do dono de 17/11/2026 (o revisor nunca
+// espera decisão de gente) tirou o desfecho em espera (`wait`): os três desfechos são sempre os
+// autônomos, e o `wait` de um arquivo antigo cai no padrão. O que continua não afrouxando é o
+// `autoReview`, o liga e desliga do monitoramento: a receita de instância de teste
+// (`{"port": 47180, "autoReview": false}`), a config de antes da primeira migração e a lista só de
+// contas silenciadas não passam a revisar sozinhas.
 //
-// A referência é a regra ANTIGA escrita à mão aqui (`antes`), como era em
-// lib/engine/contas-config.js até 30/09/2026, mais uma tabela literal de casos. Nenhuma das
-// duas chama o código de hoje.
+// A referência é a regra ANTIGA do `autoReview` escrita à mão aqui (`antes`), como era em
+// lib/engine/contas-config.js até 30/09/2026, mais uma tabela literal de casos.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -17,17 +19,9 @@ const C = (await import('../lib/engine/contas-config.js')).default;
 // A config em memória era `{ ...padrões, ...arquivo }`, com `autoReview: true` e
 // `autoApproveAll: false` nos padrões, e as duas leituras eram `!== false`.
 function antes(geral, conta) {
-  const cfg = { autoReview: true, autoApproveAll: false, ...geral };
+  const cfg = { autoReview: true, ...geral };
   const escolheuRevisao = conta.autoReview === true || conta.autoReview === false;
-  const segueRessalva = !conta.onCaveats && conta.onClean !== 'wait';
-  let ressalva = conta.onCaveats || 'wait';
-  if (segueRessalva) ressalva = cfg.autoApproveAll !== false ? 'approve' : 'wait';
-  return {
-    revisa: escolheuRevisao ? conta.autoReview : cfg.autoReview !== false,
-    limpo: conta.onClean || 'approve',
-    ressalva,
-    reprova: conta.onReject === 'request_changes' ? 'request_changes' : 'wait',
-  };
+  return { revisa: escolheuRevisao ? conta.autoReview : cfg.autoReview !== false, limpo: 'approve', ressalva: 'approve', reprova: 'request_changes' };
 }
 
 // O que o motor responde hoje com a conta que a carga devolveu.
@@ -57,12 +51,9 @@ const FORMAS = {
 };
 const naoAfrouxa = (a, d, rotulo) => {
   assert.ok(a.revisa || !d.revisa, `${rotulo}: não passa a revisar sozinha`);
-  assert.ok(a.limpo === 'approve' || d.limpo === 'wait', `${rotulo}: não passa a aprovar o limpo`);
-  assert.ok(a.ressalva === 'approve' || d.ressalva === 'wait', `${rotulo}: não passa a aprovar com ressalvas`);
-  assert.ok(a.reprova === 'request_changes' || d.reprova === 'wait', `${rotulo}: não passa a reprovar sozinha`);
 };
 
-test('a tabela inteira: config de antes da primeira migração faz depois o que fazia antes', () => {
+test('a tabela inteira: a revisão faz o que fazia antes, e os desfechos são os autônomos', () => {
   assert.equal(GERAIS.length * CONTAS.length, 729);
   for (const [nome, forma] of Object.entries(FORMAS)) {
     // o formato novo sem chave geral nenhuma não é config antiga: vale o padrão de hoje
@@ -73,15 +64,14 @@ test('a tabela inteira: config de antes da primeira migração faz depois o que 
         const d = depois(forma(geral, conta));
         const rotulo = `${nome}: ${JSON.stringify(conta)} com geral ${JSON.stringify(geral)}`;
         naoAfrouxa(a, d, rotulo);
-        // a ÚNICA diferença, e ela só restringe: limpo esperando com o com ressalvas aprovando
-        const excecao = conta.onClean === 'wait' && conta.onCaveats === 'approve';
-        assert.deepEqual(d, excecao ? { ...a, ressalva: 'wait' } : a, rotulo);
+        // os desfechos são sempre os autônomos, com ou sem `wait` no arquivo
+        assert.deepEqual(d, a, rotulo);
       }
     }
   }
 });
 
-test('chave geral antiga presente nunca afrouxa, com o marcador de esquema gravado ou não', () => {
+test('chave geral antiga de revisão presente nunca afrouxa, com o marcador de esquema gravado ou não', () => {
   for (const esquemaConfig of [1, 2, '2']) {
     for (const geral of GERAIS.filter((g) => Object.keys(g).length)) {
       for (const conta of CONTAS) {
@@ -99,31 +89,32 @@ test('modo simples (ghUser + owners): as nove combinações das chaves gerais', 
   }
 });
 
-// A tabela literal: o que a origin/main gravava, caso a caso.
+// A tabela literal: o que a carga grava, caso a caso (os desfechos ausentes valem o padrão
+// autônomo na leitura, contas-config.js).
 const TABELA = [
   ['receita de instância de teste, ainda sem login', { port: 47180, autoReview: false },
-    { user: '', owners: [], autoReview: false, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
+    { user: '', owners: [], autoReview: false }],
   ['modo simples de antes da primeira migração', { ghUser: 'antiga', owners: ['o'] },
-    { user: 'antiga', owners: ['o'], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'antiga', owners: ['o'], autoReview: true }],
   ['lista de antes da primeira migração, conta sem os quatro campos', { accounts: [{ user: 'antiga', owners: [] }] },
-    { user: 'antiga', owners: [], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'antiga', owners: [], autoReview: true }],
   ['modo simples com a revisão desligada pela chave geral', { ghUser: ' eu ', owners: ['org', ' '], autoReview: false },
-    { user: 'eu', owners: ['org'], autoReview: false, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'eu', owners: ['org'], autoReview: false }],
   ['as duas chaves gerais, conta que herda', { autoReview: false, autoApproveAll: true, accounts: [{ user: 'a', owners: ['o'] }] },
-    { user: 'a', owners: ['o'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' }],
-  ['as duas chaves gerais, conta com o limpo esperando', { autoReview: false, autoApproveAll: true, accounts: [{ user: 'b', owners: [], onClean: 'wait' }] },
-    { user: 'b', owners: [], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'a', owners: ['o'], autoReview: false }],
+  ['as duas chaves gerais, conta com o limpo esperando: o wait não atravessa', { autoReview: false, autoApproveAll: true, accounts: [{ user: 'b', owners: [], onClean: 'wait' }] },
+    { user: 'b', owners: [], autoReview: false }],
   ['chave geral escrita à mão como true depois da migração', { esquemaConfig: 1, autoReview: true, ghUser: 'x', owners: [] },
-    { user: 'x', owners: [], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'x', owners: [], autoReview: true }],
   ['chave geral torta: só false desligava', { autoApproveAll: null, autoReview: null, ghUser: 'x', owners: [] },
-    { user: 'x', owners: [], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'wait' }],
-  ['todas as contas silenciadas: a conta que nascer da detecção não age', { accounts: [{ user: 'a', owners: ['o'], muted: true }, { user: 'b', muted: true, onReject: 'request_changes' }] },
-    { user: '', owners: [], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }],
-  ['todas silenciadas com o modo simples junto: continua sem agir', { ghUser: 'eu', owners: ['o'], accounts: [{ user: 'a', muted: true }] },
-    { user: '', owners: [], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }],
+    { user: 'x', owners: [], autoReview: true }],
+  ['todas as contas silenciadas: a conta que nascer da detecção não revisa sozinha', { accounts: [{ user: 'a', owners: ['o'], muted: true }, { user: 'b', muted: true, onReject: 'request_changes' }] },
+    { user: '', owners: [], autoReview: false }],
+  ['todas silenciadas com o modo simples junto: continua sem revisar sozinha', { ghUser: 'eu', owners: ['o'], accounts: [{ user: 'a', muted: true }] },
+    { user: '', owners: [], autoReview: false }],
 ];
 
-test('a tabela literal do que a origin/main gravava', () => {
+test('a tabela literal do que a carga grava', () => {
   for (const [nome, entrada, conta] of TABELA) {
     const saida = normalizarConfig(entrada);
     assert.deepEqual(saida.conta, conta, nome);

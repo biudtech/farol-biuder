@@ -32,11 +32,12 @@ Para rodar em container há um [`Dockerfile`](Dockerfile) na raiz, com `git`, `g
 [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md).
 
 **Uma instância nova age sozinha.** Com `~/.farol` vazio e o `gh` logado, a conta detectada
-nasce revisando, aprovando e reprovando sem perguntar. Para subir sem agir, grave em
-`~/.farol/config.json` antes do primeiro boot:
+nasce revisando, aprovando e reprovando sem perguntar. O revisor nunca espera decisão de gente
+nem o CI (desde 17/11/2026): não existe desfecho em espera. Para subir sem revisar sozinho, grave
+em `~/.farol/config.json` antes do primeiro boot:
 
 ```json
-{ "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" } }
+{ "conta": { "autoReview": false } }
 ```
 
 Na primeira checagem, os PRs que já pediam revisão ficam fora da fila: o motor só revisa o que

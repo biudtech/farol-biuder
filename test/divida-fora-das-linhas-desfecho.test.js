@@ -170,13 +170,13 @@ function sessaoComDivida(e, { corrigir = true, erro, bloqueada = false, malforma
   return () => chamadas;
 }
 
-for (const politica of ['approve', 'wait']) test(`dívida repetida pela sessão é corrigida na mesma conversa e respeita ressalvas=${politica}`, async () => {
+// Até 17/11/2026 havia também a variante com ressalvas=wait (a pendência ficava). O `wait` saiu
+// (o revisor nunca espera decisão de gente) e a variante repetiria esta: saiu junto.
+test('dívida repetida pela sessão é corrigida na mesma conversa e aprova com a ressalva', async () => {
   const e = motor();
-  // Sem ressalvas aprovaria: no caso wait, só a classe correta mantém a pendência.
-  e.config.conta.onCaveats = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973)], {});
   const chamadas = sessaoComDivida(e);
-  const n = politica === 'approve' ? 1820 : 1821;
+  const n = 1820;
   await e.runHeadlessReview(PR(n));
   assert.equal(chamadas(), 2, 'uma correção dirigida, sem nova revisão inteira');
   const d = decisao(e, n);
@@ -186,11 +186,6 @@ for (const politica of ['approve', 'wait']) test(`dívida repetida pela sessão 
   assert.equal(d.esperaProva, undefined);
   assert.equal(d.technicalReview.foraDasLinhas.achados, 1);
   assert.ok((d.attention || d.reasons).some(r => /dívida anterior/.test(r.text || r)), 'a ressalva continua visível no desfecho');
-  if (politica === 'wait') {
-    assert.equal(d.status, 'pending');
-    assert.deepEqual(envios, []);
-    return;
-  }
   assert.equal(d.status, 'auto_approved');
   assert.deepEqual(envios.map(p => p.event), ['APPROVE']);
   assert.equal(envios[0].body, 'As alterações do fluxo estão corretas. A supressão do trecho antigo fica como melhoria separada.');
@@ -243,12 +238,12 @@ test('interrupção de rede durante a correção continua sendo falha recuperáv
   assert.deepEqual(envios, []);
 });
 
-for (const politica of ['request_changes', 'wait']) test(`correção sem resposta não publica texto antigo nem esgota a correção, com defeito real e reprovação=${politica}`, async () => {
+// A variante com reprovação=wait saiu em 17/11/2026, junto com o `wait`: repetiria esta.
+test('correção sem resposta não publica texto antigo nem esgota a correção, com defeito real', async () => {
   const e = motor();
-  e.config.conta.onReject = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973), supressor(1940)], {});
   const chamadas = sessaoComDivida(e, { bloqueada: true, defeitoReal: true });
-  const n = politica === 'request_changes' ? 1825 : 1826;
+  const n = 1825;
   await e.runHeadlessReview(PR(n));
   const pausada = decisao(e, n);
   assert.deepEqual(envios, [], 'nem o outro defeito permite publicar a cobrança antiga da dívida');
@@ -270,9 +265,9 @@ for (const politica of ['request_changes', 'wait']) test(`correção sem respost
   assert.equal(retomada.technicalReview.escopoSessaoInconclusivo, undefined);
   assert.equal(retomada.technicalReview.escopoSessaoPendente, undefined);
   assert.equal(retomada.esperaProva, undefined);
-  assert.equal(retomada.status, politica === 'request_changes' ? 'auto_rejected' : 'pending');
-  assert.deepEqual(envios.map(p => p.event), politica === 'request_changes' ? ['REQUEST_CHANGES'] : []);
-  if (envios.length) assert.ok(!envios[0].body.includes('nesta linha precisa de motivo'), 'a publicação usa o parecer corrigido');
+  assert.equal(retomada.status, 'auto_rejected');
+  assert.deepEqual(envios.map(p => p.event), ['REQUEST_CHANGES']);
+  assert.ok(!envios[0].body.includes('nesta linha precisa de motivo'), 'a publicação usa o parecer corrigido');
 });
 
 test('sem identificador de conversa, a correção permanece recuperável e não recebe selo de esgotamento', async () => {
@@ -290,12 +285,12 @@ test('sem identificador de conversa, a correção permanece recuperável e não 
   assert.ok(d.esperaProva);
 });
 
-for (const politica of ['request_changes', 'wait']) test(`continuação malformada não transforma o objeto reclassificado em parecer novo, com defeito real e reprovação=${politica}`, async () => {
+// A variante com reprovação=wait saiu em 17/11/2026, junto com o `wait`: repetiria esta.
+test('continuação malformada não transforma o objeto reclassificado em parecer novo, com defeito real', async () => {
   const e = motor();
-  e.config.conta.onReject = politica;
   technicalRuntime.finishTechnicalReview = avaliacao([supressor(1973), supressor(1940)], {});
   const chamadas = sessaoComDivida(e, { malformada: true, defeitoReal: true });
-  const n = politica === 'request_changes' ? 1828 : 1829;
+  const n = 1828;
   await e.runHeadlessReview(PR(n));
   const d = decisao(e, n);
   assert.equal(chamadas(), 2);

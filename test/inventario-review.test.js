@@ -92,18 +92,16 @@ for (const verdict of ['approve', 'request_changes']) {
 }
 
 // Desde 06/11/2026 (decidir na 1ª rodada) a cobertura não declarada é lacuna que não é dura: vira
-// ressalva da própria rodada e a política da conta decide. O inventário incompleto segue impedindo.
-test('inventário completo sem declaração de cobertura: ressalva da rodada, e a política decide', async () => {
+// ressalva da própria rodada. Desde 17/11/2026 a conta não espera mais nas ressalvas (o `wait`
+// saiu): o APPROVE sai com a ressalva no card. O inventário incompleto segue impedindo.
+test('inventário completo sem declaração de cobertura: ressalva da rodada, e o APPROVE sai', async () => {
   const { e } = motor('approve', { coverage: false });
-  e.approvePolicyFor = (_conta, limpo) => (limpo ? 'approve' : 'wait');
   await e.runHeadlessReview({ ...PR });
-  assert.equal(e.postados.length, 0, 'com ressalva e a conta esperando você, nada sai');
-  const d = e.decisions.pending[0];
+  assert.deepEqual(e.postados.map(p => p.event), ['APPROVE'], 'a ressalva não segura a aprovação');
+  const d = decisoesResolvidas(e)[0];
+  assert.equal(d.status, 'auto_approved');
   assert.equal(d.esperaProva, undefined, 'sem recuperação no mesmo commit');
-  assert.match(d.reasons.map(r => r.text || r).join(' '), /segue como ressalva: a cobertura da leitura tem .*não declarou a cobertura/);
-  const aprovando = motor('approve', { coverage: false }).e;
-  await aprovando.runHeadlessReview({ ...PR });
-  assert.deepEqual(aprovando.postados.map(p => p.event), ['APPROVE'], 'com a conta aprovando com ressalvas, sai');
+  assert.match(d.attention.map(r => r.text || r).join(' '), /segue como ressalva: a cobertura da leitura tem .*não declarou a cobertura/);
 });
 
 for (const own of [false, true]) {
@@ -111,7 +109,10 @@ for (const own of [false, true]) {
     const { e } = motor('approve', { partial: true, extra: { cardParteDestePr: false } });
     await e.runHeadlessReview({ ...PR, author: own ? 'eu' : 'dev' });
     assert.equal(e.postados.length, 0);
-    assert.equal(e.decisions.pending[0].inventarioDiff.status, 'incomplete');
+    // o PR próprio encerra sem postar (resolvida, `not_posted`); o de outro autor fica pendente
+    const d = own ? decisoesResolvidas(e)[0] : e.decisions.pending[0];
+    if (own) assert.equal(d.status, 'not_posted');
+    assert.equal(d.inventarioDiff.status, 'incomplete');
   });
 }
 
@@ -123,15 +124,21 @@ test('tentativas esgotadas não liberam aprovação com inventário desconhecido
 });
 
 // Segunda revisão independente de 06/11/2026: acima do limite de arquivos que o GitHub lista o
-// inventário nunca fecha. A revisão vai à mesa com o motivo, sem recuperação, e a prova gravada
-// não pede revisão nova pelo clique (que daria o mesmo resultado, uma sessão por clique).
-test('PR acima do limite de arquivos do GitHub: mesa com o motivo, sem recuperação e sem lacuna que relance pelo clique', async () => {
+// inventário nunca fecha. Até 17/11/2026 a revisão ia à mesa com o motivo; sem mesa, o motivo é
+// definitivo (outra rodada não muda nada) e sai na hora o COMMENT neutro do motor, sem recuperação,
+// e a prova gravada não pede revisão nova (que daria o mesmo resultado, uma sessão por rodada).
+test('PR acima do limite de arquivos do GitHub: COMMENT neutro na hora, sem recuperação e sem lacuna que relance', async () => {
   const { e } = motor('approve', { changedFiles: 3500 });
+  // antes do COMMENT neutro o motor relê o PR (desfecho-sem-mesa.js): aqui ele está aberto
+  e.prEstadoELabels = async () => ({ estado: 'OPEN', labels: [] });
   await e.runHeadlessReview({ ...PR });
-  assert.equal(e.postados.length, 0, 'o APPROVE automático continua impedido');
-  const d = e.decisions.pending[0];
-  assert.ok(d, 'fica com você');
+  assert.deepEqual(e.postados.map(p => p.event), ['COMMENT'], 'o APPROVE automático continua impedido');
+  assert.match(e.postados[0].body, /mais arquivos alterados do que o GitHub lista/);
+  assert.equal(e.decisions.pending.some(x => x.key === PR.key), false, 'nada fica pendente');
+  const d = decisoesResolvidas(e)[0];
+  assert.equal(d.status, 'commented_inconclusive');
+  assert.equal(d.action, 'comment');
   assert.equal(d.esperaProva, undefined, 'sem recuperação');
-  assert.match(d.reasons.map(r => r.text || r).join(' | '), /3500 arquivos.*a decisão é sua/);
+  assert.match(d.reasons.map(r => r.text || r).join(' | '), /3500 arquivos.*comentário neutro/);
   assert.equal(d.approvalEvidence.includes('diff não medido independentemente'), false);
 });

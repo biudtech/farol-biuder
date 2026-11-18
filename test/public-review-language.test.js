@@ -671,16 +671,17 @@ test('payload contaminado no auto-approve e auto-reject nunca resolve a decisão
     calls.length = 0;
     const e = headlessEngine(scenario.result);
     if (scenario.onReject) e.config.conta.onReject = scenario.onReject;
-    let event = null;
-    e.once('needs-decision', value => { event = value; });
-
     await e.runHeadlessReview(headlessPr(scenario.number));
 
     assert.equal(decisoesResolvidas(e).length, 0, `${scenario.name}: não pode parecer postado`);
-    assert.equal(e.decisions.pending.length, 1, `${scenario.name}: precisa cair na decisão humana`);
-    assert.ok(event && event.item, `${scenario.name}: evento user-facing foi emitido`);
-    assert.equal('payloads' in event.item, false);
-    assert.doesNotMatch(JSON.stringify(event), /gerada automaticamente pelo Farol|O agente revisou/i);
+    assert.equal(e.decisions.pending.length, 1, `${scenario.name}: a pendência fica registrada`);
+    // sem mesa desde 17/11/2026: a pendência vai ao desfecho sem mesa, que posta o COMMENT mínimo
+    // na varredura seguinte, montado pelo motor e sem o texto contaminado (desfecho-sem-mesa.js)
+    const pendencia = e.decisions.pending[0];
+    assert.equal(pendencia.semMesa && pendencia.semMesa.motivo, 'texto', `${scenario.name}: segue o desfecho sem mesa`);
+    const projetada = e.decisionForUi(pendencia);
+    assert.equal('payloads' in projetada, false);
+    assert.doesNotMatch(JSON.stringify(projetada), /gerada automaticamente pelo Farol|O agente revisou/i);
     assert.equal(calls.some(c => (c.args || []).includes('--input')), false, `${scenario.name}: payload bloqueado não toca o writer gh`);
   }
 });

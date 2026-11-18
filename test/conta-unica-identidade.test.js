@@ -49,13 +49,13 @@ async function comEnvDaMaquinaAte(vars, fn) {
 const REVISORA = { user: 'revisora', owners: ['biudtech'] };
 
 test('accountList devolve lista de um, vinda de config.conta', () => {
-  const e = engineDe({ ...REVISORA, autoReview: false, onClean: 'wait', padroesRevisao: 'sem any' }, 'tok-revisora');
+  const e = engineDe({ ...REVISORA, autoReview: false, onClean: 'approve', padroesRevisao: 'sem any' }, 'tok-revisora');
   const lista = e.accountList();
   assert.equal(lista.length, 1);
   assert.equal(lista[0].user, 'revisora');
   assert.deepEqual(lista[0].owners, ['biudtech']);
   assert.equal(lista[0].autoReview, false);
-  assert.equal(lista[0].onClean, 'wait');
+  assert.equal(lista[0].onClean, 'approve');
   assert.equal(lista[0].padroesRevisao, 'sem any');
   for (const campo of ['muted', 'color', 'kind', 'label']) assert.equal(campo in lista[0], false, campo);
   assert.equal(e.primaryUser(), 'revisora');

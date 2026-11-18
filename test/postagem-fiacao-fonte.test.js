@@ -31,10 +31,18 @@ test('espera do CI se identifica e ancora no head lido', () => {
   assert.ok(fonte.includes("engine.postReview(pr, novo, { via: 'espera-ci', continuidade: item })"), 'a reconstrução usa a mesma via');
 });
 
+// 17/11/2026: sétima via. O COMMENT neutro do desfecho sem mesa entra pela mesma boca, com a via
+// dita e ancorado no head lido quando há um.
+test('desfecho sem mesa se identifica e passa pelo postReview', () => {
+  const fonte = ler('lib/engine/desfecho-sem-mesa.js');
+  assert.ok(fonte.includes("engine.postReview(pr, head ? { ...payload, commit_id: head } : payload, { via: 'sem-mesa', jaSaiu })"));
+});
+
 test('nenhuma outra chamada a postReview em lib/ fora das vias conhecidas', () => {
   const conhecidas = new Map([
     ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 2],
     ['lib/engine/espera-ci.js', 2], ['lib/engine/espera-pr-proprio.js', 1],
+    ['lib/engine/desfecho-sem-mesa.js', 1],
   ]);
   const dir = path.join(RAIZ, 'lib', 'engine');
   for (const nome of fs.readdirSync(dir).filter((f) => f.endsWith('.js'))) {

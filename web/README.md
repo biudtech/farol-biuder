@@ -865,7 +865,6 @@ O contrato, lido do motor:
 
   | chave | o corpo | o que o motor faz com valor inválido | onde é usada |
   |---|---|---|---|
-  | `aguardarCiParaAprovar` | o booleano (o front não manda: só por arquivo ou API) | só `true` liga; o resto vira `false` | `aguardaCiParaAprovar`, `lib/engine/gate-espera.js` |
   | `parallelReviews` | o número | fora de 1 a 4 vai para a ponta; o que não é número mantém o anterior | `parallelLimit`, `lib/engine/headless-fila.js` |
   | `reviewModel` | o texto (vazio é o padrão do Claude Code) | fora do catálogo e do formato de nome completo mantém o anterior | `buildModelFlags`, `lib/engine/session.js`, e o roteador do Auto |
   | `reviewEffort` | o texto (vazio não manda a flag) | fora de `low`, `medium`, `high`, `xhigh` mantém o anterior | `buildModelFlags`, `lib/engine/session.js` |
@@ -874,7 +873,8 @@ O contrato, lido do motor:
   | `jiraSites` | a lista INTEIRA (o front não manda) | site inválido ou repetido sai da lista | `lib/engine/jira.js` |
 
   `bind`, `hostPublico`, `origensPermitidas`, `port` e `localAuth` não são aceitas: voltam em
-  `ignoradas`.
+  `ignoradas`. `aguardarCiParaAprovar` e `aguardarCiParaRevisar` saíram do motor em 17/11/2026 (o
+  revisor nunca espera o CI) e também voltam em `ignoradas`.
 - **`reviewModel` aceita dois formatos** (`sanitizeModel`, `lib/parse.js`): um apelido do
   catálogo (`auto`, `best`, `opus`, `sonnet`, `fable`) ou um nome completo `claude-...`, só com
   letras minúsculas, dígitos e hífen, que é a escotilha para modelo novo. O seletor oferece só
@@ -884,22 +884,17 @@ O contrato, lido do motor:
   `{ tipo: "editar", user, campos }` e aplica sobre a conta que o motor tem: cada campo troca o
   valor, e `owners` troca a lista inteira de organizações. Campo que não vai não muda. Campo
   vazio apaga o valor, e o motor regrava o padrão, que publica sozinho. Responde
-  `{ ok: true, ignoradas, ignorados }` (sem a conta gravada), ou `{ ok: false, erro }`. Com
-  `onClean` em `wait` o motor põe `onCaveats` em `wait`, e recusa o pedido de `approve`. O
-  motor ainda aceita `wait` nos três desfechos; a tela nunca o manda (veja "O revisor nunca
-  espera", abaixo).
+  `{ ok: true, ignoradas, ignorados }` (sem a conta gravada), ou `{ ok: false, erro }`. Desde
+  17/11/2026 o motor não aceita `wait` em desfecho nenhum: o pedido volta em `ignorados`, e o
+  `wait` de um `config.json` antigo é lido como o padrão autônomo.
 - **Quando a política nova vale.** O motor lê a política ao começar cada revisão
   (`politicaDeInicio`, `lib/engine/review-scope.js`), ao decidir o resultado de cada uma
-  (`shouldAutoApprove` e `shouldAutoReject`, `lib/engine/approval-policy.js`) e quando uma
-  espera do CI já armada fecha (`politicaAindaAprova`, `lib/engine/espera-ci.js`). O evento
-  `settings-changed` é emitido e ninguém o ouve: o PR que a política anterior deixou esperando
-  não é reavaliado, e o front não tem mesa para decidi-lo.
-- **A espera do CI não tem controle na tela.** `aguardarCiParaAprovar` continua no motor, e só
-  muda pelo arquivo de configuração ou por `POST /api/settings` chamado direto. Desligá-la por
-  lá tem efeito imediato: na varredura seguinte, toda aprovação que estava esperando o CI é
-  publicada sem esperar os checks, mesmo com o CI vermelho, se o commit ainda é o revisado e a
-  política ainda manda aprovar; a pendência que pediu mudanças só pelo CI fica esperando
-  (`umaEspera` e `liberarSemCi`, `lib/engine/espera-ci.js`).
+  (`shouldAutoApprove` e `shouldAutoReject`, `lib/engine/approval-policy.js`). O evento
+  `settings-changed` é emitido e ninguém o ouve. Nenhuma pendência espera decisão de gente: o que
+  não sai sozinho segue o desfecho sem mesa do motor (`lib/engine/desfecho-sem-mesa.js`).
+- **O revisor nunca espera o CI** (17/11/2026). O motor não tem mais a chave
+  `aguardarCiParaAprovar`: o CI não segura nem a revisão nem a decisão, e a espera gravada antes
+  termina sozinha na varredura seguinte, com o head conferido.
 - **`POST /api/auth/sessions`** responde `{ ok, sessoes: [{ id, rotulo, criadoEm, ultimoUsoEm,
   atual }] }`; `id` é um pedaço do hash do token. **`POST /api/auth/revoke`** recebe `{ id }` e
   responde `{ ok: true, eraAtual }` ou `{ ok: false, code: "sessao_inexistente" }`.
@@ -1052,14 +1047,8 @@ Regras que valem para quem mexer nela:
   do motor com a diferença da pessoa, o que fecha o caso de quem viu a mudança chegar; a
   mudança de outra aba que ainda não chegou a esta é sobrescrita. A correção é no motor:
   operação de acrescentar e de tirar organização.
-- **A política nova não reavalia o que já esperava.** Trocar esperar por publicar não publica o
-  PR que a política anterior deixou esperando no motor, e o front não tem mesa nem rota para
-  decidi-lo; a tela diz isso na pergunta.
-- **A espera do CI e o `wait` da política só mudam por arquivo ou API.** A tela não tem o
-  controle `aguardarCiParaAprovar` nem oferece `wait`: quem precisar ligar a espera do CI ou pôr
-  um desfecho em espera faz pelo `config.json` (com o motor parado) ou por `POST /api/settings`
-  e `POST /api/accounts/edit` chamados direto. A tela mostra o `wait` que encontrar, mas não o
-  devolve, e não mostra a espera do CI.
+- **Não existem mais espera do CI nem `wait` na política** (17/11/2026). O motor não aceita
+  nenhum dos dois, nem por arquivo nem pela API.
 - **A lista de sessões não está no snapshot nem tem evento.** Sessão criada ou revogada em
   outro navegador só aparece ao atualizar a lista.
 - **As regras de review por organização e autor** (`reviewRules`) não são mostradas nem

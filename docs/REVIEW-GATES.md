@@ -11,7 +11,7 @@ seção diz a regra e o arquivo em que ela mora.
 - [O gate automático](#o-gate-automático)
 - [Ressalva e lacuna](#ressalva-e-lacuna)
 - [A decisão sem mesa](#a-decisão-sem-mesa)
-- [CI obrigatório antes da aprovação](#ci-obrigatório-antes-da-aprovação)
+- [O CI não decide](#o-ci-não-decide)
 - [Check herdado da base](#check-herdado-da-base)
 - [PR de sincronização](#pr-de-sincronização)
 - [Dedup por head](#dedup-por-head)
@@ -77,7 +77,7 @@ indicação):
 
 Toda escrita de review passa por `postReview` (`lib/engine/decision.js`): o desfecho da revisão
 automática (`via: 'revisao'`), o clique na mesa (`via: 'clique'`), o reenvio (`via: 'reenvio'`) e a
-espera do CI (`via: 'espera-ci'`). As postagens do mesmo PR entram numa fila e saem uma por vez
+liberação das esperas do CI gravadas antes de 17/11/2026 (`via: 'espera-ci'`). As postagens do mesmo PR entram numa fila e saem uma por vez
 (`enfileirarPostagem`).
 
 Há uma escrita no GitHub que não passa por `postReview`: a retirada do pedido de mudanças
@@ -140,13 +140,12 @@ uma sessão pode sair sozinho. A admissibilidade vem antes da política da conta
 | `origem_desconhecida` | o PR não traz nenhuma marca de origem (ver [A decisão sem mesa](#a-decisão-sem-mesa)) |
 | `prova_tecnica_incompleta` | sobrou lacuna exigida (ver [Ressalva e lacuna](#ressalva-e-lacuna)) |
 | `politica` | a política da conta manda esperar |
-| `ci_vermelho`, `ci_em_andamento` | só com a espera do CI ligada |
 
 `shouldAutoReject` devolve verdadeiro ou falso. Não reprova sozinho quando: o resultado é
 incoerente; a avaliação técnica falhou pela declaração do repositório; a análise não sustenta a
 reprovação (`analiseSustentaReprovacao`); o bloqueio é só de estado do PR (CI, conflito,
-dependência, fora do diff: `reprovacaoSoDeEstado`); a espera do CI está desligada e só o CI vermelho
-sustenta o pedido; o inventário tem pendência, ou a memória de rodadas (esta só em `enforce`); o
+dependência, fora do diff: `reprovacaoSoDeEstado`); só o CI vermelho sustenta o pedido (o CI não
+decide); o inventário tem pendência, ou a memória de rodadas (esta só em `enforce`); o
 REQUEST_CHANGES não veio
 pronto e com texto; a origem é desconhecida; o PR é da própria conta; ou a política da conta não é
 `request_changes`.
@@ -181,31 +180,31 @@ Prova antiga, em dois lugares que fazem coisas diferentes:
 ## A decisão sem mesa
 
 Regra do dono de 18/10/2026: a conta configurada para aprovar sozinha aprova sozinha, e a
-configurada para reprovar sozinha reprova sozinha. O desfecho de uma revisão headless está em
-`concluirRevisao` (`lib/engine/desfecho-da-revisao.js`).
+configurada para reprovar sozinha reprova sozinha. Regra do dono de 17/11/2026: **o revisor nunca
+espera decisão de gente**. Não existe mais mesa ("Precisa de você"): nenhum desfecho termina parado
+à espera de um clique. O desfecho de uma revisão headless está em `concluirRevisao`
+(`lib/engine/desfecho-da-revisao.js`).
 
 A política é da conta (`config.conta`, lida em `lib/engine/contas-config.js`):
 
 | campo | valores | o que decide |
 |---|---|---|
-| `autoReview` | `true`, `false` | se o PR pedido à conta é revisado sem clique |
-| `onClean` | `approve`, `wait` | resultado aprovável sem ressalva |
-| `onCaveats` | `approve`, `wait` | resultado aprovável com ressalva; nunca mais permissivo que `onClean` |
-| `onReject` | `request_changes`, `wait` | resultado que pede mudanças |
+| `autoReview` | `true`, `false` | se o PR pedido à conta é revisado sem clique (o liga e desliga do monitoramento) |
+| `onClean` | `approve` | resultado aprovável sem ressalva |
+| `onCaveats` | `approve` | resultado aprovável com ressalva |
+| `onReject` | `request_changes` | resultado que pede mudanças |
 
-O padrão de uma conta nova é agir em tudo: `autoReview: true`, `approve`, `approve` e
-`request_changes` (`PADRAO`). Para um `config.json` de versão anterior vale outra regra, a de
-`normalizarConfig` (`lib/settings.js`): o campo que a conta não tinha escolhido não ganha o
-padrão novo, e com ressalvas e reprovação ficam em `wait` salvo a chave antiga de aprovar tudo.
-O detalhe está em [`CONFIGURATION.md`](CONFIGURATION.md). Em `wait`, o PR vai à mesa ("Precisa
-de você") com o motivo no card.
+O `wait` saiu dos três desfechos: `normalizarPolitica` converte o `wait` de um `config.json`
+antigo no padrão autônomo (`approve`, `approve`, `request_changes`), registra a conversão numa
+linha de log, uma vez, e o arquivo é regravado sem ele. A edição que pede `wait` volta em
+`ignorados`. O detalhe está em [`CONFIGURATION.md`](CONFIGURATION.md).
 
 **Origem.** A revisão posta sozinha quando o PR traz uma marca de origem (`origemDoDono`,
 `lib/engine/desfecho-automatico.js`). A função aceita seis marcas. Três têm quem as escreva hoje:
 `requested` (o PR pedido à conta, vindo da fila), `manual` (o clique) e `origemDono`, que a
-pendência grava e é o que faz o reenvio e a espera do CI passarem. As outras três (`viaAdmin`,
-`viaComando`, `viaDistribuicao`) são lidas e não têm escritor. Só a revisão sem marca nenhuma não
-posta sozinha, e o card diz isso.
+pendência grava e é o que faz o reenvio e a liberação da espera do CI gravada antes passarem. As outras três (`viaAdmin`,
+`viaComando`, `viaDistribuicao`) são lidas e não têm escritor. A revisão sem marca nenhuma não posta
+o parecer dela: segue o desfecho sem mesa, abaixo.
 
 **Os caminhos do desfecho**, todos atrás da conferência de head e do dedup:
 
@@ -214,11 +213,73 @@ posta sozinha, e o card diz isso.
 3. REQUEST_CHANGES montado pelo app (`caminhoNovo`), quando a sessão aprovou, a conta reprova
    sozinha e há defeito do PR (`defeitosDoPr`: violação técnica confirmada, achado não resolvido, a
    parte do card deste PR não entregue).
-4. REQUEST_CHANGES pelo CI obrigatório vermelho, só com a espera do CI ligada.
+4. (saiu em 17/11/2026: o REQUEST_CHANGES pelo CI obrigatório vermelho; o CI não decide.)
 5. COMMENT em PR da própria conta.
 
-O que não sai por nenhum deles vira pendência (`registrarPendencia`): espera automática, quando há
-uma armada, ou mesa.
+O que não sai por nenhum deles segue sozinho (`registrarPendencia`): uma espera automática, quando
+há uma armada (prova, conflito, reenvio, commit novo, reconferência técnica), ou o desfecho sem
+mesa.
+
+**O desfecho sem mesa** (`lib/engine/desfecho-sem-mesa.js`). O que antes ia à mesa por falta de
+confiança no resultado (origem sem marca, análise ou inventário que não fecharam, rodada aberta,
+resultado incoerente, lacuna de prova depois do teto, recusa por critérios inconsistentes, bloqueio
+só de estado do PR) não espera ninguém:
+
+1. o motor revisa de novo no mesmo commit, até `RODADAS_EXTRAS` (2) vezes, com recuo de 15 minutos
+   antes da primeira e de 60 antes da segunda. A marca `semMesa` vai gravada na pendência; quem
+   relança é o round automático, pela marca `stale_head` no mesmo head, como a busca da prova.
+   Commit novo zera a conta. A rodada pedida que não roda em seis horas (`TETO_DA_RODADA_MS`, o
+   round segurado por rascunho, conflito ou falta de token) conta como esgotada;
+   Há também um teto CONJUNTO de sessões extras por PR e head (`TETO_CONJUNTO`, o mesmo das 6
+   tentativas da busca da prova), somando as rodadas extras daqui e as da busca da prova e gravado
+   no `decisions.json` (`sessoesExtras`): com motivos alternados, as duas recuperações não se
+   relançam sem fim. O relançamento respeita o estacionamento por cancelamento e por label
+   retirada: esses dois encerram sem postar e sem relançar;
+2. esgotado o limite, ou quando outra rodada não muda nada (diff acima do limite do GitHub, texto
+   recusado), o motor posta um COMMENT neutro, montado só por ele (`comentarioNeutro`): o que foi
+   revisado (o commit e quantos arquivos) e o que não deu para concluir, numa frase do motor, nunca
+   texto do modelo. O COMMENT não aprova nem reprova: nunca sai APPROVE nem REQUEST_CHANGES sem
+   admissibilidade. Ele passa pelo `postReview` como qualquer texto. Resolvido como
+   `commented_inconclusive`;
+3. o portão que recusa o COMMENT encerra sem postar (`not_posted`), com o motivo no card; falha
+   passageira vai ao reenvio de sempre.
+
+**Antes do COMMENT neutro** (`gentePorPerto` e `conferirAntesDoComentario`), em todos os ramos,
+inclusive o reenvio, o motor confere a gente no PR (cancelamento, label retirada, decisão de uma
+pessoa no head) e relê o PR, e não posta quando: o PR está mesclado ou fechado (`already_merged`, `already_closed`); o estado ou o
+head não podem ser lidos agora (`not_posted`); outra conta tem a label `<conta>:revisando`
+(`not_posted`); ou o head andou (nada sai, a marca `stale_head` deixa o PR na fila do head novo).
+O portão geral não muda: o COMMENT do PR próprio em PR aberto continua. A conferência "esse
+comentário já saiu?" e o envio correm juntos dentro da fila de postagem do PR (o gancho `jaSaiu`
+do `postReview`), e a varredura reconfere a revisão em curso logo antes de postar: duas vias no
+mesmo head não publicam o COMMENT duas vezes. O COMMENT neutro leva a retirada pendente do pedido
+anterior, para a varredura retirar o CHANGES_REQUESTED depois.
+
+**Depois do COMMENT neutro**, commit novo no PR abre a rodada automática sozinho: sem review
+decisivo da conta, `staleForReview` (`lib/engine/rereview-stale.js`) usa o head da última decisão
+`commented_inconclusive` (estado `INCONCLUSIVO` no gatilho A de `explicaReRound`).
+
+O PR que saiu do automático encerra sem postar: revisão automática desligada para ele, ou gente
+que já decidiu o commit (o motor respeitando o time, não esperando decisão). A varredura do ciclo
+adota toda pendência sem caminho automático (a mesa gravada antes de 17/11/2026, inclusive a da
+recusa por credencial): nenhuma fica parada para sempre. A que já passou do teto da prova vai
+direto ao COMMENT neutro, sem sessão nova; as outras relançam escalonadas, uma a cada cinco
+minutos, nunca todas na mesma varredura.
+
+**O que vem depois de cada recusa de portão** (o portão continua recusando o que recusa):
+
+| recusa | depois |
+|---|---|
+| credencial no texto | o card registra a recusa; na varredura seguinte sai o COMMENT mínimo, sem o texto do modelo (o texto com credencial não é reconstruído: `test/credencial-no-texto.test.js` trava que a reconstrução não publica o resto do texto) |
+| linguagem interna | reconstrução uma vez; se continuar recusado, o COMMENT mínimo, como a credencial |
+| critérios inconsistentes | revisa de novo, como a falta de confiança no resultado |
+| PR mergeado ou fechado | encerra sem postar (`already_merged`, `already_closed`) |
+| PR da própria conta | encerra sem postar (`not_posted`); o COMMENT do PR próprio continua sendo o caminho 5 |
+| instância isolada | encerra sem postar (`not_posted`); a pendência gravada antes ainda volta ao reenvio se a instância deixar de ser isolada (`lib/engine/postagem-recusada.js`) |
+| head que andou | descarta e marca `stale_head`: o PR fica na fila da rodada do head novo |
+| dedup por head | já está no GitHub: resolve como `already_reviewed` |
+| avaliação técnica na aprovação | a busca da prova (`lib/engine/espera-prova.js`) |
+| conta sem token | o reenvio, com recuo longo (`semToken`) |
 
 **Cancelamento.** Cada postagem do desfecho é cercada: `conferirCancelamento` antes de montar o
 envio, e `iniciarPublicacao` logo antes de enviar, que confere de novo e marca a sessão como não
@@ -228,9 +289,18 @@ interromper o efeito no GitHub.
 **Falha ao postar.** Na hora, o desfecho repete até 3 vezes, com 2 segundos entre elas, só a
 recusa passageira de não ter conseguido ler os reviews do commit
 (`lib/engine/postagem-retentativa.js`). Falha transitória deixa a pendência marcada para o
-reenvio: `retryFailedPosts` (`lib/engine/decision.js`) tenta a cada ciclo, até 3 tentativas, e
-antes de cada uma relê o head e os reviews da conta. Head que mudou desarma o reenvio; leitura
-que falha segura até o ciclo seguinte.
+reenvio: `retryFailedPosts` (`lib/engine/decision.js`) tenta a cada ciclo nas 3 primeiras vezes e
+depois continua com recuo crescente, de 15 minutos até seis horas (`recuoDoReenvio`), sem nunca
+virar pendência de gente. Na dúvida, a falha é passageira e fica no recuo (todo 5xx, 401, 403 e
+404 momentâneos, `head_desconhecido`, a reconferência técnica que não deu para fazer, erro
+desconhecido). Permanente é só a lista explícita (`ehPermanente`): a avaliação técnica com recusa
+definitiva, critérios inconsistentes, PR próprio, instância isolada, credencial, linguagem e o 422
+de repositório arquivado ou PR travado. Ela sai do reenvio e vai ao desfecho sem mesa
+(`recusaPermanente`), que encerra sem postar no PR próprio e posta o COMMENT neutro no resto. O
+reenvio do COMMENT neutro passa pelas mesmas conferências do primeiro envio (`barrarReenvio`):
+gente no PR, estado, label e head. Antes de cada tentativa relê o head e os reviews da conta. Head que
+mudou desarma o reenvio e marca `stale_head`; leitura que falha segura até o ciclo seguinte; o
+reenvio sem o texto gravado vai ao desfecho sem mesa.
 
 **Pendência atendida por fora.** A cada ciclo, `reconcilePending` tira a pendência sem postar
 quando o PR foi mergeado ou fechado, ou quando a conta já tem review que a atende.
@@ -239,46 +309,45 @@ quando o PR foi mergeado ou fechado, ou quando a conta já tem review que a aten
 outra pessoa já aprovou ou reprovou aquele commit, a aprovação automática é dispensada sem postar
 (`dispensarAprovacaoEmHeadDecidido`).
 
-## CI obrigatório antes da aprovação
+**A rota do clique.** `POST /api/decide` continua no motor, sem tela que a chame: tirá-la exigiria
+apagar os casos de clique dos testes de portão (`test/credencial-no-texto.test.js`,
+`test/postagem-dedup.test.js`, `test/postagem-coordenacao-desligada.test.js`,
+`test/public-review-language.test.js`), e teste de portão só muda por decisão do dono. Ela não
+segura nada: nenhuma pendência espera por ela.
 
-A chave é `aguardarCiParaAprovar`, lida num lugar só (`aguardaCiParaAprovar`,
-`lib/engine/gate-espera.js`). O padrão é desligada.
+## O CI não decide
 
-**Desligada**, o estado do CI não segura nem adia a decisão em via nenhuma, e fica só como nota no
-app. O merge só fica barrado pelo GitHub onde o check é obrigatório no ruleset do repositório, e
-desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho,
-e nada barra o merge. O pedido de mudanças sustentado só pelo CI vermelho não sai
-sozinho.
+Regra do dono de 17/11/2026: **o revisor nunca espera o CI**, nem para começar a revisar nem para
+aprovar. As chaves `aguardarCiParaAprovar` ("CI obrigatório antes da aprovação") e
+`aguardarCiParaRevisar` ("só começa com os checks obrigatórios verdes") saíram da tabela de
+preferências; num `config.json` antigo são descartadas na carga.
 
-**Ligada**, o resultado aprovável com check obrigatório vermelho ou rodando fica como pendência com
-a marca `esperaCi`, gravada no `decisions.json` (`lib/engine/espera-ci.js`). A cada ciclo,
-`aprovarQuandoOCiFechar` faz uma leitura por PR em espera:
+- **Para começar**: o lançamento automático não lê os checks (`bloqueiaAutomatico`,
+  `lib/engine/skip-review.js`, só pergunta se gente já decidiu o head), e a recuperação da prova
+  não pausa pelo CI.
+- **Para decidir**: o estado do CI não segura, não adia e não barra a decisão em via nenhuma.
+  `shouldAutoApprove` não devolve motivo do CI, a lacuna do CI nunca é exigida
+  (`lacunasDaRodada`, `lib/engine/busca-da-prova.js`), a publicação não lê os checks
+  (`lib/technical-review/publication.js`), e o pedido de mudanças sustentado só pelo CI vermelho
+  não sai: quando nada mais o sustenta, vira aprovação pela política da conta
+  (`lib/engine/estado-desmentido.js`).
+- **Como informação**: os checks obrigatórios do head continuam lidos no fim da revisão
+  (`anexarChecksObrigatorios`, `lib/engine/checks-exigidos.js`), o prompt diz à sessão que o CI
+  não decide (`ciForaDaDecisaoBlock`, `lib/engine/review-prompt.js`), e o card da aprovação diz com
+  que CI ela saiu (`avisoDaAprovacao`, `lib/engine/gate-espera.js`). Nada disso vai ao PR.
 
-- checks verdes no mesmo head que a sessão leu: confere a política da conta de novo, consulta se
-  gente já decidiu o commit e posta pelo `postReview`;
-- head diferente: larga a espera e marca a pendência como commit novo; nunca posta em head que a
-  sessão não leu;
-- CI vermelho ou rodando: segue esperando, sem pedir clique;
-- CI vermelho com a conta reprovando sozinha: `reprovarPeloCi` posta o REQUEST_CHANGES citando os
-  checks e resolve a pendência como reprovada. A espera acaba ali; só outro commit abre análise
-  nova.
+O merge continua barrado pelo GitHub onde o check é obrigatório no ruleset do repositório; num
+repositório sem check obrigatório no ruleset, o APPROVE pode sair com o CI vermelho e nada barra o
+merge, e por isso o card da aprovação avisa.
 
-Na hora de postar a aprovação, decisão de gente naquele commit resolve a pendência como
-`approval_not_needed`, sem postar (`consciencia` e `dispensar`).
+**A espera gravada antes.** A pendência com a marca `esperaCi` que uma versão anterior deixou no
+`decisions.json` termina sozinha (`aprovarQuandoOCiFechar`, `lib/engine/espera-ci.js`), uma leitura
+por ciclo, sem olhar o CI: o head continua conferido (head diferente larga a espera e marca a
+pendência como commit novo), o gate de consciência vale na hora do post (decisão de gente naquele
+commit resolve como `approval_not_needed`, sem postar), e a aprovação sai pelo `postReview`, com o
+CI não verde como nota no card. O pedido de mudanças que esperava o CI não sai.
 
-A espera também é armada para um resultado que pede mudanças só por estado do PR com causa de CI,
-quando a conta reprova sozinha e a origem é conhecida (`esperaDeEstado`,
-`lib/engine/desfecho-da-revisao.js`). Para essa pendência, CI verde no mesmo head leva à mesa e
-nunca vira APPROVE; CI vermelho segue o `reprovarPeloCi`.
-
-Leitura que falha (sem token, `gh` fora, exigência da branch desconhecida) espera o próximo ciclo:
-aqui a falta de dado segura. Uma espera armada antes de a chave ser desligada é liberada no ciclo
-seguinte sem olhar o CI, com o head ainda conferido (`liberarSemCi`).
-
-O check obrigatório herdado da base não segura nada disso: ver [Check herdado da base](#check-herdado-da-base).
-
-Começar a revisão só com os checks obrigatórios verdes é outra chave, `aguardarCiParaRevisar`,
-também desligada por padrão (`bloqueiaAutomatico`, `lib/engine/skip-review.js`).
+O check obrigatório herdado da base continua sem peso: ver [Check herdado da base](#check-herdado-da-base).
 
 ## Check herdado da base
 
@@ -296,26 +365,21 @@ rodando nunca herda: a base não mostra falha nenhuma. O check que não está ve
 valendo exatamente como antes.
 
 **Onde vale.** O herdado sai da lista do que falta logo na leitura, nos dois lugares que leem os
-checks do PR: `bloqueadoPorChecks` (gate de entrada, `checksObrigatorios` do envelope, o clique e
-a publicação em `lib/technical-review/publication.js`) e `lerCi` (a espera do CI e a retirada do
-pedido, `lib/engine/espera-ci.js`). Com isso ele não segura a aprovação, nem com a espera do CI
-ligada; não vira lacuna de CI (`approvalGaps`), ressalva, motivo de espera, pedido de mudanças
-pelo CI (`payloadDoCiVermelho`) nem o aviso "aprovado com check obrigatório" do card
-(`avisoDaAprovacao`, `avisoDoCi`). Com a espera ligada, o pedido de mudanças que a sessão
-sustentou só pelo CI, quando o que falta no commit revisado é só herdado, vira aprovação pela
-política da conta (`estadosDoPedido`, `lib/engine/estado-desmentido.js`), e o prompt ganha o bloco
-`ciHerdadoBlock` (`lib/engine/review-prompt.js`) para a sessão não cobrar o herdado no texto.
-Check não obrigatório continua sem peso: nem chega a ser comparado com a base.
+checks do PR: `bloqueadoPorChecks` (`checksObrigatorios` do envelope) e `lerCi` (a liberação das
+esperas gravadas antes e a retirada do pedido, `lib/engine/espera-ci.js`). Desde 17/11/2026 o CI
+não decide nada ([O CI não decide](#o-ci-não-decide)), e o herdado também não vira o aviso
+"aprovado com check obrigatório" do card (`avisoDaAprovacao`, `avisoDoCi`): só a linha
+informativa abaixo. O bloco do prompt que tirava o herdado da sessão (`ciHerdadoBlock`) saiu com
+a espera, porque o bloco do CI fora da decisão (`ciForaDaDecisaoBlock`) já cobre. Check não
+obrigatório continua sem peso: nem chega a ser comparado com a base.
 
 **A leitura da base** (`checksDaBase`) é uma consulta GraphQL pelo `gh`: o commit atual da branch
 base e o `statusCheckRollup` dele, no mesmo formato que o `gh pr view` devolve para o PR, lido
 pela mesma régua (`checksExigidosVerdes`). Só acontece quando há check obrigatório fora do verde
 no head. Leitura que falha, commit sem SHA ou lista cortada (mais de 100 checks) valem como "não
-deu para ler", e o comportamento é o de antes: nada é herdado. O gate de lançamento e a leitura da
-revisão usam um cache por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA
-lido, que guarda também a falha. Os pontos que decidem postar leem a base fresca, sem o cache
-(`{ fresco: true }`): a espera do CI antes do APPROVE e a retirada do pedido (`lerCi`) e a
-publicação (`lib/technical-review/publication.js`).
+deu para ler", e o comportamento é o de antes: nada é herdado. A leitura da revisão usa um cache
+por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA lido, que guarda também a
+falha. A retirada do pedido (`lerCi`) lê a base fresca, sem o cache (`{ fresco: true }`).
 
 **O card.** Na mesa, o herdado aparece numa linha que só informa (`avisoDosHerdados`,
 `lib/engine/gate-espera.js`), com a marca `informativo`, que `attentionPoints` nunca conta como
@@ -386,8 +450,8 @@ A regra é `decisaoAutomaticaJaPublicada` (`lib/engine/review-head-policy.js`): 
 da boca não roda, e `myReviewStates` descarta os reviews anteriores ao pedido de revisão. Quem
 clica em Revisar num commit já decidido pela conta recebe revisão e postagem novas.
 
-O mesmo `myReviewStates` é lido também no desfecho (`lib/engine/desfecho-da-revisao.js`) e na espera
-do CI (`lib/engine/espera-ci.js`), antes de cada um montar o próprio pedido. Para saber todos os
+O mesmo `myReviewStates` é lido também no desfecho (`lib/engine/desfecho-da-revisao.js`) e na
+liberação da espera do CI gravada antes (`lib/engine/espera-ci.js`), antes de cada um montar o próprio pedido. Para saber todos os
 pontos de hoje: `git grep -n "myReviewStates(" lib server.js`.
 
 Travado em `test/postagem-dedup.test.js` e `test/postagem-coordenacao-desligada.test.js`.
@@ -400,7 +464,7 @@ O review fala do commit que a sessão leu, e não sai em outro.
   relê o head. Se mudou durante a sessão, nada é postado e a pendência fica marcada `stale_head`.
 - **No clique**: se o head de agora difere do que a sessão leu, `decide` não posta, grava na
   pendência `blockedKind: 'stale_head'` com o head novo e responde `blocked: 'stale_head'`.
-- **Na espera do CI**: head diferente larga a espera.
+- **Na espera do CI gravada antes de 17/11/2026**: head diferente larga a espera.
 - **A cada ciclo**: `marcarCommitNovo` (`lib/engine/pendencia-commit-novo.js`) converte em
   `stale_head` a pendência viva cujo head no GitHub não é mais o lido.
 
@@ -440,10 +504,11 @@ pontas, na ordem em que um PR as encontra:
    clique (`recusaDePrProprio`, `lib/engine/postagem-portao.js`). Para item que chegou sem
    autor, ele é lido ali e a recusa é conferida de novo.
 5. **O desfecho** posta a revisão como COMMENT (`payloadDoPrProprio`,
-   `lib/engine/desfecho-automatico.js`) quando a política da conta para aquele veredito é
-   automática; com a conta em `wait`, vai à mesa.
+   `lib/engine/desfecho-automatico.js`). Sem texto para o comentário, encerra sem postar
+   (`not_posted`): no PR próprio não há o que decidir.
 6. **A espera** de um PR que se descobre próprio é largada, e a pendência ganha a marca
-   `prProprio` (`lib/engine/espera-pr-proprio.js`), que a projeção leva ao front.
+   `prProprio` (`lib/engine/espera-pr-proprio.js`), que a projeção leva ao front; sem o
+   comentário, encerra sem postar.
 
 Travado em `test/pr-proprio.test.js`.
 
@@ -461,8 +526,9 @@ conta que assina em terceira pessoa (a conta dentro de crase, bloco de código o
 técnico e não conta). A recusa é `internal_language`.
 
 No desfecho automático, o texto barrado pela linguagem é reconstruído uma vez
-(`postarReconstruindo`, `lib/engine/desfecho-da-revisao.js`) e passa de novo pelas travas. No
-clique não há reconstrução: a pendência fica com o motivo dito.
+(`postarReconstruindo`, `lib/engine/desfecho-da-revisao.js`) e passa de novo pelas travas. O que
+continua barrado, e o texto com credencial (que não é reconstruído), vira o COMMENT mínimo do
+desfecho sem mesa, sem o texto do modelo ([A decisão sem mesa](#a-decisão-sem-mesa)).
 
 O prompt da sessão pede o texto certo; estas travas são a garantia, porque não dependem do modelo.
 
@@ -505,8 +571,9 @@ regra por organização e autor); conta sem token; revisão estacionada; outra
 pessoa revisando; saída de cena registrada; PR em conflito com a base.
 
 Entre as travas e o relógio, `explicaReRound` ainda segura em três casos: retry pós-falha
-pendente para o PR (quem relança é o retry); pendência viva na mesa que não é `stale_head`; e a
-âncora por head, pela qual cada head relança no máximo uma vez.
+pendente para o PR (quem relança é o retry); pendência viva que não é `stale_head` (uma espera
+automática ou o desfecho sem mesa, que é quem a move); e a âncora por head, pela qual cada head
+relança no máximo uma vez.
 
 Depois disso vale o relógio: a rodada espera o head ficar quieto por
 `TEMPOS.HEAD_QUIETO_MS` (5 minutos), contra rajada de pushes, e depois de três rodadas presas
@@ -525,8 +592,8 @@ sai sozinho, e isso não é aprovação (`lib/engine/retirada-de-pedido.js`).
   análise completa, commit confirmado, nenhuma lacuna dispensada além de divergência entre
   passadas, rodada anterior na memória e sem pendência nela, nenhum defeito do PR, e o gate da
   aprovação sem recusa (política e CI não contam como recusa aqui).
-- Com a espera do CI ligada e o CI ainda não verde naquele head, a retirada fica marcada e a
-  varredura a conclui quando ele fechar. Com a espera desligada, o CI não adia a retirada.
+- O CI não adia a retirada (o revisor nunca espera o CI, 17/11/2026). A marca do pedido feito pelo
+  CI vermelho, gravada antes, ainda espera o check que era o problema dela.
 - Retirar não aprova: o desfecho segue atrás dos gates e da política da conta.
 
 A retirada passa pelas mesmas recusas de conta e de estado do PR do portão de postagem.

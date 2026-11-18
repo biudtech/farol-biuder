@@ -56,7 +56,8 @@ function motor() {
   return e;
 }
 const politica = (e, user) => [e.autoReviewFor(user), e.approvePolicyFor(user, true), e.approvePolicyFor(user, false), e.rejectPolicyFor(user)];
-const NAO_AGE = { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' };
+// a conta que não revisa sozinha; os desfechos são os autônomos desde 17/11/2026 (sem `wait`)
+const NAO_AGE = { autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
 
 test('instância de teste: a escolha gravada antes do login vale quando o gh é detectado, mesmo com um reinício no meio', async () => {
   comecar({ port: 47180, autoReview: false });
@@ -64,8 +65,8 @@ test('instância de teste: a escolha gravada antes do login vale quando o gh é 
   const primeiro = motor();
   await primeiro.resolveAccount();
   assert.equal(primeiro.primaryUser(), '', 'sem gh logado não há conta');
-  assert.deepEqual(politica(primeiro, ''), [false, 'approve', 'wait', 'wait']);
-  assert.deepEqual(gravada().conta, { user: '', owners: [], autoReview: false, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' }, 'a escolha foi para o disco, na conta ainda sem login');
+  assert.deepEqual(politica(primeiro, ''), [false, 'approve', 'approve', 'request_changes']);
+  assert.deepEqual(gravada().conta, { user: '', owners: [], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' }, 'a escolha foi para o disco, na conta ainda sem login');
   assert.equal('autoReview' in gravada(), false, 'a chave geral antiga não volta para o arquivo');
 
   // reinício antes do login: a escolha não pode se perder na segunda carga
@@ -74,9 +75,9 @@ test('instância de teste: a escolha gravada antes do login vale quando o gh é 
   login = 'detectada';
   await segundo.resolveAccount();
   assert.equal(segundo.primaryUser(), 'detectada');
-  assert.deepEqual(politica(segundo, 'detectada'), [false, 'approve', 'wait', 'wait'], 'a conta real não revisa sozinha, e espera você nas ressalvas e na reprovação');
+  assert.deepEqual(politica(segundo, 'detectada'), [false, 'approve', 'approve', 'request_changes'], 'a conta real não revisa sozinha, e os desfechos são os autônomos');
   // como na origin/main: revisão desligada pela chave geral, ressalvas e reprovação esperando você
-  assert.deepEqual(gravada().conta, { user: 'detectada', owners: ['biudtech'], autoReview: false, onClean: 'approve', onCaveats: 'wait', onReject: 'wait' });
+  assert.deepEqual(gravada().conta, { user: 'detectada', owners: ['biudtech'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' });
   assert.equal(segundo.avisos.length, 1);
   assert.match(segundo.avisos[0].text, /Conta do GitHub detectada: @detectada/);
 });
@@ -104,10 +105,10 @@ test('config antiga só com contas silenciadas: a conta que nasce da detecção 
   await segundo.check('test');
   assert.equal(segundo.primaryUser(), 'ativa-no-gh');
   assert.deepEqual(gravada().conta, { user: 'ativa-no-gh', owners: ['biudtech'], ...NAO_AGE });
-  assert.deepEqual(politica(segundo, 'ativa-no-gh'), [false, 'wait', 'wait', 'wait'], 'na origin/main a silenciada nunca agia');
+  assert.deepEqual(politica(segundo, 'ativa-no-gh'), [false, 'approve', 'approve', 'request_changes'], 'na origin/main a silenciada nunca agia');
 
   const terceiro = motor();
-  assert.deepEqual(politica(terceiro, 'ativa-no-gh'), [false, 'wait', 'wait', 'wait'], 'e continua sem agir no boot seguinte');
+  assert.deepEqual(politica(terceiro, 'ativa-no-gh'), [false, 'approve', 'approve', 'request_changes'], 'e continua sem agir no boot seguinte');
 });
 
 test('instalação nova: a conta detectada nasce com as orgs padrão e a política por extenso', async () => {
@@ -139,16 +140,17 @@ test('receita da instância que sobe sem agir: sobrevive ao primeiro check(), à
   assert.equal(e.primaryUser(), 'revisora');
   assert.equal(e.tokenOk, true, 'a conta monitora com o token dela');
   assert.deepEqual(gravada().conta, { user: 'revisora', owners: ['biudtech'], ...NAO_AGE });
-  assert.deepEqual(politica(e, 'revisora'), [false, 'wait', 'wait', 'wait']);
+  assert.deepEqual(politica(e, 'revisora'), [false, 'approve', 'approve', 'request_changes']);
   assert.deepEqual(lancadas, [], 'nenhuma revisão automática foi lançada');
-  assert.deepEqual(politica(motor(), 'revisora'), [false, 'wait', 'wait', 'wait'], 'e o boot seguinte lê a mesma coisa');
+  assert.deepEqual(politica(motor(), 'revisora'), [false, 'approve', 'approve', 'request_changes'], 'e o boot seguinte lê a mesma coisa');
 });
 
-test('os padrões de Automação da instalação nova: retomada ligada, CI obrigatório antes da aprovação desligado', () => {
+test('os padrões de Automação da instalação nova: retomada ligada, sem chave de espera do CI', () => {
   comecar(null);
   const e = motor();
   assert.equal(e.config.reReviewResume, true);
-  assert.equal(e.config.aguardarCiParaAprovar, false);
+  assert.equal('aguardarCiParaAprovar' in e.config, false, 'o revisor nunca espera o CI: a chave não existe');
+  assert.equal('aguardarCiParaRevisar' in e.config, false);
   assert.equal('esquemaConfig' in gravada(), false, 'o marcador das migrações antigas saiu com elas');
 });
 
@@ -170,19 +172,18 @@ test('a carga de uma config antiga registra o que decidiu, com origem de migraç
     ['herda', 'autoReview', null, false],
     ['herda', 'onClean', null, 'approve'],
     ['herda', 'onCaveats', null, 'approve'],
-    ['herda', 'onReject', null, 'wait'],
+    ['herda', 'onReject', null, 'request_changes'],
   ]);
   const disco = fs.readFileSync(CONFIG, 'utf8');
   motor();
   assert.equal(rastro().length, hist.length, 'a carga fica registrada uma vez só');
   assert.equal(fs.readFileSync(CONFIG, 'utf8'), disco);
-  e.politicaHistorico = [{ at: Date.now(), conta: 'herda', campo: 'onClean', de: null, para: 'wait', origem: 'migração' }];
-  e.config.conta.onClean = 'wait';
-  assert.match(C.motivoDaPolitica(e, 'herda', true), /definido em \d{2}\/\d{2} \d{2}:\d{2}, quando a política foi lida da configuração antiga/);
+  // o motivo "a política manda aguardar" saiu com o desfecho em espera (17/11/2026)
+  assert.equal('motivoDaPolitica' in C, false);
 });
 
 test('conta que já tinha tudo escrito não gera rastro na carga', () => {
-  comecar({ conta: { user: 'pronta', owners: ['o'], autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes' } });
+  comecar({ conta: { user: 'pronta', owners: ['o'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' } });
   motor();
   assert.deepEqual(rastro(), []);
 });
@@ -197,8 +198,8 @@ test('a detecção registra a política com que a conta nasceu, com a origem dit
   assert.deepEqual(daConta.map((h) => [h.campo, h.de, h.para, h.origem]), [
     ['autoReview', null, false, 'detecção do gh'],
     ['onClean', null, 'approve', 'detecção do gh'],
-    ['onCaveats', null, 'wait', 'detecção do gh'],
-    ['onReject', null, 'wait', 'detecção do gh'],
+    ['onCaveats', null, 'approve', 'detecção do gh'],
+    ['onReject', null, 'request_changes', 'detecção do gh'],
   ]);
   const total = rastro().length;
   await motor().resolveAccount();

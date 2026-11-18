@@ -131,8 +131,10 @@ const VARIANTES = {
 const CENARIOS = {
   'aprovação limpa': { conta: {}, extra: {} },
   'card com a parte deste PR não entregue (reprova)': { conta: {}, extra: { cardMet: false, cardParteDestePr: false } },
-  'card inteiro não comprovado (ressalva, conta espera no com ressalvas)': { conta: { onCaveats: 'wait' }, extra: { cardMet: null, cardParteDestePr: true, decision: 'needs_decision' } },
-  'conta que espera': { conta: { onClean: 'wait', onCaveats: 'wait', onReject: 'wait' }, extra: {} },
+  // até 17/11/2026 a conta da fixture esperava no com ressalvas, e havia o cenário da conta que
+  // espera em tudo; o `wait` saiu (o revisor nunca espera decisão de gente), e esse cenário, que
+  // repetiria a aprovação limpa, saiu junto
+  'card inteiro não comprovado (ressalva, aprova com ela)': { conta: {}, extra: { cardMet: null, cardParteDestePr: true, decision: 'needs_decision' } },
   'card não lido': { conta: {}, extra: { card: null, cardMet: null, decision: 'needs_decision' } },
 };
 
@@ -146,12 +148,11 @@ for (const [cenario, { conta, extra }] of Object.entries(CENARIOS)) {
   });
 }
 
-test('os cenários cobrem os desfechos que importam: aprovar, reprovar, ressalva e espera', async () => {
+test('os cenários cobrem os desfechos que importam: aprovar, reprovar e aprovar com ressalva', async () => {
   const r = [];
   for (const { conta, extra } of Object.values(CENARIOS)) r.push(await revisar(motor(conta), extra));
-  assert.deepEqual(r.slice(0, 4).map((x) => x.envios.map((p) => p.event).join(',') || x.d.status), ['APPROVE', 'REQUEST_CHANGES', 'pending', 'pending']);
-  assert.match(textos(r[2].d.reasons).join(' | '), /com ressalvas/, 'o terceiro cenário é o com ressalvas');
-  assert.match(textos(r[3].d.reasons).join(' | '), /sem ressalvas/, 'o quarto é o limpo esperando');
+  assert.deepEqual(r.map((x) => x.envios.map((p) => p.event).join(',') || x.d.status), ['APPROVE', 'REQUEST_CHANGES', 'APPROVE', 'APPROVE']);
+  assert.match(textos(r[2].d.attention).join(' | '), /card/, 'o terceiro cenário é o com ressalvas');
   assert.equal((r[0].d.attention || []).length, 0, 'o primeiro é o limpo');
 });
 

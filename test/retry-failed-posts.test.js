@@ -103,24 +103,36 @@ test('falha de novo incrementa a tentativa e mantém a pendência', async () => 
   const e = engineCom(pendencia(), { postOk: false });
   const n = await e.retryFailedPosts();
   assert.equal(n, 0, 'nada resolvido');
-  assert.equal(e.decisions.pending.length, 1, 'o card continua na sua mesa');
+  assert.equal(e.decisions.pending.length, 1, 'a pendência continua, com o reenvio');
   assert.equal(e.decisions.pending[0].postRetry.attempts, 1);
   assert.equal(e.decisions.pending[0].postRetry.exhausted, false);
 });
 
-test('esgotadas as tentativas, para de tentar e a pendência espera você', async () => {
+// Até 17/11/2026, esgotadas as tentativas, o reenvio desistia (`exhausted`) e a pendência ia à
+// mesa. Sem mesa, o reenvio nunca desiste: depois das tentativas rápidas, espera com recuo longo.
+test('esgotadas as tentativas rápidas, o reenvio não desiste: espera o recuo longo e tenta de novo', async () => {
   const e = engineCom(pendencia());
   e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 503 de novo' });
   for (let i = 0; i < MAX_POST_RETRY_ATTEMPTS; i++) await e.retryFailedPosts();
   const p = e.decisions.pending[0];
   assert.equal(p.postRetry.attempts, MAX_POST_RETRY_ATTEMPTS);
-  assert.equal(p.postRetry.exhausted, true, 'marcado como esgotado pra tela poder dizer que desistiu');
+  assert.equal(p.postRetry.exhausted, false, 'o reenvio nunca desiste para uma pessoa');
+  assert.ok(p.postRetry.proximaEm > Date.now() + 10 * 60_000, 'a próxima tentativa fica para depois do recuo longo');
 
-  // e o próximo ciclo não tenta mais: acima do teto o filtro nem pega o item
+  // o ciclo seguinte, antes do recuo, não tenta
   let tentou = false;
-  e.postReview = async () => { tentou = true; return { ok: false, error: 'x' }; };
+  e.postReview = async () => { tentou = true; return { ok: false, attempted: true, error: 'HTTP 503 de novo' }; };
   await e.retryFailedPosts();
-  assert.equal(tentou, false, 'não insiste pra sempre');
+  assert.equal(tentou, false, 'respeita o recuo');
+
+  // vencido o recuo, tenta de novo e o recuo cresce
+  const recuoAnterior = p.postRetry.proximaEm - Date.now();
+  e.decisions.pending[0].postRetry.proximaEm = 0;
+  await e.retryFailedPosts();
+  assert.equal(tentou, true, 'vencido o recuo, tenta de novo');
+  const depois = e.decisions.pending[0].postRetry;
+  assert.equal(depois.attempts, MAX_POST_RETRY_ATTEMPTS + 1);
+  assert.ok(depois.proximaEm - Date.now() > recuoAnterior, 'o recuo cresce');
 });
 
 test('pendência SEM marcador de retry nunca é tocada pelo sweep', async () => {
@@ -130,7 +142,7 @@ test('pendência SEM marcador de retry nunca é tocada pelo sweep', async () => 
   const n = await e.retryFailedPosts();
   assert.equal(n, 0);
   assert.equal(e.posts.length, 0, 'nada postado');
-  assert.equal(e.decisions.pending.length, 1, 'segue esperando você');
+  assert.equal(e.decisions.pending.length, 1, 'segue onde estava');
 });
 
 test('marcador sem o payload correspondente desarma em vez de reenviar às cegas', async () => {

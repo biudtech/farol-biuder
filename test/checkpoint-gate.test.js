@@ -55,17 +55,16 @@ test('checkpointGap: verificationCheckpoint limpo (sem conflito), não bloqueia'
 
 // Até 30/09/2026 os dois casos abaixo devolviam { ok: false, motivo: 'checkpoint' } em
 // qualquer política. Agora o problema do checkpoint é RESSALVA: a conta que aprova com
-// ressalvas aprova, a que espera espera, e o card mostra o que divergiu.
+// ressalvas aprova, e o card mostra o que divergiu (desde 17/11/2026 nenhuma conta espera).
 function ehRessalvaDoCheckpoint(r, trecho) {
   assert.deepEqual(enginePorClasse('approve', 'approve').shouldAutoApprove(PR, r), { ok: false, motivo: 'prova_tecnica_incompleta' });
-  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r), { ok: false, motivo: 'prova_tecnica_incompleta' });
-  const pts = enginePorClasse('approve', 'wait').attentionPoints(r);
+  const pts = enginePorClasse('approve', 'approve').attentionPoints(r);
   assert.equal(pts.length, 1);
   assert.match(pts[0].text, trecho);
   assert.equal(pts[0].kind, 'gate');
 }
 
-test('checkpointGap: verificationCheckpoint com conflito é ressalva e a política da conta decide', () => {
+test('checkpointGap: verificationCheckpoint com conflito é ressalva e não segura o APPROVE', () => {
   const r = approvableResult({
     verificationCheckpoint: {
       total: 2, confirmedCount: 1,
@@ -73,10 +72,11 @@ test('checkpointGap: verificationCheckpoint com conflito é ressalva e a políti
     }
   });
   // v2.78.39: a divergência entre passadas não pede outra busca da prova (outra tentativa não a
-  // desfaz, busca-da-prova.js), então ela é só ressalva e a política da conta decide na hora
+  // desfaz, busca-da-prova.js), então ela é só ressalva. Até 17/11/2026 a conta em espera a
+  // segurava (motivo `politica`); o `wait` saiu, e nem o stub antigo segura mais
   assert.deepEqual(enginePorClasse('approve', 'approve').shouldAutoApprove(PR, r), { ok: true, motivo: null });
-  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r), { ok: false, motivo: 'politica' });
-  const pts = enginePorClasse('approve', 'wait').attentionPoints(r);
+  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r), { ok: true, motivo: null });
+  const pts = enginePorClasse('approve', 'approve').attentionPoints(r);
   assert.equal(pts.length, 1);
   assert.match(pts[0].text, /verificação de afirmações ficou com problema: divergência de veredito/);
 });

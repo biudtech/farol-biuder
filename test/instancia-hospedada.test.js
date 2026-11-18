@@ -27,8 +27,9 @@ const { exigeAutenticacao } = await import('../lib/local-auth/modo.js');
 const { validarHostEOrigem } = await import('../lib/http-guard.js');
 const { VARIAVEL, modoHospedado, recusasDaHospedagem, avisosDaHospedagem } = await import('../lib/instancia-hospedada.js');
 
-const CONTA_EM_ESPERA = { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' };
-const HOSPEDADO = { bind: '0.0.0.0', hostPublico: 'farol.exemplo.com', origensPermitidas: ['https://painel.exemplo.com'], localAuth: 'exigir', conta: CONTA_EM_ESPERA };
+// a conta que monitora sem revisar sozinha: desde 17/11/2026 os desfechos só têm o valor autônomo
+const CONTA_SEM_AGIR = { autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
+const HOSPEDADO = { bind: '0.0.0.0', hostPublico: 'farol.exemplo.com', origensPermitidas: ['https://painel.exemplo.com'], localAuth: 'exigir', conta: CONTA_SEM_AGIR };
 
 function gravar(config) {
   fs.mkdirSync(HOME, { recursive: true });
@@ -163,7 +164,7 @@ const SEM_AUTENTICACAO = [
   {},
   { port: 47190 },
   { bind: '127.0.0.1' },
-  { conta: CONTA_EM_ESPERA },
+  { conta: CONTA_SEM_AGIR },
   { localAuth: '', hostPublico: '', origensPermitidas: [] },
   { localAuth: null, hostPublico: null, origensPermitidas: null, bind: 'localhost' },
 ];
@@ -183,7 +184,7 @@ for (const config of SEM_AUTENTICACAO) {
 const SEM_FRONTEIRA = [
   { localAuth: 'exigir' },
   { bind: '0.0.0.0' },
-  { localAuth: 'exigir', bind: '0.0.0.0', conta: CONTA_EM_ESPERA },
+  { localAuth: 'exigir', bind: '0.0.0.0', conta: CONTA_SEM_AGIR },
   { localAuth: 'exigir', hostPublico: '', origensPermitidas: [] },
 ];
 
@@ -249,9 +250,11 @@ test('o config.json de exemplo de docs/exemplos sobe na instância hospedada, se
   assert.deepEqual(engine.config.origensPermitidas, ['https://painel.exemplo.invalid']);
   assert.equal(engine.config.localAuth, 'exigir');
   assert.deepEqual(avisosDaHospedagem(engine.config, { ligada: true }), [], 'o exemplo não acende aviso');
-  // a primeira subida recomendada: monitora, põe na fila e não posta nada sozinha
+  // a primeira subida recomendada: monitora e não revisa sozinha (`autoReview: false`). Desde
+  // 17/11/2026 os três desfechos só têm o valor autônomo, e o `wait` que o exemplo ainda traga é
+  // lido como o padrão (o revisor nunca espera decisão de gente)
   const { autoReview, onClean, onCaveats, onReject } = engine.config.conta;
-  assert.deepEqual({ autoReview, onClean, onCaveats, onReject }, { autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' });
+  assert.deepEqual({ autoReview, onClean, onCaveats, onReject }, { autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' });
 });
 
 /* ---------- config que sobe e não atende: aviso, não recusa ---------- */
@@ -288,7 +291,7 @@ test('avisosDaHospedagem: origensPermitidas sem hostPublico, com bind fora do lo
 });
 
 test('a instância que sobe com bind em loopback grava UMA linha WARN no farol.log e não recusa', async () => {
-  gravar({ hostPublico: 'farol.exemplo.com', conta: CONTA_EM_ESPERA });
+  gravar({ hostPublico: 'farol.exemplo.com', conta: CONTA_SEM_AGIR });
   ligar();
   const engine = new Engine();
   assert.equal(engine.config.hostPublico, 'farol.exemplo.com');
@@ -299,7 +302,7 @@ test('a instância que sobe com bind em loopback grava UMA linha WARN no farol.l
 });
 
 test('a instância com origensPermitidas, sem hostPublico e com bind aberto grava o aviso do Host', async () => {
-  gravar({ bind: '0.0.0.0', origensPermitidas: ['https://painel.exemplo.com'], conta: CONTA_EM_ESPERA });
+  gravar({ bind: '0.0.0.0', origensPermitidas: ['https://painel.exemplo.com'], conta: CONTA_SEM_AGIR });
   ligar();
   new Engine();
   await proximoTurno();

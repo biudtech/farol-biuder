@@ -490,9 +490,9 @@ class Engine extends EventEmitter {
   // nome da conta nos motivos do card (o login); vazio para "todas"
   scopeLabel(scope) { return contasConfig.rotuloDaConta(this, scope); }
   inicioAutomaticoDaFila() { return Object.fromEntries(this.queue.map(p => [p.key, politicaDeInicio(this, p).automatic])); }
-  // quando aprovável: 'approve' (postar sozinho) ou 'wait' (aguardar você). clean = sem ressalvas
+  // quando aprovável: sempre 'approve' desde 17/11/2026 (o revisor nunca espera decisão de gente)
   approvePolicyFor(user, clean) { return contasConfig.acaoAoAprovar(this, user, clean); }
-  // quando a revisão pede mudanças: 'request_changes' (reprovar sozinho, opt-in por conta) ou 'wait'
+  // quando a revisão pede mudanças: sempre 'request_changes' desde 17/11/2026
   rejectPolicyFor(user) { return contasConfig.acaoAoReprovar(this, user); }
 
   // login da conta revisora (a única identidade que age no GitHub)

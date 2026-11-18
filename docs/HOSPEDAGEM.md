@@ -56,8 +56,9 @@ dentro da imagem, e `tools/provar-imagem.sh` as imprime.
 
 O que entra do repositório, em `/opt/farol`, com dono root e sem permissão de escrita para o
 usuário do motor: `server.js`, `package.json`, `LICENSE`, `lib/`, `workspace-template/`,
-`assets/third-party/babel-parser/` e quatro ferramentas (`tools/farol-parear.js`,
-`tools/jira-mcp.js`, `tools/diagnosticar-legados.js` e `tools/simular-politica.js`). Não entram
+`assets/third-party/babel-parser/` e três ferramentas (`tools/farol-parear.js`,
+`tools/jira-mcp.js` e `tools/diagnosticar-legados.js`; o `tools/simular-politica.js` saiu em
+17/11/2026 com o desfecho em espera, que era a única alternativa que ele simulava). Não entram
 `web/`, `test/`, `docs/`, `.git` nem `.github`: o `.dockerignore` nega tudo e libera por lista, e
 `test/imagem-do-motor.test.js` confere que tudo o que o `server.js` importa está no que é
 copiado.
@@ -804,7 +805,7 @@ recusa a subida sem `config.json` ou sem a fronteira. O `config.json`, em
   "hostPublico": "farol.exemplo.invalid",
   "origensPermitidas": ["https://farol.exemplo.invalid"],
   "localAuth": "exigir",
-  "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" }
+  "conta": { "autoReview": false }
 }
 ```
 
@@ -822,8 +823,9 @@ recusa a subida sem `config.json` ou sem a fronteira. O `config.json`, em
 - `origensPermitidas` com a própria origem pública: o navegador manda `Origin` nos `POST`, mesmo
   na mesma origem, e o motor só aceita origem escrita na lista. A resposta ganha os cabeçalhos
   CORS dessa origem, o que na mesma origem não muda nada;
-- `conta` em espera: a primeira subida monitora e não posta nada sozinha
-  ([receita](CONFIGURATION.md#receita-da-instância-que-sobe-sem-agir)).
+- `conta` com `autoReview: false`: a primeira subida monitora e não abre revisão sozinha (não
+  existe mais desfecho em espera desde 17/11/2026;
+  [receita](CONFIGURATION.md#receita-da-instância-que-sobe-sem-revisar-sozinha)).
 
 Pareie com `HOME=<base>/dados node tools/farol-parear.js` (o mesmo `HOME` do motor). Para olhar
 a API pelo socket, sem o proxy: `curl --unix-socket <base>/run/motor.sock -H 'Host:

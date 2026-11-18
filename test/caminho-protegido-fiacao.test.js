@@ -43,14 +43,16 @@ function setup({ jira = true } = {}) {
   const e = new Engine();
   e.config = { ...e.config, reReviewResume: false, reviewContextMode: 'off',
     jiraSites: jira ? [{ id: 'site-fixture', baseUrl: 'https://fixture.example.invalid', owners: ['outra-org'] }] : [],
-    conta: { user: 'fixture', owners: ['org'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' } };
+    conta: { user: 'fixture', owners: ['org'], autoReview: false } };
   e.accountForPr = () => 'fixture'; e.tokenFor = () => 'fixture-token'; e.resolveClaudeAuth = () => ({ kind: 'dir' });
   e.headSha = async () => H;
   e.bloqueadoPorChecks = async () => ({ faltando: [], verifiedHead: H });
   e.myReviewStates = async () => [];
   e.decisions = { pending: [], resolved: [] };
   e.writeMemory = e.writeInflight = e.pushState = e.processHeadless = e.log = () => {};
-  e.postReview = async () => { throw new Error('Nenhuma publicação permitida na fixture.'); };
+  // desde 17/11/2026 a conta não espera mais (o `wait` saiu), então a revisão tenta postar: a
+  // fixture recusa como falha passageira do GitHub, nada sai e a decisão fica gravada para leitura
+  e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
   io.run = async (_command, args) => {
     if (args.includes('headRefOid')) return { ok: true, stdout: H };
     if (args.includes('--json')) return { ok: true, stdout: JSON.stringify({ headRefOid: H, baseRefOid: B, statusCheckRollup: [] }) };

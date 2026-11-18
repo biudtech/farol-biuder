@@ -83,15 +83,16 @@ test('as ressalvas nomeiam o card e a dependência', () => {
   assert.equal(attentionPoints(null, multiRepo({ cardMet: true, dependenciasAbertas: [], decision: 'auto_approve' })).length, 0, 'card provado e nada aberto é limpo');
 });
 
-test('a política de ressalvas da conta decide: aprova sozinho com "aprovar", espera com "esperar"', () => {
+// Até 17/11/2026 a conta em "esperar" segurava as ressalvas (motivo `politica`). O `wait` saiu
+// (o revisor nunca espera decisão de gente): com ressalvas aprova sozinho, e o stub antigo não muda.
+test('com ressalvas aprova sozinho, e a política antiga em espera não segura mais', () => {
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, multiRepo()), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, multiRepo()), { ok: false, motivo: 'politica' });
+  assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, multiRepo()), { ok: true, motivo: null });
 });
 
-test('CI vermelho e violação técnica continuam bloqueando o mesmo caso multi-repo', () => {
+test('violação técnica continua bloqueando o mesmo caso multi-repo, e o CI vermelho não', () => {
   const ci = multiRepo({ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] });
-  // o CI só bloqueia com "CI obrigatório antes da aprovação" ligado (06/11/2026); desligado, a política decide
-  assert.equal(shouldAutoApprove({ ...engineCom('approve'), config: { aguardarCiParaAprovar: true } }, PEDIDO, ci).motivo, 'ci_vermelho');
+  // o revisor nunca espera o CI (17/11/2026): a política decide
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, ci), { ok: true, motivo: null });
   const violacao = multiRepo({ technicalReview: report({ verdict: 'fail', findings: [{ file: 'a.ts', message: 'regra duplicada' }] }) });
   assert.ok(approvalGaps(violacao).includes('violação técnica confirmada'));
@@ -102,7 +103,7 @@ test('CI vermelho e violação técnica continuam bloqueando o mesmo caso multi-
 
 // Arquivo de ambiente e caminho protegido (08/11/2026, ordem do dono: "se eu deixei pra aprovar
 // sozinho ele deve aprovar sozinho"): o que a revisão não leu vira ressalva, nunca mesa, seja
-// quem for o autor; a política de ressalvas da conta decide. Supera as regras de 03 e 06/11/2026.
+// quem for o autor, e desde 17/11/2026 a ressalva não segura o APPROVE. Supera as regras de 03 e 06/11/2026.
 function comAmbiente(hiddenValues) {
   return multiRepo({ inventarioDiff: { status: 'complete', reason: '', headSha: head, baseSha: 'b'.repeat(40), changedFiles: 1,
     files: [{ path: 'a.md', representation: { kind: 'env-changes', hiddenValues, redactions: [] } }] } });
@@ -123,8 +124,9 @@ test('valor oculto de ambiente aprova sozinho com ressalva, seja quem for o auto
   }
   assert.ok(textos(comAmbiente(1)).some((t) => /Arquivo de ambiente com valor que pode ser credencial .*\(a\.md\)/.test(t)));
 });
-test('valor oculto de ambiente com a conta em "espera você" nas ressalvas vai à mesa pela política', () => {
-  assert.deepEqual(shouldAutoApprove(engineComPapel('junior', 'wait'), DA_ANA, comAmbiente(1)), { ok: false, motivo: 'politica' });
+// até 17/11/2026 a conta em "espera você" levava este caso à mesa; sem mesa, ele aprova com a ressalva
+test('valor oculto de ambiente com a política antiga em espera também aprova com a ressalva', () => {
+  assert.deepEqual(shouldAutoApprove(engineComPapel('junior', 'wait'), DA_ANA, comAmbiente(1)), { ok: true, motivo: null });
 });
 test('patch truncado de arquivo de ambiente também é ressalva', () => {
   const r = comAmbiente(0);

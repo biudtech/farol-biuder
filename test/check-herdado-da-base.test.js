@@ -11,7 +11,8 @@ import { criteriaFixture } from './helpers/criteria-fixture.js';
 // A regra: check obrigatório que falha (ou está sem resultado) no head do PR e que está VERMELHO no
 // commit atual da base é herdado. Base sem o check (ausente, rollup vazio, check que só roda em
 // pull_request) ou com ele ainda rodando nunca herda: a base não mostra falha nenhuma (correção da
-// revisão independente, 17/11/2026). O herdado não segura a aprovação (nem com a espera do CI ligada), não vira ressalva, nem motivo de
+// revisão independente, 17/11/2026). O herdado não segura a aprovação (o revisor nunca espera o CI
+// desde 17/11/2026, e o herdado nem vira o aviso do CI no card), não vira ressalva, nem motivo de
 // reprovação, nem texto de cobrança no card. O check que só falha no PR continua valendo como
 // antes, e a leitura da base que falha é conservadora: trata como não herdado.
 import os from 'node:os';
@@ -66,7 +67,6 @@ const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 const checksMod = await import('../lib/engine/checks-exigidos.js');
 const { avisoDosHerdados, avisoDaAprovacao, avisoDoCi, motivoDeEspera } = await import('../lib/engine/gate-espera.js');
-const { ciHerdadoBlock } = await import('../lib/engine/review-prompt.js');
 const { attentionPoints } = await import('../lib/engine/ressalvas.js');
 const { reviewActions } = await import('../lib/engine/decision.js');
 
@@ -85,12 +85,11 @@ beforeEach(() => {
   };
 });
 
-// `ciObrigatorio`: "CI obrigatório antes da aprovação". `politica` = [limpo, com ressalvas].
-function motor({ ciObrigatorio = true, politica = ['approve', 'approve'], reprova = 'request_changes' } = {}) {
+// `politica` = [limpo, com ressalvas].
+function motor({ politica = ['approve', 'approve'], reprova = 'request_changes' } = {}) {
   const e = new Engine();
   e.token = 'token-falso';
   e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: politica[0], onCaveats: politica[1], onReject: reprova };
-  e.config.aguardarCiParaAprovar = ciObrigatorio;
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };
@@ -120,9 +119,11 @@ const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/api#$
 const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/api#${n}`);
 const textos = (lista) => (lista || []).map((r) => (r && r.text) || String(r));
 
-async function revisar(n, opcoes, extra) {
+async function revisar(n, opcoes, extra, { postagemFalha = false } = {}) {
   const e = motor(opcoes);
   sessao(e, extra);
+  // a postagem recusada como falha passageira do GitHub deixa a pendência (com o reenvio) para ler
+  if (postagemFalha) e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
   await e.runHeadlessReview(PR(n));
   return e;
 }
@@ -235,153 +236,42 @@ test('check NÃO obrigatório não pesa, e nem chega a ler a base', async () => 
   assert.equal(leiturasDaBase, 0);
 });
 
-/* ---------- na revisão, com a espera do CI ligada ---------- */
+/* ---------- a leitura fresca da base ---------- */
 
-test('espera ligada: o herdado não segura a aprovação, que sai limpa e sem aviso de CI no card', async () => {
-  const e = await revisar(10);
-  assert.equal(envios.length, 1, 'a aprovação saiu sem esperar o osv herdado');
-  assert.equal(envios[0].event, 'APPROVE');
-  assert.equal(pendente(e, 10), undefined, 'nenhuma espera do CI armada');
-  const r = resolvida(e, 10);
-  assert.equal(r.status, 'auto_approved');
-  assert.deepEqual(textos(r.attention), [], 'nem ressalva nem aviso "aprovado com check obrigatório"');
-  assert.ok(e.toasts.some((t) => /aprovado sem ressalvas/.test(t)), e.toasts.join(' | '));
-});
-
-// o texto que a conta que reprova sozinha publica pelo CI vermelho (desfecho-automatico.js): é o
-// do caso de origem, e com o check herdado ele não pode sair
-const PEDIDO_PELO_CI = /Os checks obrigatórios `osv` estão falhando no commit/;
-
-test('espera ligada e conta que reprova sozinha: o herdado não vira o pedido de mudanças pelo CI', async () => {
-  await revisar(17);
-  assert.equal(envios.length, 1);
-  assert.equal(envios[0].event, 'APPROVE');
-  assert.doesNotMatch(envios[0].body, PEDIDO_PELO_CI);
-});
-
-test('espera ligada: o check que só falha no PR continua valendo (pedido pelo CI, ou espera do CI)', async () => {
-  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  await revisar(11);
-  assert.equal(envios.length, 1);
-  assert.equal(envios[0].event, 'REQUEST_CHANGES', 'a conta reprova sozinha: o pedido pelo CI de sempre');
-  assert.match(envios[0].body, PEDIDO_PELO_CI);
-  envios = [];
-  const e = await revisar(18, { reprova: 'wait' });
-  assert.deepEqual(envios, []);
-  assert.deepEqual(pendente(e, 18).esperaCi.checks, [{ nome: 'osv', estado: 'vermelho' }], 'sem reprovar sozinha, a espera do CI de sempre');
-});
-
-test('espera ligada: a leitura da base que falha deixa o check valendo como hoje', async () => {
-  gh.baseFalha = true;
-  await revisar(12);
-  assert.equal(envios.length, 1);
-  assert.equal(envios[0].event, 'REQUEST_CHANGES');
-  envios = [];
-  const e = await revisar(19, { reprova: 'wait' });
-  assert.deepEqual(envios, []);
-  assert.deepEqual(pendente(e, 19).esperaCi.checks, [{ nome: 'osv', estado: 'vermelho' }]);
-});
-
-// Até a revisão independente (17/11/2026) a primeira metade gravava o contrário: o osv rodando no
-// head e ausente na base saía como herdado e a aprovação ia sem esperar. Agora só a base vermelha
-// herda; ausente ou verde na base, a espera do CI de sempre.
-test('espera ligada: sem resultado no head só é herdado com a base vermelha; ausente ou verde na base segura', async () => {
-  gh.rollup = [check('osv', null, 'IN_PROGRESS'), check('test', 'SUCCESS')];
-  gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
-  await revisar(13);
-  assert.equal(envios.length, 1, 'o osv falha na base: não segura');
-  for (const [n, base] of [[14, [check('osv', 'SUCCESS'), check('test', 'SUCCESS')]], [24, [check('test', 'SUCCESS')]]]) {
-    gh.rollupBase = base;
-    envios = [];
-    const outro = await revisar(n, { reprova: 'wait' });
-    assert.deepEqual(envios, [], JSON.stringify(base));
-    assert.deepEqual(pendente(outro, n).esperaCi.checks, [{ nome: 'osv', estado: 'rodando' }]);
-  }
-});
-
-// Os pontos que decidem postar leem a base fresca (correção da revisão independente): a espera do
-// CI antes do APPROVE e a retirada do pedido (lerCi) e a publicação (bloqueadoPorChecks com
-// fresco). Só o gate de lançamento usa o cache de um minuto.
-test('a espera do CI lê a base fresca: o rollup em cache não decide o APPROVE', async () => {
-  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  const e = await revisar(25, { reprova: 'wait' });
-  assert.ok(pendente(e, 25).esperaCi, 'só no PR: espera armada');
-  // o cache ainda guarda a base verde; sem ler fresco, a falha nova da base não apareceria
-  gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
-  assert.equal(await e.varrerEsperas(), 1);
-  assert.equal(resolvida(e, 25).status, 'auto_approved');
-});
-
-test('leitura fresca no sentido que importa: o herdado em cache que deixou de ser não libera a publicação', async () => {
-  const e = motor({ reprova: 'wait' });
+// Quem decide lê a base fresca (correção da revisão independente): a retirada do pedido (lerCi).
+// A leitura da revisão usa o cache de um minuto.
+test('leitura fresca no sentido que importa: o herdado em cache que deixou de ser não vale para quem lê fresco', async () => {
+  const e = motor();
   await e.bloqueadoPorChecks(PR(26));
   assert.ok(e.checksDaBaseCache.size, 'o cache guarda a base vermelha');
   gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
   const lancamento = await e.bloqueadoPorChecks(PR(26));
-  assert.deepEqual(lancamento.faltando, [], 'o gate de lançamento pode usar o cache de um minuto');
+  assert.deepEqual(lancamento.faltando, [], 'a leitura da revisão pode usar o cache de um minuto');
   const fresco = await e.bloqueadoPorChecks(PR(26), { fresco: true });
-  assert.deepEqual(fresco.faltando, [{ nome: 'osv', estado: 'vermelho' }], 'a publicação lê fresco');
+  assert.deepEqual(fresco.faltando, [{ nome: 'osv', estado: 'vermelho' }], 'quem lê fresco vê a base de agora');
 });
 
-test('a espera do CI com a base corrigida depois do cache: o check volta a segurar', async () => {
-  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  const e = await revisar(27, { reprova: 'wait' });
-  // a revisão armou a espera; agora a base passa a falhar e o cache é trocado por uma leitura
-  // velha de base vermelha, que diria "herdado" se fosse usada
-  e.checksDaBaseCache.set(`acme/api@${BASE}`, { lido: { sha: BASE_SHA, rollup: [check('osv', 'FAILURE'), check('test', 'SUCCESS')] }, at: Date.now() });
-  assert.equal(await e.varrerEsperas(), 0, 'a base fresca está verde: o osv é do PR e segue segurando');
-  assert.deepEqual(envios, []);
-  assert.ok(pendente(e, 27).esperaCi);
-});
+/* ---------- na revisão: o revisor nunca espera o CI ---------- */
 
-test('a publicação pede a leitura fresca dos checks', () => {
-  const fonte = fs.readFileSync(new URL('../lib/technical-review/publication.js', import.meta.url), 'utf8');
-  const chamadas = fonte.match(/engine.bloqueadoPorChecks([^)]*)/g) || [];
-  assert.ok(chamadas.length >= 2, chamadas.join(' | '));
-  for (const c of chamadas) assert.match(c, /fresco: true/, c);
-});
-
-test('espera armada pelo PR: quando a base passa a falhar no mesmo check, a falha vira herdada e a aprovação sai', async () => {
-  gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  const e = await revisar(15, { reprova: 'wait' });
-  assert.ok(pendente(e, 15).esperaCi);
-  gh.rollupBase = [check('osv', 'FAILURE'), check('test', 'SUCCESS')];
-  assert.equal(await e.varrerEsperas(), 1, 'a espera lê a base fresca, sem esperar o cache vencer');
-  assert.equal(envios.length, 1);
-  assert.equal(resolvida(e, 15).status, 'auto_approved');
-});
-
-test('espera ligada: o pedido de mudanças só pelo CI herdado não segura nem vai à mesa', async () => {
-  const extra = {
-    verdict: 'request_changes', decision: 'needs_decision',
-    findings: [{ severity: 'blocking', causa: 'ci', title: 'osv vermelho', summary: 'o check osv falha', evidence: 'osv', criteria: { key: 'ci-osv', criterion: 'CI verde', source: 'ruleset', scope: 'Este diff' } }],
-    payloads: { request_changes: { event: 'REQUEST_CHANGES', body: 'O check osv precisa passar antes do merge.' } },
-  };
-  const e = await revisar(16, {}, extra);
-  assert.equal(envios.length, 1);
-  assert.equal(envios[0].event, 'APPROVE', 'o estado que sustentava o pedido é herdado da base');
-  assert.equal(resolvida(e, 16).status, 'auto_approved');
-});
-
-/* ---------- com a espera do CI desligada (padrão) ---------- */
-
-test('espera desligada: o herdado não vira o aviso "aprovado com check obrigatório vermelho" no card', async () => {
-  const e = await revisar(20, { ciObrigatorio: false });
+test('o herdado não segura a aprovação nem vira o aviso "aprovado com check obrigatório vermelho" no card', async () => {
+  const e = await revisar(20);
   assert.equal(envios.length, 1);
   assert.deepEqual(textos(resolvida(e, 20).attention), []);
 });
 
-test('espera desligada: o check que só falha no PR continua com o aviso de hoje', async () => {
+test('o check que só falha no PR não segura, e o card avisa com que CI a aprovação saiu', async () => {
   gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
-  const e = await revisar(21, { ciObrigatorio: false });
+  const e = await revisar(21);
   assert.equal(envios.length, 1);
   assert.ok(textos(resolvida(e, 21).attention).some((t) => /aprovado com check obrigatório vermelho no head \(osv\)/.test(t)));
 });
 
 /* ---------- o card e o texto ---------- */
 
-test('card na mesa: o herdado aparece numa linha informativa, que não é ressalva', async () => {
-  const e = await revisar(30, { ciObrigatorio: false, politica: ['wait', 'wait'] });
+// Até 17/11/2026 o card pendente vinha da conta em espera (mesa); o `wait` saiu, e a pendência
+// daqui é a do reenvio, quando a postagem do APPROVE falha de passagem.
+test('card pendente: o herdado aparece numa linha informativa, que não é ressalva', async () => {
+  const e = await revisar(30, undefined, undefined, { postagemFalha: true });
   const d = pendente(e, 30);
   const linha = (d.reasons || []).find((r) => /falha também no commit atual da branch base/.test(r.text));
   assert.ok(linha, textos(d.reasons).join(' | '));
@@ -389,11 +279,11 @@ test('card na mesa: o herdado aparece numa linha informativa, que não é ressal
   assert.match(linha.text, /osv/);
   assert.doesNotMatch(linha.text, /precisa|corrij|antes do merge|esper/i, 'informa, não cobra');
   assert.deepEqual(attentionPoints(null, d).filter((p) => /branch base/.test(p.text)), [], 'a linha nunca conta como ressalva');
-  assert.match(textos(d.reasons)[0], /sem ressalvas/, 'a classe é limpa: a política é a do limpo');
+  assert.ok(d.postRetry, 'a pendência é a do reenvio');
 });
 
 test('Panorama: a linha informativa do herdado não marca a decisão como aprovada com ressalva', async () => {
-  const e = await revisar(31, { ciObrigatorio: false, politica: ['wait', 'wait'] });
+  const e = await revisar(31, undefined, undefined, { postagemFalha: true });
   const d = pendente(e, 31);
   assert.ok((d.reasons || []).some((r) => r.informativo === true));
   // a pendência resolvida pelo clique leva as mesmas reasons para o histórico
@@ -410,13 +300,4 @@ test('os textos do CI só falam do check que pesa', () => {
   assert.deepEqual(avisoDaAprovacao(r), []);
   assert.equal(avisoDosHerdados(r).length, 1);
   assert.deepEqual(avisoDosHerdados({ checksObrigatorios: [] }), []);
-});
-
-test('prompt: com a espera ligada a sessão sabe que check herdado da base não segura nem vira texto', () => {
-  const bloco = ciHerdadoBlock({ aguardarCiParaAprovar: true });
-  assert.match(bloco, /branch base/);
-  assert.match(bloco, /herdad/);
-  assert.match(bloco, /reasons/);
-  assert.doesNotMatch(bloco, /—/, 'sem travessão');
-  assert.equal(ciHerdadoBlock({ aguardarCiParaAprovar: false }), '', 'desligada, o bloco do CI fora da decisão já cobre');
 });

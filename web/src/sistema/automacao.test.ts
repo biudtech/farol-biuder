@@ -72,9 +72,9 @@ describe('a espera do CI saiu da tela (o revisor nunca espera)', () => {
     expect(fontes.filter(([, fonte]) => fonte.includes('aguardarCiParaAprovar')).map(([nome]) => nome)).toEqual([]);
   });
 
-  it('o motor continua aceitando a chave por API e arquivo (a lacuna do README)', () => {
-    expect(raiz('lib/settings.js')).toMatch(/key: 'aguardarCiParaAprovar'/);
-    expect(raiz('lib/engine/gate-espera.js')).toContain('config.aguardarCiParaAprovar === true');
+  it('o motor também não espera o CI: a chave saiu da tabela e não tem leitor (17/11/2026)', () => {
+    expect(raiz('lib/settings.js')).not.toMatch(/key: 'aguardarCiParaAprovar'/);
+    expect(raiz('lib/engine/gate-espera.js')).not.toContain('config.aguardarCiParaAprovar === true');
   });
 });
 

@@ -2,6 +2,8 @@
 // A tela saiu em 16/11/2026 e nada no motor lia as três: o front novo guarda o tema no
 // navegador. Elas saem da tabela de preferências, com o padrão do projeto para chave morta
 // num config.json antigo: o motor sobe, ignora, e a chave some na próxima gravação.
+// `aguardarCiParaAprovar` e `aguardarCiParaRevisar` seguem o mesmo padrão desde 17/11/2026: o
+// revisor nunca espera o CI, nem para começar nem para aprovar, e as duas chaves não têm leitor.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,11 +13,11 @@ import assert from 'node:assert/strict';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-pref-sem-leitor-'));
 process.env.FAROL_HOME = home;
 const CONFIG = path.join(home, 'config.json');
-const MORTAS = ['soundEnabled', 'theme', 'autostart'];
+const MORTAS = ['soundEnabled', 'theme', 'autostart', 'aguardarCiParaAprovar', 'aguardarCiParaRevisar'];
 const CONFIG_ANTIGA = JSON.stringify({
   esquemaConfig: 1,
-  conta: { user: 'me', owners: ['acme'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' },
-  intervalSeconds: 600, soundEnabled: false, theme: 'light', autostart: true,
+  conta: { user: 'me', owners: ['acme'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' },
+  intervalSeconds: 600, soundEnabled: false, theme: 'light', autostart: true, aguardarCiParaAprovar: true, aguardarCiParaRevisar: true,
 });
 fs.writeFileSync(CONFIG, CONFIG_ANTIGA);
 
@@ -32,7 +34,7 @@ function motor() {
   return e;
 }
 
-test('a tabela de preferências não conhece mais som, tema nem abrir com o sistema', () => {
+test('a tabela de preferências não conhece mais som, tema, abrir com o sistema nem as esperas do CI', () => {
   const chaves = SETTINGS.map((s) => s.key);
   const padroes = defaults(1);
   for (const morta of MORTAS) {
@@ -42,11 +44,11 @@ test('a tabela de preferências não conhece mais som, tema nem abrir com o sist
   }
 });
 
-test('a leitura do config.json antigo descarta as três e deixa o resto', () => {
-  assert.deepEqual(normalizarConfig({ intervalSeconds: 600, soundEnabled: false, theme: 'light', autostart: true }), { intervalSeconds: 600 });
+test('a leitura do config.json antigo descarta as cinco e deixa o resto', () => {
+  assert.deepEqual(normalizarConfig({ intervalSeconds: 600, soundEnabled: false, theme: 'light', autostart: true, aguardarCiParaAprovar: true, aguardarCiParaRevisar: true }), { intervalSeconds: 600 });
 });
 
-test('config antiga com as três sobe, elas não chegam ao motor e o arquivo não é regravado na carga', () => {
+test('config antiga com as cinco sobe, elas não chegam ao motor e o arquivo não é regravado na carga', () => {
   const e = motor();
   assert.equal(e.config.intervalSeconds, 600, 'a preferência viva do mesmo arquivo vale');
   assert.equal(e.config.conta.user, 'me');
@@ -55,7 +57,7 @@ test('config antiga com as três sobe, elas não chegam ao motor e o arquivo nã
   assert.equal(fs.readFileSync(CONFIG, 'utf8'), CONFIG_ANTIGA, 'a carga não reescreve o config.json');
 });
 
-test('a próxima gravação tira as três do disco', () => {
+test('a próxima gravação tira as cinco do disco', () => {
   const copia = fs.readFileSync(CONFIG, 'utf8');
   try {
     const e = motor();
@@ -66,12 +68,12 @@ test('a próxima gravação tira as três do disco', () => {
   } finally { fs.writeFileSync(CONFIG, copia); }
 });
 
-test('POST /api/settings com uma das três devolve a chave em ignoradas e não a grava', () => {
+test('POST /api/settings com uma das cinco devolve a chave em ignoradas e não a grava', () => {
   const copia = fs.readFileSync(CONFIG, 'utf8');
   try {
     const e = motor();
-    const r = e.updateSettings({ theme: 'dark', soundEnabled: true, autostart: false, reviewFast: true });
-    assert.deepEqual(r.ignoradas.slice().sort(), ['autostart', 'soundEnabled', 'theme']);
+    const r = e.updateSettings({ theme: 'dark', soundEnabled: true, autostart: false, aguardarCiParaAprovar: true, aguardarCiParaRevisar: true, reviewFast: true });
+    assert.deepEqual(r.ignoradas.slice().sort(), ['aguardarCiParaAprovar', 'aguardarCiParaRevisar', 'autostart', 'soundEnabled', 'theme']);
     assert.equal(e.config.reviewFast, true, 'a chave viva do mesmo salvar entra');
     for (const morta of MORTAS) assert.equal(morta in e.config, false);
     const gravado = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));

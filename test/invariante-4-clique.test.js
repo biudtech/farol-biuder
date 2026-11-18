@@ -85,12 +85,15 @@ test('origem desconhecida (nenhuma marca): nada sai sozinho, dos dois lados na M
   assert.equal(e.shouldAutoApprove({ ...PR, manual: 'sim', viaAdmin: 1 }, aprovavel()).ok, false);
 });
 
-test('a política da conta continua mandando: origem do dono com a conta esperando você não posta', () => {
-  const e = enginePermissivo();
-  e.approvePolicyFor = () => 'wait';
-  e.rejectPolicyFor = () => 'wait';
-  assert.deepEqual(e.shouldAutoApprove({ ...PR, manual: true }, aprovavel()), { ok: false, motivo: 'politica' });
-  assert.equal(e.shouldAutoReject({ ...PR, manual: true }, reprovavel()), false);
+// 17/11/2026, regra do dono: o revisor nunca espera decisão de gente. O `wait` antigo da conta é
+// lido como o padrão autônomo, e a postagem segue pelos mesmos portões (os outros casos daqui).
+test('o wait antigo da conta é normalizado para approve, approve e request_changes, e a decisão passa pelos mesmos portões', () => {
+  const e = new Engine();
+  e.config = { ...e.config, conta: { user: 'conta', owners: ['acme'], onClean: 'wait', onCaveats: 'wait', onReject: 'wait' } };
+  e.accountForPr = () => 'conta';
+  assert.deepEqual([e.approvePolicyFor('conta', true), e.approvePolicyFor('conta', false), e.rejectPolicyFor('conta')], ['approve', 'approve', 'request_changes']);
+  assert.deepEqual(e.shouldAutoApprove({ ...PR, manual: true }, aprovavel()), { ok: true, motivo: null });
+  assert.equal(e.shouldAutoReject({ ...PR, manual: true }, reprovavel()), true);
 });
 
 /* ---------- APPROVE em branco não sai sozinho (31/08/2026) ----------

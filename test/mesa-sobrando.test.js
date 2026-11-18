@@ -3,7 +3,8 @@
 //   1. pedido de mudanças sustentado só pelo CI, com a espera do CI desligada;
 //   2. conflito declarado pela revisão que o GitHub desmente;
 //   3. análise que não fecha no teto de rodadas do commit.
-// Nos três a decisão volta à política da conta, com ressalva dizendo por quê.
+// Nos três a decisão volta à política da conta, com ressalva dizendo por quê. Desde 17/11/2026 a
+// conta não espera mais (o `wait` gravado é lido como o padrão autônomo), então os três aprovam.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,58 +43,57 @@ function soPeloCi(extra = {}) {
     payloads: { request_changes: PEDIDO_RC }, findings: [], ...extra });
 }
 const achado = (causa, extra = {}) => ({ severity: 'blocking', title: 'Bloqueio', summary: 'resumo', causa, file: 'a.md', line: 1, ...extra });
-function engineCom({ onCaveats = 'approve', ciDecide = false, decisions } = {}) {
+function engineCom({ onCaveats = 'approve', decisions } = {}) {
   const e = { accountForPr: () => 'reviewer', attentionPoints: (r) => attentionPoints(null, r),
     accountList: () => [{ user: 'reviewer', onClean: 'approve', onCaveats, onReject: 'request_changes' }],
-    config: { aguardarCiParaAprovar: ciDecide }, decisions: decisions || { pending: [] }, tokenFor: () => null };
+    config: {}, decisions: decisions || { pending: [] }, tokenFor: () => null };
   e.approvePolicyFor = (user, limpo) => acaoAoAprovar(e, user, limpo);
   e.rejectPolicyFor = () => 'request_changes';
   return e;
 }
 const PR = { key: 'org/repo#1', repo: 'org/repo', number: 1, requested: true };
 
-test('1: pedido só pelo CI com a espera desligada vira aprovação pela política, com ressalva', () => {
+test('1: pedido só pelo CI vira aprovação, com ressalva (o CI não decide)', () => {
   const e = engineCom();
   const r = soPeloCi();
   assert.equal(shouldAutoReject(e, PR, r), false, 'antes: o pedido não saía sozinho');
-  assert.deepEqual(estadosDoPedido(e, r), { ci: true, conflito: false });
-  aprovarSemOEstado(r, estadosDoPedido(e, r), gateReason);
+  assert.deepEqual(estadosDoPedido(r), { ci: true, conflito: false });
+  aprovarSemOEstado(r, estadosDoPedido(r), gateReason);
   assert.equal(r.verdict, 'approve');
   assert.equal(r.payloads.approve.event, 'APPROVE');
   assert.deepEqual(publicReviewLanguageIssues(r.payloads.approve, 'reviewer'), [], 'o texto do app passa a trava de linguagem');
-  assert.ok(attentionPoints(null, r).some((p) => /pediu mudanças só pelo CI obrigatório, com a espera do CI desligada/.test(p.text)));
+  assert.ok(attentionPoints(null, r).some((p) => /pediu mudanças só pelo CI obrigatório, que não decide a revisão/.test(p.text)));
   assert.deepEqual(shouldAutoApprove(e, PR, r), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait' }), PR, r), { ok: false, motivo: 'politica' }, 'a conta em espera continua levando à mesa');
+  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait' }), PR, r), { ok: true, motivo: null }, 'o wait gravado na conta não leva mais à mesa');
 });
 
 test('1: bloqueio declarado com causa ci vira sugestão e retira o que vinha de rodada anterior', () => {
   const e = engineCom();
   const r = soPeloCi({ findings: [achado('ci'), achado('ci', { ref: 'r1:f1', status: 'persiste' })] });
-  aprovarSemOEstado(r, estadosDoPedido(e, r), gateReason);
+  aprovarSemOEstado(r, estadosDoPedido(r), gateReason);
   assert.deepEqual(r.findings.map((f) => [f.severity, f.status || null]), [['suggestion', null], ['suggestion', 'retirado']]);
   assert.deepEqual(shouldAutoApprove(e, PR, r), { ok: true, motivo: null });
 });
 
 test('1: texto de aprovação escrito pela revisão é preservado', () => {
   const r = soPeloCi({ payloads: { request_changes: PEDIDO_RC, approve: { event: 'APPROVE', body: 'Texto da revisão.' } } });
-  aprovarSemOEstado(r, estadosDoPedido(engineCom(), r), gateReason);
+  aprovarSemOEstado(r, estadosDoPedido(r), gateReason);
   assert.equal(r.payloads.approve.body, 'Texto da revisão.');
 });
 
-test('1: com a espera do CI ligada, defeito provado, outra causa ou análise incompleta, nada muda', () => {
-  assert.equal(estadosDoPedido(engineCom({ ciDecide: true }), soPeloCi()), null, 'CI ligado: a espera do CI decide');
-  assert.equal(estadosDoPedido(engineCom(), soPeloCi({ findings: [achado('ci'), achado('defeito_codigo')] })), null);
-  assert.equal(estadosDoPedido(engineCom(), soPeloCi({ findings: [achado('dependencia')] })), null);
-  assert.equal(estadosDoPedido(engineCom(), soPeloCi({ technicalReview: report({ verdict: 'fail' }) })), null);
-  assert.equal(estadosDoPedido(engineCom(), soPeloCi({ analysisStatus: 'incomplete' })), null);
-  assert.equal(estadosDoPedido(engineCom(), soPeloCi({ checksObrigatorios: [] })), null, 'sem CI vermelho e sem bloqueio, não é pedido só pelo CI');
-  assert.equal(estadosDoPedido(engineCom(), base()), null, 'aprovação não é tocada');
+test('1: defeito provado, outra causa ou análise incompleta, nada muda', () => {
+  assert.equal(estadosDoPedido(soPeloCi({ findings: [achado('ci'), achado('defeito_codigo')] })), null);
+  assert.equal(estadosDoPedido(soPeloCi({ findings: [achado('dependencia')] })), null);
+  assert.equal(estadosDoPedido(soPeloCi({ technicalReview: report({ verdict: 'fail' }) })), null);
+  assert.equal(estadosDoPedido(soPeloCi({ analysisStatus: 'incomplete' })), null);
+  assert.equal(estadosDoPedido(soPeloCi({ checksObrigatorios: [] })), null, 'sem CI vermelho e sem bloqueio, não é pedido só pelo CI');
+  assert.equal(estadosDoPedido(base()), null, 'aprovação não é tocada');
 });
 
 test('2: conflito declarado só vira aprovação com o GitHub dizendo MERGEABLE', async () => {
   const e = engineCom();
   const r = soPeloCi({ checksObrigatorios: [], findings: [achado('conflito')] });
-  assert.deepEqual(estadosDoPedido(e, r), { ci: false, conflito: true });
+  assert.deepEqual(estadosDoPedido(r), { ci: false, conflito: true });
   assert.equal(await aplicarEstadoDesmentido(e, PR, r, gateReason), false, 'leitura indisponível não desmente');
   assert.equal(r.verdict, 'request_changes');
   aprovarSemOEstado(r, { ci: false, conflito: true }, gateReason);
@@ -116,7 +116,7 @@ test('3: a rodada que chega ao teto do commit é reconhecida pela marca da recup
   assert.equal(busca.rodadaNoTeto(engineCom({ decisions: pendenteComTentativas(MAX - 1) }), PR, base({ headSha: 'c'.repeat(40) })), false, 'outro commit recomeça');
 });
 
-test('3: no teto, a análise que não fechou vira ressalva e a política decide', () => {
+test('3: no teto, a análise que não fechou vira ressalva e o APPROVE sai', () => {
   const e = engineCom({ decisions: pendenteComTentativas(busca.MAX_TENTATIVAS_POR_HEAD - 1) });
   const r = base({ analysisStatus: 'incomplete', decision: 'needs_decision' });
   const exigidas = busca.lacunasDaRodada(e, PR, r);
@@ -126,7 +126,7 @@ test('3: no teto, a análise que não fechou vira ressalva e a política decide'
   r.reasons = busca.pontosDaProvaEsgotada(r);
   assert.ok(r.reasons.some((p) => /depois de 6 revisões neste commit a análise não fechou, então segue como ressalva: análise incompleta/.test(p.text)));
   assert.deepEqual(shouldAutoApprove(e, PR, r), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait', decisions: pendenteComTentativas(5) }), PR, r), { ok: false, motivo: 'politica' });
+  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait', decisions: pendenteComTentativas(5) }), PR, r), { ok: true, motivo: null }, 'o wait gravado na conta não segura');
 });
 
 test('3: antes do teto a análise incompleta segue exigida, e no teto a violação também', () => {

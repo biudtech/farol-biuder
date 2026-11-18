@@ -12,7 +12,9 @@ import { criteriaFixture } from './helpers/criteria-fixture.js';
 //    Nenhuma prova destrava isso: a espera não arma e a que já existia é largada.
 //    Desde 18/10/2026 (a decisão sem mesa), com a política da classe automática a revisão sai
 //    como COMMENT (que o GitHub aceita do autor) e a pendência é resolvida como
-//    `commented_own_pr`; a mesa sobra para a conta que espera você.
+//    `commented_own_pr`. Desde 17/11/2026 não há mesa nem conta que espera você (o `wait` saiu): sem
+//    texto para o comentário, ou com falha permanente ao postá-lo, a pendência encerra sem postar
+//    (`not_posted`), porque no PR próprio não há o que decidir.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -61,13 +63,6 @@ after(() => {
 });
 beforeEach(() => { envios = []; leiturasDoPr = 0; gh = { autor: 'dev' }; });
 
-// A política é a da conta, gravada por extenso como a tela de Contas grava, e lida pelos métodos
-// reais do motor (contas-config.js), sem substituí-los.
-function conta(e, politica) {
-  Object.assign(e.config.conta, politica);
-  return e;
-}
-
 function motor() {
   const e = new Engine();
   e.token = 'token-falso';
@@ -107,8 +102,6 @@ const PR = { key: 'acme/app#1', repo: 'acme/app', number: 1, url: 'https://githu
 const PROPRIO = { ...PR, author: 'Eu' };
 const pendente = (e) => e.decisions.pending.find((x) => x.key === PR.key);
 const resolvida = (e) => decisoesResolvidas(e).find((x) => x.key === PR.key);
-// a conta que espera você: a mesa é escolha dela, e o PR próprio vai para lá com o motivo
-const esperaVoce = (e) => conta(e, { onClean: 'wait', onCaveats: 'wait', onReject: 'wait' });
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 const SEM_PROTOCOLO = { protocolo: { prReviewer: 'pulado' } };
 // Desde 06/11/2026 a lacuna que não é dura vira ressalva na própria rodada e não arma a espera:
@@ -201,17 +194,19 @@ test('gate: PR da própria conta nunca é aprovado nem reprovado sozinho (caixa 
   assert.equal(esperaProva.armarEspera(e, PROPRIO, 'pr_proprio', { headSha: HEAD, approvalEvidence: ['protocolo de revisão não comprovado'], reasons: [] }, []), null);
 });
 
-test('PR da própria conta com a conta esperando você: nenhuma espera, mesa com o motivo', async () => {
-  const e = esperaVoce(motor());
-  const d = await revisado(e, PROPRIO, SEM_PROTOCOLO);
-  assert.equal(d.esperaProva, undefined);
-  assert.equal(d.esperaCi, undefined);
-  assert.ok(textos(d).includes(TEXTO_PROPRIO), textos(d).join(' | '));
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+// Até 17/11/2026: "PR da própria conta com a conta esperando você: nenhuma espera, mesa com o
+// motivo". Sem `wait` e sem mesa, o caso que sobra sem COMMENT é o PR próprio sem texto para ele.
+test('PR da própria conta sem texto para o comentário: nenhuma espera, encerra sem postar', async () => {
+  const e = motor();
+  const d = await revisado(e, PROPRIO, { ...SEM_PROTOCOLO, payloads: {} });
+  assert.equal(d, undefined, 'nada fica pendente');
   assert.deepEqual(envios, []);
-  // em Precisa de você, nunca em Aprova sozinho: a projeção não leva espera nenhuma
-  const tela = e.decisionForUi(d);
-  assert.deepEqual([tela.esperaProva, tela.esperaCi, tela.prProprio], [undefined, undefined, true]);
+  const r = resolvida(e);
+  assert.equal(r.status, 'not_posted');
+  assert.equal(r.esperaProva, undefined);
+  assert.equal(r.esperaCi, undefined);
+  assert.ok(textos(r).some((t) => /própria conta que revisa/.test(t)), textos(r).join(' | '));
+  assert.equal(e.eventos.some((x) => x[0] === 'needs-decision'), false, 'ninguém foi chamado');
 });
 
 test('PR da própria conta aprovável, conta aprovando sozinha: sai como COMMENT e resolve, sem mesa', async () => {
@@ -243,13 +238,8 @@ test('PR da própria conta com reprovação, conta reprovando sozinha: o pedido 
   assert.deepEqual(e.eventos, [['auto-commented', PR.key]]);
 });
 
-test('PR da própria conta com reprovação e a conta esperando você: nada é postado, mesa com o motivo', async () => {
-  const e = esperaVoce(motor());
-  const d = await revisado(e, PROPRIO, REPROVA);
-  assert.deepEqual(envios, []);
-  assert.ok(textos(d).some((t) => /própria conta que revisa \(@eu\).*pedido de mudanças/.test(t)), textos(d).join(' | '));
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-});
+// "PR da própria conta com reprovação e a conta esperando você" saiu em 17/11/2026 com o `wait`:
+// repetiria o teste acima, em que o pedido sai como COMMENT.
 
 test('controle: PR de outra pessoa segue aprovando e reprovando sozinho', async () => {
   const e = motor();
@@ -276,22 +266,24 @@ test('espera da prova que já existia em PR da própria conta, conta aprovando s
   assert.deepEqual(e.eventos, [['auto-commented', PR.key]]);
 });
 
-test('espera da prova que já existia em PR da própria conta, conta esperando você: larga, mesa com o motivo, aviso uma vez', async () => {
+// Até 17/11/2026 a conta esperando você levava esta espera à mesa. Sem mesa, o que sobra sem
+// COMMENT é a pendência sem texto para ele: larga a espera e encerra sem postar, uma vez.
+test('espera da prova que já existia em PR da própria conta, sem texto para o comentário: larga e encerra sem postar', async () => {
   const e = motor();
   await revisado(e, PR, INCOMPLETA);
   pendente(e).pr.author = 'EU';
-  esperaVoce(e);
+  pendente(e).payloads = {};
   assert.equal(await esperaProva.varrerEsperas(e), 1);
-  const d = pendente(e);
-  assert.equal(d.esperaProva, null);
-  assert.equal(d.reasons.some((r) => r && r.espera === true), false, 'o motivo da espera sai');
-  assert.equal(textos(d)[0], TEXTO_PROPRIO);
+  assert.equal(pendente(e), undefined, 'nada fica pendente');
+  const r = resolvida(e);
+  assert.equal(r.status, 'not_posted');
+  assert.equal(r.esperaProva, null);
+  assert.equal(r.reasons.some((x) => x && x.espera === true), false, 'o motivo da espera sai');
+  assert.equal(textos(r)[0], TEXTO_PROPRIO);
   assert.equal(leiturasDoPr, 0, 'autor gravado basta, sem leitura gh');
   for (let ciclo = 0; ciclo < 2; ciclo++) assert.equal(await esperaProva.varrerEsperas(e), 0);
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'needs-decision uma vez só');
-  const tela = e.decisionForUi(d);
-  assert.ok(!tela.esperaProva && !tela.esperaCi, 'a projeção não leva espera: é Precisa de você');
-  assert.equal(tela.prProprio, true);
+  assert.deepEqual(envios, []);
+  assert.deepEqual(e.eventos, [], 'ninguém foi chamado');
 });
 
 test('espera sem autor gravado: o autor lido do GitHub na varredura também conta, e o comentário sai', async () => {
@@ -318,20 +310,8 @@ test('espera do CI que já existia em PR da própria conta também é largada e 
   assert.deepEqual(e.eventos, [['auto-commented', PR.key]]);
 });
 
-test('espera do CI em PR da própria conta com a conta esperando você: larga e vai para a mesa', async () => {
-  const e = motor();
-  await revisado(e, PR, INCOMPLETA);
-  const d = pendente(e);
-  d.esperaProva = null;
-  d.esperaCi = { desde: 1, checks: [], pontos: [] };
-  d.pr.author = 'eu';
-  esperaVoce(e);
-  assert.equal(await esperaProva.varrerEsperas(e), 1);
-  assert.equal(pendente(e).esperaCi, null);
-  assert.equal(textos(pendente(e))[0], TEXTO_PROPRIO);
-  assert.deepEqual(envios, []);
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-});
+// "espera do CI em PR da própria conta com a conta esperando você" saiu em 17/11/2026 com o
+// `wait`: repetiria o teste acima, em que a espera do CI é largada e comentada.
 
 // Revisão do PR #248 (Codex, 17/10/2026). Cada caso abaixo reprovava no head 38f8300.
 
@@ -349,9 +329,14 @@ test('PR #248, achado 3: o portão de postagem recusa APPROVE e REQUEST_CHANGES 
   assert.notEqual(comentario.blocked, 'pr_proprio', 'comentar o próprio PR continua permitido');
 });
 
+// Até 17/11/2026 a pendência de PR próprio era a da mesa (conta esperando você). Sem mesa, ela
+// só existe no reenvio do COMMENT, quando a postagem falha de passagem.
 test('PR #248, achado 3: a pendência de PR próprio vai marcada na projeção, e a decisão pelo clique não sai', async () => {
-  const e = esperaVoce(motor());
+  const e = motor();
+  e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
   const d = await revisado(e, PROPRIO, {});
+  assert.ok(d && d.postRetry, 'o COMMENT ficou no reenvio');
+  delete e.postReview;
   const tela = e.decisionForUi(d);
   assert.equal(tela.prProprio, true);
   // a decisão pelo clique também não sai
@@ -370,15 +355,14 @@ test('PR #248, achado 4: largar a espera de PR próprio durante a rodada complem
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1, 'a busca relançou no mesmo head');
   assert.equal(pendente(e).blockedKind, 'stale_head');
   pendente(e).pr.author = 'eu';
-  esperaVoce(e);
   assert.equal(await esperaProva.varrerEsperas(e), 1);
-  const d = pendente(e);
+  // até 17/11/2026 a conta daqui esperava e a pendência ia à mesa; sem `wait`, comenta e resolve
+  assert.equal(pendente(e), undefined, 'nada fica pendente');
+  const d = resolvida(e);
+  assert.equal(d.status, 'commented_own_pr');
   assert.equal(d.esperaProva, null);
   assert.equal(d.blockedKind, undefined, 'sem stale_head');
   assert.equal(d.blockedHead, undefined);
   assert.equal(reviewMod.explicaReRound(e, { ...PR }, new Set(), Date.now()).estado, 'sem_gatilho', 'o round automático não mira mais o PR');
-  const tela = e.decisionForUi(d);
-  assert.notEqual(tela.blockedKind, 'stale_head', 'sem card de commit novo na projeção');
-  assert.equal(tela.prProprio, true);
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+  assert.deepEqual(e.eventos, [['auto-commented', PR.key]]);
 });

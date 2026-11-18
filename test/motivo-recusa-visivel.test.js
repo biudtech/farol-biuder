@@ -22,9 +22,12 @@ const DECISION = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'en
 const MOTIVOS = [...DECISION.matchAll(/motivo: '([a-z_]+)'/g)].map(m => m[1]);
 
 test('o gate devolve os motivos que este teste conhece', () => {
-  for (const esperado of ['analise_incompleta', 'nao_aprovavel', 'sem_texto', 'origem_desconhecida', 'politica']) {
+  for (const esperado of ['analise_incompleta', 'nao_aprovavel', 'sem_texto', 'origem_desconhecida']) {
     assert.ok(MOTIVOS.includes(esperado), `motivo ${esperado} sumiu do gate`);
   }
+  // o motivo `politica` saiu em 17/11/2026: a conta não espera mais (o revisor nunca espera
+  // decisão de gente), e a política não segura o APPROVE
+  assert.equal(MOTIVOS.includes('politica'), false, 'o motivo politica voltou ao gate');
 });
 
 // 30/09/2026: discordância, cobertura, checkpoint e dependência eram motivos de recusa que
@@ -40,13 +43,15 @@ test('o gate não tem mais motivo que mande um aprovável para a mesa por fora d
   assert.doesNotMatch(corpo, /coverageGap|checkpointGap|contestations|result\.decision/, 'a classe depende só dos pontos de atenção');
 });
 
-test('os dois motivos do CI são espera automática, tratada pelo espera-ci.js', () => {
-  // o funil das esperas (17/10/2026) passa primeiro pelo do CI, sem mudar o vocabulário dele
+test('o CI não arma espera nenhuma: o funil das esperas só tem a da prova', () => {
+  // o revisor nunca espera o CI (17/11/2026): a espera do CI saiu do funil, e o espera-ci.js
+  // ficou só com a liberação das esperas gravadas antes
   assert.match(REVIEW, /esperaProva\.armarEspera\(engine, pr, autoDec\.motivo, result, pontos\)/);
   const FUNIL = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'espera-prova.js'), 'utf8');
-  assert.match(FUNIL, /const ci = esperaCi\.armar\(motivo, result, pontos\);\n {2}if \(ci\) return/);
+  assert.doesNotMatch(FUNIL, /esperaCi\.armar/);
   const ESPERA = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'espera-ci.js'), 'utf8');
-  assert.match(ESPERA, /MOTIVOS_DE_ESPERA = \['ci_vermelho', 'ci_em_andamento'\]/);
+  assert.doesNotMatch(ESPERA, /MOTIVOS_DE_ESPERA|function armar/);
+  assert.doesNotMatch(DECISION, /ci_vermelho|ci_em_andamento/, 'o gate não devolve mais motivo do CI');
 });
 
 // Desde 17/10/2026 os textos moram junto dos motivos (TEXTOS_DA_RECUSA em approval-policy.js),
@@ -72,11 +77,12 @@ test('envelope incompleto é explicado como envelope, não como achado do códig
 });
 
 // 05/11/2026: a reprovação apoiada só no estado do PR não sai sozinha, e o card diz por quê
-// com o texto que mora junto dos outros motivos, lido pelo desfecho da revisão.
+// com o texto que mora junto dos outros motivos, lido pelo desfecho da revisão. Desde 17/11/2026
+// não há espera nem mesa: o texto diz só que não reprova (o desfecho sem mesa segue dali).
 test('o bloqueio de estado tem texto próprio e o desfecho o lê', async () => {
   const { textoDaRecusa } = await import('../lib/engine/approval-policy.js');
   assert.equal(textoDaRecusa({}, {}, 'bloqueio_de_estado', {}),
-    'a reprovação se apoia só no estado do PR (CI, conflito, dependência ou arquivo fora do diff), não em defeito do código: espera, sem reprovar');
+    'a reprovação se apoia só no estado do PR (CI, conflito, dependência ou arquivo fora do diff), não em defeito do código: não reprova');
   assert.ok(REVIEW.includes("textoDaRecusa(engine, pr, 'bloqueio_de_estado', result)"));
 });
 
