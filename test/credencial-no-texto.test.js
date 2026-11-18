@@ -65,7 +65,6 @@ function motor({ checks = [], reprova = 'request_changes' } = {}) {
   const e = new Engine();
   e.token = 'token-falso';
   e.config.conta = { user: 'eu', owners: ['acme'] };
-  e.config.aguardarCiParaAprovar = true;
   e.approvePolicyFor = () => 'approve';
   e.rejectPolicyFor = () => reprova;
   e.autoReviewFor = () => true;
@@ -313,12 +312,20 @@ test('reenvio: pendência gravada antes da trava para de tentar e perde o valor'
   semValor(e);
 });
 
+// A espera do CI saiu em 17/11/2026 (o revisor nunca espera o CI). A via `espera-ci` continua
+// existindo para terminar a espera gravada antes, e a trava vale nela: a marca é posta na
+// pendência como o decisions.json de uma instalação antiga a traria.
+function emEsperaGravada(d) {
+  Object.assign(d, { reasons: [], postRetry: null, esperaCi: { desde: Date.now(), checks: [{ nome: 'test', estado: 'rodando' }], pontos: [] } });
+  return d;
+}
+
 test('espera do CI: CI verde não publica o texto recortado, e a pendência vai para a pessoa', async () => {
   const e = motor({ checks: [{ nome: 'test', estado: 'rodando' }], reprova: 'wait' });
   sessaoQueAprova(e, `Leitura completa, sem bloqueios. Chave em uso: ${GH}.`);
   gh.rollup = [check('test', null, 'IN_PROGRESS'), check('audit', 'SUCCESS')];
   await e.runHeadlessReview(PR(9));
-  const antes = e.decisions.pending.find((x) => x.key === 'acme/app#9');
+  const antes = emEsperaGravada(e.decisions.pending.find((x) => x.key === 'acme/app#9'));
   assert.ok(antes.esperaCi, 'esperando o CI');
   semValor(e);
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
@@ -335,7 +342,11 @@ test('espera do CI: `nao_enviada` da credencial também vai para a pessoa', asyn
   const e = motor({ checks: [{ nome: 'test', estado: 'rodando' }], reprova: 'wait' });
   sessaoQueAprova(e, 'Leitura completa, sem bloqueios.');
   gh.rollup = [check('test', null, 'IN_PROGRESS'), check('audit', 'SUCCESS')];
+  const postar = e.postReview.bind(e);
+  e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
   await e.runHeadlessReview(PR(10));
+  e.postReview = postar;
+  emEsperaGravada(e.decisions.pending.find((x) => x.key === 'acme/app#10'));
   gh.rollup = [check('test', 'SUCCESS'), check('audit', 'SUCCESS')];
   e.postReview = async () => ({ ok: false, blocked: BLOQUEIO_CREDENCIAL, estado: 'nao_enviada', motivo: BLOQUEIO_CREDENCIAL, attempted: false, error: 'o texto do review tem o que parece uma credencial' });
   await e.varrerEsperas();

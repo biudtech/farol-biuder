@@ -3,8 +3,8 @@
 // Medido no admin (v2.72.4): só o próprio Farol tem declaração em
 // ~/.farol/technical-review/repositories.json, então todo PR de outro repositório saía com
 // "avaliação técnica atual ausente" e nunca era aprovado sozinho. Regra do dono: a aprovação
-// não depende dele; bloqueiam só CI vermelho ou pendente, violação técnica confirmada e
-// lacuna de leitura. Sem declaração não há avaliação técnica configurada, e isso não é
+// não depende dele; bloqueiam só violação técnica confirmada e lacuna de leitura (o CI saiu da
+// decisão em 17/11/2026: o revisor nunca espera o CI). Sem declaração não há avaliação técnica configurada, e isso não é
 // violação: vira ressalva. Com declaração, toda lacuna técnica continua bloqueando.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -77,9 +77,7 @@ test('sem declaração vira ressalva com texto próprio, e a política de ressal
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, result()), { ok: true, motivo: null });
   assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, result()), { ok: false, motivo: 'politica' });
   const vermelho = result({ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] });
-  assert.equal(shouldAutoApprove({ ...engineCom('approve'), config: { aguardarCiParaAprovar: true } }, PEDIDO, vermelho).motivo, 'ci_vermelho',
-    'com "CI obrigatório antes da aprovação" ligado, o CI vermelho continua bloqueando');
-  assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, vermelho), { ok: true, motivo: null }, 'desligado (padrão), não');
+  assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, vermelho), { ok: true, motivo: null }, 'o CI vermelho não segura');
 });
 
 test('a tela diz que não há declaração, sem o rótulo de verificação pendente', () => {
@@ -100,41 +98,32 @@ test('o envelope não escreve a marca: o fechamento usa o contexto medido pelo r
   assert.deepEqual(measured.technicalReview, SEM_DECLARACAO);
 });
 
-// "CI obrigatório antes da aprovação" ligado por padrão aqui: os casos nasceram com ele obrigatório
-function motorDaPublicacao(checks, ciObrigatorio = true) {
+function motorDaPublicacao(checks) {
   const evidencias = new Map([['org/sem-declaracao#1', { report: SEM_DECLARACAO, evidence: [] }]]);
-  return { config: { aguardarCiParaAprovar: ciObrigatorio }, technicalApprovals: evidencias, decisions: { pending: [] }, bloqueadoPorChecks: async () => checks };
+  return { config: {}, technicalApprovals: evidencias, decisions: { pending: [] }, bloqueadoPorChecks: async () => checks };
 }
 
-test('publicação sem declaração com a chave desligada: CI rodando, vermelho ou de outro commit não segura', async () => {
+test('publicação sem declaração: CI rodando, vermelho ou de outro commit não segura', async () => {
   for (const checks of [{ verifiedHead: head, faltando: [{ nome: 'test', estado: 'rodando' }] },
     { verifiedHead: head, faltando: [{ nome: 'test', estado: 'vermelho' }] }, { verifiedHead: 'c'.repeat(40), faltando: [] }, null]) {
-    assert.equal(await approvalRefusal(motorDaPublicacao(checks, false), PR, { event: 'APPROVE', commit_id: head }), null, JSON.stringify(checks));
+    assert.equal(await approvalRefusal(motorDaPublicacao(checks), PR, { event: 'APPROVE', commit_id: head }), null, JSON.stringify(checks));
   }
-  const semCommit = await approvalRefusal(motorDaPublicacao(null, false), PR, { event: 'APPROVE' });
+  const semCommit = await approvalRefusal(motorDaPublicacao(null), PR, { event: 'APPROVE' });
   assert.equal(semCommit.error, 'aprovação sem commit confirmado', 'o commit continua obrigatório');
 });
 const PR = { key: 'org/sem-declaracao#1', repo: 'org/sem-declaracao' };
 
-test('publicação sem declaração: sai com commit confirmado e checks verdes nele', async () => {
+test('publicação sem declaração: sai com commit confirmado', async () => {
   const e = motorDaPublicacao({ verifiedHead: head, faltando: [] });
   assert.equal(await approvalRefusal(e, PR, { event: 'APPROVE', commit_id: head }), null);
 });
 
-test('publicação sem declaração: checks pendentes esperam, commit ausente e prova com lacuna recusam', async () => {
-  const pendente = await approvalRefusal(motorDaPublicacao({ verifiedHead: head, faltando: [{ nome: 'test', estado: 'rodando' }] }), PR, { event: 'APPROVE', commit_id: head });
-  assert.equal(pendente.blocked, 'technical_review');
-  assert.equal(pendente.waitForCi, true);
-  const outroHead = await approvalRefusal(motorDaPublicacao({ verifiedHead: 'c'.repeat(40), faltando: [] }), PR, { event: 'APPROVE', commit_id: head });
-  assert.equal(outroHead.waitForCi, true, 'checks lidos em outro commit não provam este');
+test('publicação sem declaração: commit ausente e prova com lacuna recusam', async () => {
   const semCommit = await approvalRefusal(motorDaPublicacao({ verifiedHead: head, faltando: [] }), PR, { event: 'APPROVE' });
   assert.equal(semCommit.error, 'aprovação sem commit confirmado');
   const comLacuna = motorDaPublicacao({ verifiedHead: head, faltando: [] });
   comLacuna.technicalApprovals.get(PR.key).evidence = ['análise incompleta'];
   assert.equal((await approvalRefusal(comLacuna, PR, { event: 'APPROVE', commit_id: head })).error, 'análise incompleta');
-  const falhou = motorDaPublicacao(null);
-  falhou.bloqueadoPorChecks = async () => { throw new Error('rede'); };
-  assert.equal((await approvalRefusal(falhou, PR, { event: 'APPROVE', commit_id: head })).blocked, 'technical_review');
 });
 
 test('cadastro que existe e não abre não vira "sem declaração": segue lacuna e recusa', async () => {

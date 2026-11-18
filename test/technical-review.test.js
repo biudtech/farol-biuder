@@ -43,7 +43,7 @@ function result(extra = {}) {
 }
 // "CI obrigatório antes da aprovação" ligado nos casos que nasceram com ele obrigatório; o desligado
 // (padrão desde 06/11/2026) tem casos próprios mais abaixo
-const engine = { config: { aguardarCiParaAprovar: true }, accountForPr: () => 'reviewer',
+const engine = { config: {}, accountForPr: () => 'reviewer',
   attentionPoints: () => [], approvePolicyFor: () => 'approve' };
 
 test('conformidade técnica e prova suficiente permitem a preferência de aprovar', () => {
@@ -86,20 +86,14 @@ for (const [name, patch] of Object.entries({
   leitura: { coverage: { total: 1, reviewed: [], missing: ['a.md'] } },
   checkpoint: { verificationCheckpoint: { malformed: true } },
   incompleta: { analysisStatus: 'partial' },
-  checksDesconhecidos: { checksVerifiedHead: null },
   parteDoCard: { card: 'CARD-1', cardMet: false, cardParteDestePr: false },
 })) test(`política de ressalvas não atravessa ${name}`, () => {
   assert.equal(shouldAutoApprove(engine, { requested: true }, result(patch)).ok, false);
 });
 
-test('CI obrigatório segura com "CI obrigatório antes da aprovação" ligado', () => {
-  const r = result({ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] });
-  assert.equal(shouldAutoApprove(engine, { requested: true }, r).motivo, 'ci_vermelho');
-  assert.equal(shouldAutoApprove(engine, { requested: true }, result({ checksVerifiedHead: null })).motivo, 'ci_em_andamento');
-});
-
-test('com a chave desligada (padrão) o CI vermelho, rodando ou não lido não segura o gate', () => {
-  for (const config of [{}, { aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: 'true' }]) {
+// O revisor nunca espera o CI (17/11/2026): nem o config.json antigo com a chave ligada religa a espera.
+test('o CI vermelho, rodando ou não lido não segura o gate, em config nenhuma', () => {
+  for (const config of [{}, { aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: true }]) {
     const semCi = { ...engine, config };
     for (const patch of [{ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] },
       { checksObrigatorios: [{ nome: 'test', estado: 'rodando' }] }, { checksVerifiedHead: null }]) {
@@ -174,7 +168,7 @@ test('cadastro ausente ou corrompido não inventa declaração', () => {
   assert.equal(fs.existsSync(file + '.bad'), false);
 });
 
-test('aprovação reconfirma base, objeções, declaração e CI na fronteira comum', async () => {
+test('aprovação reconfirma base, objeções e declaração na fronteira comum, sem ler o CI', async () => {
   fs.mkdirSync(path.dirname(PROFILE_FILE), { recursive: true });
   fs.writeFileSync(PROFILE_FILE, JSON.stringify({ repositories: { 'org/repo': { declaration: { scopes: ['core'] } } } }));
   const profile = profileFor('org/repo');
@@ -190,11 +184,6 @@ test('aprovação reconfirma base, objeções, declaração e CI na fronteira co
   try {
     assert.equal(await approvalRefusal(e, pr, payload), null);
     const receipt = e.technicalApprovals.get(pr.key);
-    receipt.evidence = approvalGaps(result({ checksVerifiedHead: null }));
-    assert.equal(await approvalRefusal(e, pr, payload), null, 'a consulta atual verde recupera a falha transitória anterior');
-    e.bloqueadoPorChecks = async () => ({ faltando: [] });
-    assert.equal((await approvalRefusal(e, pr, payload)).blocked, 'technical_review', 'a falta de prova atual continua segurando');
-    e.bloqueadoPorChecks = async () => ({ verifiedHead: head, faltando: [] });
     receipt.evidence = approvalGaps(result({ analysisStatus: 'partial' }));
     assert.equal((await approvalRefusal(e, pr, payload)).blocked, 'technical_review', 'o clique não libera análise incompleta');
     receipt.evidence = {};
@@ -206,15 +195,11 @@ test('aprovação reconfirma base, objeções, declaração e CI na fronteira co
     technicalRuntime.targetFor = async () => ({ head, base: 'c'.repeat(40) });
     assert.equal((await approvalRefusal(e, pr, payload)).blocked, 'technical_review');
     technicalRuntime.targetFor = async () => ({ head, base: proof.base });
-    e.bloqueadoPorChecks = async () => ({ verifiedHead: head, faltando: [{ nome: 'test', estado: 'rodando' }] });
-    const esperando = await approvalRefusal(e, pr, payload);
-    assert.deepEqual([esperando.waitForCi, esperando.ok, esperando.attempted, esperando.blocked], [true, false, false, 'technical_review'],
-      'ligada, o clique com o CI rodando espera e não publica nada');
-    // desligada (padrão): o clique e a postagem automática não leem nem esperam o CI
-    e.config = { aguardarCiParaAprovar: false };
+    // o clique e a postagem automática não leem nem esperam o CI, com qualquer config
+    e.config = { aguardarCiParaAprovar: true };
     let leituras = 0;
     e.bloqueadoPorChecks = async () => { leituras++; return { faltando: [{ nome: 'test', estado: 'vermelho' }] }; };
-    assert.equal(await approvalRefusal(e, pr, payload), null, 'sem a chave, o CI não barra a publicação');
+    assert.equal(await approvalRefusal(e, pr, payload), null, 'o CI não barra a publicação');
     assert.equal(leituras, 0, 'nem consulta o CI');
     receipt.evidence = approvalGaps(result({ analysisStatus: 'partial' }));
     assert.equal((await approvalRefusal(e, pr, payload)).blocked, 'technical_review', 'o resto da prova continua exigido');

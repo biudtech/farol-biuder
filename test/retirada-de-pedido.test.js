@@ -79,10 +79,10 @@ const eventos = () => envios.map((x) => x.event);
 const ARQUIVO = 'src/a.ts';
 const BLOCKER = { ...criteriaFixture('request_changes').findings[0], title: 'Desvio silencioso', summary: 'O motivo se perde.', file: ARQUIVO, line: 1 };
 
-// `ciObrigatorio`: a chave "CI obrigatório antes da aprovação" (06/11/2026), ligada nos casos de antes.
-function motor({ aprova = 'approve', reprova = 'request_changes', checks = () => [], ciObrigatorio = true } = {}) {
+// O revisor nunca espera o CI (17/11/2026): a retirada não espera o CI, salvo a marca do pedido
+// pelo CI vermelho gravada antes, que espera o check que era o problema dela.
+function motor({ aprova = 'approve', reprova = 'request_changes', checks = () => [] } = {}) {
   const e = new Engine();
-  e.config.aguardarCiParaAprovar = ciObrigatorio;
   e.token = 'token-falso';
   e.config.conta = { user: 'eu', owners: ['acme'] };
   e.approvePolicyFor = () => aprova;
@@ -200,35 +200,7 @@ test('sem rodada anterior na memória não há como afirmar que foi resolvido', 
   assert.deepEqual(eventos(), ['APPROVE']);
 });
 
-test('conta em espera você com CI rodando: retira quando o CI fecha verde, e não aprova', async () => {
-  let checks = [{ nome: 'test', estado: 'rodando' }];
-  const e = await duasRodadas(6, { aprova: 'wait', checks: () => checks });
-  assert.deepEqual(eventos(), []);
-  checks = [];
-  await e.varrerEsperas();
-  assert.deepEqual(eventos(), ['DISMISS']);
-  await e.varrerEsperas();
-  assert.deepEqual(eventos(), ['DISMISS'], 'a marca sai depois de retirar: nada de segundo envio');
-});
-
-test('conta que aprova com CI rodando: retira e só então aprova', async () => {
-  let checks = [{ nome: 'test', estado: 'rodando' }];
-  const e = await duasRodadas(7, { checks: () => checks });
-  assert.deepEqual(eventos(), []);
-  checks = [];
-  assert.equal(await e.varrerEsperas(), 1);
-  assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
-});
-
-test('commit novo antes do CI fechar limpa a marca sem retirar', async () => {
-  const e = await duasRodadas(8, { aprova: 'wait', checks: () => [{ nome: 'test', estado: 'rodando' }] });
-  gh.head = HEAD_NOVO;
-  await e.varrerEsperas();
-  assert.deepEqual(eventos(), []);
-  assert.equal(e.decisions.pending.find((x) => x.key === KEY(8)).retiradaPendente, null);
-});
-
-test('pedido pelo CI vermelho sai quando o check fecha verde no mesmo commit, sem aprovar', async () => {
+test('pedido pelo CI vermelho gravado antes sai quando o check fecha verde no mesmo commit, sem aprovar', async () => {
   const e = motor();
   e.decisions.resolved = [{ key: KEY(9), id: 'd9', headSha: HEAD, status: 'auto_rejected', pr: { ...PR(9) }, retiradaPendente: { tipo: 'ci', head: HEAD, tentativas: 0 } }];
   gh.head = HEAD;
@@ -239,17 +211,6 @@ test('pedido pelo CI vermelho sai quando o check fecha verde no mesmo commit, se
   gh.rollup = [check('test', 'SUCCESS')];
   await e.varrerEsperas();
   assert.deepEqual(eventos(), ['DISMISS']);
-});
-
-test('CI vermelho depois da prova da rodada: com o check verde saem o pedido novo e o antigo', async () => {
-  const e = await duasRodadas(14, { checks: () => [{ nome: 'test', estado: 'vermelho' }] });
-  assert.deepEqual(eventos(), ['REQUEST_CHANGES']);
-  envios = [];
-  const pedidoPeloCi = decisoesResolvidas(e).find((d) => d.key === KEY(14) && d.headSha === HEAD);
-  assert.equal(pedidoPeloCi.status, 'auto_rejected');
-  gh.meus = [pedido({ id: 1 }), pedido({ id: 2, commit: HEAD, at: '2026-11-05T04:00:00Z' })];
-  await e.varrerEsperas();
-  assert.deepEqual(envios.map((x) => x.id), [1, 2]);
 });
 
 test('CI vermelho sem prova da rodada: com o check verde sai só o pedido do commit', async () => {
@@ -266,15 +227,6 @@ test('a marca do CI herda a prova da rodada só do mesmo head', () => {
   assert.equal(marcaDoCi(HEAD, marcaDoCi(HEAD, marcaDaRodada(HEAD))).comRodada, true);
   assert.equal(marcaDoCi(HEAD, marcaDaRodada(HEAD_VELHO)).comRodada, false);
   assert.equal(marcaDoCi(HEAD).comRodada, false);
-});
-
-test('a retirada que esperava o CI conclui na varredura quando ele fecha', async () => {
-  let checks = [{ nome: 'test', estado: 'rodando' }];
-  const e = await duasRodadas(16, { aprova: 'wait', checks: () => checks });
-  assert.ok(e.decisions.pending.find((x) => x.key === KEY(16)), 'a pendência espera o CI');
-  checks = [];
-  await e.varrerEsperas();
-  assert.deepEqual(eventos(), ['DISMISS']);
 });
 
 test('head sem confirmação no fim da rodada adia a retirada para a varredura', async () => {
@@ -527,10 +479,11 @@ const SO_CI = [
   ['checks de outro head', () => ({ checksVerifiedHead: HEAD_VELHO })],
   ['prova esgotada sem lacuna, check pendente', () => ({ provaEsgotada: true, checksObrigatorios: [{ nome: 'test', estado: 'rodando' }] })],
 ];
+// o CI não adia a retirada (17/11/2026): o que antes respondia 'ci' agora retira
 SO_CI.forEach(([nome, mudar], i) => {
-  test(`só falta o CI: ${nome}`, async () => {
+  test(`o CI não adia a retirada: ${nome}`, async () => {
     const { e, base } = await resultadoReal(70 + i);
-    assert.equal(provaDaRetirada(e, PR(70 + i), { ...base, ...mudar(base) }), 'ci');
+    assert.equal(provaDaRetirada(e, PR(70 + i), { ...base, ...mudar(base) }), 'sim');
   });
 });
 
@@ -543,22 +496,20 @@ test('o texto da retirada passa pela trava de linguagem', () => {
   assert.deepEqual(publicTextLanguageIssues(textoDaRetirada(HEAD), 'body', 'eu'), []);
 });
 
-/* ---------- "CI obrigatório antes da aprovação" desligado (padrão desde 06/11/2026) ---------- */
+/* ---------- o revisor nunca espera o CI (17/11/2026) ---------- */
 
-test('desligada: com CI rodando, retira e aprova na mesma rodada, sem esperar o CI', async () => {
-  await duasRodadas(40, { checks: () => [{ nome: 'test', estado: 'rodando' }], ciObrigatorio: false });
+test('com CI rodando, retira e aprova na mesma rodada, sem esperar o CI', async () => {
+  await duasRodadas(40, { checks: () => [{ nome: 'test', estado: 'rodando' }] });
   assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
 });
 
-test('desligada: a marca da rodada armada antes não espera mais o CI; a do pedido pelo CI vermelho continua esperando o check', async () => {
-  const e = await duasRodadas(41, { aprova: 'wait', checks: () => [{ nome: 'test', estado: 'rodando' }] });
-  assert.deepEqual(eventos(), [], 'ligada: espera o CI');
-  e.config.aguardarCiParaAprovar = false;
-  gh.rollup = [check('test', '', 'IN_PROGRESS')];
-  await e.varrerEsperas();
-  assert.deepEqual(eventos(), ['DISMISS'], 'desligada: a marca da rodada sai sem o CI');
-  envios.length = 0;
-  const m = motor({ ciObrigatorio: false });
+test('com CI vermelho, a conta em espera nas ressalvas retira na mesma rodada', async () => {
+  await duasRodadas(41, { aprova: 'wait', checks: () => [{ nome: 'test', estado: 'vermelho' }] });
+  assert.deepEqual(eventos(), ['DISMISS'], 'a retirada não espera o CI');
+});
+
+test('a marca do pedido pelo CI vermelho, gravada antes, continua esperando o check', async () => {
+  const m = motor();
   m.decisions.resolved = [{ key: KEY(42), id: 'd42', headSha: HEAD, status: 'auto_rejected', pr: { ...PR(42) }, retiradaPendente: { tipo: 'ci', head: HEAD, tentativas: 0 } }];
   gh.head = HEAD;
   gh.meus = [pedido({ commit: HEAD })];

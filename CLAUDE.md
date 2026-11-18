@@ -239,13 +239,16 @@ recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta COMMENT
 (`lib/engine/pr-proprio.js`, `lib/engine/espera-pr-proprio.js`). Travado em
 `test/pr-proprio.test.js`.
 
-**Espera do CI é opcional.** `aguardarCiParaAprovar` nasce desligada e é lida num lugar só
-(`aguardaCiParaAprovar`, `lib/engine/gate-espera.js`). Desligada, o estado do CI não segura nem barra
-a decisão: só é seguro onde o check é obrigatório no ruleset do repositório. Ligada, a aprovação
-espera os checks obrigatórios verdes no commit revisado e sai sozinha quando fecham
-(`lib/engine/espera-ci.js`); head diferente larga a espera. Nos dois modos, o check obrigatório
-que também falha no commit atual da base é herdado e não pesa (`separarHerdados`,
-`lib/engine/checks-exigidos.js`).
+**Espera do CI: o revisor nunca espera o CI** (regra do dono de 17/11/2026), nem para começar a
+revisar nem para aprovar. `aguardarCiParaAprovar` e `aguardarCiParaRevisar` saíram da tabela de
+preferências (num `config.json` antigo são descartadas na carga): o lançamento não lê os checks,
+a decisão e a publicação não os esperam, e o pedido de mudanças sustentado só pelo CI não sai. O
+estado do CI chega à revisão como informação (`anexarChecksObrigatorios`,
+`lib/engine/checks-exigidos.js`) e vira nota no card da aprovação (`lib/engine/gate-espera.js`);
+o merge continua barrado pelo GitHub onde o check é obrigatório no ruleset, e num repositório sem
+check obrigatório o APPROVE pode sair com o CI vermelho. O check obrigatório que também falha no
+commit atual da base é herdado e não pesa (`separarHerdados`). A espera gravada antes por uma
+versão anterior termina sozinha, sem olhar o CI e com o head conferido (`lib/engine/espera-ci.js`).
 
 **Gente no PR segura o automático.** Aprovação ou reprovação de uma pessoa no head, e a label
 `<conta>:revisando` de outra conta, tiram o PR do caminho automático
@@ -362,12 +365,12 @@ pareamento e `x-farol: 1`). Os corpos estão em
 [`web/README.md`](web/README.md).
 
 Das preferências de `POST /api/settings`, o front edita `parallelReviews`, `reviewModel`,
-`reviewEffort` e `people`. Só mudam pela API ou pelo arquivo: `aguardarCiParaAprovar` (o revisor
-não espera o CI pela tela desde o redesenho de 17/11/2026),
-`jiraSites`, `claudeProfiles`, `claudeProfileId`, `intervalSeconds`, `globalParallelReviews`,
-`reReviewResume`, `reviewFast`, `aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`.
-`soundEnabled`, `theme` e `autostart`, da tela antiga, saíram da tabela: voltam em `ignoradas`,
-e num `config.json` antigo são descartadas na carga (`test/preferencias-sem-leitor.test.js`).
+`reviewEffort` e `people`. Só mudam pela API ou pelo arquivo: `jiraSites`, `claudeProfiles`,
+`claudeProfileId`, `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `reviewFast`,
+`autoPushback` e `debugSpawns`. `soundEnabled`, `theme` e `autostart`, da tela antiga, e
+`aguardarCiParaAprovar` e `aguardarCiParaRevisar`, que saíram em 17/11/2026 (o revisor nunca
+espera o CI), não estão na tabela: voltam em `ignoradas`, e num `config.json` antigo são
+descartadas na carga (`test/preferencias-sem-leitor.test.js`).
 
 O snapshot leva só as 30 decisões resolvidas mais recentes. O histórico inteiro (até 3.000, a
 mais nova primeiro) sai em `GET /api/decisions`, uma página por vez

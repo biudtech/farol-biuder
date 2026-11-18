@@ -103,8 +103,8 @@ test('a escolha da própria conta vence a chave geral antiga', () => {
 });
 
 test('preferências conhecidas atravessam como vieram', () => {
-  const saida = normalizarConfig({ intervalSeconds: 600, port: 47180, aguardarCiParaAprovar: true, instanciaIsoladaPosta: true, aguardarMergeavelParaRevisar: false });
-  assert.deepEqual(saida, { intervalSeconds: 600, port: 47180, aguardarCiParaAprovar: true, instanciaIsoladaPosta: true, aguardarMergeavelParaRevisar: false });
+  const saida = normalizarConfig({ intervalSeconds: 600, port: 47180, reviewFast: true, instanciaIsoladaPosta: true, aguardarMergeavelParaRevisar: false });
+  assert.deepEqual(saida, { intervalSeconds: 600, port: 47180, reviewFast: true, instanciaIsoladaPosta: true, aguardarMergeavelParaRevisar: false });
 });
 
 test('config vazia: objeto sem conta, e não lança', () => {

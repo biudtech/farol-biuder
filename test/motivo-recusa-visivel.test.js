@@ -40,13 +40,15 @@ test('o gate não tem mais motivo que mande um aprovável para a mesa por fora d
   assert.doesNotMatch(corpo, /coverageGap|checkpointGap|contestations|result\.decision/, 'a classe depende só dos pontos de atenção');
 });
 
-test('os dois motivos do CI são espera automática, tratada pelo espera-ci.js', () => {
-  // o funil das esperas (17/10/2026) passa primeiro pelo do CI, sem mudar o vocabulário dele
+test('o CI não arma espera nenhuma: o funil das esperas só tem a da prova', () => {
+  // o revisor nunca espera o CI (17/11/2026): a espera do CI saiu do funil, e o espera-ci.js
+  // ficou só com a liberação das esperas gravadas antes
   assert.match(REVIEW, /esperaProva\.armarEspera\(engine, pr, autoDec\.motivo, result, pontos\)/);
   const FUNIL = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'espera-prova.js'), 'utf8');
-  assert.match(FUNIL, /const ci = esperaCi\.armar\(motivo, result, pontos\);\n {2}if \(ci\) return/);
+  assert.doesNotMatch(FUNIL, /esperaCi\.armar/);
   const ESPERA = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'espera-ci.js'), 'utf8');
-  assert.match(ESPERA, /MOTIVOS_DE_ESPERA = \['ci_vermelho', 'ci_em_andamento'\]/);
+  assert.doesNotMatch(ESPERA, /MOTIVOS_DE_ESPERA|function armar/);
+  assert.doesNotMatch(DECISION, /ci_vermelho|ci_em_andamento/, 'o gate não devolve mais motivo do CI');
 });
 
 // Desde 17/10/2026 os textos moram junto dos motivos (TEXTOS_DA_RECUSA em approval-policy.js),

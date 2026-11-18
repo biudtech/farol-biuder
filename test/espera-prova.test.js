@@ -203,16 +203,14 @@ test('recuperação entrega as 44 lacunas completas após persistir a marca, sem
   for (const arquivo of arquivos) assert.ok(bloco.includes(arquivo), arquivo);
 });
 
-test('recuperação com CI obrigatório vermelho não agenda nem conta outra tentativa', async () => {
+// O revisor nunca espera o CI (17/11/2026): o CI vermelho não pausa nem adia a recuperação.
+test('recuperação com CI obrigatório vermelho agenda na hora, sem consultar os checks', async () => {
   const e = motor();
   const d = await revisado(e, INCOMPLETA);
   e.config.aguardarCiParaRevisar = true;
-  e.bloqueadoPorChecks = async () => ({ bloqueado: true, faltando: [{ nome: 'ci', estado: 'vermelho' }] });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.equal(d.esperaProva.tentativas, 0);
-  assert.match(d.esperaProva.impedimento, /Aguardando os checks/);
-  e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [] });
+  e.bloqueadoPorChecks = async () => { throw new Error('a recuperação não consulta os checks'); };
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
+  assert.equal(d.esperaProva.impedimento || '', '');
   assert.equal(d.esperaProva.tentativas, 0, 'relançar não conta: a tentativa conta quando a rodada conclui');
 });
 
@@ -221,19 +219,15 @@ test(`retomada pela fila normal substitui a recuperação sem knownHead, no head
   const e = motor();
   const d = await revisado(e, INCOMPLETA);
   e.processHeadless = () => {};
-  e.config.aguardarCiParaRevisar = true;
-  e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [], verifiedHead: HEAD });
   await esperaProva.reverQuandoAProvaMudar(e);
   await e.launchReReviews();
-  const pr = e.headlessQueue.shift();
-  e.prState = async () => 'OPEN';
-  e.bloqueadoPorChecks = async () => ({ bloqueado: true, faltando: [{ nome: 'ci', estado: 'vermelho' }], verifiedHead: HEAD });
-  await e.runOneHeadless(pr, 'eu');
-  assert.equal(d.esperaProva.aguardandoCi, true);
+  e.headlessQueue.shift();
   const marcaAnterior = d.esperaProva;
+  e.prState = async () => 'OPEN';
   sessao(e, {});
   gh.head = headAtual;
-  e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [], verifiedHead: headAtual });
+  // o CI vermelho não segura a sessão nem a aprovação
+  e.bloqueadoPorChecks = async () => ({ bloqueado: true, faltando: [{ nome: 'ci', estado: 'vermelho' }], verifiedHead: headAtual });
   await e.runOneHeadless({ ...PR }, 'eu');
   assert.equal(pendente(e), undefined, 'recordDecision real remove a recuperação anterior');
   assert.deepEqual(envios.map(x => [x.event, x.commit_id]), [['APPROVE', headAtual]]);
@@ -242,39 +236,15 @@ test(`retomada pela fila normal substitui a recuperação sem knownHead, no head
 });
 }
 
-test('CI muda após o agendamento: ciclo completo espera sem virar órfã e retoma com uma tentativa', async () => {
+test('a marca de espera do CI no início, gravada antes de 17/11/2026, não segura a recuperação', async () => {
   const e = motor();
   const d = await revisado(e, INCOMPLETA);
   e.processHeadless = () => {};
-  e.config.aguardarCiParaRevisar = true;
-  e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [] });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
+  d.esperaProva.aguardandoCi = true;
+  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1, 'relança no ciclo, sem olhar o CI');
+  assert.equal(d.esperaProva.aguardandoCi, undefined, 'a marca antiga sai');
   await e.launchReReviews();
   assert.equal(e.headlessQueue.length, 1);
-  const pr = e.headlessQueue.shift();
-  assert.equal(pr.knownHead, HEAD);
-  e.prState = async () => 'OPEN';
-  let executadas = 0;
-  e.runHeadlessReview = async () => { executadas++; };
-  e.bloqueadoPorChecks = async () => ({ bloqueado: true, faltando: [{ nome: 'ci', estado: 'vermelho' }] });
-  await e.runOneHeadless(pr, 'eu');
-  assert.equal(executadas, 0);
-  assert.equal(d.blockedKind, undefined);
-  assert.equal(d.esperaProva.tentativas, 0);
-  const projetada = e.decisionForUi(d);
-  assert.equal(projetada.esperaProva.aguardandoCi, true);
-  e.reReviewLaunched[PR.key] = { head: HEAD, at: 1 };
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.equal(d.esperaProva.interrupcoes, 0);
-  assert.ok(d.esperaProva.proximaEm <= Date.now(), 'não impõe recuo de execução interrompida');
-  e.bloqueadoPorChecks = async () => ({ bloqueado: false, faltando: [] });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.equal(d.esperaProva.aguardandoCi, undefined);
-  await e.launchReReviews();
-  assert.equal(e.headlessQueue.length, 1);
-  await e.runOneHeadless(e.headlessQueue.shift(), 'eu');
-  assert.equal(executadas, 1);
-  assert.equal(d.esperaProva.tentativas, 0, 'a sessão que não concluiu (stub) não conta');
 });
 
 test('head não confirmado entra na recuperação e só publica após uma nova análise ancorada', async () => {
@@ -374,8 +344,8 @@ test('armar: só prova_tecnica_incompleta, sem violação confirmada, com a pol�
   assert.equal(esperaProva.armar(e, { ...PR, url: '' }, 'prova_tecnica_incompleta', { ...base, headSha: '' }, []), null, 'sem head nem endereço não há alvo verificável');
   assert.ok(esperaProva.armar(e, PR, 'prova_tecnica_incompleta', { ...base, technicalRecheck: true }, []));
   assert.ok(esperaProva.armar(motor(['approve', 'wait']), PR, 'prova_tecnica_incompleta', base, [{ text: 'ressalva', kind: 'content' }]), 'a análise precisa terminar antes de classificar a publicação');
-  const ci = esperaProva.armarEspera(e, PR, 'ci_em_andamento', { checksObrigatorios: [] }, []);
-  assert.ok(ci && ci.extra.esperaCi, 'a espera do CI segue com o mesmo funil');
+  // o revisor nunca espera o CI (17/11/2026): motivo do CI não arma espera nenhuma no funil
+  assert.equal(esperaProva.armarEspera(e, PR, 'ci_em_andamento', { checksObrigatorios: [] }, []), null, 'o funil não arma espera do CI');
 });
 
 test('ciclo: commit novo larga a espera e carimba stale_head', async () => {

@@ -195,7 +195,6 @@ no padrão.
 | chave | padrão | onde se muda |
 |---|---|---|
 | `conta` | `null` | Sistema (política e organizações, por `POST /api/accounts/edit`) e o arquivo ([acima](#a-conta-revisora-e-a-política)) |
-| `aguardarCiParaAprovar` | `false` | API ou arquivo (o front não tem o controle desde o redesenho de 17/11/2026) |
 | `parallelReviews` | `1` (1 a 4) | Sistema, "Revisões ao mesmo tempo" |
 | `reviewModel`, `reviewEffort` | `""` | Sistema ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
 | `people` | `{}` | Time |
@@ -205,7 +204,6 @@ no padrão.
 | `globalParallelReviews` | `0` (0 a 8; 0 = sem teto total) | API ou arquivo; Sistema avisa quando está ligado |
 | `reReviewResume` | `true` (retoma a sessão na segunda rodada) | API ou arquivo |
 | `reviewFast` | `false` (modo rápido da revisão) | API ou arquivo |
-| `aguardarCiParaRevisar` | `false` (espera o CI antes de revisar) | API ou arquivo |
 | `autoPushback`, `debugSpawns` | `true`, `false` | API ou arquivo |
 | `reviewSingleOutput` | `false` | arquivo |
 | `reviewRoundsMode` | `"observe"` (`"enforce"` liga os gates de rodada) | arquivo |
@@ -220,20 +218,22 @@ no padrão.
 | `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
 | `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |
 
-Desde 16/11/2026, quando a tela antiga saiu, sete chaves que ela editava só mudam pela API ou
+Desde 16/11/2026, quando a tela antiga saiu, seis chaves que ela editava só mudam pela API ou
 pelo arquivo: `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `reviewFast`,
-`aguardarCiParaRevisar`, `autoPushback` e `debugSpawns`. Um exemplo:
+`autoPushback` e `debugSpawns`. Um exemplo:
 
 ```sh
 # FAROL e CAB: veja "Chamar a API sem tela"
 curl -sS -X POST "$FAROL/api/settings" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
-  --data '{"intervalSeconds":600,"aguardarCiParaRevisar":true}'
+  --data '{"intervalSeconds":600,"reviewFast":true}'
 ```
 
 `soundEnabled`, `theme` e `autostart` eram da tela antiga (som, tema e abrir com o sistema) e
-saíram da tabela em 16/11/2026, porque nada no motor as lia. Num `config.json` antigo elas são
-descartadas na carga, sem erro, e somem na próxima gravação; `POST /api/settings` as devolve em
-`ignoradas` (`test/preferencias-sem-leitor.test.js`). A carga não regrava o arquivo por causa
+saíram da tabela em 16/11/2026, porque nada no motor as lia. `aguardarCiParaAprovar` ("CI
+obrigatório antes da aprovação") e `aguardarCiParaRevisar` ("só começa a revisar com os checks
+verdes") saíram em 17/11/2026: o revisor nunca espera o CI, nem para começar nem para aprovar.
+Num `config.json` antigo as cinco são descartadas na carga, sem erro, e somem na próxima
+gravação; `POST /api/settings` as devolve em `ignoradas` (`test/preferencias-sem-leitor.test.js`). A carga não regrava o arquivo por causa
 delas: ele só é regravado no boot quando a leitura da conta mudou alguma coisa (formato antigo,
 chave geral antiga, ou política que não estava com os quatro campos por extenso), e aí elas já
 saem nessa gravação (`aoCarregar`, `lib/engine/contas-config.js`). O tema
@@ -243,13 +243,12 @@ Lidas só do arquivo e fora da tabela (`CHAVES_SO_DE_ARQUIVO`): `instanciaIsolad
 `aguardarMergeavelParaRevisar` (ligada salvo `false` explícito: PR em conflito com a base
 não abre sessão automática, `lib/engine/espera-conflito.js`).
 
-**CI obrigatório antes da aprovação** (`aguardarCiParaAprovar`, lida só por
-`aguardaCiParaAprovar` em `lib/engine/gate-espera.js`). Ligada, a aprovação espera os checks
-obrigatórios verdes no commit revisado. Desligada (padrão), o estado do CI não segura nem
-adia a decisão.
-**Só é seguro desligar onde o check é obrigatório no ruleset**: sem isso, o Farol pode aprovar com o CI vermelho
-e o GitHub não barra o merge. Detalhe em
-[`REVIEW-GATES.md`](REVIEW-GATES.md).
+**O revisor nunca espera o CI** (regra do dono de 17/11/2026). O estado do CI obrigatório não
+segura, não adia e não barra a revisão nem a decisão: chega à revisão como informação, e o card
+da aprovação diz com que CI ela saiu. O merge continua barrado pelo GitHub onde o check é
+obrigatório no ruleset; **num repositório sem check obrigatório, o Farol pode aprovar com o CI
+vermelho e o GitHub não barra o merge**. O check obrigatório herdado da base continua sem peso.
+Detalhe em [`REVIEW-GATES.md`](REVIEW-GATES.md#o-ci-não-decide).
 
 **Paralelismo.** `parallelReviews` é o limite de revisões simultâneas da conta;
 `globalParallelReviews` é o teto da instância inteira, e 0 deixa só o limite da conta. Com

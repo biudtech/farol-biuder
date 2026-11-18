@@ -1,10 +1,9 @@
-// "CI obrigatório antes da aprovação" voltou a ser escolha, desligada por padrão (06/11/2026).
-//
-// Pedido do dono: "CI obrigatório antes da aprovação: isso aqui tem que ter como desativar no
-// Farol, acredito que isso é a maior falha, e deve vir por default como desabilitado". As vias da
-// decisão e da postagem têm casos próprios (gate-espera-revisao, decisao-sem-mesa,
-// retirada-de-pedido, technical-review, sem-declaracao-tecnica, busca-da-prova); aqui ficam o
-// prompt da sessão e o que os guias prometem: com a chave desligada, nada pode prometer espera do CI.
+// O CI fora da decisão. "CI obrigatório antes da aprovação" voltou a ser escolha, desligada por
+// padrão, em 06/11/2026, e saiu de vez em 17/11/2026, regra do dono: o revisor nunca espera o CI,
+// nem para começar nem para aprovar. As vias da decisão e da postagem têm casos próprios
+// (gate-espera-revisao, decisao-sem-mesa, retirada-de-pedido, technical-review,
+// sem-declaracao-tecnica, busca-da-prova); aqui ficam o prompt da sessão e o que os guias
+// prometem: nada pode prometer espera do CI.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,18 +17,16 @@ function secaoDoChangelog() {
   return inicio < 0 ? '' : texto.slice(inicio, texto.indexOf('## v2.78.41', inicio));
 }
 
-test('prompt: desligada, a sessão é avisada de que o CI não decide; ligada, nada muda', () => {
-  for (const config of [{}, { aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: 'true' }]) {
-    const bloco = ciForaDaDecisaoBlock(config);
-    assert.match(bloco, /CI obrigatório fora da decisão/);
-    assert.match(bloco, /Não conclua `request_changes` nem declare bloqueio com causa `ci`/);
-    assert.match(bloco, /defeito do código \(causa `defeito_codigo`\)/, 'o diff que quebra o check, com prova, continua defeito');
-    assert.match(bloco, /não rebaixe `decision` para `needs_decision` nem escreva item em\s+`reasons` só pelo estado do CI/,
-      'o CI não vira ressalva pela sessão (com a conta esperando você nas ressalvas, isso mandaria o PR limpo para a mesa)');
-    assert.match(bloco, /vale por cima das regras de CI deste prompt/);
-  }
-  assert.equal(ciForaDaDecisaoBlock({ aguardarCiParaAprovar: true }), '');
-  assert.match(ler('lib/engine/review-prompt.js'), /thirdPartyReviewBlock\(\) \+ ciForaDaDecisaoBlock\(engine\.config\)/, 'o bloco entra no prompt da revisão');
+test('prompt: a sessão é sempre avisada de que o CI não decide', () => {
+  const bloco = ciForaDaDecisaoBlock();
+  assert.match(bloco, /CI obrigatório fora da decisão/);
+  assert.match(bloco, /Não conclua `request_changes` nem declare bloqueio com causa `ci`/);
+  assert.match(bloco, /defeito do código \(causa `defeito_codigo`\)/, 'o diff que quebra o check, com prova, continua defeito');
+  assert.match(bloco, /não rebaixe `decision` para `needs_decision` nem escreva item em\s+`reasons` só pelo estado do CI/,
+    'o CI não vira ressalva pela sessão');
+  assert.match(bloco, /vale por cima das regras de CI deste prompt/);
+  assert.match(ler('lib/engine/review-prompt.js'), /thirdPartyReviewBlock\(\) \+ ciForaDaDecisaoBlock\(\) \+ complementar/, 'o bloco entra no prompt da revisão, sem condição');
+  assert.doesNotMatch(ler('lib/engine/review-prompt.js'), /ciHerdadoBlock/, 'o bloco do herdado, que só valia com a espera ligada, saiu');
 });
 
 test('espera armada e desligada: as notas não prometem que a decisão sempre sai pela política da conta', () => {
@@ -46,15 +43,16 @@ test('espera armada e desligada: as notas não prometem que a decisão sempre sa
   }
 });
 
-test('desligar só é seguro com check obrigatório no ruleset: os docs, as notas e a tabela das preferências avisam', () => {
-  assert.match(ler('docs/CONFIGURATION.md'), /Só é seguro desligar onde o check é obrigatório no ruleset\*\*: sem isso, o Farol pode aprovar com o CI vermelho/);
-  assert.match(ler('docs/REVIEW-GATES.md'), /desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho/);
-  assert.doesNotMatch(ler('docs/REVIEW-GATES.md'), /e é por isso que desligar é seguro/);
-  assert.match(secaoDoChangelog(), /Só desligue onde o check é obrigatório no ruleset/);
-  assert.match(ler('lib/settings.js'), /Só é seguro onde o check é obrigatório no ruleset/);
+test('os guias dizem que o revisor nunca espera o CI, e que sem check obrigatório o GitHub não barra o merge', () => {
+  for (const guia of ['CLAUDE.md', 'docs/REVIEW-GATES.md', 'docs/CONFIGURATION.md']) {
+    const texto = ler(guia);
+    assert.match(texto, /nunca espera o CI/, guia);
+    assert.doesNotMatch(texto, /aguarda(?:r)?CiPara(?:Aprovar|Revisar)` (?:nasce|é|fica) (?:desligad|ligad)/, `${guia} não descreve a chave como viva`);
+  }
+  assert.match(ler('docs/REVIEW-GATES.md'), /num repositório sem check obrigatório no ruleset, o APPROVE pode sair com o CI vermelho e nada barra o merge/);
 });
 
-test('lacunas da rodada: o CI só entra na prova exigida com a chave ligada; o approvalGaps segue apontando a pipe', async () => {
+test('lacunas da rodada: o CI nunca entra na prova exigida; o approvalGaps segue apontando a pipe', async () => {
   const { lacunasDaRodada } = await import('../lib/engine/busca-da-prova.js');
   const { approvalGaps } = await import('../lib/technical-review/evidence.js');
   const head = 'a'.repeat(40);
@@ -62,11 +60,9 @@ test('lacunas da rodada: o CI só entra na prova exigida com a chave ligada; o a
     checksObrigatorios: [{ nome: 'audit', estado: 'vermelho' }] });
   const ci = ['checks não conferidos no commit revisado', 'ci_vermelho'];
   for (const g of ci) assert.ok(approvalGaps(base()).includes(g), g);
-  const ligada = lacunasDaRodada({ config: { aguardarCiParaAprovar: true } }, null, base());
-  for (const g of ci) assert.ok(ligada.includes(g), `ligada exige ${g}`);
-  for (const config of [{}, { aguardarCiParaAprovar: false }]) {
-    const desligada = lacunasDaRodada({ config }, null, base());
-    for (const g of ci) assert.equal(desligada.includes(g), false, `desligada não exige ${g}`);
+  for (const config of [{}, { aguardarCiParaAprovar: false }, { aguardarCiParaAprovar: true }]) {
+    const exigidas = lacunasDaRodada({ config }, null, base());
+    for (const g of ci) assert.equal(exigidas.includes(g), false, `${JSON.stringify(config)} não exige ${g}`);
   }
 });
 

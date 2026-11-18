@@ -263,7 +263,7 @@ test('B7: pendência pausada vai marcada na projeção, e a que não está pausa
   assert.equal(e.decisionForUi(d).esperaProva.pedeVoce, false, 'a projeção acompanha');
 });
 
-test('B7: a pausa que chega depois avisa needs-decision uma vez, e a espera do CI no início não é "precisa de você"', async () => {
+test('B7: a pausa que chega depois avisa needs-decision uma vez, e o CI não pausa a recuperação', async () => {
   const e = motor(['approve', 'approve']);
   const d = await revisado(e, INCOMPLETA);
   assert.deepEqual(e.eventos, []);
@@ -274,16 +274,14 @@ test('B7: a pausa que chega depois avisa needs-decision uma vez, e a espera do C
   revisaSozinha(e, true);
   await esperaProva.reverQuandoAProvaMudar(e);
   assert.equal(d.esperaProva.pedeVoce, false);
-  // a pausa pelo CI obrigatório é automática: não pede ninguém
+  // a pausa pelo CI obrigatório saiu em 17/11/2026: o revisor nunca espera o CI
   const c = motor(['approve', 'approve']);
   const dc = await revisado(c, INCOMPLETA);
   c.config.aguardarCiParaRevisar = true;
-  c.bloqueadoPorChecks = async () => ({ bloqueado: true, faltando: [{ nome: 'ci', estado: 'vermelho' }] });
+  c.bloqueadoPorChecks = async () => { throw new Error('a recuperação não consulta os checks'); };
   await esperaProva.reverQuandoAProvaMudar(c);
-  assert.match(dc.esperaProva.impedimento, /checks/);
-  assert.equal(dc.esperaProva.pedeVoce, false);
+  assert.equal(dc.esperaProva.impedimento || '', '');
   assert.deepEqual(c.eventos, []);
-  assert.equal(c.decisionForUi(dc).esperaProva.pedeVoce, false, 'na projeção, a espera pelo CI não pede você');
 });
 
 // Review do PR #349: `anotarPausa` e `registrarPausa` saíam quando o texto do impedimento não

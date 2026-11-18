@@ -11,7 +11,7 @@ seção diz a regra e o arquivo em que ela mora.
 - [O gate automático](#o-gate-automático)
 - [Ressalva e lacuna](#ressalva-e-lacuna)
 - [A decisão sem mesa](#a-decisão-sem-mesa)
-- [CI obrigatório antes da aprovação](#ci-obrigatório-antes-da-aprovação)
+- [O CI não decide](#o-ci-não-decide)
 - [Check herdado da base](#check-herdado-da-base)
 - [PR de sincronização](#pr-de-sincronização)
 - [Dedup por head](#dedup-por-head)
@@ -77,7 +77,7 @@ indicação):
 
 Toda escrita de review passa por `postReview` (`lib/engine/decision.js`): o desfecho da revisão
 automática (`via: 'revisao'`), o clique na mesa (`via: 'clique'`), o reenvio (`via: 'reenvio'`) e a
-espera do CI (`via: 'espera-ci'`). As postagens do mesmo PR entram numa fila e saem uma por vez
+liberação das esperas do CI gravadas antes de 17/11/2026 (`via: 'espera-ci'`). As postagens do mesmo PR entram numa fila e saem uma por vez
 (`enfileirarPostagem`).
 
 Há uma escrita no GitHub que não passa por `postReview`: a retirada do pedido de mudanças
@@ -140,13 +140,12 @@ uma sessão pode sair sozinho. A admissibilidade vem antes da política da conta
 | `origem_desconhecida` | o PR não traz nenhuma marca de origem (ver [A decisão sem mesa](#a-decisão-sem-mesa)) |
 | `prova_tecnica_incompleta` | sobrou lacuna exigida (ver [Ressalva e lacuna](#ressalva-e-lacuna)) |
 | `politica` | a política da conta manda esperar |
-| `ci_vermelho`, `ci_em_andamento` | só com a espera do CI ligada |
 
 `shouldAutoReject` devolve verdadeiro ou falso. Não reprova sozinho quando: o resultado é
 incoerente; a avaliação técnica falhou pela declaração do repositório; a análise não sustenta a
 reprovação (`analiseSustentaReprovacao`); o bloqueio é só de estado do PR (CI, conflito,
-dependência, fora do diff: `reprovacaoSoDeEstado`); a espera do CI está desligada e só o CI vermelho
-sustenta o pedido; o inventário tem pendência, ou a memória de rodadas (esta só em `enforce`); o
+dependência, fora do diff: `reprovacaoSoDeEstado`); só o CI vermelho sustenta o pedido (o CI não
+decide); o inventário tem pendência, ou a memória de rodadas (esta só em `enforce`); o
 REQUEST_CHANGES não veio
 pronto e com texto; a origem é desconhecida; o PR é da própria conta; ou a política da conta não é
 `request_changes`.
@@ -203,7 +202,7 @@ de você") com o motivo no card.
 **Origem.** A revisão posta sozinha quando o PR traz uma marca de origem (`origemDoDono`,
 `lib/engine/desfecho-automatico.js`). A função aceita seis marcas. Três têm quem as escreva hoje:
 `requested` (o PR pedido à conta, vindo da fila), `manual` (o clique) e `origemDono`, que a
-pendência grava e é o que faz o reenvio e a espera do CI passarem. As outras três (`viaAdmin`,
+pendência grava e é o que faz o reenvio e a liberação da espera do CI gravada antes passarem. As outras três (`viaAdmin`,
 `viaComando`, `viaDistribuicao`) são lidas e não têm escritor. Só a revisão sem marca nenhuma não
 posta sozinha, e o card diz isso.
 
@@ -214,7 +213,7 @@ posta sozinha, e o card diz isso.
 3. REQUEST_CHANGES montado pelo app (`caminhoNovo`), quando a sessão aprovou, a conta reprova
    sozinha e há defeito do PR (`defeitosDoPr`: violação técnica confirmada, achado não resolvido, a
    parte do card deste PR não entregue).
-4. REQUEST_CHANGES pelo CI obrigatório vermelho, só com a espera do CI ligada.
+4. (saiu em 17/11/2026: o REQUEST_CHANGES pelo CI obrigatório vermelho; o CI não decide.)
 5. COMMENT em PR da própria conta.
 
 O que não sai por nenhum deles vira pendência (`registrarPendencia`): espera automática, quando há
@@ -239,46 +238,39 @@ quando o PR foi mergeado ou fechado, ou quando a conta já tem review que a aten
 outra pessoa já aprovou ou reprovou aquele commit, a aprovação automática é dispensada sem postar
 (`dispensarAprovacaoEmHeadDecidido`).
 
-## CI obrigatório antes da aprovação
+## O CI não decide
 
-A chave é `aguardarCiParaAprovar`, lida num lugar só (`aguardaCiParaAprovar`,
-`lib/engine/gate-espera.js`). O padrão é desligada.
+Regra do dono de 17/11/2026: **o revisor nunca espera o CI**, nem para começar a revisar nem para
+aprovar. As chaves `aguardarCiParaAprovar` ("CI obrigatório antes da aprovação") e
+`aguardarCiParaRevisar` ("só começa com os checks obrigatórios verdes") saíram da tabela de
+preferências; num `config.json` antigo são descartadas na carga.
 
-**Desligada**, o estado do CI não segura nem adia a decisão em via nenhuma, e fica só como nota no
-app. O merge só fica barrado pelo GitHub onde o check é obrigatório no ruleset do repositório, e
-desligar só é seguro nesse caso: num repositório sem check obrigatório, desligar permite APPROVE com o CI vermelho,
-e nada barra o merge. O pedido de mudanças sustentado só pelo CI vermelho não sai
-sozinho.
+- **Para começar**: o lançamento automático não lê os checks (`bloqueiaAutomatico`,
+  `lib/engine/skip-review.js`, só pergunta se gente já decidiu o head), e a recuperação da prova
+  não pausa pelo CI.
+- **Para decidir**: o estado do CI não segura, não adia e não barra a decisão em via nenhuma.
+  `shouldAutoApprove` não devolve motivo do CI, a lacuna do CI nunca é exigida
+  (`lacunasDaRodada`, `lib/engine/busca-da-prova.js`), a publicação não lê os checks
+  (`lib/technical-review/publication.js`), e o pedido de mudanças sustentado só pelo CI vermelho
+  não sai: quando nada mais o sustenta, vira aprovação pela política da conta
+  (`lib/engine/estado-desmentido.js`).
+- **Como informação**: os checks obrigatórios do head continuam lidos no fim da revisão
+  (`anexarChecksObrigatorios`, `lib/engine/checks-exigidos.js`), o prompt diz à sessão que o CI
+  não decide (`ciForaDaDecisaoBlock`, `lib/engine/review-prompt.js`), e o card da aprovação diz com
+  que CI ela saiu (`avisoDaAprovacao`, `lib/engine/gate-espera.js`). Nada disso vai ao PR.
 
-**Ligada**, o resultado aprovável com check obrigatório vermelho ou rodando fica como pendência com
-a marca `esperaCi`, gravada no `decisions.json` (`lib/engine/espera-ci.js`). A cada ciclo,
-`aprovarQuandoOCiFechar` faz uma leitura por PR em espera:
+O merge continua barrado pelo GitHub onde o check é obrigatório no ruleset do repositório; num
+repositório sem check obrigatório no ruleset, o APPROVE pode sair com o CI vermelho e nada barra o
+merge, e por isso o card da aprovação avisa.
 
-- checks verdes no mesmo head que a sessão leu: confere a política da conta de novo, consulta se
-  gente já decidiu o commit e posta pelo `postReview`;
-- head diferente: larga a espera e marca a pendência como commit novo; nunca posta em head que a
-  sessão não leu;
-- CI vermelho ou rodando: segue esperando, sem pedir clique;
-- CI vermelho com a conta reprovando sozinha: `reprovarPeloCi` posta o REQUEST_CHANGES citando os
-  checks e resolve a pendência como reprovada. A espera acaba ali; só outro commit abre análise
-  nova.
+**A espera gravada antes.** A pendência com a marca `esperaCi` que uma versão anterior deixou no
+`decisions.json` termina sozinha (`aprovarQuandoOCiFechar`, `lib/engine/espera-ci.js`), uma leitura
+por ciclo, sem olhar o CI: o head continua conferido (head diferente larga a espera e marca a
+pendência como commit novo), o gate de consciência vale na hora do post (decisão de gente naquele
+commit resolve como `approval_not_needed`, sem postar), e a aprovação sai pelo `postReview`, com o
+CI não verde como nota no card. O pedido de mudanças que esperava o CI não sai.
 
-Na hora de postar a aprovação, decisão de gente naquele commit resolve a pendência como
-`approval_not_needed`, sem postar (`consciencia` e `dispensar`).
-
-A espera também é armada para um resultado que pede mudanças só por estado do PR com causa de CI,
-quando a conta reprova sozinha e a origem é conhecida (`esperaDeEstado`,
-`lib/engine/desfecho-da-revisao.js`). Para essa pendência, CI verde no mesmo head leva à mesa e
-nunca vira APPROVE; CI vermelho segue o `reprovarPeloCi`.
-
-Leitura que falha (sem token, `gh` fora, exigência da branch desconhecida) espera o próximo ciclo:
-aqui a falta de dado segura. Uma espera armada antes de a chave ser desligada é liberada no ciclo
-seguinte sem olhar o CI, com o head ainda conferido (`liberarSemCi`).
-
-O check obrigatório herdado da base não segura nada disso: ver [Check herdado da base](#check-herdado-da-base).
-
-Começar a revisão só com os checks obrigatórios verdes é outra chave, `aguardarCiParaRevisar`,
-também desligada por padrão (`bloqueiaAutomatico`, `lib/engine/skip-review.js`).
+O check obrigatório herdado da base continua sem peso: ver [Check herdado da base](#check-herdado-da-base).
 
 ## Check herdado da base
 
@@ -296,26 +288,21 @@ rodando nunca herda: a base não mostra falha nenhuma. O check que não está ve
 valendo exatamente como antes.
 
 **Onde vale.** O herdado sai da lista do que falta logo na leitura, nos dois lugares que leem os
-checks do PR: `bloqueadoPorChecks` (gate de entrada, `checksObrigatorios` do envelope, o clique e
-a publicação em `lib/technical-review/publication.js`) e `lerCi` (a espera do CI e a retirada do
-pedido, `lib/engine/espera-ci.js`). Com isso ele não segura a aprovação, nem com a espera do CI
-ligada; não vira lacuna de CI (`approvalGaps`), ressalva, motivo de espera, pedido de mudanças
-pelo CI (`payloadDoCiVermelho`) nem o aviso "aprovado com check obrigatório" do card
-(`avisoDaAprovacao`, `avisoDoCi`). Com a espera ligada, o pedido de mudanças que a sessão
-sustentou só pelo CI, quando o que falta no commit revisado é só herdado, vira aprovação pela
-política da conta (`estadosDoPedido`, `lib/engine/estado-desmentido.js`), e o prompt ganha o bloco
-`ciHerdadoBlock` (`lib/engine/review-prompt.js`) para a sessão não cobrar o herdado no texto.
-Check não obrigatório continua sem peso: nem chega a ser comparado com a base.
+checks do PR: `bloqueadoPorChecks` (`checksObrigatorios` do envelope) e `lerCi` (a liberação das
+esperas gravadas antes e a retirada do pedido, `lib/engine/espera-ci.js`). Desde 17/11/2026 o CI
+não decide nada ([O CI não decide](#o-ci-não-decide)), e o herdado também não vira o aviso
+"aprovado com check obrigatório" do card (`avisoDaAprovacao`, `avisoDoCi`): só a linha
+informativa abaixo. O bloco do prompt que tirava o herdado da sessão (`ciHerdadoBlock`) saiu com
+a espera, porque o bloco do CI fora da decisão (`ciForaDaDecisaoBlock`) já cobre. Check não
+obrigatório continua sem peso: nem chega a ser comparado com a base.
 
 **A leitura da base** (`checksDaBase`) é uma consulta GraphQL pelo `gh`: o commit atual da branch
 base e o `statusCheckRollup` dele, no mesmo formato que o `gh pr view` devolve para o PR, lido
 pela mesma régua (`checksExigidosVerdes`). Só acontece quando há check obrigatório fora do verde
 no head. Leitura que falha, commit sem SHA ou lista cortada (mais de 100 checks) valem como "não
-deu para ler", e o comportamento é o de antes: nada é herdado. O gate de lançamento e a leitura da
-revisão usam um cache por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA
-lido, que guarda também a falha. Os pontos que decidem postar leem a base fresca, sem o cache
-(`{ fresco: true }`): a espera do CI antes do APPROVE e a retirada do pedido (`lerCi`) e a
-publicação (`lib/technical-review/publication.js`).
+deu para ler", e o comportamento é o de antes: nada é herdado. A leitura da revisão usa um cache
+por `repo@base` de `TEMPOS.CHECKS_DA_BASE_TTL_MS` (um minuto), com o SHA lido, que guarda também a
+falha. A retirada do pedido (`lerCi`) lê a base fresca, sem o cache (`{ fresco: true }`).
 
 **O card.** Na mesa, o herdado aparece numa linha que só informa (`avisoDosHerdados`,
 `lib/engine/gate-espera.js`), com a marca `informativo`, que `attentionPoints` nunca conta como
@@ -386,8 +373,8 @@ A regra é `decisaoAutomaticaJaPublicada` (`lib/engine/review-head-policy.js`): 
 da boca não roda, e `myReviewStates` descarta os reviews anteriores ao pedido de revisão. Quem
 clica em Revisar num commit já decidido pela conta recebe revisão e postagem novas.
 
-O mesmo `myReviewStates` é lido também no desfecho (`lib/engine/desfecho-da-revisao.js`) e na espera
-do CI (`lib/engine/espera-ci.js`), antes de cada um montar o próprio pedido. Para saber todos os
+O mesmo `myReviewStates` é lido também no desfecho (`lib/engine/desfecho-da-revisao.js`) e na
+liberação da espera do CI gravada antes (`lib/engine/espera-ci.js`), antes de cada um montar o próprio pedido. Para saber todos os
 pontos de hoje: `git grep -n "myReviewStates(" lib server.js`.
 
 Travado em `test/postagem-dedup.test.js` e `test/postagem-coordenacao-desligada.test.js`.
@@ -400,7 +387,7 @@ O review fala do commit que a sessão leu, e não sai em outro.
   relê o head. Se mudou durante a sessão, nada é postado e a pendência fica marcada `stale_head`.
 - **No clique**: se o head de agora difere do que a sessão leu, `decide` não posta, grava na
   pendência `blockedKind: 'stale_head'` com o head novo e responde `blocked: 'stale_head'`.
-- **Na espera do CI**: head diferente larga a espera.
+- **Na espera do CI gravada antes de 17/11/2026**: head diferente larga a espera.
 - **A cada ciclo**: `marcarCommitNovo` (`lib/engine/pendencia-commit-novo.js`) converte em
   `stale_head` a pendência viva cujo head no GitHub não é mais o lido.
 
@@ -525,8 +512,8 @@ sai sozinho, e isso não é aprovação (`lib/engine/retirada-de-pedido.js`).
   análise completa, commit confirmado, nenhuma lacuna dispensada além de divergência entre
   passadas, rodada anterior na memória e sem pendência nela, nenhum defeito do PR, e o gate da
   aprovação sem recusa (política e CI não contam como recusa aqui).
-- Com a espera do CI ligada e o CI ainda não verde naquele head, a retirada fica marcada e a
-  varredura a conclui quando ele fechar. Com a espera desligada, o CI não adia a retirada.
+- O CI não adia a retirada (o revisor nunca espera o CI, 17/11/2026). A marca do pedido feito pelo
+  CI vermelho, gravada antes, ainda espera o check que era o problema dela.
 - Retirar não aprova: o desfecho segue atrás dos gates e da política da conta.
 
 A retirada passa pelas mesmas recusas de conta e de estado do PR do portão de postagem.

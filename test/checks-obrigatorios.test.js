@@ -1,4 +1,6 @@
-// A revisão automática só começa com 100% dos checks OBRIGATÓRIOS verdes.
+// A régua dos checks OBRIGATÓRIOS verdes. Nasceu como gate de entrada (a revisão automática só
+// começava com 100% dos obrigatórios verdes), que saiu em 17/11/2026: o revisor nunca espera o
+// CI para começar a revisar. A régua ficou para a leitura informativa dos checks.
 //
 // PEDIDO DE UM COLEGA (31/08/2026), com dois desperdícios medidos por ele em campo:
 // (1) o Farol começa a revisar, alguém clica em "Update branch", entra commit novo e a
@@ -10,7 +12,7 @@
 // exigido. Exigir tudo verde nunca revisaria aquele repositório.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-const { checksExigidosVerdes, textoDosChecks } = await import('../lib/engine/checks-exigidos.js');
+const { checksExigidosVerdes } = await import('../lib/engine/checks-exigidos.js');
 
 const run = (name, conclusion, over = {}) => ({
   name, conclusion, status: 'COMPLETED', startedAt: '2026-08-31T10:00:00Z', ...over,
@@ -97,88 +99,48 @@ test('check de status legado (context em vez de name) é entendido', () => {
   assert.deepEqual(checksExigidosVerdes(vermelho, ['ci/legado']).faltando, [{ nome: 'ci/legado', estado: 'vermelho' }]);
 });
 
-/* ---------- fiação: o gate entra na boca única do lançamento automático ---------- */
+/* ---------- o gate de entrada pelo CI saiu (17/11/2026) ---------- */
 
 const LIVRE = { bloqueado: false, head: 'sha', quem: [], decisivos: [] };
 const PR = { key: 'o/r#1', repo: 'o/r', number: 1, url: 'https://github.com/o/r/pull/1' };
 
 function engineFalso(extra = {}) {
   return {
-    // o gate de entrada é opt-in desde 01/10/2026: estes casos testam o gate LIGADO
-    config: { aguardarCiParaRevisar: true },
+    config: {},
     toasts: [],
     emit(_, p) { this.toasts.push(p); },
     bloqueadoPorHistorico: async () => LIVRE,
-    bloqueadoPorChecks: async () => ({ bloqueado: false, faltando: [] }),
+    bloqueadoPorChecks: async () => { throw new Error('o lançamento automático não consulta os checks'); },
     ...extra,
   };
 }
 
-test('obrigatório faltando segura o automático e avisa que o botão vale', async () => {
-  const e = engineFalso({ bloqueadoPorChecks: async () => ({ bloqueado: true, faltando: [{ nome: 'test', estado: 'rodando' }] }) });
-  assert.equal(await skip.bloqueiaAutomatico(e, { ...PR }), true);
-  assert.match(e.toasts[0].text, /esperando os checks obrigatórios/);
-  assert.match(e.toasts[0].text, /test \(ainda rodando\)/);
-  assert.match(e.toasts[0].text, /Revisar agora continua valendo/);
-});
-
-test('desligado (padrão), o automático nem consulta os checks e revisa na hora', async () => {
-  for (const config of [{}, { aguardarCiParaRevisar: false }, { aguardarCiParaRevisar: 'true' }]) {
-    const e = engineFalso({
-      config,
-      bloqueadoPorChecks: async () => { throw new Error('sem a chave ligada o gate de entrada não consulta checks'); },
-    });
+test('o automático nem consulta os checks e revisa na hora, com qualquer config', async () => {
+  for (const config of [{}, { aguardarCiParaRevisar: false }, { aguardarCiParaRevisar: true }]) {
+    const e = engineFalso({ config });
     assert.equal(await skip.bloqueiaAutomatico(e, { ...PR }), false, JSON.stringify(config));
     assert.equal(e.toasts.length, 0);
   }
 });
 
-test('o padrão da preferência é desligado e só o booleano verdadeiro liga', async () => {
-  const { SETTINGS, EDITAVEIS, sanear } = await import('../lib/settings.js');
-  assert.equal(SETTINGS.find(x => x.key === 'aguardarCiParaRevisar').def, false);
-  assert.ok(EDITAVEIS.has('aguardarCiParaRevisar'));
-  assert.equal(sanear('aguardarCiParaRevisar', true), true);
-  for (const v of [false, 'true', 1, null, undefined]) assert.equal(sanear('aguardarCiParaRevisar', v), false, String(v));
+test('a preferência de esperar o CI para revisar saiu da tabela', async () => {
+  const { SETTINGS, EDITAVEIS } = await import('../lib/settings.js');
+  assert.equal(SETTINGS.some(x => x.key === 'aguardarCiParaRevisar'), false);
+  assert.equal(EDITAVEIS.has('aguardarCiParaRevisar'), false);
 });
 
-test('clique manual atravessa sem consultar nada: é a saída de quem tem pressa', async () => {
+test('clique manual atravessa sem consultar nada', async () => {
   const e = engineFalso({
     bloqueadoPorHistorico: async () => { throw new Error('clique não podia consultar histórico'); },
-    bloqueadoPorChecks: async () => { throw new Error('clique não podia consultar checks'); },
   });
   assert.equal(await skip.bloqueiaAutomatico(e, { ...PR, manual: true }), false);
 });
 
-test('checks verdes deixam passar', async () => {
-  const e = engineFalso();
-  assert.equal(await skip.bloqueiaAutomatico(e, { ...PR }), false);
-  assert.equal(e.toasts.length, 0);
-});
-
-test('histórico decisivo continua vencendo, e nem chega a olhar os checks', async () => {
+test('histórico decisivo continua segurando o automático', async () => {
   const e = engineFalso({
     bloqueadoPorHistorico: async () => ({ bloqueado: true, head: 'sha', quem: ['ana'], decisivos: [{ quem: 'ana', state: 'APPROVED' }] }),
-    bloqueadoPorChecks: async () => { throw new Error('não devia consultar checks com o histórico já segurando'); },
   });
   assert.equal(await skip.bloqueiaAutomatico(e, { ...PR }), true);
-});
-
-test('o aviso não se repete no mesmo estado, e volta quando a pipe anda', async () => {
-  let faltando = [{ nome: 'test', estado: 'rodando' }];
-  const e = engineFalso({ bloqueadoPorChecks: async () => ({ bloqueado: true, faltando }) });
-  await skip.bloqueiaAutomatico(e, { ...PR });
-  await skip.bloqueiaAutomatico(e, { ...PR });
-  assert.equal(e.toasts.length, 1, 'mesmo estado não repete o toast a cada ciclo');
-  faltando = [{ nome: 'build', estado: 'vermelho' }];
-  await skip.bloqueiaAutomatico(e, { ...PR });
-  assert.equal(e.toasts.length, 2, 'o que falta mudou: é informação nova, não repetição');
-});
-
-test('a lista do aviso é cortada, pra o toast não virar parede', () => {
-  const muitos = ['a', 'b', 'c', 'd', 'e'].map(nome => ({ nome, estado: 'rodando' }));
-  const t = textoDosChecks('o/r#1', muitos);
-  assert.match(t, /e mais 2/);
-  assert.equal(textoDosChecks('o/r#1', []), '');
 });
 
 /* ---------- veredito de review não é sinal de pipe (16/09/2026) ---------- */

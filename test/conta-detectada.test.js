@@ -144,11 +144,12 @@ test('receita da instância que sobe sem agir: sobrevive ao primeiro check(), à
   assert.deepEqual(politica(motor(), 'revisora'), [false, 'wait', 'wait', 'wait'], 'e o boot seguinte lê a mesma coisa');
 });
 
-test('os padrões de Automação da instalação nova: retomada ligada, CI obrigatório antes da aprovação desligado', () => {
+test('os padrões de Automação da instalação nova: retomada ligada, sem chave de espera do CI', () => {
   comecar(null);
   const e = motor();
   assert.equal(e.config.reReviewResume, true);
-  assert.equal(e.config.aguardarCiParaAprovar, false);
+  assert.equal('aguardarCiParaAprovar' in e.config, false, 'o revisor nunca espera o CI: a chave não existe');
+  assert.equal('aguardarCiParaRevisar' in e.config, false);
   assert.equal('esquemaConfig' in gravada(), false, 'o marcador das migrações antigas saiu com elas');
 });
 

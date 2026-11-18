@@ -152,11 +152,11 @@ test('pôr o sem ressalvas em espera leva o com ressalvas junto, e pedir o contr
 
 /* ---------- o rastro: toda mudança de política tem data e origem ---------- */
 
-test('a diferença de política considera a conta e a chave geral, e ignora o que não é política', () => {
+test('a diferença de política considera a conta, e ignora o que não é política', () => {
   const antes = C.retratoDaPolitica({ aguardarCiParaRevisar: false, conta: BASE });
   const depois = C.retratoDaPolitica({ aguardarCiParaRevisar: true, conta: { ...BASE, owners: ['outra'], onClean: 'wait' } });
+  // as chaves de espera do CI saíram em 17/11/2026: não são mais política
   assert.deepEqual(C.mudancasDePolitica(antes, depois), [
-    { conta: null, campo: 'aguardarCiParaRevisar', de: false, para: true },
     { conta: 'trabalho', campo: 'onClean', de: null, para: 'wait' },
   ]);
   // as chaves gerais que saíram em 30/09/2026 não são mais política geral
@@ -241,13 +241,14 @@ test('a conta não é editável pelo POST /api/settings: a chave volta como igno
   assert.equal(JSON.stringify(e.config.conta), antes);
 });
 
-test('chave geral de Automação que continua sendo política também entra no rastro', () => {
+test('chave de espera do CI no salvar volta em ignoradas e não entra no rastro', () => {
   const e = new Engine();
   e.pushState = () => { };
-  e.updateSettings({ aguardarCiParaRevisar: true }, 'janela do Farol');
-  const hist = JSON.parse(fs.readFileSync(POLITICA_HISTORICO_FILE, 'utf8'));
-  const ultima = hist[hist.length - 1];
-  assert.deepEqual([ultima.conta, ultima.campo, ultima.de, ultima.para, ultima.origem], [null, 'aguardarCiParaRevisar', false, true, 'janela do Farol']);
+  const antes = fs.existsSync(POLITICA_HISTORICO_FILE) ? JSON.parse(fs.readFileSync(POLITICA_HISTORICO_FILE, 'utf8')).length : 0;
+  const r = e.updateSettings({ aguardarCiParaRevisar: true }, 'navegador');
+  assert.deepEqual(r.ignoradas, ['aguardarCiParaRevisar']);
+  const depois = fs.existsSync(POLITICA_HISTORICO_FILE) ? JSON.parse(fs.readFileSync(POLITICA_HISTORICO_FILE, 'utf8')).length : 0;
+  assert.equal(depois, antes);
 });
 
 test('o Diagnóstico mostra as mudanças recentes de política', () => {
