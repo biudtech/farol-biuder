@@ -81,3 +81,21 @@ test('conta sem organização e lista torta dão total zero', () => {
   iniciarChecagem(engine, undefined);
   assert.deepEqual(checagemParaTela(engine), { total: 0, feitas: 0 });
 });
+
+// Revisão independente (17/11/2026): a contagem do ciclo anterior não aparece no novo, nem fica
+// depois que o ciclo termina, inclusive quando ele cai antes de começar a contar.
+test('check() zera a contagem no começo e no fim do ciclo, mesmo quando o ciclo cai', async () => {
+  const real = new Engine();
+  real.schedule = () => {};
+  real.log = () => {};
+  real.checagemEmCurso = { total: 3, feitas: 3 };
+  let vistoNoCiclo;
+  real._coletarPanorama = async () => { vistoNoCiclo = real.snapshot().checagem; throw new Error('gh fora'); };
+  await real.check('manual');
+  assert.equal(vistoNoCiclo, null, 'no começo do ciclo a contagem velha já saiu');
+  assert.equal(real.checagemEmCurso, null);
+  assert.equal(real.snapshot().checagem, null);
+  real._coletarPanorama = async () => { iniciarChecagem(real, [{ owners: ['a'] }]); throw new Error('caiu no meio'); };
+  await real.check('manual');
+  assert.equal(real.checagemEmCurso, null, 'o fim do ciclo também zera');
+});

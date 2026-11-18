@@ -579,7 +579,8 @@ class Engine extends EventEmitter {
 
   async check(reason = 'timer') {
     if (this.checking) return;
-    this.checking = true;
+    // a contagem do ciclo anterior nunca aparece no novo (checagem-em-curso.js)
+    this.checking = true; this.checagemEmCurso = null;
     this.setStatus('checking');
     try {
       const { panorama, queue, fresh, mineList, ownersOk, monitoredOwners } = await this._coletarPanorama();
@@ -657,7 +658,7 @@ class Engine extends EventEmitter {
       this.log('ERROR', `ciclo de monitoramento: ${err.message}`);
       this.setStatus('error');
     } finally {
-      this.checking = false;
+      this.checking = false; this.checagemEmCurso = null;
       this.schedule();
       this.pushState();
     }
