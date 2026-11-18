@@ -35,7 +35,7 @@ test('espera do CI se identifica e ancora no head lido', () => {
 // dita e ancorado no head lido quando há um.
 test('desfecho sem mesa se identifica e passa pelo postReview', () => {
   const fonte = ler('lib/engine/desfecho-sem-mesa.js');
-  assert.ok(fonte.includes("engine.postReview(pr, head ? { ...payload, commit_id: head } : payload, { via: 'sem-mesa' })"));
+  assert.ok(fonte.includes("engine.postReview(pr, head ? { ...payload, commit_id: head } : payload, { via: 'sem-mesa', jaSaiu })"));
 });
 
 test('nenhuma outra chamada a postReview em lib/ fora das vias conhecidas', () => {

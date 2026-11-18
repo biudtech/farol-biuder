@@ -36,6 +36,8 @@ io.run = async (_cmd, args) => {
     const payload = JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8'));
     if (gh.postFalha) return { ok: false, code: 1, stdout: '', stderr: gh.postFalha };
     envios.push(payload);
+    // como o GitHub: o comentário postado passa a aparecer nos reviews da conta
+    if (gh.registrarComentarios && payload.event === 'COMMENT') gh.meusReviews.push({ state: 'COMMENTED', submitted_at: new Date().toISOString(), commit_id: payload.commit_id, body: payload.body });
     return { ok: true, code: 0, stdout: '{"id":1}', stderr: '' };
   }
   if (/pulls\/\d+\/reviews/.test(sub) && sub.includes('!= "eu"')) return { ok: true, code: 0, stdout: JSON.stringify(gh.reviewsAlheios), stderr: '' };
@@ -515,15 +517,138 @@ test('ressalva 5: o reenvio tira a recusa permanente do recuo e deixa só a falh
 
 test('ressalva 7: na adoção, a pendência que passou do teto da prova vai direto ao COMMENT, e as outras saem escalonadas', async () => {
   const e = motor();
-  e.decisions.pending.push(mesaAntiga(71, { tentativasDaProva: MAX_TENTATIVAS_POR_HEAD }), mesaAntiga(72), mesaAntiga(73));
+  e.decisions.pending.push(mesaAntiga(72), mesaAntiga(71, { tentativasDaProva: MAX_TENTATIVAS_POR_HEAD }), mesaAntiga(73));
   semMesa.adotar(e);
   assert.equal(pendente(e, 71).semMesa.rodadas, semMesa.RODADAS_EXTRAS, 'sem sessão nova');
   assert.equal(pendente(e, 72).semMesa.rodadas, 0);
   const quando = [72, 73].map((n) => pendente(e, n).semMesa.proximaEm);
-  assert.ok(quando[1] - quando[0] >= 60_000, 'não relançam na mesma varredura');
+  // a do teto, no meio da lista, não ocupa vaga no escalonamento: as duas que relançam distam 5 min
+  assert.ok(Math.abs(quando[1] - quando[0] - semMesa.ESCALONAMENTO_MS) < 1000, 'cinco minutos entre as que relançam');
+  assert.equal(semMesa.ESCALONAMENTO_MS, 5 * 60_000);
   pendente(e, 71).semMesa.proximaEm = 0;
   await semMesa.varrer(e);
   assert.deepEqual(envios.map((p) => p.event), ['COMMENT']);
   assert.equal(resolvida(e, 71).status, 'commented_inconclusive');
   assert.equal(pendente(e, 72).blockedKind, undefined, 'a escalonada ainda não relançou');
+});
+
+/* ---------- segunda revisão independente de 17/11/2026 ---------- */
+
+// o reenvio do COMMENT neutro: o primeiro envio dá 502 e fica no reenvio
+async function comentarioNoReenvio(n) {
+  const e = motor();
+  gh.postFalha = 'HTTP 502: Bad Gateway';
+  const r = await semMesa.encerrarNaRevisao(e, ctxDaRevisao(n), 'analise_incompleta');
+  gh.postFalha = '';
+  assert.equal(r.postRetry.statusAoPublicar, 'commented_inconclusive');
+  return e;
+}
+
+test('bloqueio 1: o reenvio do COMMENT neutro passa pelas conferências do primeiro envio', async () => {
+  for (const [nome, prepara, status] of [
+    ['mesclado', () => { gh.state = 'MERGED'; }, 'already_merged'],
+    ['estado ilegível', () => { gh.estadoFalha = true; }, 'not_posted'],
+    ['label de outra conta', () => { gh.labels = ['outra-conta:revisando']; }, 'not_posted'],
+    ['gente no head', (e) => { e.bloqueadoPorHistorico = async () => ({ bloqueado: true, decidido: true, head: HEAD, quem: ['ana'] }); }, 'not_posted'],
+    ['cancelado', (e) => { e.autoReviewParked.add('acme/app#80'); e.parkedMotivos['acme/app#80'] = { tipo: 'cancelado' }; }, 'not_posted'],
+  ]) {
+    gh.state = 'OPEN'; gh.estadoFalha = false; gh.labels = [];
+    const e = await comentarioNoReenvio(80);
+    prepara(e);
+    envios = [];
+    await e.retryFailedPosts();
+    assert.deepEqual(envios, [], `${nome}: o reenvio não posta`);
+    assert.equal(pendente(e, 80), undefined, nome);
+    assert.equal(resolvida(e, 80).status, status, nome);
+  }
+  gh.state = 'OPEN'; gh.estadoFalha = false; gh.labels = [];
+  const andou = await comentarioNoReenvio(81);
+  gh.head = HEAD_NOVO;
+  await andou.retryFailedPosts();
+  assert.deepEqual(envios, [], 'head andado: o reenvio não posta');
+  assert.deepEqual([pendente(andou, 81).blockedKind, pendente(andou, 81).blockedHead, pendente(andou, 81).postRetry], ['stale_head', HEAD_NOVO, null]);
+  gh.head = HEAD;
+  const livre = await comentarioNoReenvio(82);
+  await livre.retryFailedPosts();
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT'], 'sem barreira, o reenvio posta');
+});
+
+test('ressalva 2: na dúvida, passageira; permanente é só a lista explícita', () => {
+  const passageiras = [
+    { ok: false, attempted: true, error: 'gh: Internal Server Error (HTTP 500)' },
+    { ok: false, attempted: true, error: 'gh: Not Found (HTTP 404)' },
+    { ok: false, attempted: true, error: 'gh: Forbidden (HTTP 403)' },
+    { ok: false, attempted: true, blocked: 'head_desconhecido', error: 'não deu para ler o head' },
+    { ok: false, blocked: 'technical_review', attempted: false, error: 'não foi possível reconfirmar a avaliação técnica' },
+    { ok: false, attempted: true, error: 'algo que ninguém previu' },
+  ];
+  for (const post of passageiras) assert.equal(semMesa.ehPermanente(post), false, post.error);
+  const permanentes = [
+    { ok: false, blocked: 'technical_review', error: 'violação técnica confirmada' },
+    { ok: false, blocked: 'criterios_inconsistentes', error: 'x' }, { ok: false, blocked: 'pr_proprio', error: 'x' },
+    { ok: false, blocked: 'instancia_isolada', error: 'x' }, { ok: false, blocked: 'credencial_no_texto', error: 'x' },
+    { ok: false, blocked: 'internal_language', error: 'x' },
+    { ok: false, attempted: true, error: 'gh: Unprocessable Entity (HTTP 422) · Repository was archived so is read-only' },
+    { ok: false, attempted: true, error: 'gh: Unprocessable Entity (HTTP 422) · Pull request is locked' },
+  ];
+  for (const post of permanentes) assert.equal(semMesa.ehPermanente(post), true, post.blocked || post.error);
+});
+
+test('ressalva 2: no reenvio, 500, head_desconhecido e a reconferência técnica que falhou continuam no recuo', async () => {
+  for (const post of [
+    { ok: false, attempted: true, error: 'gh: Internal Server Error (HTTP 500)' },
+    { ok: false, attempted: true, blocked: 'head_desconhecido', error: 'não deu para ler o head' },
+    { ok: false, blocked: 'technical_review', attempted: false, error: 'não foi possível reconfirmar a avaliação técnica' },
+  ]) {
+    const e = motor();
+    e.decisions.pending.push(mesaAntiga(83, { postRetry: { event: 'approve', attempts: 0 }, payloads: { approve: { event: 'APPROVE', body: 'ok' } } }));
+    e.postReview = async () => post;
+    await e.retryFailedPosts();
+    assert.equal(pendente(e, 83).postRetry.attempts, 1, post.error);
+    assert.equal(pendente(e, 83).semMesa, undefined, post.error);
+  }
+});
+
+test('ressalva 3: o COMMENT neutro leva a retirada pendente, para a varredura retirar o pedido depois', async () => {
+  const e = motor();
+  const marca = { tipo: 'rodada', head: HEAD, tentativas: 0 };
+  const item = await semMesa.encerrarNaRevisao(e, ctxDaRevisao(84), 'analise_incompleta', { retiradaPendente: marca });
+  assert.equal(item.status, 'commented_inconclusive');
+  assert.deepEqual(resolvida(e, 84).retiradaPendente, marca);
+  gh.state = 'MERGED';
+  const fechado = await semMesa.encerrarNaRevisao(motor(), ctxDaRevisao(85), 'analise_incompleta', { retiradaPendente: marca });
+  assert.deepEqual(fechado.retiradaPendente, marca, 'também no ramo que encerra sem postar');
+  // o desfecho da revisão passa a marca adiante
+  assert.match(fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'engine', 'desfecho-da-revisao.js'), 'utf8'), /semMesa\.encerrarNaRevisao\(engine, ctx, motivo, pendingExtra\)/);
+});
+
+test('ressalva 4: na revisão, gente que decidiu o head encerra o desfecho sem postar', async () => {
+  const e = motor();
+  e.bloqueadoPorHistorico = async () => ({ bloqueado: true, decidido: true, head: HEAD, quem: ['ana'] });
+  const r = await semMesa.encerrarNaRevisao(e, ctxDaRevisao(86), 'analise_incompleta');
+  assert.deepEqual(envios, []);
+  assert.equal(r.status, 'not_posted');
+  assert.match(r.reasons[0].text, /@ana/);
+});
+
+test('ressalva 5: duas vias no mesmo head não publicam o COMMENT neutro duas vezes', async () => {
+  gh.registrarComentarios = true;
+  const e = motor();
+  await Promise.all([
+    semMesa.encerrarNaRevisao(e, ctxDaRevisao(87), 'analise_incompleta'),
+    semMesa.encerrarNaRevisao(e, ctxDaRevisao(87), 'analise_incompleta'),
+  ]);
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT'], 'a conferência do já publicado corre dentro da fila do PR');
+});
+
+test('ressalva 5: na varredura, uma revisão que começou durante as leituras segura o COMMENT', async () => {
+  const e = motor();
+  e.decisions.pending.push(mesaAntiga(88));
+  pendente(e, 88).semMesa = { head: HEAD, motivo: '', rodadas: semMesa.RODADAS_EXTRAS, proximaEm: 0 };
+  // a sessão do mesmo PR entra enquanto o motor lê o estado
+  const ler = e.prEstadoELabels.bind(e);
+  e.prEstadoELabels = async (pr) => { e.headlessQueue.push({ key: 'acme/app#88' }); return ler(pr); };
+  await semMesa.varrer(e);
+  assert.deepEqual(envios, []);
+  assert.ok(pendente(e, 88), 'a pendência fica para a revisão em curso decidir');
 });
