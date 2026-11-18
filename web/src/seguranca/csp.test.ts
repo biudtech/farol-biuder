@@ -25,6 +25,11 @@ describe('CSP do front', () => {
     expect(producao.get('default-src')).toEqual(["'self'"]);
   });
 
+  it('img-src é a própria origem, data: e só o servidor de avatares do GitHub, sem curinga', () => {
+    expect(producao.get('img-src')).toEqual(["'self'", 'data:', 'https://avatars.githubusercontent.com']);
+    expect(diretivas(montarCsp({ nonce: 'n', motor: '', dev: true })).get('img-src')).toEqual(["'self'", 'data:', 'https://avatars.githubusercontent.com']);
+  });
+
   it('connect-src é a própria origem e o motor, e mais nada', () => {
     expect(producao.get('connect-src')).toEqual(["'self'", 'https://farol.exemplo.com']);
   });

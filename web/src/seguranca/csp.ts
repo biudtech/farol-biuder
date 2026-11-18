@@ -2,7 +2,8 @@
 //
 // Script e estilo só entram da própria origem e com o nonce do pedido: o App Router escreve
 // scripts em linha para hidratar a página, e o nonce é o que os libera sem 'unsafe-inline'.
-// O navegador só fala com a própria origem e com o motor (connect-src).
+// O navegador só fala com a própria origem e com o motor (connect-src). Imagem de fora, só a
+// foto do autor do PR, do servidor de avatares do GitHub (o cartão do Radar).
 
 export interface OpcoesDaCsp {
   nonce: string;
@@ -10,6 +11,9 @@ export interface OpcoesDaCsp {
   motor: string;
   dev: boolean;
 }
+
+// a única origem de imagem de fora: a foto do autor do PR (src/radar/cartao.ts, urlDoAvatar)
+export const AVATARES_DO_GITHUB = 'https://avatars.githubusercontent.com';
 
 const NONCE_VALIDO = /^[A-Za-z0-9+/=_-]+$/;
 // Segunda conferência do endereço do motor, além da de enderecoDoMotor: o que vai para o
@@ -31,7 +35,7 @@ export function montarCsp({ nonce, motor: motorPedido, dev }: OpcoesDaCsp): stri
     ['default-src', "'self'"],
     ['script-src', ...script],
     ['style-src', ...estilo],
-    ['img-src', "'self'", 'data:'],
+    ['img-src', "'self'", 'data:', AVATARES_DO_GITHUB],
     ['font-src', "'self'"],
     ['connect-src', "'self'", ...(motor ? [motor] : [])],
     ['object-src', "'none'"],
