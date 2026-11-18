@@ -51,6 +51,11 @@ test('campo de CSV: aspas, vírgula e quebra de linha escapadas; fórmula vira t
     assert.ok(campoCsv(perigoso).replace(/^"/, '').startsWith("'"), perigoso);
   }
   assert.equal(campoCsv('=1,2'), `"'=1,2"`);
+  // espaço no começo não esconde a fórmula: a planilha apara e calcula
+  for (const disfarcado of [' =1+1', '  +cmd', ' -2+3', '\t @SUM(A1)', ' \n=1']) {
+    assert.ok(campoCsv(disfarcado).replace(/^"/, '').startsWith("'"), JSON.stringify(disfarcado));
+  }
+  assert.equal(campoCsv(' texto comum'), ' texto comum');
   assert.equal(campoCsv(null), '');
   assert.equal(campoCsv(42), '42');
 });
