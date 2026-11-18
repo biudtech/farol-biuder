@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from './fatias';
+import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaChecagemEmCurso, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from './fatias';
 
 const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
 
@@ -44,9 +44,18 @@ describe('estado da checagem e fila vazia', () => {
   it('diz o que o motor está fazendo, ou quando checou e quando checa de novo', () => {
     expect(textoDaChecagem({ status: 'starting' })).toBe('O motor está iniciando.');
     expect(textoDaChecagem({ status: 'checking', lastCheckAt: INSTANTE })).toBe('Checando agora.');
+    expect(textoDaChecagem({ status: 'checking', checagem: { total: 22, feitas: 9, agora: 'biudtech' } })).toBe('Checando as 22 organizações · 9 de 22 · agora: biudtech');
+    // a checagem que sobrou de um ciclo já encerrado não vale
+    expect(textoDaChecagem({ status: 'idle', checagem: { total: 2, feitas: 1 }, lastCheckAt: null })).toBe('Nenhuma checagem terminou ainda.');
     expect(textoDaChecagem({ status: 'idle', lastCheckAt: INSTANTE, nextCheckAt: INSTANTE + 180000 }, 'UTC')).toBe('Última checagem: 16/11, 14:32. Próxima: 16/11, 14:35.');
     expect(textoDaChecagem({ status: 'idle', lastCheckAt: null, nextCheckAt: null })).toBe('Nenhuma checagem terminou ainda.');
     expect(textoDaChecagem({})).toBe('Nenhuma checagem terminou ainda.');
+  });
+
+  it('checagem em curso: a contagem do motor, a organização da vez e o singular', () => {
+    expect(textoDaChecagemEmCurso({ total: 1, feitas: 0, agora: 'biudtech' })).toBe('Checando a organização · 0 de 1 · agora: biudtech');
+    expect(textoDaChecagemEmCurso({ total: 3, feitas: 3 })).toBe('Checando as 3 organizações · 3 de 3');
+    expect(textoDaChecagemEmCurso({ total: 0, feitas: 0 })).toBe('Checando agora.');
   });
 
   it('fila vazia só é "nenhum PR" depois de uma checagem terminar', () => {

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ContaRevisora, Saude } from '@/contratos/sistema';
 import type { Saida } from '@/estado/app';
-import { ROTULO_DO_ESTADO, resumoDaSaude, verificacaoDaConta, verificacaoDoCli, verificacoesDaSaude, verificacoesDosPerfis } from './saude';
+import { ROTULO_DO_ESTADO, duracaoCurta, resumoDaSaude, todasAsVerificacoes, verificacaoDaConta, verificacaoDoCli, verificacoesDaSaude, verificacoesDoMotor, verificacoesDosPerfis } from './saude';
 import { nomeDaSessao, perguntaDeRevogar, textoDaLista, textoDaSaida } from './sessoes';
 
 const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
@@ -24,6 +24,46 @@ const SAUDE: Saude = {
 };
 
 const linhas = (saude: Saude): string[] => verificacoesDaSaude(saude).map((v) => `${ROTULO_DO_ESTADO[v.estado]} · ${v.nome}: ${v.detalhe}`);
+
+describe('verificacoesDoMotor', () => {
+  const quando = (ms: number) => `em ${ms}`;
+  const DIA = 86400000;
+  const motor = (extra: Partial<NonNullable<Saude['motor']>> = {}): Saude => ({ claudeAuth: [], motor: {
+    medidoEm: 3 * DIA + 1000, noArDesde: 1000, commit: '520e680'.padEnd(40, '0'), disco: { livreBytes: 71e9, totalBytes: 100e9 },
+    telemetria: { consumoNoBanco: true, historicoNoBanco: true, ultimaEscritaEm: 2 * DIA }, ...extra } });
+  const texto = (s: Saude) => verificacoesDoMotor(s, quando).map((v) => `${ROTULO_DO_ESTADO[v.estado]} · ${v.nome}: ${v.detalhe}`);
+
+  it('no ar, commit, disco e telemetria, como o motor mediu', () => {
+    expect(texto(motor())).toEqual([
+      'OK · Motor: no ar há 3 dias, desde em 1000',
+      'OK · Commit do motor: commit 520e680',
+      'OK · Disco da pasta de dados: 71% livre (71 GB de 100 GB)',
+      `OK · Telemetria: gravando no banco; última escrita em em ${2 * DIA}`,
+    ]);
+  });
+
+  it('o que falta: commit ausente é sem dado, disco quase cheio e telemetria fora do banco pedem atenção', () => {
+    const linhas = texto(motor({ commit: undefined, disco: { livreBytes: 5e9, totalBytes: 100e9 }, telemetria: { consumoNoBanco: false, historicoNoBanco: false } }));
+    expect(linhas[1]).toBe('Sem dado · Commit do motor: commit não informado');
+    expect(linhas[2]).toBe('Atenção · Disco da pasta de dados: 5% livre (5 GB de 100 GB)');
+    expect(linhas[3]).toBe('Atenção · Telemetria: banco da telemetria fechado (o consumo e o histórico); sem escrita registrada');
+    expect(texto(motor({ telemetria: { consumoNoBanco: true, historicoNoBanco: false } }))[3]).toBe('Atenção · Telemetria: banco da telemetria fechado (o histórico); sem escrita registrada');
+    expect(texto(motor({ disco: undefined }))[2]).toBe('Sem dado · Disco da pasta de dados: O motor não conseguiu medir.');
+    expect(texto({ claudeAuth: [] })).toEqual([]);
+  });
+
+  it('as linhas do motor abrem a seção, antes das do ambiente', () => {
+    const todas = todasAsVerificacoes(motor(), undefined, undefined, undefined, quando);
+    expect(todas.slice(0, 4).map((v) => v.nome)).toEqual(['Motor', 'Commit do motor', 'Disco da pasta de dados', 'Telemetria']);
+  });
+
+  it('duração curta: minutos, horas até dois dias, depois dias', () => {
+    expect(duracaoCurta(-5)).toBe('0 min');
+    expect(duracaoCurta(59 * 60000)).toBe('59 min');
+    expect(duracaoCurta(47 * 3600000)).toBe('47 h');
+    expect(duracaoCurta(3 * 86400000)).toBe('3 dias');
+  });
+});
 
 describe('verificacoesDaSaude', () => {
   it('escreve cada verificação do diagnóstico com o estado em texto', () => {

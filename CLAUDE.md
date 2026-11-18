@@ -121,13 +121,13 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
 | Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
 | Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
-| Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
-| Fila, sinais e labels | `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
+| Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `trecho-do-achado.js` (o trecho do diff de cada achado, lido no desfecho e gravado nas provas), `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
+| Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
 | Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `usage-diario-banco.js` (o lado do banco: o cache da atividade e da auditoria e a leitura que não lança), `telemetria-pendentes.js` (a fila do que o banco recusou), `telemetria-do-motor.js` (a leitura no construtor, a abertura e a importação do consumo e do histórico no `start()`, por `iniciarTelemetria`, e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
-| Histórico | `historico-decisoes.js` (o histórico das resolvidas atrás de uma interface só: no banco da telemetria ou no `resolved` do `decisions.json`, com o cache do recorte leve e a fila do que o banco recusou; todo leitor e escritor do histórico passa por aqui), `historico-na-subida.js` (a abertura, a importação, a cópia e a marca na subida, separadas do consumo), `busca-do-historico.js` (a definição da busca e dos filtros, que o SQL também usa), `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`), `detalhe-da-decisao.js` (o detalhe de `GET /api/decision`, com os checks do head, a execução e os critérios do card), `criterios-do-card.js` (a conferência do campo opcional `criteriosDoCard` do envelope, que só informa a tela), `numeros-do-time.js` (os números de 30 dias por autor de `GET /api/team`) |
-| Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
+| Histórico | `historico-decisoes.js` (o histórico das resolvidas atrás de uma interface só: no banco da telemetria ou no `resolved` do `decisions.json`, com o cache do recorte leve e a fila do que o banco recusou; todo leitor e escritor do histórico passa por aqui), `historico-na-subida.js` (a abertura, a importação, a cópia e a marca na subida, separadas do consumo), `busca-do-historico.js` (a definição da busca e dos filtros, que o SQL também usa), `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`), `detalhe-da-decisao.js` (o detalhe de `GET /api/decision`, com os checks do head, a execução, os critérios do card, os achados, as rodadas e o tamanho do PR), `historico-csv.js` (o recorte em CSV de `GET /api/decisions?formato=csv`), `criterios-do-card.js` (a conferência do campo opcional `criteriosDoCard` do envelope, que só informa a tela), `numeros-do-time.js` (os números de 30 dias por autor de `GET /api/team`) |
+| Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `saude-do-motor.js` (no ar desde, commit, disco e telemetria, no `doctor`), `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
 
 ### `tools/`
 
@@ -332,7 +332,16 @@ públicos, cada um só no método dele: o pareamento, o status da autenticação
 nova sem classe reprova em `test/local-auth-inventario.test.js`. O estado inteiro sai em `GET /api/state` e, por
 diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada, travada em
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
-recalcula.
+recalcula. A chave `checagem` (17/11/2026) é a do ciclo de monitoramento em curso, `{ total,
+feitas, agora? }`: o ciclo busca os PRs abertos por organização, e é essa a unidade contada
+(`lib/engine/checagem-em-curso.js`); fora do ciclo vai `null`, e a contagem empurra o estado no
+máximo uma vez por segundo. A chave `doctor` (e `GET /api/doctor`) leva `saude`: `noArDesde` (o
+início do processo), `commit` (lido dos arquivos do git do código uma vez por processo; `null` na
+imagem, que não leva a pasta `.git`), `disco` (`livreBytes` e `totalBytes` da pasta de dados, por
+`fs.statfs`), `telemetria` (`consumoNoBanco`, `historicoNoBanco` e `ultimaEscritaEm`, pela hora do
+arquivo do banco e do `-wal`) e `medidoEm` (`lib/engine/saude-do-motor.js`). Na revisão em curso, o
+`progresso` leva `arquivoAtual` na etapa do código: o último arquivo lido pelo mesmo sinal que conta
+os lidos, em caminho relativo do PR.
 
 As rotas, todas em `lib/http-server.js`:
 
@@ -380,8 +389,9 @@ mais nova primeiro) sai em `GET /api/decisions`, uma página por vez
   resolvida (`resolvedAt`). Vale um só, ou os dois; `ate` antes de `desde` é recusado pelo campo
   `ate`. Com período, decisão sem hora de resolução fica de fora.
 
-Responde `{ ok, page, pageSize, total, pages, items, repos }`: `total` e `pages` contam o que
-passou nos filtros, e `repos` são os repositórios de todo o histórico, uma entrada por
+Responde `{ ok, page, pageSize, total, pages, items, repos, recentes7Dias }`: `total` e `pages`
+contam o que passou nos filtros, `recentes7Dias` conta as resolvidas nos últimos 7 dias, hoje
+incluído, no fuso do motor, sem os outros filtros, e `repos` são os repositórios de todo o histórico, uma entrada por
 repositório (sem diferenciar caixa, com a grafia do item mais recente). Cada item sai pela
 mesma projeção do snapshot (`decisionForUi`), e as pendentes ficam só no snapshot. Parâmetro
 inválido ou repetido responde 400 com `{ ok: false, code: "parametro_invalido", campo }`;
@@ -389,7 +399,10 @@ página além do fim responde 200 com `items` vazio. Campo torto num item guarda
 autor que não é texto) conta como vazio na busca. Com o histórico indisponível (o banco que o
 guarda não abriu ou não respondeu, `lib/engine/historico-decisoes.js`) responde 503 com
 `{ ok: false, code: "historico_indisponivel" }`. A rota só lê: não altera o histórico e não
-escreve no log, nem no 200, nem no 400, nem no 503.
+escreve no log, nem no 200, nem no 400, nem no 503. Com `formato=csv` (o único formato) a mesma
+rota responde o recorte filtrado inteiro, sem página, como `text/csv` para baixar
+(`lib/engine/historico-csv.js`): escape de CSV, apóstrofo na frente do campo que começaria com
+`=`, `+`, `-` ou `@` (também depois de espaço), tabulação ou retorno de carro, marca de ordem de bytes e linhas em LF.
 
 `GET /api/decision?key=` responde `{ found, decision }` com a decisão mais recente do PR (a
 pendente antes da resolvida), ou, com `id`, aquela decisão do PR (a rodada antiga, ou a resolvida
@@ -409,14 +422,23 @@ indisponível a chave não sai) e `criteriosDoCard` (os critérios do card um a 
 com `atende` `true`, `false` ou `null`, como a sessão os declarou no campo opcional do envelope e
 as provas da decisão os gravaram;
 `lib/engine/criterios-do-card.js` limita a 20 itens de até 300 caracteres. Ausente quando a sessão
-não leu critérios no card, e nas decisões anteriores a 17/11/2026). O campo não entra em gate
+não leu critérios no card, e nas decisões anteriores a 17/11/2026). Desde 17/11/2026 também saem
+`achados` (os achados da sessão da memória de rodadas, pelo `roundId`: `severidade`, `titulo`,
+`resumo`, `arquivo`, `linha`, `situacao` e, gravado nas provas daqui em diante, `trecho`, as
+linhas do lado do head em volta da linha quando ela está no diff, nunca de caminho protegido nem da
+pasta redigida, com a máscara de segredo aplicada no patch inteiro antes do corte; o caminho só sai
+quando está no inventário do diff da decisão ou, sem inventário, quando é relativo ao PR),
+`rodadasDoPr` (as decisões do mesmo PR em ordem de criação, `{ itens: [{ id, rodada, em, head,
+parecer, publicado, pendente? }], inicioIncerto? }`) e `tamanhoDoPr` (`arquivos` do inventário e,
+nas decisões gravadas daqui em diante, `adicoes` e `remocoes`). O campo não entra em gate
 nenhum: não muda veredito, ressalva, lacuna nem admissibilidade, e quem decide o card na política
 continua sendo `cardMet` e `cardParteDestePr` (`test/criterios-do-card.test.js` roda a mesma
 revisão com e sem ele).
 
 `GET /api/team` é a lista dos dossiês; o autor com PR revisado nos últimos 30 dias leva
 `numeros` (`lib/engine/numeros-do-time.js`): `janelaDias`, `prs` (PRs cuja primeira revisão
-publicada caiu na janela), `aprovadosDePrimeira` e `rodadas` (as revisões publicadas desses PRs).
+publicada caiu na janela), `aprovadosDePrimeira`, `rodadas` (as revisões publicadas desses PRs) e
+`bloqueios` (quantas delas pediram mudanças).
 Com o histórico no teto, o PR da decisão mais antiga guardada não conta e os números levam
 `historicoNoTeto`: valem para os PRs com histórico completo. Histórico indisponível tira a chave de
 todos. `GET /api/usage` traz `repos`, o custo e as

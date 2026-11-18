@@ -27,6 +27,8 @@ export interface NumerosDoAutor {
   prs: number;
   aprovadosDePrimeira: number;
   rodadas: number;
+  // quantas dessas revisões publicadas pediram mudanças (desde 17/11/2026; motor antigo não manda)
+  bloqueios?: number;
   // o histórico guardado está no teto: PR com rodada anterior já descartada pode contar como novo
   historicoNoTeto?: true;
 }
@@ -61,7 +63,9 @@ const ehContagem = (v: unknown): v is number => typeof v === 'number' && Number.
 function lerNumeros(v: unknown): NumerosDoAutor | undefined {
   if (!ehObjeto(v) || !ehContagem(v.janelaDias) || !ehContagem(v.prs) || v.prs < 1 || !ehContagem(v.aprovadosDePrimeira) || !ehContagem(v.rodadas)) return undefined;
   if (v.aprovadosDePrimeira > v.prs || v.rodadas < v.prs) return undefined;
-  return semAusentes({ janelaDias: v.janelaDias, prs: v.prs, aprovadosDePrimeira: v.aprovadosDePrimeira, rodadas: v.rodadas, historicoNoTeto: v.historicoNoTeto === true ? (true as const) : undefined });
+  // os bloqueios são revisões publicadas desses PRs: mais que as rodadas é número que não fecha
+  const bloqueios = ehContagem(v.bloqueios) && v.bloqueios <= v.rodadas ? v.bloqueios : undefined;
+  return semAusentes({ janelaDias: v.janelaDias, prs: v.prs, aprovadosDePrimeira: v.aprovadosDePrimeira, rodadas: v.rodadas, bloqueios, historicoNoTeto: v.historicoNoTeto === true ? (true as const) : undefined });
 }
 
 export const lerAutor: LeitorDeItem<Autor> = (v) => {

@@ -65,7 +65,7 @@ function noBanco(resolved) {
 
 test('período: dia de calendário válido é aceito; o resto vira 400 com o campo', () => {
   assert.deepEqual(lerParametros(new URLSearchParams('desde=2026-11-01&ate=2026-11-17')),
-    { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '2026-11-01', ate: '2026-11-17' });
+    { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '2026-11-01', ate: '2026-11-17', formato: '' });
   assert.equal(diaValido('2024-02-29'), true);
   for (const [texto, campo] of [['desde=2026-02-30', 'desde'], ['desde=2026/11/01', 'desde'], ['ate=17-11-2026', 'ate'], ['ate=2026-11-1', 'ate'],
     ['desde=2026-11-01&desde=2026-11-02', 'desde'], ['desde=2026-11-10&ate=2026-11-09', 'ate'], ['desde=%202026-11-01', 'desde']]) {
@@ -234,21 +234,21 @@ test('números de 30 dias: PRs cuja primeira revisão publicada caiu na janela, 
     rodada('a/r#6', '', 1, 'approve'), { key: 'a/r#7', action: 'approve', pr: { author: 'bia' } }, null,
   ];
   assert.deepEqual(numerosPorAutor(lista, AGORA), {
-    ana: { janelaDias: 30, prs: 3, aprovadosDePrimeira: 1, rodadas: 4 },
-    bia: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1 },
+    ana: { janelaDias: 30, prs: 3, aprovadosDePrimeira: 1, rodadas: 4, bloqueios: 1 },
+    bia: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1, bloqueios: 0 },
   });
 });
 
 test('números no teto do histórico: o PR da decisão mais antiga não conta, e os números saem marcados', () => {
   const lista = [rodada('a/r#2', 'ana', 5, 'approve'), rodada('a/r#1', 'ana', 20, 'approve')];
-  assert.deepEqual(numerosPorAutor(lista, AGORA, { noTeto: true }), { ana: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1, historicoNoTeto: true } });
+  assert.deepEqual(numerosPorAutor(lista, AGORA, { noTeto: true }), { ana: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1, bloqueios: 0, historicoNoTeto: true } });
   assert.equal(numerosPorAutor(lista, AGORA).ana.prs, 2, 'fora do teto o mesmo PR conta');
 });
 
 test('GET /api/team leva os números no autor que os tem; histórico indisponível não leva nenhum', () => {
   const lista = [{ login: 'Ana', name: 'Ana', entries: [] }, { login: 'caio', entries: [] }];
   const numeros = numerosDoTime(json([rodada('a/r#2', 'ana', 5, 'approve')]), AGORA);
-  assert.deepEqual(timeComNumeros(lista, numeros), [{ login: 'Ana', name: 'Ana', entries: [], numeros: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1 } }, { login: 'caio', entries: [] }]);
+  assert.deepEqual(timeComNumeros(lista, numeros), [{ login: 'Ana', name: 'Ana', entries: [], numeros: { janelaDias: 30, prs: 1, aprovadosDePrimeira: 1, rodadas: 1, bloqueios: 0 } }, { login: 'caio', entries: [] }]);
   assert.equal(numerosDoTime({ historicoForaDoBanco: true }), null);
   assert.equal(timeComNumeros(lista, null), lista);
 });
@@ -273,4 +273,17 @@ test('o relatório do consumo soma custo e tentativas por repositório, com o se
 test('pessoa cadastrada sem papel nem competência fica, se o login tem forma de login do GitHub', () => {
   assert.deepEqual(parsePeople({ 'Ana-Dev': {}, 'x y': {}, '-a': {}, 'a--b': {}, [`${'a'.repeat(40)}`]: {}, ok: { papel: 'senior' }, nada: null }),
     { 'ana-dev': {}, ok: { papel: 'senior' } });
+});
+
+test('bloqueios de 30 dias: as revisões publicadas que pediram mudanças, nos mesmos PRs da janela', () => {
+  const lista = [
+    rodada('a/r#1', 'ana', 12, 'request_changes'), rodada('a/r#1', 'ana', 9, 'request_changes'), rodada('a/r#1', 'ana', 7, 'approve'),
+    rodada('a/r#2', 'ana', 4, 'request_changes'),
+    rodada('a/r#3', 'ana', 45, 'request_changes'), rodada('a/r#3', 'ana', 2, 'request_changes'), // PR de antes da janela: fora
+    rodada('a/r#4', 'ana', 3, 'skip'),                                                          // não publicado: não é bloqueio
+  ];
+  const ana = numerosPorAutor(lista, AGORA).ana;
+  assert.equal(ana.bloqueios, 3);
+  assert.equal(ana.rodadas, 4);
+  assert.equal(ana.prs, 2);
 });

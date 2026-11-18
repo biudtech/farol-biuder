@@ -2,15 +2,19 @@
 
 // O detalhe de uma revisão, aberto na própria página, no desenho enxuto: o PR, o título, o
 // chip do que foi publicado e a hora; a frase da avaliação técnica; os achados, uma linha por
-// motivo, com o bloqueio aberto e o resto fechado; e "Mais detalhes" (critérios do card, checks,
+// achado da sessão (com arquivo, linha e o trecho do diff quando o motor manda) e por motivo,
+// com o bloqueio aberto e o resto fechado; e "Mais detalhes" (critérios do card, checks,
 // execução, rodadas, etapas e o review completo), tudo fechado, cada um com o resumo na própria linha. O foco vai
 // ao título ao abrir, e Escape fecha. As ações são duas: revisar de novo e, quando o PR tem
 // contestação registrada, o desfecho dela.
 import { useEffect, useId, useRef } from 'react';
-import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
+import type { AchadoDaRevisao, Contestacao as Registro, Revisao } from '@/contratos/historico';
 import type { Motivo } from '@/contratos/radar';
 import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
-import { resumoDaExecucao, resumoDosChecks, resumoDosCriterios, textoDoCriterio, textoDoEstadoDoCheck } from '@/historico/detalhe';
+import {
+  ROTULO_DA_SEVERIDADE, localDoAchado, resumoDaExecucao, resumoDosChecks, resumoDosCriterios, textoDaRodada, textoDaSituacao, textoDoCriterio,
+  textoDoEstadoDoCheck, textoDoTamanho,
+} from '@/historico/detalhe';
 import { dolar } from '@/consumo/formato';
 import { foiPublicado, parecerQueDifere, rotuloDoDesfecho, textoDoPublicado, textoDoStatus, tomDoDesfecho } from '@/historico/rotulos';
 import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/radar/formato';
@@ -51,31 +55,98 @@ function Achado({ rotulo, tom, motivo, aberta }: { rotulo: string; tom: Tom; mot
   );
 }
 
-// Os achados com o que o item traz: o bloqueio (`blockedReason`), aberto; os motivos
-// (`reasons`) e os pontos de atenção (`attention`), fechados. Nada além disso: o item não traz
-// arquivo, linha nem trecho de código de cada achado.
+const TOM_DA_SEVERIDADE: Record<AchadoDaRevisao['severidade'], Tom> = { blocking: 'ruim', suggestion: 'aviso', question: 'neutro', nitpick: 'neutro' };
+
+// O trecho do diff daquela linha, só do lado do head: o número da linha, a marca da adicionada
+// e o texto. Texto de fora: entra como filho de texto, em <pre>, sem interpretar nada.
+function Trecho({ linhas, local }: { linhas: NonNullable<AchadoDaRevisao['trecho']>; local: string }) {
+  return (
+    <pre className={estilos.trecho} aria-label={`Trecho do diff em ${local}`} tabIndex={0}>
+      {linhas.map((l) => (
+        <span key={l.linha} className={estilos.linhaDoTrecho} data-tipo={l.tipo}>
+          <span className={estilos.numeroDoTrecho} aria-hidden="true">{l.linha}</span>
+          <span aria-hidden="true">{l.tipo === 'adicionada' ? '+' : ' '}</span>
+          <span className={ui.soLeitor}>{`linha ${l.linha}${l.tipo === 'adicionada' ? ', adicionada' : ''}: `}</span>
+          {l.texto}
+          {'\n'}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+// Um achado da sessão: a severidade e o título na linha; aberta, o arquivo e a linha, o resumo,
+// a situação numa rodada seguinte e o trecho do diff, quando o motor os manda.
+function AchadoDaSessao({ achado: a }: { achado: AchadoDaRevisao }) {
+  const rotulo = ROTULO_DA_SEVERIDADE[a.severidade];
+  const local = localDoAchado(a);
+  const situacao = textoDaSituacao(a.situacao);
+  return (
+    <Linha
+      aberta={a.severidade === 'blocking' && a.situacao !== 'resolvido' && a.situacao !== 'retirado'}
+      rotulo={`${rotulo}: ${a.titulo}`}
+      resumo={(
+        <>
+          <Chip tom={TOM_DA_SEVERIDADE[a.severidade]} pequeno>{rotulo}</Chip>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{a.titulo}</span>
+        </>
+      )}
+    >
+      {local ? <p className={estilos.localDoAchado}><code>{local}</code></p> : null}
+      {a.resumo ? <p className={ui.texto}>{a.resumo}</p> : null}
+      {situacao ? <p className={ui.mini}>{situacao[0]?.toUpperCase()}{situacao.slice(1)}.</p> : null}
+      {a.trecho ? <Trecho linhas={a.trecho} local={local} /> : null}
+    </Linha>
+  );
+}
+
+// Os achados com o que o motor manda: o bloqueio (`blockedReason`), aberto; os achados da sessão
+// (`achados`, só pela rota do detalhe), com o que bloqueia aberto; os motivos (`reasons`) e os
+// pontos de atenção (`attention`), fechados.
 function Achados({ revisao: r }: { revisao: Revisao }) {
-  if (!r.blockedReason && !r.reasons.length && !r.attention.length) return null;
+  if (!r.blockedReason && !r.achados?.length && !r.reasons.length && !r.attention.length) return null;
   return (
     <Secao titulo="Achados">
       {r.blockedReason ? <Achado rotulo="Bloqueio" tom="ruim" aberta motivo={{ text: r.blockedReason, kind: 'gate' }} /> : null}
+      {(r.achados ?? []).map((a, i) => <AchadoDaSessao key={`s${i}`} achado={a} />)}
       {r.reasons.map((m, i) => <Achado key={`m${i}`} rotulo="Motivo" tom="ruim" motivo={m} />)}
       {r.attention.map((m, i) => <Achado key={`a${i}`} rotulo="Ponto de atenção" tom="aviso" motivo={m} />)}
     </Secao>
   );
 }
 
-function Rodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
+// As rodadas do PR uma a uma (`rodadasDoPr`, só pela rota do detalhe), a mais nova primeiro, e a
+// comparação entre rodadas desta revisão (`rounds`), quando há.
+function Rodadas({ rodadas, doPr }: { rodadas: Revisao['rounds']; doPr: Revisao['rodadasDoPr'] }) {
+  const resumo = doPr
+    ? `${doPr.itens.length}${doPr.inicioIncerto ? ' guardadas' : ''}`
+    : `rodada ${contagem(rodadas?.ordinal)} · ${contagem(rodadas?.unresolvedCount)} pendência(s)`;
   return (
     <Linha
       rotulo="Rodadas"
       resumo={(
         <>
           <span className={`${ui.t} ${estilos.tituloDaLinha}`}>Rodadas</span>
-          <span className={ui.r}>rodada {contagem(rodadas.ordinal)} · {contagem(rodadas.unresolvedCount)} pendência(s)</span>
+          <span className={ui.r}>{resumo}</span>
         </>
       )}
     >
+      {doPr ? (
+        <>
+          <ol className={estilos.rodadas} aria-label="Rodadas deste PR, a mais nova primeiro">
+            {[...doPr.itens].reverse().map((item) => <li key={item.id || item.rodada}>{textoDaRodada(item, (ms) => dataComAno(ms) || 'hora não informada')}</li>)}
+          </ol>
+          {doPr.inicioIncerto ? <p className={ui.mini}>O histórico guardado está no teto: as primeiras rodadas deste PR podem ter sido descartadas, e a contagem começa na mais antiga que ficou.</p> : null}
+        </>
+      ) : null}
+      {rodadas ? <ComparacaoDasRodadas rodadas={rodadas} /> : null}
+    </Linha>
+  );
+}
+
+function ComparacaoDasRodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
+  return (
+    <>
       <p className={ui.texto}>
         Rodada {contagem(rodadas.ordinal)}, com {contagem(rodadas.unresolvedCount)} pendência(s) rastreada(s).{' '}
         {rodadas.mode === 'enforce' ? 'A comparação entre rodadas está ativa.' : 'A comparação entre rodadas está em observação.'}{' '}
@@ -88,7 +159,7 @@ function Rodadas({ rodadas }: { rodadas: NonNullable<Revisao['rounds']> }) {
         <Campo nome="Resolvidos em arquivo inalterado">{contagem(rodadas.resolvedOnUnchangedCount)}</Campo>
         <Campo nome="Contexto alterado">{rodadas.changedContext ? 'sim' : 'não registrado'}</Campo>
       </dl>
-    </Linha>
+    </>
   );
 }
 
@@ -195,6 +266,7 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
         {e?.custoUsd !== undefined ? <Campo nome={e.custoEstimado ? 'Custo estimado (parte calculada pelo motor)' : 'Custo estimado'}>{dolar(e.custoUsd)}</Campo> : null}
         {e?.modelos.length ? <Campo nome={e.modelos.length === 1 ? 'Modelo' : 'Modelos'}>{e.modelos.join(', ')}</Campo> : null}
         {e ? <Campo nome="Tentativas de revisão na rodada">{String(e.tentativas)}</Campo> : null}
+        {r.tamanhoDoPr ? <Campo nome="Tamanho do PR">{textoDoTamanho(r.tamanhoDoPr)}</Campo> : null}
         <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
         {parecer ? <Campo nome="Parecer da revisão">{parecer}</Campo> : null}
         <Campo nome="Situação">{textoDoStatus(r.status)}</Campo>
@@ -292,7 +364,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
         {r.criteriosDoCard ? <CriteriosDoCard criterios={r.criteriosDoCard} card={r.card} /> : null}
         {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
         <Execucao revisao={r} />
-        {r.rounds ? <Rodadas rodadas={r.rounds} /> : null}
+        {r.rounds || r.rodadasDoPr ? <Rodadas rodadas={r.rounds} doPr={r.rodadasDoPr} /> : null}
         {r.stages ? <Etapas etapas={r.stages} /> : null}
         <ReviewCompleto revisao={r} />
       </Secao>

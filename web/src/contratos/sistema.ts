@@ -151,6 +151,33 @@ export interface AvaliacaoTecnicaNaSaude {
 
 // O que o diagnóstico do motor mede (Engine.doctor, server.js). Os caminhos de pasta que ele
 // traz (`home`, `workspace`) não são lidos.
+// `doctor.saude`: a saúde do próprio motor (saudeDoMotor, lib/engine/saude-do-motor.js), medida a
+// cada diagnóstico: o início do processo, o commit do código (null na imagem, que não leva a pasta
+// .git), o disco da pasta de dados e a telemetria gravando no banco.
+export interface SaudeDoMotor {
+  medidoEm?: number;
+  noArDesde?: number;
+  commit?: string;
+  disco?: { livreBytes: number; totalBytes: number };
+  telemetria?: { consumoNoBanco: boolean; historicoNoBanco: boolean; ultimaEscritaEm?: number };
+}
+
+function lerSaudeDoMotor(v: unknown): SaudeDoMotor | undefined {
+  if (!ehObjeto(v)) return undefined;
+  const motor: SaudeDoMotor = {};
+  if (ehNumero(v.medidoEm)) motor.medidoEm = v.medidoEm;
+  if (ehNumero(v.noArDesde) && v.noArDesde > 0) motor.noArDesde = v.noArDesde;
+  if (ehTexto(v.commit) && /^[0-9a-f]{7,40}$/.test(v.commit)) motor.commit = v.commit;
+  const d = v.disco;
+  if (ehObjeto(d) && ehNumero(d.livreBytes) && ehNumero(d.totalBytes) && d.totalBytes > 0 && d.livreBytes >= 0 && d.livreBytes <= d.totalBytes) motor.disco = { livreBytes: d.livreBytes, totalBytes: d.totalBytes };
+  const t = v.telemetria;
+  if (ehObjeto(t) && ehBooleano(t.consumoNoBanco) && ehBooleano(t.historicoNoBanco)) {
+    motor.telemetria = { consumoNoBanco: t.consumoNoBanco, historicoNoBanco: t.historicoNoBanco };
+    if (ehNumero(t.ultimaEscritaEm) && t.ultimaEscritaEm > 0) motor.telemetria.ultimaEscritaEm = t.ultimaEscritaEm;
+  }
+  return motor;
+}
+
 export interface Saude {
   node?: string;
   gh?: string;
@@ -163,6 +190,7 @@ export interface Saude {
   claudePerfilTipo?: string;
   claudePerfilFalta?: string;
   avaliacaoTecnica?: AvaliacaoTecnicaNaSaude;
+  motor?: SaudeDoMotor;
   checkedAt?: number;
 }
 
@@ -190,6 +218,7 @@ function saudeDe(v: Record<string, unknown>): Saude {
     claudePerfilTipo: campo(v.claudePerfilTipo, ehTexto),
     claudePerfilFalta: campo(v.claudePerfilFalta, ehTexto),
     avaliacaoTecnica: lerAvaliacaoTecnica(v.avaliacaoTecnica),
+    motor: lerSaudeDoMotor(v.saude),
     checkedAt: campo(v.checkedAt, ehNumero),
   });
 }

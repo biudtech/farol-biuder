@@ -75,6 +75,20 @@ describe('seção Em análise', () => {
     expect(screen.getByRole('button', { name: `Cancelar ${NOME}` })).toBeTruthy();
   });
 
+  it('o arquivo da vez: na etapa atual da lista e, sem a lista, na linha do detalhe', () => {
+    const { controle } = controleFalso();
+    const etapas = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];
+    const comLista = { ...PROGRESSO, rotuloDaEtapa: 'código', etapas, arquivoAtual: 'src/remanejamento.ts' };
+    const { container, unmount } = render(<EmAnalise sessoes={[sessao({ progresso: comLista })]} feeds={{}} controle={controle} />);
+    fireEvent.click(resumo(container));
+    const atual = within(screen.getByRole('list', { name: 'Etapas da revisão' })).getAllByRole('listitem')[2];
+    expect(atual?.textContent).toBe('Código: 9 de 20 arquivos · src/remanejamento.ts (agora)');
+    unmount();
+    const semLista = render(<EmAnalise sessoes={[sessao({ progresso: { ...PROGRESSO, arquivoAtual: 'src/a.ts' } })]} feeds={{}} controle={controle} />);
+    fireEvent.click(resumo(semLista.container));
+    expect(screen.getByText('Etapa 3 de 5: lendo o código · 9 de 20 arquivos · último lido: src/a.ts · faltam ~4 min')).toBeTruthy();
+  });
+
   it('com os nomes das etapas, o detalhe lista as feitas, a atual com os arquivos e as que faltam', () => {
     const { controle } = controleFalso();
     const etapas = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];

@@ -202,6 +202,16 @@ describe('leitores do snapshot', () => {
     expect(lerSaudeDaRota(null)).toBeNull();
   });
 
+  it('doctor.saude: a saúde do motor campo a campo, e o torto sai', () => {
+    const motor = { medidoEm: 5000, noArDesde: 1000, commit: 'a'.repeat(40), disco: { livreBytes: 30, totalBytes: 100 },
+      telemetria: { consumoNoBanco: true, historicoNoBanco: false, ultimaEscritaEm: 4000 }, caminho: '/home/farol' };
+    expect(lerSaudeDaRota({ saude: motor })?.motor).toEqual({ medidoEm: 5000, noArDesde: 1000, commit: 'a'.repeat(40), disco: { livreBytes: 30, totalBytes: 100 },
+      telemetria: { consumoNoBanco: true, historicoNoBanco: false, ultimaEscritaEm: 4000 } });
+    expect(lerSaudeDaRota({ saude: { commit: null, disco: null, telemetria: null } })?.motor).toEqual({});
+    expect(lerSaudeDaRota({ saude: { commit: 'não é sha', disco: { livreBytes: 200, totalBytes: 100 }, telemetria: { consumoNoBanco: 'sim' } } })?.motor).toEqual({});
+    expect(lerSaudeDaRota({ saude: 'x' })).toEqual({ claudeAuth: [] });
+  });
+
   it('modelos: as seleções do catálogo e a versão do Claude Code', () => {
     expect(lerModelos({ cli: { instalada: '2.1.268', maisRecente: '2.1.300', atualizada: false, atrasada: true, atrasadaDesde: 5 }, claude: [{ valor: '', rotulo: 'Padrão', auto: false, aceitaEsforco: true, nome: '' }, { valor: 'auto', rotulo: 'Auto', auto: true, aceitaEsforco: false }, { rotulo: 'sem valor' }] }, vi.fn())).toEqual({
       cli: { instalada: '2.1.268', maisRecente: '2.1.300', atualizada: false, atrasada: true, atrasadaDesde: 5 },

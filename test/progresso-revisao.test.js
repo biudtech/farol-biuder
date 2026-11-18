@@ -152,12 +152,13 @@ test('marcarEtapa: só avança, empurra o estado quando muda e ignora sessão se
 
 test('projeção: o progresso vai no estado e o Set da rodada não', () => {
   const rec = { id: 'a1', etapa: 'codigo', startedAt: 0, estimativa: { tipicoMs: 10 * MIN },
-    arquivosALer: new Set(['x', 'y']), filesRead: new Set(['x']) };
+    arquivosALer: new Set(['x', 'y']), filesRead: new Set(['x']), ultimoLido: 'x' };
   const [s] = projectSessions([rec], 4 * MIN);
   assert.equal('arquivosALer' in s, false);
+  assert.equal('ultimoLido' in s, false, 'o arquivo da vez vai só dentro do progresso');
   assert.deepEqual(s.progresso, { percentual: 42, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código',
     etapas: ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'],
-    arquivosLidos: 1, arquivosTotais: 2, restanteEstimadoMs: 6 * MIN });
+    arquivosLidos: 1, arquivosTotais: 2, arquivoAtual: 'x', restanteEstimadoMs: 6 * MIN });
   assert.equal(s.lidos, 1);
 });
 

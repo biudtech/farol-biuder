@@ -99,6 +99,28 @@ export function caminhoDaPagina(consulta: Consulta, agora: number = Date.now()):
   return `/api/decisions?${params.toString()}`;
 }
 
+// O recorte da tela em CSV (GET /api/decisions?formato=csv): a mesma busca e os mesmos filtros da
+// lista, sem página, porque o motor exporta o recorte inteiro.
+export function caminhoDoCsv(consulta: Consulta, agora: number = Date.now()): string {
+  const params = new URLSearchParams({ formato: 'csv' });
+  if (consulta.q) params.set('q', consulta.q);
+  if (consulta.veredito) params.set('veredito', consulta.veredito);
+  if (consulta.repo) params.set('repo', consulta.repo);
+  const desde = desdeDoPeriodo(consulta.periodo, agora);
+  if (desde) params.set('desde', desde);
+  return `/api/decisions?${params.toString()}`;
+}
+
+// O nome do arquivo baixado, com o dia de hoje no fuso do motor (o mesmo que o motor dá).
+export function nomeDoCsv(agora: number = Date.now()): string {
+  return `farol-historico-${DIA_NO_FUSO.format(agora)}.csv`;
+}
+
+// "146 revisões nos últimos 7 dias": a contagem que o motor manda junto da página.
+export function textoDosRecentes(n: number): string {
+  return `${n} ${n === 1 ? 'revisão' : 'revisões'} nos últimos 7 dias`;
+}
+
 // Com `id`, o motor devolve aquela revisão do PR (a rodada antiga, ou a resolvida quando há uma
 // pendente); sem ele, a mais recente do PR.
 export function caminhoDoDetalhe(chave: string, id?: string): string {
@@ -127,6 +149,7 @@ const CAMPO_RECUSADO: Record<string, string> = {
   repo: 'o filtro de repositório',
   desde: 'o início do período',
   ate: 'o fim do período',
+  formato: 'o formato da exportação',
 };
 
 type Falha = Extract<Resultado<never>, { ok: false }>;

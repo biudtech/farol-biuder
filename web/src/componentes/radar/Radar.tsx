@@ -13,11 +13,11 @@
 import Link from 'next/link';
 import { useId, useMemo } from 'react';
 import { Simbolo } from '@/componentes/Logo';
-import { Esqueleto, Pagina, ui } from '@/componentes/ui';
+import { Esqueleto, Pagina, Spinner, ui } from '@/componentes/ui';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { CHECAR } from '@/radar/acoes';
-import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from '@/radar/fatias';
+import { avisosDoMotor, chavesAusentes, fatiarFila, resumoDoTopo, textoDaChecagem, textoDaChecagemEmCurso, textoDaFilaVazia, textoDasPendencias, textoDoTudoEmDia } from '@/radar/fatias';
 import { AcoesDoItem } from './AcoesDoItem';
 import { EmAnalise } from './EmAnalise';
 import { Fila } from './Fila';
@@ -47,6 +47,7 @@ export function Radar({ app = appDoNavegador }: Props) {
   const conta = useApp((e) => e.snapshot?.account, app);
   const ultimaChecagem = useApp((e) => e.snapshot?.lastCheckAt, app);
   const proximaChecagem = useApp((e) => e.snapshot?.nextCheckAt, app);
+  const checagem = useApp((e) => e.snapshot?.checagem, app);
   const buscasPausadas = useApp((e) => e.snapshot?.buscasPausadas, app);
   const decisoes = useApp((e) => e.snapshot?.decisions, app);
   const sessoes = useApp((e) => e.snapshot?.activeSessions, app);
@@ -72,7 +73,7 @@ export function Radar({ app = appDoNavegador }: Props) {
     [ignorados, filaDoMotor],
   );
 
-  const doTopo = { status, error: erro, account: conta, lastCheckAt: ultimaChecagem, nextCheckAt: proximaChecagem, buscasPausadas };
+  const doTopo = { status, error: erro, account: conta, lastCheckAt: ultimaChecagem, nextCheckAt: proximaChecagem, checagem, buscasPausadas };
   const avisos = temEstado ? avisosDoMotor(doTopo) : [];
   const ausentes = temEstado ? chavesAusentes({ activeSessions: sessoes, queue: filaDoMotor, decisions: decisoes }) : [];
   const emAnalise = sessoes?.length ?? 0;
@@ -106,6 +107,14 @@ export function Radar({ app = appDoNavegador }: Props) {
                 </li>
               ) : null}
             </ul>
+          ) : null}
+
+          {/* a checagem em curso, com a contagem do motor; sem região viva: muda a cada segundo */}
+          {status === 'checking' && checagem ? (
+            <p className={`${ui.mini} ${estilos.checagemEmCurso}`}>
+              <Spinner tamanho="p" />
+              <span>{textoDaChecagemEmCurso(checagem)}</span>
+            </p>
           ) : null}
 
           {pendentes > 0 ? (

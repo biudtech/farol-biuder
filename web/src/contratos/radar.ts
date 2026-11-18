@@ -150,7 +150,15 @@ export interface ProgressoDaRevisao {
   etapas?: string[];
   arquivosLidos?: number;
   arquivosTotais?: number;
+  // o arquivo da vez: o último que a sessão leu, em caminho relativo do PR; só na etapa do código
+  arquivoAtual?: string;
   restanteEstimadoMs?: number;
+}
+
+// O caminho do arquivo da vez só entra relativo: nada que comece na raiz, com letra de unidade
+// ou que suba de pasta, e até 300 caracteres (o teto do motor).
+function ehCaminhoRelativo(valor: unknown): valor is string {
+  return ehTexto(valor) && valor.length > 0 && valor.length <= 300 && !/^[/\\]|^[A-Za-z]:/.test(valor) && !valor.split(/[/\\]/).includes('..');
 }
 
 function ehInteiro(valor: unknown): valor is number {
@@ -166,6 +174,7 @@ export function lerProgresso(v: unknown): ProgressoDaRevisao | undefined {
   const { arquivosLidos: lidos, arquivosTotais: totais, restanteEstimadoMs: restante } = v;
   if (ehInteiro(lidos) && ehInteiro(totais) && totais > 0 && lidos >= 0 && lidos <= totais) Object.assign(progresso, { arquivosLidos: lidos, arquivosTotais: totais });
   if (ehNumero(restante) && restante > 0) progresso.restanteEstimadoMs = restante;
+  if (ehCaminhoRelativo(v.arquivoAtual)) progresso.arquivoAtual = v.arquivoAtual;
   const nomes = v.etapas;
   if (Array.isArray(nomes) && nomes.length === v.totalEtapas && nomes.every(ehTexto) && nomes[v.etapa - 1] === v.rotuloDaEtapa) progresso.etapas = [...nomes];
   return progresso;
@@ -403,6 +412,24 @@ export const lerDecisoes: Leitor<Decisoes> = (valor, registrar) => {
 };
 
 export const lerStatus = deGuarda(ehStatus);
+
+// `checagem`: as organizações do ciclo de monitoramento em curso (checagemParaTela,
+// lib/engine/checagem-em-curso.js), ou null fora dele. O ciclo busca por organização, e não por
+// repositório: é essa a contagem que o motor tem.
+export interface ChecagemEmCurso {
+  total: number;
+  feitas: number;
+  // a organização que está sendo buscada agora; ausente com todas buscadas
+  agora?: string;
+}
+
+export const lerChecagem: Leitor<ChecagemEmCurso | null> = (valor) => {
+  if (valor === null) return null;
+  if (!ehObjeto(valor) || !ehInteiro(valor.total) || !ehInteiro(valor.feitas) || valor.total < 0 || valor.feitas < 0 || valor.feitas > valor.total) return undefined;
+  const checagem: ChecagemEmCurso = { total: valor.total, feitas: valor.feitas };
+  if (ehTexto(valor.agora) && valor.agora && valor.agora.length <= 200) checagem.agora = valor.agora;
+  return checagem;
+};
 // o erro do motor é texto para ler: o trecho em formato de credencial é trocado
 export const lerErro: Leitor<string | null> = (valor) => (ehErro(valor) ? (valor === null ? null : mascararSegredos(valor)) : undefined);
 export const lerInstante = deGuarda(ehInstanteOuNulo);

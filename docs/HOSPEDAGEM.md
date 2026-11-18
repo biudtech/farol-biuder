@@ -39,7 +39,7 @@ reconstruir a imagem.
 |---|---|---|
 | base | `node:24.22.1-bookworm-slim`, fixada por digest | o contrato de Node do `package.json` e do `.nvmrc` |
 | `git` | a do Debian 12 no dia do build (2.39.5 em 16/11/2026) | o pacote do Debian, sem versão fixada: fixar o patch quebraria o build quando o Debian o trocasse por uma correção |
-| `gh` | 2.104.0 | o repositório apt oficial do GitHub CLI, com o chaveiro conferido por sha256 no build |
+| `gh` | 2.105.0 | o repositório apt oficial do GitHub CLI, com o chaveiro conferido por sha256 no build |
 | Claude Code | 2.1.326 | o pacote npm `@anthropic-ai/claude-code`, instalado em `/usr/local/bin` |
 | `pnpm` | 10.34.9 | o pacote npm `pnpm`, instalado em `/usr/local/bin`; constrói a ferramenta da [avaliação técnica](#avaliação-técnica) |
 | apoio | `ca-certificates`, `procps`, `tini`, `tzdata` | o Debian da base, sem versão fixada |

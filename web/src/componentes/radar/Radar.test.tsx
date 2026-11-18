@@ -107,6 +107,18 @@ describe('tela Radar: carga, topo e estados', () => {
     expect(screen.getByText('Checando agora.')).toBeTruthy();
   });
 
+  it('checagem em curso: a linha visível com a contagem do motor e a organização da vez', () => {
+    montar(estado({ status: 'checking', checagem: { total: 4, feitas: 2, agora: 'biudtech' } }));
+    expect(screen.getAllByText('Checando as 4 organizações · 2 de 4 · agora: biudtech').length).toBeGreaterThan(0);
+    const linha = screen.getAllByText('Checando as 4 organizações · 2 de 4 · agora: biudtech')[0]?.closest('p');
+    expect(linha?.closest('[aria-live]')).toBeNull();
+  });
+
+  it('fora da checagem a linha some, mesmo com a chave sobrando', () => {
+    montar(estado({ status: 'idle', checagem: { total: 4, feitas: 4 } }));
+    expect(screen.queryByText(/Checando as 4 organizações/)).toBeNull();
+  });
+
   it('primeira checagem que falhou: o erro traz o Checar agora, e a fila não diz que não há nada', async () => {
     const t = montar(estado({ lastCheckAt: null, nextCheckAt: null, status: 'error', error: 'gh: timeout' }));
     const aviso = within(screen.getByRole('list', { name: 'Avisos do motor' })).getByRole('listitem');

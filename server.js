@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { iniciarManutencaoDoEngine } from './lib/technical-review/material-session-proof.js';
 import { snapshotDecisions, snapshotReviewActions } from './lib/engine/snapshot-decisions.js';
 import { snapshotUsage } from './lib/engine/snapshot-usage.js';
+import { iniciarChecagem, buscarOrganizacao, checagemParaTela } from './lib/engine/checagem-em-curso.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
 import {
@@ -578,7 +579,8 @@ class Engine extends EventEmitter {
 
   async check(reason = 'timer') {
     if (this.checking) return;
-    this.checking = true;
+    // a contagem do ciclo anterior nunca aparece no novo (checagem-em-curso.js)
+    this.checking = true; this.checagemEmCurso = null;
     this.setStatus('checking');
     try {
       const { panorama, queue, fresh, mineList, ownersOk, monitoredOwners } = await this._coletarPanorama();
@@ -656,7 +658,7 @@ class Engine extends EventEmitter {
       this.log('ERROR', `ciclo de monitoramento: ${err.message}`);
       this.setStatus('error');
     } finally {
-      this.checking = false;
+      this.checking = false; this.checagemEmCurso = null;
       this.schedule();
       this.pushState();
     }
@@ -666,6 +668,7 @@ class Engine extends EventEmitter {
       await this.resolveAccount();
       await this.refreshTokens();
       const accounts = this.accountList();
+      iniciarChecagem(this, accounts); // o Radar conta as organizações buscadas (checagem-em-curso.js)
 
       // painel: todos os PRs abertos das orgs monitoradas (sem alerta), com o token da
       // conta revisora; dedup por chave (o mesmo PR não entra duas vezes)
@@ -684,7 +687,7 @@ class Engine extends EventEmitter {
       const monitoredOwners = new Set(accounts.flatMap(acc => (acc.owners || []).map(o => String(o).toLowerCase())));
       for (const acc of accounts) {
         for (const owner of acc.owners) {
-          const list = await this.searchPRs(['--owner', owner], acc.user);
+          const list = await buscarOrganizacao(this, owner, acc.user);
           if (list === null) continue;
           anyOk = true;
           ownersOk.add(String(owner).toLowerCase());
@@ -1102,7 +1105,8 @@ class Engine extends EventEmitter {
       // um "saiu com código 1" por ciclo, pra sempre, com o doctor todo verde.
       root: rodandoComoRoot(),
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
-      home: HOME, workspace: WORKSPACE, avaliacaoTecnica,
+      // saude: no ar desde, commit, disco e telemetria (saude-do-motor.js)
+      home: HOME, workspace: WORKSPACE, avaliacaoTecnica, saude: diagnosticoMod.saudeDoMotor(this),
       claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
       ...perfilMod.prontidaoParaDoctor(this.config), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
@@ -1201,6 +1205,7 @@ class Engine extends EventEmitter {
       jiraSites: maskJiraSites(this.config.jiraSites || [], credMod.hasCredential),
       lastCheckAt: this.lastCheckAt,
       nextCheckAt: this.nextCheckAt,
+      checagem: checagemParaTela(this), // as organizações do ciclo em curso, ou null (checagem-em-curso.js)
       // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela
       // exibe panorama velho sem dizer que ele esta velho (lib/engine/limite-gh.js)
       buscasPausadas: limiteGhMod.buscasPausadas(this),

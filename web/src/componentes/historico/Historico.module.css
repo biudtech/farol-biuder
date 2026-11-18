@@ -104,6 +104,26 @@
 .par { min-width: 0; overflow-wrap: anywhere; }
 .criterios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .criterio { display: flex; align-items: baseline; gap: 10px; overflow-wrap: anywhere; }
+
+/* o achado aberto: o arquivo e a linha, e o trecho do diff daquela linha */
+.localDoAchado { margin: 0; overflow-wrap: anywhere; }
+.trecho {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.linhaDoTrecho { display: block; }
+.linhaDoTrecho[data-tipo="adicionada"] { color: var(--text); }
+.linhaDoTrecho[data-tipo="contexto"] { color: var(--muted); }
+.numeroDoTrecho { display: inline-block; min-width: 4ch; margin-right: 8px; text-align: right; color: var(--muted); user-select: none; }
+
+/* as rodadas do PR, uma por linha */
+.rodadas { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
 .par dt { color: var(--muted); font-size: 12px; font-weight: 700; }
 .par dd { margin: 0; }
 
