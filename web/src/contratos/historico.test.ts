@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lerDetalheDaRevisao, lerPaginaDoHistorico, lerRevisao } from './historico';
+import { lerCsv, lerDetalheDaRevisao, lerPaginaDoHistorico, lerRevisao } from './historico';
 import { LEITORES } from './snapshot';
 
 // O que decisionForUi (lib/engine/public-review.js) emite numa revisão resolvida.
@@ -71,6 +71,33 @@ describe('página do histórico (GET /api/decisions)', () => {
     const lida = lerPaginaDoHistorico(resposta());
     expect(lida).toMatchObject({ page: 2, pageSize: 30, total: 61, pages: 3, repos: ['dono/repo'], descartados: 0 });
     expect(lida?.items.map((i) => i.id)).toEqual(['d1']);
+  });
+
+  it('a contagem dos últimos 7 dias entra quando é contagem; o CSV só como texto', () => {
+    expect(lerPaginaDoHistorico(resposta({ recentes7Dias: 146 }))?.recentes7Dias).toBe(146);
+    expect(lerPaginaDoHistorico(resposta())).not.toHaveProperty('recentes7Dias');
+    expect(lerPaginaDoHistorico(resposta({ recentes7Dias: -1 }))).not.toHaveProperty('recentes7Dias');
+    expect(lerPaginaDoHistorico(resposta({ recentes7Dias: '3' }))).not.toHaveProperty('recentes7Dias');
+    expect(lerCsv('a,b\n')).toBe('a,b\n');
+    expect(lerCsv({ csv: 'x' })).toBeNull();
+  });
+
+  it('achados, rodadas e tamanho do detalhe: campo a campo, com o texto mascarado', () => {
+    const lido = lerRevisao({ id: 'd1', key: 'k',
+      achados: [
+        { severidade: 'blocking', titulo: 'usa ghp_0123456789abcdefghijABCDEFGHIJ0123456789', resumo: 'r', arquivo: 'a.ts', linha: 3, trecho: [{ linha: 3, tipo: 'adicionada', texto: 'x' }, { linha: 'quatro', texto: 'y' }] },
+        { severidade: 'elogio', titulo: 'fora' }, { severidade: 'nitpick', titulo: '  ' }, { severidade: 'question', titulo: 'sem arquivo', linha: 9, trecho: [{ linha: 1, texto: 'z' }] },
+      ],
+      rodadasDoPr: { itens: [{ id: 'd0', rodada: 1, em: 5, head: 'abc1234', parecer: 'approve', publicado: 'approve' }, { id: 'd1', rodada: 0 }, { id: 'd2', rodada: 2, head: 'x', publicado: '' }], inicioIncerto: true },
+      tamanhoDoPr: { arquivos: 14, adicoes: 612, remocoes: null },
+    });
+    expect(lido?.achados).toHaveLength(2);
+    expect(lido?.achados?.[0]?.titulo).not.toContain('ghp_');
+    expect(lido?.achados?.[0]?.trecho).toEqual([{ linha: 3, tipo: 'adicionada', texto: 'x' }]);
+    expect(lido?.achados?.[1]).toEqual({ severidade: 'question', titulo: 'sem arquivo' });
+    expect(lido?.rodadasDoPr).toEqual({ itens: [{ id: 'd0', rodada: 1, em: 5, head: 'abc1234', parecer: 'approve', publicado: 'approve' }, { id: 'd2', rodada: 2, publicado: null }], inicioIncerto: true });
+    expect(lido?.tamanhoDoPr).toEqual({ arquivos: 14 });
+    expect(lerRevisao({ id: 'd1', key: 'k', achados: [], rodadasDoPr: { itens: [] }, tamanhoDoPr: { arquivos: -1 } })).toEqual(lerRevisao({ id: 'd1', key: 'k' }));
   });
 
   it('item sem id ou sem chave é descartado e contado, e os outros entram', () => {

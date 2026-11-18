@@ -85,6 +85,56 @@ export interface CriterioDoCard {
   atende: boolean | null;
 }
 
+// Uma linha do trecho do diff de um achado: só o lado do head (trecho-do-achado.js).
+export interface LinhaDoTrecho {
+  linha: number;
+  tipo: 'adicionada' | 'contexto';
+  texto: string;
+}
+
+export const SEVERIDADES = ['blocking', 'suggestion', 'question', 'nitpick'] as const;
+export type Severidade = (typeof SEVERIDADES)[number];
+
+// Um achado da sessão, da memória de rodadas (só em GET /api/decision, 17/11/2026): a severidade,
+// o título e, quando a sessão disse, o resumo, o arquivo, a linha e a situação numa rodada
+// seguinte (persiste, resolvido, retirado). O trecho do diff só existe nas revisões gravadas
+// desde 17/11/2026, e só quando a linha está no diff.
+export interface AchadoDaRevisao {
+  severidade: Severidade;
+  titulo: string;
+  resumo?: string;
+  arquivo?: string;
+  linha?: number;
+  situacao?: string;
+  trecho?: LinhaDoTrecho[];
+}
+
+// Uma decisão do mesmo PR (só em GET /api/decision): a posição dela entre as guardadas, a hora,
+// o head curto, o parecer da sessão e o que foi publicado (null: nada). `pendente`: ainda na mesa.
+export interface RodadaDoPr {
+  id: string;
+  rodada: number;
+  em?: number;
+  head?: string;
+  parecer?: string;
+  publicado: string | null;
+  pendente?: true;
+}
+
+// `inicioIncerto`: o histórico está no teto e pode ter descartado as primeiras rodadas.
+export interface RodadasDoPr {
+  itens: RodadaDoPr[];
+  inicioIncerto?: true;
+}
+
+// O tamanho do PR, do inventário do diff gravado na decisão. Adições e remoções só nas
+// revisões gravadas desde 17/11/2026.
+export interface TamanhoDoPr {
+  arquivos: number;
+  adicoes?: number;
+  remocoes?: number;
+}
+
 // Uma revisão do histórico. `status` e `action` são os valores que o motor grava ao resolver
 // (a tabela de rótulos está em src/historico/rotulos.ts); a revisão que ainda espera na mesa,
 // que só chega por GET /api/decision, vem sem `resolvedAt`.
@@ -110,6 +160,9 @@ export interface Revisao {
   checks?: ChecksDoHead;
   execucao?: ExecucaoDaRevisao;
   criteriosDoCard?: CriterioDoCard[];
+  achados?: AchadoDaRevisao[];
+  rodadasDoPr?: RodadasDoPr;
+  tamanhoDoPr?: TamanhoDoPr;
   // o texto do review do parecer, em markdown (reviewMarkdownForUi)
   reportMarkdown: string;
   reasons: Motivo[];
@@ -174,6 +227,58 @@ function lerCriteriosDoCard(v: unknown): CriterioDoCard[] | undefined {
   return lista.length ? lista : undefined;
 }
 
+const ehInteiroPositivo = (v: unknown): v is number => ehNumero(v) && Number.isInteger(v) && v > 0;
+const ehSeveridade = (v: unknown): v is Severidade => ehTexto(v) && (SEVERIDADES as readonly string[]).includes(v);
+
+function lerTrecho(v: unknown): LinhaDoTrecho[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const linhas = v.filter((l): l is { linha: number; tipo?: unknown; texto: string } => ehObjeto(l) && ehInteiroPositivo(l.linha) && ehTexto(l.texto))
+    .map((l) => ({ linha: l.linha, tipo: l.tipo === 'adicionada' ? 'adicionada' as const : 'contexto' as const, texto: mascararSegredos(l.texto) }));
+  return linhas.length ? linhas : undefined;
+}
+
+// Achado sem severidade conhecida ou sem título sai; o texto de fora passa pela máscara.
+function lerAchados(v: unknown): AchadoDaRevisao[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const lista: AchadoDaRevisao[] = [];
+  for (const a of v) {
+    if (!ehObjeto(a) || !ehSeveridade(a.severidade) || !ehTexto(a.titulo) || !a.titulo.trim()) continue;
+    const arquivo = ehTexto(a.arquivo) && a.arquivo ? a.arquivo : undefined;
+    lista.push(semAusentes({
+      severidade: a.severidade,
+      titulo: mascararSegredos(a.titulo),
+      resumo: ehTexto(a.resumo) && a.resumo ? mascararSegredos(a.resumo) : undefined,
+      arquivo,
+      linha: arquivo && ehInteiroPositivo(a.linha) ? a.linha : undefined,
+      situacao: campo(a.situacao, ehTexto) || undefined,
+      trecho: arquivo ? lerTrecho(a.trecho) : undefined,
+    }));
+  }
+  return lista.length ? lista : undefined;
+}
+
+function lerRodadasDoPr(v: unknown): RodadasDoPr | undefined {
+  if (!ehObjeto(v) || !Array.isArray(v.itens)) return undefined;
+  const itens: RodadaDoPr[] = [];
+  for (const r of v.itens) {
+    if (!ehObjeto(r) || !ehTexto(r.id) || !ehInteiroPositivo(r.rodada)) continue;
+    itens.push(semAusentes({
+      id: r.id, rodada: r.rodada, em: campo(r.em, ehNumero), head: ehTexto(r.head) && /^[0-9a-f]{7}$/i.test(r.head) ? r.head : undefined,
+      parecer: campo(r.parecer, ehTexto) || undefined, publicado: ehTexto(r.publicado) && r.publicado ? r.publicado : null,
+      pendente: r.pendente === true ? (true as const) : undefined,
+    }));
+  }
+  if (!itens.length) return undefined;
+  return v.inicioIncerto === true ? { itens, inicioIncerto: true } : { itens };
+}
+
+function lerTamanhoDoPr(v: unknown): TamanhoDoPr | undefined {
+  if (!ehObjeto(v) || !ehQuantia(v.arquivos) || !Number.isInteger(v.arquivos)) return undefined;
+  const tamanho: TamanhoDoPr = { arquivos: v.arquivos };
+  if (ehQuantia(v.adicoes) && ehQuantia(v.remocoes) && Number.isInteger(v.adicoes) && Number.isInteger(v.remocoes)) Object.assign(tamanho, { adicoes: v.adicoes, remocoes: v.remocoes });
+  return tamanho;
+}
+
 export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.id) || !v.id || !ehTexto(v.key) || !v.key) return undefined;
   return semAusentes({
@@ -195,6 +300,9 @@ export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
     checks: lerChecksDoHead(v.checks),
     execucao: lerExecucaoDaRevisao(v.execucao),
     criteriosDoCard: lerCriteriosDoCard(v.criteriosDoCard),
+    achados: lerAchados(v.achados),
+    rodadasDoPr: lerRodadasDoPr(v.rodadasDoPr),
+    tamanhoDoPr: lerTamanhoDoPr(v.tamanhoDoPr),
     reportMarkdown: mascararSegredos(campo(v.reportMarkdown, ehTexto) ?? ''),
     reasons: lerMotivos(v.reasons),
     attention: lerMotivos(v.attention),
@@ -211,6 +319,8 @@ export interface PaginaDoHistorico {
   items: Revisao[];
   // os repositórios de todo o histórico, para o seletor
   repos: string[];
+  // as revisões resolvidas nos últimos 7 dias, hoje incluído, sem os filtros (desde 17/11/2026)
+  recentes7Dias?: number;
   // Não vem do motor: quantos itens da página chegaram sem id ou sem chave e foram
   // descartados aqui. A tela avisa, para a página não parecer menor do que é.
   descartados: number;
@@ -226,7 +336,14 @@ export function lerPaginaDoHistorico(bruto: unknown): PaginaDoHistorico | null {
   const lido = lerItens(bruto.items, lerRevisao);
   if (!lido) return null;
   const repos = Array.isArray(bruto.repos) ? bruto.repos.filter((r): r is string => ehTexto(r) && r.length > 0) : [];
-  return { page: bruto.page, pageSize: bruto.pageSize, total: bruto.total, pages: bruto.pages, items: lido.itens, repos, descartados: lido.descartados };
+  const pagina: PaginaDoHistorico = { page: bruto.page, pageSize: bruto.pageSize, total: bruto.total, pages: bruto.pages, items: lido.itens, repos, descartados: lido.descartados };
+  if (ehContagem(bruto.recentes7Dias)) pagina.recentes7Dias = bruto.recentes7Dias;
+  return pagina;
+}
+
+// O CSV de GET /api/decisions?formato=csv chega como texto; o que não é texto é resposta torta.
+export function lerCsv(bruto: unknown): string | null {
+  return typeof bruto === 'string' ? bruto : null;
 }
 
 // A resposta de GET /api/decision?key=: o envelope `{ found, decision }`. A rota devolve a

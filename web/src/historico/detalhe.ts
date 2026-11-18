@@ -1,7 +1,7 @@
 // As frases das linhas "Critérios do card", "Checks do head" e "Execução" do detalhe de uma revisão, sobre o que
 // GET /api/decision manda (lib/engine/detalhe-da-decisao.js, na raiz). Sem React. Nada aqui é
 // calculado além de juntar o que veio: a soma do custo e da duração é do motor.
-import type { ChecksDoHead, CriterioDoCard, ExecucaoDaRevisao } from '@/contratos/historico';
+import type { AchadoDaRevisao, ChecksDoHead, CriterioDoCard, ExecucaoDaRevisao, RodadaDoPr, Severidade, TamanhoDoPr } from '@/contratos/historico';
 import { dolar } from '@/consumo/formato';
 import { textoDaDuracao } from './consulta';
 
@@ -44,6 +44,40 @@ export function resumoDosCriterios(criterios: readonly CriterioDoCard[]): string
   const semConferir = criterios.filter((c) => c.atende === null).length;
   const base = `${atendidos} de ${criterios.length} atendidos`;
   return semConferir ? `${base} · ${semConferir} sem conferir` : base;
+}
+
+// A severidade do achado, como o desenho: o que bloqueia, a sugestão, a pergunta e o detalhe.
+export const ROTULO_DA_SEVERIDADE: Record<Severidade, string> = { blocking: 'Bloqueia', suggestion: 'Sugestão', question: 'Pergunta', nitpick: 'Detalhe' };
+
+const SITUACAO_DO_ACHADO: Record<string, string> = { persiste: 'persiste da rodada anterior', resolvido: 'resolvido nesta rodada', retirado: 'retirado nesta rodada' };
+
+export function textoDaSituacao(situacao: string | undefined): string {
+  return situacao && Object.hasOwn(SITUACAO_DO_ACHADO, situacao) ? SITUACAO_DO_ACHADO[situacao] as string : '';
+}
+
+// "src/x.ts:267", ou só o arquivo quando a sessão não disse a linha.
+export function localDoAchado(a: AchadoDaRevisao): string {
+  if (!a.arquivo) return '';
+  return a.linha ? `${a.arquivo}:${a.linha}` : a.arquivo;
+}
+
+// "14 arquivos, +612 −148", ou só os arquivos quando a revisão não gravou adições e remoções.
+export function textoDoTamanho(t: TamanhoDoPr): string {
+  const arquivos = t.arquivos === 1 ? '1 arquivo' : `${t.arquivos} arquivos`;
+  return t.adicoes !== undefined && t.remocoes !== undefined ? `${arquivos}, +${t.adicoes} −${t.remocoes}` : arquivos;
+}
+
+const PUBLICADO_NA_RODADA: Record<string, string> = { approve: 'aprovou', request_changes: 'pediu mudanças', comment: 'comentou' };
+const PARECER_NA_RODADA: Record<string, string> = { approve: 'aprovar', request_changes: 'pedir mudanças', comment: 'comentar' };
+
+// "3ª · 17/11, 13:21 · a3f91c2 · pediu mudanças": a rodada, a hora, o head curto e o desfecho. O
+// que não foi publicado diz isso, com o parecer da sessão quando há.
+export function textoDaRodada(r: RodadaDoPr, quando: (ms: number) => string): string {
+  let desfecho: string;
+  if (r.pendente) desfecho = 'na mesa, nada postado ainda';
+  else if (r.publicado) desfecho = PUBLICADO_NA_RODADA[r.publicado] ?? r.publicado;
+  else desfecho = r.parecer ? `nada publicado (o parecer era ${PARECER_NA_RODADA[r.parecer] ?? r.parecer})` : 'nada publicado';
+  return [`${r.rodada}ª`, r.em ? quando(r.em) : '', r.head ?? '', desfecho].filter(Boolean).join(' · ');
 }
 
 const ESTADO_DO_CRITERIO = { sim: 'Atende', nao: 'Não atende', nulo: 'Não conferido' } as const;

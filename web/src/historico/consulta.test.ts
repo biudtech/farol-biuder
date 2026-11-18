@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ehHistoricoIndisponivel,
-  CONSULTA_VAZIA, caminhoDaPagina, caminhoDoDetalhe, enderecoDa, lerEndereco, marcaDasResolvidas, mensagemDaFalha, temFiltro,
+  CONSULTA_VAZIA, caminhoDaPagina, caminhoDoCsv, caminhoDoDetalhe, nomeDoCsv, textoDosRecentes, enderecoDa, lerEndereco, marcaDasResolvidas, mensagemDaFalha, temFiltro,
   desdeDoPeriodo, textoDaDuracao, textoDoResultado, textoDoVazio,
 } from './consulta';
 
@@ -65,6 +65,20 @@ describe('pedido ao motor', () => {
     expect(caminhoDaPagina(CONSULTA_VAZIA)).toBe('/api/decisions?page=1');
     expect(caminhoDaPagina({ pagina: 3, q: 'proj-9 ana', veredito: 'skip', repo: 'dono/repo', periodo: '' }))
       .toBe('/api/decisions?page=3&q=proj-9+ana&veredito=skip&repo=dono%2Frepo');
+  });
+
+  it('o CSV leva a mesma busca e os mesmos filtros, sem página, com o formato', () => {
+    const agora = Date.parse('2026-11-17T15:00:00Z');
+    expect(caminhoDoCsv(CONSULTA_VAZIA, agora)).toBe('/api/decisions?formato=csv');
+    expect(caminhoDoCsv({ pagina: 3, q: 'proj-9', veredito: 'approve', repo: 'dono/repo', periodo: '7' }, agora))
+      .toBe('/api/decisions?formato=csv&q=proj-9&veredito=approve&repo=dono%2Frepo&desde=2026-11-11');
+    expect(nomeDoCsv(Date.parse('2026-11-17T01:30:00Z'))).toBe('farol-historico-2026-11-16.csv');
+  });
+
+  it('a contagem dos últimos 7 dias, com o singular', () => {
+    expect(textoDosRecentes(146)).toBe('146 revisões nos últimos 7 dias');
+    expect(textoDosRecentes(1)).toBe('1 revisão nos últimos 7 dias');
+    expect(textoDosRecentes(0)).toBe('0 revisões nos últimos 7 dias');
   });
 
   it('o período vira o primeiro dia (desde), contado com hoje, no fuso do motor', () => {

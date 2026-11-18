@@ -79,6 +79,18 @@ describe('get e post', () => {
     expect(cabecalhos(t.pedidos[0]).has('x-farol')).toBe(false);
   });
 
+  it('com texto, o corpo do 2xx chega ao leitor como texto, com o Bearer', async () => {
+    const t = montar();
+    t.respostas.push(() => new Response('\uFEFFResolvida em,PR\n', { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8' } }));
+    const r = await t.cliente.get('/api/decisions?formato=csv', (b) => (typeof b === 'string' ? b : null), { texto: true });
+    // a leitura do texto tira a marca de ordem de bytes do começo, como todo navegador faz
+    expect(r).toEqual({ ok: true, dados: 'Resolvida em,PR\n' });
+    expect(cabecalhos(t.pedidos[0]).get('authorization')).toBe(`Bearer ${TOKEN}`);
+    // sem a opção, o mesmo corpo não é JSON: resposta torta
+    t.respostas.push(() => new Response('a,b\n', { status: 200 }));
+    expect(await t.cliente.get('/api/decisions?formato=csv', (b) => (typeof b === 'string' ? b : null))).toEqual({ ok: false, falha: 'resposta_invalida', status: 200 });
+  });
+
   it('post manda x-farol: 1, o Bearer e o corpo em JSON', async () => {
     const t = montar();
     t.respostas.push(() => json({ ok: true }));

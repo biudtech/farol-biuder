@@ -926,6 +926,54 @@ describe('Histórico: ações do detalhe', () => {
   });
 });
 
+describe('Histórico: topo com os 7 dias e Exportar CSV', () => {
+  it('o topo diz quantas revisões o motor contou nos últimos 7 dias, ao lado do resultado', async () => {
+    montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1)], { recentes7Dias: 146 })) });
+    await assentar();
+    const sub = screen.getByRole('heading', { level: 1, name: 'Histórico' }).parentElement?.querySelector('p')?.textContent;
+    expect(sub).toBe('146 revisões nos últimos 7 dias · 1 revisão, página 1 de 1');
+    expect(anuncio()).toBe('1 revisão, página 1 de 1');
+  });
+
+  it('sem a contagem do motor (motor antigo), o topo fica só com o resultado', async () => {
+    montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1)])) });
+    await assentar();
+    expect(screen.queryByText(/nos últimos 7 dias/)).toBeNull();
+  });
+
+  it('Exportar CSV pede o recorte filtrado como texto e entrega o arquivo para baixar', async () => {
+    const criado: Blob[] = [];
+    const criar = vi.fn((b: Blob) => { criado.push(b); return 'blob:farol/1'; });
+    const soltar = vi.fn();
+    Object.assign(URL, { createObjectURL: criar, revokeObjectURL: soltar });
+    const clicado = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toMatch(/^farol-historico-\d{4}-\d{2}-\d{2}\.csv$/); });
+    const t = montar({ url: '/historico?q=proj&veredito=approve', responder: (caminho) => (caminho.includes('formato=csv') ? corpo('\uFEFFResolvida em,PR\n') : corpo(paginaDoMotor([revisaoDoMotor(1)]))) });
+    await assentar();
+    await clicar('Exportar CSV');
+    await assentar();
+    const pedido = t.get.mock.calls.find(([caminho]) => caminho.includes('formato=csv'));
+    expect(pedido?.[0]).toBe('/api/decisions?formato=csv&q=proj&veredito=approve');
+    expect(pedido?.[2]).toMatchObject({ texto: true });
+    expect(criar).toHaveBeenCalledTimes(1);
+    expect(criado[0]?.type).toBe('text/csv;charset=utf-8');
+    // a marca de ordem de bytes volta no arquivo (a leitura do texto a tira): os três primeiros bytes
+    expect([...new Uint8Array(await (criado[0] as Blob).arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(clicado).toHaveBeenCalledTimes(1);
+    clicado.mockRestore();
+  });
+
+  it('Exportar CSV que falha diz o erro, sem baixar nada', async () => {
+    const criar = vi.fn(() => 'blob:x');
+    Object.assign(URL, { createObjectURL: criar, revokeObjectURL: vi.fn() });
+    montar({ responder: (caminho) => (caminho.includes('formato=csv') ? { ok: false, falha: 'recusado', status: 503, detalhe: { codigo: 'historico_indisponivel' } } : corpo(paginaDoMotor([revisaoDoMotor(1)]))) });
+    await assentar();
+    await clicar('Exportar CSV');
+    await assentar();
+    expect(screen.getByRole('alert').textContent).toMatch(/^Erro: O motor recusou o pedido \(HTTP 503, historico_indisponivel\)\.$/);
+    expect(criar).not.toHaveBeenCalled();
+  });
+});
+
 describe('Histórico: período', () => {
   it('o select Período vai ao endereço e manda ao motor o primeiro dia, com chip e Limpar filtros', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -1027,5 +1075,76 @@ describe('Histórico: critérios do card, checks do head e execução', () => {
     await assentar();
     await assentar();
     expect(resumos()[0]).toEqual(['Checks do head', 'não conferidos no commit revisado']);
+  });
+
+  it('os achados da sessão: severidade e título na linha; aberta, arquivo:linha, o resumo e o trecho do diff', async () => {
+    const achados = [
+      { severidade: 'blocking', titulo: 'Editar falha sempre com o histórico vazio', resumo: 'O backend responde 404 e a edição se perde.', arquivo: 'src/zones/mia/SuggestedReplyCard.tsx', linha: 267,
+        trecho: [{ linha: 267, tipo: 'adicionada', texto: 'const alvo = versoes[indice] ?? { id: 1 }' }, { linha: 268, tipo: 'contexto', texto: "await api.patch('/respostas/' + alvo.id, corpo)" }] },
+      { severidade: 'suggestion', titulo: 'Contador não volta', arquivo: 'src/zones/mia/useVersoes.ts', linha: 41, situacao: 'persiste' },
+      { severidade: 'question', titulo: '<b>sem arquivo</b>' },
+      { severidade: 'praise', titulo: 'fora da lista' },
+    ];
+    montar({ url: pedirAberta, responder: responder({ ...complemento, achados }) });
+    await assentar();
+    await assentar();
+    const regiao = screen.getByRole('region', { name: 'Achados' });
+    const linhas = [...regiao.querySelectorAll(':scope > details')] as HTMLDetailsElement[];
+    expect(linhas.map((l) => [l.getAttribute('aria-label'), l.open])).toEqual([
+      ['Bloqueia: Editar falha sempre com o histórico vazio', true],
+      ['Sugestão: Contador não volta', false],
+      ['Pergunta: <b>sem arquivo</b>', false],
+    ]);
+    const bloqueio = linhas[0] as HTMLDetailsElement;
+    expect(bloqueio.querySelector('code')?.textContent).toBe('src/zones/mia/SuggestedReplyCard.tsx:267');
+    expect(within(bloqueio).getByText('O backend responde 404 e a edição se perde.')).toBeTruthy();
+    const trecho = within(bloqueio).getByLabelText('Trecho do diff em src/zones/mia/SuggestedReplyCard.tsx:267');
+    expect(trecho.tagName).toBe('PRE');
+    expect([...trecho.querySelectorAll('span[data-tipo]')].map((l) => l.getAttribute('data-tipo'))).toEqual(['adicionada', 'contexto']);
+    expect(trecho.textContent).toContain('const alvo = versoes[indice] ?? { id: 1 }');
+    expect(within(linhas[1] as HTMLElement).getByText('Persiste da rodada anterior.')).toBeTruthy();
+    expect((linhas[1] as HTMLElement).querySelector('pre')).toBeNull();
+    expect((linhas[2] as HTMLElement).querySelector('code, b')).toBeNull();
+  });
+
+  it('as rodadas do PR uma a uma, a mais nova primeiro, na linha fechada "Rodadas"', async () => {
+    const rodadasDoPr = { itens: [
+      { id: 'd10', rodada: 1, em: Date.UTC(2026, 10, 16, 13, 12), head: '2c77a19', parecer: 'comment', publicado: 'comment' },
+      { id: 'd11', rodada: 2, em: Date.UTC(2026, 10, 16, 20, 4), head: '81bd0e4', parecer: 'approve', publicado: null },
+      { id: 'd12', rodada: 3, em: Date.UTC(2026, 10, 17, 16, 21), head: 'a3f91c2', parecer: 'request_changes', publicado: 'request_changes' },
+    ] };
+    montar({ url: pedirAberta, responder: responder({ ...complemento, rodadasDoPr }) });
+    await assentar();
+    await assentar();
+    expect(resumos().find((r) => r[0] === 'Rodadas')).toEqual(['Rodadas', '3']);
+    const lista = screen.getByRole('list', { name: 'Rodadas deste PR, a mais nova primeiro' });
+    const itens = [...lista.querySelectorAll('li')].map((li) => li.textContent);
+    expect(itens).toHaveLength(3);
+    expect(itens[0]).toMatch(/^3ª · \d{2}\/11\/2026, \d{2}:\d{2} · a3f91c2 · pediu mudanças$/);
+    expect(itens[1]).toMatch(/· 81bd0e4 · nada publicado \(o parecer era aprovar\)$/);
+    expect(itens[2]).toMatch(/^1ª · .* · 2c77a19 · comentou$/);
+    cleanup();
+    montar({ url: pedirAberta, responder: responder({ ...complemento, rodadasDoPr: { ...rodadasDoPr, inicioIncerto: true } }) });
+    await assentar();
+    await assentar();
+    expect(resumos().find((r) => r[0] === 'Rodadas')).toEqual(['Rodadas', '3 guardadas']);
+    expect(screen.getByText(/as primeiras rodadas deste PR podem ter sido descartadas/)).toBeTruthy();
+  });
+
+  it('a execução diz o tamanho do PR quando o motor o manda, e só os arquivos quando é o que há', async () => {
+    montar({ url: pedirAberta, responder: responder({ ...complemento, tamanhoDoPr: { arquivos: 14, adicoes: 612, remocoes: 148 } }) });
+    await assentar();
+    await assentar();
+    expect(campos('Execução')).toContain('Tamanho do PR: 14 arquivos, +612 −148');
+    cleanup();
+    montar({ url: pedirAberta, responder: responder({ ...complemento, tamanhoDoPr: { arquivos: 1 } }) });
+    await assentar();
+    await assentar();
+    expect(campos('Execução')).toContain('Tamanho do PR: 1 arquivo');
+    cleanup();
+    montar({ url: pedirAberta, responder: responder(complemento) });
+    await assentar();
+    await assentar();
+    expect(campos('Execução').some((c) => c.startsWith('Tamanho do PR'))).toBe(false);
   });
 });

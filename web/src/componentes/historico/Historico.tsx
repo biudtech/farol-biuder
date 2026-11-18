@@ -17,7 +17,7 @@ import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import {
   CONSULTA_VAZIA, TEXTO_DO_INDISPONIVEL, ehHistoricoIndisponivel, ehRecusaDeParametro, marcaDasResolvidas, mensagemDaFalha, temFiltro,
-  textoDoResultado, textoDoVazio,
+  textoDosRecentes, textoDoResultado, textoDoVazio,
 } from '@/historico/consulta';
 import { LEGENDA_DAS_CORES } from '@/historico/rotulos';
 import { ABA_INICIAL } from '@/navegacao/abas';
@@ -25,6 +25,7 @@ import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Bolinha, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { Detalhe } from './Detalhe';
+import { ExportarCsv } from './ExportarCsv';
 import { Filtros } from './Filtros';
 import { Lista, Pendencias, idDoBotao, idDoBotaoDaPendencia } from './Lista';
 import { Paginacao } from './Paginacao';
@@ -100,6 +101,9 @@ export function Historico({ app = appDoNavegador }: Props) {
   const mostrada = alemDoFim ? null : pagina;
   const esperando = carregando || alemDoFim;
   const anuncio = mostrada && !esperando ? textoDoResultado(mostrada) : '';
+  // a contagem dos últimos 7 dias é do motor e não depende dos filtros; a da última carga fica
+  // até chegar a próxima
+  const recentes = pagina?.recentes7Dias;
   let textoDoErro = '';
   if (falha) {
     textoDoErro = ehHistoricoIndisponivel(falha) ? TEXTO_DO_INDISPONIVEL : mensagemDaFalha(falha) || 'A carga da lista foi interrompida.';
@@ -111,7 +115,13 @@ export function Historico({ app = appDoNavegador }: Props) {
       <div className={estilos.listagem} hidden={detalhe !== null}>
         <Pagina
           titulo="Histórico"
-          sub={<span role="status" aria-live="polite" aria-label="Resultado da consulta">{anuncio}</span>}
+          sub={(
+            <>
+              {recentes !== undefined ? <span>{textoDosRecentes(recentes)}{anuncio ? ' · ' : ''}</span> : null}
+              <span role="status" aria-live="polite" aria-label="Resultado da consulta">{anuncio}</span>
+            </>
+          )}
+          acoes={<ExportarCsv cliente={app.cliente} consulta={consulta} />}
         >
           <Filtros consulta={consulta} repos={repos} aoBuscar={aoBuscar} aoFiltrar={aoFiltrar} />
 

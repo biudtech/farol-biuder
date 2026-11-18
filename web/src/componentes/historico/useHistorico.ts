@@ -91,13 +91,16 @@ const AUSENTE: LeituraDoDetalhe = Object.freeze({ fase: 'ausente' });
 // revisão, a da página é mostrada sem essas linhas.
 // `listaLida`: a página da lista já respondeu (com dados ou com falha); antes disso não dá
 // para saber se o item está nela.
-// Os checks, a execução e os critérios do card da resposta por chave, quando ela é a mesma
-// revisão da página.
+// O que só a resposta por chave traz (os checks, a execução, os critérios do card, os achados com
+// arquivo e linha, as rodadas do PR e o tamanho dele), quando ela é a mesma revisão da página.
+const DO_DETALHE = ['checks', 'execucao', 'criteriosDoCard', 'achados', 'rodadasDoPr', 'tamanhoDoPr'] as const;
+
 function comOComplemento(daPagina: Revisao, r: Resultado<DetalheDaRevisao> | null): Revisao {
   if (!r?.ok || !r.dados.encontrada || r.dados.revisao.id !== daPagina.id) return daPagina;
-  const { checks, execucao, criteriosDoCard } = r.dados.revisao;
-  if (!checks && !execucao && !criteriosDoCard) return daPagina;
-  return { ...daPagina, ...(checks ? { checks } : {}), ...(execucao ? { execucao } : {}), ...(criteriosDoCard ? { criteriosDoCard } : {}) };
+  const daRota = r.dados.revisao;
+  const presentes = DO_DETALHE.filter((chave) => daRota[chave] !== undefined);
+  if (!presentes.length) return daPagina;
+  return { ...daPagina, ...Object.fromEntries(presentes.map((chave) => [chave, daRota[chave]])) };
 }
 
 export function useDetalhe(

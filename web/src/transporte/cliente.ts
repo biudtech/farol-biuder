@@ -39,6 +39,8 @@ export interface OpcoesDaChamada {
   sinal?: AbortSignal;
   // leva o cookie da própria origem mesmo fora do modo do portão (a sondagem que descobre o modo)
   comCookie?: boolean;
+  // o corpo do 2xx chega ao leitor como texto, sem ler JSON (o CSV de GET /api/decisions)
+  texto?: boolean;
 }
 
 // conectando: primeira tentativa. reconectando: caiu e vai tentar. sem-motor: tentou e o
@@ -204,7 +206,7 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
         return detalhe ? { ok: false, falha: 'recusado', status: resposta.status, detalhe } : { ok: false, falha: 'recusado', status: resposta.status };
       }
       let bruto: unknown;
-      try { bruto = await resposta.json(); } catch {
+      try { bruto = opcoes?.texto ? await resposta.text() : await resposta.json(); } catch {
         return cancelado() ? CANCELADO : { ok: false, falha: 'resposta_invalida', status: resposta.status };
       }
       if (cancelado()) return CANCELADO;
