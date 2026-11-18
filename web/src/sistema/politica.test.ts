@@ -15,7 +15,9 @@ const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk:
 const ABERTA: ContaRevisora = { ...CONTA, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
 
 describe('a política é a do motor', () => {
-  it('o domínio de cada campo é o de DOMINIO_DA_POLITICA, em lib/settings.js', () => {
+  // Desde 17/11/2026 o motor não aceita `wait` (o revisor nunca espera decisão de gente): o domínio
+  // dele é o que a tela oferece. O DOMINIO_DA_POLITICA da tela ainda lê o `wait` que vier de fora.
+  it('o domínio de cada campo do motor (lib/settings.js) é o que a tela oferece', () => {
     const fonte = raiz('lib/settings.js');
     const bloco = /const DOMINIO_DA_POLITICA = Object\.freeze\(\{([\s\S]*?)\}\);/.exec(fonte);
     expect(bloco).not.toBeNull();
@@ -23,7 +25,7 @@ describe('a política é a do motor', () => {
       m[1] as string,
       (m[2] as string).split(',').map((v) => v.trim()).map((v) => (v === 'true' ? true : v === 'false' ? false : v.replace(/'/g, ''))),
     ]));
-    expect(doMotor).toEqual(DOMINIO_DA_POLITICA);
+    expect(doMotor).toEqual({ autoReview: [true, false], ...OPCOES_DA_TELA });
   });
 
   it('os campos que a tela manda são campos que a rota edita (CAMPOS_EDITAVEIS)', () => {
@@ -31,8 +33,8 @@ describe('a política é a do motor', () => {
     const lista = /const CAMPOS_EDITAVEIS = Object\.freeze\(\[([^\]]*)\]\)/.exec(fonte);
     const editaveis = [...(lista?.[1] ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
     for (const campo of ['owners', 'autoReview', 'onClean', 'onCaveats', 'onReject']) expect(editaveis).toContain(campo);
-    // a regra que a tela repete no formulário: o com ressalvas nunca é mais permissivo
-    expect(fonte).toContain("if (nova.onClean === 'wait') nova.onCaveats = 'wait';");
+    // o `wait` saiu do motor em 17/11/2026: a edição que o pede volta em `ignorados`
+    expect(fonte).not.toContain("nova.onCaveats = 'wait'");
   });
 
   it('o valor que publica sozinho, por desfecho', () => {
