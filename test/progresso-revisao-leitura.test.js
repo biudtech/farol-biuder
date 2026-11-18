@@ -63,3 +63,40 @@ test('retomada: o número segue pela leitura observada e o "N de M" sai; a verif
   abrirConferenciaPelaVerificacao(e, 'a1');
   assert.equal(e.rec.etapa, 'codigo');
 });
+
+// O arquivo da vez (17/11/2026): o último que a sessão leu pelo mesmo sinal que conta os lidos,
+// como caminho relativo do PR. Só na etapa do código e só quando é um dos arquivos contados.
+test('arquivo da vez: o último lido, em caminho relativo, inclusive pela entrega em partes', () => {
+  const e = motor();
+  assert.equal(progressoDaSessao(e.rec).arquivoAtual, undefined);
+  ler(e, 'a.js', 'r0');
+  assert.equal(progressoDaSessao(e.rec).arquivoAtual, 'a.js');
+  ler(e, 'c.js', 'r1', { lines: ['first'] });
+  const p = progressoDaSessao(e.rec);
+  assert.equal(p.arquivoAtual, 'c.js');
+  assert.ok(!path.isAbsolute(p.arquivoAtual));
+  assert.ok(!p.arquivoAtual.includes(home));
+  // entrega adulterada não é leitura: o arquivo da vez não muda
+  ler(e, 'b.js', 'r2', { lines: ['outra coisa'] });
+  assert.equal(progressoDaSessao(e.rec).arquivoAtual, 'c.js');
+});
+
+test('arquivo da vez fica de fora fora do código, sem conteúdo integral e fora da rodada', () => {
+  const sem = motor({ semConteudoIntegral: new Set(['d.js']) });
+  ler(sem, 'd.js', 'r0');
+  assert.equal(progressoDaSessao(sem.rec).arquivoAtual, undefined);
+  const fora = motor({ arquivosALer: new Set(['b.js']) });
+  ler(fora, 'a.js', 'r0');
+  assert.equal(progressoDaSessao(fora.rec).arquivoAtual, undefined);
+  const depois = motor();
+  ler(depois, 'a.js', 'r0');
+  depois.rec.etapa = 'conferencia';
+  assert.equal(progressoDaSessao(depois.rec).arquivoAtual, undefined);
+});
+
+test('a regra do Read (sem reviewBatchedReads) também marca o arquivo da vez', () => {
+  const e = motor();
+  e.config.reviewBatchedReads = false;
+  observarLeitura(e, opts, { type: 'tool_use', name: 'Read', id: 'x', input: { file_path: path.join(root, 'b.js') } });
+  assert.equal(progressoDaSessao(e.rec).arquivoAtual, 'b.js');
+});
