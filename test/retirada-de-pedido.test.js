@@ -34,7 +34,10 @@ io.run = async (_cmd, args) => {
     return { ok: true, code: 0, stdout: '{}', stderr: '' };
   }
   if (/pulls\/\d+\/reviews --input/.test(sub)) {
-    envios.push(JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8')));
+    const postado = JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8'));
+    envios.push(postado);
+    // como o GitHub: o review postado passa a ser a última decisão da conta no PR
+    if (gh.registrarPostados && postado.event === 'APPROVE') gh.meus.push({ id: 900 + gh.meus.length, state: 'APPROVED', commit: postado.commit_id, at: '2026-11-06T00:00:00Z' });
     return { ok: true, code: 0, stdout: '{"id":1}', stderr: '' };
   }
   // a leitura da retirada é a única que pede o id do review
@@ -270,18 +273,22 @@ test('falha ao retirar não impede a aprovação já liberada', async () => {
   assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
 });
 
-// Achado de 17/11/2026: com a aprovação publicada, a marca da retirada que falhou se perdia, e o
-// pedido de mudanças anterior ficava aberto para sempre. Ela agora viaja na decisão aprovada.
-test('falha passageira ao retirar com o APPROVE publicado: a marca fica na decisão e a varredura retira', async () => {
+// Revisão de 17/11/2026: com a aprovação da mesma conta publicada, o pedido de mudanças anterior
+// dela deixa de valer no GitHub (vale a última decisão de cada revisor). A retirada que falhou
+// não precisa de outra tentativa, e por isso a aprovação não grava a marca: a varredura não tem
+// o que retirar, porque o pedido ativo da conta já é a aprovação.
+test('falha passageira ao retirar com o APPROVE publicado: o APPROVE substitui o pedido, e nada fica para retirar', async () => {
   gh.retiradaFalha = 'HTTP 502';
+  gh.registrarPostados = true;
   const e = await duasRodadas(19);
   assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
   const aprovada = decisoesResolvidas(e).find((d) => d.key === KEY(19) && d.status === 'auto_approved');
-  assert.ok(aprovada?.retiradaPendente, 'a retirada pendente foi gravada com a aprovação');
-  assert.equal(aprovada.retiradaPendente.head, HEAD);
+  assert.ok(aprovada, 'a aprovação saiu');
+  assert.equal(aprovada.retiradaPendente, undefined, 'a aprovação não guarda retirada pendente');
+  assert.equal(gh.meus[gh.meus.length - 1].state, 'APPROVED', 'a última decisão da conta no PR é a aprovação');
   gh.retiradaFalha = '';
   await e.varrerEsperas();
-  assert.deepEqual(eventos(), ['DISMISS', 'APPROVE', 'DISMISS'], 'a varredura retira o pedido de novo');
+  assert.deepEqual(eventos(), ['DISMISS', 'APPROVE'], 'a varredura não tenta retirar o que o APPROVE já substituiu');
 });
 
 test('retirada que falhou numa rodada dispensada pela decisão de gente fica marcada para a varredura', async () => {
