@@ -127,6 +127,18 @@ async function revisado(e, extra) {
   return pendente(e);
 }
 
+// Uma pendência de uma revisão limpa: até 17/11/2026 vinha da conta em espera (`wait`), que saiu.
+// Agora vem da postagem que falhou por instabilidade, com o reenvio tirado, como a pendência
+// que os casos de reconferência partem.
+async function pendenteDeRevisaoLimpa(e) {
+  const postar = e.postReview.bind(e);
+  e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
+  const d = await revisado(e, {});
+  e.postReview = postar;
+  d.postRetry = null;
+  return d;
+}
+
 test('mudança de regras preserva recuo, não relança fora dele e só conta a sessão que conclui', async () => {
   const e = motor();
   const d = await revisado(e, { analysisStatus: 'incomplete', decision: 'needs_decision' });
@@ -319,20 +331,6 @@ test('análise incompleta se recupera mesmo com lista de lacunas vazia', async (
   assert.deepEqual(envios, []);
 });
 
-test('publicação manual recebe uma análise concluída, nunca uma decisão sem prova', async () => {
-  const e = motor(['wait', 'wait']);
-  const d = await revisado(e, INCOMPLETA);
-  assert.ok(d.esperaProva);
-  assert.deepEqual(e.eventos, []);
-  assert.deepEqual(envios, []);
-  await esperaProva.reverQuandoAProvaMudar(e);
-  const pronta = await revisado(e, {});
-  assert.equal(pronta.esperaProva, undefined);
-  assert.equal(e.decisionForUi(pronta).technical.state, 'pass');
-  assert.deepEqual(envios, [], 'política manual não é permissão para publicar');
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-});
-
 test('armar: só prova_tecnica_incompleta, sem violação confirmada, com a política aprovando', () => {
   const e = motor();
   const base = { headSha: HEAD, approvalEvidence: ['protocolo de revisão não comprovado'], reasons: [] };
@@ -361,35 +359,6 @@ test('ciclo: commit novo larga a espera e carimba stale_head', async () => {
   assert.match(textos(d)[0], /commit novo/);
   assert.deepEqual(envios, []);
   assert.deepEqual(e.eventos, []);
-});
-
-test('ciclo: PR fechado é do reconcilePending, leitura que falha espera, coordenação fora do ar não lê', async () => {
-  const e = motor();
-  await revisado(e, COM_DEPENDENCIA);
-  gh.state = 'MERGED';
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.equal(pendente(e).blockedKind, undefined);
-  gh.state = 'OPEN';
-  gh.leituraFalha = true;
-  e.salvas = 0;
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.equal(e.salvas, 0);
-  gh.leituraFalha = false;
-  leiturasDoPr = 0;
-});
-
-test('mudança para publicação manual não abandona a análise ainda bloqueada', async () => {
-  const e = motor();
-  await revisado(e, INCOMPLETA);
-  conta(e, { onClean: 'wait', onCaveats: 'wait' });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.ok(pendente(e).esperaProva);
-  assert.deepEqual(e.eventos, []);
-  const pronta = await revisado(e, {});
-  assert.equal(pronta.esperaProva, undefined);
-  assert.equal(e.decisionForUi(pronta).technical.state, 'pass');
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-  assert.deepEqual(envios, []);
 });
 
 // Revisão do Codex no PR #245 (17/10/2026): três furos, cada um provado aqui antes da correção.
@@ -503,8 +472,8 @@ test('recusa técnica durante a publicação entra na recuperação única e nã
 
 for (const origem of ['fila', 'sessao', 'retry']) {
   test(`reconferência em ${origem} preserva a substituição da decisão antiga`, async () => {
-    const e = motor(['wait', 'wait']);
-    const d = await revisado(e, {});
+    const e = motor();
+    const d = await pendenteDeRevisaoLimpa(e);
     d.technicalRecheck = false;
     d.blockedKind = 'technical_recheck';
     if (origem === 'fila') e.headlessQueue.push(PR);
@@ -526,8 +495,8 @@ for (const origem of ['fila', 'sessao', 'retry']) {
 }
 
 test('sessão aparece durante a recuperação e ainda substitui a decisão anterior', async () => {
-  const e = motor(['wait', 'wait']);
-  const d = await revisado(e, {});
+  const e = motor();
+  const d = await pendenteDeRevisaoLimpa(e);
   d.technicalRecheck = false;
   d.blockedKind = 'technical_recheck';
   const recuperando = esperaProva.reverQuandoAProvaMudar(e);
@@ -543,8 +512,8 @@ test('sessão aparece durante a recuperação e ainda substitui a decisão anter
 });
 
 test('falha de rede sem reconferência mantém o reenvio e não inicia análise nova', async () => {
-  const e = motor(['wait', 'wait']);
-  const d = await revisado(e, {});
+  const e = motor();
+  const d = await pendenteDeRevisaoLimpa(e);
   d.postRetry = { event: 'approve', attempts: 1 };
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
   assert.deepEqual(d.postRetry, { event: 'approve', attempts: 1 });
@@ -554,13 +523,12 @@ test('falha de rede sem reconferência mantém o reenvio e não inicia análise 
 
 for (const retry of [null, { event: 'approve', attempts: 3, exhausted: true }]) {
   test(`reconferência consumida pela fila retoma após reinício, com retry ${retry ? 'esgotado' : 'ausente'}`, async () => {
-    const e = motor(['wait', 'wait']);
-    const d = await revisado(e, {});
+    const e = motor();
+    const d = await pendenteDeRevisaoLimpa(e);
     d.technicalRecheck = false;
     d.blockedKind = 'technical_recheck';
     d.postRetry = retry;
     e.decisions = JSON.parse(JSON.stringify(e.decisions));
-    conta(e, { onClean: 'approve', onCaveats: 'approve' });
     e.eventos = [];
     const tela = e.decisionForUi(pendente(e));
     assert.equal(tela.technical.state, 'pending', 'a prova anterior não continua verde');
@@ -588,17 +556,18 @@ test('pendência antiga esgotada volta à recuperação sem perder o bloqueio t�
   assert.deepEqual(e.eventos, []);
 });
 
-test('cancelamento explícito não é desfeito pela recuperação e aparece como impedimento', async () => {
+// 17/11/2026 (o revisor nunca espera decisão de gente): o cancelamento explícito encerra a
+// recuperação sem postar; ninguém mais vai mover esta pendência.
+test('cancelamento explícito encerra a recuperação sem postar e sem pendência', async () => {
   const e = motor();
-  const d = await revisado(e, INCOMPLETA);
+  await revisado(e, INCOMPLETA);
   e.autoReviewParked.add(PR.key);
   e.parkedMotivos[PR.key] = { tipo: 'cancelado', motivo: 'cancelada por você' };
-  for (let i = 0; i < 3; i++) assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.equal(e.autoReviewParked.has(PR.key), true);
-  assert.match(d.esperaProva.impedimento, /cancelada por você/);
-  assert.match(e.decisionForUi(d).esperaProva.impedimento, /cancelada por você/, 'o impedimento chega à projeção');
-  // a pausa que só você desfaz é "precisa de você", avisada uma vez (06/11/2026)
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
+  assert.equal(e.autoReviewParked.has(PR.key), true, 'o cancelamento não é desfeito');
+  assert.equal(pendente(e), undefined);
+  assert.equal(decisoesResolvidas(e).find((x) => x.key === PR.key).status, 'commented_inconclusive', 'a conta revisa sozinha: o desfecho sem mesa comenta');
+  assert.deepEqual(e.eventos, []);
 });
 
 test('autenticação vencida pausa a execução e segue recuperável após restabelecer o perfil', async () => {
@@ -611,7 +580,7 @@ test('autenticação vencida pausa a execução e segue recuperável após resta
   e.autoReviewParked.delete(PR.key); // O fluxo de login existente libera o estacionamento.
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
   assert.equal(d.esperaProva.impedimento, '');
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'a pausa pelo login avisou uma vez');
+  assert.deepEqual(e.eventos, [], 'a pausa pelo login não pede ninguém: segue sozinha quando o login volta');
 });
 
 test('fila, sessão e retry existentes impedem uma recuperação concorrente', async () => {
@@ -627,20 +596,20 @@ test('fila, sessão e retry existentes impedem uma recuperação concorrente', a
   }
 });
 
-// O card não promete o que a pausa impede (03/11/2026): dizia "concluo sozinho" com a automação da
-// conta desligada, em que nenhuma tentativa roda até alguém religar.
-test('automação desligada: o card diz o que falta, sem prometer conclusão sozinho', async () => {
+// Automação desligada para o PR (17/11/2026): a recuperação encerra sem postar, porque o
+// monitoramento desse PR está desligado e ninguém mais vai mover a pendência.
+test('automação desligada: a recuperação encerra sem postar e sem pendência', async () => {
   const e = motor();
   const antes = await revisado(e, INCOMPLETA);
   assert.match(antes.reasons[0].text, /concluo a revisão sozinho/, 'com a automação ligada a promessa vale');
   conta(e, { autoReview: false });
-  await esperaProva.reverQuandoAProvaMudar(e);
-  assert.doesNotMatch(antes.reasons[0].text, /sozinho/);
-  assert.match(antes.reasons[0].text, /desativada/);
-  assert.equal(antes.reasons.filter(r => r.espera).length, 1);
-  conta(e, { autoReview: true });
-  await esperaProva.reverQuandoAProvaMudar(e);
-  assert.doesNotMatch(antes.reasons[0].text, /desativada/);
+  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
+  assert.equal(pendente(e), undefined);
+  const r = decisoesResolvidas(e).find((x) => x.key === PR.key);
+  assert.equal(r.status, 'not_posted');
+  assert.equal(r.action, 'skip');
+  assert.deepEqual(envios, []);
+  assert.deepEqual(e.eventos, []);
 });
 
 test('revisão que termina com a automação já desligada nasce pausada, sem promessa no card nem no aviso', async () => {
@@ -669,17 +638,6 @@ test('pendência com caminho protegido não rearma na varredura: segue com a pes
   assert.ok(d.esperaProva, 'sem caminho protegido a mesma pendência volta a recuperar');
 });
 
-test('automação desligada pausa a recuperação sem descartar a pendência', async () => {
-  const e = motor();
-  const d = await revisado(e, INCOMPLETA);
-  conta(e, { autoReview: false });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 0);
-  assert.match(d.esperaProva.impedimento, /desativada/);
-  conta(e, { autoReview: true });
-  assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]], 'a pausa pela automação avisou uma vez');
-});
-
 test('clique avulso e PR da própria conta não ganham recuperação com publicação automática', () => {
   const e = motor();
   const r = { headSha: HEAD, approvalEvidence: ['avaliação técnica atual ausente'] };
@@ -687,8 +645,8 @@ test('clique avulso e PR da própria conta não ganham recuperação com publica
   assert.equal(esperaProva.armar(e, { ...PR, author: 'eu' }, 'prova_tecnica_incompleta', r, []), null);
 });
 
-test('reprovação automática também recupera a análise quando a aprovação é manual', async () => {
-  const e = motor(['wait', 'wait']);
+test('reprovação automática também recupera a análise', async () => {
+  const e = motor();
   conta(e, { onReject: 'request_changes' });
   const d = await revisado(e, INCOMPLETA);
   assert.ok(d.esperaProva);
@@ -700,13 +658,3 @@ test('reprovação automática também recupera a análise quando a aprovação 
   assert.equal(pendente(e), undefined);
 });
 
-test('ressalva real após recuperar a prova continua obedecendo à aprovação manual', async () => {
-  const e = motor(['approve', 'wait']);
-  await revisado(e, INCOMPLETA);
-  await esperaProva.reverQuandoAProvaMudar(e);
-  const d = await revisado(e, { card: 'CARD-1', cardMet: false });
-  assert.equal(d.esperaProva, undefined);
-  assert.equal(e.decisionForUi(d).technical.state, 'pass', 'a decisão manual agora tem evidência suficiente');
-  assert.deepEqual(envios, []);
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-});

@@ -54,22 +54,20 @@ test('config antiga com várias contas sobe com UMA conta: a primeira não silen
 
 /* ---------- o que a tela de Contas mostra é o que o engine faz ---------- */
 
-// Cada linha é uma combinação dos seletores de Sistema > Contas e o que o Farol precisa fazer
-// com ela. Desde 30/09/2026 a conta é o ÚNICO endereço: as chaves gerais de Automação
-// deixaram de existir, e o que está na config em memória com esses nomes não muda nada.
+// Cada linha é uma combinação gravada na conta e o que o Farol faz com ela. Desde 30/09/2026 a
+// conta é o ÚNICO endereço (as chaves gerais de Automação não mudam nada), e desde 17/11/2026 o
+// revisor nunca espera decisão de gente: o `wait` gravado antes vale o padrão autônomo.
 const MATRIZ = [
   // conta,                                      limpo, com ressalvas
   [{}, 'approve', 'approve'],   // conta sem campo vale o padrão (01/10/2026)
   [{ onClean: 'approve', onCaveats: 'approve' }, 'approve', 'approve'],
-  [{ onClean: 'approve', onCaveats: 'wait' }, 'approve', 'wait'],
-  [{ onClean: 'wait' }, 'wait', 'wait'],
-  [{ onClean: 'wait', onCaveats: 'wait' }, 'wait', 'wait'],
-  // até 30/09/2026 esta linha aprovava com ressalvas: a escolha própria passava por cima do
-  // limpo. Agora o com ressalvas nunca é mais permissivo que o limpo, sem exceção.
-  [{ onClean: 'wait', onCaveats: 'approve' }, 'wait', 'wait'],
+  [{ onClean: 'approve', onCaveats: 'wait' }, 'approve', 'approve'],
+  [{ onClean: 'wait' }, 'approve', 'approve'],
+  [{ onClean: 'wait', onCaveats: 'wait' }, 'approve', 'approve'],
+  [{ onClean: 'wait', onCaveats: 'approve' }, 'approve', 'approve'],
 ];
 
-test('a política de aprovação vem só da conta, e o com ressalvas nunca é mais permissivo que o limpo', () => {
+test('a política de aprovação vem só da conta, e o wait gravado antes vale o padrão autônomo', () => {
   for (const [conta, limpo, ressalva] of MATRIZ) {
     for (const geral of [true, false, undefined]) {
       const e = { config: { autoApproveAll: geral, autoReview: geral }, accountList: () => [{ user: 'x', owners: [], ...conta }] };
@@ -86,13 +84,13 @@ test('revisar sozinho e reprovar sozinho vêm só da conta, e nenhuma chave gera
   assert.equal(C.revisaSozinho(e({ autoReview: false }, true), 'x'), false, 'nem em true a liga');
   assert.equal(C.revisaSozinho(e({}, false), 'x'), true, 'campo ausente vale o padrão, não a chave geral');
   assert.equal(C.acaoAoReprovar(e({ onReject: 'request_changes' }, true), 'x'), 'request_changes');
-  assert.equal(C.acaoAoReprovar(e({ onReject: 'wait' }, true), 'x'), 'wait', 'escolha da conta vale');
+  assert.equal(C.acaoAoReprovar(e({ onReject: 'wait' }, true), 'x'), 'request_changes', 'o wait gravado antes vale o padrão autônomo');
   assert.equal(C.acaoAoReprovar(e({}, true), 'x'), 'request_changes', 'campo ausente vale o padrão');
 });
 
-test('a política por extenso: o padrão aprova e reprova sozinho, e o par proibido gravado à mão ainda espera', () => {
+test('a política por extenso: o padrão aprova e reprova sozinho, e o wait gravado à mão vale o padrão', () => {
   assert.deepEqual(C.politicaExplicita({}), { autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' });
-  assert.deepEqual(C.politicaExplicita({ onClean: 'wait', onCaveats: 'approve' }), { autoReview: true, onClean: 'wait', onCaveats: 'wait', onReject: 'request_changes' });
+  assert.deepEqual(C.politicaExplicita({ onClean: 'wait', onCaveats: 'approve' }), C.PADRAO);
   assert.deepEqual(C.politicaExplicita({ autoReview: 'sim', onReject: 'merge' }), C.PADRAO, 'valor torto não vira escolha');
   assert.deepEqual(C.politicaExplicita(null), C.PADRAO);
 });
@@ -142,22 +140,21 @@ test('a regra de review por organização é editada pela mesma rota, sem tocar 
   assert.equal(C.aplicarEdicao(BASE, { tipo: 'regra-review', user: 'trabalho', organization: 'org1', mode: 'qualquer' }).ok, false);
 });
 
-test('pôr o sem ressalvas em espera leva o com ressalvas junto, e pedir o contrário é recusa dita', () => {
+test('pedir um desfecho em espera volta em ignorados: o wait saiu do domínio', () => {
   const r = C.aplicarEdicao({ ...BASE, onClean: 'approve', onCaveats: 'approve' }, { tipo: 'editar', user: 'trabalho', campos: { onClean: 'wait' } });
-  assert.equal(r.conta.onCaveats, 'wait');
-  const recusa = C.aplicarEdicao({ ...BASE, onClean: 'wait', onCaveats: 'wait' }, { tipo: 'editar', user: 'trabalho', campos: { onCaveats: 'approve' } });
-  assert.equal(recusa.ok, false);
-  assert.match(recusa.erro, /sem ressalvas.*espera você/);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.ignorados, ['onClean']);
+  assert.equal(r.conta.onClean, 'approve');
 });
 
 /* ---------- o rastro: toda mudança de política tem data e origem ---------- */
 
 test('a diferença de política considera a conta, e ignora o que não é política', () => {
   const antes = C.retratoDaPolitica({ aguardarCiParaRevisar: false, conta: BASE });
-  const depois = C.retratoDaPolitica({ aguardarCiParaRevisar: true, conta: { ...BASE, owners: ['outra'], onClean: 'wait' } });
+  const depois = C.retratoDaPolitica({ aguardarCiParaRevisar: true, conta: { ...BASE, owners: ['outra'], autoReview: false } });
   // as chaves de espera do CI saíram em 17/11/2026: não são mais política
   assert.deepEqual(C.mudancasDePolitica(antes, depois), [
-    { conta: 'trabalho', campo: 'onClean', de: null, para: 'wait' },
+    { conta: 'trabalho', campo: 'autoReview', de: null, para: false },
   ]);
   // as chaves gerais que saíram em 30/09/2026 não são mais política geral
   const semChave = C.mudancasDePolitica(C.retratoDaPolitica({ autoReview: true, autoApproveAll: true }), C.retratoDaPolitica({ autoReview: false, autoApproveAll: false }));
@@ -171,29 +168,24 @@ test('a origem da mudança é o navegador, e sem User-Agent fica desconhecida', 
   assert.equal(C.origemDaRequisicao(''), 'desconhecida');
 });
 
-test('editar pelo engine grava a config, registra o rastro e o motivo do gate diz quando', () => {
+test('editar pelo engine grava a config e registra o rastro', () => {
   const e = new Engine();
   let estados = 0;
   e.pushState = () => { estados++; };
-  const r = e.editarConta({ tipo: 'editar', user: 'trabalho', campos: { onClean: 'wait', padroesRevisao: '  sem any  ' } }, 'navegador');
+  const novo = e.config.conta.autoReview === false;
+  const r = e.editarConta({ tipo: 'editar', user: 'trabalho', campos: { autoReview: novo, padroesRevisao: '  sem any  ' } }, 'navegador');
   assert.equal(r.ok, true);
   assert.equal(estados, 1, 'a tela recebe o estado novo');
   const conta = configGravada().conta;
-  assert.equal(conta.onClean, 'wait');
+  assert.equal(conta.autoReview, novo);
   assert.equal(conta.padroesRevisao, 'sem any');
   assert.deepEqual(conta.owners, ['org1'], 'a edição não apagou o que não foi mandado');
   const hist = JSON.parse(fs.readFileSync(POLITICA_HISTORICO_FILE, 'utf8'));
-  const ultima = hist.filter((h) => h.campo === 'onClean').pop();
-  assert.deepEqual([ultima.conta, ultima.para, ultima.origem], ['trabalho', 'wait', 'navegador']);
+  const ultima = hist.filter((h) => h.campo === 'autoReview').pop();
+  assert.deepEqual([ultima.conta, ultima.para, ultima.origem], ['trabalho', novo, 'navegador']);
   assert.ok(Number(ultima.at) > 0);
-  // pôr o limpo em espera põe o com ressalvas junto, e isso também fica no rastro
-  assert.equal(conta.onCaveats, 'wait');
-  const ressalva = hist.filter((h) => h.campo === 'onCaveats' && h.conta === 'trabalho').pop();
-  assert.deepEqual([ressalva.de, ressalva.para, ressalva.origem], ['approve', 'wait', 'navegador']);
   assert.equal(hist.filter((h) => h.campo === 'padroesRevisao').length, 0, 'padrões do time não são política de postagem');
-  const motivo = C.motivoDaPolitica(e, 'trabalho', true);
-  assert.match(motivo, /manda aguardar/);
-  assert.match(motivo, /definido em \d{2}\/\d{2} \d{2}:\d{2}, pelo navegador/, 'quem vê o card sabe quando e de onde veio');
+  assert.equal('motivoDaPolitica' in C, false, 'o motivo "a política manda aguardar" saiu com o wait');
 });
 
 test('o servidor é quem decide o que é valor válido: escolha fica, valor torto não entra', () => {
@@ -201,11 +193,10 @@ test('o servidor é quem decide o que é valor válido: escolha fica, valor tort
   e.pushState = () => { };
   e.editarConta({ tipo: 'editar', user: 'trabalho', campos: { autoReview: false, onReject: 'wait' } }, 'navegador');
   assert.equal(e.config.conta.autoReview, false, 'false é escolha, não ausência');
-  // conta que escolheu esperar não vira "reprova sozinho" por um valor torto
   const r = e.editarConta({ tipo: 'editar', user: 'trabalho', campos: { onReject: 'merge' } }, 'navegador');
   assert.deepEqual(r.ignorados, ['onReject']);
-  assert.equal(e.config.conta.onReject, 'wait');
-  assert.equal(configGravada().conta.onReject, 'wait');
+  assert.equal(e.config.conta.onReject, 'request_changes', 'nem o wait nem o torto entram');
+  assert.equal(configGravada().conta.onReject, 'request_changes');
 });
 
 test('operação recusada não grava nada nem muda a conta em memória', () => {

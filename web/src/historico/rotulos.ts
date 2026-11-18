@@ -4,8 +4,8 @@
 //
 // De onde vem cada valor (arquivos na raiz do repositório):
 // - `status`: quem resolve a revisão grava um destes, em lib/engine/decision.js,
-//   desfecho-da-revisao.js, desfecho-automatico.js (o mapa STATUS), espera-ci.js,
-//   espera-pr-proprio.js, espera-prova-decidida.js e postagem-recusada.js. `pending` não é
+//   desfecho-da-revisao.js, desfecho-automatico.js (o mapa STATUS), desfecho-sem-mesa.js,
+//   espera-ci.js, espera-pr-proprio.js, espera-prova-decidida.js e postagem-recusada.js. `pending` não é
 //   de item resolvido: é a pendência da mesa, que só chega aqui pelo detalhe por chave
 //   (GET /api/decision);
 // - `action`: os quatro valores de `VEREDITOS` em lib/engine/historico-paginado.js, que são
@@ -25,6 +25,8 @@ export const ROTULO_DO_STATUS: Record<string, string> = {
   auto_approved: 'Publicado automaticamente',
   auto_rejected: 'Publicado automaticamente',
   commented_own_pr: 'Publicado automaticamente, como comentário (PR da própria conta)',
+  commented_inconclusive: 'Publicado automaticamente, como comentário neutro (a revisão não chegou a uma conclusão segura)',
+  not_posted: 'Encerrado sem publicar: um portão de postagem recusou, ou o PR saiu do automático',
   posted: 'Publicado por você',
   already_reviewed: 'Já havia review seu no PR: nada foi publicado de novo',
   approval_not_needed: 'Outra pessoa já decidiu o commit: a publicação automática não foi necessária',

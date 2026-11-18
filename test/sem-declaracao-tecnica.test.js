@@ -71,11 +71,12 @@ test('a marca de sem declaração tira a lacuna técnica; com declaração a lac
     'lacuna de leitura continua bloqueando sem declaração');
 });
 
-test('sem declaração vira ressalva com texto próprio, e a política de ressalvas decide', () => {
+// até 17/11/2026 a conta em espera segurava esta ressalva (motivo `politica`); o `wait` saiu
+test('sem declaração vira ressalva com texto próprio, e não segura o APPROVE', () => {
   const textos = attentionPoints(null, result()).map((p) => p.text);
   assert.ok(textos.some((t) => /não tem declaração técnica cadastrada, então a avaliação técnica automática não rodou/.test(t)), textos.join(' | '));
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, result()), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, result()), { ok: false, motivo: 'politica' });
+  assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, result()), { ok: true, motivo: null }, 'nem o stub antigo em espera segura');
   const vermelho = result({ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] });
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, vermelho), { ok: true, motivo: null }, 'o CI vermelho não segura');
 });

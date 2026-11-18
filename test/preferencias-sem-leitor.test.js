@@ -16,7 +16,7 @@ const CONFIG = path.join(home, 'config.json');
 const MORTAS = ['soundEnabled', 'theme', 'autostart', 'aguardarCiParaAprovar', 'aguardarCiParaRevisar'];
 const CONFIG_ANTIGA = JSON.stringify({
   esquemaConfig: 1,
-  conta: { user: 'me', owners: ['acme'], autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' },
+  conta: { user: 'me', owners: ['acme'], autoReview: false, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' },
   intervalSeconds: 600, soundEnabled: false, theme: 'light', autostart: true, aguardarCiParaAprovar: true, aguardarCiParaRevisar: true,
 });
 fs.writeFileSync(CONFIG, CONFIG_ANTIGA);

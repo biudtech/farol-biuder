@@ -119,9 +119,11 @@ const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/api#$
 const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/api#${n}`);
 const textos = (lista) => (lista || []).map((r) => (r && r.text) || String(r));
 
-async function revisar(n, opcoes, extra) {
+async function revisar(n, opcoes, extra, { postagemFalha = false } = {}) {
   const e = motor(opcoes);
   sessao(e, extra);
+  // a postagem recusada como falha passageira do GitHub deixa a pendência (com o reenvio) para ler
+  if (postagemFalha) e.postReview = async () => ({ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' });
   await e.runHeadlessReview(PR(n));
   return e;
 }
@@ -239,7 +241,7 @@ test('check NÃO obrigatório não pesa, e nem chega a ler a base', async () => 
 // Quem decide lê a base fresca (correção da revisão independente): a retirada do pedido (lerCi).
 // A leitura da revisão usa o cache de um minuto.
 test('leitura fresca no sentido que importa: o herdado em cache que deixou de ser não vale para quem lê fresco', async () => {
-  const e = motor({ reprova: 'wait' });
+  const e = motor();
   await e.bloqueadoPorChecks(PR(26));
   assert.ok(e.checksDaBaseCache.size, 'o cache guarda a base vermelha');
   gh.rollupBase = [check('osv', 'SUCCESS'), check('test', 'SUCCESS')];
@@ -266,8 +268,10 @@ test('o check que só falha no PR não segura, e o card avisa com que CI a aprov
 
 /* ---------- o card e o texto ---------- */
 
-test('card na mesa: o herdado aparece numa linha informativa, que não é ressalva', async () => {
-  const e = await revisar(30, { politica: ['wait', 'wait'] });
+// Até 17/11/2026 o card pendente vinha da conta em espera (mesa); o `wait` saiu, e a pendência
+// daqui é a do reenvio, quando a postagem do APPROVE falha de passagem.
+test('card pendente: o herdado aparece numa linha informativa, que não é ressalva', async () => {
+  const e = await revisar(30, undefined, undefined, { postagemFalha: true });
   const d = pendente(e, 30);
   const linha = (d.reasons || []).find((r) => /falha também no commit atual da branch base/.test(r.text));
   assert.ok(linha, textos(d.reasons).join(' | '));
@@ -275,11 +279,11 @@ test('card na mesa: o herdado aparece numa linha informativa, que não é ressal
   assert.match(linha.text, /osv/);
   assert.doesNotMatch(linha.text, /precisa|corrij|antes do merge|esper/i, 'informa, não cobra');
   assert.deepEqual(attentionPoints(null, d).filter((p) => /branch base/.test(p.text)), [], 'a linha nunca conta como ressalva');
-  assert.match(textos(d.reasons)[0], /sem ressalvas/, 'a classe é limpa: a política é a do limpo');
+  assert.ok(d.postRetry, 'a pendência é a do reenvio');
 });
 
 test('Panorama: a linha informativa do herdado não marca a decisão como aprovada com ressalva', async () => {
-  const e = await revisar(31, { politica: ['wait', 'wait'] });
+  const e = await revisar(31, undefined, undefined, { postagemFalha: true });
   const d = pendente(e, 31);
   assert.ok((d.reasons || []).some((r) => r.informativo === true));
   // a pendência resolvida pelo clique leva as mesmas reasons para o histórico

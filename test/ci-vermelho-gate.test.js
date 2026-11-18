@@ -85,18 +85,19 @@ test('check ainda rodando, que nem começou ou não conferido no head também n�
 
 // De 27 a 30/09/2026 a dependência em aberto devolvia { ok: false, motivo: 'dependencia' } em
 // qualquer política; de 16 a 17/10/2026 (PR #244) era lacuna obrigatória. Desde 17/10/2026 é
-// de novo ressalva com o texto da dependência, e a política decide: a dependência aberta
-// costuma ser o PR irmão do mesmo card, também esperando aprovação.
-test('dependência em aberto declarada pela revisão é ressalva: a política de ressalvas decide', () => {
+// de novo ressalva com o texto da dependência: a dependência aberta costuma ser o PR irmão do
+// mesmo card, também esperando aprovação. Até 17/11/2026 a conta em espera a segurava (motivo
+// `politica`); o `wait` saiu, e nem o stub antigo segura mais.
+test('dependência em aberto declarada pela revisão é ressalva e não segura o APPROVE', () => {
   const r = approvableResult({ dependenciasAbertas: ['biudtech/infra-k8s#189 ainda aberto'] });
   assert.deepEqual(enginePorClasse('approve', 'approve').shouldAutoApprove(PR, r), { ok: true, motivo: null });
-  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r), { ok: false, motivo: 'politica' });
-  const pts = enginePorClasse('approve', 'wait').attentionPoints(r);
+  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r), { ok: true, motivo: null });
+  const pts = enginePorClasse('approve', 'approve').attentionPoints(r);
   assert.equal(pts.length, 1);
   assert.match(pts[0].text, /depende de algo que estava em aberto na leitura: biudtech\/infra-k8s#189 ainda aberto/);
-  const e = enginePorClasse('approve', 'wait');
-  assert.equal(e.shouldAutoApprove(PR, approvableResult({ dependenciasAbertas: [] })).ok, true, 'lista vazia é limpo');
-  assert.equal(e.shouldAutoApprove(PR, approvableResult({ dependenciasAbertas: ['', '   ', 7] })).ok, true, 'item vazio ou torto não conta');
+  const e = enginePorClasse('approve', 'approve');
+  assert.deepEqual(e.attentionPoints(approvableResult({ dependenciasAbertas: [] })), [], 'lista vazia é limpo');
+  assert.deepEqual(e.attentionPoints(approvableResult({ dependenciasAbertas: ['', '   ', 7] })), [], 'item vazio ou torto não conta');
 });
 
 test('o estado do CI vira nota do card, sem texto de espera', async () => {

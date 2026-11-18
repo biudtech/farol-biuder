@@ -327,19 +327,27 @@ for (const [origem, marcas] of [
   });
 }
 
+// desde 17/11/2026 a origem desconhecida vai ao desfecho sem mesa: revisa de novo e, sem
+// conclusão, sai um COMMENT neutro; o card diz por quê
 test('origem desconhecida (nenhuma marca): nada é postado, e o card diz por quê', async () => {
   const e = motor();
   await revisar(e, 2, { marcas: {} });
   assert.deepEqual(envios, []);
-  assert.match(textos(pendente(e, 2))[0], /origem desconhecida/);
+  const d = pendente(e, 2);
+  assert.equal(d.semMesa?.motivo, 'origem_desconhecida', 'o desfecho sem mesa assume');
+  assert.ok(textos(d).some((t) => /origem desconhecida/.test(t)), textos(d).join(' | '));
+  semMesa(e);
 });
 
-test('o clique do dono com a conta esperando você: a mesa é a escolha da conta', async () => {
+// Até 17/11/2026: "o clique do dono com a conta esperando você: a mesa é a escolha da conta". O
+// `wait` saiu: gravado na conta, é lido como o padrão autônomo, e o clique do dono aprova.
+test('o clique do dono com o wait gravado na conta: o APPROVE sai', async () => {
   const e = motor({ aprova: 'wait' });
   await revisar(e, 3, { marcas: { manual: true } });
-  assert.deepEqual(envios, []);
-  assert.ok(pendente(e, 3));
-  assert.deepEqual(e.eventos, [['needs-decision', 'acme/app#3']]);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.equal(pendente(e, 3), undefined);
+  assert.equal(resolvida(e, 3).status, 'auto_approved');
+  semMesa(e);
 });
 
 // ---------------------------------------------------------------- defeito do PR
@@ -387,12 +395,15 @@ test('a parte do card deste PR dita não entregue: REQUEST_CHANGES com a conta r
   semMesa(e);
 });
 
-test('defeito com a conta que não reprova sozinha: nada é postado (a mesa é a escolha da conta)', async () => {
+// Até 17/11/2026: "defeito com a conta que não reprova sozinha: nada é postado (a mesa é a
+// escolha da conta)". O `wait` saiu: gravado no onReject, é lido como reprovar sozinho.
+test('defeito com o wait gravado no onReject da conta: o REQUEST_CHANGES sai', async () => {
   const e = motor({ reprova: 'wait' });
   technicalRuntime.finishTechnicalReview = violacao();
   await revisar(e, 13);
-  assert.deepEqual(envios, []);
-  assert.deepEqual(e.eventos, [['needs-decision', 'acme/app#13']]);
+  assert.deepEqual(envios.map((p) => p.event), ['REQUEST_CHANGES']);
+  assert.equal(resolvida(e, 13).status, 'auto_rejected');
+  semMesa(e);
 });
 
 test('defeito com o head que andou durante a sessão: nada é postado, o round seguinte revisa o commit novo', async () => {
@@ -897,15 +908,17 @@ test('ci e conflito: a espera do conflito segura, e o CI não decide', async () 
 });
 
 for (const causa of ['dependencia', 'fora_do_diff']) {
-  test(`bloqueio só de ${causa} vai à mesa com o motivo dito`, async () => {
+  // até 17/11/2026 ia à mesa; desde então vai ao desfecho sem mesa, com o motivo dito no card
+  test(`bloqueio só de ${causa} vai ao desfecho sem mesa com o motivo dito`, async () => {
     const e = motor();
     await revisar(e, 78, { extra: reprovando([causa]) });
     assert.deepEqual(envios, []);
     const d = pendente(e, 78);
     assert.equal(d.esperaCi, undefined);
     assert.equal(d.blockedKind, undefined);
-    assert.match(textos(d)[0], /não em defeito do código/);
-    assert.deepEqual(e.eventos, [['needs-decision', 'acme/app#78']]);
+    assert.equal(d.semMesa?.motivo, 'bloqueio_de_estado');
+    assert.ok(textos(d).some((t) => /não em defeito do código/.test(t)), textos(d).join(' | '));
+    semMesa(e);
   });
 }
 
@@ -991,9 +1004,15 @@ test('espera do CI gravada antes, de um pedido só pelo CI: o pedido não sai, s
   assert.equal(d.esperaCi, null);
   assert.match(textos(d)[0], /a espera do CI saiu/);
   assert.deepEqual(envios, [], 'CI fora da decisão não vira APPROVE do que a revisão reprovou');
-  assert.ok(e.eventos.some(([t]) => t === 'needs-decision'));
-  assert.equal(await e.varrerEsperas(), 0, 'nada volta a esperar');
+  // desde 17/11/2026 não vai à mesa: o desfecho sem mesa posta o COMMENT neutro na varredura seguinte
+  assert.equal(d.semMesa?.motivo, 'bloqueio_de_estado');
+  semMesa(e);
+  assert.equal(await e.varrerEsperas(), 0, 'nada volta a esperar, e o COMMENT não sai na mesma varredura');
   assert.deepEqual(envios, []);
+  d.semMesa.proximaEm = 0;
+  assert.equal(await e.varrerEsperas(), 1);
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT'], 'nunca o pedido pelo CI nem o APPROVE');
+  assert.equal(resolvida(e, 94).status, 'commented_inconclusive');
 });
 
 test('espera do CI gravada antes: a aprovação que esperava o CI vermelho sai no próximo ciclo, sem pedido pelo CI', async () => {

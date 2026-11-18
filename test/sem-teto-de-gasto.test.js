@@ -21,7 +21,7 @@ const PERFIL_ANTIGO = {
 };
 const CONFIG_ANTIGA = JSON.stringify({
   esquemaConfig: 1,
-  conta: { user: 'me', owners: ['acme'], autoReview: true, onClean: 'wait', onCaveats: 'wait', onReject: 'wait' },
+  conta: { user: 'me', owners: ['acme'], autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' },
   claudeProfiles: [PERFIL_ANTIGO], claudeProfileId: 'p1',
 });
 fs.writeFileSync(CONFIG, CONFIG_ANTIGA);

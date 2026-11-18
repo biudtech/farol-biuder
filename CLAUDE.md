@@ -46,10 +46,10 @@ instância, uma conta revisora do GitHub, só Linux. Ele:
 1. consulta o GitHub com o `gh` (sem gastar token de IA) e monta a fila dos PRs pedidos à conta;
 2. abre, para cada PR, uma sessão headless do Claude Code no workspace `~/.farol/workspace`, com o
    protocolo de `workspace-template/`, o card do Jira já lido e o diff já gravado em disco;
-3. recebe o envelope JSON da sessão, passa pelos gates e posta APPROVE, REQUEST_CHANGES ou COMMENT,
-   ou guarda o PR como pendência quando a política da conta manda esperar (`wait`, que só se põe
-   por arquivo ou API: o front não oferece esperar, não tem mesa e mostra a pendência no Histórico
-   como "nada postado");
+3. recebe o envelope JSON da sessão, passa pelos gates e posta APPROVE, REQUEST_CHANGES ou COMMENT.
+   Nunca espera decisão de gente nem o CI (regras do dono de 17/11/2026): o que não sai sozinho
+   segue uma espera automática ou o desfecho sem mesa, que revisa de novo com limite e, esgotado,
+   posta um COMMENT neutro pelos mesmos gates;
 4. serve a API por HTTP e SSE. A tela é o front de `web/`, que fala com essa API de outra origem.
 
 A sessão de IA nunca posta: quem escreve no GitHub é o motor, pela conta revisora.
@@ -119,7 +119,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Assunto | Arquivos |
 |---|---|
 | Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
-| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
+| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
 | Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `trecho-do-achado.js` (o trecho do diff de cada achado, lido no desfecho e gravado nas provas), `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
 | Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
@@ -140,7 +140,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | `tools/farol-parear.js` | Imprime um código de pareamento da API no stdout; `--revogar-todas` |
 | `tools/provar-imagem.sh` | Prova a imagem do container com ele de pé (saúde, 404 da raiz, 401 sem token, sonda, parada com código 0 e as três recusas da instância hospedada), o `pnpm` na versão fixada e a instalação da ferramenta técnica sem acesso à origem. É o que o job `imagem` do CI roda; não publica nada nem clona o repositório privado |
 | `tools/jira-mcp.js` | O servidor MCP local do Jira que a sessão usa. Recebe só o id do site e lê a credencial do disco |
-| `tools/simular-politica.js`, `tools/diagnosticar-legados.js` | Leitura: o que mudaria com outra política; o que há de formato antigo no disco |
+| `tools/diagnosticar-legados.js` | Leitura: o que há de formato antigo no disco (o `tools/simular-politica.js` saiu em 17/11/2026: a única alternativa que ele simulava era o desfecho em espera) |
 | `tools/replay-saida-review.js` | Replay offline da saída pública única, sem modelo ([`docs/CONSUMO-REVIEWS.md`](docs/CONSUMO-REVIEWS.md)) |
 | `tools/replay-contexto.js`, `tools/benchmark-contexto.js`, `tools/comparar-contexto-engine.js`, `tools/medir-parser-frontend.js` | Medição do mapa de contexto e do parser, sobre fontes sintéticas e sem modelo |
 | `tools/provar-fontes-github.js` | Prova de aquisição das fontes de um PR público, só leitura, com `FAROL_HOME` temporário |
@@ -182,7 +182,8 @@ Não se negociam. Mudar um deles é decisão do dono, com teste junto.
 de origem estão em [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md).
 
 **Uma boca só.** Toda escrita de review passa por `postReview` (`lib/engine/decision.js`): revisão
-automática, clique na mesa, reenvio e esperas. As postagens do mesmo PR entram em fila, uma por vez.
+automática, desfecho sem mesa, reenvio, a liberação das esperas do CI gravadas antes e o clique
+(`POST /api/decide`, sem tela). As postagens do mesmo PR entram em fila, uma por vez.
 Dentro dela, `postReviewOnce` recusa, nesta ordem:
 
 - pendência na memória de rodadas, só com `reviewRoundsMode: "enforce"` e fora do clique
@@ -215,12 +216,21 @@ saem de `lib/technical-review/evidence.js`; o que separa limpo de com ressalvas 
 No PR de sincronização entre branches contínuas sem defeito (`lib/engine/pr-de-sincronizacao.js`,
 critério do app), a falta de card e os itens de processo não são ressalva e o resultado é limpo.
 
-**Decisão sem mesa, pela política da conta.** `config.conta` traz `autoReview`, `onClean`,
-`onCaveats` e `onReject` (`lib/engine/contas-config.js`). Fora de `wait` o motor decide e posta
-sozinho; em `wait` o PR vai à mesa, com o motivo dito no card. O com ressalvas nunca é mais
-permissivo que o limpo. Revisão de origem sem marca nenhuma não posta sozinha
-(`origemDoDono`, `lib/engine/desfecho-automatico.js`). Bloqueio que a sessão declara com causa de
-estado (CI, conflito, dependência, fora do diff) não reprova sozinho.
+**Decisão sem mesa.** Regra do dono de 17/11/2026: o revisor nunca espera decisão de gente, e não
+existe mais mesa ("Precisa de você"). `config.conta` traz `autoReview` (o liga e desliga do
+monitoramento) e os três desfechos, que só aceitam o autônomo (`approve`, `approve`,
+`request_changes`): `normalizarPolitica` (`lib/engine/contas-config.js`) converte o `wait` antigo
+e registra a conversão numa linha de log, uma vez. O que não sai sozinho por falta de confiança no
+resultado (origem sem marca, admissibilidade que falha, inventário ou rodada abertos, lacuna de
+prova depois do teto, critérios inconsistentes, bloqueio só de estado) segue o desfecho sem mesa
+(`lib/engine/desfecho-sem-mesa.js`): até 2 rodadas extras no mesmo commit, com recuo, e esgotado
+um COMMENT neutro, montado só pelo motor e passando pelos mesmos portões, dizendo o que foi revisado
+e o que não deu para concluir. Nunca APPROVE nem REQUEST_CHANGES sem admissibilidade. Texto recusado
+(credencial, ou linguagem depois da reconstrução) vira o COMMENT mínimo, sem o texto do modelo. PR
+fechado, PR próprio e instância isolada encerram sem postar; head que andou deixa o PR na fila do
+head novo; o reenvio nunca desiste para uma pessoa (recuo longo). A varredura adota a pendência sem
+caminho automático, inclusive a mesa gravada antes: nenhuma fica parada para sempre. Bloqueio que
+a sessão declara com causa de estado (CI, conflito, dependência, fora do diff) não reprova.
 
 **Dedup por head.** Uma aprovação ou reprovação publicada encerra aquele commit para a conta: antes
 de postar na revisão automática, o motor lê os reviews da própria conta naquele `commit_id`
@@ -229,14 +239,15 @@ mesmo head postam uma vez. Só commit novo abre rodada nova. Travado em
 `test/postagem-dedup.test.js` e `test/postagem-coordenacao-desligada.test.js`.
 
 **Head que anda durante a sessão não recebe o review.** O desfecho confere o head antes de postar; se
-mudou, nada sai e a pendência fica marcada `stale_head` (`lib/engine/desfecho-da-revisao.js`).
+mudou, nada sai e a marca `stale_head` deixa o PR na fila da rodada do head novo
+(`lib/engine/desfecho-da-revisao.js`).
 
 **PR da própria conta não é revisado.** A revisão nem abre: `motivoParaNaoExecutar`
 (`lib/engine/porta-de-execucao.js`) tira o PR do lançamento e `enqueueHeadless`
 (`lib/engine/review.js`) o recusa por qualquer caminho, clique inclusive. O que vem depois é o
 caso residual, de quando o autor não pôde ser lido antes: o gate responde `pr_proprio`, o portão
-recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta COMMENT
-(`lib/engine/pr-proprio.js`, `lib/engine/espera-pr-proprio.js`). Travado em
+recusa APPROVE e REQUEST_CHANGES por qualquer via, e o desfecho posta COMMENT ou, sem texto para
+ele, encerra sem postar (`lib/engine/pr-proprio.js`, `lib/engine/espera-pr-proprio.js`). Travado em
 `test/pr-proprio.test.js`.
 
 **Espera do CI: o revisor nunca espera o CI** (regra do dono de 17/11/2026), nem para começar a
@@ -252,7 +263,9 @@ versão anterior termina sozinha, sem olhar o CI e com o head conferido (`lib/en
 
 **Gente no PR segura o automático.** Aprovação ou reprovação de uma pessoa no head, e a label
 `<conta>:revisando` de outra conta, tiram o PR do caminho automático
-(`lib/engine/skip-review.js`). O clique atravessa.
+(`lib/engine/skip-review.js`). Não é esperar decisão: é o motor respeitando o time. Esse head não
+é revisado e nenhuma pendência nasce disso; o desfecho sem mesa que encontra gente no head encerra
+sem postar.
 
 **Instância isolada não escreve no GitHub.** Com `FAROL_HOME` fora de `~/.farol`, postagem e label
 são recusadas (`blocked: 'instancia_isolada'`, `lib/engine/instancia-isolada.js`), a menos que o
@@ -352,6 +365,11 @@ As rotas, todas em `lib/http-server.js`:
 |---|---|
 | `GET` | `/api/health`, `/api/auth/status`, `/api/state`, `/api/events` (SSE), `/api/decision`, `/api/decisions`, `/api/team`, `/api/usage`, `/api/log`, `/api/log/triage`, `/api/diagnostics`, `/api/doctor` |
 | `POST` | `/api/auth/pair`, `/api/auth/sessions`, `/api/auth/revoke`, `/api/check`, `/api/review`, `/api/cancel`, `/api/decide`, `/api/ignore`, `/api/restore`, `/api/pushback`, `/api/settings`, `/api/accounts/edit`, `/api/team/remove`, `/api/claude/profile-test`, `/api/claude/login-web/start`, `/api/claude/login-web/code`, `/api/claude/login-web/cancel`, `/api/jira/credential`, `/api/jira/credential/remove`, `/api/jira/test` |
+
+`POST /api/decide` (o clique da mesa antiga) continua na rota, sem tela que a chame e sem
+pendência que espere por ela: tirá-la exigiria apagar os casos de clique dos testes de portão,
+que só mudam por decisão do dono ([`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md#a-decisão-sem-mesa)).
+O evento `needs-decision` saiu do SSE em 17/11/2026: não há mais mesa.
 
 Nem toda rota tem tela. O front lê o estado pelo SSE e só chama `GET /api/state` (que serve
 também a `tools/diagnosticar-legados.js` e a quem consulta à mão) para reler `config.people` logo
@@ -471,8 +489,9 @@ pessoa" do Time) quando a chave tem forma de login do GitHub (`parsePeople`, `li
   tocar nos dados reais, e por ser isolada não escreve no GitHub. Para trocar a porta, grave
   `{"port": 47180}` no `config.json` dela antes de subir.
 - **Instância nova age sozinha.** Com a pasta de dados vazia e o `gh` logado, a conta detectada
-  nasce revisando, aprovando e reprovando sozinha. Para subir sem agir, grave a conta em espera no
-  `config.json` antes do primeiro boot: a receita está em
+  nasce revisando, aprovando e reprovando sozinha. Para subir sem revisar sozinho, grave
+  `"autoReview": false` na conta do `config.json` antes do primeiro boot (não existe mais desfecho
+  em espera); para não escrever nada no GitHub, a instância isolada. A receita está em
   [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#a-conta-revisora-e-a-política) e é provada em
   `test/conta-detectada.test.js`.
 - **Stub da sessão**: `FAROL_HEADLESS_CMD` substitui o `claude` headless (imprima um envelope

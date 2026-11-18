@@ -152,7 +152,7 @@ function motor(alcance) {
   e.token = 'token-falso';
   e.config.conta = { user: 'eu', owners: ['acme'] };
   e.config.autoApproveAll = true;
-  e.approvePolicyFor = (_conta, limpo) => (limpo ? 'approve' : 'wait');
+  e.approvePolicyFor = () => 'approve';
   e.saveDecisions = () => { };
   e.pushState = () => { };
   e.refreshTokens = async () => { };
@@ -179,16 +179,20 @@ function motor(alcance) {
 const motivos = (e) => [...e.decisions.pending, ...decisoesResolvidas(e)].find((d) => d.key === PR.key).reasons
   .map((r) => (typeof r === 'string' ? r : r.text)).join(' | ');
 
-// 30/09/2026: a lacuna de alcance é ressalva. Aqui a conta espera nas ressalvas (o motor
-// acima), então nada é postado, e o motivo é a política com a lacuna visível ao lado.
-test('revisão real: chamador inventado é ressalva, a conta que espera nas ressalvas não posta e o card cita o arquivo', async () => {
+// 30/09/2026: a lacuna de alcance é ressalva. Até 17/11/2026 a conta daqui esperava nas
+// ressalvas e nada era postado; o `wait` saiu (o revisor nunca espera decisão de gente), então o
+// APPROVE sai e a ressalva fica no card da aprovação, citando o arquivo.
+test('revisão real: chamador inventado é ressalva, o APPROVE sai e o card cita o arquivo', async () => {
   noHead = { 'src/rota.ts': CHAMADOR };
   const e = motor([{ alterado: 'src/veredito.ts', chamadores: [{ arquivo: 'src/rota.ts', linha: 4, simbolo: 'naoExiste' }] }]);
   await e.runHeadlessReview({ ...PR });
-  assert.equal(e.postados.length, 0, 'nada foi postado');
-  assert.match(motivos(e), /cobertura da leitura/);
-  assert.match(motivos(e), /cobertura da leitura/);
-  assert.match(motivos(e), /src\/rota\.ts:4 não cita naoExiste no head/);
+  assert.deepEqual(e.postados.map((p) => p.event), ['APPROVE']);
+  assert.doesNotMatch(JSON.stringify(e.postados[0]), /naoExiste|cobertura da leitura/, 'a ressalva não entra no texto do PR');
+  const d = decisoesResolvidas(e).find((x) => x.key === PR.key);
+  assert.equal(d.status, 'auto_approved');
+  const ressalvas = (d.attention || []).map((r) => (typeof r === 'string' ? r : r.text)).join(' | ');
+  assert.match(ressalvas, /cobertura da leitura/);
+  assert.match(ressalvas, /src\/rota\.ts:4 não cita naoExiste no head/);
 });
 
 test('revisão real: chamador que confere no head deixa o gate de cobertura passar', async () => {

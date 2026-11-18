@@ -49,7 +49,8 @@ test('os guias dizem que o revisor nunca espera o CI, e que sem check obrigatór
     assert.match(texto, /nunca espera o CI/, guia);
     assert.doesNotMatch(texto, /aguarda(?:r)?CiPara(?:Aprovar|Revisar)` (?:nasce|é|fica) (?:desligad|ligad)/, `${guia} não descreve a chave como viva`);
   }
-  assert.match(ler('docs/REVIEW-GATES.md'), /num repositório sem check obrigatório no ruleset, o APPROVE pode sair com o CI vermelho e nada barra o merge/);
+  // a frase pode quebrar linha em qualquer espaço quando o parágrafo é realinhado: compara normalizado
+  assert.match(ler('docs/REVIEW-GATES.md').replace(/\s+/g, ' '), /num repositório sem check obrigatório no ruleset, o APPROVE pode sair com o CI vermelho e nada barra o merge/);
 });
 
 test('lacunas da rodada: o CI nunca entra na prova exigida; o approvalGaps segue apontando a pipe', async () => {

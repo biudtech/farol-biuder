@@ -52,6 +52,7 @@ const finishOriginal = technicalRuntime.finishTechnicalReview;
 const targetOriginal = technicalRuntime.targetFor;
 const snapshotOriginal = technicalRuntime.reviewSnapshot;
 const { decisionForUi } = await import('../lib/engine/public-review.js');
+const { decisoesResolvidas } = await import('../lib/engine/historico-decisoes.js');
 const { camposDoAprovar } = await import('./helpers/projecao-do-aprovar.js');
 after(() => {
   io.run = runReal;
@@ -75,7 +76,7 @@ function conta(e, politica) {
 function motor(politica = ['approve', 'approve']) {
   const e = new Engine();
   e.token = 'token-falso';
-  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: politica[0], onCaveats: politica[1], onReject: 'wait' };
+  e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, onClean: politica[0], onCaveats: politica[1], onReject: 'request_changes' };
   e.decisions = { pending: [], resolved: [] };
   e.saveDecisions = () => { };
   e.saveReReviewLaunched = () => { };
@@ -104,6 +105,7 @@ function sessao(e, extra) {
 
 const PR = { key: 'acme/app#1', repo: 'acme/app', number: 1, url: 'https://github.com/acme/app/pull/1', title: 'PR', author: 'dev', requested: true, account: 'eu' };
 const pendente = (e) => e.decisions.pending.find((x) => x.key === PR.key);
+const resolvida = (e) => decisoesResolvidas(e).find((x) => x.key === PR.key);
 const textos = (d) => (d.reasons || []).map((r) => r.text || r);
 const SEM_PROTOCOLO = { protocolo: { prReviewer: 'pulado' } };
 
@@ -164,20 +166,11 @@ test('decidir na 1ª rodada: só lacuna de cobertura, conta aprovando com ressal
   assert.equal(e.eventos.some((x) => x[0] === 'needs-decision'), false, 'ninguém foi chamado');
 });
 
-test('lacuna que não é dura na rodada 1 com a conta esperando você nas ressalvas: mesa com a ressalva, sem espera da prova', async () => {
-  const e = motor(['approve', 'wait']);
-  const d = await revisado(e, SEM_PROTOCOLO);
-  assert.deepEqual(envios, []);
-  assert.equal(d.esperaProva, undefined);
-  assert.deepEqual(d.approvalEvidence, [], 'nada segue exigido: o Aprovar da mesa fica com você');
-  assert.ok(textos(d).some((t) => /^faltou prova nesta revisão, então segue como ressalva: protocolo de revisão não comprovado/.test(t)), textos(d).join(' | '));
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
-  // o Aprovar da mesa fica ligado: nada na projeção o segura
-  assert.deepEqual(camposDoAprovar(decisionForUi(d)), { esperaProva: false, esperaCi: false, prProprio: false, technical: 'pass', recheck: false });
-});
+// O caso da lacuna que não é dura com a conta esperando nas ressalvas (mesa com a ressalva) saiu
+// em 17/11/2026 com o `wait`: com ressalvas aprova, e o teste anterior já prova o APPROVE.
 
 test('falta de prova que segue exigida não é ressalva que transfere uma decisão ainda bloqueada', async () => {
-  const e = motor(['approve', 'wait']);
+  const e = motor();
   const d = await revisado(e, INCOMPLETA);
   assert.ok(d.esperaProva);
   assert.deepEqual(envios, []);
@@ -189,29 +182,30 @@ test('falta de prova que segue exigida não é ressalva que transfere uma decis�
   assert.equal(pendente(e), undefined);
 });
 
-// Os dois casos abaixo são da conta que NÃO reprova sozinha (onReject: wait). Com ela
-// reprovando sozinha, defeito do PR vira REQUEST_CHANGES automático
-// (test/decisao-sem-mesa.test.js, 18/10/2026). O caso do CI vermelho com a espera ligada saiu em
-// 17/11/2026, com a espera do CI.
-test('a ressalva da rodada não converte violação técnica confirmada: com a conta sem reprovar sozinha, vai para a mesa', async () => {
+// Até 17/11/2026 os dois casos abaixo eram da conta que NÃO reprovava sozinha (onReject: wait),
+// e iam à mesa. O `wait` saiu: a conta reprova sozinha, e o que se prova é que a ressalva da
+// rodada não converte o defeito do PR em aprovação (sai o REQUEST_CHANGES, sem recuperação).
+// O caso do CI vermelho com a espera ligada saiu em 17/11/2026, com a espera do CI.
+test('a ressalva da rodada não converte violação técnica confirmada: sai o REQUEST_CHANGES', async () => {
   const e = motor();
-  conta(e, { onReject: 'wait' });
   technicalRuntime.finishTechnicalReview = async (ctx) => ({ ...technicalReport(ctx.head, ctx.repo), verdict: 'fail', rules: [{ rule: 'x', verdict: 'fail' }] });
-  const d = await revisado(e, SEM_PROTOCOLO);
-  assert.deepEqual(envios, []);
+  await revisado(e, SEM_PROTOCOLO);
+  assert.deepEqual(envios.map((p) => p.event), ['REQUEST_CHANGES']);
+  const d = resolvida(e);
+  assert.equal(d.status, 'auto_rejected');
   assert.equal(d.esperaProva, undefined);
-  assert.ok(textos(d).includes('violação técnica confirmada'), textos(d).join(' | '));
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+  assert.ok(d.approvalEvidence.includes('violação técnica confirmada'), d.approvalEvidence.join(' | '));
+  assert.equal(e.eventos.some((x) => x[0] === 'needs-decision'), false, 'ninguém foi chamado');
 });
 
-test('a ressalva da rodada não converte a parte do card deste PR dita não entregue: com a conta sem reprovar sozinha, vai para a mesa', async () => {
+test('a ressalva da rodada não converte a parte do card deste PR dita não entregue: sai o REQUEST_CHANGES', async () => {
   const e = motor();
-  conta(e, { onReject: 'wait' });
-  const d = await revisado(e, { ...SEM_PROTOCOLO, card: 'CARD-1', cardMet: false, cardParteDestePr: false });
-  assert.deepEqual(envios, []);
+  await revisado(e, { ...SEM_PROTOCOLO, card: 'CARD-1', cardMet: false, cardParteDestePr: false });
+  assert.deepEqual(envios.map((p) => p.event), ['REQUEST_CHANGES']);
+  const d = resolvida(e);
+  assert.equal(d.status, 'auto_rejected');
   assert.equal(d.esperaProva, undefined, 'defeito do PR não é recuperação');
-  assert.ok(textos(d).includes('a parte do card que cabe a este PR não foi comprovada'), textos(d).join(' | '));
-  assert.deepEqual(e.eventos, [['needs-decision', PR.key]]);
+  assert.equal(e.eventos.some((x) => x[0] === 'needs-decision'), false, 'ninguém foi chamado');
 });
 
 test('unidade: só a lacuna que não é dura vira ressalva, e o relatório com violação segue impedindo', () => {
@@ -252,10 +246,10 @@ test('diff não medido e avaliação técnica ausente seguem exigidos na 1ª rod
 
 // Segunda revisão independente de 06/11/2026: PR com mais arquivos do que a lista do GitHub
 // devolve (3000) tem o inventário incompleto para sempre. Outra revisão dá o mesmo resultado, então
-// é desfecho terminal: a decisão é sua, sem recuperação e sem revisão nova pelo clique; o APPROVE
-// automático continua impedido.
+// é desfecho terminal, sem recuperação e sem revisão nova pelo clique; o APPROVE automático continua
+// impedido. Até 17/11/2026 a decisão ficava com você; sem mesa, sai um COMMENT neutro.
 const NO_LIMITE = { status: 'incomplete', reason: 'lista incompleta ou duplicada: 3000 de 3500 arquivos', changedFiles: 3500 };
-test('inventário acima do limite do GitHub: desfecho terminal, a decisão é sua, sem recuperação e sem revisão nova pelo clique', () => {
+test('inventário acima do limite do GitHub: desfecho terminal, COMMENT neutro, sem recuperação e sem revisão nova pelo clique', () => {
   const r = { headSha: HEAD, ...criteriaFixture('approve'), analysisStatus: 'complete', checksVerifiedHead: HEAD, verificationCheckpoint: { total: 0, conflicts: [] },
     technicalReview: technicalReport(HEAD), protocolo: { prReviewer: 'rodou' }, coverage: { total: 0, reviewed: [], missing: [] }, provaEsgotada: true,
     verdict: 'approve', payloads: { approve: { event: 'APPROVE', body: 'Leitura feita.' } }, inventarioDiff: NO_LIMITE };
@@ -263,7 +257,7 @@ test('inventário acima do limite do GitHub: desfecho terminal, a decisão é su
   const gate = e.shouldAutoApprove({ ...PR }, r);
   assert.equal(gate.ok, false, 'o APPROVE automático continua impedido');
   assert.equal(gate.motivo, 'inventario_no_limite');
-  assert.match(textoDaRecusa(e, { ...PR }, gate.motivo, r), /3500 arquivos.*a decisão é sua/);
+  assert.match(textoDaRecusa(e, { ...PR }, gate.motivo, r), /3500 arquivos.*sai um comentário neutro/);
   assert.equal(busca.lacunasExigidas(r).includes('diff não medido independentemente'), false, 'o clique da mesa não pede revisão nova que daria o mesmo');
   assert.equal(esperaProva.armarEspera(e, { ...PR }, 'analise_incompleta', { ...r, analysisStatus: 'incomplete', approvalEvidence: ['análise incompleta'] }, []), null,
     'nem a análise incompleta arma recuperação: outra rodada não mede o diff');

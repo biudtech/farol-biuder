@@ -22,9 +22,12 @@ const DECISION = fs.readFileSync(path.join(import.meta.dirname, '..', 'lib', 'en
 const MOTIVOS = [...DECISION.matchAll(/motivo: '([a-z_]+)'/g)].map(m => m[1]);
 
 test('o gate devolve os motivos que este teste conhece', () => {
-  for (const esperado of ['analise_incompleta', 'nao_aprovavel', 'sem_texto', 'origem_desconhecida', 'politica']) {
+  for (const esperado of ['analise_incompleta', 'nao_aprovavel', 'sem_texto', 'origem_desconhecida']) {
     assert.ok(MOTIVOS.includes(esperado), `motivo ${esperado} sumiu do gate`);
   }
+  // o motivo `politica` saiu em 17/11/2026: a conta não espera mais (o revisor nunca espera
+  // decisão de gente), e a política não segura o APPROVE
+  assert.equal(MOTIVOS.includes('politica'), false, 'o motivo politica voltou ao gate');
 });
 
 // 30/09/2026: discordância, cobertura, checkpoint e dependência eram motivos de recusa que
@@ -74,11 +77,12 @@ test('envelope incompleto é explicado como envelope, não como achado do códig
 });
 
 // 05/11/2026: a reprovação apoiada só no estado do PR não sai sozinha, e o card diz por quê
-// com o texto que mora junto dos outros motivos, lido pelo desfecho da revisão.
+// com o texto que mora junto dos outros motivos, lido pelo desfecho da revisão. Desde 17/11/2026
+// não há espera nem mesa: o texto diz só que não reprova (o desfecho sem mesa segue dali).
 test('o bloqueio de estado tem texto próprio e o desfecho o lê', async () => {
   const { textoDaRecusa } = await import('../lib/engine/approval-policy.js');
   assert.equal(textoDaRecusa({}, {}, 'bloqueio_de_estado', {}),
-    'a reprovação se apoia só no estado do PR (CI, conflito, dependência ou arquivo fora do diff), não em defeito do código: espera, sem reprovar');
+    'a reprovação se apoia só no estado do PR (CI, conflito, dependência ou arquivo fora do diff), não em defeito do código: não reprova');
   assert.ok(REVIEW.includes("textoDaRecusa(engine, pr, 'bloqueio_de_estado', result)"));
 });
 

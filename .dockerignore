@@ -17,7 +17,6 @@ tools/*
 !tools/farol-parear.js
 !tools/jira-mcp.js
 !tools/diagnosticar-legados.js
-!tools/simular-politica.js
 # o que nunca entra, mesmo dentro de uma pasta permitida
 **/node_modules
 **/config.json

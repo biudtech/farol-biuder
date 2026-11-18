@@ -13,7 +13,7 @@ after(() => fs.rmSync(testHome, { recursive: true, force: true }));
 const pr = (author = 'joao', org = 'acme') => ({ key: `${org}/app#1`, repo: `${org}/app`, number: 1, url: `https://github.com/${org}/app/pull/1`, account: 'revisor', author });
 function engine(reviewRules, autoReview = true) {
   const e = new Engine();
-  e.config.conta = { user: 'revisor', owners: ['acme'], autoReview, onClean: 'wait', onCaveats: 'wait', onReject: 'wait', ...(reviewRules ? { reviewRules } : {}) };
+  e.config.conta = { user: 'revisor', owners: ['acme'], autoReview, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes', ...(reviewRules ? { reviewRules } : {}) };
   e.token = 'token-de-teste';
   e.log = () => {};
   e.pushState = () => {};

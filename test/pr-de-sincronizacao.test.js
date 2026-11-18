@@ -168,7 +168,10 @@ test('sincronização com defeito real: o comportamento é o de hoje', () => {
 
 /* ---------- na revisão ---------- */
 
-function motor(politica = { onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes' }) {
+// Até 17/11/2026 a conta da fixture esperava nas ressalvas, e era o que separava limpo de com
+// ressalvas aqui. O `wait` saiu (o revisor nunca espera decisão de gente): as duas classes aprovam,
+// e a diferença se confere pelas ressalvas gravadas na aprovação (`attention`).
+function motor(politica = { onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' }) {
   const e = new Engine();
   e.token = 'token-falso';
   e.config.conta = { user: 'eu', owners: ['acme'], autoReview: true, ...politica };
@@ -203,7 +206,6 @@ function sessao(e, extra) {
 }
 
 const PR = (n) => ({ key: `acme/api#${n}`, repo: 'acme/api', number: n, url: `https://github.com/acme/api/pull/${n}`, title: 'Merge production into development', author: 'dev', requested: true });
-const pendente = (e, n) => e.decisions.pending.find((x) => x.key === `acme/api#${n}`);
 const resolvida = (e, n) => decisoesResolvidas(e).find((x) => x.key === `acme/api#${n}`);
 
 async function revisar(n, { politica, extra } = {}) {
@@ -214,7 +216,7 @@ async function revisar(n, { politica, extra } = {}) {
   return e;
 }
 
-test('sincronização limpa sai como LIMPO: a conta que só aprova limpo sozinha aprova', async () => {
+test('sincronização limpa sai como LIMPO: aprova sem ressalva nenhuma', async () => {
   const e = await revisar(40);
   assert.equal(envios.length, 1);
   assert.equal(envios[0].event, 'APPROVE');
@@ -224,25 +226,30 @@ test('sincronização limpa sai como LIMPO: a conta que só aprova limpo sozinha
   assert.deepEqual(r.sincronizacao, { origem: 'production', destino: 'development', commits: 2 });
 });
 
-test('o mesmo resultado num PR de task para bancada continua com ressalvas e vai à mesa pela política', async () => {
+test('o mesmo resultado num PR de task para bancada continua com ressalvas', async () => {
   gh.pr = dados({ headRefName: 'task/nova-tela', baseRefName: 'release_hmg_17' });
   const e = await revisar(41);
-  assert.deepEqual(envios, []);
-  assert.match(pendente(e, 41).reasons[0].text, /aprovável com ressalvas/);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  const r = resolvida(e, 41);
+  assert.equal(r.status, 'auto_approved');
+  assert.ok(r.attention.some((p) => p.text === 'PR sem card no Jira'), 'a falta de card segue ressalva fora da sincronização');
+  assert.equal(r.sincronizacao, null);
 });
 
 test('o mesmo resultado entre branches contínuas com commit exclusivo também continua com ressalvas', async () => {
   gh.pr = dados({ commits: [{ oid: sha(1), prs: [mesclado(31, 'production')] }, { oid: sha(2), prs: [] }] });
   const e = await revisar(42);
-  assert.deepEqual(envios, []);
-  assert.ok(pendente(e, 42));
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.ok(resolvida(e, 42).attention.length > 0, 'com ressalvas, não limpo');
 });
 
 test('a marca de sincronização é só do app: a da sessão é descartada', async () => {
   gh.syncFalha = true;
   const e = await revisar(43, { extra: { sincronizacao: { origem: 'production', destino: 'development', commits: 1 } } });
-  assert.deepEqual(envios, []);
-  assert.equal(pendente(e, 43).sincronizacao, null);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  const r = resolvida(e, 43);
+  assert.equal(r.sincronizacao, null);
+  assert.ok(r.attention.length > 0, 'sem a marca do app, a falta de card segue ressalva');
 });
 
 test('sincronização com defeito real: o achado vale e a reprovação sai como hoje', async () => {

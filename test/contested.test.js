@@ -3,9 +3,9 @@
 // Até 30/09/2026 a contestação NUNCA auto-postava por padrão (chave `autoApproveContested`,
 // desligada). Pedido do dono naquele dia: "se é pra aprovar automaticamente, ele realmente
 // aprova, sem desculpas pra passar por um approve humano". A chave morreu e a discordância é
-// SEMPRE ponto de atenção: cai em "com ressalvas" e a política da conta decide. Reprovar
-// sozinho por cima de uma discordância continua passando por você, e a discordância segue
-// fora do texto do PR.
+// SEMPRE ponto de atenção: cai em "com ressalvas". Desde 17/11/2026 a política da conta não
+// espera mais (o `wait` saiu), então com ressalvas também aprova. A discordância segue fora do
+// texto do PR.
 // Runner nativo, ZERO deps.
 import os from 'node:os';
 import path from 'node:path';
@@ -40,23 +40,26 @@ function engineWithPolicy(policy) {
   return e;
 }
 
-// 30/09/2026: a política da conta é a ÚNICA coisa que decide entre postar e esperar você, e
-// ela responde por CLASSE (limpo = nenhum ponto de atenção; com ressalvas = um ou mais).
+// De 30/09 a 17/11/2026 a política da conta respondia por CLASSE (limpo = nenhum ponto de
+// atenção; com ressalvas = um ou mais) e podia mandar esperar. Desde 17/11/2026 (o revisor nunca
+// espera decisão de gente) o `wait` saiu e `shouldAutoApprove` não consulta mais a política: o
+// stub que ainda devolve `wait` prova que ela não segura nada.
 function enginePorClasse(limpo, comRessalvas) {
   const e = engineWithPolicy('approve');
   e.approvePolicyFor = (_conta, semPontos) => (semPontos ? limpo : comRessalvas);
   return e;
 }
 
-test('contestação com prova é ressalva: aprova quando a conta aprova com ressalvas, espera quando ela manda esperar', () => {
+test('contestação com prova é ressalva e não segura o APPROVE, nem com a política antiga em espera', () => {
   const comContest = approvableResult({
     contested: [{ source: 'Acrity', claim: 'ref não é setado', label: 'falso_positivo', evidence: 'Arquivo.tsx:172 seta o ref' }]
   });
   assert.deepEqual(enginePorClasse('approve', 'approve').shouldAutoApprove(PR, comContest), { ok: true, motivo: null },
-    'conta que aprova com ressalvas aprova, sem chave extra nenhuma');
-  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, comContest), { ok: false, motivo: 'politica' },
-    'conta que espera nas ressalvas espera, e o motivo é a política');
-  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, approvableResult()), { ok: true, motivo: null },
+    'com ressalvas aprova, sem chave extra nenhuma');
+  assert.deepEqual(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, comContest), { ok: true, motivo: null },
+    'a política em espera saiu: o motivo `politica` não existe mais');
+  assert.equal(enginePorClasse('approve', 'approve').attentionPoints(comContest).length, 1, 'a contestação é a ressalva');
+  assert.deepEqual(enginePorClasse('approve', 'approve').attentionPoints(approvableResult()), [],
     'sem contestação o mesmo resultado é limpo');
 });
 
@@ -92,12 +95,13 @@ test('os 4 rótulos válidos são aceitos quando têm prova', () => {
   for (const label of labels) {
     const r = approvableResult({ contested: [{ source: 'X', claim: 'c', label, evidence: 'prova' }] });
     assert.equal(e.contestations(r).length, 1, `rótulo ${label} é válido`);
-    assert.equal(enginePorClasse('approve', 'wait').shouldAutoApprove(PR, r).motivo, 'politica', `rótulo ${label} põe o resultado em "com ressalvas"`);
+    assert.equal(e.attentionPoints(r).length, 1, `rótulo ${label} põe o resultado em "com ressalvas"`);
+    assert.deepEqual(e.shouldAutoApprove(PR, r), { ok: true, motivo: null }, `rótulo ${label}: a ressalva não segura o APPROVE`);
   }
 });
 
 test('contestação entra nos pontos de atenção com rótulo em português e a prova', () => {
-  const e = engineWithPolicy('wait');
+  const e = engineWithPolicy('approve');
   const r = approvableResult({
     contested: [{ source: 'Acrity', claim: 'upload sem validar tipo', label: 'fora_de_escopo', evidence: 'PR declara BAIXA fora de escopo' }]
   });
@@ -135,20 +139,22 @@ test('o protocolo de terceiros é injetado no prompt headless, com a barra e o s
    "política da conta", mesmo quando o bloqueio veio de contestação ou cobertura.
    Contrato novo: { ok, motivo }, com o motivo nomeado. */
 
-test('contestação e cobertura deixaram de ser motivo de recusa: o motivo é sempre a política', () => {
+test('contestação deixou de ser motivo de recusa, e a cobertura incompleta recusa pela prova, não pela política', () => {
   const e = enginePorClasse('approve', 'wait');
   const contestado = approvableResult({
     contested: [{ source: 'Acrity', claim: 'x', label: 'falso_positivo', evidence: 'Arquivo.tsx:10' }]
   });
-  assert.deepEqual(e.shouldAutoApprove(PR, contestado), { ok: false, motivo: 'politica' });
+  assert.deepEqual(e.shouldAutoApprove(PR, contestado), { ok: true, motivo: null });
   const comLacuna = approvableResult({ coverage: { total: 3, reviewed: ['a.ts'], missing: ['b.ts', 'c.ts'] } });
   assert.deepEqual(e.shouldAutoApprove(PR, comLacuna), { ok: false, motivo: 'prova_tecnica_incompleta' });
   assert.ok(e.attentionPoints(comLacuna).some(p => /cobertura da leitura tem 2 pendência/.test(p.text)), 'a lacuna aparece como ressalva');
 });
 
-test('shouldAutoApprove expõe o motivo da recusa: política da conta', () => {
+// Até 17/11/2026 este teste afirmava o motivo `politica` para a conta em espera. O `wait` saiu
+// (o revisor nunca espera decisão de gente): a política não é mais motivo de recusa.
+test('shouldAutoApprove não recusa mais pela política da conta (17/11/2026)', () => {
   const e = engineWithPolicy('wait');
-  assert.deepEqual(e.shouldAutoApprove(PR, approvableResult()), { ok: false, motivo: 'politica' });
+  assert.deepEqual(e.shouldAutoApprove(PR, approvableResult()), { ok: true, motivo: null });
 });
 
 test('shouldAutoApprove expõe o motivo da recusa: origem desconhecida e não-aprovável (o clique do dono aprova)', () => {
@@ -171,7 +177,7 @@ test('shouldAutoApprove aprovando devolve ok true e motivo nulo', () => {
    uma chave em Sistema > Automação a liberava. Agora ela é sempre ressalva, e a chave não
    existe mais em lugar nenhum: nem na tabela de preferências, nem no engine. */
 
-test('a contestação nunca passa por cima da política de ressalvas, e também nunca a contorna para esperar', () => {
+test('a chave antiga autoApproveContested não muda nada: a ressalva aprova', () => {
   const r = approvableResult({
     contested: [{ source: 'Acrity', claim: 'x', label: 'fora_de_escopo', evidence: 'prova' }]
   });
@@ -179,9 +185,6 @@ test('a contestação nunca passa por cima da política de ressalvas, e também 
     const aprova = enginePorClasse('wait', 'approve');
     aprova.config.autoApproveContested = lixo;
     assert.equal(aprova.shouldAutoApprove(PR, r).ok, true, `config antiga ${lixo} não muda nada: ressalva aprova`);
-    const espera = enginePorClasse('approve', 'wait');
-    espera.config.autoApproveContested = lixo;
-    assert.equal(espera.shouldAutoApprove(PR, r).motivo, 'politica', `config antiga ${lixo} não muda nada: ressalva espera`);
   }
 });
 

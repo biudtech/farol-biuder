@@ -54,16 +54,21 @@ chave geral que a substitua.
 | campo | valores | padrão da conta detectada |
 |---|---|---|
 | `autoReview` | `true` (revisa sozinho o PR pedido à conta), `false` (só põe na fila) | `true` |
-| `onClean` | `approve`, `wait` | `approve` |
-| `onCaveats` | `approve`, `wait` | `approve` |
-| `onReject` | `request_changes`, `wait` | `request_changes` |
+| `onClean` | `approve` | `approve` |
+| `onCaveats` | `approve` | `approve` |
+| `onReject` | `request_changes` | `request_changes` |
 
 O padrão é `PADRAO` em `lib/engine/contas-config.js`. A leitura da política
 (`politicaExplicita`) dá ao campo ausente ou fora do domínio o valor padrão, e a gravação
-(`contaParaGravar`) escreve os quatro por extenso no arquivo. **O com ressalvas nunca é
-mais permissivo que o limpo:** com `onClean: "wait"`, a leitura devolve `onCaveats: "wait"`
-seja o que for que esteja gravado, e a edição que pede `onCaveats: "approve"` nessa conta é
-recusada com o motivo (`aplicarEdicao`).
+(`contaParaGravar`) escreve os quatro por extenso no arquivo.
+
+**O revisor nunca espera decisão de gente** (regra do dono de 17/11/2026). O desfecho em espera
+(`wait`) saiu dos três campos: um `config.json` antigo com `wait` é lido com o padrão autônomo no
+lugar (`normalizarPolitica`), a conversão vai ao `farol.log` numa linha, uma vez, e ao rastro da
+política com origem `migração`, e o arquivo é regravado sem o `wait`. A edição que pede `wait`
+volta em `ignorados`. O que não sai sozinho segue o desfecho sem mesa
+([`REVIEW-GATES.md`](REVIEW-GATES.md#a-decisão-sem-mesa)). `autoReview` continua: é o liga e
+desliga do monitoramento.
 
 ### De onde vem o login
 
@@ -78,20 +83,20 @@ detectar outra. A tela nunca muda o login.
 e reprovando sozinha**, porque esse é o padrão da conta detectada. Quem não quer isso grava a
 receita abaixo antes do primeiro boot.
 
-### Receita da instância que sobe sem agir
+### Receita da instância que sobe sem revisar sozinha
 
 Grave no `config.json`, antes do primeiro boot:
 
 ```json
-{ "conta": { "autoReview": false, "onClean": "wait", "onCaveats": "wait", "onReject": "wait" } }
+{ "conta": { "autoReview": false } }
 ```
 
-A instância monitora, põe os PRs na fila e não posta nada sozinha. A escolha sobrevive ao
-primeiro `check()`, à detecção da conta pelo `gh` e ao reinício, e a conta detectada fica
-gravada com esses quatro valores (travado em `test/conta-detectada.test.js`, caso "receita da
-instância que sobe sem agir"). Só `"autoReview": false` não basta: a revisão automática
-desliga, mas os outros três campos caem no padrão, então um PR revisado por clique ainda é
-aprovado sozinho (limpo ou com ressalvas) e reprovado sozinho.
+A instância monitora, põe os PRs na fila e não abre revisão sozinha. A escolha sobrevive ao
+primeiro `check()`, à detecção da conta pelo `gh` e ao reinício (travado em
+`test/conta-detectada.test.js`). O PR revisado por clique decide sozinho, como todo desfecho
+desde 17/11/2026: não existe mais desfecho em espera. Para não escrever nada no GitHub, a
+instância isolada (`FAROL_HOME` fora de `~/.farol`) é o caminho
+([`REVIEW-GATES.md`](REVIEW-GATES.md#instância-isolada)).
 
 Uma regra de review por organização ou autor marcada Automático revisa sozinha mesmo com
 `autoReview: false` (ver abaixo). A receita parte de `reviewRules` vazio.
@@ -114,9 +119,9 @@ gravada: confira no estado. Mudar as organizações dispara uma checagem na hora
 variáveis de [Chamar a API sem tela](#chamar-a-api-sem-tela):
 
 ```sh
-# a política: com ressalvas passa a esperar você
+# a política: a conta para de revisar sozinha (o monitoramento segue)
 curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
-  --data '{"tipo":"editar","user":"login-da-conta","campos":{"onCaveats":"wait"}}'
+  --data '{"tipo":"editar","user":"login-da-conta","campos":{"autoReview":false}}'
 
 # uma regra de review: o autor joao, da organização acme, é revisado sozinho
 curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" \
@@ -128,18 +133,15 @@ jq -Rs '{tipo: "editar", user: "login-da-conta", campos: {padroesRevisao: .}}' <
 ```
 
 No front, a seção Conta revisora e política da tela Sistema edita as organizações e os quatro
-campos da política, sem a opção `wait`: o revisor da tela não espera. Pôr um desfecho em espera
-é só pela API, como no exemplo acima, ou pelo arquivo; a tela mostra o valor `wait` que vier do
-motor e não o reenvia. `padroesRevisao` e as regras de review não têm campo lá: mudam pela API,
-como acima, ou pelo arquivo.
+campos da política, sem a opção `wait`, que o motor também não aceita mais. `padroesRevisao` e as
+regras de review não têm campo lá: mudam pela API, como acima, ou pelo arquivo.
 
 Toda mudança de política vai a `state/politica-historico.json` (dentro do workspace), com
 data e origem, até 200 entradas. A origem de um pedido pela API é `navegador` sempre que ele
 traz `User-Agent`, inclusive o de um `curl` (o motor não distingue os dois), e `desconhecida`
 quando não traz (`origemDaRequisicao`). As outras são `migração` (a carga de uma config
-antiga) e `detecção do gh`; registro antigo pode trazer `janela do Farol`. O motivo "a
-política manda aguardar" no card diz quando e de onde veio a configuração que segurou
-(`motivoDaPolitica`), e o diagnóstico (`GET /api/diagnostics`) lista as mudanças recentes.
+antiga) e `detecção do gh`; registro antigo pode trazer `janela do Farol`. O diagnóstico
+(`GET /api/diagnostics`) lista as mudanças recentes.
 
 ### `config.json` antigo
 
@@ -148,14 +150,13 @@ lançar e devolve só o que o motor ainda lê. As regras, do comentário e do c�
 
 - `conta` no formato novo vale. Sem ela, vale a primeira conta **não silenciada** da lista
   antiga `accounts`; sem lista, o modo simples `ghUser` + `owners`.
-- Lista só de contas silenciadas vira uma conta sem login que não age (`autoReview: false` e
-  os três desfechos em `wait`): a silenciada nunca agia.
-- Da conta ficam só os campos de `CAMPOS_DA_CONTA`, e só valor do domínio.
-- **Ler uma config antiga nunca deixa a conta mais permissiva do que ela era.** Com as chaves
-  gerais antigas `autoReview` ou `autoApproveAll` no arquivo, ou com conta vinda do formato
-  antigo sem o marcador `esquemaConfig`, o campo que a conta não escolheu recebe o que valia
-  então: revisa pela chave geral antiga, com ressalvas só aprova com `autoApproveAll`
-  verdadeiro, e reprovar sozinha fica em `wait`. Vale também antes de existir login.
+- Lista só de contas silenciadas vira uma conta sem login que não revisa sozinha
+  (`autoReview: false`): a silenciada nunca agia.
+- Da conta ficam só os campos de `CAMPOS_DA_CONTA`, e só valor do domínio: o `wait` não
+  atravessa e o campo cai no padrão autônomo (desde 17/11/2026).
+- Com a chave geral antiga `autoReview` no arquivo, ou com conta vinda do formato antigo sem o
+  marcador `esquemaConfig`, a conta que não escolheu revisa pela chave geral antiga. Vale também
+  antes de existir login. `autoApproveAll` só decidia o com ressalvas, que não espera mais.
 - Perfil do Claude que não é `dir` nem `apikey` sai, e do perfil que fica saem os campos de
   teto de gasto (`budgetDaily` e os outros quatro), que não têm mais leitor.
 - `seniority` atravessa e vira o perfil por pessoa (`people`) no boot.

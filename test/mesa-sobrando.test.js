@@ -3,7 +3,8 @@
 //   1. pedido de mudanças sustentado só pelo CI, com a espera do CI desligada;
 //   2. conflito declarado pela revisão que o GitHub desmente;
 //   3. análise que não fecha no teto de rodadas do commit.
-// Nos três a decisão volta à política da conta, com ressalva dizendo por quê.
+// Nos três a decisão volta à política da conta, com ressalva dizendo por quê. Desde 17/11/2026 a
+// conta não espera mais (o `wait` gravado é lido como o padrão autônomo), então os três aprovam.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +53,7 @@ function engineCom({ onCaveats = 'approve', decisions } = {}) {
 }
 const PR = { key: 'org/repo#1', repo: 'org/repo', number: 1, requested: true };
 
-test('1: pedido só pelo CI vira aprovação pela política, com ressalva (o CI não decide)', () => {
+test('1: pedido só pelo CI vira aprovação, com ressalva (o CI não decide)', () => {
   const e = engineCom();
   const r = soPeloCi();
   assert.equal(shouldAutoReject(e, PR, r), false, 'antes: o pedido não saía sozinho');
@@ -63,7 +64,7 @@ test('1: pedido só pelo CI vira aprovação pela política, com ressalva (o CI 
   assert.deepEqual(publicReviewLanguageIssues(r.payloads.approve, 'reviewer'), [], 'o texto do app passa a trava de linguagem');
   assert.ok(attentionPoints(null, r).some((p) => /pediu mudanças só pelo CI obrigatório, que não decide a revisão/.test(p.text)));
   assert.deepEqual(shouldAutoApprove(e, PR, r), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait' }), PR, r), { ok: false, motivo: 'politica' }, 'a conta em espera continua levando à mesa');
+  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait' }), PR, r), { ok: true, motivo: null }, 'o wait gravado na conta não leva mais à mesa');
 });
 
 test('1: bloqueio declarado com causa ci vira sugestão e retira o que vinha de rodada anterior', () => {
@@ -115,7 +116,7 @@ test('3: a rodada que chega ao teto do commit é reconhecida pela marca da recup
   assert.equal(busca.rodadaNoTeto(engineCom({ decisions: pendenteComTentativas(MAX - 1) }), PR, base({ headSha: 'c'.repeat(40) })), false, 'outro commit recomeça');
 });
 
-test('3: no teto, a análise que não fechou vira ressalva e a política decide', () => {
+test('3: no teto, a análise que não fechou vira ressalva e o APPROVE sai', () => {
   const e = engineCom({ decisions: pendenteComTentativas(busca.MAX_TENTATIVAS_POR_HEAD - 1) });
   const r = base({ analysisStatus: 'incomplete', decision: 'needs_decision' });
   const exigidas = busca.lacunasDaRodada(e, PR, r);
@@ -125,7 +126,7 @@ test('3: no teto, a análise que não fechou vira ressalva e a política decide'
   r.reasons = busca.pontosDaProvaEsgotada(r);
   assert.ok(r.reasons.some((p) => /depois de 6 revisões neste commit a análise não fechou, então segue como ressalva: análise incompleta/.test(p.text)));
   assert.deepEqual(shouldAutoApprove(e, PR, r), { ok: true, motivo: null });
-  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait', decisions: pendenteComTentativas(5) }), PR, r), { ok: false, motivo: 'politica' });
+  assert.deepEqual(shouldAutoApprove(engineCom({ onCaveats: 'wait', decisions: pendenteComTentativas(5) }), PR, r), { ok: true, motivo: null }, 'o wait gravado na conta não segura');
 });
 
 test('3: antes do teto a análise incompleta segue exigida, e no teto a violação também', () => {

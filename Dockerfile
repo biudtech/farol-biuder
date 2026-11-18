@@ -109,7 +109,7 @@ COPY package.json server.js LICENSE ./
 COPY lib/ lib/
 COPY workspace-template/ workspace-template/
 COPY assets/third-party/babel-parser/ assets/third-party/babel-parser/
-COPY tools/farol-parear.js tools/jira-mcp.js tools/diagnosticar-legados.js tools/simular-politica.js tools/
+COPY tools/farol-parear.js tools/jira-mcp.js tools/diagnosticar-legados.js tools/
 RUN chmod -R a+rX,go-w /opt/farol
 
 # HOME é o volume inteiro, e não só ~/.farol: o motor grava ~/.claude.json, o gh grava
