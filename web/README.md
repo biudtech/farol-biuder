@@ -841,7 +841,7 @@ esqueleto.
 
 | Seção | Componente | De onde vem | O que edita |
 |---|---|---|---|
-| Saúde | `Saude.tsx` | `doctor`, `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
+| Saúde | `Saude.tsx` | `doctor` (com `doctor.saude`, a saúde do próprio motor), `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
 | Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot; as duas regras fixas do motor, como texto (`REGRAS_FIXAS`, `src/sistema/politica.ts`) | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
 | Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
 | Perfil do Claude | `PerfilDoClaude.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | nada |
@@ -1000,6 +1000,13 @@ Regras que valem para quem mexer nela:
   o estado em texto ("OK", "Atenção", "Sem dado"); os rótulos são os de `ambienteDoDoctor`
   (`lib/engine/diagnostico.js`), conferidos por teste. Rodar o diagnóstico de novo não abre
   sessão de IA. Os caminhos de pasta que o `doctor` traz não são lidos.
+- **A saúde do próprio motor abre a seção** (`verificacoesDoMotor`, de `doctor.saude`,
+  `lib/engine/saude-do-motor.js`): "Motor" (no ar há quanto tempo, contado até a hora da
+  medição, porque a tela não tem relógio, e desde quando), "Commit do motor" (sem dado quando o
+  motor não acha o git do código, como na imagem do container), "Disco da pasta de dados" (o
+  livre e o total; atenção abaixo de 10% livre, `DISCO_EM_ATENCAO`, a única régua que a tela
+  põe) e "Telemetria" (gravando no banco, ou o que ficou nos arquivos JSON, com a última
+  escrita).
 - **Sessão atual.** Encerrar a sessão `atual` avisa que este navegador volta ao pareamento, e
   depois do aceite a tela chama `app.esquecerSessao('revogada')`: o token sai daqui e a tela
   vai ao pareamento. Encerrar outra pede a lista de novo. Na tela a ação se chama Encerrar; no
