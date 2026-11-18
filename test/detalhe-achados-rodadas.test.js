@@ -231,3 +231,25 @@ test('caminho na pasta redigida do escopo, ou que representa um protegido, não 
   const raiz = escopo('redigido', { '_farol_redigido_/_.env.redigido': '@@ -1 +1 @@\n+A=1', '_farol_redigido_/x.ts': '@@ -1 +1 @@\n+b' });
   assert.deepEqual(trechosDosAchados(raiz, [achado({ file: '_farol_redigido_/_.env.redigido', line: 1 }), achado({ file: '_farol_redigido_/x.ts', line: 1 })]), []);
 });
+
+test('o caminho do achado só sai do inventário do diff ou, sem ele, relativo ao PR', () => {
+  const rodada = { findings: [
+    { severity: 'blocking', title: 'no inventário', summary: 's', file: 'src/a.ts', line: 3 },
+    { severity: 'blocking', title: 'fora do inventário', summary: 's', file: 'src/outro.ts', line: 4 },
+    { severity: 'suggestion', title: 'absoluto', summary: 's', file: '/home/farol/.farol/workspace/state/pr-scope/x/src/a.ts', line: 5 },
+    { severity: 'suggestion', title: 'sobe', summary: 's', file: '../segredo.ts', line: 6 },
+    { severity: 'question', title: 'windows', summary: 's', file: 'C:\\x\\a.ts', line: 7 },
+  ] };
+  const provas = { trechos: [{ arquivo: 'src/outro.ts', linha: 4, linhas: [{ linha: 4, tipo: 'adicionada', texto: 'x' }] }] };
+  const comInventario = achadosDaRodada(rodada, provas, { files: [{ path: 'src/a.ts' }] });
+  assert.deepEqual(comInventario.map((a) => [a.titulo, a.arquivo ?? null, a.linha ?? null, 'trecho' in a]), [
+    ['no inventário', 'src/a.ts', 3, false],
+    ['fora do inventário', null, null, false],
+    ['absoluto', null, null, false],
+    ['sobe', null, null, false],
+    ['windows', null, null, false],
+  ]);
+  const semInventario = achadosDaRodada(rodada, provas, { files: [] });
+  assert.deepEqual(semInventario.map((a) => a.arquivo ?? null), ['src/a.ts', 'src/outro.ts', null, null, null]);
+  assert.equal(semInventario[1].trecho.length, 1, 'relativo e sem inventário: o trecho sai');
+});
