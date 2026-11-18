@@ -270,6 +270,20 @@ test('falha ao retirar não impede a aprovação já liberada', async () => {
   assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
 });
 
+// Achado de 17/11/2026: com a aprovação publicada, a marca da retirada que falhou se perdia, e o
+// pedido de mudanças anterior ficava aberto para sempre. Ela agora viaja na decisão aprovada.
+test('falha passageira ao retirar com o APPROVE publicado: a marca fica na decisão e a varredura retira', async () => {
+  gh.retiradaFalha = 'HTTP 502';
+  const e = await duasRodadas(19);
+  assert.deepEqual(eventos(), ['DISMISS', 'APPROVE']);
+  const aprovada = decisoesResolvidas(e).find((d) => d.key === KEY(19) && d.status === 'auto_approved');
+  assert.ok(aprovada?.retiradaPendente, 'a retirada pendente foi gravada com a aprovação');
+  assert.equal(aprovada.retiradaPendente.head, HEAD);
+  gh.retiradaFalha = '';
+  await e.varrerEsperas();
+  assert.deepEqual(eventos(), ['DISMISS', 'APPROVE', 'DISMISS'], 'a varredura retira o pedido de novo');
+});
+
 test('retirada que falhou numa rodada dispensada pela decisão de gente fica marcada para a varredura', async () => {
   const e = motor();
   await rodadaQuePede(e, 18);
