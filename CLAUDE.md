@@ -126,7 +126,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js`, `provedores.js`, `model-router.js`, `versao-claude.js` |
 | Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `usage-diario-banco.js` (o lado do banco: o cache da atividade e da auditoria e a leitura que não lança), `telemetria-pendentes.js` (a fila do que o banco recusou), `telemetria-do-motor.js` (a leitura no construtor, a abertura e a importação do consumo e do histórico no `start()`, por `iniciarTelemetria`, e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
-| Histórico | `historico-decisoes.js` (o histórico das resolvidas atrás de uma interface só: no banco da telemetria ou no `resolved` do `decisions.json`, com o cache do recorte leve e a fila do que o banco recusou; todo leitor e escritor do histórico passa por aqui), `historico-na-subida.js` (a abertura, a importação, a cópia e a marca na subida, separadas do consumo), `busca-do-historico.js` (a definição da busca e dos filtros, que o SQL também usa), `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`), `detalhe-da-decisao.js` (o detalhe de `GET /api/decision`, com os checks do head e a execução), `numeros-do-time.js` (os números de 30 dias por autor de `GET /api/team`) |
+| Histórico | `historico-decisoes.js` (o histórico das resolvidas atrás de uma interface só: no banco da telemetria ou no `resolved` do `decisions.json`, com o cache do recorte leve e a fila do que o banco recusou; todo leitor e escritor do histórico passa por aqui), `historico-na-subida.js` (a abertura, a importação, a cópia e a marca na subida, separadas do consumo), `busca-do-historico.js` (a definição da busca e dos filtros, que o SQL também usa), `snapshot-decisions.js` (as 30 resolvidas mais recentes que vão no snapshot), `historico-paginado.js` (a consulta paginada de `GET /api/decisions`), `detalhe-da-decisao.js` (o detalhe de `GET /api/decision`, com os checks do head, a execução e os critérios do card), `criterios-do-card.js` (a conferência do campo opcional `criteriosDoCard` do envelope, que só informa a tela), `numeros-do-time.js` (os números de 30 dias por autor de `GET /api/team`) |
 | Resto | `jira.js` (compõe `lib/jira/`), `pushback.js` (contestação do autor), `padroes-do-time.js`, `diagnostico.js`, `limite-gh.js`, `orcamento-busca.js`, `saida-ordenada.js`, `guardas-da-sessao.js`, `estado-do-boot.js` (o que o boot ajusta no estado gravado) |
 
 ### `tools/`
@@ -395,18 +395,24 @@ escreve no log, nem no 200, nem no 400, nem no 503.
 pendente antes da resolvida), ou, com `id`, aquela decisão do PR (a rodada antiga, ou a resolvida
 quando há uma pendente); `id` fora da forma (letras, dígitos, hífen e sublinhado, até 64) ou
 repetido responde 400 com `{ ok: false, code: "parametro_invalido", campo: "id" }`. A decisão sai
-pela mesma projeção e, só nesta rota (`lib/engine/detalhe-da-decisao.js`), com duas chaves quando o
+pela mesma projeção e, só nesta rota (`lib/engine/detalhe-da-decisao.js`), com três chaves quando o
 motor as tem:
 `checks` (os checks obrigatórios do head lidos no fim da revisão: `conferidoNoHead`,
 `semExigencia`, `naoVerdes` e `herdados`, cada um `{ nome, estado }`; gravados nas provas da
-decisão desde 17/11/2026, e ausentes nas anteriores; a lista dos verdes o motor não guarda) e
+decisão desde 17/11/2026, e ausentes nas anteriores; a lista dos verdes o motor não guarda),
 `execucao` (do diário de consumo, a rodada desta decisão: as tentativas de revisão do mesmo PR
 registradas depois da criação da decisão anterior do PR e até a criação desta, e não pelo
 `sessionId`, que a retomada repete entre rodadas; `tentativas`, `modelos` e, quando todas as
 tentativas sabem, `duracaoMs`, `custoUsd` e `custoEstimado`; `inicioIncerto` quando não há decisão
 anterior e o histórico está no teto, e a anterior pode ter sido descartada; com o histórico
-indisponível a chave não sai). Os critérios do card um a um não saem: a sessão só declara o card inteiro
-(`cardMet`) e a parte deste PR, e nenhum registro guarda o atendimento de cada critério.
+indisponível a chave não sai) e `criteriosDoCard` (os critérios do card um a um, `{ texto, atende }`,
+com `atende` `true`, `false` ou `null`, como a sessão os declarou no campo opcional do envelope e
+as provas da decisão os gravaram;
+`lib/engine/criterios-do-card.js` limita a 20 itens de até 300 caracteres. Ausente quando a sessão
+não leu critérios no card, e nas decisões anteriores a 17/11/2026). O campo não entra em gate
+nenhum: não muda veredito, ressalva, lacuna nem admissibilidade, e quem decide o card na política
+continua sendo `cardMet` e `cardParteDestePr` (`test/criterios-do-card.test.js` roda a mesma
+revisão com e sem ele).
 
 `GET /api/team` é a lista dos dossiês; o autor com PR revisado nos últimos 30 dias leva
 `numeros` (`lib/engine/numeros-do-time.js`): `janelaDias`, `prs` (PRs cuja primeira revisão

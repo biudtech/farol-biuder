@@ -361,6 +361,38 @@ describe('fluxo de eventos', () => {
     fechar();
   });
 
+  it('a queda diz em quanto tempo sai a próxima tentativa, e tentarAgora a adianta sem zerar o recuo', async () => {
+    const t = montar();
+    let fluxo!: ReturnType<typeof fluxoFalso>;
+    t.respostas.push((p) => { fluxo = fluxoFalso(p.init); return fluxo.resposta; });
+    const esperas: Array<[Conexao, number | undefined]> = [];
+    let tentativas = 0;
+    const aberto = t.cliente.abrirFluxo({ aoEvento: () => {}, aoMudarConexao: (c, ms) => { esperas.push([c, ms]); }, aoTentar: () => { tentativas += 1; } });
+    aberto.tentarAgora();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.pedidos).toHaveLength(1);
+    aberto.tentarAgora();
+    expect(t.pedidos).toHaveLength(1);
+    fluxo.fim();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(esperas).toEqual([['conectando', undefined], ['conectado', undefined], ['reconectando', 3000]]);
+    expect(tentativas).toBe(0);
+    aberto.tentarAgora();
+    expect(tentativas).toBe(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.pedidos).toHaveLength(2);
+    expect(esperas.at(-1)).toEqual(['sem-motor', 6000]);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(t.pedidos).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(t.pedidos).toHaveLength(3);
+    expect(tentativas, 'a tentativa do relógio também avisa').toBe(2);
+    aberto();
+    aberto.tentarAgora();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(t.pedidos).toHaveLength(3);
+  });
+
   it('queda vira reconectando; motor que não responde vira sem-motor, com recuo de 3 a 30 s', async () => {
     const t = montar();
     let fluxo!: ReturnType<typeof fluxoFalso>;

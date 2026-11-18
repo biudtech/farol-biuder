@@ -948,7 +948,7 @@ describe('Histórico: período', () => {
   });
 });
 
-describe('Histórico: checks do head e execução', () => {
+describe('Histórico: critérios do card, checks do head e execução', () => {
   const NOME = 'PR #12 de dono/repo';
   const daPagina = revisaoDoMotor(12);
   const complemento = {
@@ -983,6 +983,35 @@ describe('Histórico: checks do head e execução', () => {
       expect(resumos()[0]).toEqual(['Execução', 'Aprovação']);
       cleanup();
     }
+  });
+
+  it('os critérios do card vêm numa linha fechada, com a contagem e o estado de cada um em texto', async () => {
+    const criterios = [
+      { texto: 'Navegar entre as versões geradas', atende: true },
+      { texto: 'Limite de cinco regenerações', atende: true },
+      { texto: 'Editar a versão escolhida antes de enviar', atende: false },
+      { texto: 'Mensagem de erro do servidor', atende: null },
+    ];
+    montar({ url: pedirAberta, responder: responder({ ...complemento, criteriosDoCard: criterios }) });
+    await assentar();
+    await assentar();
+    expect(resumos()[0]).toEqual(['Critérios do card BT-12', '2 de 4 atendidos · 1 sem conferir']);
+    const linha = linhasDe()[0] as HTMLDetailsElement;
+    expect(linha.open).toBe(false);
+    expect([...linha.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      '✓AtendeNavegar entre as versões geradas',
+      '✓AtendeLimite de cinco regenerações',
+      '✕Não atendeEditar a versão escolhida antes de enviar',
+      '?Não conferidoMensagem de erro do servidor',
+    ]);
+  });
+
+  it('sem critérios declarados a linha não aparece', async () => {
+    montar({ url: pedirAberta, responder: responder({ ...complemento, criteriosDoCard: [] }) });
+    await assentar();
+    await assentar();
+    expect(resumos().map((r) => r[0])).not.toContain('Critérios do card');
+    expect(resumos()[0]?.[0]).toBe('Checks do head');
   });
 
   it('o que falta no head vem por nome, e leitura fora do commit revisado é dita', async () => {

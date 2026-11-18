@@ -245,3 +245,8 @@
 .sessao { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-linha); }
 .linhaDaSessao { border: 0; background: transparent; }
 .barraDaSessao { padding: 0 18px 14px; }
+.etapas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.etapa { display: flex; gap: 8px; align-items: baseline; }
+.etapa[data-estado="falta"] { color: var(--muted); }
+.etapa[data-estado="agora"] { font-weight: 700; }
+.marcaDaEtapa { flex: none; width: 14px; color: var(--ok-texto); }

@@ -168,6 +168,16 @@ cabeçalhos) derrubam a conexão, e a reconexão espera de 3 a 30 s, dobrando a 
 espera só volta a 3 s quando o fluxo entrega um evento, não quando o motor aceita a conexão.
 Um evento que passa de 8 MiB sem terminar também derruba a conexão.
 
+Quando a conexão cai com a tela já desenhada, a casca mostra a faixa "Sem motor"
+(`FaixaDeQueda.tsx`) no alto do conteúdo: a hora da queda (a primeira desde o último
+"conectado", medida aqui), que o que está na tela é do último estado recebido, e a hora da
+próxima tentativa, que o cliente informa pelo recuo (`aoMudarConexao(conexao, esperaMs)`).
+"Tentar agora" adianta essa tentativa (`tentarAgora` do fluxo aberto, por `app.tentarReconectar`)
+sem zerar o recuo das seguintes. No começo de cada tentativa, a do relógio ou a do clique, o
+fluxo avisa (`aoTentar`): a faixa troca a hora por "Tentando reconectar…" e o botão fica ocupado
+até o desfecho, para nunca mostrar uma próxima tentativa já vencida. Sem estado recebido não há
+faixa: a tela é a de conexão.
+
 **Como testar.** O teste mora ao lado do arquivo, com nome `*.test.ts` ou `*.test.tsx`. Lógica
 (transporte, contrato, estado) testa sem React, com `fetch` e relógio de mentira; escreva o
 teste antes. Componente usa Testing Library e começa com `// @vitest-environment jsdom`. Cor
@@ -195,7 +205,7 @@ item, e o detalhe num clique (`Linha`, de `src/componentes/ui`):
 |---|---|---|
 | Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt`) |
 | Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
-| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), quem e quando, o feed, Abrir no GitHub e Cancelar |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), as etapas pelo nome (feitas, a atual e as que faltam, de `progresso.etapas`, que o motor manda só no estado: a linha do feed traz o progresso sem os nomes, e a tela mantém os que já tem enquanto fecham com a etapa), quem e quando, o feed, Abrir no GitHub e Cancelar |
 | Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A linha: título, marcas (rascunho, parada, em conflito, esperando vaga) e repositório. O detalhe: chave, autor, hora, posição, o motivo do motor, Revisar agora, Ignorar e Abrir no GitHub |
 | Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`). A linha: bolinha (aprovado verde, pediu mudanças vermelho, comentado âmbar), título e hora. O detalhe: chave, desfecho em texto, "Ver a revisão" (o Histórico com a revisão aberta) e Abrir no GitHub |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
@@ -261,8 +271,10 @@ Regras que valem para quem mexer nela:
 O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
 do motor, não com regra na tela:
 
-- **As etapas da revisão.** O `progresso` traz só a etapa atual (número, total e rótulo): o
-  detalhe não lista pelo nome as etapas feitas e as que faltam.
+- **O que acontece dentro da etapa.** O `progresso` traz os nomes das cinco etapas
+  (`etapas`) e, no código, quantos arquivos foram lidos: o detalhe lista as feitas, a atual e as
+  que faltam, mas não diz qual arquivo está sendo lido agora nem qual review vai sair na
+  postagem (aprovação ou pedido de mudanças só se sabe no desfecho).
 - **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
   na aba aberta.
 - **Item ilegível da fila.** `queue` e `activeSessions` descartam o item torto com registro no
@@ -303,7 +315,7 @@ só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o deta
 | Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
 | Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
 | Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
-| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
+| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `criteriosDoCard`, `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
 Regras que valem para quem mexer nela:
@@ -386,8 +398,10 @@ Regras que valem para quem mexer nela:
   GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
   o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
   (`blockedReason`) aberto, os motivos (`reasons`) e os pontos de atenção (`attention`)
-  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Checks do head (`checks`, com
-  o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
+  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Critérios do card
+  (`criteriosDoCard`, com o resumo "2 de 3 atendidos" e uma linha por critério, com a marca e o
+  estado em texto: atende, não atende ou não conferido; só quando a sessão declarou), Checks do
+  head (`checks`, com o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
   duração, custo e modelo; sem ela, o que foi publicado; e sempre publicado,
   parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
   (`rounds`), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
@@ -412,12 +426,13 @@ Regras que valem para quem mexer nela:
   resumo de uma frase do parecer, nem arquivo, linha ou trecho de código de cada achado: a
   linha da lista fica sem resumo, a frase do detalhe é a da avaliação técnica, e cada achado é
   só o texto do motivo.
-- **Critérios do card.** O desenho tem "Critérios do card" com o atendimento de cada um. A
-  sessão só declara o card inteiro (`cardMet`) e a parte deste PR, e nenhum registro do motor
-  guarda critério por critério: a linha fica de fora.
-- **Checks e execução só no detalhe.** `checks` e `execucao` vêm só em `GET /api/decision`
+- **Critérios do card só quando a sessão os declara.** O campo `criteriosDoCard` é opcional no
+  envelope e o prompt o pede só quando o card tem critérios de aceitação lidos: revisão sem card,
+  com card não lido ou gravada antes de 17/11/2026 fica sem a linha. É o que a sessão declarou,
+  e não decide nada: a decisão sobre o card continua sendo `cardMet` e a parte deste PR.
+- **Critérios, checks e execução só no detalhe.** `criteriosDoCard`, `checks` e `execucao` vêm só em `GET /api/decision`
   (`lib/engine/detalhe-da-decisao.js`). A revisão aberta da página é pedida também, pela chave e
-  pelo `id`, e ganha as duas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
+  pelo `id`, e ganha essas linhas quando a resposta é a mesma revisão (`useDetalhe`); aberta por
   endereço fora da página, vale a mais recente do PR, como antes. Os checks verdes não vêm por nome
   (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem checks. A
   execução é a da rodada (as tentativas do PR desde a revisão anterior), e a tela diz quando o
@@ -807,7 +822,7 @@ esqueleto.
 | Seção | Componente | De onde vem | O que edita |
 |---|---|---|---|
 | Saúde | `Saude.tsx` | `doctor`, `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version` do snapshot; `GET /api/doctor`; `GET /api/diagnostics` | nada |
-| Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
+| Conta revisora e política | `ContaEPolitica.tsx` | `accounts` do snapshot; as duas regras fixas do motor, como texto (`REGRAS_FIXAS`, `src/sistema/politica.ts`) | organizações e os quatro campos da política, por `POST /api/accounts/edit` |
 | Automação | `Automacao.tsx` | `config` e `modelos.claude` do snapshot | `parallelReviews`, `reviewModel` e `reviewEffort`, por `POST /api/settings` |
 | Perfil do Claude | `PerfilDoClaude.tsx` | `config.claudeProfiles`, `claudePerfis.uso` e `doctor.claudeAuth` do snapshot; `POST /api/claude/profile-test` | nada |
 | Jira | `Jira.tsx` | `jiraSites` do snapshot; `POST /api/jira/test` | nada |
@@ -940,6 +955,10 @@ Regras que valem para quem mexer nela:
   ressalvas é mostrado em espera, desabilitado, sem mexer no rascunho, e não vai no corpo;
   trocar a limpa para publicar o libera. `DOMINIO_DA_POLITICA` continua a cópia conferida do
   domínio do motor (com `wait`); `OPCOES_DA_TELA` é o subconjunto que a tela oferece.
+- **Regras fixas são texto.** "Check que já falha na base não segura" (`separarHerdados`,
+  `lib/engine/checks-exigidos.js`) e "Merge-back sem commit próprio sai limpo"
+  (`lib/engine/pr-de-sincronizacao.js`) aparecem na linha da conta e da política como texto
+  informativo, não como caixa de marcar: nenhuma chave do motor as desliga.
 - **A tela não manda campo vazio da política.** Vazio faria o motor regravar o padrão.
   `camposAlterados` só manda valor de `OPCOES_DA_TELA`, nunca vazio nem `wait`.
 - **Valores permitidos.** Os modelos vêm do catálogo do motor (`modelos.claude`). Os níveis de

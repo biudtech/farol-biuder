@@ -2,15 +2,15 @@
 
 // O detalhe de uma revisão, aberto na própria página, no desenho enxuto: o PR, o título, o
 // chip do que foi publicado e a hora; a frase da avaliação técnica; os achados, uma linha por
-// motivo, com o bloqueio aberto e o resto fechado; e "Mais detalhes" (execução, rodadas,
-// etapas e o review completo), tudo fechado, cada um com o resumo na própria linha. O foco vai
+// motivo, com o bloqueio aberto e o resto fechado; e "Mais detalhes" (critérios do card, checks,
+// execução, rodadas, etapas e o review completo), tudo fechado, cada um com o resumo na própria linha. O foco vai
 // ao título ao abrir, e Escape fecha. As ações são duas: revisar de novo e, quando o PR tem
 // contestação registrada, o desfecho dela.
 import { useEffect, useId, useRef } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import type { Motivo } from '@/contratos/radar';
 import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
-import { resumoDaExecucao, resumoDosChecks, textoDoEstadoDoCheck } from '@/historico/detalhe';
+import { resumoDaExecucao, resumoDosChecks, resumoDosCriterios, textoDoCriterio, textoDoEstadoDoCheck } from '@/historico/detalhe';
 import { dolar } from '@/consumo/formato';
 import { foiPublicado, parecerQueDifere, rotuloDoDesfecho, textoDoPublicado, textoDoStatus, tomDoDesfecho } from '@/historico/rotulos';
 import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/radar/formato';
@@ -107,6 +107,43 @@ function Etapas({ etapas }: { etapas: NonNullable<Revisao['stages']> }) {
         {etapas.stages.map((etapa, i) => <Campo key={i} nome={etapa.label || etapa.id || `Etapa ${i + 1}`}>{textoDaDuracao(etapa.ms)}</Campo>)}
         {etapas.totalMs > 0 ? <Campo nome="Total">{textoDaDuracao(etapas.totalMs)}</Campo> : null}
       </dl>
+    </Linha>
+  );
+}
+
+function tomDoCriterio(atende: boolean | null): Tom {
+  if (atende === null) return 'neutro';
+  return atende ? 'ok' : 'ruim';
+}
+
+function marcaDoCriterio(atende: boolean | null): string {
+  if (atende === null) return '?';
+  return atende ? '✓' : '✕';
+}
+
+// Os critérios do card um a um, como a sessão os declarou. A marca é visual; o estado vai em texto
+// para o leitor de tela.
+function CriteriosDoCard({ criterios, card }: { criterios: NonNullable<Revisao['criteriosDoCard']>; card: string | undefined }) {
+  const titulo = card ? `Critérios do card ${card}` : 'Critérios do card';
+  return (
+    <Linha
+      rotulo={titulo}
+      resumo={(
+        <>
+          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{titulo}</span>
+          <span className={ui.r}>{resumoDosCriterios(criterios)}</span>
+        </>
+      )}
+    >
+      <ul className={estilos.criterios}>
+        {criterios.map((c, i) => (
+          <li key={i} className={estilos.criterio}>
+            <Chip tom={tomDoCriterio(c.atende)} pequeno><span aria-hidden="true">{marcaDoCriterio(c.atende)}</span><span className={ui.soLeitor}>{textoDoCriterio(c.atende)}</span></Chip>
+            <span>{c.texto}</span>
+          </li>
+        ))}
+      </ul>
+      <p className={ui.mini}>O que a revisão declarou de cada critério. A decisão sobre o card é a do motor, pelo card inteiro e pela parte deste PR.</p>
     </Linha>
   );
 }
@@ -252,6 +289,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
       <Achados revisao={r} />
 
       <Secao titulo="Mais detalhes">
+        {r.criteriosDoCard ? <CriteriosDoCard criterios={r.criteriosDoCard} card={r.card} /> : null}
         {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
         <Execucao revisao={r} />
         {r.rounds ? <Rodadas rodadas={r.rounds} /> : null}

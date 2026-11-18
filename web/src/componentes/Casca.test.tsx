@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App, EstadoDoApp } from '@/estado/app';
 import { ESTADO_INICIAL } from '@/estado/app';
 import { criarStore } from '@/estado/store';
+import type { Snapshot } from '@/contratos/snapshot';
 import { Casca } from './Casca';
+import { textoDaQueda } from './FaixaDeQueda';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/radar' }));
 vi.mock('next/link', () => ({
@@ -17,7 +19,8 @@ afterEach(cleanup);
 function appFalso(entrouAgora: boolean) {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', entrouAgora });
   const sair = vi.fn(async () => null);
-  return { app: { store, sair } as unknown as App, sair, store };
+  const tentarReconectar = vi.fn();
+  return { app: { store, sair, tentarReconectar } as unknown as App, sair, store, tentarReconectar };
 }
 
 describe('casca', () => {
@@ -66,5 +69,32 @@ describe('casca', () => {
     expect(sair).toHaveBeenCalledTimes(1);
     act(() => { store.trocar({ saindo: true }); });
     expect(screen.getByText('Saindo: encerrando o login da frente.').getAttribute('role')).toBe('status');
+  });
+
+  it('a conexão que cai com a tela desenhada ganha a faixa: desde quando, o último estado e a próxima tentativa', () => {
+    const { app, store, tentarReconectar } = appFalso(false);
+    render(<Casca app={app}><h1>Radar</h1></Casca>);
+    expect(screen.queryByText(/^Sem motor:/)).toBeNull();
+    const queda = new Date(2026, 10, 17, 14, 21, 0).getTime();
+    act(() => { store.trocar({ snapshot: {} as Snapshot, conexao: 'reconectando', quedaEm: queda, proximaTentativaEm: queda + 6000 }); });
+    const faixa = screen.getByText(/^Sem motor:/);
+    expect(faixa.textContent).toBe('Sem motor: a conexão caiu às 14:21. O que está na tela é do último estado recebido. A próxima tentativa sai às 14:21:06.');
+    expect(faixa.closest('[role="status"]')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar agora' }));
+    expect(tentarReconectar).toHaveBeenCalledTimes(1);
+    act(() => { store.trocar({ proximaTentativaEm: null }); });
+    expect(screen.getByText(/^Sem motor:/).textContent).toBe('Sem motor: a conexão caiu às 14:21. O que está na tela é do último estado recebido. Tentando reconectar…');
+    expect((screen.getByRole('button', { name: 'Tentando reconectar…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/próxima tentativa/)).toBeNull();
+    act(() => { store.trocar({ conexao: 'conectado', quedaEm: null, proximaTentativaEm: null }); });
+    expect(screen.queryByText(/^Sem motor:/)).toBeNull();
+  });
+
+  it('sem estado recebido não há faixa: a tela é a de conexão', () => {
+    const { app, store } = appFalso(false);
+    render(<Casca app={app}><h1>Radar</h1></Casca>);
+    act(() => { store.trocar({ snapshot: null, conexao: 'sem-motor', quedaEm: 1, proximaTentativaEm: 2 }); });
+    expect(screen.queryByText(/^Sem motor:/)).toBeNull();
+    expect(textoDaQueda(0, null)).toBe('Sem motor: a conexão caiu. O que está na tela é do último estado recebido. Tentando reconectar…');
   });
 });

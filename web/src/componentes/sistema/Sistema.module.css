@@ -9,6 +9,7 @@
 .resumoDaLinha { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
 
 .subtitulo { font-size: 14px; font-weight: 800; }
+.regrasFixas { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; }
 
 /* pares rótulo e valor, uma linha cada */
 .pares { display: flex; flex-direction: column; gap: 8px; margin: 0; }

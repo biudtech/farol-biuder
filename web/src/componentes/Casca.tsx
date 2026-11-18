@@ -1,6 +1,7 @@
 'use client';
 
-// A casca das cinco abas: a marca da BIUD com "Farol" ao lado, a navegação, estado da conexão, tema e Sair. Só existe com
+// A casca das cinco abas: a marca da BIUD com "Farol" ao lado, a navegação, estado da conexão, tema e Sair,
+// e a faixa de queda da conexão (FaixaDeQueda.tsx) no alto do conteúdo. Só existe com
 // este navegador pareado (src/componentes/Aplicacao.tsx). O Sair pede ao motor que revogue a
 // sessão deste navegador antes de apagar o token daqui (app.sair, src/estado/app.ts): enquanto
 // o motor não responde o botão diz "Saindo", e o desfecho aparece na tela de pareamento.
@@ -10,6 +11,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { ABA_INICIAL, ABAS } from '@/navegacao/abas';
+import { FaixaDeQueda } from './FaixaDeQueda';
 import { IndicadorDeConexao } from './IndicadorDeConexao';
 import { Logo } from './Logo';
 import { TrocaDeTema } from './TrocaDeTema';
@@ -76,6 +78,7 @@ export function Casca({ children, app = appDoNavegador }: Props) {
       </header>
 
       <main id="conteudo" ref={conteudo} className={estilos.conteudo} tabIndex={-1}>
+        <FaixaDeQueda app={app} />
         {children}
       </main>
     </>

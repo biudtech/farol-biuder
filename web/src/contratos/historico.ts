@@ -77,6 +77,14 @@ export interface ExecucaoDaRevisao {
   inicioIncerto?: true;
 }
 
+// Um critério do card como a sessão o declarou (só em GET /api/decision, desde 17/11/2026,
+// lib/engine/criterios-do-card.js): o texto e se foi atendido; `null` é "não deu para conferir".
+// Informa a tela e nada mais: o motor não decide por ele.
+export interface CriterioDoCard {
+  texto: string;
+  atende: boolean | null;
+}
+
 // Uma revisão do histórico. `status` e `action` são os valores que o motor grava ao resolver
 // (a tabela de rótulos está em src/historico/rotulos.ts); a revisão que ainda espera na mesa,
 // que só chega por GET /api/decision, vem sem `resolvedAt`.
@@ -101,6 +109,7 @@ export interface Revisao {
   verificationCheckpoint?: Conferencia;
   checks?: ChecksDoHead;
   execucao?: ExecucaoDaRevisao;
+  criteriosDoCard?: CriterioDoCard[];
   // o texto do review do parecer, em markdown (reviewMarkdownForUi)
   reportMarkdown: string;
   reasons: Motivo[];
@@ -157,6 +166,14 @@ function lerExecucaoDaRevisao(v: unknown): ExecucaoDaRevisao | undefined {
   });
 }
 
+// Item sem texto sai; `atende` fora de booleano conta como não conferido. Lista vazia é ausente.
+function lerCriteriosDoCard(v: unknown): CriterioDoCard[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const lista = v.filter((c): c is { texto: string; atende?: unknown } => ehObjeto(c) && ehTexto(c.texto) && c.texto.trim() !== '')
+    .map((c) => ({ texto: mascararSegredos(c.texto), atende: ehBooleano(c.atende) ? c.atende : null }));
+  return lista.length ? lista : undefined;
+}
+
 export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.id) || !v.id || !ehTexto(v.key) || !v.key) return undefined;
   return semAusentes({
@@ -177,6 +194,7 @@ export const lerRevisao: LeitorDeItem<Revisao> = (v) => {
     verificationCheckpoint: lerConferencia(v.verificationCheckpoint),
     checks: lerChecksDoHead(v.checks),
     execucao: lerExecucaoDaRevisao(v.execucao),
+    criteriosDoCard: lerCriteriosDoCard(v.criteriosDoCard),
     reportMarkdown: mascararSegredos(campo(v.reportMarkdown, ehTexto) ?? ''),
     reasons: lerMotivos(v.reasons),
     attention: lerMotivos(v.attention),

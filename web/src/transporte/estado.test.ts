@@ -154,6 +154,26 @@ describe('activity: a linha nova do feed de uma sessão', () => {
     expect(feed.at(-1)).toEqual(linha(500));
   });
 
+  it('a linha sem os nomes das etapas mantém os que o estado trouxe, enquanto fecham com a etapa', () => {
+    const { avisos, registrar } = coletor();
+    const etapas = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];
+    const doEstado = { percentual: 20, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', etapas };
+    const comSessoes: Snapshot = { ...base, activeSessions: [{ id: 'a1', progresso: doEstado }] };
+    const daLinha = { percentual: 31, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 5, arquivosTotais: 20 };
+    const novo = aplicarAtividade(comSessoes, { id: 'a1', item: linha(2), progresso: daLinha }, registrar);
+    expect(novo?.activeSessions?.[0]?.progresso).toEqual({ ...daLinha, etapas });
+    // a mesma linha de novo não cria array novo
+    const igual = aplicarAtividade(novo, { id: 'a1', item: linha(3), progresso: { ...daLinha } }, registrar);
+    expect(igual?.activeSessions).toBe(novo?.activeSessions);
+    // nomes que não fecham com a etapa da linha não são mantidos
+    const outra = aplicarAtividade(novo, { id: 'a1', item: linha(4), progresso: { percentual: 65, etapa: 4, totalEtapas: 5, rotuloDaEtapa: 'outra coisa' } }, registrar);
+    expect(outra?.activeSessions?.[0]?.progresso).not.toHaveProperty('etapas');
+    // motor que ainda manda os nomes na linha continua valendo
+    const antigo = aplicarAtividade(comSessoes, { id: 'a1', item: linha(5), progresso: { ...daLinha, etapas } }, registrar);
+    expect(antigo?.activeSessions?.[0]?.progresso).toEqual({ ...daLinha, etapas });
+    expect(avisos).toEqual([]);
+  });
+
   it('o progresso que vem com a linha atualiza a sessão dela, e só ela', () => {
     const { avisos, registrar } = coletor();
     const progresso = { percentual: 31, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 5, arquivosTotais: 20 };

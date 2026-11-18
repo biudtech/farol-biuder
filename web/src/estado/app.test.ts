@@ -516,6 +516,69 @@ describe('o estado desta conexão já chegou', () => {
     encerrar();
   });
 
+  it('a queda guarda desde quando e a próxima tentativa; tentar de novo adianta e a volta limpa as duas', async () => {
+    let relogio = 1_000_000;
+    const t = montar({ token: TOKEN, agora: () => relogio });
+    const fluxos: Array<ReturnType<typeof fluxoFalso>> = [];
+    t.rotas.set('/api/events', (p) => { const f = fluxoFalso(p.init); fluxos.push(f); return f.resposta; });
+    const encerrar = t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    fluxos[0]?.enviar(estado({ app: APP, status: 'idle' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ quedaEm: null, proximaTentativaEm: null });
+    t.app.tentarReconectar();
+    expect(fluxos).toHaveLength(1);
+
+    fluxos[0]?.cair();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'reconectando', quedaEm: 1_000_000, proximaTentativaEm: 1_003_000 });
+
+    // sem rota, a próxima tentativa falha: a queda continua a mesma, a espera dobra
+    t.rotas.delete('/api/events');
+    relogio = 1_001_000;
+    t.app.tentarReconectar();
+    expect(t.app.store.ler().proximaTentativaEm).toBeNull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'sem-motor', quedaEm: 1_000_000, proximaTentativaEm: 1_007_000 });
+
+    t.rotas.set('/api/events', (p) => { const f = fluxoFalso(p.init); fluxos.push(f); return f.resposta; });
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'conectado', quedaEm: null, proximaTentativaEm: null });
+    encerrar();
+  });
+
+  it('a tentativa que o recuo dispara sozinho também tira a hora vencida: fica sem próxima até o desfecho', async () => {
+    let relogio = 2_000_000;
+    const t = montar({ token: TOKEN, agora: () => relogio });
+    const fluxos: Array<ReturnType<typeof fluxoFalso>> = [];
+    t.rotas.set('/api/events', (p) => { const f = fluxoFalso(p.init); fluxos.push(f); return f.resposta; });
+    const encerrar = t.app.iniciar();
+    await vi.advanceTimersByTimeAsync(0);
+    fluxos[0]?.enviar(estado({ app: APP, status: 'idle' }));
+    await vi.advanceTimersByTimeAsync(0);
+    fluxos[0]?.cair();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'reconectando', proximaTentativaEm: 2_003_000 });
+
+    // a próxima tentativa fica pendurada: o motor não responde
+    let soltar!: () => void;
+    t.rotas.set('/api/events', () => new Promise<Response>((_r, falhar) => { soltar = () => falhar(new TypeError('Failed to fetch')); }));
+    relogio = 2_003_000;
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(t.app.store.ler().proximaTentativaEm).toBe(2_003_000);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'reconectando', proximaTentativaEm: null });
+    // durante a tentativa, o clique não abre outra
+    t.app.tentarReconectar();
+    expect(t.pedidos.filter((p) => p.url.endsWith('/api/events'))).toHaveLength(2);
+
+    relogio = 2_004_000;
+    soltar();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.app.store.ler()).toMatchObject({ conexao: 'sem-motor', quedaEm: 2_000_000, proximaTentativaEm: 2_010_000 });
+    encerrar();
+  });
+
   it('sair leva o sinal embora com o snapshot', async () => {
     const t = montar({ token: TOKEN });
     let fluxo!: ReturnType<typeof fluxoFalso>;

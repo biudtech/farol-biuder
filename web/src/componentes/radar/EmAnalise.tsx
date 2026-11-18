@@ -66,6 +66,34 @@ function detalheDoProgresso(p: ProgressoDaRevisao): string {
   ].filter(Boolean).join(' · ');
 }
 
+const primeiraMaiuscula = (texto: string): string => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+// As etapas pelo nome, quando o motor manda a lista: as feitas com a marca, a atual com os
+// arquivos (quando há) e as que faltam apagadas. O estado de cada uma vai em texto para o
+// leitor de tela. Com 100% todas estão feitas.
+function EtapasDaRevisao({ progresso: p }: { progresso: ProgressoDaRevisao & { etapas: string[] } }) {
+  const concluida = p.percentual === 100;
+  return (
+    <ol className={estilos.etapas} aria-label="Etapas da revisão">
+      {p.etapas.map((nome, i) => {
+        const feita = concluida || i < p.etapa - 1;
+        const atual = !concluida && i === p.etapa - 1;
+        const arquivos = atual && p.arquivosTotais !== undefined ? `: ${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '';
+        let estado = 'falta';
+        if (feita) estado = 'feita';
+        else if (atual) estado = 'agora';
+        return (
+          <li key={nome} className={estilos.etapa} data-estado={estado}>
+            <span aria-hidden="true" className={estilos.marcaDaEtapa}>{feita ? '✓' : ''}</span>
+            <span>{primeiraMaiuscula(nome)}{arquivos}</span>
+            <span className={ui.soLeitor}>{` (${estado})`}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 // Com memo: a linha nova do feed de uma sessão não redesenha a linha das outras.
 const LinhaDaSessao = memo(function LinhaDaSessao({ sessao: s, feed, controle }: { sessao: SessaoAtiva; feed: readonly LinhaDoFeed[]; controle: ControleDeAcoes }) {
   const chave = s.pr?.key ?? s.keys?.[0] ?? '';
@@ -94,6 +122,7 @@ const LinhaDaSessao = memo(function LinhaDaSessao({ sessao: s, feed, controle }:
       }
     >
       {p ? <p className={ui.mini}>{detalheDoProgresso(p)}</p> : null}
+      {p?.etapas ? <EtapasDaRevisao progresso={{ ...p, etapas: p.etapas }} /> : null}
       {quem ? <p className={ui.mini}>{quem}</p> : null}
       <Feed linhas={feed} de={de} />
       {!s.cancelled && s.cancellable === false ? <p className={ui.mini}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}

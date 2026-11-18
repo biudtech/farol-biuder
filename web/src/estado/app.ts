@@ -4,7 +4,7 @@ import { lerPareamento, lerStatusDaAutenticacao } from '@/contratos/auth';
 import { lerRecado, type RecadoDoMotor } from '@/contratos/eventos';
 import { lerRevogacao, lerSessoes } from '@/contratos/sistema';
 import type { Snapshot } from '@/contratos/snapshot';
-import { criarCliente, type Cliente, type Conexao } from '@/transporte/cliente';
+import { criarCliente, type Cliente, type Conexao, type FluxoAberto } from '@/transporte/cliente';
 import { aplicarAtividade, aplicarEstadoInteiro, aplicarPatch, type Registrar } from '@/transporte/estado';
 import { CHAVE_DO_TOKEN, type CofreDoToken } from '@/transporte/token';
 import { criarStore, type Store } from './store';
@@ -74,6 +74,11 @@ export interface EstadoDoApp {
   // a sessão vem do portão (o login da frente injeta a credencial): este navegador não guarda
   // token, e a casca diz de onde vem a sessão
   viaPortao: boolean;
+  // A queda do fluxo, medida aqui: quando a conexão caiu (a primeira queda desde o último
+  // "conectado") e quando sai a próxima tentativa, pelo recuo do cliente. null fora da queda, e
+  // `proximaTentativaEm` null também enquanto uma tentativa está no ar (automática ou do clique).
+  quedaEm: number | null;
+  proximaTentativaEm: number | null;
 }
 
 export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
@@ -88,6 +93,8 @@ export const ESTADO_INICIAL: EstadoDoApp = Object.freeze({
   saindo: false,
   saida: null,
   viaPortao: false,
+  quedaEm: null,
+  proximaTentativaEm: null,
 });
 
 export interface App {
@@ -113,6 +120,8 @@ export interface App {
   dispensarRecados(): void;
   // Na tela de sessão do portão expirada: volta à raiz, onde o portão mostra o login.
   entrarDeNovo(): void;
+  // Com o fluxo caído e esperando o recuo, tenta de novo agora. Fora disso não faz nada.
+  tentarReconectar(): void;
 }
 
 // O que a sessão pelo portão usa da janela: ir à raiz (location.assign) e lembrar, nesta janela
@@ -144,7 +153,7 @@ export interface DependenciasDoApp {
 
 export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora = () => Date.now() }: DependenciasDoApp): App {
   const store = criarStore<EstadoDoApp>(ESTADO_INICIAL);
-  let fecharFluxo: (() => void) | null = null;
+  let fecharFluxo: FluxoAberto | null = null;
   // o token com que esta aba abriu o fluxo: é com ele que se compara o que outra aba gravou
   let tokenDaSessao = '';
   // só a sondagem mais recente grava o resultado
@@ -192,7 +201,23 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
 
   function abrirFluxo(): void {
     fechar();
-    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao: (conexao) => store.trocar({ conexao, estadoEmDia: false }) });
+    fecharFluxo = cliente.abrirFluxo({ aoEvento, aoMudarConexao, aoTentar: () => store.trocar({ proximaTentativaEm: null }) });
+  }
+
+  function aoMudarConexao(conexao: Conexao, esperaMs?: number): void {
+    if (conexao === 'conectado' || conexao === 'conectando') {
+      store.trocar({ conexao, estadoEmDia: false, quedaEm: null, proximaTentativaEm: null });
+      return;
+    }
+    const quando = agora();
+    store.trocar({ conexao, estadoEmDia: false, quedaEm: store.ler().quedaEm ?? quando, proximaTentativaEm: esperaMs === undefined ? null : quando + esperaMs });
+  }
+
+  // A faixa sai de "próxima tentativa às" no começo da tentativa, pelo aoTentar do fluxo: vale
+  // para a que o relógio do recuo dispara e para a do clique.
+  function tentarReconectar(): void {
+    if (!fecharFluxo || store.ler().proximaTentativaEm === null) return;
+    fecharFluxo.tentarAgora();
   }
 
   async function verificarMotor(): Promise<void> {
@@ -211,7 +236,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
     fechar();
     cliente.cancelarChamadas();
     tokenDaSessao = '';
-    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', estadoEmDia: false, motivo, entrouAgora: false, recados: SEM_RECADOS, saindo: false, saida, viaPortao: false });
+    store.trocar({ sessao: 'pareamento', snapshot: null, conexao: 'conectando', estadoEmDia: false, motivo, entrouAgora: false, recados: SEM_RECADOS, saindo: false, saida, viaPortao: false, quedaEm: null, proximaTentativaEm: null });
     void verificarMotor();
   }
 
@@ -252,7 +277,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
     cliente.cancelarChamadas();
     const ultima = portao?.lerUltimaRecarga() ?? 0;
     const quando = agora();
-    const base = { snapshot: null, conexao: 'conectando' as const, estadoEmDia: false, recados: SEM_RECADOS, saindo: false };
+    const base = { snapshot: null, conexao: 'conectando' as const, estadoEmDia: false, recados: SEM_RECADOS, saindo: false, quedaEm: null, proximaTentativaEm: null };
     if (!portao || (ultima > 0 && quando - ultima < JANELA_DA_RECARGA_MS)) {
       store.trocar({ ...base, sessao: 'portao-expirado' });
       return;
@@ -451,6 +476,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
     dispensarRecados() {
       store.trocar({ recados: SEM_RECADOS });
     },
+    tentarReconectar,
     entrarDeNovo() {
       portao?.gravarUltimaRecarga(agora());
       portao?.irParaARaiz();
