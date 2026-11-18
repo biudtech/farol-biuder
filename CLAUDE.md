@@ -402,7 +402,7 @@ guarda não abriu ou não respondeu, `lib/engine/historico-decisoes.js`) respond
 escreve no log, nem no 200, nem no 400, nem no 503. Com `formato=csv` (o único formato) a mesma
 rota responde o recorte filtrado inteiro, sem página, como `text/csv` para baixar
 (`lib/engine/historico-csv.js`): escape de CSV, apóstrofo na frente do campo que começaria com
-`=`, `+`, `-`, `@`, tabulação ou retorno de carro, marca de ordem de bytes e linhas em LF.
+`=`, `+`, `-` ou `@` (também depois de espaço), tabulação ou retorno de carro, marca de ordem de bytes e linhas em LF.
 
 `GET /api/decision?key=` responde `{ found, decision }` com a decisão mais recente do PR (a
 pendente antes da resolvida), ou, com `id`, aquela decisão do PR (a rodada antiga, ou a resolvida
@@ -425,7 +425,9 @@ as provas da decisão os gravaram;
 não leu critérios no card, e nas decisões anteriores a 17/11/2026). Desde 17/11/2026 também saem
 `achados` (os achados da sessão da memória de rodadas, pelo `roundId`: `severidade`, `titulo`,
 `resumo`, `arquivo`, `linha`, `situacao` e, gravado nas provas daqui em diante, `trecho`, as
-linhas do lado do head em volta da linha quando ela está no diff, nunca de caminho protegido),
+linhas do lado do head em volta da linha quando ela está no diff, nunca de caminho protegido nem da
+pasta redigida, com a máscara de segredo aplicada no patch inteiro antes do corte; o caminho só sai
+quando está no inventário do diff da decisão ou, sem inventário, quando é relativo ao PR),
 `rodadasDoPr` (as decisões do mesmo PR em ordem de criação, `{ itens: [{ id, rodada, em, head,
 parecer, publicado, pendente? }], inicioIncerto? }`) e `tamanhoDoPr` (`arquivos` do inventário e,
 nas decisões gravadas daqui em diante, `adicoes` e `remocoes`). O campo não entra em gate
