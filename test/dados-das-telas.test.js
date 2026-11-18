@@ -65,7 +65,7 @@ function noBanco(resolved) {
 
 test('período: dia de calendário válido é aceito; o resto vira 400 com o campo', () => {
   assert.deepEqual(lerParametros(new URLSearchParams('desde=2026-11-01&ate=2026-11-17')),
-    { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '2026-11-01', ate: '2026-11-17' });
+    { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '2026-11-01', ate: '2026-11-17', formato: '' });
   assert.equal(diaValido('2024-02-29'), true);
   for (const [texto, campo] of [['desde=2026-02-30', 'desde'], ['desde=2026/11/01', 'desde'], ['ate=17-11-2026', 'ate'], ['ate=2026-11-1', 'ate'],
     ['desde=2026-11-01&desde=2026-11-02', 'desde'], ['desde=2026-11-10&ate=2026-11-09', 'ate'], ['desde=%202026-11-01', 'desde']]) {

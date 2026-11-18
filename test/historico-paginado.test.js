@@ -34,16 +34,16 @@ test('sem parâmetro nenhum valem os padrões: página 1 de 30, sem filtro', () 
   assert.equal(PAGINA_PADRAO, 30);
   assert.equal(TETO_DA_PAGINA, 100);
   assert.equal(TETO_DA_BUSCA, 200);
-  assert.deepEqual(lerParametros(consulta('')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '' });
+  assert.deepEqual(lerParametros(consulta('')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '', formato: '' });
 });
 
 test('parâmetro presente e vazio conta como ausente', () => {
-  assert.deepEqual(lerParametros(consulta('page=&pageSize=&q=&veredito=&repo=')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '' });
+  assert.deepEqual(lerParametros(consulta('page=&pageSize=&q=&veredito=&repo=')), { ok: true, page: 1, pageSize: 30, q: '', veredito: '', repo: '', desde: '', ate: '', formato: '' });
 });
 
 test('parâmetros válidos são lidos, e o que a rota não conhece é ignorado', () => {
   const lido = lerParametros(consulta('page=3&pageSize=100&q=Login&veredito=request_changes&repo=Acme/App&outro=1'));
-  assert.deepEqual(lido, { ok: true, page: 3, pageSize: 100, q: 'Login', veredito: 'request_changes', repo: 'Acme/App', desde: '', ate: '' });
+  assert.deepEqual(lido, { ok: true, page: 3, pageSize: 100, q: 'Login', veredito: 'request_changes', repo: 'Acme/App', desde: '', ate: '', formato: '' });
 });
 
 test('repo com espaço nas pontas é aparado, e só espaço conta como ausente', () => {
@@ -91,7 +91,7 @@ test('com dois parâmetros inválidos a recusa cita o primeiro na ordem do contr
 test('histórico vazio: 200, nenhuma página e nenhum repositório', () => {
   const r = pedir([]);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, page: 1, pageSize: 30, total: 0, pages: 0, items: [], repos: [] });
+  assert.deepEqual(r.body, { ok: true, page: 1, pageSize: 30, total: 0, pages: 0, items: [], repos: [], recentes7Dias: 0 });
 });
 
 test('engine sem histórico carregado responde vazio em vez de lançar', () => {

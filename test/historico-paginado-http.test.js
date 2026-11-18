@@ -71,7 +71,7 @@ test('sem parâmetro: a primeira página de 30, com o total e os repositórios',
   const r = await pedir();
   assert.equal(r.status, 200);
   assert.match(r.tipo, /application\/json/);
-  assert.deepEqual(Object.keys(r.json).sort(), ['items', 'ok', 'page', 'pageSize', 'pages', 'repos', 'total']);
+  assert.deepEqual(Object.keys(r.json).sort(), ['items', 'ok', 'page', 'pageSize', 'pages', 'recentes7Dias', 'repos', 'total']);
   assert.deepEqual([r.json.ok, r.json.page, r.json.pageSize, r.json.total, r.json.pages], [true, 1, 30, 65, 3]);
   assert.equal(r.json.items.length, 30);
   assert.equal(r.json.items[0].id, 'd65', 'a mais nova vem primeiro');
