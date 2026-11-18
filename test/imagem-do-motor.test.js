@@ -46,13 +46,15 @@ test('a base é o Node do contrato, fixada por digest', () => {
   assert.deepEqual(bases, ['node:${NODE_VERSION}-bookworm-slim@${NODE_DIGEST}'], 'uma base só, com a versão e o digest dos ARG');
 });
 
-test('gh e Claude Code têm versão exata e o chaveiro do gh é conferido por hash', () => {
+test('gh e Claude Code têm versão exata e o pacote do gh é conferido por hash', () => {
   assert.match(ARGS.GH_VERSION, /^\d+\.\d+\.\d+$/);
   assert.match(ARGS.CLAUDE_CODE_VERSION, /^\d+\.\d+\.\d+$/);
-  assert.match(ARGS.GH_KEYRING_SHA256, /^[0-9a-f]{64}$/);
-  assert.ok(DOCKERFILE.includes('"gh=${GH_VERSION}"'));
+  assert.match(ARGS.GH_SHA256_AMD64, /^[0-9a-f]{64}$/);
+  assert.match(ARGS.GH_SHA256_ARM64, /^[0-9a-f]{64}$/);
+  assert.ok(DOCKERFILE.includes('https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz'));
   assert.ok(DOCKERFILE.includes('"@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"'));
-  assert.ok(DOCKERFILE.includes('echo "${GH_KEYRING_SHA256}  /etc/apt/keyrings/githubcli-archive-keyring.gpg" | sha256sum -c -'));
+  assert.ok(DOCKERFILE.includes('echo "${GH_SHA256}  ${GH_TGZ}" | sha256sum -c -'));
+  assert.ok(DOCKERFILE.indexOf('sha256sum -c -') < DOCKERFILE.indexOf('tar -xzf "${GH_TGZ}"'), 'confere antes de extrair');
   assert.doesNotMatch(DOCKERFILE, /@latest|:latest/);
 });
 
