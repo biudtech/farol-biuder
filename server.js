@@ -1192,7 +1192,7 @@ class Engine extends EventEmitter {
       modelos: catalogoDeModelos(this.claudeVersao || null),
       // perfil apontado que a resolução não usa (A2): a queda não é silenciosa
       claudePerfis: perfilMod.perfisParaTela(this), // e o uso do plano de cada perfil de assinatura
-      status: this.status,
+      status: this.status, agora: Date.now(), // agora: a hora do motor no retrato, para a tela medir a diferença de relógio
       error: this.lastError,
       baseline: this.baseline ??= lerBaseline(BASELINE_FILE),   // desde quando vigia (lido uma vez)
       account: { user: this.primaryUser(), tokenOk: this.tokenOk },

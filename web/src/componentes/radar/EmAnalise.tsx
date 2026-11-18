@@ -1,175 +1,200 @@
 'use client';
 
-// A seção "Em análise": uma linha por sessão em curso, com o título, a porcentagem e a barra.
-// Num clique abre o detalhe: a etapa, os arquivos e quanto falta (quando o motor manda), o
-// feed, o link do PR e o Cancelar. O feed é texto de fora (o que a sessão está fazendo) e
-// entra sempre como texto.
-import { memo } from 'react';
-import type { LinhaDoFeed, ProgressoDaRevisao, SessaoAtiva } from '@/contratos/radar';
-import { Botao, Linha, Secao, Spinner, ui } from '@/componentes/ui';
-import { chaveCurta, chavesDoFeed, dataHora, hora, nomeDoPr } from '@/radar/formato';
+// A seção "Em análise": um cartão por sessão em curso, no molde do cartão da autoanálise. O
+// cabeçalho diz o PR, o autor e o contexto; as pílulas, o que já se sabe dos checks, do card e
+// do parecer; a faixa, a etapa do motor (que nunca recua), o tempo, o trilho e o que a sessão faz
+// agora. Depois das sessões vêm as que sumiram sem resultado e cujo PR não está mais na fila
+// (com o PR na fila, a falha aparece no cartão da fila).
+import { memo, useState, type ReactNode } from 'react';
+import type { LinhaDoFeed, SessaoAtiva } from '@/contratos/radar';
+import { Botao, Secao, ui } from '@/componentes/ui';
+import {
+  andamentoDaFalha, andamentoDaSessao, andamentoIniciando, contextoDaSessao, etapaDoProgresso, pilulasDaFalha, pilulasDaSessao,
+  SEM_SINAL_MS, tempoDecorrido, ultimoEvento,
+} from '@/radar/cartao';
+import type { Falha } from '@/radar/falhas';
+import { nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
-import { AbrirNoGitHub } from './Bloco';
+import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, useAgora, usePassou } from './Cartao';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
 
-function Feed({ linhas, de }: { linhas: readonly LinhaDoFeed[]; de: string }) {
-  if (!linhas.length) return <p className={ui.mini}>O feed desta sessão ainda não tem linha.</p>;
-  // A chave de cada linha não depende da posição: quando o motor corta as antigas, as que
-  // ficam mantêm a chave e o React não refaz a lista inteira.
-  const chaves = chavesDoFeed(linhas);
-  // a mais recente primeiro: é a que diz o que a sessão faz agora
-  const recentes = linhas.map((linha, i) => ({ linha, chave: chaves[i] })).reverse();
-  return (
-    // rolável pelo teclado: por isso o tabIndex e o nome
-    <ol className={estilos.feed} aria-label={`Feed de ${de}, a linha mais recente primeiro`} tabIndex={0}>
-      {recentes.map(({ linha, chave }) => (
-        <li key={chave} className={estilos.linhaDoFeed} data-tipo={linha.k === 'warn' ? 'aviso' : undefined}>
-          <span className={estilos.horaDoFeed}>{hora(linha.t)}</span>
-          <span>{linha.k === 'warn' ? 'Aviso: ' : ''}{linha.a ? `[${linha.a}] ` : ''}{linha.text}</span>
-        </li>
-      ))}
-    </ol>
-  );
+const POSTAGEM = 4;
+const CODIGO = 2;
+const CONFERENCIA = 3;
+
+interface PropsDaFaixaDaSessao {
+  sessao: SessaoAtiva;
+  etapa: number;
+  ultimo: number | undefined;
+  outras: number;
+  desvio: number;
+  de: string;
+  acao: ReactNode;
 }
 
-const MINUTO_MS = 60000;
-
-function faltam(ms: number): string {
-  return ms < MINUTO_MS ? 'faltam menos de 1 min' : `faltam ~${Math.round(ms / MINUTO_MS)} min`;
+// A faixa da sessão: o único pedaço do cartão com o relógio de 1 s. O tempo e o "sem sinal"
+// contam na hora do motor (a do navegador menos o desvio), porque as horas da sessão são dele.
+function FaixaDaSessao({ sessao: s, etapa, ultimo, outras, desvio, de, acao }: PropsDaFaixaDaSessao) {
+  const agora = useAgora() - desvio;
+  const andamento = andamentoDaSessao({
+    etapa, progresso: s.progresso, ultimoEvento: ultimo, agora, outras,
+    costumaMs: s.estimativa?.ateOFimMs ?? s.estimativa?.tipicoMs, conta: s.pr?.account,
+  });
+  const tempo = s.startedAt ? tempoDecorrido(agora - s.startedAt) : '';
+  return <Faixa andamento={andamento} de={de} tempo={tempo} acao={acao} />;
 }
 
-// A barra da porcentagem que o motor calcula (lib/engine/progresso-revisao.js). É SVG porque a
-// CSP de produção recusa estilo em linha, e a largura vai como atributo.
-function Barra({ progresso: p, de }: { progresso: ProgressoDaRevisao; de: string }) {
-  const etapa = `etapa ${p.etapa} de ${p.totalEtapas}: ${p.rotuloDaEtapa}`;
-  return (
-    <span
-      role="progressbar" aria-label={`Andamento de ${de}`} aria-valuemin={0} aria-valuemax={100}
-      aria-valuenow={p.percentual} aria-valuetext={`${p.percentual}%, ${etapa}`} className={estilos.barraDoProgresso}
-    >
-      <svg viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-        <rect className={estilos.trilhoDoProgresso} x={0} y={0} width={100} height={6} />
-        <rect className={estilos.preenchidoDoProgresso} x={0} y={0} width={p.percentual} height={6} />
-      </svg>
-    </span>
-  );
+interface PropsDaSessao {
+  sessao: SessaoAtiva;
+  // o último sinal de vida da sessão, na hora do motor (ultimoEvento: a linha mais nova do feed, o
+  // modelo escrevendo ou o começo): número, para a linha nova do feed de uma sessão não redesenhar
+  // o cartão das outras
+  ultimo: number | undefined;
+  outras: number;
+  // a diferença entre o relógio do navegador e o do motor, em ms
+  desvio: number;
+  controle: ControleDeAcoes;
 }
 
-// A linha do detalhe com a etapa, os arquivos e quanto falta. Arquivos, o arquivo da vez e o tempo
-// restante só aparecem quando o motor os manda; com a lista das etapas, o arquivo da vez vai nela.
-function detalheDoProgresso(p: ProgressoDaRevisao): string {
-  return [
-    `Etapa ${p.etapa} de ${p.totalEtapas}: ${p.rotuloDaEtapa}`,
-    p.arquivosTotais !== undefined ? `${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '',
-    p.arquivoAtual && !p.etapas ? `último lido: ${p.arquivoAtual}` : '',
-    p.restanteEstimadoMs !== undefined ? faltam(p.restanteEstimadoMs) : '',
-  ].filter(Boolean).join(' · ');
-}
-
-const primeiraMaiuscula = (texto: string): string => texto.charAt(0).toUpperCase() + texto.slice(1);
-
-// As etapas pelo nome, quando o motor manda a lista: as feitas com a marca, a atual com os
-// arquivos (quando há) e as que faltam apagadas. O estado de cada uma vai em texto para o
-// leitor de tela. Com 100% todas estão feitas.
-function EtapasDaRevisao({ progresso: p }: { progresso: ProgressoDaRevisao & { etapas: string[] } }) {
-  const concluida = p.percentual === 100;
-  return (
-    <ol className={estilos.etapas} aria-label="Etapas da revisão">
-      {p.etapas.map((nome, i) => {
-        const feita = concluida || i < p.etapa - 1;
-        const atual = !concluida && i === p.etapa - 1;
-        const contagem = atual && p.arquivosTotais !== undefined ? `: ${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '';
-        // o arquivo da vez, como o desenho: "Código: 9 de 20 arquivos · src/x.ts"
-        const arquivos = atual && p.arquivoAtual ? `${contagem || ':'} · ${p.arquivoAtual}` : contagem;
-        let estado = 'falta';
-        if (feita) estado = 'feita';
-        else if (atual) estado = 'agora';
-        return (
-          <li key={nome} className={estilos.etapa} data-estado={estado}>
-            <span aria-hidden="true" className={estilos.marcaDaEtapa}>{feita ? '✓' : ''}</span>
-            <span>{primeiraMaiuscula(nome)}{arquivos}</span>
-            <span className={ui.soLeitor}>{` (${estado})`}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-// Com memo: a linha nova do feed de uma sessão não redesenha a linha das outras.
-const LinhaDaSessao = memo(function LinhaDaSessao({ sessao: s, feed, controle }: { sessao: SessaoAtiva; feed: readonly LinhaDoFeed[]; controle: ControleDeAcoes }) {
+// Com memo: a linha nova do feed de uma sessão não redesenha as outras. O cabeçalho, o avatar e
+// as pílulas não têm relógio: só a faixa redesenha a cada segundo, e a borda do "sem sinal" vira
+// com um disparo só, na hora (usePassou).
+const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras, desvio, controle }: PropsDaSessao) {
   const chave = s.pr?.key ?? s.keys?.[0] ?? '';
-  const rotulo = s.label ?? `Sessão ${s.id}`;
-  const de = chave ? nomeDoPr(chave) : rotulo;
-  const titulo = s.pr?.title || (chave ? nomeDoPr(chave) : rotulo);
-  const inicio = dataHora(s.startedAt);
-  const p = s.progresso;
-  const meta = [chave ? chaveCurta(chave) : '', p ? p.rotuloDaEtapa : '', s.cancelled ? 'cancelando' : ''].filter(Boolean).join(' · ');
-  const quem = [chave, s.pr?.author ? `PR de ${s.pr.author}` : '', inicio ? `começou em ${inicio}` : ''].filter(Boolean).join(' · ');
-
-  // A barra fica fora do <summary>: dentro dele o leitor de tela lê só o texto do botão de
-  // abrir, e o role="progressbar" com o aria-valuetext se perderia. No resumo vai só texto.
+  const de = chave ? nomeDoPr(chave) : (s.label ?? `Sessão ${s.id}`);
+  const doMotor = etapaDoProgresso(s.progresso);
+  // A etapa nunca recua: um estado atrasado (a reconexão, um patch fora de ordem) não faz a faixa
+  // voltar. Ajuste de estado no desenho, como o React prevê para estado que depende de propriedade.
+  const [piso, setPiso] = useState(doMotor);
+  if (doMotor > piso) setPiso(doMotor);
+  const etapa = Math.max(piso, doMotor);
+  // o "sem sinal" só vale com o modelo trabalhando; o prazo vai para o relógio do navegador
+  const comModelo = etapa === CODIGO || etapa === CONFERENCIA;
+  const mudo = usePassou(comModelo && ultimo !== undefined ? ultimo + desvio + SEM_SINAL_MS + 1 : undefined);
+  let acao = null;
+  if (s.cancelled) acao = <Botao pequeno fantasma ocupado="Cancelando…" aria-label={`Cancelando a sessão de ${de}`}>Cancelar</Botao>;
+  else if (s.cancellable === true) {
+    acao = (
+      <AcoesDoItem
+        pequeno
+        botoes={[{ acao: { tipo: 'cancelar', id: s.id, alvo: `sessao:${s.id}`, nome: `a sessão de ${de}` }, fantasma: true, ocupado: 'Cancelando…' }]}
+        controle={controle}
+      />
+    );
+  }
   return (
-    <div className={estilos.sessao}>
-    <Linha
-      className={estilos.linhaDaSessao}
-      resumo={
-        <span className={estilos.resumoDaSessao}>
-          <span className={estilos.cabecaDaSessao}>
-            <span className={ui.t}>{titulo}</span>
-            {p ? <span className={estilos.percentual}>{`${p.percentual}%`}</span> : <Spinner tamanho="p" />}
-          </span>
-          {meta ? <span className={ui.r}>{meta}</span> : null}
-        </span>
-      }
+    <Cartao
+      tom={mudo ? 'aviso' : 'rodando'}
+      chave={chave || de}
+      url={s.pr?.url}
+      autor={s.pr?.author}
+      titulo={s.pr?.title || de}
+      contexto={contextoDaSessao(s)}
+      estado={mudo ? 'em análise, sem sinal do modelo' : 'em análise'}
+      botoes={(
+        <>
+          <BotaoOcupado texto={etapa >= POSTAGEM ? 'Postando' : 'Revisando'} de={de} chave={chave || undefined} />
+          {chave ? <AbrirNoGitHub chave={chave} url={s.pr?.url} /> : null}
+        </>
+      )}
+      pilulas={pilulasDaSessao(etapa)}
     >
-      {p ? <p className={ui.mini}>{detalheDoProgresso(p)}</p> : null}
-      {p?.etapas ? <EtapasDaRevisao progresso={{ ...p, etapas: p.etapas }} /> : null}
-      {quem ? <p className={ui.mini}>{quem}</p> : null}
-      <Feed linhas={feed} de={de} />
-      {!s.cancelled && s.cancellable === false ? <p className={ui.mini}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}
-      <div className={ui.fila}>
-        {chave ? <AbrirNoGitHub chave={chave} url={s.pr?.url} /> : null}
-        <div className={ui.empurra}>
-          {s.cancelled ? (
-            <Botao pequeno ocupado="Cancelando…" aria-label={`Cancelando a sessão de ${de}`}>Cancelar</Botao>
-          ) : null}
-          {!s.cancelled && s.cancellable === true ? (
-            <AcoesDoItem
-              pequeno
-              botoes={[{ acao: { tipo: 'cancelar', id: s.id, alvo: `sessao:${s.id}`, nome: `a sessão de ${de}` }, fantasma: true, ocupado: 'Cancelando…' }]}
-              controle={controle}
-            />
-          ) : null}
-        </div>
-      </div>
-    </Linha>
-    {p ? <div className={estilos.barraDaSessao}><Barra progresso={p} de={de} /></div> : null}
-    </div>
+      <FaixaDaSessao sessao={s} etapa={etapa} ultimo={ultimo} outras={outras} desvio={desvio} de={de} acao={acao} />
+      {!s.cancelled && s.cancellable === false ? <p className={estilos.nota}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}
+    </Cartao>
   );
 });
+
+// O clique em Revisar ou Tentar de novo, antes de o motor abrir a sessão: "Iniciando a revisão.",
+// com o tempo desde o clique (as duas horas são do navegador, sem desvio).
+export function FaixaIniciando({ desde, de }: { desde: number; de: string }) {
+  const agora = useAgora();
+  return <Faixa andamento={andamentoIniciando()} de={de} tempo={tempoDecorrido(agora - desde)} />;
+}
+
+interface PropsDaFalha {
+  falha: Falha & { motivo: string };
+  iniciadaEm?: number;
+  controle: ControleDeAcoes;
+  aoDispensar: (chave: string) => void;
+}
+
+export function CartaoDaFalha({ falha: f, iniciadaEm, controle, aoDispensar }: PropsDaFalha) {
+  const de = nomeDoPr(f.chave);
+  const andamento = andamentoDaFalha(f.etapa, f.motivo);
+  const tempo = f.inicio ? tempoDecorrido(f.fimNoMotor - f.inicio) : '';
+  const botoes = (
+    <>
+      {iniciadaEm !== undefined ? <BotaoOcupado texto="Revisando" de={de} chave={f.chave} /> : null}
+      {iniciadaEm === undefined && f.url ? (
+        <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', url: f.url, falhou: true, alvo: f.chave, nome: de }, primario: true }]} controle={controle} />
+      ) : null}
+      <AbrirNoGitHub chave={f.chave} url={f.url} />
+    </>
+  );
+  return (
+    <Cartao
+      tom={iniciadaEm !== undefined ? 'rodando' : 'falha'}
+      chave={f.chave}
+      url={f.url}
+      autor={f.autor}
+      titulo={f.titulo || de}
+      contexto=""
+      estado={iniciadaEm !== undefined ? 'iniciando a revisão' : 'a sessão terminou sem resultado'}
+      botoes={botoes}
+      pilulas={pilulasDaFalha(f.etapa)}
+    >
+      {iniciadaEm !== undefined ? <FaixaIniciando desde={iniciadaEm} de={de} /> : (
+        <Faixa
+          andamento={andamento}
+          de={de}
+          tempo={tempo}
+          acao={<Botao pequeno fantasma onClick={() => aoDispensar(f.chave)} aria-label={`Dispensar a falha de ${de}`}>Dispensar</Botao>}
+        />
+      )}
+    </Cartao>
+  );
+}
 
 interface Props {
   sessoes: readonly SessaoAtiva[];
   // o feed de cada sessão, por id (a chave `activity` do snapshot)
   feeds: Readonly<Record<string, LinhaDoFeed[]>>;
+  // as sessões que sumiram sem resultado e cujo PR não está na fila
+  falhas?: ReadonlyArray<Falha & { motivo: string }>;
+  // os PRs com o Revisar clicado e a sessão ainda não aberta, com a hora do clique
+  iniciadas?: ReadonlyMap<string, number>;
+  // a diferença entre o relógio do navegador e o do motor, em ms (0 sem medida)
+  desvio?: number;
   controle: ControleDeAcoes;
+  aoDispensarFalha?: (chave: string) => void;
 }
 
-const SEM_LINHAS: readonly LinhaDoFeed[] = [];
+const NENHUMA_FALHA: ReadonlyArray<Falha & { motivo: string }> = [];
+const NENHUMA_INICIADA: ReadonlyMap<string, number> = new Map<string, number>();
+const NADA = (): void => {};
 
-export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, controle }: Props) {
+export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, aoDispensarFalha = NADA }: Props) {
+  const vazio = !sessoes.length && !falhas.length;
   return (
     <Secao titulo="Em análise">
-      {sessoes.length ? (
-        <div className={ui.lista}>
+      {vazio ? <p className={ui.vazio}>Nenhuma sessão em curso.</p> : (
+        <div className={estilos.cartoes}>
           {sessoes.map((s) => (
-            <LinhaDaSessao key={s.id} sessao={s} feed={Object.hasOwn(feeds, s.id) ? (feeds[s.id] ?? SEM_LINHAS) : SEM_LINHAS} controle={controle} />
+            <CartaoDaSessao
+              key={s.id}
+              sessao={s}
+              ultimo={ultimoEvento(Object.hasOwn(feeds, s.id) ? (feeds[s.id] ?? []) : [], s.startedAt, s.ultimoSinalEm)}
+              outras={sessoes.length - 1}
+              desvio={desvio}
+              controle={controle}
+            />
+          ))}
+          {falhas.map((f) => (
+            <CartaoDaFalha key={`falha:${f.chave}`} falha={f} iniciadaEm={iniciadas.get(f.chave)} controle={controle} aoDispensar={aoDispensarFalha} />
           ))}
         </div>
-      ) : (
-        <p className={ui.vazio}>Nenhuma sessão em curso.</p>
       )}
     </Secao>
   );

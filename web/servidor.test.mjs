@@ -119,6 +119,8 @@ test('sobe no socket com 600, / leva a /radar, /radar sai 200 com a CSP por nonc
     const api = process.env.NEXT_PUBLIC_FAROL_API;
     if (api) assert.equal(connect, `'self' ${new URL(api).origin}`);
     else assert.match(connect, /^'self'/);
+    // imagem de fora, só a foto do autor do PR, do servidor de avatares do GitHub
+    assert.equal(/img-src ([^;]+)/.exec(csp)?.[1], "'self' data: https://avatars.githubusercontent.com");
     const outro = await pedir(caminho, '/radar');
     assert.notEqual(/'nonce-([^']+)'/.exec(outro.headers['content-security-policy'])?.[1], nonce, 'um nonce por pedido');
   } finally {

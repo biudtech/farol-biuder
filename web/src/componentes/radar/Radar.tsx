@@ -26,6 +26,9 @@ import { PostadasHoje } from './PostadasHoje';
 import { RegiaoDeResultado } from './RegiaoDeResultado';
 import { RevisarUmPr } from './RevisarUmPr';
 import { useAcoes } from './useAcoes';
+import { useDesvio } from './useDesvio';
+import { useFalhas } from './useFalhas';
+import { useIniciadas } from './useIniciadas';
 import estilos from './Radar.module.css';
 
 interface Props {
@@ -59,14 +62,27 @@ export function Radar({ app = appDoNavegador }: Props) {
   const inicioAutomatico = useApp((e) => e.snapshot?.inicioAutomatico, app);
   const emConflito = useApp((e) => e.snapshot?.esperaConflito, app);
   const recados = useApp((e) => e.recados, app);
+  // a diferença entre o relógio do navegador e o do motor, medida a cada retrato
+  const desvio = useDesvio(useApp((e) => e.snapshot?.agora, app));
 
-  const { controle, resultado, dispensar, ignorados, regiao } = useAcoes(app.cliente);
+  const { controle: controleDasAcoes, resultado, dispensar, ignorados, regiao } = useAcoes(app.cliente);
   const idDoTudoEmDia = useId();
 
   const { fila, emEspera } = useMemo(
     () => fatiarFila(filaDoMotor ?? NENHUM, emEsperaDoMotor ?? NENHUM, sessoes ?? NENHUM),
     [filaDoMotor, emEsperaDoMotor, sessoes],
   );
+  // o clique em Revisar vira "Iniciando a revisão." na hora, antes do motor
+  const { iniciadas, controle } = useIniciadas(controleDasAcoes, sessoes ?? NENHUM, emEspera);
+  // a sessão que some sem resultado: no cartão da fila quando o PR está nela, senão em Em análise
+  const { falhas, dispensar: dispensarFalha } = useFalhas({
+    sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados, desvio,
+  });
+  const { falhasDaFila, falhasSoltas } = useMemo(() => {
+    const naFila = new Set(fila.map((pr) => pr.key));
+    const daFila = new Map(falhas.filter((f) => naFila.has(f.chave)).map((f) => [f.chave, f] as const));
+    return { falhasDaFila: daFila, falhasSoltas: falhas.filter((f) => !naFila.has(f.chave) && !emEspera.some((pr) => pr.key === f.chave)) };
+  }, [falhas, fila, emEspera]);
   // o PR que voltou para a fila não é mais um ignorado
   const ignoradosFora = useMemo(
     () => ignorados.filter((i) => !(filaDoMotor ?? NENHUM).some((pr) => pr.key === i.chave)),
@@ -81,7 +97,7 @@ export function Radar({ app = appDoNavegador }: Props) {
   const pendentes = decisoes?.pending.length ?? 0;
   // Tudo em dia: a primeira checagem já terminou, o estado chegou inteiro e não há nada em
   // análise, na fila nem guardado sem publicar.
-  const tudoEmDia = temEstado && !ausentes.length && Boolean(ultimaChecagem) && emAnalise === 0 && naFila === 0 && pendentes === 0;
+  const tudoEmDia = temEstado && !ausentes.length && Boolean(ultimaChecagem) && emAnalise === 0 && naFila === 0 && pendentes === 0 && !falhasSoltas.length;
   // "Hoje" é lido quando a próxima checagem muda: a tela não tem relógio próprio.
   const fraseDoTudoEmDia = useMemo(() => textoDoTudoEmDia({ nextCheckAt: proximaChecagem }), [proximaChecagem]);
 
@@ -132,7 +148,15 @@ export function Radar({ app = appDoNavegador }: Props) {
             </section>
           ) : (
             <>
-              <EmAnalise sessoes={sessoes ?? NENHUM} feeds={feeds ?? SEM_FEEDS} controle={controle} />
+              <EmAnalise
+                sessoes={sessoes ?? NENHUM}
+                feeds={feeds ?? SEM_FEEDS}
+                falhas={falhasSoltas}
+                iniciadas={iniciadas}
+                desvio={desvio}
+                controle={controle}
+                aoDispensarFalha={dispensarFalha}
+              />
               <Fila
                 fila={fila}
                 emEspera={emEspera}
@@ -142,11 +166,14 @@ export function Radar({ app = appDoNavegador }: Props) {
                 emConflito={emConflito}
                 vazio={textoDaFilaVazia(doTopo)}
                 checando={status === 'checking' && !ultimaChecagem}
+                falhas={falhasDaFila}
+                iniciadas={iniciadas}
                 controle={controle}
+                aoDispensarFalha={dispensarFalha}
               />
             </>
           )}
-          <PostadasHoje resolvidas={decisoes?.resolved ?? NENHUM} />
+          <PostadasHoje resolvidas={decisoes?.resolved ?? NENHUM} cliente={app.cliente} controle={controle} iniciadas={iniciadas} />
           <Ignorados ignorados={ignoradosFora} controle={controle} />
         </>
       ) : (

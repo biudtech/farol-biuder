@@ -194,3 +194,44 @@ describe('o CSS do Sistema', () => {
     }
   });
 });
+
+// O cartão de um PR no Radar: o texto do rodapé da faixa vai na cor do estado direto sobre o
+// cartão (--surface), e as pílulas e o marcador da etapa põem o texto do estado sobre o fundo
+// suave dele (o par conferido acima). O trilho e o spinner são parte gráfica (--accent, 3:1).
+describe.each(TEMAS)('o cartão do Radar no tema %s', (_nome, v) => {
+  const de = (nome: string) => cor(v.get(nome) as string);
+
+  it('texto de estado direto sobre o cartão: 4,5:1', () => {
+    for (const estado of ['--ok-texto', '--aviso-texto', '--danger-texto', '--accent-texto', '--apagado', '--muted', '--text']) {
+      expect(contraste(de(estado), de('--surface')), `${estado} sobre --surface`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('o trilho e o spinner da etapa contra o trilho vazio e o cartão: 3:1', () => {
+    expect(contraste(de('--accent'), de('--surface-2')), '--accent sobre --surface-2').toBeGreaterThanOrEqual(3);
+    expect(contraste(de('--accent'), de('--surface')), '--accent sobre --surface').toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('o CSS do Radar', () => {
+  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../componentes/radar/Radar.module.css'), 'utf8');
+
+  it('não tem cor fora das variáveis de globals.css', () => {
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+    const usadas = new Set([...css.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1] as string));
+    expect(usadas.size).toBeGreaterThan(0);
+    for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
+  });
+
+  // texto sobre o fundo suave de um estado é sempre o texto daquele estado
+  it('fundo suave de estado só com o texto do mesmo estado', () => {
+    for (const regra of css.match(/\{[^}]*\}/g) ?? []) {
+      const fundo = /background: var\(--(ok|aviso|danger|accent)-soft\)/.exec(regra)?.[1];
+      if (fundo && /color:/.test(regra)) expect(regra).toContain(`color: var(--${fundo}-texto)`);
+    }
+  });
+
+  it('o spinner da etapa e o trilho indefinido param com movimento reduzido', () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.giro, \.corre \{ animation: none; \}/);
+  });
+});

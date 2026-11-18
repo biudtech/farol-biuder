@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chaveCurta, chavesDoFeed, dataComAno, dataHora, dia, hora, horaCurta, linkDoPr, nomeDoPr, prDaUrl, repoDaChave, textoDaEspera,
+  dataComAno, dataHora, dia, hora, horaCurta, linkDoPr, nomeDoPr, prDaUrl, textoDaEspera,
   textoDoEstacionado,
 } from './formato';
 
@@ -8,13 +8,6 @@ import {
 const INSTANTE = Date.UTC(2026, 10, 16, 14, 32, 5);
 
 describe('nome e link do PR', () => {
-  it('a chave curta e o repositório tiram o dono, e chave fora do formato volta como veio', () => {
-    expect(chaveCurta('biudtech/biud-esg#678')).toBe('biud-esg#678');
-    expect(repoDaChave('biudtech/biud-esg#678')).toBe('biud-esg');
-    expect(chaveCurta('torta')).toBe('torta');
-    expect(repoDaChave('torta')).toBe('torta');
-  });
-
   it('a chave do motor vira o nome que o botão diz', () => {
     expect(nomeDoPr('dono/repo#123')).toBe('PR #123 de dono/repo');
     expect(nomeDoPr('Outra-Org/biblioteca.web#7')).toBe('PR #7 de Outra-Org/biblioteca.web');
@@ -44,20 +37,6 @@ describe('nome e link do PR', () => {
     for (const digitada of [`  ${canonica}  `, `${canonica}/files`, `${canonica}/`, `${canonica}?w=1&x=<y>`, `${canonica}#issuecomment-1`, `${canonica}/commits/abc?diff=split#L3`]) {
       expect(prDaUrl(digitada), digitada).toEqual({ chave: 'dono/repo.js#9', url: canonica });
     }
-  });
-});
-
-describe('chave das linhas do feed', () => {
-  it('é a hora da linha e a ordem entre as de mesma hora', () => {
-    expect(chavesDoFeed([{ t: 1 }, { t: 2 }, { t: 2 }, { t: 3 }])).toEqual(['1:0', '2:0', '2:1', '3:0']);
-    expect(chavesDoFeed([])).toEqual([]);
-  });
-
-  it('a linha mantém a chave quando o motor corta as antigas e chega uma nova', () => {
-    const antes = [{ t: 1 }, { t: 2 }, { t: 3 }];
-    const depois = [{ t: 2 }, { t: 3 }, { t: 4 }];
-    expect(chavesDoFeed(depois).slice(0, 2)).toEqual(chavesDoFeed(antes).slice(1));
-    expect(new Set(chavesDoFeed(depois)).size).toBe(3);
   });
 });
 

@@ -48,6 +48,12 @@ test('semMudanca: so quando nao ha alterado nem removido', () => {
   assert.equal(semMudanca({ alterados: [], removidos: ['a'] }), false);
 });
 
+test('semMudanca: a hora do motor sozinha nao vira evento, e vai junto de mudanca de verdade', () => {
+  assert.equal(semMudanca({ alterados: ['agora'], removidos: [] }), true);
+  assert.equal(semMudanca({ alterados: ['agora', 'status'], removidos: [] }), false);
+  assert.equal(semMudanca({ alterados: ['agora'], removidos: ['a'] }), false);
+});
+
 test('corpoDoPatch: JSON valido, so com o que mudou, reusando o texto ja serializado', () => {
   const atual = { status: 'checking', queue: [{ key: 'o/r#1' }], usage: { dias: [1, 2, 3] } };
   const serializado = camposSerializados(atual);

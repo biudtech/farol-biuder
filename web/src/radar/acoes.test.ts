@@ -41,6 +41,10 @@ describe('ações do Histórico: revisar de novo e contestação', () => {
     expect(nomeDa(deNovo)).toBe('Revisar de novo PR #12 de dono/repo');
     expect(confirmacaoDa(deNovo)).toBeNull();
     expect(idDa(deNovo)).toBe('revisar');
+    const falhou: Acao = { ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', falhou: true };
+    expect(rotuloDa(falhou)).toBe('Tentar de novo');
+    expect(nomeDa(falhou)).toBe('Tentar de novo PR #12 de dono/repo');
+    expect(pedidoDa(falhou)).toEqual({ rota: '/api/review', corpo: { urls: ['https://github.com/dono/repo/pull/12'] } });
   });
 
   // lib/engine/pushback.js: recordPushback grava confirmado e manual; pushbacksFor leva o

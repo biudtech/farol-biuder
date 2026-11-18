@@ -79,7 +79,8 @@ test('abre com o snapshot inteiro e depois só manda o que mudou', async () => {
   const patch = s.eventos[1];
   assert.equal(patch.tipo, 'state-patch');
   const corpo = JSON.parse(patch.dados);
-  assert.deepEqual(Object.keys(corpo.campos), ['status']);
+  // só o que mudou, e a hora do motor junto quando ela andou desde o retrato inicial
+  assert.deepEqual(Object.keys(corpo.campos).filter((k) => k !== 'agora'), ['status']);
   assert.equal(corpo.campos.status, 'checking');
   // o patch é ordens de grandeza menor que o snapshot: é o motivo desta mudança
   assert.ok(patch.dados.length < s.eventos[0].dados.length / 10,
@@ -94,7 +95,7 @@ test('empurrão que não muda nada não vira evento nenhum', async () => {
   engine.pushState();
   // espera ATIVA por um evento que não deve existir: se aparecer, o teste falha
   await ate(() => s.eventos.length >= 2, 300);
-  assert.equal(s.eventos.length, 1, 'estado igual não pode gerar tráfego');
+  assert.equal(s.eventos.length, 1, 'estado igual não pode gerar tráfego, nem com a hora do motor andando');
   s.fechar();
 });
 
@@ -115,7 +116,12 @@ test('mesclar os patches no snapshot inicial reproduz o estado do engine', async
     estado = { ...estado, ...corpo.campos };
     for (const k of corpo.removidos || []) delete estado[k];
   }
-  assert.deepEqual(estado, JSON.parse(JSON.stringify(engine.snapshot())));
+  // a hora do motor muda a cada retrato: vai junto de cada mudança, e o resto bate
+  const { agora, ...semCarimbo } = estado;
+  const { agora: agoraDoEngine, ...doEngine } = JSON.parse(JSON.stringify(engine.snapshot()));
+  assert.ok(Number.isSafeInteger(agora) && agora <= agoraDoEngine, String(agora));
+  assert.ok(s.eventos.slice(1).every((e) => Number.isSafeInteger(JSON.parse(e.dados).campos.agora)), 'cada patch leva a hora do motor');
+  assert.deepEqual(semCarimbo, doEngine);
   s.fechar();
 });
 

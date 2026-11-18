@@ -38,6 +38,11 @@ describe('postadas hoje', () => {
     expect(ilegiveis).toBe(0);
   });
 
+  it('leva ao cartão o autor, o card e a duração das etapas, só quando o motor mandou', () => {
+    const [p] = postadasDeHoje([resolvida({ card: 'BT-1', stages: { totalMs: 420000, stages: [] }, pr: { url: 'https://github.com/dono/repo/pull/12', author: 'ana' } })], AGORA, 'UTC').postadas;
+    expect([p?.autor, p?.card, p?.totalMs, p?.acao]).toEqual(['ana', 'BT-1', 420000, 'approve']);
+  });
+
   it('o dia é o do fuso do navegador: 23h de ontem em São Paulo ainda é ontem lá', () => {
     // 02h UTC do dia 16 são 23h do dia 15 em São Paulo
     const madrugada = Date.UTC(2026, 10, 16, 2);
@@ -58,6 +63,8 @@ describe('postadas hoje', () => {
       desfecho: 'Aprovação. Publicado automaticamente.',
       endereco: '/historico?id=d1&pr=dono%2Frepo%2312',
       url: 'https://github.com/dono/repo/pull/12',
+      acao: 'approve',
+      resolvedAt: AGORA - HORA,
     });
     expect([b?.tom, b?.rotulo, b?.desfecho]).toEqual(['ruim', 'Pediu mudanças', 'Pedido de mudanças. Publicado por você.']);
     // status que a tabela não conhece aparece cru

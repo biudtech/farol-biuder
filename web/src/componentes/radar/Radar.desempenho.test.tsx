@@ -2,13 +2,15 @@
 // O que cada mudança do snapshot redesenha. As seções são `memo` e a tela lê cada chave por
 // um seletor próprio: a linha nova de um feed não pode custar a fila nem as postadas.
 // Mudou com o redesenho de 17/11/2026: o espião das pendências (textoDoParecer, de "Precisa de
-// você") saiu com a mesa, e entrou o de "Postadas hoje" (postadasDeHoje).
+// você") saiu com a mesa, e entrou o de "Postadas hoje" (postadasDeHoje). Com o cartão de
+// 18/11/2026 o feed saiu do Radar, e o espião da sessão passou a ser o andamento do cartão dela.
 import { act, cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '@/contratos/snapshot';
 import { ESTADO_INICIAL, type App, type EstadoDoApp } from '@/estado/app';
 import { criarStore } from '@/estado/store';
+import * as cartao from '@/radar/cartao';
 import * as formato from '@/radar/formato';
 import * as postadas from '@/radar/postadas';
 import { aplicarAtividade } from '@/transporte/estado';
@@ -21,8 +23,11 @@ vi.mock('@/radar/formato', async (importar) => {
   return {
     ...real,
     textoDoEstacionado: vi.fn(real.textoDoEstacionado), // só a Fila
-    chavesDoFeed: vi.fn(real.chavesDoFeed), // só o feed de uma sessão
   };
+});
+vi.mock('@/radar/cartao', async (importar) => {
+  const real = await importar<typeof import('@/radar/cartao')>();
+  return { ...real, andamentoDaSessao: vi.fn(real.andamentoDaSessao) }; // só o cartão de uma sessão
 });
 vi.mock('@/radar/postadas', async (importar) => {
   const real = await importar<typeof import('@/radar/postadas')>();
@@ -52,7 +57,7 @@ function estado(): Snapshot {
 
 function montar() {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot: estado() });
-  const app = { store, cliente: { post: vi.fn() }, dispensarRecados: vi.fn() } as unknown as App;
+  const app = { store, cliente: { post: vi.fn(), get: vi.fn(() => new Promise(() => {})) }, dispensarRecados: vi.fn() } as unknown as App;
   render(<Radar app={app} />);
   return store;
 }
@@ -62,22 +67,21 @@ describe('o que uma linha de feed redesenha', () => {
     const store = montar();
     const daFila = vi.mocked(formato.textoDoEstacionado);
     const dasPostadas = vi.mocked(postadas.postadasDeHoje);
-    const dosFeeds = vi.mocked(formato.chavesDoFeed);
+    const dosFeeds = vi.mocked(cartao.andamentoDaSessao);
     expect(daFila).toHaveBeenCalledTimes(1);
     expect(dasPostadas).toHaveBeenCalledTimes(1);
     expect(dosFeeds).toHaveBeenCalledTimes(2);
 
     act(() => { store.trocar({ snapshot: aplicarAtividade(store.ler().snapshot, { id: 'a1', item: linha(2) }, () => {}) }); });
-    expect(screen.getByText('linha 2')).toBeTruthy();
     expect(daFila).toHaveBeenCalledTimes(1);
     expect(dasPostadas).toHaveBeenCalledTimes(1);
-    // o feed da sessão a1 de novo; o da a2 não
+    // o cartão da sessão a1 de novo (o último evento dela mudou); o da a2 não
     expect(dosFeeds).toHaveBeenCalledTimes(3);
   });
 
   it('um aviso do motor não redesenha seção nenhuma', () => {
     const store = montar();
-    const chamadas = () => [formato.textoDoEstacionado, postadas.postadasDeHoje, formato.chavesDoFeed].map((f) => vi.mocked(f).mock.calls.length);
+    const chamadas = () => [formato.textoDoEstacionado, postadas.postadasDeHoje, cartao.andamentoDaSessao].map((f) => vi.mocked(f).mock.calls.length);
     const antes = chamadas();
     act(() => { store.trocar({ recados: [{ n: 1, tom: 'ok', texto: 'aprovado' }] }); });
     expect(screen.getByText('aprovado')).toBeTruthy();

@@ -43,7 +43,9 @@ function estado(extra: Partial<Snapshot> = {}): Snapshot {
 function montar(snapshot: Snapshot | null, resposta: Resultado<RespostaDeAcao> = ACEITE) {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot });
   const post = vi.fn(async (rota: string, corpo: unknown) => { void rota; void corpo; return resposta; });
-  const app = { store, cliente: { post }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
+  // o detalhe das postadas (GET /api/decision) fica sem resposta: as pílulas dizem "Carregando"
+  const get = vi.fn(() => new Promise(() => {}));
+  const app = { store, cliente: { post, get }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
   render(<Radar app={app} />);
   return { store, post };
 }
@@ -154,7 +156,7 @@ describe('tela Radar: carga, topo e estados', () => {
       headlessWaitingPrs: [pr('dono/livre#1'), pr('dono/espera#7', { title: 'Esperando' })],
     }));
     const fila = screen.getByRole('region', { name: 'Fila' });
-    expect([...fila.querySelectorAll('summary')].map((s) => s.querySelector('span')?.textContent)).toEqual(['Livre', 'Esperando']);
+    expect(within(fila).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Livre', 'Esperando']);
     expect(screen.getAllByRole('button', { name: /^Revisar agora / })).toHaveLength(1);
   });
 });
@@ -207,9 +209,9 @@ describe('tela Radar: Postadas hoje', () => {
       ]),
     }));
     const secao = screen.getByRole('region', { name: 'Postadas hoje' });
-    expect([...secao.querySelectorAll('summary')].map((s) => s.textContent)).toEqual([expect.stringContaining('Aprovada hoje')]);
+    expect(within(secao).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Aprovada hoje']);
     expect(within(secao).getByRole('link', { name: 'Ver histórico' }).getAttribute('href')).toBe('/historico');
-    expect(within(secao).getByRole('link', { name: 'Ver a revisão de dono/repo#12' }).getAttribute('href')).toBe('/historico?id=r1&pr=dono%2Frepo%2312');
+    expect(within(secao).getByRole('link', { name: 'Ver resultado de dono/repo#12' }).getAttribute('href')).toBe('/historico?id=r1&pr=dono%2Frepo%2312');
   });
 });
 
@@ -229,26 +231,117 @@ describe('tela Radar: ações', () => {
     expect(regiao().textContent).toMatch(/^O motor aceitou o pedido: .*PR #12 de dono\/repo/);
   });
 
-  it('envio: o POST sai pelo cliente, o botão diz Enviando e fica desabilitado, a região viva anuncia, e depois vem o resultado', async () => {
+  it('envio: o POST sai pelo cliente, o cartão vira "Iniciando a revisão." na hora, a região viva anuncia, e depois vem o resultado', async () => {
     let soltar!: (r: Resultado<RespostaDeAcao>) => void;
     const t = montar(estado({ queue: [pr('dono/repo#12')] }));
     t.post.mockImplementationOnce(() => new Promise<Resultado<RespostaDeAcao>>((resolver) => { soltar = resolver; }));
     await clicar(`Revisar agora ${NOME}`);
     expect(t.post).toHaveBeenCalledTimes(1);
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/review', { urls: [URL_DO_PR] }]);
-    const enviando = screen.getByRole('button', { name: `Enviando: Revisar agora ${NOME}` }) as HTMLButtonElement;
-    expect(enviando.disabled).toBe(true);
-    expect((screen.getByRole('button', { name: `Ignorar ${NOME}` }) as HTMLButtonElement).disabled).toBe(true);
+    // antes do servidor: o cartão já diz que começou, com Revisando ocupado no lugar dos botões
+    const cartao = screen.getByRole('article');
+    expect(cartao.getAttribute('data-tom')).toBe('rodando');
+    expect(within(cartao).getByText('Iniciando a revisão.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: `Revisando ${NOME}` }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button', { name: /Revisar agora/ })).toBeNull();
     expect(regiao().getAttribute('aria-live')).toBe('polite');
     expect(regiao().textContent).toBe(`Enviando: Revisar agora ${NOME}.`);
-    // clique dobrado não manda outro pedido
-    fireEvent.click(enviando);
-    expect(t.post).toHaveBeenCalledTimes(1);
 
     await act(async () => { soltar(ACEITE); });
     expect(regiao().textContent).toContain(`O motor aceitou o pedido: revisar agora ${NOME}.`);
     expect(regiao().textContent).not.toContain('Enviando');
+    // aceito: segue iniciando até a sessão aparecer no estado do motor
+    expect(within(screen.getByRole('article')).getByText('Iniciando a revisão.')).toBeTruthy();
+    act(() => { t.store.trocar({ snapshot: estado({ queue: [pr('dono/repo#12')], activeSessions: [{ id: 'a1', startedAt: Date.now(), pr: { key: 'dono/repo#12', url: URL_DO_PR } }] }) }); });
+    const emAnalise = screen.getByRole('region', { name: 'Em análise' });
+    expect(within(emAnalise).getByText('Buscando o código do PR.')).toBeTruthy();
+    expect(screen.queryByText('Iniciando a revisão.')).toBeNull();
+  });
+
+  it('foco: o botão clicado vira Revisando e o foco vai para ele, e depois para o Revisando da sessão que abriu', async () => {
+    const t = montar(estado({ queue: [pr('dono/repo#12')] }));
+    const revisar = screen.getByRole('button', { name: `Revisar agora ${NOME}` });
+    revisar.focus();
+    await act(async () => { fireEvent.click(revisar); });
+    const ocupado = screen.getByRole('button', { name: `Revisando ${NOME}` });
+    expect(document.activeElement).toBe(ocupado);
+    expect(document.activeElement).not.toBe(document.body);
+    // a sessão abre: o cartão da fila sai, e o foco vai ao Revisando do cartão da sessão
+    act(() => { t.store.trocar({ snapshot: estado({ queue: [pr('dono/repo#12')], activeSessions: [{ id: 'a1', startedAt: Date.now(), pr: { key: 'dono/repo#12', url: URL_DO_PR } }] }) }); });
+    const daSessao = within(screen.getByRole('region', { name: 'Em análise' })).getByRole('button', { name: `Revisando ${NOME}` });
+    expect(document.activeElement).toBe(daSessao);
+  });
+
+  it('foco: Revisar de novo de uma postada vira Revisando com o foco nele, e quem estava em outro lugar não é puxado', async () => {
+    const agora = Date.now();
+    montar(estado({ decisions: decisoes([], [{ id: 'r1', key: 'dono/repo#12', resolvedAt: agora, action: 'approve', status: 'auto_approved', pr: { url: URL_DO_PR, title: 'Aprovada' } }]) }));
+    const deNovo = screen.getByRole('button', { name: `Revisar de novo ${NOME}` });
+    deNovo.focus();
+    await act(async () => { fireEvent.click(deNovo); });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Revisando ${NOME}` }));
+  });
+
+  it('relógio do motor 60 s atrás do navegador: o tempo da sessão conta na hora do motor', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+    try {
+      const navegador = Date.UTC(2026, 10, 18, 12);
+      vi.setSystemTime(navegador);
+      const motor = navegador - 60000;
+      montar(estado({
+        agora: motor,
+        activeSessions: [{ id: 'a1', startedAt: motor - 18000, pr: { key: 'dono/repo#12', url: URL_DO_PR }, progresso: { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' } }],
+        activity: { a1: [{ t: motor - 8000, k: 'tool', text: 'lendo' }] },
+      }));
+      const faixa = screen.getByRole('group', { name: `Andamento da revisão de ${NOME}` });
+      expect(within(faixa).getByText('18 s')).toBeTruthy();
+      expect(screen.getByRole('article').getAttribute('data-tom')).toBe('rodando');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('o motor recusa o Revisar: o cartão volta a ser da fila, com o botão', async () => {
+    montar(estado({ queue: [pr('dono/repo#12')] }), { ok: false, falha: 'recusado', status: 403 });
+    await clicar(`Revisar agora ${NOME}`);
+    expect(screen.getByRole('article').getAttribute('data-tom')).toBe('fila');
+    expect(screen.queryByText('Iniciando a revisão.')).toBeNull();
     expect((screen.getByRole('button', { name: `Revisar agora ${NOME}` }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a sessão que some sem resultado vira falha, com o motivo, depois da carência; a decisão que chega a tira', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const inicio = Date.now();
+      const sessao = { id: 'a1', startedAt: inicio, cancellable: true, pr: { key: 'dono/repo#12', url: URL_DO_PR, title: 'Corrige' }, progresso: { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' } };
+      const t = montar(estado({ activeSessions: [sessao], activity: { a1: [{ t: inicio, k: 'warn', text: 'limite do plano até 19/11' }] } }));
+      // a tela está aberta há tempo quando a sessão some: a carência conta da hora em que sumiu
+      act(() => { vi.advanceTimersByTime(120000); });
+      act(() => { t.store.trocar({ snapshot: estado() }); });
+      // na carência a decisão pode chegar: ainda não é falha
+      expect(screen.queryByText(/terminou sem resultado/)).toBeNull();
+      act(() => { vi.advanceTimersByTime(3100); });
+      const cartao = screen.getByRole('article');
+      expect(cartao.getAttribute('data-tom')).toBe('falha');
+      expect(within(cartao).getByText('A sessão terminou sem resultado: limite do plano até 19/11.')).toBeTruthy();
+      expect(screen.queryByText('Tudo revisado')).toBeNull();
+      // a decisão do PR chegou depois: não era falha
+      act(() => { t.store.trocar({ snapshot: estado({ decisions: decisoes([], [{ id: 'r1', key: 'dono/repo#12', resolvedAt: Date.now(), action: 'approve', status: 'auto_approved' }]) }) }); });
+      expect(screen.queryByText(/terminou sem resultado/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a sessão cancelada que some não vira falha', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const t = montar(estado({ activeSessions: [{ id: 'a1', startedAt: Date.now(), cancelled: true, pr: { key: 'dono/repo#12', url: URL_DO_PR } }] }));
+      act(() => { t.store.trocar({ snapshot: estado() }); });
+      act(() => { vi.advanceTimersByTime(5000); });
+      expect(screen.queryByText(/terminou sem resultado/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('nada de atualização otimista: o PR só sai da fila quando o snapshot do motor muda', async () => {
@@ -304,7 +397,6 @@ describe('tela Radar: ações', () => {
   it('Cancelar a sessão manda o id dela, depois da confirmação, e o foco vai à região do resultado', async () => {
     const sessao = { id: 'a1', label: 'Revisão automática de dono/repo#12', startedAt: 1, cancellable: true, pr: { key: 'dono/repo#12', url: URL_DO_PR } };
     const t = montar(estado({ activeSessions: [sessao], activity: { a1: [{ t: 1, k: 'tool', text: 'lendo o diff' }] } }));
-    expect(screen.getByText('lendo o diff')).toBeTruthy();
     await clicar(`Cancelar a sessão de ${NOME}`);
     expect(t.post).not.toHaveBeenCalled();
     await clicar(`Cancelar a sessão: a sessão de ${NOME}`);
