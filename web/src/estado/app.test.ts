@@ -309,8 +309,8 @@ describe('sessão do front', () => {
       t.rotas.set('/api/events', (p) => fluxoFalso(p.init).resposta);
       t.app.iniciar();
       await vi.advanceTimersByTimeAsync(0);
-      t.guardado.set('farol-tema', 'light');
-      t.janela.disparar('farol-tema');
+      t.guardado.set('farol-tema-v3', 'light');
+      t.janela.disparar('farol-tema-v3');
       expect(t.app.store.ler()).toMatchObject({ sessao: 'pareado', conexao: 'conectado' });
       expect(t.pedidos).toHaveLength(1);
     });
