@@ -193,3 +193,41 @@ test('o desfecho lê os trechos do escopo da sessão antes de decidir, e as prov
   assert.deepEqual(result.trechosDosAchados.map((t) => `${t.arquivo}:${t.linha}`), ['src/editar.ts:12']);
   assert.equal(provasDaDecisao(result).trechos[0].linhas.length, 3);
 });
+
+// Revisão independente (17/11/2026): a máscara roda no patch inteiro, antes de quebrar e cortar.
+const CORPO_PEM = ['MIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun', 'VTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK', 'LxoS2tFczGkPLPgizskuemMghRniWaoLcyehkd3qqGElvW/VDL5AaWTg0nLVkjRo'];
+const PATCH_PEM = ['@@ -0,0 +1,5 @@', '+-----BEGIN RSA PRIVATE KEY-----', ...CORPO_PEM.map((l) => `+${l}`), '+-----END RSA PRIVATE KEY-----'].join('\n');
+
+test('chave PEM de várias linhas: nem o cabeçalho nem uma linha do corpo saem crus, e as linhas seguem contadas', () => {
+  const raiz = escopo('pem', { 'cfg/chave.txt': PATCH_PEM, 'cfg/sem-fim.txt': PATCH_PEM.split('\n').slice(0, 4).join('\n') });
+  const trechos = trechosDosAchados(raiz, [achado({ file: 'cfg/chave.txt', line: 1 }), achado({ file: 'cfg/chave.txt', line: 3 }), achado({ file: 'cfg/sem-fim.txt', line: 2 })]);
+  assert.deepEqual(trechos.map((t) => `${t.arquivo}:${t.linha}`), ['cfg/chave.txt:1', 'cfg/chave.txt:3', 'cfg/sem-fim.txt:2']);
+  assert.deepEqual(trechos[1].linhas.map((l) => l.linha), [2, 3, 4], 'a máscara não muda a contagem das linhas do head');
+  const tudo = JSON.stringify(trechos);
+  for (const pedaco of CORPO_PEM) assert.equal(tudo.includes(pedaco.slice(0, 20)), false, pedaco.slice(0, 20));
+  assert.equal(tudo.includes('BEGIN RSA PRIVATE KEY'), false);
+  assert.match(trechos[0].linhas[0].texto, /\[segredo mascarado\]/);
+});
+
+test('token que o corte de 160 partiria (começando na coluna 150) sai mascarado inteiro', () => {
+  const token = `ghp_${'aB3dE5fG7hJ9kL1mN2pQ4rS6tU8vW0xY2zA4'}`;
+  // o detector pede borda de palavra antes do prefixo: um espaço, e o token começa na coluna 150
+  const linha = `${'x'.repeat(148)} ${token}`;
+  const raiz = escopo('borda', { 'src/borda.ts': `@@ -1 +1 @@\n+${linha}` });
+  const [t] = trechosDosAchados(raiz, [achado({ file: 'src/borda.ts', line: 1 })]);
+  assert.equal(t.linhas[0].texto.includes('ghp_'), false);
+  assert.equal(t.linhas[0].texto.includes(token.slice(0, 10)), false);
+  assert.ok(t.linhas[0].texto.length <= 160);
+  // na leitura do que foi gravado cru, a mesma regra: máscara antes do corte, no trecho inteiro
+  const gravado = trechosGravados([{ arquivo: 'a', linha: 2, linhas: [
+    { linha: 1, tipo: 'adicionada', texto: '-----BEGIN RSA PRIVATE KEY-----' }, { linha: 2, tipo: 'adicionada', texto: CORPO_PEM[0] }, { linha: 3, texto: linha }] }]);
+  const lido = JSON.stringify(gravado);
+  assert.equal(lido.includes(CORPO_PEM[0].slice(0, 20)), false);
+  assert.equal(lido.includes('ghp_'), false);
+  assert.deepEqual(gravado[0].linhas.map((l) => l.linha), [1, 2, 3]);
+});
+
+test('caminho na pasta redigida do escopo, ou que representa um protegido, não dá trecho', () => {
+  const raiz = escopo('redigido', { '_farol_redigido_/_.env.redigido': '@@ -1 +1 @@\n+A=1', '_farol_redigido_/x.ts': '@@ -1 +1 @@\n+b' });
+  assert.deepEqual(trechosDosAchados(raiz, [achado({ file: '_farol_redigido_/_.env.redigido', line: 1 }), achado({ file: '_farol_redigido_/x.ts', line: 1 })]), []);
+});
