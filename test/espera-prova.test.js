@@ -566,7 +566,8 @@ test('cancelamento explícito encerra a recuperação sem postar e sem pendênci
   assert.equal(await esperaProva.reverQuandoAProvaMudar(e), 1);
   assert.equal(e.autoReviewParked.has(PR.key), true, 'o cancelamento não é desfeito');
   assert.equal(pendente(e), undefined);
-  assert.equal(decisoesResolvidas(e).find((x) => x.key === PR.key).status, 'commented_inconclusive', 'a conta revisa sozinha: o desfecho sem mesa comenta');
+  assert.equal(decisoesResolvidas(e).find((x) => x.key === PR.key).status, 'not_posted', 'o cancelamento encerra sem postar e sem relançar');
+  assert.deepEqual(envios, []);
   assert.deepEqual(e.eventos, []);
 });
 

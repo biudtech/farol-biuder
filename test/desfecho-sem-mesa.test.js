@@ -44,6 +44,10 @@ io.run = async (_cmd, args) => {
     return { ok: true, code: 0, stderr: '', stdout: JSON.stringify({ state: gh.state, headRefOid: gh.head, author: { login: 'dev' } }) };
   }
   if (sub.includes('--json headRefOid')) return { ok: true, code: 0, stdout: gh.head, stderr: '' };
+  if (sub.includes('--json state,labels')) {
+    if (gh.estadoFalha) return { ok: false, code: 1, stdout: '', stderr: 'HTTP 502' };
+    return { ok: true, code: 0, stdout: JSON.stringify({ state: gh.state, labels: (gh.labels || []).map((name) => ({ name })) }), stderr: '' };
+  }
   if (sub.includes('--json state')) return { ok: true, code: 0, stdout: JSON.stringify({ state: gh.state }), stderr: '' };
   return { ok: true, code: 0, stdout: '', stderr: '' };
 };
@@ -54,6 +58,9 @@ isolateTechnicalTool();
 const semMesa = (await import('../lib/engine/desfecho-sem-mesa.js')).default;
 const { publicReviewLanguageIssues } = await import('../lib/engine/public-review.js');
 const contasConfig = (await import('../lib/engine/contas-config.js')).default;
+const esperaProva = (await import('../lib/engine/espera-prova.js')).default;
+const { staleForReview } = await import('../lib/engine/rereview-stale.js');
+const { MAX_TENTATIVAS_POR_HEAD } = await import('../lib/engine/busca-da-prova.js');
 const { normalizarConfig } = await import('../lib/settings.js');
 
 after(() => {
@@ -62,7 +69,7 @@ after(() => {
 });
 beforeEach(() => {
   envios = [];
-  gh = { head: HEAD, state: 'OPEN', meusReviews: [], reviewsAlheios: [], postFalha: '' };
+  gh = { head: HEAD, state: 'OPEN', meusReviews: [], reviewsAlheios: [], postFalha: '', labels: [], estadoFalha: false };
 });
 
 function motor() {
@@ -386,4 +393,137 @@ test('a edição que pede `wait` volta em ignorados, e autoReview continua o lig
   assert.equal(r.ok, true);
   assert.deepEqual(r.ignorados.sort(), ['onCaveats', 'onClean', 'onReject']);
   assert.equal(r.conta.autoReview, false);
+});
+
+/* ---------- revisão independente de 17/11/2026: as conferências antes do COMMENT neutro ---------- */
+
+const ctxDaRevisao = (n, head = HEAD) => ({ pr: PR(n), result: { headSha: head, reasons: [], verdict: 'approve', payloads: {} }, headShaAtual: head, estado: {} });
+
+test('bloqueio 1: PR mesclado, fechado ou com estado ilegível não recebe o COMMENT neutro, nos dois ramos', async () => {
+  for (const [estado, falha, status] of [['MERGED', false, 'already_merged'], ['CLOSED', false, 'already_closed'], ['OPEN', true, 'not_posted']]) {
+    gh.state = estado; gh.estadoFalha = falha;
+    const e = motor();
+    e.decisions.pending.push(mesaAntiga(60, { headSha: '' }));
+    await varrerAdotadas(e);
+    assert.deepEqual(envios, [], `${estado}${falha ? ' ilegível' : ''}: pendência`);
+    assert.equal(resolvida(e, 60).status, status);
+    const r = await semMesa.encerrarNaRevisao(e, ctxDaRevisao(61), 'analise_incompleta');
+    assert.deepEqual(envios, [], `${estado}${falha ? ' ilegível' : ''}: revisão`);
+    assert.equal(r.status, status);
+  }
+  // o portão geral não muda: o COMMENT no PR aberto continua saindo
+  gh.state = 'OPEN'; gh.estadoFalha = false;
+  const aberto = motor();
+  await semMesa.encerrarNaRevisao(aberto, ctxDaRevisao(62), 'analise_incompleta');
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT']);
+});
+
+test('bloqueio 2: head que andou antes do COMMENT neutro não recebe o comentário, e fica na fila do head novo', async () => {
+  gh.head = HEAD_NOVO;
+  const e = motor();
+  const r = await semMesa.encerrarNaRevisao(e, ctxDaRevisao(63, HEAD), 'analise_incompleta');
+  assert.deepEqual(envios, []);
+  assert.equal(r.status, 'pending');
+  assert.deepEqual([r.blockedKind, r.blockedHead], ['stale_head', HEAD_NOVO]);
+  e.decisions.pending.push(mesaAntiga(64));
+  pendente(e, 64).semMesa = { head: HEAD, motivo: '', rodadas: semMesa.RODADAS_EXTRAS, proximaEm: 0 };
+  await semMesa.varrer(e);
+  assert.deepEqual(envios, []);
+  assert.deepEqual([pendente(e, 64).blockedKind, pendente(e, 64).blockedHead], ['stale_head', HEAD_NOVO]);
+});
+
+test('bloqueio 2: depois do COMMENT neutro, commit novo no PR abre a rodada automática', async () => {
+  const e = motor();
+  await semMesa.encerrarNaRevisao(e, ctxDaRevisao(65, HEAD), 'analise_incompleta');
+  assert.equal(resolvida(e, 65).status, 'commented_inconclusive');
+  assert.equal(e.reviewActions()['acme/app#65'].inconclusivo, true, 'o panorama marca o PR para a conferência de head novo');
+  assert.deepEqual(await staleForReview(e, PR(65)), { stale: false, head: HEAD, lastState: 'INCONCLUSIVO' });
+  gh.head = HEAD_NOVO;
+  assert.deepEqual(await staleForReview(e, PR(65)), { stale: true, head: HEAD_NOVO, lastState: 'INCONCLUSIVO' }, 'commit novo é o gatilho A da re-revisão');
+});
+
+test('bloqueio 3: cancelamento e label retirada encerram sem postar e sem relançar; label de outra conta também', async () => {
+  for (const tipo of ['cancelado', 'label-retirada']) {
+    const e = motor();
+    e.decisions.pending.push(mesaAntiga(66));
+    pendente(e, 66).semMesa = { head: HEAD, motivo: '', rodadas: 0, proximaEm: 0 };
+    e.autoReviewParked.add('acme/app#66');
+    e.parkedMotivos['acme/app#66'] = { tipo, motivo: tipo };
+    await semMesa.varrer(e);
+    assert.deepEqual(envios, [], tipo);
+    assert.equal(resolvida(e, 66).status, 'not_posted', tipo);
+    assert.equal(e.autoReviewParked.has('acme/app#66'), true, `${tipo}: o estacionamento continua`);
+  }
+  gh.labels = ['outra-conta:revisando'];
+  const e = motor();
+  e.decisions.pending.push(mesaAntiga(67, { headSha: '' }));
+  await varrerAdotadas(e);
+  assert.deepEqual(envios, []);
+  assert.equal(resolvida(e, 67).status, 'not_posted');
+  assert.match(resolvida(e, 67).reasons[0].text, /outra-conta:revisando/);
+  gh.labels = ['eu:revisando'];
+  const minha = motor();
+  minha.decisions.pending.push(mesaAntiga(68, { headSha: '' }));
+  await varrerAdotadas(minha);
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT'], 'a label da própria conta não segura');
+});
+
+test('ressalva 4: o teto conjunto de sessões extras por head vale para as duas recuperações, e sobrevive à troca de pendência', async () => {
+  const e = motor();
+  const key = 'acme/app#69';
+  // uma sessão extra contada pela busca da prova e uma pelo desfecho sem mesa, no mesmo head
+  e.decisions.sessoesExtras = { [`${key}@${HEAD}`]: semMesa.TETO_CONJUNTO - 1 };
+  e.decisions.pending.push(mesaAntiga(69));
+  pendente(e, 69).semMesa = { head: HEAD, motivo: '', rodadas: 0, proximaEm: 0 };
+  await semMesa.varrer(e);
+  assert.equal(pendente(e, 69).blockedKind, 'stale_head', 'abaixo do teto, relança');
+  assert.equal(semMesa.sessoesExtras(e, key, HEAD), semMesa.TETO_CONJUNTO, 'e conta a sessão');
+  // a rodada concluiu com o OUTRO motivo (a busca da prova): a conta continua, e o teto vale
+  e.decisions.pending = [mesaAntiga(69, { esperaProva: { tentativas: 0, proximaEm: 0, regras: 99, recuperacao: 2, lacunas: ['análise incompleta'] }, analysisStatus: 'incomplete' })];
+  e.processHeadless = () => { };
+  await esperaProva.reverQuandoAProvaMudar(e);
+  assert.equal(pendente(e, 69), undefined, 'no teto conjunto, a busca da prova não relança');
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT']);
+  assert.equal(resolvida(e, 69).status, 'commented_inconclusive');
+});
+
+test('ressalva 5: o reenvio tira a recusa permanente do recuo e deixa só a falha passageira', async () => {
+  const casos = [
+    [{ ok: false, blocked: 'technical_review', attempted: false, error: 'avaliação técnica inconclusiva' }, 'semMesa'],
+    [{ ok: false, blocked: 'criterios_inconsistentes', attempted: false, error: 'critérios inconsistentes' }, 'semMesa'],
+    [{ ok: false, blocked: 'pr_proprio', attempted: false, error: 'PR da própria conta' }, 'semMesa'],
+    [{ ok: false, attempted: true, error: 'gh: Unprocessable Entity (HTTP 422) · Repository was archived so is read-only' }, 'semMesa'],
+    [{ ok: false, attempted: true, error: 'HTTP 502: Bad Gateway' }, 'reenvio'],
+  ];
+  for (const [post, destino] of casos) {
+    const e = motor();
+    e.decisions.pending.push(mesaAntiga(70, { postRetry: { event: 'approve', attempts: 0 }, payloads: { approve: { event: 'APPROVE', body: 'ok' } } }));
+    e.postReview = async () => post;
+    await e.retryFailedPosts();
+    const d = pendente(e, 70);
+    if (destino === 'reenvio') { assert.equal(d.postRetry.attempts, 1, post.error); assert.equal(d.semMesa, undefined); continue; }
+    assert.equal(d.postRetry, null, post.blocked || post.error);
+    assert.equal(d.semMesa.rodadas, semMesa.RODADAS_EXTRAS, 'vai direto ao fim do desfecho sem mesa');
+    if (post.blocked === 'pr_proprio') {
+      vencer(d);
+      e.postReview = async () => { throw new Error('PR próprio não recebe COMMENT neutro'); };
+      await semMesa.varrer(e);
+      assert.equal(resolvida(e, 70).status, 'not_posted');
+    }
+  }
+});
+
+test('ressalva 7: na adoção, a pendência que passou do teto da prova vai direto ao COMMENT, e as outras saem escalonadas', async () => {
+  const e = motor();
+  e.decisions.pending.push(mesaAntiga(71, { tentativasDaProva: MAX_TENTATIVAS_POR_HEAD }), mesaAntiga(72), mesaAntiga(73));
+  semMesa.adotar(e);
+  assert.equal(pendente(e, 71).semMesa.rodadas, semMesa.RODADAS_EXTRAS, 'sem sessão nova');
+  assert.equal(pendente(e, 72).semMesa.rodadas, 0);
+  const quando = [72, 73].map((n) => pendente(e, n).semMesa.proximaEm);
+  assert.ok(quando[1] - quando[0] >= 60_000, 'não relançam na mesma varredura');
+  pendente(e, 71).semMesa.proximaEm = 0;
+  await semMesa.varrer(e);
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT']);
+  assert.equal(resolvida(e, 71).status, 'commented_inconclusive');
+  assert.equal(pendente(e, 72).blockedKind, undefined, 'a escalonada ainda não relançou');
 });

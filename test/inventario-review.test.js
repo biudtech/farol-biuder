@@ -129,6 +129,8 @@ test('tentativas esgotadas não liberam aprovação com inventário desconhecido
 // e a prova gravada não pede revisão nova (que daria o mesmo resultado, uma sessão por rodada).
 test('PR acima do limite de arquivos do GitHub: COMMENT neutro na hora, sem recuperação e sem lacuna que relance', async () => {
   const { e } = motor('approve', { changedFiles: 3500 });
+  // antes do COMMENT neutro o motor relê o PR (desfecho-sem-mesa.js): aqui ele está aberto
+  e.prEstadoELabels = async () => ({ estado: 'OPEN', labels: [] });
   await e.runHeadlessReview({ ...PR });
   assert.deepEqual(e.postados.map(p => p.event), ['COMMENT'], 'o APPROVE automático continua impedido');
   assert.match(e.postados[0].body, /mais arquivos alterados do que o GitHub lista/);
