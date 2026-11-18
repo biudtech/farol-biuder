@@ -19,8 +19,10 @@ after(() => fs.rmSync(home, { recursive: true, force: true }));
 //   (lib/engine/headless-fila.js); a tela só fatia.
 // - `checagem` está (17/11/2026): as organizações do ciclo de monitoramento em curso, que o Radar
 //   mostra (lib/engine/checagem-em-curso.js); fora do ciclo vai null.
+// - `agora` está (18/11/2026): a hora do motor quando o retrato foi montado, com que o cartão do
+//   Radar mede a diferença entre o relógio do motor e o do navegador.
 const CHAVES = [
-  'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',
+  'app', 'modelos', 'claudePerfis', 'agora', 'status', 'error', 'baseline', 'account', 'accounts',
   'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'checagem', 'buscasPausadas', 'queue',
   'inicioAutomatico', 'esperaConflito', 'parked', 'reRounds', 'activeSessions', 'activity',
   'headlessWaiting', 'headlessWaitingPrs', 'headlessWaitingDetails', 'filaJusta', 'decisions',
@@ -29,6 +31,12 @@ const CHAVES = [
 
 test('o snapshot tem exatamente as chaves da lista fechada', () => {
   assert.deepEqual(Object.keys(new Engine().snapshot()).sort(), CHAVES.slice().sort());
+});
+
+test('agora é a hora do motor quando o retrato foi montado', () => {
+  const antes = Date.now();
+  const { agora } = new Engine().snapshot();
+  assert.ok(Number.isSafeInteger(agora) && agora >= antes && agora <= Date.now(), String(agora));
 });
 
 test('a lista fechada não repete chave nem traz as do que saiu do motor', () => {

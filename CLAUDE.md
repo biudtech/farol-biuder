@@ -352,7 +352,10 @@ públicos, cada um só no método dele: o pareamento, o status da autenticação
 nova sem classe reprova em `test/local-auth-inventario.test.js`. O estado inteiro sai em `GET /api/state` e, por
 diferença, em `GET /api/events` (SSE); as chaves do snapshot são lista fechada, travada em
 `test/snapshot-chaves.test.js`. A definição do dado é do motor: a tela fatia e formata, não
-recalcula. A chave `checagem` (17/11/2026) é a do ciclo de monitoramento em curso, `{ total,
+recalcula. A chave `agora` (18/11/2026) é a hora do motor quando o retrato foi montado, com que o
+front mede a diferença de relógio; sozinha ela não vira evento do SSE (`semMudanca`,
+`lib/estado-delta.js`). Na revisão em curso, `activeSessions` leva `ultimoSinalEm`, o sinal de vida
+que também o modelo escrevendo renova, no máximo a cada 5 s (`lib/engine/sinal-de-vida.js`). A chave `checagem` (17/11/2026) é a do ciclo de monitoramento em curso, `{ total,
 feitas, agora? }`: o ciclo busca os PRs abertos por organização, e é essa a unidade contada
 (`lib/engine/checagem-em-curso.js`); fora do ciclo vai `null`, e a contagem empurra o estado no
 máximo uma vez por segundo. A chave `doctor` (e `GET /api/doctor`) leva `saude`: `noArDesde` (o
