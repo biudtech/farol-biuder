@@ -79,7 +79,7 @@ export function verificacoesDoMotor(saude: Saude, quando: (ms: number) => string
   }
   linhas.push(m.commit
     ? { nome: 'Commit do motor', estado: 'ok', detalhe: `commit ${m.commit.slice(0, 7)}` }
-    : { nome: 'Commit do motor', estado: 'sem-dado', detalhe: 'o motor não achou o git do código (a imagem do container não leva a pasta .git)' });
+    : { nome: 'Commit do motor', estado: 'sem-dado', detalhe: 'commit não informado' });
   if (m.disco) {
     const livre = m.disco.livreBytes / m.disco.totalBytes;
     const detalhe = `${Math.floor(livre * 100)}% livre (${emGb(m.disco.livreBytes)} de ${emGb(m.disco.totalBytes)})`;
@@ -92,7 +92,7 @@ export function verificacoesDoMotor(saude: Saude, quando: (ms: number) => string
     const ultima = ultimaEscritaEm ? `última escrita em ${quando(ultimaEscritaEm)}` : 'sem escrita registrada';
     const fora = [consumoNoBanco ? '' : 'o consumo', historicoNoBanco ? '' : 'o histórico'].filter(Boolean).join(' e ');
     linhas.push(fora
-      ? { nome: 'Telemetria', estado: 'atencao', detalhe: `${fora} fora do banco, nos arquivos JSON (o banco não abriu nesta subida); ${ultima}` }
+      ? { nome: 'Telemetria', estado: 'atencao', detalhe: `banco da telemetria fechado (${fora}); ${ultima}` }
       : { nome: 'Telemetria', estado: 'ok', detalhe: `gravando no banco; ${ultima}` });
   }
   return linhas;

@@ -44,9 +44,10 @@ describe('verificacoesDoMotor', () => {
 
   it('o que falta: commit ausente é sem dado, disco quase cheio e telemetria fora do banco pedem atenção', () => {
     const linhas = texto(motor({ commit: undefined, disco: { livreBytes: 5e9, totalBytes: 100e9 }, telemetria: { consumoNoBanco: false, historicoNoBanco: false } }));
-    expect(linhas[1]).toBe('Sem dado · Commit do motor: o motor não achou o git do código (a imagem do container não leva a pasta .git)');
+    expect(linhas[1]).toBe('Sem dado · Commit do motor: commit não informado');
     expect(linhas[2]).toBe('Atenção · Disco da pasta de dados: 5% livre (5 GB de 100 GB)');
-    expect(linhas[3]).toBe('Atenção · Telemetria: o consumo e o histórico fora do banco, nos arquivos JSON (o banco não abriu nesta subida); sem escrita registrada');
+    expect(linhas[3]).toBe('Atenção · Telemetria: banco da telemetria fechado (o consumo e o histórico); sem escrita registrada');
+    expect(texto(motor({ telemetria: { consumoNoBanco: true, historicoNoBanco: false } }))[3]).toBe('Atenção · Telemetria: banco da telemetria fechado (o histórico); sem escrita registrada');
     expect(texto(motor({ disco: undefined }))[2]).toBe('Sem dado · Disco da pasta de dados: O motor não conseguiu medir.');
     expect(texto({ claudeAuth: [] })).toEqual([]);
   });

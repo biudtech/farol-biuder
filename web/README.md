@@ -1002,11 +1002,11 @@ Regras que valem para quem mexer nela:
   sessão de IA. Os caminhos de pasta que o `doctor` traz não são lidos.
 - **A saúde do próprio motor abre a seção** (`verificacoesDoMotor`, de `doctor.saude`,
   `lib/engine/saude-do-motor.js`): "Motor" (no ar há quanto tempo, contado até a hora da
-  medição, porque a tela não tem relógio, e desde quando), "Commit do motor" (sem dado quando o
-  motor não acha o git do código, como na imagem do container), "Disco da pasta de dados" (o
+  medição, porque a tela não tem relógio, e desde quando), "Commit do motor" ("commit não informado",
+  sem dado, quando o motor manda `null`), "Disco da pasta de dados" (o
   livre e o total; atenção abaixo de 10% livre, `DISCO_EM_ATENCAO`, a única régua que a tela
-  põe) e "Telemetria" (gravando no banco, ou o que ficou nos arquivos JSON, com a última
-  escrita).
+  põe) e "Telemetria" (gravando no banco, ou "banco da telemetria fechado" para o consumo ou o
+  histórico, com a última escrita).
 - **Sessão atual.** Encerrar a sessão `atual` avisa que este navegador volta ao pareamento, e
   depois do aceite a tela chama `app.esquecerSessao('revogada')`: o token sai daqui e a tela
   vai ao pareamento. Encerrar outra pede a lista de novo. Na tela a ação se chama Encerrar; no
