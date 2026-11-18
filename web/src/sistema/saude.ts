@@ -50,6 +50,54 @@ function avaliacaoTecnica(saude: Saude): Verificacao {
   return { nome, estado: saude.avaliacaoTecnica.pronta ? 'ok' : 'atencao', detalhe: saude.avaliacaoTecnica.detalhe };
 }
 
+const MINUTO_MS = 60000;
+
+// Quanto tempo, por extenso curto: minutos até uma hora, horas até dois dias, depois dias.
+export function duracaoCurta(ms: number): string {
+  const minutos = Math.max(0, Math.floor(ms / MINUTO_MS));
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 48) return `${horas} h`;
+  return `${Math.floor(horas / 24)} dias`;
+}
+
+const GB = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+const emGb = (bytes: number): string => `${GB.format(bytes / 1e9)} GB`;
+// Abaixo disto o disco da pasta de dados pede atenção: o banco, o cache das fontes e o log moram lá.
+export const DISCO_EM_ATENCAO = 0.1;
+
+// A saúde do próprio motor (doctor.saude): há quanto tempo está no ar, o commit em execução, o
+// disco da pasta de dados e a telemetria gravando. O tempo no ar é contado até a hora da medição,
+// não até agora: a tela não tem relógio, e o diagnóstico diz quando foi feito.
+export function verificacoesDoMotor(saude: Saude, quando: (ms: number) => string): Verificacao[] {
+  const m = saude.motor;
+  if (!m) return [];
+  const linhas: Verificacao[] = [];
+  if (m.noArDesde) {
+    const ate = m.medidoEm ?? m.noArDesde;
+    linhas.push({ nome: 'Motor', estado: 'ok', detalhe: `no ar há ${duracaoCurta(ate - m.noArDesde)}, desde ${quando(m.noArDesde)}` });
+  }
+  linhas.push(m.commit
+    ? { nome: 'Commit do motor', estado: 'ok', detalhe: `commit ${m.commit.slice(0, 7)}` }
+    : { nome: 'Commit do motor', estado: 'sem-dado', detalhe: 'o motor não achou o git do código (a imagem do container não leva a pasta .git)' });
+  if (m.disco) {
+    const livre = m.disco.livreBytes / m.disco.totalBytes;
+    const detalhe = `${Math.floor(livre * 100)}% livre (${emGb(m.disco.livreBytes)} de ${emGb(m.disco.totalBytes)})`;
+    linhas.push({ nome: 'Disco da pasta de dados', estado: livre < DISCO_EM_ATENCAO ? 'atencao' : 'ok', detalhe });
+  } else {
+    linhas.push({ nome: 'Disco da pasta de dados', estado: 'sem-dado', detalhe: 'O motor não conseguiu medir.' });
+  }
+  if (m.telemetria) {
+    const { consumoNoBanco, historicoNoBanco, ultimaEscritaEm } = m.telemetria;
+    const ultima = ultimaEscritaEm ? `última escrita em ${quando(ultimaEscritaEm)}` : 'sem escrita registrada';
+    const fora = [consumoNoBanco ? '' : 'o consumo', historicoNoBanco ? '' : 'o histórico'].filter(Boolean).join(' e ');
+    linhas.push(fora
+      ? { nome: 'Telemetria', estado: 'atencao', detalhe: `${fora} fora do banco, nos arquivos JSON (o banco não abriu nesta subida); ${ultima}` }
+      : { nome: 'Telemetria', estado: 'ok', detalhe: `gravando no banco; ${ultima}` });
+  }
+  return linhas;
+}
+
 // As verificações do diagnóstico, na ordem do motor.
 export function verificacoesDaSaude(saude: Saude): Verificacao[] {
   const linhas: Verificacao[] = [
@@ -141,6 +189,7 @@ export function todasAsVerificacoes(
 ): Verificacao[] {
   const daVersao = verificacaoDoCli(cli);
   return [
+    ...(saude ? verificacoesDoMotor(saude, quando) : []),
     ...(saude ? verificacoesDaSaude(saude) : []),
     ...(daVersao ? [daVersao] : []),
     ...verificacoesDosPerfis(perfis),
