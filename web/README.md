@@ -203,9 +203,10 @@ item, e o detalhe num clique (`Linha`, de `src/componentes/ui`):
 
 | Seção | Componente | De onde vem |
 |---|---|---|
-| Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt`) |
+| Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt` e, com o ciclo em curso, `checagem`) |
+| Checagem em curso | `Radar.tsx` | `checagem` com `status` `checking`: "Checando as N organizações · K de N · agora: dono", com o spinner pequeno, numa linha sem região viva (muda a cada segundo). O ciclo do motor busca por organização, e não por repositório: o desenho dizia "repositórios", e a tela diz a unidade que o motor conta |
 | Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
-| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos e quanto falta (quando o motor manda), as etapas pelo nome (feitas, a atual e as que faltam, de `progresso.etapas`, que o motor manda só no estado: a linha do feed traz o progresso sem os nomes, e a tela mantém os que já tem enquanto fecham com a etapa), quem e quando, o feed, Abrir no GitHub e Cancelar |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos, o arquivo da vez (`progresso.arquivoAtual`, o último lido, em caminho relativo do PR) e quanto falta (quando o motor manda), as etapas pelo nome (feitas, a atual e as que faltam, de `progresso.etapas`, que o motor manda só no estado: a linha do feed traz o progresso sem os nomes, e a tela mantém os que já tem enquanto fecham com a etapa), quem e quando, o feed, Abrir no GitHub e Cancelar |
 | Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A linha: título, marcas (rascunho, parada, em conflito, esperando vaga) e repositório. O detalhe: chave, autor, hora, posição, o motivo do motor, Revisar agora, Ignorar e Abrir no GitHub |
 | Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`). A linha: bolinha (aprovado verde, pediu mudanças vermelho, comentado âmbar), título e hora. O detalhe: chave, desfecho em texto, "Ver a revisão" (o Histórico com a revisão aberta) e Abrir no GitHub |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
@@ -272,9 +273,12 @@ O que a tela não faz porque o motor não manda. Cada item se resolve no snapsho
 do motor, não com regra na tela:
 
 - **O que acontece dentro da etapa.** O `progresso` traz os nomes das cinco etapas
-  (`etapas`) e, no código, quantos arquivos foram lidos: o detalhe lista as feitas, a atual e as
-  que faltam, mas não diz qual arquivo está sendo lido agora nem qual review vai sair na
-  postagem (aprovação ou pedido de mudanças só se sabe no desfecho).
+  (`etapas`) e, no código, quantos arquivos foram lidos e o último que a sessão leu
+  (`arquivoAtual`): é o último lido, não o que está sendo lido (o motor só vê a leitura quando
+  ela volta). Qual review vai sair na postagem não se sabe antes do desfecho.
+- **Checagem por organização.** A `checagem` conta as buscas por organização do ciclo; as buscas
+  que vêm depois (os PRs pedidos à conta e os já revisados) e o resto do ciclo não entram, e com
+  todas as organizações buscadas a linha fica em "N de N", sem "agora", até o ciclo terminar.
 - **A lista dos ignorados.** O snapshot não a traz: só dá para restaurar o que foi ignorado
   na aba aberta.
 - **Item ilegível da fila.** `queue` e `activeSessions` descartam o item torto com registro no
@@ -311,11 +315,11 @@ só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o deta
 
 | Parte | Componente | De onde vem |
 |---|---|---|
-| Topo | `Historico.tsx` (`Pagina`) | "Histórico" e a frase do resultado: `total`, `page` e `pages` da resposta |
+| Topo | `Historico.tsx` (`Pagina`), `ExportarCsv.tsx` | "Histórico", "N revisões nos últimos 7 dias" (`recentes7Dias` da resposta, sem os filtros) e a frase do resultado (`total`, `page` e `pages`); o botão "Exportar CSV" pede `GET /api/decisions?formato=csv` com a busca e os filtros do endereço, sem página, e entrega o texto como arquivo `farol-historico-AAAA-MM-DD.csv` |
 | Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
 | Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
 | Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
-| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `criteriosDoCard`, `checks` e `execucao` de `GET /api/decision?key=`; fora dela, só a rota |
+| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `criteriosDoCard`, `checks`, `execucao`, `achados`, `rodadasDoPr` e `tamanhoDoPr` de `GET /api/decision?key=`; fora dela, só a rota |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
 Regras que valem para quem mexer nela:
@@ -397,14 +401,20 @@ Regras que valem para quem mexer nela:
   "repo#n · autor · Nª rodada · card", o título, o chip do que foi publicado, a hora e "Ver no
   GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
   o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
-  (`blockedReason`) aberto, os motivos (`reasons`) e os pontos de atenção (`attention`)
-  fechados. Em "Mais detalhes", fechados e com o resumo na linha: Critérios do card
+  (`blockedReason`) aberto; os achados da sessão (`achados`), com a severidade (Bloqueia,
+  Sugestão, Pergunta, Detalhe) e o título na linha, o que bloqueia e não foi resolvido aberto, e,
+  dentro da linha, `arquivo:linha`, o resumo, a situação numa rodada seguinte e o trecho do diff
+  daquela linha (só o lado do head, em `<pre>`, com o número de cada linha e a marca da
+  adicionada); os motivos (`reasons`) e os pontos de atenção (`attention`) fechados. Em "Mais detalhes", fechados e com o resumo na linha: Critérios do card
   (`criteriosDoCard`, com o resumo "2 de 3 atendidos" e uma linha por critério, com a marca e o
   estado em texto: atende, não atende ou não conferido; só quando a sessão declarou), Checks do
   head (`checks`, com o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
-  duração, custo e modelo; sem ela, o que foi publicado; e sempre publicado,
+  duração, custo e modelo; com `tamanhoDoPr`, "14 arquivos, +612 −148", ou só os arquivos nas
+  revisões gravadas antes de 17/11/2026; sem ela, o que foi publicado; e sempre publicado,
   parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
-  (`rounds`), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
+  (`rodadasDoPr`, uma por linha, a mais nova primeiro: "3ª · 17/11/2026, 13:21 · a3f91c2 · pediu
+  mudanças", com o resumo na linha pela contagem; e, abaixo, a comparação entre rodadas de
+  `rounds` quando há), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
   revisão ficou sem texto gravado."). Revisão que não postou nada diz isso logo abaixo do
   chip.
 - **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo", no pé do
@@ -420,12 +430,19 @@ Regras que valem para quem mexer nela:
 
 ### Lacunas do contrato
 
-- **Período no topo.** O desenho diz "nos últimos 7 dias" no topo; o topo diz só o total que o
-  motor manda, e o período fica no Filtrar.
-- **Resumo curto do parecer e achados detalhados.** A projeção (`decisionForUi`) não traz um
-  resumo de uma frase do parecer, nem arquivo, linha ou trecho de código de cada achado: a
-  linha da lista fica sem resumo, a frase do detalhe é a da avaliação técnica, e cada achado é
-  só o texto do motivo.
+- **Os 7 dias do topo não seguem o filtro.** `recentes7Dias` conta todas as resolvidas dos últimos
+  7 dias, sem a busca nem os filtros abertos, como o desenho: o total do filtro é a frase ao lado.
+- **O CSV é o recorte do motor.** As colunas, o escape e a proteção contra fórmula são do motor
+  (`lib/engine/historico-csv.js`); a tela só devolve a marca de ordem de bytes que a leitura do
+  texto tira e entrega o arquivo. O nome do arquivo é montado aqui com o dia no fuso do motor,
+  porque o cabeçalho do motor não chega de outra origem.
+- **Resumo curto do parecer.** A projeção (`decisionForUi`) não traz um resumo de uma frase do
+  parecer: a linha da lista fica sem resumo e a frase do detalhe é a da avaliação técnica.
+- **Achados só pela rota do detalhe, e o trecho só daqui em diante.** `achados` vem da memória
+  de rodadas, que só existe para a análise completa: revisão sem rodada gravada fica com os
+  motivos, como antes. O trecho do diff é gravado nas provas desde 17/11/2026, só quando a linha
+  do achado está no diff e nunca de arquivo de ambiente ou credencial; antes disso o achado
+  mostra só `arquivo:linha`.
 - **Critérios do card só quando a sessão os declara.** O campo `criteriosDoCard` é opcional no
   envelope e o prompt o pede só quando o card tem critérios de aceitação lidos: revisão sem card,
   com card não lido ou gravada antes de 17/11/2026 fica sem a linha. É o que a sessão declarou,
@@ -437,8 +454,9 @@ Regras que valem para quem mexer nela:
   (o motor guarda só o que faltava), e revisão gravada antes de 17/11/2026 não tem checks. A
   execução é a da rodada (as tentativas do PR desde a revisão anterior), e a tela diz quando o
   começo é incerto (`inicioIncerto`).
-- **Rodadas uma a uma.** `rounds` é o resumo da comparação entre rodadas (a ordem, as
-  pendências), não a lista das rodadas com commit e desfecho de cada uma.
+- **Rodadas uma a uma.** `rodadasDoPr` é a lista das decisões guardadas do PR. A rodada é a
+  posição entre as guardadas: com o histórico no teto, as primeiras podem ter sido descartadas,
+  e a linha diz isso (`inicioIncerto`).
 - **Pendência sem filtro.** As pendências vêm do snapshot, que não sabe da busca nem dos
   filtros: elas aparecem com qualquer consulta, e o grupo diz isso.
 - **Revisão por id.** O motor só busca uma revisão pela chave do PR (`GET /api/decision?key=`),
@@ -544,7 +562,8 @@ Regras que valem para quem mexer nela:
   que abriu (ou ao título da lista, se a pessoa não está mais nela). As entradas aparecem com o
   dia, o PR e o que foi publicado quando o motor diz; os pontos são desenhados de markdown,
   que é como o motor os grava. "Números" traz os de 30 dias que o motor manda (`numeros`:
-  PRs, aprovação de primeira e rodadas por PR, com o resumo "1,6 rodada por PR") e a contagem
+  PRs, aprovação de primeira, rodadas por PR e, quando o motor manda, os bloqueios, as
+  revisões publicadas que pediram mudanças; com o resumo "1,6 rodada por PR") e a contagem
   das entradas listadas. As contestações dos PRs da pessoa aparecem só para leitura: o
   desfecho se confirma no Histórico.
 - **Salvar manda a lista inteira, montada do dado cru.** O store guarda `config.people` duas
@@ -624,7 +643,8 @@ Regras que valem para quem mexer nela:
   números (`historicoNoTeto`) e a tela diz que valem para os PRs com histórico completo.
 - **Números só de 30 dias e só de quem tem dossiê.** `numeros` vem no autor de `GET /api/team`
   (`lib/engine/numeros-do-time.js`), só com PR cuja primeira revisão publicada caiu na janela;
-  quem só tem perfil não está na lista e fica sem números. Os bloqueios do desenho não vêm.
+  quem só tem perfil não está na lista e fica sem números. Os bloqueios são os desses mesmos
+  PRs, e não todo pedido de mudanças dos 30 dias.
 - **A entrada não liga à revisão.** Vem o dia e a chave do PR, sem hora, sem endereço e sem
   o id da revisão: não dá para abrir a revisão no Histórico a partir dela. Entrada antiga traz
   só o nome curto do repositório, e aparece como veio.
