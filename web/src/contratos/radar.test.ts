@@ -66,6 +66,25 @@ describe('listas do Radar: só o que identifica o item é exigido', () => {
     expect(avisos).toHaveLength(1);
   });
 
+  it('activeSessions lê o pedido, a estimativa, o tamanho e a conta que posta, e larga o torto', () => {
+    const { registrar } = coletor();
+    const boa = {
+      id: 'a1', pr: { key: 'a/b#1', account: 'revisora' }, pedido: { por: 'ana', em: '2026-11-18T14:03:00Z', time: false },
+      estimativa: { tipicoMs: 300000, ateOFimMs: 420000, amostras: 9, base: 'geral' }, arquivosPr: 14,
+    };
+    const lidas = LEITORES.activeSessions([
+      boa,
+      { id: 'a2', pr: { account: '' }, pedido: { por: 'ana', em: 'ontem' }, estimativa: { tipicoMs: -1 }, arquivosPr: 2.5 },
+      { id: 'a3', pedido: { em: '2026-11-18T14:03:00Z' }, estimativa: 'x', arquivosPr: 0 },
+    ], registrar);
+    expect(lidas?.[0]).toEqual({
+      id: 'a1', pr: { key: 'a/b#1', account: 'revisora' }, pedido: { por: 'ana', em: '2026-11-18T14:03:00Z' },
+      estimativa: { tipicoMs: 300000, ateOFimMs: 420000 }, arquivosPr: 14,
+    });
+    expect(lidas?.[1]).toEqual({ id: 'a2', pr: {} });
+    expect(lidas?.[2]).toEqual({ id: 'a3' });
+  });
+
   it('activeSessions lê o progresso da revisão quando ele vem inteiro, e ignora o torto', () => {
     const { registrar } = coletor();
     const progresso = { percentual: 42, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 9, arquivosTotais: 20, restanteEstimadoMs: 240000 };

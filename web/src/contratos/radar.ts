@@ -133,6 +133,23 @@ export interface PrDaSessao {
   url?: string;
   title?: string;
   author?: string;
+  // a conta revisora que vai postar (runHeadlessReview, lib/engine/review.js)
+  account?: string;
+}
+
+// Quem pediu a revisão à conta e quando (ultimoPedidoDeRevisao, lib/engine/gh-queries.js,
+// gravado na sessão por registrarPedidoDaSessao, lib/engine/pedido-de-revisao.js). `em` é ISO.
+export interface PedidoDaRevisao {
+  por: string;
+  em: string;
+}
+
+// Quanto uma revisão deste tamanho costuma levar nesta máquina (tempoTipico,
+// lib/engine/estimativa-sessao.js): até o modelo devolver e, com amostra suficiente, até o fim
+// do desfecho.
+export interface EstimativaDaSessao {
+  tipicoMs?: number;
+  ateOFimMs?: number;
 }
 
 // `progresso`: a porcentagem da revisão em andamento (progressoDaSessao,
@@ -191,11 +208,30 @@ export interface SessaoAtiva {
   cancelled?: boolean;
   pr?: PrDaSessao;
   progresso?: ProgressoDaRevisao;
+  pedido?: PedidoDaRevisao;
+  estimativa?: EstimativaDaSessao;
+  // arquivos alterados do PR, medidos no começo da revisão (anotarEstimativa)
+  arquivosPr?: number;
 }
 
 function lerPrDaSessao(v: unknown): PrDaSessao | undefined {
   if (!ehObjeto(v)) return undefined;
-  return semAusentes({ key: campo(v.key, ehTexto), url: campo(v.url, ehTexto), title: campo(v.title, ehTexto), author: campo(v.author, ehTexto) });
+  return semAusentes({
+    key: campo(v.key, ehTexto), url: campo(v.url, ehTexto), title: campo(v.title, ehTexto), author: campo(v.author, ehTexto),
+    account: campo(v.account, ehTexto) || undefined,
+  });
+}
+
+function lerPedido(v: unknown): PedidoDaRevisao | undefined {
+  return ehObjeto(v) && ehTexto(v.por) && v.por && ehTexto(v.em) && Number.isFinite(Date.parse(v.em)) ? { por: v.por, em: v.em } : undefined;
+}
+
+const ehDuracao = (v: unknown): v is number => ehNumero(v) && v > 0;
+
+function lerEstimativa(v: unknown): EstimativaDaSessao | undefined {
+  if (!ehObjeto(v)) return undefined;
+  const estimativa = semAusentes({ tipicoMs: campo(v.tipicoMs, ehDuracao), ateOFimMs: campo(v.ateOFimMs, ehDuracao) });
+  return Object.keys(estimativa).length ? estimativa : undefined;
 }
 
 const lerSessaoAtiva: LeitorDeItem<SessaoAtiva> = (v) => {
@@ -204,6 +240,9 @@ const lerSessaoAtiva: LeitorDeItem<SessaoAtiva> = (v) => {
     id: v.id, label: campo(v.label, ehTexto), startedAt: campo(v.startedAt, ehNumero), keys: campo(v.keys, ehListaDeTextos),
     cancellable: campo(v.cancellable, ehBooleano), cancelled: campo(v.cancelled, ehBooleano), pr: lerPrDaSessao(v.pr),
     progresso: lerProgresso(v.progresso),
+    pedido: lerPedido(v.pedido),
+    estimativa: lerEstimativa(v.estimativa),
+    arquivosPr: campo(v.arquivosPr, (n: unknown): n is number => ehInteiro(n) && n > 0),
   });
 };
 
