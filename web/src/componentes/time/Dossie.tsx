@@ -93,6 +93,8 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
   const dosDias: Array<[string, string]> = n
     ? [['PRs revisados', String(n.prs)], ['De primeira', taxaDePrimeira(n)], ['Rodadas por PR', rodadasPorPr(n)]]
     : [];
+  // os bloqueios do período: as revisões publicadas desses PRs que pediram mudanças
+  if (n?.bloqueios !== undefined) dosDias.push(['Bloqueios', String(n.bloqueios)]);
   const caixas: Array<[string, number]> = [
     ['Entradas guardadas', autor.entries.length],
     ['Aprovações', contagem.aprovacao],
@@ -124,7 +126,7 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
             ))}
           </dl>
           <p className={ui.mini}>
-            Dos últimos {n.janelaDias} dias, contados no histórico de revisões do motor: os PRs cuja primeira revisão publicada caiu na janela, quantos foram aprovados nessa primeira e quantas revisões publicadas eles somam.
+            Dos últimos {n.janelaDias} dias, contados no histórico de revisões do motor: os PRs cuja primeira revisão publicada caiu na janela, quantos foram aprovados nessa primeira e quantas revisões publicadas eles somam{n.bloqueios !== undefined ? ', e quantas dessas revisões pediram mudanças' : ''}.
             {n.historicoNoTeto ? ' O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.' : ''}
           </p>
         </>

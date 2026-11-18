@@ -1002,6 +1002,23 @@ describe('Time: números de 30 dias', () => {
     expect(caixas.slice(0, 3)).toEqual(['PRs revisados: 22', 'De primeira: 68%', 'Rodadas por PR: 1,6']);
   });
 
+  it('os bloqueios do período entram ao lado das rodadas quando o motor os manda', async () => {
+    montar({ url: '/time?autor=Ana-Souza', responder: () => corpo([{ ...ANA, numeros: { janelaDias: 30, prs: 22, aprovadosDePrimeira: 15, rodadas: 35, bloqueios: 3 } }, BRUNO]) });
+    await assentar();
+    const caixas = [...secao('Números').querySelectorAll('dl > div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`);
+    expect(caixas.slice(0, 4)).toEqual(['PRs revisados: 22', 'De primeira: 68%', 'Rodadas por PR: 1,6', 'Bloqueios: 3']);
+    expect(secao('Números').textContent).toContain('quantas dessas revisões pediram mudanças');
+  });
+
+  it('bloqueios acima das rodadas, ou ausentes (motor antigo), não aparecem', async () => {
+    for (const bloqueios of [99, undefined]) {
+      montar({ url: '/time?autor=Ana-Souza', responder: () => corpo([{ ...ANA, numeros: { janelaDias: 30, prs: 22, aprovadosDePrimeira: 15, rodadas: 35, bloqueios } }]) });
+      await assentar();
+      expect(secao('Números').textContent).not.toContain('Bloqueios');
+      cleanup();
+    }
+  });
+
   it('número incoerente (aprovados acima dos PRs) não é mostrado', async () => {
     montar({ url: '/time?autor=Ana-Souza', responder: () => corpo([{ ...ANA, numeros: { janelaDias: 30, prs: 2, aprovadosDePrimeira: 3, rodadas: 2 } }]) });
     await assentar();
