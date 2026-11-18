@@ -645,9 +645,11 @@ class Engine extends EventEmitter {
       // muda (lib/engine/espera-prova.js, 17/10/2026), sem nunca postar com lacuna
       try { await this.varrerEsperas(); } catch (e) { this.log('WARN', `esperas automáticas: ${e.message}`); }
       try { await this.retryFailedPosts(); } catch (e) { this.log('WARN', `retryFailedPosts: ${e.message}`); }
-      // pushback automático: contestação do autor a um review meu (fire-and-forget: roda em background pra não segurar a checagem, com guarda anti-concorrência)
+      // pushback automático: contestação do autor a um review meu (fire-and-forget:
+      // roda em background pra não segurar a checagem, com guarda anti-concorrência)
       this.scanPushbacks().catch(e => this.log('WARN', `scanPushbacks: ${e.message}`));
-      // versao do Claude Code contra o registro do npm (lib/engine/versao-claude.js): intervalo proprio de 6 h e nunca lanca, entao o ciclo so dispara e segue
+      // versao do Claude Code contra o registro do npm (lib/engine/versao-claude.js):
+      // intervalo proprio de 6 h e nunca lanca, entao o ciclo so dispara e segue
       versaoClaude.atualizarVersaoClaude(this);
       this.setStatus('idle');
     } catch (err) {
@@ -1102,7 +1104,8 @@ class Engine extends EventEmitter {
       // um "saiu com código 1" por ciclo, pra sempre, com o doctor todo verde.
       root: rodandoComoRoot(),
       instanciaIsolada, // FAROL_HOME fora de ~/.farol: não escreve no GitHub sem opt-in por arquivo
-      home: HOME, workspace: WORKSPACE, avaliacaoTecnica,
+      // saude: no ar desde, commit, disco e telemetria (saude-do-motor.js)
+      home: HOME, workspace: WORKSPACE, avaliacaoTecnica, saude: diagnosticoMod.saudeDoMotor(this),
       claudeAuth: this.allClaudeAuthInfo(), // status de cada perfil do Claude salvo
       ...perfilMod.prontidaoParaDoctor(this.config), // o perfil que o motor vai usar tem credencial?
       checkedAt: Date.now()
@@ -1202,7 +1205,8 @@ class Engine extends EventEmitter {
       lastCheckAt: this.lastCheckAt,
       nextCheckAt: this.nextCheckAt,
       checagem: checagemParaTela(this), // as organizações do ciclo em curso, ou null (checagem-em-curso.js)
-      // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela exibe panorama velho sem dizer que ele esta velho (lib/engine/limite-gh.js)
+      // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela
+      // exibe panorama velho sem dizer que ele esta velho (lib/engine/limite-gh.js)
       buscasPausadas: limiteGhMod.buscasPausadas(this),
       queue: this.queue,
       inicioAutomatico: this.inicioAutomaticoDaFila(),
