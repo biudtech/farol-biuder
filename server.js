@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { iniciarManutencaoDoEngine } from './lib/technical-review/material-session-proof.js';
 import { snapshotDecisions, snapshotReviewActions } from './lib/engine/snapshot-decisions.js';
 import { snapshotUsage } from './lib/engine/snapshot-usage.js';
+import { iniciarChecagem, buscarOrganizacao, checagemParaTela } from './lib/engine/checagem-em-curso.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
 import {
@@ -644,11 +645,9 @@ class Engine extends EventEmitter {
       // muda (lib/engine/espera-prova.js, 17/10/2026), sem nunca postar com lacuna
       try { await this.varrerEsperas(); } catch (e) { this.log('WARN', `esperas automáticas: ${e.message}`); }
       try { await this.retryFailedPosts(); } catch (e) { this.log('WARN', `retryFailedPosts: ${e.message}`); }
-      // pushback automático: contestação do autor a um review meu (fire-and-forget:
-      // roda em background pra não segurar a checagem, com guarda anti-concorrência)
+      // pushback automático: contestação do autor a um review meu (fire-and-forget: roda em background pra não segurar a checagem, com guarda anti-concorrência)
       this.scanPushbacks().catch(e => this.log('WARN', `scanPushbacks: ${e.message}`));
-      // versao do Claude Code contra o registro do npm (lib/engine/versao-claude.js):
-      // intervalo proprio de 6 h e nunca lanca, entao o ciclo so dispara e segue
+      // versao do Claude Code contra o registro do npm (lib/engine/versao-claude.js): intervalo proprio de 6 h e nunca lanca, entao o ciclo so dispara e segue
       versaoClaude.atualizarVersaoClaude(this);
       this.setStatus('idle');
     } catch (err) {
@@ -666,6 +665,7 @@ class Engine extends EventEmitter {
       await this.resolveAccount();
       await this.refreshTokens();
       const accounts = this.accountList();
+      iniciarChecagem(this, accounts); // o Radar conta as organizações buscadas (checagem-em-curso.js)
 
       // painel: todos os PRs abertos das orgs monitoradas (sem alerta), com o token da
       // conta revisora; dedup por chave (o mesmo PR não entra duas vezes)
@@ -684,7 +684,7 @@ class Engine extends EventEmitter {
       const monitoredOwners = new Set(accounts.flatMap(acc => (acc.owners || []).map(o => String(o).toLowerCase())));
       for (const acc of accounts) {
         for (const owner of acc.owners) {
-          const list = await this.searchPRs(['--owner', owner], acc.user);
+          const list = await buscarOrganizacao(this, owner, acc.user);
           if (list === null) continue;
           anyOk = true;
           ownersOk.add(String(owner).toLowerCase());
@@ -1201,8 +1201,8 @@ class Engine extends EventEmitter {
       jiraSites: maskJiraSites(this.config.jiraSites || [], credMod.hasCredential),
       lastCheckAt: this.lastCheckAt,
       nextCheckAt: this.nextCheckAt,
-      // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela
-      // exibe panorama velho sem dizer que ele esta velho (lib/engine/limite-gh.js)
+      checagem: checagemParaTela(this), // as organizações do ciclo em curso, ou null (checagem-em-curso.js)
+      // contas com as buscas paradas por limite do GitHub, e ate quando: sem isto a tela exibe panorama velho sem dizer que ele esta velho (lib/engine/limite-gh.js)
       buscasPausadas: limiteGhMod.buscasPausadas(this),
       queue: this.queue,
       inicioAutomatico: this.inicioAutomaticoDaFila(),
