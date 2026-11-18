@@ -719,7 +719,7 @@ decidir, com o tech lead:
 - **a credencial**: para o ECR, OIDC do GitHub Actions para um papel da AWS com permissão só
   de push naquele repositório, sem chave de longa duração; para o GHCR, o `GITHUB_TOKEN` do
   job com `packages: write`;
-- **a marca da imagem**: a versão do `package.json`, hoje `3.0.0-dev`, e o commit;
+- **a marca da imagem**: a versão do `package.json`, hoje `3.0.0`, e o commit;
 - **o destino**: o cluster (EKS) e o manifesto, com os requisitos de
   [O que o orquestrador precisa garantir](#o-que-o-orquestrador-precisa-garantir).
 

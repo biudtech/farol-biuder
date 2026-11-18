@@ -7,10 +7,57 @@ existirem, e descreve só o que mudou para quem opera e mantém o motor.
 As versões 2.x abaixo são o histórico do aplicativo de mesa de onde este repositório saiu, mantidas
 como registro: muito do que elas descrevem não existe mais aqui.
 
-## 3.0.0-dev
+## 3.0.0 (18/11/2026)
 
-O Farol virou um motor de revisão: uma instância, uma conta revisora, só Linux, `node server.js`.
-Ainda sem versão publicada.
+O Farol virou um motor de revisão: uma instância, uma conta revisora, só Linux, `node server.js`,
+com o front de `web/` como a única tela. É a primeira versão publicada desta série. O revisor é
+autônomo de ponta a ponta: nunca espera decisão de gente nem o CI, e cada desfecho termina numa
+postagem que passou pelos portões, numa nova rodada ou num encerramento sem postar.
+
+### Revisor autônomo e telas novas
+
+Esta parte vale por cima do que as seções abaixo dizem sobre a mesa ("Precisa de você") e sobre a
+espera do CI: as duas saíram do motor e do front.
+
+- **Sem mesa:** nenhum desfecho fica parado à espera de um clique. A política da conta deixa de
+  aceitar `wait`; um `wait` antigo vira `approve`/`approve`/`request_changes`, com uma linha no
+  log. Resultado em que o motor não confia (`needs_decision`, origem sem marca, admissibilidade
+  que falha, inventário ou rodada abertos, lacuna de prova) leva a uma nova revisão; no teto
+  conjunto de 6 sessões extras por head, sai um COMMENT neutro montado pelo motor, sem texto do
+  modelo, pelos mesmos portões (`lib/engine/desfecho-sem-mesa.js`). Antes de cada envio desse
+  COMMENT, inclusive no reenvio, o motor relê o PR: mesclado, fechado ou ilegível, gente no head,
+  label `:revisando` de outra conta ou revisão cancelada encerram sem postar, e head que andou
+  vira `stale_head`. Commit novo depois de um COMMENT neutro abre rodada nova. Falha passageira
+  de postagem (rede, 5xx, limite, token) fica no reenvio com recuo longo; recusa permanente vai ao
+  desfecho sem mesa. Pendências antigas no disco são adotadas aos poucos na subida.
+- **Sem espera do CI:** `aguardarCiParaAprovar` e `aguardarCiParaRevisar` saem das preferências
+  (num `config.json` antigo são descartadas na carga), o gate de lançamento deixa de olhar os
+  checks e o pedido de mudanças pelo CI vermelho sai. O estado do CI continua como informação no
+  card, e o check obrigatório que já falha na base continua herdado.
+- **Check herdado e merge-back sem atrito:** check obrigatório vermelho também no commit atual da
+  base não pesa na decisão; PR de sincronização entre branches contínuas, com todo commit já
+  revisado num PR mesclado numa delas, sai limpo.
+- **Telas redesenhadas:** Radar, Histórico, detalhe da revisão, Time, Dossiê, Consumo e Sistema
+  com a identidade da BIUD (Mulish servida pelo próprio front, cores e logo), o mínimo na tela e o
+  detalhe sob demanda. Saem do front a mesa, as ações de aprovar e pedir mudanças, o bloco
+  "Esperando o CI" e a opção de esperar na política. O tema claro passa a ser o padrão. O selo de
+  conexão só aparece quando a conexão não está de pé. Estados de carregamento por processo,
+  esqueletos, faixa "Sem motor" com a hora da queda e a marca 404.
+- **Dados novos nas telas:** a porcentagem da revisão em andamento, com etapa, arquivos e tempo
+  restante; a checagem em andamento por organização; a saúde do motor (no ar há quanto tempo,
+  commit, disco, telemetria) no doctor; no detalhe, os checks do head, a execução da rodada
+  (duração, tentativas, modelos, custo estimado), os critérios do card um a um (campo opcional
+  `criteriosDoCard` do envelope, que não entra em gate nem veredito), os achados com arquivo,
+  linha e trecho do diff mascarado, as rodadas do PR e o tamanho do PR; no Dossiê, os números de
+  30 dias e os bloqueios; no Consumo, a quebra por repositório; no Histórico, o filtro de período,
+  a contagem dos 7 dias e a exportação em CSV (`formato=csv`, com proteção contra fórmula); no
+  Time, "Adicionar pessoa" (`people` em `POST /api/settings`, pessoa sem papel aceita).
+- **Auditoria do front com exceção de prazo:** `npm run audit` (`web/auditoria.mjs`) só tolera o
+  que estiver em `web/auditoria-excecoes.json`, com motivo e prazo. A única é o `picomatch`
+  (GHSA-fc5q-39xc-vjpf), sem versão corrigida e só em dependência de desenvolvimento, até
+  31/12/2026.
+- **Imagem do motor:** o `gh` vem do pacote da release no GitHub, conferido por sha256 da
+  arquitetura, no lugar do repositório apt que só mantém a versão mais nova.
 
 ### O que saiu (fase 1, lotes 1 a 16)
 
