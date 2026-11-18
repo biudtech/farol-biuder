@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgressoDaRevisao } from '@/contratos/radar';
 import {
-  SEM_SINAL_MS, andamentoDaFalha, andamentoDaPostada, andamentoDaSessao, andamentoIniciando, contextoDaPostada, contextoDaSessao,
+  SEM_SINAL_MS, andamentoDaFalha, desvioDoRelogio, andamentoDaPostada, andamentoDaSessao, andamentoIniciando, contextoDaPostada, contextoDaSessao,
   etapaDoProgresso, etapasDaFaixa, iniciais, pilulaDosChecks, pilulaDosCriterios, pilulasDaPostada, pilulasDaSessao, tempoDecorrido,
   textoDaFila, ultimoEvento, urlDoAvatar,
 } from './cartao';
@@ -102,6 +102,14 @@ describe('o cartão do Radar, sem React', () => {
     expect(contextoDaSessao({ arquivosPr: 1, pedido: { por: 'ana', em: '2026-11-16T14:03:00Z' }, startedAt: AGORA }, 'UTC')).toBe('1 arquivo · pedido por @ana às 14:03');
     expect(contextoDaPostada({}, undefined, 'UTC')).toBe('');
     expect(contextoDaPostada({ card: 'BT-1', resolvedAt: AGORA }, undefined, 'UTC')).toBe('card BT-1 · postado às 14:32');
+  });
+
+  it('o desvio do relógio: navegador menos motor, arredondado ao segundo', () => {
+    expect(desvioDoRelogio(AGORA - 60000, AGORA)).toBe(60000);
+    expect(desvioDoRelogio(AGORA + 60000, AGORA)).toBe(-60000);
+    expect(desvioDoRelogio(AGORA - 400, AGORA)).toBe(0);
+    expect(desvioDoRelogio(AGORA - 17600, AGORA)).toBe(18000);
+    expect(andamentoDaSessao({ etapa: 2, agora: AGORA - desvioDoRelogio(AGORA - 60000, AGORA), outras: 0, ultimoEvento: AGORA - 70000 }).tipo).toBe('rodando');
   });
 
   it('o rodapé da fila', () => {

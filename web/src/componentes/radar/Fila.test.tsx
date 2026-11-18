@@ -141,7 +141,7 @@ describe('seção Fila', () => {
   it('a última sessão sumiu sem resultado: o cartão da fila mostra a falha, com Tentar de novo, Ignorar e Dispensar', () => {
     const { controle, disparar } = controleFalso();
     const aoDispensar = vi.fn();
-    const falha = { id: 'a1', chave: 'dono/repo#12', inicio: 1000, etapa: 3, cancelada: false, sumiuEm: 61000, motivo: '' };
+    const falha = { id: 'a1', chave: 'dono/repo#12', inicio: 1000, etapa: 3, cancelada: false, sumiuEm: 61000, fimNoMotor: 61000, motivo: '' };
     render(<Fila fila={[item()]} emEspera={[]} vazio="" falhas={new Map([['dono/repo#12', falha]])} controle={controle} aoDispensarFalha={aoDispensar} />);
     const cartao = cartoes()[0] as HTMLElement;
     expect(cartao.getAttribute('data-tom')).toBe('falha');

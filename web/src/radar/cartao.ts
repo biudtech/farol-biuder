@@ -102,10 +102,12 @@ export function etapaDoProgresso(p: ProgressoDaRevisao | undefined): number {
   return Math.min(POSTAGEM, Math.max(0, p.etapa - 1));
 }
 
-// O último sinal de vida da sessão: a linha mais nova do feed, ou o começo dela.
-export function ultimoEvento(feed: readonly LinhaDoFeed[], inicio: number | undefined): number | undefined {
+// O último sinal de vida da sessão, na hora do motor: a linha mais nova do feed, o sinal que o
+// motor publica com o modelo pensando ou escrevendo (ultimoSinalEm, que não vira linha), ou o
+// começo dela.
+export function ultimoEvento(feed: readonly LinhaDoFeed[], inicio: number | undefined, sinal?: number): number | undefined {
   const ultima = feed.length ? feed[feed.length - 1]?.t : undefined;
-  const candidatos = [ultima, inicio].filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
+  const candidatos = [ultima, inicio, sinal].filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
   return candidatos.length ? Math.max(...candidatos) : undefined;
 }
 
@@ -125,6 +127,12 @@ export interface SinaisDaSessao {
 
 function costuma(ms: number | undefined): string {
   return ms ? `costuma levar ${minutos(ms)} min` : '';
+}
+
+// A diferença entre o relógio do navegador e o do motor, arredondada ao segundo: a hora do motor
+// é a do navegador menos ela. Medida na chegada do retrato, contra o `agora` que o motor manda.
+export function desvioDoRelogio(horaDoMotor: number, horaDoNavegador: number): number {
+  return Math.round((horaDoNavegador - horaDoMotor) / 1000) * 1000;
 }
 
 const juntar = (...partes: string[]): string => partes.filter(Boolean).join(' · ');

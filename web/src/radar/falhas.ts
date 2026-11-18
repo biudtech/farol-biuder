@@ -25,7 +25,10 @@ export interface SessaoVista {
 }
 
 export interface Falha extends SessaoVista {
+  // na hora do navegador (a carência conta nela)
   sumiuEm: number;
+  // a mesma hora no relógio do motor, para medir a duração contra o começo da sessão
+  fimNoMotor: number;
 }
 
 export function vistaDa(s: SessaoAtiva, feed: readonly LinhaDoFeed[] | undefined, etapaMinima = 0): SessaoVista | null {
@@ -39,9 +42,9 @@ export function vistaDa(s: SessaoAtiva, feed: readonly LinhaDoFeed[] | undefined
 }
 
 // As vistas de antes que não estão mais entre as sessões de agora, sem as canceladas.
-export function sumidas(antes: readonly SessaoVista[], agora: readonly SessaoAtiva[], sumiuEm: number): Falha[] {
+export function sumidas(antes: readonly SessaoVista[], agora: readonly SessaoAtiva[], sumiuEm: number, desvio = 0): Falha[] {
   const ids = new Set(agora.map((s) => s.id));
-  return antes.filter((v) => !ids.has(v.id) && !v.cancelada).map((v) => ({ ...v, sumiuEm }));
+  return antes.filter((v) => !ids.has(v.id) && !v.cancelada).map((v) => ({ ...v, sumiuEm, fimNoMotor: sumiuEm - desvio }));
 }
 
 function depoisDoInicio(instante: number | undefined, inicio: number | undefined): boolean {

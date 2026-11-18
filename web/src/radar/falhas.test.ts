@@ -19,7 +19,9 @@ describe('a sessão que some sem resultado', () => {
 
   it('some: a que saiu e não foi cancelada', () => {
     const antes = [vistaDa(sessao(), []), vistaDa(sessao({ id: 'a2', cancelled: true }), []), vistaDa(sessao({ id: 'a3' }), [])].filter((v) => v !== null);
-    expect(sumidas(antes, [sessao({ id: 'a3' })], 99).map((f) => [f.id, f.sumiuEm])).toEqual([['a1', 99]]);
+    expect(sumidas(antes, [sessao({ id: 'a3' })], 99).map((f) => [f.id, f.sumiuEm, f.fimNoMotor])).toEqual([['a1', 99, 99]]);
+    // com o motor 60 s atrás do navegador, o fim na hora do motor é 60 s antes
+    expect(sumidas(antes, [], 100000, 60000).map((f) => f.fimNoMotor)).toEqual([40000, 40000]);
   });
 
   it('superada: o PR voltou a ter sessão ou ganhou decisão depois do começo', () => {
@@ -41,7 +43,7 @@ describe('a sessão que some sem resultado', () => {
   });
 
   it('carência: só aparece depois de 3 s', () => {
-    const f = { id: 'a1', chave: 'k', etapa: 0, cancelada: false, sumiuEm: 1000 };
+    const f = { id: 'a1', chave: 'k', etapa: 0, cancelada: false, sumiuEm: 1000, fimNoMotor: 1000 };
     expect(visivel(f, 1000 + CARENCIA_MS - 1)).toBe(false);
     expect(visivel(f, 1000 + CARENCIA_MS)).toBe(true);
   });

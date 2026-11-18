@@ -284,7 +284,9 @@ Regras que valem para quem mexer nela:
   última atualização, na fila).
 - **Botões**: rodando, "Revisando" ocupado ("Postando" na postagem); parado, Revisar agora (fila),
   Revisar de novo (postada) ou Tentar de novo (falha); Abrir no GitHub e Ignorar onde a ação
-  existe.
+  existe. O botão ocupado é focável (`aria-disabled`): quando o botão clicado vira "Revisando",
+  o foco vai para ele, e depois para o "Revisando" do cartão da sessão que abriu, nunca para o
+  body (`marcarFoco` e `BotaoOcupado`, em `Cartao.tsx`); quem estava em outro lugar não é puxado.
 - **Três pílulas** (sessão, falha e postada): Checks obrigatórios (os `checks` do detalhe; enquanto
   roda, "Lidos no fim da revisão", porque o motor só lê os checks no fim), Card (os critérios de
   `criteriosDoCard`; enquanto roda, "Ainda não lido", "Lendo os critérios" ou "Conferido no
@@ -292,7 +294,9 @@ Regras que valem para quem mexer nela:
   publicado"). Sem dado, o traço com texto neutro.
 - **Faixa** (`role="group"`): as etapas Fontes, Card, Código, Conferência e Postagem, a feita com ✓,
   a atual com o spinner e `aria-current="step"`, a da falha com "!", e os traços verdes até a
-  atual; o tempo decorrido (um relógio de 1 s só do cartão, que troca o texto sem tirar o foco) e
+  atual; o tempo decorrido (um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
+  cabeçalho, o avatar e as pílulas não redesenham a cada segundo, e a borda do "sem sinal" vira com
+  um disparo só, na hora) e
   a ação (Cancelar, Ver resultado ou Dispensar); o trilho de 4 px, definido com `aria-valuenow` só
   no código com a contagem de arquivos, indefinido nas outras etapas e ausente quando terminou; e
   o rodapé, com o que a sessão faz agora à esquerda e o apoio à direita. Com movimento reduzido o
@@ -303,11 +307,20 @@ Regras que valem para quem mexer nela:
   (`useIniciadas.ts`; a recusa do motor desfaz, a sessão que abre ou o PR que vai esperar vaga
   encerram, e sem sessão em 2 min o cartão volta ao que era); buscando o código, lendo o card,
   lendo (o arquivo da vez), conferindo e postando, pela etapa; sem sinal, com mais de 45 s sem
-  evento da sessão (a hora da última linha do feed) no código ou na conferência, que são as etapas
+  sinal de vida da sessão no código ou na conferência, que são as etapas
   em que o modelo trabalha; postada; e falhou: a sessão que some sem cancelamento e sem decisão do
   PR depois do começo dela, passados 3 s de carência (a decisão pode chegar no estado seguinte),
   com o motivo da parada do PR em `parked` ou do último aviso do feed. A falha aparece no cartão
   da fila quando o PR está nela, e sai quando o PR volta a ter sessão ou ganha decisão.
+- **Sinal de vida**: a hora mais nova entre a última linha do feed, o começo da sessão e o
+  `ultimoSinalEm` que o motor publica em `activeSessions` (`lib/engine/sinal-de-vida.js`): o
+  modelo pensando ou escrevendo chega como `stream_event`, que não vira linha, e renova o sinal no
+  máximo a cada 5 s.
+- **Relógio do motor contra o do navegador**: as horas da sessão são do motor, e o relógio da tela
+  é do navegador. A cada retrato a tela mede a diferença contra o `agora` do snapshot (a hora do
+  motor quando ele foi montado), arredondada ao segundo e trocada só com 2 s ou mais de mudança
+  (`useDesvio.ts`), e o tempo decorrido e o "sem sinal" contam na hora do motor. O `agora` sozinho
+  não vira evento do SSE (`semMudanca`, `lib/estado-delta.js`): vai junto de toda mudança de verdade.
 
 ### Lacunas do contrato
 
@@ -320,11 +333,6 @@ do motor, não com regra na tela:
   só os lê no fim), quanto uma revisão costuma levar para um PR da fila (a estimativa existe só na
   sessão aberta) e qual review vai sair na postagem: a linha some, ou a pílula diz o traço. As falhas
   e os cliques em curso são desta aba: recarregar a página esquece.
-- **Relógio do motor contra o do navegador.** O tempo decorrido e o "sem sinal" comparam as horas
-  que o motor grava (`startedAt`, a hora das linhas do feed) com o relógio do navegador, e o
-  snapshot não diz a hora do motor. Com os dois relógios fora de sincronia, o tempo fica atrasado
-  (nunca negativo) ou adiantado; medido no WSL em 18/11/2026, 17 s de diferença. O "sem sinal" só
-  se engana com mais de 45 s de diferença.
 - **O que acontece dentro da etapa.** O `progresso` traz os nomes das cinco etapas
   (`etapas`) e, no código, quantos arquivos foram lidos e o último que a sessão leu
   (`arquivoAtual`): é o último lido, não o que está sendo lido (o motor só vê a leitura quando

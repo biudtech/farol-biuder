@@ -68,7 +68,8 @@ describe('seção Em análise: o cartão', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'Corrige o cálculo' })).toBeTruthy();
     expect(screen.getByText(/^14 arquivos · pedido por @bia às \d\d:03$/)).toBeTruthy();
     const ocupado = screen.getByRole('button', { name: 'Revisando PR #12 de dono/repo' }) as HTMLButtonElement;
-    expect(ocupado.disabled).toBe(true);
+    // ocupado, mas focável: aria-disabled em vez de disabled, para o foco do clique ter onde ficar
+    expect(ocupado.getAttribute('aria-disabled')).toBe('true');
     expect(ocupado.querySelector('[data-tamanho="p"]')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Abrir no GitHub: dono\/repo#12/ }).getAttribute('href')).toBe(URL_DO_PR);
     // nada de estilo em linha: a CSP recusa
@@ -167,6 +168,43 @@ describe('seção Em análise: o cartão', () => {
     expect(cartao().getAttribute('data-tom')).toBe('rodando');
   });
 
+  it('o modelo pensando não vira linha do feed: o sinal de vida do motor (ultimoSinalEm) mantém a sessão viva', () => {
+    const feeds = { a1: [{ t: INICIO, k: 'tool', text: 'lendo' }] };
+    const { rerender, controle } = montar(sessao({ progresso: progresso(3), ultimoSinalEm: INICIO + 10000 }), feeds);
+    // 70 s desde a última linha do feed, mas o motor viu o modelo escrevendo há 8 s + 50 s
+    act(() => { vi.advanceTimersByTime(50000); });
+    expect(cartao().getAttribute('data-tom')).toBe('aviso');
+    // o sinal novo chega no estado: a sessão está viva, sem nenhuma linha nova no feed
+    rerender(<EmAnalise sessoes={[sessao({ progresso: progresso(3), ultimoSinalEm: Date.now() - 2000 })]} feeds={feeds} controle={controle} />);
+    expect(cartao().getAttribute('data-tom')).toBe('rodando');
+    expect(screen.queryByText(/Sem sinal/)).toBeNull();
+    act(() => { vi.advanceTimersByTime(40000); });
+    expect(cartao().getAttribute('data-tom')).toBe('rodando');
+  });
+
+  it('relógio do navegador 60 s à frente do motor: o tempo e o "sem sinal" contam na hora do motor', () => {
+    // o navegador está 60 s adiantado: a sessão começou há 18 s no relógio do motor
+    vi.setSystemTime(INICIO + 18000 + 60000);
+    const { controle } = controleFalso();
+    const feeds = { a1: [{ t: INICIO + 10000, k: 'tool', text: 'lendo' }] };
+    render(<EmAnalise sessoes={[sessao({ progresso: progresso(3) })]} feeds={feeds} desvio={60000} controle={controle} />);
+    expect(within(faixa()).getByText('18 s')).toBeTruthy();
+    // 68 s no relógio do navegador desde a última linha, mas só 8 s no do motor
+    expect(cartao().getAttribute('data-tom')).toBe('rodando');
+    act(() => { vi.advanceTimersByTime(36000); });
+    expect(cartao().getAttribute('data-tom')).toBe('rodando');
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(cartao().getAttribute('data-tom')).toBe('aviso');
+    expect(within(faixa()).getByText('Sem sinal do modelo há 46 s. A sessão segue aberta.')).toBeTruthy();
+  });
+
+  it('sem o desvio o mesmo motor atrasado acenderia o "sem sinal" na hora: é o que o desvio corrige', () => {
+    vi.setSystemTime(INICIO + 18000 + 60000);
+    const { controle } = controleFalso();
+    render(<EmAnalise sessoes={[sessao({ progresso: progresso(3) })]} feeds={{ a1: [{ t: INICIO + 10000, k: 'tool', text: 'lendo' }] }} controle={controle} />);
+    expect(cartao().getAttribute('data-tom')).toBe('aviso');
+  });
+
   it('sem sinal não vale nas fontes, no card nem na postagem: quem trabalha é o motor', () => {
     montar(sessao({ progresso: progresso(1) }));
     act(() => { vi.advanceTimersByTime(120000); });
@@ -226,7 +264,7 @@ describe('seção Em análise: o cartão', () => {
 });
 
 describe('seção Em análise: a sessão que falhou', () => {
-  const falha = { id: 'a1', chave: 'dono/repo#12', url: URL_DO_PR, titulo: 'Corrige o cálculo', autor: 'ana', inicio: INICIO, etapa: 2, cancelada: false, sumiuEm: INICIO + 151000, motivo: 'limite do plano até 19/11.' };
+  const falha = { id: 'a1', chave: 'dono/repo#12', url: URL_DO_PR, titulo: 'Corrige o cálculo', autor: 'ana', inicio: INICIO, etapa: 2, cancelada: false, sumiuEm: INICIO + 151000, fimNoMotor: INICIO + 151000, motivo: 'limite do plano até 19/11.' };
 
   it('borda de falha, a etapa onde parou com "!", o motivo, "nada foi publicado", Tentar de novo e Dispensar', () => {
     const { controle, disparar } = controleFalso();

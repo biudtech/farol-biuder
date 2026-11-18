@@ -15,7 +15,7 @@ import { ehObjeto, ehTexto, type Leitor } from './formas';
 import { lerContestacoes, type Contestacao } from './historico';
 import {
   lerAtividade, lerBuscasPausadas, lerChavesEmEspera, lerChecagem, lerConta, lerDecisoes, lerDetalhesDaEspera, lerErro,
-  lerEsperaConflito, lerEstacionados, lerFila, lerInicioAutomatico, lerInstante, lerPrsEmEspera, lerSessoes,
+  lerEsperaConflito, lerEstacionados, lerFila, lerHoraDoMotor, lerInicioAutomatico, lerInstante, lerPrsEmEspera, lerSessoes,
   lerStatus,
   type BuscaPausada, type ChecagemEmCurso, type ContaDoMotor, type Decisoes, type DetalheDaEspera, type EsperaConflito,
   type Estacionado, type InicioAutomatico, type ItemDaFila, type LinhaDoFeed, type PrEmEspera,
@@ -29,7 +29,7 @@ import {
 import { lerConfig, type ConfigDoMotor } from './time';
 
 export const CHAVES_DO_SNAPSHOT = [
-  'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',
+  'app', 'modelos', 'claudePerfis', 'agora', 'status', 'error', 'baseline', 'account', 'accounts',
   'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'checagem', 'buscasPausadas', 'queue',
   'inicioAutomatico', 'esperaConflito', 'parked', 'reRounds', 'activeSessions', 'activity',
   'headlessWaiting', 'headlessWaitingPrs', 'headlessWaitingDetails', 'filaJusta', 'decisions',
@@ -49,6 +49,8 @@ export interface FormasDoSnapshot {
   app: AppDoMotor;
   modelos: Modelos;
   claudePerfis: PerfisDoClaude;
+  // a hora do motor quando o retrato foi montado (snapshot() em server.js)
+  agora: number;
   status: StatusDoMotor;
   error: string | null;
   baseline: unknown;
@@ -101,6 +103,7 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   app: lerApp,
   modelos: lerModelos,
   claudePerfis: lerPerfisDoClaude,
+  agora: lerHoraDoMotor,
   status: lerStatus,
   error: lerErro,
   baseline: qualquer,

@@ -26,6 +26,7 @@ import { PostadasHoje } from './PostadasHoje';
 import { RegiaoDeResultado } from './RegiaoDeResultado';
 import { RevisarUmPr } from './RevisarUmPr';
 import { useAcoes } from './useAcoes';
+import { useDesvio } from './useDesvio';
 import { useFalhas } from './useFalhas';
 import { useIniciadas } from './useIniciadas';
 import estilos from './Radar.module.css';
@@ -61,6 +62,8 @@ export function Radar({ app = appDoNavegador }: Props) {
   const inicioAutomatico = useApp((e) => e.snapshot?.inicioAutomatico, app);
   const emConflito = useApp((e) => e.snapshot?.esperaConflito, app);
   const recados = useApp((e) => e.recados, app);
+  // a diferença entre o relógio do navegador e o do motor, medida a cada retrato
+  const desvio = useDesvio(useApp((e) => e.snapshot?.agora, app));
 
   const { controle: controleDasAcoes, resultado, dispensar, ignorados, regiao } = useAcoes(app.cliente);
   const idDoTudoEmDia = useId();
@@ -73,7 +76,7 @@ export function Radar({ app = appDoNavegador }: Props) {
   const { iniciadas, controle } = useIniciadas(controleDasAcoes, sessoes ?? NENHUM, emEspera);
   // a sessão que some sem resultado: no cartão da fila quando o PR está nela, senão em Em análise
   const { falhas, dispensar: dispensarFalha } = useFalhas({
-    sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados,
+    sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados, desvio,
   });
   const { falhasDaFila, falhasSoltas } = useMemo(() => {
     const naFila = new Set(fila.map((pr) => pr.key));
@@ -150,6 +153,7 @@ export function Radar({ app = appDoNavegador }: Props) {
                 feeds={feeds ?? SEM_FEEDS}
                 falhas={falhasSoltas}
                 iniciadas={iniciadas}
+                desvio={desvio}
                 controle={controle}
                 aoDispensarFalha={dispensarFalha}
               />

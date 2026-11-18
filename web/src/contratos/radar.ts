@@ -212,6 +212,9 @@ export interface SessaoAtiva {
   estimativa?: EstimativaDaSessao;
   // arquivos alterados do PR, medidos no começo da revisão (anotarEstimativa)
   arquivosPr?: number;
+  // o último sinal de vida da sessão, na hora do motor: a linha do feed ou o modelo escrevendo
+  // (lib/engine/sinal-de-vida.js, no máximo a cada 5 s)
+  ultimoSinalEm?: number;
 }
 
 function lerPrDaSessao(v: unknown): PrDaSessao | undefined {
@@ -243,6 +246,7 @@ const lerSessaoAtiva: LeitorDeItem<SessaoAtiva> = (v) => {
     pedido: lerPedido(v.pedido),
     estimativa: lerEstimativa(v.estimativa),
     arquivosPr: campo(v.arquivosPr, (n: unknown): n is number => ehInteiro(n) && n > 0),
+    ultimoSinalEm: campo(v.ultimoSinalEm, (n: unknown): n is number => ehNumero(n) && n > 0),
   });
 };
 
@@ -472,6 +476,8 @@ export const lerChecagem: Leitor<ChecagemEmCurso | null> = (valor) => {
 // o erro do motor é texto para ler: o trecho em formato de credencial é trocado
 export const lerErro: Leitor<string | null> = (valor) => (ehErro(valor) ? (valor === null ? null : mascararSegredos(valor)) : undefined);
 export const lerInstante = deGuarda(ehInstanteOuNulo);
+// `agora`: a hora do motor quando o retrato foi montado, em ms (snapshot(), server.js)
+export const lerHoraDoMotor: Leitor<number> = (valor) => (ehNumero(valor) && valor > 0 ? valor : undefined);
 // montada campo a campo: o que mais vier junto da conta não entra no store
 export const lerConta: Leitor<ContaDoMotor> = (valor) => (ehConta(valor) ? { user: valor.user, tokenOk: valor.tokenOk } : undefined);
 export const lerBuscasPausadas = lerLista('buscasPausadas', lerBuscaPausada);

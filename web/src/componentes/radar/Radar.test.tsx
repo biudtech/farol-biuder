@@ -242,7 +242,7 @@ describe('tela Radar: ações', () => {
     const cartao = screen.getByRole('article');
     expect(cartao.getAttribute('data-tom')).toBe('rodando');
     expect(within(cartao).getByText('Iniciando a revisão.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: `Revisando ${NOME}` }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: `Revisando ${NOME}` }).getAttribute('aria-disabled')).toBe('true');
     expect(screen.queryByRole('button', { name: /Revisar agora/ })).toBeNull();
     expect(regiao().getAttribute('aria-live')).toBe('polite');
     expect(regiao().textContent).toBe(`Enviando: Revisar agora ${NOME}.`);
@@ -256,6 +256,48 @@ describe('tela Radar: ações', () => {
     const emAnalise = screen.getByRole('region', { name: 'Em análise' });
     expect(within(emAnalise).getByText('Buscando o código do PR.')).toBeTruthy();
     expect(screen.queryByText('Iniciando a revisão.')).toBeNull();
+  });
+
+  it('foco: o botão clicado vira Revisando e o foco vai para ele, e depois para o Revisando da sessão que abriu', async () => {
+    const t = montar(estado({ queue: [pr('dono/repo#12')] }));
+    const revisar = screen.getByRole('button', { name: `Revisar agora ${NOME}` });
+    revisar.focus();
+    await act(async () => { fireEvent.click(revisar); });
+    const ocupado = screen.getByRole('button', { name: `Revisando ${NOME}` });
+    expect(document.activeElement).toBe(ocupado);
+    expect(document.activeElement).not.toBe(document.body);
+    // a sessão abre: o cartão da fila sai, e o foco vai ao Revisando do cartão da sessão
+    act(() => { t.store.trocar({ snapshot: estado({ queue: [pr('dono/repo#12')], activeSessions: [{ id: 'a1', startedAt: Date.now(), pr: { key: 'dono/repo#12', url: URL_DO_PR } }] }) }); });
+    const daSessao = within(screen.getByRole('region', { name: 'Em análise' })).getByRole('button', { name: `Revisando ${NOME}` });
+    expect(document.activeElement).toBe(daSessao);
+  });
+
+  it('foco: Revisar de novo de uma postada vira Revisando com o foco nele, e quem estava em outro lugar não é puxado', async () => {
+    const agora = Date.now();
+    montar(estado({ decisions: decisoes([], [{ id: 'r1', key: 'dono/repo#12', resolvedAt: agora, action: 'approve', status: 'auto_approved', pr: { url: URL_DO_PR, title: 'Aprovada' } }]) }));
+    const deNovo = screen.getByRole('button', { name: `Revisar de novo ${NOME}` });
+    deNovo.focus();
+    await act(async () => { fireEvent.click(deNovo); });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Revisando ${NOME}` }));
+  });
+
+  it('relógio do motor 60 s atrás do navegador: o tempo da sessão conta na hora do motor', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+    try {
+      const navegador = Date.UTC(2026, 10, 18, 12);
+      vi.setSystemTime(navegador);
+      const motor = navegador - 60000;
+      montar(estado({
+        agora: motor,
+        activeSessions: [{ id: 'a1', startedAt: motor - 18000, pr: { key: 'dono/repo#12', url: URL_DO_PR }, progresso: { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' } }],
+        activity: { a1: [{ t: motor - 8000, k: 'tool', text: 'lendo' }] },
+      }));
+      const faixa = screen.getByRole('group', { name: `Andamento da revisão de ${NOME}` });
+      expect(within(faixa).getByText('18 s')).toBeTruthy();
+      expect(screen.getByRole('article').getAttribute('data-tom')).toBe('rodando');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('o motor recusa o Revisar: o cartão volta a ser da fila, com o botão', async () => {

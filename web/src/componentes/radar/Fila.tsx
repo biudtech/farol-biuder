@@ -71,7 +71,7 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, falha, iniciadaEm
 
   if (iniciadaEm !== undefined) {
     return (
-      <Cartao {...comum} tom="rodando" estado="iniciando a revisão" botoes={<><BotaoOcupado texto="Revisando" de={nome} /><AbrirNoGitHub chave={pr.key} url={pr.url} /></>}>
+      <Cartao {...comum} tom="rodando" estado="iniciando a revisão" botoes={<><BotaoOcupado texto="Revisando" de={nome} chave={pr.key} /><AbrirNoGitHub chave={pr.key} url={pr.url} /></>}>
         <FaixaIniciando desde={iniciadaEm} de={nome} />
       </Cartao>
     );
@@ -97,7 +97,7 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, falha, iniciadaEm
         <Faixa
           andamento={andamentoDaFalha(falha.etapa, falha.motivo)}
           de={nome}
-          tempo={falha.inicio ? tempoDecorrido(falha.sumiuEm - falha.inicio) : ''}
+          tempo={falha.inicio ? tempoDecorrido(falha.fimNoMotor - falha.inicio) : ''}
           acao={aoDispensarFalha ? <Botao pequeno fantasma onClick={() => aoDispensarFalha(pr.key)} aria-label={`Dispensar a falha de ${nome}`}>Dispensar</Botao> : null}
         />
       </Cartao>

@@ -5,34 +5,62 @@
 // do parecer; a faixa, a etapa do motor (que nunca recua), o tempo, o trilho e o que a sessão faz
 // agora. Depois das sessões vêm as que sumiram sem resultado e cujo PR não está mais na fila
 // (com o PR na fila, a falha aparece no cartão da fila).
-import { memo, useState } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import type { LinhaDoFeed, SessaoAtiva } from '@/contratos/radar';
 import { Botao, Secao, ui } from '@/componentes/ui';
 import {
   andamentoDaFalha, andamentoDaSessao, andamentoIniciando, contextoDaSessao, etapaDoProgresso, pilulasDaFalha, pilulasDaSessao,
-  tempoDecorrido, ultimoEvento,
+  SEM_SINAL_MS, tempoDecorrido, ultimoEvento,
 } from '@/radar/cartao';
 import type { Falha } from '@/radar/falhas';
 import { nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
-import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, useAgora } from './Cartao';
+import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, useAgora, usePassou } from './Cartao';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
 
 const POSTAGEM = 4;
+const CODIGO = 2;
+const CONFERENCIA = 3;
+
+interface PropsDaFaixaDaSessao {
+  sessao: SessaoAtiva;
+  etapa: number;
+  ultimo: number | undefined;
+  outras: number;
+  desvio: number;
+  de: string;
+  acao: ReactNode;
+}
+
+// A faixa da sessão: o único pedaço do cartão com o relógio de 1 s. O tempo e o "sem sinal"
+// contam na hora do motor (a do navegador menos o desvio), porque as horas da sessão são dele.
+function FaixaDaSessao({ sessao: s, etapa, ultimo, outras, desvio, de, acao }: PropsDaFaixaDaSessao) {
+  const agora = useAgora() - desvio;
+  const andamento = andamentoDaSessao({
+    etapa, progresso: s.progresso, ultimoEvento: ultimo, agora, outras,
+    costumaMs: s.estimativa?.ateOFimMs ?? s.estimativa?.tipicoMs, conta: s.pr?.account,
+  });
+  const tempo = s.startedAt ? tempoDecorrido(agora - s.startedAt) : '';
+  return <Faixa andamento={andamento} de={de} tempo={tempo} acao={acao} />;
+}
 
 interface PropsDaSessao {
   sessao: SessaoAtiva;
-  // o último evento da sessão (a linha mais nova do feed, ou o começo): número, para a linha
-  // nova do feed de uma sessão não redesenhar o cartão das outras
+  // o último sinal de vida da sessão, na hora do motor (ultimoEvento: a linha mais nova do feed, o
+  // modelo escrevendo ou o começo): número, para a linha nova do feed de uma sessão não redesenhar
+  // o cartão das outras
   ultimo: number | undefined;
   outras: number;
+  // a diferença entre o relógio do navegador e o do motor, em ms
+  desvio: number;
   controle: ControleDeAcoes;
 }
 
-// Com memo: o relógio de cada cartão é dele, e a linha nova do feed de uma sessão não redesenha
-// as outras.
-const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras, controle }: PropsDaSessao) {
+// Com memo: a linha nova do feed de uma sessão não redesenha as outras. O cabeçalho, o avatar e
+// as pílulas não têm relógio: só a faixa redesenha a cada segundo, e a borda do "sem sinal" vira
+// com um disparo só, na hora (usePassou).
+const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras, desvio, controle }: PropsDaSessao) {
   const chave = s.pr?.key ?? s.keys?.[0] ?? '';
   const de = chave ? nomeDoPr(chave) : (s.label ?? `Sessão ${s.id}`);
   const doMotor = etapaDoProgresso(s.progresso);
@@ -41,12 +69,9 @@ const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras,
   const [piso, setPiso] = useState(doMotor);
   if (doMotor > piso) setPiso(doMotor);
   const etapa = Math.max(piso, doMotor);
-  const agora = useAgora();
-  const andamento = andamentoDaSessao({
-    etapa, progresso: s.progresso, ultimoEvento: ultimo, agora, outras,
-    costumaMs: s.estimativa?.ateOFimMs ?? s.estimativa?.tipicoMs, conta: s.pr?.account,
-  });
-  const tempo = s.startedAt ? tempoDecorrido(agora - s.startedAt) : '';
+  // o "sem sinal" só vale com o modelo trabalhando; o prazo vai para o relógio do navegador
+  const comModelo = etapa === CODIGO || etapa === CONFERENCIA;
+  const mudo = usePassou(comModelo && ultimo !== undefined ? ultimo + desvio + SEM_SINAL_MS + 1 : undefined);
   let acao = null;
   if (s.cancelled) acao = <Botao pequeno fantasma ocupado="Cancelando…" aria-label={`Cancelando a sessão de ${de}`}>Cancelar</Botao>;
   else if (s.cancellable === true) {
@@ -60,29 +85,29 @@ const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras,
   }
   return (
     <Cartao
-      tom={andamento.tom}
+      tom={mudo ? 'aviso' : 'rodando'}
       chave={chave || de}
       url={s.pr?.url}
       autor={s.pr?.author}
       titulo={s.pr?.title || de}
       contexto={contextoDaSessao(s)}
-      estado={andamento.tipo === 'mudo' ? 'em análise, sem sinal do modelo' : 'em análise'}
+      estado={mudo ? 'em análise, sem sinal do modelo' : 'em análise'}
       botoes={(
         <>
-          <BotaoOcupado texto={etapa >= POSTAGEM ? 'Postando' : 'Revisando'} de={de} />
+          <BotaoOcupado texto={etapa >= POSTAGEM ? 'Postando' : 'Revisando'} de={de} chave={chave || undefined} />
           {chave ? <AbrirNoGitHub chave={chave} url={s.pr?.url} /> : null}
         </>
       )}
       pilulas={pilulasDaSessao(etapa)}
     >
-      <Faixa andamento={andamento} de={de} tempo={tempo} acao={acao} />
+      <FaixaDaSessao sessao={s} etapa={etapa} ultimo={ultimo} outras={outras} desvio={desvio} de={de} acao={acao} />
       {!s.cancelled && s.cancellable === false ? <p className={estilos.nota}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}
     </Cartao>
   );
 });
 
 // O clique em Revisar ou Tentar de novo, antes de o motor abrir a sessão: "Iniciando a revisão.",
-// com o tempo desde o clique.
+// com o tempo desde o clique (as duas horas são do navegador, sem desvio).
 export function FaixaIniciando({ desde, de }: { desde: number; de: string }) {
   const agora = useAgora();
   return <Faixa andamento={andamentoIniciando()} de={de} tempo={tempoDecorrido(agora - desde)} />;
@@ -98,10 +123,10 @@ interface PropsDaFalha {
 export function CartaoDaFalha({ falha: f, iniciadaEm, controle, aoDispensar }: PropsDaFalha) {
   const de = nomeDoPr(f.chave);
   const andamento = andamentoDaFalha(f.etapa, f.motivo);
-  const tempo = f.inicio ? tempoDecorrido(f.sumiuEm - f.inicio) : '';
+  const tempo = f.inicio ? tempoDecorrido(f.fimNoMotor - f.inicio) : '';
   const botoes = (
     <>
-      {iniciadaEm !== undefined ? <BotaoOcupado texto="Revisando" de={de} /> : null}
+      {iniciadaEm !== undefined ? <BotaoOcupado texto="Revisando" de={de} chave={f.chave} /> : null}
       {iniciadaEm === undefined && f.url ? (
         <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', url: f.url, falhou: true, alvo: f.chave, nome: de }, primario: true }]} controle={controle} />
       ) : null}
@@ -140,6 +165,8 @@ interface Props {
   falhas?: ReadonlyArray<Falha & { motivo: string }>;
   // os PRs com o Revisar clicado e a sessão ainda não aberta, com a hora do clique
   iniciadas?: ReadonlyMap<string, number>;
+  // a diferença entre o relógio do navegador e o do motor, em ms (0 sem medida)
+  desvio?: number;
   controle: ControleDeAcoes;
   aoDispensarFalha?: (chave: string) => void;
 }
@@ -148,7 +175,7 @@ const NENHUMA_FALHA: ReadonlyArray<Falha & { motivo: string }> = [];
 const NENHUMA_INICIADA: ReadonlyMap<string, number> = new Map<string, number>();
 const NADA = (): void => {};
 
-export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, controle, aoDispensarFalha = NADA }: Props) {
+export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, aoDispensarFalha = NADA }: Props) {
   const vazio = !sessoes.length && !falhas.length;
   return (
     <Secao titulo="Em análise">
@@ -158,8 +185,9 @@ export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENH
             <CartaoDaSessao
               key={s.id}
               sessao={s}
-              ultimo={ultimoEvento(Object.hasOwn(feeds, s.id) ? (feeds[s.id] ?? []) : [], s.startedAt)}
+              ultimo={ultimoEvento(Object.hasOwn(feeds, s.id) ? (feeds[s.id] ?? []) : [], s.startedAt, s.ultimoSinalEm)}
               outras={sessoes.length - 1}
+              desvio={desvio}
               controle={controle}
             />
           ))}

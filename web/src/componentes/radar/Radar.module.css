@@ -257,7 +257,7 @@ a.chaveDoPr:hover { color: var(--link-hover); text-decoration: underline; }
 .botoesDoCartao { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .botaoLink { text-decoration: none; white-space: nowrap; }
 .botaoOcupado { gap: 8px; background: var(--accent-soft); border-color: transparent; color: var(--accent-texto); }
-.botaoOcupado:disabled { opacity: 1; }
+.botaoOcupado, .botaoOcupado:hover { cursor: default; background: var(--accent-soft); color: var(--accent-texto); }
 
 .pilulas {
   display: grid;

@@ -15,6 +15,8 @@ interface Entrada {
   pendentes: readonly Pendencia[];
   resolvidas: readonly unknown[];
   estacionados?: Readonly<Record<string, Estacionado>>;
+  // a diferença entre o relógio do navegador e o do motor, em ms
+  desvio?: number;
 }
 
 function vistas(sessoes: readonly SessaoAtiva[], feeds: Entrada['feeds'], antes: readonly SessaoVista[]): SessaoVista[] {
@@ -30,13 +32,13 @@ function vistas(sessoes: readonly SessaoAtiva[], feeds: Entrada['feeds'], antes:
 // o relógio entra de fora para o teste; a tela usa o do navegador
 const relogio = (): number => Date.now();
 
-export function useFalhas({ sessoes, feeds, pendentes, resolvidas, estacionados }: Entrada) {
+export function useFalhas({ sessoes, feeds, pendentes, resolvidas, estacionados, desvio = 0 }: Entrada) {
   const [visto, setVisto] = useState(() => ({ sessoes, feeds, lista: vistas(sessoes, feeds, []) }));
   const [falhas, setFalhas] = useState<readonly Falha[]>([]);
   // Ajuste de estado no desenho, como o React prevê para estado que depende de propriedade: a
   // sessão que estava no estado anterior e não está neste vira falha candidata.
   if (visto.sessoes !== sessoes || visto.feeds !== feeds) {
-    const novas = visto.sessoes !== sessoes ? sumidas(visto.lista, sessoes, relogio()) : [];
+    const novas = visto.sessoes !== sessoes ? sumidas(visto.lista, sessoes, relogio(), desvio) : [];
     setVisto({ sessoes, feeds, lista: vistas(sessoes, feeds, visto.lista) });
     if (novas.length) setFalhas((antes) => [...antes.filter((f) => !novas.some((n) => n.chave === f.chave)), ...novas]);
   }

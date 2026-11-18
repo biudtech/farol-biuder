@@ -5,7 +5,7 @@
 // três pílulas e a faixa (etapas, tempo, ação, trilho e rodapé). O que cada peça diz vem pronto
 // de src/radar/cartao.ts. Sem estilo em linha: a CSP recusa, e a largura do trilho vai como
 // atributo do SVG.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner, ui } from '@/componentes/ui';
 import { etapasDaFaixa, iniciais, urlDoAvatar, type Andamento, type Pilula, type TomDoCartao } from '@/radar/cartao';
 import { linkDoPr } from '@/radar/formato';
@@ -15,7 +15,9 @@ function classes(...nomes: Array<string | false | undefined>): string {
   return nomes.filter(Boolean).join(' ');
 }
 
-// O relógio de 1 s da faixa. Só quem mostra o tempo o usa: o resto do cartão não redesenha.
+// O relógio de 1 s. Quem o chama redesenha a cada segundo: por isso ele mora só nos componentes
+// do tempo e da faixa (FaixaDaSessao, FaixaIniciando), e o cabeçalho, o avatar e as pílulas do
+// cartão ficam de fora.
 export function useAgora(intervaloMs = 1000): number {
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
@@ -23,6 +25,18 @@ export function useAgora(intervaloMs = 1000): number {
     return () => clearInterval(id);
   }, [intervaloMs]);
   return agora;
+}
+
+// true a partir do `instante` (no relógio do navegador), com um disparo só, na hora: quem precisa
+// saber se um prazo passou não redesenha a cada segundo.
+export function usePassou(instante: number | undefined): boolean {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    if (instante === undefined) return undefined;
+    const id = setTimeout(() => setAgora(Date.now()), Math.max(0, instante - Date.now()));
+    return () => clearTimeout(id);
+  }, [instante]);
+  return instante !== undefined && agora >= instante;
 }
 
 // A foto do GitHub do autor, e as iniciais quando não há login com forma de login ou a imagem
@@ -60,10 +74,36 @@ export function AbrirNoGitHub({ chave, url }: { chave: string; url: string | nul
   );
 }
 
-// O botão do estado que roda ("Revisando", "Postando"): ocupado, com o spinner.
-export function BotaoOcupado({ texto, de }: { texto: string; de: string }) {
+// Os PRs com o Revisar (ou Tentar de novo, ou Revisar de novo) clicado há pouco. O botão clicado
+// sai da tela e o foco cairia no body: o botão ocupado que nasce no lugar, no cartão da fila ou
+// no da sessão que abriu, pega o foco, mas só se ele ficou solto.
+const PRAZO_DO_FOCO_MS = 120000;
+const focoPendente = new Map<string, number>();
+
+export function marcarFoco(chave: string): void {
+  focoPendente.set(chave, Date.now());
+}
+
+function focoSolto(): boolean {
+  const ativo = document.activeElement;
+  return ativo === null || ativo === document.body;
+}
+
+// O botão do estado que roda ("Revisando", "Postando"): ocupado, com o spinner. Fica focável
+// (aria-disabled em vez de disabled), para o foco do clique ter onde ficar.
+export function BotaoOcupado({ texto, de, chave }: { texto: string; de: string; chave?: string }) {
+  const botao = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const em = chave === undefined ? undefined : focoPendente.get(chave);
+    if (em === undefined) return;
+    if (Date.now() - em > PRAZO_DO_FOCO_MS) {
+      focoPendente.delete(chave as string);
+      return;
+    }
+    if (focoSolto()) botao.current?.focus();
+  }, [chave]);
   return (
-    <button type="button" className={classes(ui.botao, ui.pequeno, estilos.botaoOcupado)} disabled aria-label={`${texto} ${de}`}>
+    <button ref={botao} type="button" className={classes(ui.botao, ui.pequeno, estilos.botaoOcupado)} aria-disabled="true" aria-label={`${texto} ${de}`}>
       <Spinner tamanho="p" />{texto}
     </button>
   );

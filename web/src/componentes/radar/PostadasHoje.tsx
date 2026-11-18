@@ -72,7 +72,7 @@ function CartaoDaPostada({ p, detalhe, carregando, iniciadaEm, controle }: {
     </Link>
   );
   let revisar = null;
-  if (iniciadaEm !== undefined) revisar = <BotaoOcupado texto="Revisando" de={nome} />;
+  if (iniciadaEm !== undefined) revisar = <BotaoOcupado texto="Revisando" de={nome} chave={p.chave} />;
   else if (p.url && controle) {
     revisar = <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', url: p.url, deNovo: true, alvo: p.chave, nome }, primario: true }]} controle={controle} />;
   }

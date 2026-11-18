@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Acao } from '@/radar/acoes';
+import { marcarFoco } from './Cartao';
 import type { ControleDeAcoes } from './useAcoes';
 
 export const PRAZO_DO_INICIO_MS = 120000;
@@ -42,6 +43,8 @@ export function useIniciadas(controle: ControleDeAcoes, sessoes: readonly Sessao
 
   const disparar = useCallback(async (acao: Acao): Promise<boolean> => {
     if (acao.tipo !== 'revisar' || controle.emCurso(acao.alvo) !== null) return controle.disparar(acao);
+    // o botão clicado sai da tela: o botão ocupado que nasce no lugar pega o foco
+    marcarFoco(acao.alvo);
     setIniciadas((antes) => new Map(antes).set(acao.alvo, relogio()));
     const aceito = await controle.disparar(acao);
     if (!aceito) setIniciadas((antes) => sem(antes, (chave) => chave === acao.alvo));
