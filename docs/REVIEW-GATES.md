@@ -244,11 +244,16 @@ só de estado do PR) não espera ninguém:
 3. o portão que recusa o COMMENT encerra sem postar (`not_posted`), com o motivo no card; falha
    passageira vai ao reenvio de sempre.
 
-**Antes do COMMENT neutro** (`conferirAntesDoComentario`), em todos os ramos, o motor relê o PR e
-não posta quando: o PR está mesclado ou fechado (`already_merged`, `already_closed`); o estado ou o
+**Antes do COMMENT neutro** (`gentePorPerto` e `conferirAntesDoComentario`), em todos os ramos,
+inclusive o reenvio, o motor confere a gente no PR (cancelamento, label retirada, decisão de uma
+pessoa no head) e relê o PR, e não posta quando: o PR está mesclado ou fechado (`already_merged`, `already_closed`); o estado ou o
 head não podem ser lidos agora (`not_posted`); outra conta tem a label `<conta>:revisando`
 (`not_posted`); ou o head andou (nada sai, a marca `stale_head` deixa o PR na fila do head novo).
-O portão geral não muda: o COMMENT do PR próprio em PR aberto continua.
+O portão geral não muda: o COMMENT do PR próprio em PR aberto continua. A conferência "esse
+comentário já saiu?" e o envio correm juntos dentro da fila de postagem do PR (o gancho `jaSaiu`
+do `postReview`), e a varredura reconfere a revisão em curso logo antes de postar: duas vias no
+mesmo head não publicam o COMMENT duas vezes. O COMMENT neutro leva a retirada pendente do pedido
+anterior, para a varredura retirar o CHANGES_REQUESTED depois.
 
 **Depois do COMMENT neutro**, commit novo no PR abre a rodada automática sozinho: sem review
 decisivo da conta, `staleForReview` (`lib/engine/rereview-stale.js`) usa o head da última decisão
@@ -286,10 +291,14 @@ recusa passageira de não ter conseguido ler os reviews do commit
 (`lib/engine/postagem-retentativa.js`). Falha transitória deixa a pendência marcada para o
 reenvio: `retryFailedPosts` (`lib/engine/decision.js`) tenta a cada ciclo nas 3 primeiras vezes e
 depois continua com recuo crescente, de 15 minutos até seis horas (`recuoDoReenvio`), sem nunca
-virar pendência de gente. Só a falha passageira (rede, 5xx, limite de taxa, conta sem token) fica
-no recuo: a recusa permanente (avaliação técnica, critérios, PR próprio, 422 de PR travado ou
-repositório arquivado) sai do reenvio e vai ao desfecho sem mesa (`recusaPermanente`), que encerra
-sem postar no PR próprio e posta o COMMENT neutro no resto. Antes de cada tentativa relê o head e os reviews da conta. Head que
+virar pendência de gente. Na dúvida, a falha é passageira e fica no recuo (todo 5xx, 401, 403 e
+404 momentâneos, `head_desconhecido`, a reconferência técnica que não deu para fazer, erro
+desconhecido). Permanente é só a lista explícita (`ehPermanente`): a avaliação técnica com recusa
+definitiva, critérios inconsistentes, PR próprio, instância isolada, credencial, linguagem e o 422
+de repositório arquivado ou PR travado. Ela sai do reenvio e vai ao desfecho sem mesa
+(`recusaPermanente`), que encerra sem postar no PR próprio e posta o COMMENT neutro no resto. O
+reenvio do COMMENT neutro passa pelas mesmas conferências do primeiro envio (`barrarReenvio`):
+gente no PR, estado, label e head. Antes de cada tentativa relê o head e os reviews da conta. Head que
 mudou desarma o reenvio e marca `stale_head`; leitura que falha segura até o ciclo seguinte; o
 reenvio sem o texto gravado vai ao desfecho sem mesa.
 

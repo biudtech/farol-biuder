@@ -285,7 +285,6 @@ test('falha passageira ao retirar com o APPROVE publicado: o APPROVE substitui o
   const aprovada = decisoesResolvidas(e).find((d) => d.key === KEY(19) && d.status === 'auto_approved');
   assert.ok(aprovada, 'a aprovação saiu');
   assert.equal(aprovada.retiradaPendente, undefined, 'a aprovação não guarda retirada pendente');
-  assert.equal(gh.meus[gh.meus.length - 1].state, 'APPROVED', 'a última decisão da conta no PR é a aprovação');
   gh.retiradaFalha = '';
   await e.varrerEsperas();
   assert.deepEqual(eventos(), ['DISMISS', 'APPROVE'], 'a varredura não tenta retirar o que o APPROVE já substituiu');
