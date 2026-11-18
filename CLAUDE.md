@@ -223,12 +223,16 @@ monitoramento) e os três desfechos, que só aceitam o autônomo (`approve`, `ap
 e registra a conversão numa linha de log, uma vez. O que não sai sozinho por falta de confiança no
 resultado (origem sem marca, admissibilidade que falha, inventário ou rodada abertos, lacuna de
 prova depois do teto, critérios inconsistentes, bloqueio só de estado) segue o desfecho sem mesa
-(`lib/engine/desfecho-sem-mesa.js`): até 2 rodadas extras no mesmo commit, com recuo, e esgotado
-um COMMENT neutro, montado só pelo motor e passando pelos mesmos portões, dizendo o que foi revisado
-e o que não deu para concluir. Nunca APPROVE nem REQUEST_CHANGES sem admissibilidade. Texto recusado
+(`lib/engine/desfecho-sem-mesa.js`): até 2 rodadas extras no mesmo commit, com recuo (e um teto
+conjunto de 6 sessões extras por head somando a busca da prova), e esgotado um COMMENT neutro,
+montado só pelo motor e passando pelos mesmos portões, dizendo o que foi revisado e o que não deu
+para concluir. Antes de postá-lo o motor relê o PR: mesclado, fechado, ilegível, com a label de
+revisão de outra conta ou com o head andado, não posta. Depois dele, commit novo abre a rodada
+automática (`rereview-stale.js`). Cancelamento e label retirada encerram sem postar e sem relançar. Nunca APPROVE nem REQUEST_CHANGES sem admissibilidade. Texto recusado
 (credencial, ou linguagem depois da reconstrução) vira o COMMENT mínimo, sem o texto do modelo. PR
 fechado, PR próprio e instância isolada encerram sem postar; head que andou deixa o PR na fila do
-head novo; o reenvio nunca desiste para uma pessoa (recuo longo). A varredura adota a pendência sem
+head novo; o reenvio nunca desiste para uma pessoa (recuo longo só para falha passageira; a recusa
+permanente vai ao desfecho sem mesa). A varredura adota a pendência sem
 caminho automático, inclusive a mesa gravada antes: nenhuma fica parada para sempre. Bloqueio que
 a sessão declara com causa de estado (CI, conflito, dependência, fora do diff) não reprova.
 

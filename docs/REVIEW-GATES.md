@@ -230,6 +230,11 @@ só de estado do PR) não espera ninguém:
    relança é o round automático, pela marca `stale_head` no mesmo head, como a busca da prova.
    Commit novo zera a conta. A rodada pedida que não roda em seis horas (`TETO_DA_RODADA_MS`, o
    round segurado por rascunho, conflito ou falta de token) conta como esgotada;
+   Há também um teto CONJUNTO de sessões extras por PR e head (`TETO_CONJUNTO`, o mesmo das 6
+   tentativas da busca da prova), somando as rodadas extras daqui e as da busca da prova e gravado
+   no `decisions.json` (`sessoesExtras`): com motivos alternados, as duas recuperações não se
+   relançam sem fim. O relançamento respeita o estacionamento por cancelamento e por label
+   retirada: esses dois encerram sem postar e sem relançar;
 2. esgotado o limite, ou quando outra rodada não muda nada (diff acima do limite do GitHub, texto
    recusado), o motor posta um COMMENT neutro, montado só por ele (`comentarioNeutro`): o que foi
    revisado (o commit e quantos arquivos) e o que não deu para concluir, numa frase do motor, nunca
@@ -239,10 +244,22 @@ só de estado do PR) não espera ninguém:
 3. o portão que recusa o COMMENT encerra sem postar (`not_posted`), com o motivo no card; falha
    passageira vai ao reenvio de sempre.
 
+**Antes do COMMENT neutro** (`conferirAntesDoComentario`), em todos os ramos, o motor relê o PR e
+não posta quando: o PR está mesclado ou fechado (`already_merged`, `already_closed`); o estado ou o
+head não podem ser lidos agora (`not_posted`); outra conta tem a label `<conta>:revisando`
+(`not_posted`); ou o head andou (nada sai, a marca `stale_head` deixa o PR na fila do head novo).
+O portão geral não muda: o COMMENT do PR próprio em PR aberto continua.
+
+**Depois do COMMENT neutro**, commit novo no PR abre a rodada automática sozinho: sem review
+decisivo da conta, `staleForReview` (`lib/engine/rereview-stale.js`) usa o head da última decisão
+`commented_inconclusive` (estado `INCONCLUSIVO` no gatilho A de `explicaReRound`).
+
 O PR que saiu do automático encerra sem postar: revisão automática desligada para ele, ou gente
 que já decidiu o commit (o motor respeitando o time, não esperando decisão). A varredura do ciclo
 adota toda pendência sem caminho automático (a mesa gravada antes de 17/11/2026, inclusive a da
-recusa por credencial): nenhuma fica parada para sempre.
+recusa por credencial): nenhuma fica parada para sempre. A que já passou do teto da prova vai
+direto ao COMMENT neutro, sem sessão nova; as outras relançam escalonadas, uma a cada cinco
+minutos, nunca todas na mesma varredura.
 
 **O que vem depois de cada recusa de portão** (o portão continua recusando o que recusa):
 
@@ -269,7 +286,10 @@ recusa passageira de não ter conseguido ler os reviews do commit
 (`lib/engine/postagem-retentativa.js`). Falha transitória deixa a pendência marcada para o
 reenvio: `retryFailedPosts` (`lib/engine/decision.js`) tenta a cada ciclo nas 3 primeiras vezes e
 depois continua com recuo crescente, de 15 minutos até seis horas (`recuoDoReenvio`), sem nunca
-virar pendência de gente. Antes de cada tentativa relê o head e os reviews da conta. Head que
+virar pendência de gente. Só a falha passageira (rede, 5xx, limite de taxa, conta sem token) fica
+no recuo: a recusa permanente (avaliação técnica, critérios, PR próprio, 422 de PR travado ou
+repositório arquivado) sai do reenvio e vai ao desfecho sem mesa (`recusaPermanente`), que encerra
+sem postar no PR próprio e posta o COMMENT neutro no resto. Antes de cada tentativa relê o head e os reviews da conta. Head que
 mudou desarma o reenvio e marca `stale_head`; leitura que falha segura até o ciclo seguinte; o
 reenvio sem o texto gravado vai ao desfecho sem mesa.
 
