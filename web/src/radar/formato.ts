@@ -16,19 +16,6 @@ export function nomeDoPr(chave: string): string {
   return partes ? `PR #${partes[2]} de ${partes[1]}` : `PR ${chave}`;
 }
 
-// 'dono/repo#12' vira 'repo#12': o nome curto da linha, sem o dono. Chave fora do formato
-// volta como veio.
-export function chaveCurta(chave: string): string {
-  const partes = CHAVE_DE_PR.exec(chave);
-  return partes ? `${(partes[1] ?? '').split('/').pop() ?? ''}#${partes[2]}` : chave;
-}
-
-// 'dono/repo#12' vira 'repo': o repositório, à direita da linha da Fila.
-export function repoDaChave(chave: string): string {
-  const partes = CHAVE_DE_PR.exec(chave);
-  return partes ? ((partes[1] ?? '').split('/').pop() ?? chave) : chave;
-}
-
 // A URL só vira link quando aponta para o GitHub por HTTPS. Qualquer outra coisa (outro
 // esquema, outro host, um host que só começa parecido) fica como texto.
 export function linkDoPr(url: string | undefined): string | null {
@@ -103,18 +90,6 @@ export function horaCurta(valor: number | string | null | undefined, fuso?: stri
 // O dia do calendário, no fuso do navegador: é por ele que se diz se um fato é de hoje.
 export function dia(valor: number | string | null | undefined, fuso?: string): string {
   return formatar(valor, 'calendario', SO_DIA, fuso);
-}
-
-// A chave de cada linha do feed na lista da tela: a hora da linha e a ordem dela entre as
-// que têm a mesma hora. Não usa a posição no feed, que muda quando o motor corta as linhas
-// antigas: com ela, toda linha trocaria de chave a cada linha nova.
-export function chavesDoFeed(linhas: readonly { t: number }[]): string[] {
-  const vistas = new Map<number, number>();
-  return linhas.map((linha) => {
-    const ordem = vistas.get(linha.t) ?? 0;
-    vistas.set(linha.t, ordem + 1);
-    return `${linha.t}:${ordem}`;
-  });
 }
 
 // De quem é cada motivo de uma pendência (REASON_KINDS, lib/engine/public-review.js).

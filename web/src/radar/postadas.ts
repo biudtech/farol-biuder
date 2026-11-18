@@ -27,6 +27,13 @@ export interface Postada {
   endereco: string;
   // o link do PR, só quando é do GitHub por HTTPS
   url: string | null;
+  // o que foi publicado (approve, request_changes ou comment), para o cartão
+  acao: string;
+  autor?: string;
+  card?: string;
+  resolvedAt?: number;
+  // a duração das etapas da sessão, quando o motor gravou
+  totalMs?: number;
 }
 
 // A cor de cada coisa publicada: aprovado verde, pediu mudanças vermelho, comentado âmbar.
@@ -68,6 +75,11 @@ export function postadasDeHoje(resolvidas: readonly unknown[], agora: number = D
       desfecho: `${ROTULO_DA_ACAO[acao] ?? acao}. ${textoDoStatus(r.status)}.`,
       endereco: enderecoDaRevisao(r.id, r.key),
       url: linkDoPr(r.pr?.url),
+      acao,
+      ...(r.pr?.author ? { autor: r.pr.author } : {}),
+      ...(r.card ? { card: r.card } : {}),
+      ...(r.resolvedAt !== undefined ? { resolvedAt: r.resolvedAt } : {}),
+      ...(r.stages?.totalMs ? { totalMs: r.stages.totalMs } : {}),
     });
   }
   return { postadas, ilegiveis };

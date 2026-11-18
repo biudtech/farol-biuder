@@ -73,46 +73,6 @@
 }
 
 
-/* a linha de uma sessão em análise: título e porcentagem, a barra e a meta embaixo */
-.resumoDaSessao { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
-.cabecaDaSessao { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
-
-.percentual {
-  flex: none;
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.barraDoProgresso { display: block; line-height: 0; }
-
-.barraDoProgresso svg { display: block; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; }
-
-.trilhoDoProgresso { fill: var(--surface-2); }
-
-.preenchidoDoProgresso { fill: var(--accent); }
-
-.feed {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 8px 10px;
-  max-height: 220px;
-  overflow-y: auto;
-  list-style: none;
-  background: var(--surface-2);
-  border-radius: 8px;
-  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-}
-.linhaDoFeed { display: flex; gap: 10px; overflow-wrap: anywhere; min-width: 0; }
-.linhaDoFeed[data-tipo="aviso"] { font-weight: 650; }
-.linhaDoFeed span { min-width: 0; }
-.horaDoFeed { flex: none; color: var(--muted); }
-
 .botoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .botao {
   display: inline-flex;
@@ -244,12 +204,160 @@
 /* a checagem em curso: o spinner pequeno e a contagem do motor numa linha */
 .checagemEmCurso { display: flex; align-items: center; gap: 8px; margin: 0; }
 
-/* a sessão em análise: a linha que abre e, fora do <summary>, a barra do andamento */
-.sessao { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-linha); }
-.linhaDaSessao { border: 0; background: transparent; }
-.barraDaSessao { padding: 0 18px 14px; }
-.etapas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
-.etapa { display: flex; gap: 8px; align-items: baseline; }
-.etapa[data-estado="falta"] { color: var(--muted); }
-.etapa[data-estado="agora"] { font-weight: 700; }
-.marcaDaEtapa { flex: none; width: 14px; color: var(--ok-texto); }
+/* ---------- o cartão de um PR, no molde do cartão da autoanálise do Farol ----------
+   A borda esquerda diz o estado pela cor (rodando, ok, falha, aviso, fila), e o texto do rodapé
+   e o das pílulas dizem o mesmo em palavras. Texto de estado usa as variáveis -texto, sobre a
+   superfície ou sobre o fundo suave do estado (pares de src/tema/contraste.test.ts). */
+.cartoes { display: flex; flex-direction: column; gap: 12px; }
+.cartaoDoPr {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+}
+.cartaoDoPr[data-tom="ok"] { border-left-color: var(--ok); }
+.cartaoDoPr[data-tom="falha"] { border-left-color: var(--danger); }
+.cartaoDoPr[data-tom="aviso"] { border-left-color: var(--aviso); }
+.cartaoDoPr[data-tom="fila"] { border-left-color: var(--border); }
+
+.cabecaDoCartao { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.avatar {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.corpoDoCartao { flex: 1; min-width: 0; }
+.linhaDaChave { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.chaveDoPr { font-weight: 700; color: var(--link); text-decoration: none; overflow-wrap: anywhere; }
+a.chaveDoPr:hover { color: var(--link-hover); text-decoration: underline; }
+.quem {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--accent-soft);
+  color: var(--accent-texto);
+  overflow-wrap: anywhere;
+}
+.tituloDoPr { margin: 2px 0 5px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; text-wrap: pretty; }
+.contexto { margin-top: 5px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.botoesDoCartao { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.botaoLink { text-decoration: none; white-space: nowrap; }
+.botaoOcupado { gap: 8px; background: var(--accent-soft); border-color: transparent; color: var(--accent-texto); }
+.botaoOcupado:disabled { opacity: 1; }
+
+.pilulas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pilula {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.iconeDaPilula {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface);
+  color: var(--muted);
+}
+.textoDaPilula { display: flex; flex-direction: column; min-width: 0; }
+.rotuloDaPilula { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.valorDaPilula { font-size: 13px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.pilula[data-tom="ok"] .iconeDaPilula { background: var(--ok-soft); color: var(--ok-texto); }
+.pilula[data-tom="ok"] .valorDaPilula { color: var(--ok-texto); }
+.pilula[data-tom="aviso"] .iconeDaPilula { background: var(--aviso-soft); color: var(--aviso-texto); }
+.pilula[data-tom="aviso"] .valorDaPilula { color: var(--aviso-texto); }
+.pilula[data-tom="falha"] .iconeDaPilula { background: var(--danger-soft); color: var(--danger-texto); }
+.pilula[data-tom="falha"] .valorDaPilula { color: var(--danger-texto); }
+
+.faixa { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.topoDaFaixa { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.etapasDaFaixa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; margin: 0; padding: 0; list-style: none; }
+.etapaDaFaixa { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--apagado); white-space: nowrap; }
+.etapaDaFaixa[data-estado="feita"] { color: var(--muted); }
+.etapaDaFaixa[data-estado="agora"] { color: var(--text); }
+.etapaDaFaixa[data-estado="erro"] { color: var(--danger-texto); }
+.liga { width: 26px; height: 1.5px; margin: 0 8px; background: var(--border); }
+.liga[data-feita="true"] { background: var(--ok); }
+.marcador {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+.etapaDaFaixa[data-estado="feita"] .marcador { border-color: transparent; background: var(--ok-soft); color: var(--ok-texto); }
+.etapaDaFaixa[data-estado="agora"] .marcador { border: 0; color: var(--accent); }
+.etapaDaFaixa[data-estado="erro"] .marcador { border-color: transparent; background: var(--danger-soft); color: var(--danger-texto); }
+.giro {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: giroDaEtapa .8s linear infinite;
+}
+@keyframes giroDaEtapa { to { transform: rotate(360deg); } }
+.ladoDaFaixa { display: flex; align-items: center; gap: 12px; }
+.tempo { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.trilho { position: relative; display: block; height: 4px; margin: 11px 0 9px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.trilho svg { display: block; width: 100%; height: 4px; }
+.cheio { fill: var(--accent); }
+.corre { position: absolute; top: 0; bottom: 0; left: -32%; width: 32%; border-radius: 999px; background: var(--accent); animation: correDaFaixa 1.5s ease-in-out infinite; }
+@keyframes correDaFaixa { 0% { left: -32%; } 100% { left: 100%; } }
+
+.rodapeDaFaixa { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.rodapeDaFaixa[data-sem-trilho="sim"] { margin-top: 10px; }
+.faixa > .rodapeDaFaixa[data-sem-trilho="sim"]:first-child { margin-top: 0; }
+.textoDaFaixa { min-width: 0; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.textoDaFaixa[data-tom="ok"] { color: var(--ok-texto); }
+.textoDaFaixa[data-tom="falha"] { color: var(--danger-texto); }
+.textoDaFaixa[data-tom="aviso"] { color: var(--aviso-texto); }
+.apoio { font-size: 12px; color: var(--apagado); white-space: nowrap; }
+
+/* Movimento reduzido: o spinner da etapa para, e o trilho indefinido vira uma faixa parada. */
+@media (prefers-reduced-motion: reduce) {
+  .giro, .corre { animation: none; }
+  .corre { left: 0; width: 100%; opacity: .45; }
+}
+
+/* Janela estreita: os botões descem para baixo do título e as pílulas viram uma coluna. */
+@media (max-width: 760px) {
+  .cabecaDoCartao { flex-wrap: wrap; }
+  .botoesDoCartao { flex-basis: 100%; justify-content: flex-start; }
+  .pilulas { grid-template-columns: minmax(0, 1fr); }
+  .apoio { white-space: normal; }
+}

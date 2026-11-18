@@ -32,8 +32,9 @@ interface Base {
 
 export type Acao =
   | (Base & { tipo: 'checar' })
-  // `deNovo`: o PR já tem revisão (o botão do Histórico); muda só o rótulo
-  | (Base & { tipo: 'revisar'; url: string; deNovo?: true })
+  // `deNovo`: o PR já tem revisão (o botão do Histórico); `falhou`: a última sessão terminou sem
+  // resultado (o cartão do Radar). Os dois mudam só o rótulo
+  | (Base & { tipo: 'revisar'; url: string; deNovo?: true; falhou?: true })
   | (Base & { tipo: 'cancelar'; id: string })
   | (Base & { tipo: 'ignorar'; chave: string })
   | (Base & { tipo: 'restaurar'; chave: string })
@@ -86,7 +87,7 @@ export function rotuloDa(acao: Acao): string {
   if (ehDoSistema(acao)) return rotuloDoSistema(acao);
   switch (acao.tipo) {
     case 'checar': return 'Checar agora';
-    case 'revisar': return acao.deNovo ? 'Revisar de novo' : 'Revisar agora';
+    case 'revisar': return acao.falhou ? 'Tentar de novo' : (acao.deNovo ? 'Revisar de novo' : 'Revisar agora');
     case 'cancelar': return 'Cancelar';
     case 'ignorar': return 'Ignorar';
     case 'restaurar': return 'Restaurar';

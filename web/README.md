@@ -91,7 +91,7 @@ corrigida sozinho, o `overrides` sai.
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
 | `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
 | `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
-| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`), o que o cartão de um PR diz (`cartao.ts`), a sessão que some sem resultado (`falhas.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action`, com o tom e o chip de cada desfecho (`rotulos.ts`), os dias da lista (`dias.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e a auditoria do registro em frases (`auditoria.ts`) |
@@ -198,17 +198,18 @@ prompt).
 ## A tela Radar
 
 A aba `/radar` é `src/componentes/radar/Radar.tsx`: o que o revisor autônomo está fazendo
-agora. Ela lê o snapshot do store, fatia nas seções e liga os botões às ações. Uma linha por
-item, e o detalhe num clique (`Linha`, de `src/componentes/ui`):
+agora. Ela lê o snapshot do store, fatia nas seções e liga os botões às ações. Cada PR é um
+cartão no molde do cartão da autoanálise do Farol (canvas aprovado em 18/11/2026; `Cartao.tsx`,
+com o que cada peça diz em `src/radar/cartao.ts`), descrito em "O cartão de um PR", abaixo:
 
 | Seção | Componente | De onde vem |
 |---|---|---|
 | Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt` e, com o ciclo em curso, `checagem`) |
 | Checagem em curso | `Radar.tsx` | `checagem` com `status` `checking`: "Checando as N organizações · K de N · agora: dono", com o spinner pequeno, numa linha sem região viva (muda a cada segundo). O ciclo do motor busca por organização, e não por repositório: o desenho dizia "repositórios", e a tela diz a unidade que o motor conta |
 | Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
-| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`) e `activity`. A linha: título, porcentagem, barra e "repo#n · etapa atual". O detalhe: etapa, arquivos, o arquivo da vez (`progresso.arquivoAtual`, o último lido, em caminho relativo do PR) e quanto falta (quando o motor manda), as etapas pelo nome (feitas, a atual e as que faltam, de `progresso.etapas`, que o motor manda só no estado: a linha do feed traz o progresso sem os nomes, e a tela mantém os que já tem enquanto fecham com a etapa), quem e quando, o feed, Abrir no GitHub e Cancelar |
-| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A linha: título, marcas (rascunho, parada, em conflito, esperando vaga) e repositório. O detalhe: chave, autor, hora, posição, o motivo do motor, Revisar agora, Ignorar e Abrir no GitHub |
-| Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`). A linha: bolinha (aprovado verde, pediu mudanças vermelho, comentado âmbar), título e hora. O detalhe: chave, desfecho em texto, "Ver a revisão" (o Histórico com a revisão aberta) e Abrir no GitHub |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`, `pedido`, `estimativa`, `arquivosPr` e `pr.account`) e o último evento de cada sessão em `activity`. Um cartão por sessão; depois, as sessões que sumiram sem resultado e cujo PR não está mais na fila (`useFalhas.ts`) |
+| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. Um cartão por PR, com a borda neutra, sem pílulas: as marcas (rascunho, parada, em conflito, esperando vaga) ao lado do autor, Revisar agora, Ignorar e Abrir no GitHub, e o rodapé com a posição e o que segura o PR |
+| Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`), e o detalhe de cada uma em `GET /api/decision?key=&id=` (checks, `criteriosDoCard`, achados, `rodadasDoPr`, `tamanhoDoPr` e `execucao`), buscado uma vez por revisão. A borda e o parecer pelo que saiu (aprovado verde, pediu mudanças vermelho, comentado âmbar), Revisar de novo, Abrir no GitHub e, na faixa, Ver resultado (o Histórico com a revisão aberta) |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
 
 Estados: antes do primeiro estado, o esqueleto com "Carregando o estado do motor."
@@ -257,21 +258,73 @@ Regras que valem para quem mexer nela:
   `https://github.com/`, com `rel="noreferrer noopener"` e `target="_blank"`. A revisão sob
   demanda manda a URL canônica do PR (`prDaUrl`), não o que foi digitado.
 - **Cor não é o único sinal.** Erro e aviso começam dizendo o que são ("Erro:", "Aviso:"), e a
-  bolinha das postadas tem o rótulo escondido para o leitor de tela.
+  borda do cartão repete o que o nome do cartão, o rodapé e as pílulas já dizem em texto.
 - **Hora.** As datas saem de `dataHora` e `horaCurta`, no fuso do navegador, sempre absolutas.
-  A tela não tem relógio próprio: "hoje" é lido quando a lista das resolvidas (ou a próxima
+  O tempo decorrido da faixa é duração, não data, e é o único relógio da tela (um por cartão,
+  de 1 s). Fora dele a tela não tem relógio: "hoje" é lido quando a lista das resolvidas (ou a próxima
   checagem) muda, e as funções sem React recebem o instante, para os testes não dependerem da
   hora.
 - **Desenho.** A tela lê cada chave do snapshot por um seletor próprio, e as seções são
   `memo`: a seção só é redesenhada quando a fatia dela muda de referência
-  (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a uma seção, use `useMemo`. A
-  barra da porcentagem é SVG com a largura em atributo: a CSP recusa estilo em linha.
+  (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a uma seção, use `useMemo`. O
+  cartão da sessão recebe o último evento como número, para a linha nova do feed de uma sessão
+  não redesenhar as outras. O trilho definido é SVG com a largura em atributo: a CSP recusa
+  estilo em linha.
+
+### O cartão de um PR
+
+- **Borda esquerda de 3 px pelo estado**: rodando, a primária; postada aprovada, ok; pediu
+  mudanças ou falha, perigo; sem sinal ou comentada, aviso; fila, neutra. O estado também vai em
+  texto: no nome do cartão (`article`), no rodapé e nas pílulas.
+- **Cabeçalho**: a foto do GitHub do autor (`https://avatars.githubusercontent.com/<login>?s=72`,
+  `alt` vazio, 36 px, `loading="lazy"`, sem referer; a origem é a única imagem de fora no
+  `img-src` da CSP; login que não tem forma de login e foto que falha caem nas iniciais), a
+  chave como link do PR, o login do autor, o título e a linha de contexto, só com o que existe
+  (arquivos e quem pediu, na sessão; a rodada, o card, o tamanho e a hora, na postada; a hora da
+  última atualização, na fila).
+- **Botões**: rodando, "Revisando" ocupado ("Postando" na postagem); parado, Revisar agora (fila),
+  Revisar de novo (postada) ou Tentar de novo (falha); Abrir no GitHub e Ignorar onde a ação
+  existe.
+- **Três pílulas** (sessão, falha e postada): Checks obrigatórios (os `checks` do detalhe; enquanto
+  roda, "Lidos no fim da revisão", porque o motor só lê os checks no fim), Card (os critérios de
+  `criteriosDoCard`; enquanto roda, "Ainda não lido", "Lendo os critérios" ou "Conferido no
+  parecer") e Parecer (o que foi publicado, com os bloqueios; "Em análise" ou "Nada foi
+  publicado"). Sem dado, o traço com texto neutro.
+- **Faixa** (`role="group"`): as etapas Fontes, Card, Código, Conferência e Postagem, a feita com ✓,
+  a atual com o spinner e `aria-current="step"`, a da falha com "!", e os traços verdes até a
+  atual; o tempo decorrido (um relógio de 1 s só do cartão, que troca o texto sem tirar o foco) e
+  a ação (Cancelar, Ver resultado ou Dispensar); o trilho de 4 px, definido com `aria-valuenow` só
+  no código com a contagem de arquivos, indefinido nas outras etapas e ausente quando terminou; e
+  o rodapé, com o que a sessão faz agora à esquerda e o apoio à direita. Com movimento reduzido o
+  spinner para e o trilho indefinido vira uma faixa parada.
+- **A etapa nunca recua**: é a do `progresso`, e o cartão guarda o piso para um estado atrasado
+  não fazer a faixa voltar.
+- **Estados**: ao clicar em Revisar, "Iniciando a revisão." na hora, antes do servidor
+  (`useIniciadas.ts`; a recusa do motor desfaz, a sessão que abre ou o PR que vai esperar vaga
+  encerram, e sem sessão em 2 min o cartão volta ao que era); buscando o código, lendo o card,
+  lendo (o arquivo da vez), conferindo e postando, pela etapa; sem sinal, com mais de 45 s sem
+  evento da sessão (a hora da última linha do feed) no código ou na conferência, que são as etapas
+  em que o modelo trabalha; postada; e falhou: a sessão que some sem cancelamento e sem decisão do
+  PR depois do começo dela, passados 3 s de carência (a decisão pode chegar no estado seguinte),
+  com o motivo da parada do PR em `parked` ou do último aviso do feed. A falha aparece no cartão
+  da fila quando o PR está nela, e sai quando o PR volta a ter sessão ou ganha decisão.
 
 ### Lacunas do contrato
 
 O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
 do motor, não com regra na tela:
 
+- **O que o cartão não mostra.** As branches de origem e destino (a busca da fila, `gh search
+  prs`, não as traz, e a sessão só lê a de origem quando há site do Jira), a chave do card
+  enquanto a sessão roda (ela só aparece na decisão), o estado dos checks enquanto roda (o motor
+  só os lê no fim), quanto uma revisão costuma levar para um PR da fila (a estimativa existe só na
+  sessão aberta) e qual review vai sair na postagem: a linha some, ou a pílula diz o traço. As falhas
+  e os cliques em curso são desta aba: recarregar a página esquece.
+- **Relógio do motor contra o do navegador.** O tempo decorrido e o "sem sinal" comparam as horas
+  que o motor grava (`startedAt`, a hora das linhas do feed) com o relógio do navegador, e o
+  snapshot não diz a hora do motor. Com os dois relógios fora de sincronia, o tempo fica atrasado
+  (nunca negativo) ou adiantado; medido no WSL em 18/11/2026, 17 s de diferença. O "sem sinal" só
+  se engana com mais de 45 s de diferença.
 - **O que acontece dentro da etapa.** O `progresso` traz os nomes das cinco etapas
   (`etapas`) e, no código, quantos arquivos foram lidos e o último que a sessão leu
   (`arquivoAtual`): é o último lido, não o que está sendo lido (o motor só vê a leitura quando
