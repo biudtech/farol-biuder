@@ -36,7 +36,7 @@ import {
   sanitizeParallelReviews, sanitizeGlobalParallelReviews, sanearBind, sanearHostPublico, sanearOrigensPermitidas, sanearSocket } from './lib/parse.js';
 import io, { ensureDir, readJson, writeJsonAtomic, writeTextAtomic, copyRecursive, prependPathDirs, priorizarNoPath } from './lib/io.js';
 import pushbackMod from './lib/engine/pushback.js';
-import { carregarLimites, limiteAte } from './lib/engine/limite-plano.js';
+import { carregarLimites, limiteAte, escolherPerfil } from './lib/engine/limite-plano.js';
 import decisionMod from './lib/engine/decision.js';
 import ghMod from './lib/engine/gh-queries.js';
 import limiteGhMod from './lib/engine/limite-gh.js';
@@ -562,7 +562,7 @@ class Engine extends EventEmitter {
     delete env.GITHUB_TOKEN;
     if (tok) env.GH_TOKEN = tok;
     // perfil do Claude (assinatura ou chave de API) que o Farol usa: ver resolveClaudeAuth
-    // (perfil padrão do Farol > primeiro perfil utilizável).
+    // (perfil padrão do Farol > demais perfis utilizáveis, trocando no limite do plano).
     applyClaudeAuthEnv(env, this.resolveClaudeAuth());
     return env;
   }
@@ -1068,10 +1068,12 @@ class Engine extends EventEmitter {
     this.checkNow();
   }
 
-  // qual AUTENTICAÇÃO usar pras sessões. Cascata: 1) claudeProfileId (padrão do Farol);
-  // 2) o primeiro perfil utilizável, de assinatura ou de chave de API. null = sem perfil
-  // utilizável (a sessão não abre; lib/engine/perfil-claude.js).
-  resolveClaudeAuth() { return perfilMod.authDaConta(this.config); }
+  // qual AUTENTICAÇÃO usar pras sessões. Candidatos: 1) claudeProfileId (padrão do Farol);
+  // 2) os demais perfis utilizáveis, de assinatura ou de chave de API, na ordem da lista. Usa
+  // o primeiro fora do limite do plano; todos no limite, o de reset mais cedo (18/11/2026,
+  // escolherPerfil em lib/engine/limite-plano.js). null = sem perfil utilizável (a sessão não
+  // abre; lib/engine/perfil-claude.js).
+  resolveClaudeAuth() { return escolherPerfil(this, perfilMod.candidatosDaConta(this.config), perfilMod.authPronto); }
 
   // status de TODOS os perfis salvos, pro doctor mostrar quem está pronto: chave preenchida
   // ou pasta da assinatura com login gravado. Não abre o CLI nem toca a rede.
