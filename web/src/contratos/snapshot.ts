@@ -14,10 +14,10 @@ import { lerConsumoDoSnapshot, type ConsumoDoSnapshot } from './consumo';
 import { ehObjeto, ehTexto, type Leitor } from './formas';
 import { lerContestacoes, type Contestacao } from './historico';
 import {
-  lerAtividade, lerBuscasPausadas, lerChavesEmEspera, lerConta, lerDecisoes, lerDetalhesDaEspera, lerErro,
+  lerAtividade, lerBuscasPausadas, lerChavesEmEspera, lerChecagem, lerConta, lerDecisoes, lerDetalhesDaEspera, lerErro,
   lerEsperaConflito, lerEstacionados, lerFila, lerInicioAutomatico, lerInstante, lerPrsEmEspera, lerSessoes,
   lerStatus,
-  type BuscaPausada, type ContaDoMotor, type Decisoes, type DetalheDaEspera, type EsperaConflito,
+  type BuscaPausada, type ChecagemEmCurso, type ContaDoMotor, type Decisoes, type DetalheDaEspera, type EsperaConflito,
   type Estacionado, type InicioAutomatico, type ItemDaFila, type LinhaDoFeed, type PrEmEspera,
   type SessaoAtiva, type StatusDoMotor,
 } from './radar';
@@ -30,7 +30,7 @@ import { lerConfig, type ConfigDoMotor } from './time';
 
 export const CHAVES_DO_SNAPSHOT = [
   'app', 'modelos', 'claudePerfis', 'status', 'error', 'baseline', 'account', 'accounts',
-  'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'buscasPausadas', 'queue',
+  'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'checagem', 'buscasPausadas', 'queue',
   'inicioAutomatico', 'esperaConflito', 'parked', 'reRounds', 'activeSessions', 'activity',
   'headlessWaiting', 'headlessWaitingPrs', 'headlessWaitingDetails', 'filaJusta', 'decisions',
   'reviewActions', 'usage', 'doctor', 'paths',
@@ -59,6 +59,7 @@ export interface FormasDoSnapshot {
   jiraSites: SiteDoJira[];
   lastCheckAt: number | null;
   nextCheckAt: number | null;
+  checagem: ChecagemEmCurso | null;
   buscasPausadas: BuscaPausada[];
   queue: ItemDaFila[];
   inicioAutomatico: InicioAutomatico;
@@ -110,6 +111,7 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   jiraSites: lerSitesDoJira,
   lastCheckAt: lerInstante,
   nextCheckAt: lerInstante,
+  checagem: lerChecagem,
   buscasPausadas: lerBuscasPausadas,
   queue: lerFila,
   inicioAutomatico: lerInicioAutomatico,

@@ -56,12 +56,13 @@ function Barra({ progresso: p, de }: { progresso: ProgressoDaRevisao; de: string
   );
 }
 
-// A linha do detalhe com a etapa, os arquivos e quanto falta. Arquivos e tempo restante só
-// aparecem quando o motor os manda.
+// A linha do detalhe com a etapa, os arquivos e quanto falta. Arquivos, o arquivo da vez e o tempo
+// restante só aparecem quando o motor os manda; com a lista das etapas, o arquivo da vez vai nela.
 function detalheDoProgresso(p: ProgressoDaRevisao): string {
   return [
     `Etapa ${p.etapa} de ${p.totalEtapas}: ${p.rotuloDaEtapa}`,
     p.arquivosTotais !== undefined ? `${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '',
+    p.arquivoAtual && !p.etapas ? `último lido: ${p.arquivoAtual}` : '',
     p.restanteEstimadoMs !== undefined ? faltam(p.restanteEstimadoMs) : '',
   ].filter(Boolean).join(' · ');
 }
@@ -78,7 +79,9 @@ function EtapasDaRevisao({ progresso: p }: { progresso: ProgressoDaRevisao & { e
       {p.etapas.map((nome, i) => {
         const feita = concluida || i < p.etapa - 1;
         const atual = !concluida && i === p.etapa - 1;
-        const arquivos = atual && p.arquivosTotais !== undefined ? `: ${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '';
+        const contagem = atual && p.arquivosTotais !== undefined ? `: ${p.arquivosLidos ?? 0} de ${p.arquivosTotais} arquivos` : '';
+        // o arquivo da vez, como o desenho: "Código: 9 de 20 arquivos · src/x.ts"
+        const arquivos = atual && p.arquivoAtual ? `${contagem || ':'} · ${p.arquivoAtual}` : contagem;
         let estado = 'falta';
         if (feita) estado = 'feita';
         else if (atual) estado = 'agora';

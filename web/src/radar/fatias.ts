@@ -1,7 +1,7 @@
 // Como o Radar fatia o snapshot nas seções da tela. Nada aqui decide: cada corte lê um campo
 // que o motor já mandou pronto. As pendências da mesa (`decisions.pending`) não entram no
 // Radar: o revisor é autônomo, e a revisão que não publicou nada aparece no Histórico.
-import type { ItemDaFila, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
+import type { ChecagemEmCurso, ItemDaFila, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Snapshot } from '@/contratos/snapshot';
 import { dataHora, dia, horaCurta } from './formato';
 
@@ -78,10 +78,18 @@ export function chavesAusentes(s: Snapshot): string[] {
   return BLOCOS.filter(([chave]) => s[chave] === undefined).map(([, nome]) => nome);
 }
 
+// A checagem em curso, com a contagem do motor: "Checando as 2 organizações · 1 de 2 · agora:
+// biudtech". Sem organização para buscar, só que está checando.
+export function textoDaChecagemEmCurso(c: ChecagemEmCurso): string {
+  if (c.total < 1) return 'Checando agora.';
+  const quais = c.total === 1 ? 'a organização' : `as ${c.total} organizações`;
+  return [`Checando ${quais}`, `${c.feitas} de ${c.total}`, c.agora ? `agora: ${c.agora}` : ''].filter(Boolean).join(' · ');
+}
+
 // O estado da checagem, numa linha.
 export function textoDaChecagem(s: Snapshot, fuso?: string): string {
   if (s.status === 'starting') return 'O motor está iniciando.';
-  if (s.status === 'checking') return 'Checando agora.';
+  if (s.status === 'checking') return s.checagem ? textoDaChecagemEmCurso(s.checagem) : 'Checando agora.';
   const ultima = dataHora(s.lastCheckAt, fuso);
   const proxima = dataHora(s.nextCheckAt, fuso);
   const partes = [ultima ? `Última checagem: ${ultima}.` : 'Nenhuma checagem terminou ainda.'];

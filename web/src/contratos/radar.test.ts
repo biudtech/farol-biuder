@@ -89,6 +89,25 @@ describe('listas do Radar: só o que identifica o item é exigido', () => {
     expect(lerProgresso({ ...base, restanteEstimadoMs: null })).toEqual(base);
   });
 
+  it('o arquivo da vez só entra como caminho relativo do PR', () => {
+    const base = { percentual: 40, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' };
+    expect(lerProgresso({ ...base, arquivoAtual: 'src/zones/mia/Card.tsx' })).toEqual({ ...base, arquivoAtual: 'src/zones/mia/Card.tsx' });
+    for (const torto of ['/home/farol/.farol/workspace/state/pr-scope/x', 'C:\\x', '../fora.ts', 'a/../../b', '', 3, null, 'x'.repeat(301)]) {
+      expect(lerProgresso({ ...base, arquivoAtual: torto })).toEqual(base);
+    }
+  });
+
+  it('checagem: null fora do ciclo; a contagem só vale inteira e coerente', () => {
+    const { registrar } = coletor();
+    expect(LEITORES.checagem(null, registrar)).toBeNull();
+    expect(LEITORES.checagem({ total: 3, feitas: 1, agora: 'biudtech', outro: 'x' }, registrar)).toEqual({ total: 3, feitas: 1, agora: 'biudtech' });
+    expect(LEITORES.checagem({ total: 3, feitas: 3 }, registrar)).toEqual({ total: 3, feitas: 3 });
+    expect(LEITORES.checagem({ total: 3, feitas: 1, agora: '' }, registrar)).toEqual({ total: 3, feitas: 1 });
+    for (const torto of [{ total: 2, feitas: 3 }, { total: -1, feitas: 0 }, { total: 1.5, feitas: 0 }, { feitas: 0 }, 'x', []]) {
+      expect(LEITORES.checagem(torto, registrar)).toBeUndefined();
+    }
+  });
+
   it('os nomes das etapas só entram quando fecham com o total e com a etapa atual', () => {
     const p = { percentual: 45, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código' };
     const nomes = ['fontes', 'card', 'código', 'conferência dos achados', 'postagem'];
