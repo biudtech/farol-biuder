@@ -30,15 +30,17 @@ ARG NODE_DIGEST=sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9
 FROM node:${NODE_VERSION}-bookworm-slim@${NODE_DIGEST}
 
 ARG GH_VERSION=2.105.0
-ARG GH_KEYRING_SHA256=6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b
+ARG GH_SHA256_AMD64=79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f
+ARG GH_SHA256_ARM64=b1278c75107423d818f1937fd92cafc9e5e9b606631568f68d7fb816f5885a02
 ARG CLAUDE_CODE_VERSION=2.1.326
 ARG PNPM_VERSION=10.34.9
 ARG FAROL_UID=10001
 ARG FAROL_GID=10001
 
-# gh com a versão fixada e git na versão do Debian da base. O chaveiro do repositório do gh é
-# baixado com o próprio Node (a imagem não tem curl) e conferido contra o sha256 acima antes de
-# o apt confiar nele.
+# gh com a versão fixada e git na versão do Debian da base. O gh vem do pacote da release no
+# GitHub (o repositório apt oficial só mantém a versão mais nova, e o pino quebrava a cada
+# lançamento), baixado com o próprio Node (a imagem não tem curl) e conferido contra o sha256
+# da arquitetura, tirado do gh_<versão>_checksums.txt da release, antes de ser extraído.
 # Os pacotes de apoio também vêm do Debian, sem versão fixada: ca-certificates (TLS do git),
 # procps (o motor chama "ps" para saber se um processo de fonte ainda vive), tini (o init, veja
 # o ENTRYPOINT) e tzdata (o fuso, veja TZ).
@@ -50,14 +52,19 @@ RUN set -eux; \
     apt-get update; \
     apt-get upgrade -y --no-install-recommends; \
     apt-get install -y --no-install-recommends ca-certificates git procps tini tzdata; \
-    install -d -m 0755 /etc/apt/keyrings; \
-    node -e "fetch('https://cli.github.com/packages/githubcli-archive-keyring.gpg').then((r) => { if (!r.ok) throw new Error('chaveiro do gh: HTTP ' + r.status); return r.arrayBuffer(); }).then((b) => require('node:fs').writeFileSync('/etc/apt/keyrings/githubcli-archive-keyring.gpg', Buffer.from(b)))"; \
-    echo "${GH_KEYRING_SHA256}  /etc/apt/keyrings/githubcli-archive-keyring.gpg" | sha256sum -c -; \
-    chmod 0644 /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends "gh=${GH_VERSION}"; \
     rm -rf /var/lib/apt/lists/*; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) GH_ARCH=amd64; GH_SHA256="${GH_SHA256_AMD64}" ;; \
+      arm64) GH_ARCH=arm64; GH_SHA256="${GH_SHA256_ARM64}" ;; \
+      *) echo "arquitetura sem gh conferido"; exit 1 ;; \
+    esac; \
+    GH_TGZ="/tmp/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz"; \
+    GH_URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" \
+      GH_TGZ="${GH_TGZ}" node -e "fetch(process.env.GH_URL).then((r) => { if (!r.ok) throw new Error('pacote do gh: HTTP ' + r.status); return r.arrayBuffer(); }).then((b) => require('node:fs').writeFileSync(process.env.GH_TGZ, Buffer.from(b)))"; \
+    echo "${GH_SHA256}  ${GH_TGZ}" | sha256sum -c -; \
+    tar -xzf "${GH_TGZ}" -C /tmp; \
+    install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh" /usr/local/bin/gh; \
+    rm -rf "${GH_TGZ}" "/tmp/gh_${GH_VERSION}_linux_${GH_ARCH}"; \
     git --version; \
     gh --version
 
