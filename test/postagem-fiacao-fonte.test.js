@@ -38,11 +38,20 @@ test('desfecho sem mesa se identifica e passa pelo postReview', () => {
   assert.ok(fonte.includes("engine.postReview(pr, head ? { ...payload, commit_id: head } : payload, { via: 'sem-mesa', jaSaiu })"));
 });
 
+// 19/11/2026: oitava via. O PR de diff vazio que só alinha a história (diff-vazio-de-linhagem.js)
+// posta o APPROVE como a revisão automática (via revisao, pela boca das retentativas) e o COMMENT
+// neutro como o desfecho sem mesa, os dois ancorados no head medido.
+test('diff vazio de linhagem se identifica e ancora no head medido', () => {
+  const fonte = ler('lib/engine/diff-vazio-de-linhagem.js');
+  assert.ok(fonte.includes("postarComRetentativas(() => engine.postReview(pr, { ...payload, commit_id: m.headSha }, { via: 'revisao' }))"));
+  assert.ok(fonte.includes("engine.postReview(pr, { ...payload, commit_id: m.headSha }, { via: 'sem-mesa', jaSaiu })"));
+});
+
 test('nenhuma outra chamada a postReview em lib/ fora das vias conhecidas', () => {
   const conhecidas = new Map([
     ['lib/engine/desfecho-da-revisao.js', 1], ['lib/engine/decision.js', 2],
     ['lib/engine/espera-ci.js', 2], ['lib/engine/espera-pr-proprio.js', 1],
-    ['lib/engine/desfecho-sem-mesa.js', 1],
+    ['lib/engine/desfecho-sem-mesa.js', 1], ['lib/engine/diff-vazio-de-linhagem.js', 2],
   ]);
   const dir = path.join(RAIZ, 'lib', 'engine');
   for (const nome of fs.readdirSync(dir).filter((f) => f.endsWith('.js'))) {
