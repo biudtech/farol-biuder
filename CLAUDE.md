@@ -122,7 +122,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
 | Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `trecho-do-achado.js` (o trecho do diff de cada achado, lido no desfecho e gravado nas provas), `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
-| Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
+| Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `segurado-por-gente.js` (o registro de quem segurou e quando), `de-fora.js` (a projeção `deFora` e `emRetentativa` do snapshot), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
 | Conta e Claude | `contas-config.js` (a política da conta e a edição por operação), `perfil-claude.js`, `pasta-do-perfil.js`, `perfil-assinatura.js`, `chave-do-perfil.js`, `login-web.js`, `uso-do-plano.js`, `limite-plano.js` (o limite do plano por perfil e a troca de perfil no limite, `escolherPerfil`), `provedores.js`, `model-router.js`, `versao-claude.js` |
 | Consumo | `usage.js` (fonte única do que a tela de consumo mostra), `usage-diario.js` (o diário de sessões no banco da telemetria, ou no `usage-sessions.json` quando o banco não abriu), `usage-diario-banco.js` (o lado do banco: o cache da atividade e da auditoria e a leitura que não lança), `telemetria-pendentes.js` (a fila do que o banco recusou), `telemetria-do-motor.js` (a leitura no construtor, a abertura e a importação do consumo e do histórico no `start()`, por `iniciarTelemetria`, e o fechamento), `usage-accounting.js` (a conta por modelo e o cursor das retomadas), `uso-parcial.js`, `usage-tentativas.js`, `usage-series.js`, `usage-activity.js`, `usage-desfechos.js`, `snapshot-usage.js` (a projeção que vai no snapshot), `falhas.js`. Só mede: não há teto de gasto, e o consumo não barra revisão (decisão de 16/11/2026, `test/sem-teto-de-gasto.test.js`) |
@@ -365,6 +365,34 @@ imagem, que não leva a pasta `.git`), `disco` (`livreBytes` e `totalBytes` da p
 arquivo do banco e do `-wal`) e `medidoEm` (`lib/engine/saude-do-motor.js`). Na revisão em curso, o
 `progresso` leva `arquivoAtual` na etapa do código: o último arquivo lido pelo mesmo sinal que conta
 os lidos, em caminho relativo do PR.
+
+Desde 19/11/2026 (redesenho, lote 1) o snapshot leva mais três dados para o Radar, todos projeção
+do que o motor já decide, sem regra nova de gate, fila ou postagem:
+
+- `deFora`: a lista dos PRs pedidos à conta (a `queue` e os do panorama com `mine`) que o motor
+  não vai revisar sozinho, `[{ key, url, title, author, repo, number, motivo, detalhe, desde,
+  head, quem? }]`, montada por `lib/engine/de-fora.js`, pura e sem log. Os motivos, na ordem de
+  precedência: `estacionado` (detalhe `{ tipo, motivo }`), `outra_conta` (a saída de cena ou a
+  label viva de outra pessoa; detalhe `{ fonte }`, com `quem`), `decisao_de_gente` (detalhe
+  `{ decisivos: [{ quem, estado, em }] }`, com `quem`; `em` é o `submitted_at` do review),
+  `pedido_retirado`, `regra_manual` (detalhe `{ source, organization?, author? }` de
+  `politicaDeInicio`), `auto_desligado` e `ignorado` (sem data). `desde` é epoch em ms ou `null`.
+  Regra e automático desligado só valem para PR da fila. Nunca entra PR que o motor ainda revisa
+  sozinho (fila comum, conflito com a base, limite do plano, retentativa automática, em revisão
+  ou esperando vaga) nem PR próprio; rascunho não é motivo. A `queue` não muda: tirar estes PRs
+  da Fila e da contagem é da tela. A decisão de gente e o pedido retirado vêm de
+  `engine.seguradoPorGente` (`lib/engine/segurado-por-gente.js`), gravado onde o motor já decide
+  segurar (`bloqueiaAutomatico`, a recusa na boca da sessão, o Revisar tudo e o pedido retirado),
+  apagado quando o gate deixa de segurar e quando o PR sai do panorama. O registro guarda o
+  `updatedAt` do PR, e a projeção o ignora quando o PR mudou depois dele, mesmo que o gate não
+  tenha rodado de novo (limite do plano, conta sem token). O pedido retirado vai sem `head` (o
+  gate do pedido não lê o head). É memória: o reinício zera, e o próximo ciclo que segura grava
+  de novo.
+- `emRetentativa`: `{ [key]: { tentativas, aPartirDe } }` da retentativa por PR
+  (`engine.retryAfterNet`); `aPartirDe` é o epoch a partir do qual ela roda, ou `null`.
+- `card` em cada `activeSessions[]`: a chave do card do Jira lido pela sessão, gravada logo depois
+  da leitura (`cardNaSessao`, `lib/engine/jira.js`); ausente enquanto o card não foi lido ou
+  quando a leitura falhou.
 
 As rotas, todas em `lib/http-server.js`:
 

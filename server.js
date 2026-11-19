@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { iniciarManutencaoDoEngine } from './lib/technical-review/material-session-proof.js';
 import { snapshotDecisions, snapshotReviewActions } from './lib/engine/snapshot-decisions.js';
 import { snapshotUsage } from './lib/engine/snapshot-usage.js';
+import { deForaParaTela, emRetentativaParaTela } from './lib/engine/de-fora.js';
 import { iniciarChecagem, buscarOrganizacao, checagemParaTela } from './lib/engine/checagem-em-curso.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
@@ -1218,6 +1219,9 @@ class Engine extends EventEmitter {
       // PRs da fila que estacionaram (falha, cancelamento, label retirada): o card mostra
       // quando e por quê, senão "nunca revisou" e "revisou e caiu" são idênticos na tela
       parked: this.parkedParaUi(),
+      // De fora da fila: os pedidos que o motor não revisa sozinho, com o motivo, e a retentativa
+      // por PR, { tentativas, aPartirDe } (lib/engine/de-fora.js). A `queue` não muda: a tela fatia
+      deFora: deForaParaTela(this), emRetentativa: emRetentativaParaTela(this),
       // card de commit novo (pendência stale_head): o que o round automático vai fazer e
       // quando, ou por que não vai. Sem isto o card pedia clique no caso em que o app agia sozinho
       reRounds: this.reRoundParaUi(),
@@ -1240,15 +1244,8 @@ class Engine extends EventEmitter {
   }
 
   // Outra PESSOA já revisando este PR? Registra no acumulador do ciclo e devolve
-  // true pro filtro do toReview cortar. Extraído do próprio filtro porque o corpo
-  // dele já era um if por trava, e mais um bloco estourava a profundidade do gate
-  // de qualidade. Ver lib/engine/skip-review.js.
-  _registraPulo(pr, pulados) {
-    const outros = skipMod.outrosQueSeguram(this, pr);
-    if (!outros.length) return false;
-    pulados.push({ pr, outros });
-    return true;
-  }
+  // true pro filtro do toReview cortar (registraPulo, lib/engine/skip-review.js).
+  _registraPulo(pr, pulados) { return skipMod.registraPulo(this, pr, pulados); }
 
   // Consumo de tokens: colaborador lib/engine/usage.js (registro permanente, sem custo);
   // ref é a referência amigável (PR/chat/ferramenta) que alimenta a tabela de sessões.

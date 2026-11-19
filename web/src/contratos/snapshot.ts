@@ -31,7 +31,7 @@ import { lerConfig, type ConfigDoMotor } from './time';
 export const CHAVES_DO_SNAPSHOT = [
   'app', 'modelos', 'claudePerfis', 'agora', 'status', 'error', 'baseline', 'account', 'accounts',
   'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'checagem', 'buscasPausadas', 'queue',
-  'inicioAutomatico', 'esperaConflito', 'parked', 'reRounds', 'activeSessions', 'activity',
+  'inicioAutomatico', 'esperaConflito', 'parked', 'deFora', 'emRetentativa', 'reRounds', 'activeSessions', 'activity',
   'headlessWaiting', 'headlessWaitingPrs', 'headlessWaitingDetails', 'filaJusta', 'decisions',
   'reviewActions', 'usage', 'doctor', 'paths',
 ] as const;
@@ -67,6 +67,9 @@ export interface FormasDoSnapshot {
   inicioAutomatico: InicioAutomatico;
   esperaConflito: EsperaConflito;
   parked: Record<string, Estacionado>;
+  // De fora da fila e a retentativa por PR (lib/engine/de-fora.js): o leitor é do lote 3
+  deFora: unknown;
+  emRetentativa: unknown;
   reRounds: unknown;
   activeSessions: SessaoAtiva[];
   activity: Record<string, LinhaDoFeed[]>;
@@ -120,6 +123,8 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   inicioAutomatico: lerInicioAutomatico,
   esperaConflito: lerEsperaConflito,
   parked: lerEstacionados,
+  deFora: qualquer,
+  emRetentativa: qualquer,
   reRounds: qualquer,
   activeSessions: lerSessoes,
   activity: lerAtividade,
