@@ -101,7 +101,7 @@ export function Jira({ cliente, sites, resolvidas, impedimento }: Props) {
   return (
     <>
       <p className={ui.mini}>
-        De onde o Farol lê o card de cada PR: o site do Jira ligado à organização do GitHub dona do PR. Testar a conexão faz o motor perguntar ao Jira de quem é a credencial guardada, sem gravar nada. Os últimos cards lidos saem das revisões recentes.
+        O site do Jira de um PR é o ligado à organização do GitHub dona dele. Testar a conexão faz o motor perguntar ao Jira de quem é a credencial guardada, sem gravar nada. Os últimos cards lidos saem das revisões recentes.
       </p>
       {!sites ? <p className={ui.nota}>Atenção: o motor não mandou a lista de sites do Jira a esta tela.</p> : null}
       {sites && !sites.length ? (
