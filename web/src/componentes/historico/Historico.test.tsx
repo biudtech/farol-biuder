@@ -50,17 +50,18 @@ const clicar = async (nome: string | RegExp) => { await act(async () => { fireEv
 const anuncio = () => screen.getByRole('status', { name: 'Resultado da consulta' }).textContent;
 const regiao = () => screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
 const revisoes = () => screen.getByRole('region', { name: 'Revisões' });
-// As linhas da lista paginada: o <details> de cada revisão, e o título (o texto do resumo
-// sem a bolinha nem a hora).
-const linhas = (): HTMLDetailsElement[] => [...revisoes().querySelectorAll<HTMLDetailsElement>(':scope details')];
-const tituloDa = (linha: HTMLDetailsElement): string => linha.querySelector('summary')?.children[2]?.textContent ?? '';
+// Os cartões da lista paginada (o <article> do cartão único), e o título do PR de cada um (h4,
+// debaixo do título do dia).
+const linhas = (): HTMLElement[] => [...revisoes().querySelectorAll<HTMLElement>(':scope article')];
+const tituloDa = (cartao: HTMLElement): string => cartao.querySelector('h4')?.textContent ?? '';
 const titulosDosItens = (): string[] => linhas().map(tituloDa);
-const abrirLinha = async (linha: HTMLDetailsElement | undefined) => {
-  await act(async () => {
-    if (!linha) throw new Error('linha ausente');
-    linha.open = true;
-    fireEvent(linha, new Event('toggle'));
-  });
+// a seta do cartão: o botão que abre e fecha o detalhe nele
+const seta = (cartao: HTMLElement | undefined): HTMLButtonElement => {
+  if (!cartao) throw new Error('cartão ausente');
+  return within(cartao).getByRole('button', { name: /^Detalhe de / }) as HTMLButtonElement;
+};
+const abrirLinha = async (cartao: HTMLElement | undefined) => {
+  await act(async () => { fireEvent.click(seta(cartao)); });
 };
 const umaPagina: Responder = () => corpo(paginaDoMotor([revisaoDoMotor(12), revisaoDoMotor(7, { status: 'posted', action: 'request_changes' })]));
 
@@ -83,60 +84,83 @@ describe('Histórico: a lista', () => {
     expect(titulosDosItens()).toEqual(['Título do PR 12', 'Título do PR 7']);
   });
 
-  it('agrupa por dia, no fuso do navegador: Hoje, Ontem e depois a data', async () => {
+  it('agrupa por dia, no fuso de Brasília: Hoje e Ontem com a data, depois o dia da semana, cada um com a contagem', async () => {
     // só o Date é de mentira: as promessas e os relógios do teste seguem de verdade
     vi.useFakeTimers({ toFake: ['Date'] });
-    // meio-dia UTC: o mesmo dia do calendário em qualquer fuso de -11 a +11 horas
-    vi.setSystemTime(Date.UTC(2026, 10, 17, 12, 0));
+    // 17/11, 15:00 em Brasília
+    vi.setSystemTime(Date.UTC(2026, 10, 17, 18, 0));
     montar({
       responder: () => corpo(paginaDoMotor([
-        revisaoDoMotor(1, { resolvedAt: Date.UTC(2026, 10, 17, 11, 0) }),
-        revisaoDoMotor(2, { resolvedAt: Date.UTC(2026, 10, 17, 10, 0) }),
+        revisaoDoMotor(1, { resolvedAt: Date.UTC(2026, 10, 17, 14, 0) }),
+        // 01:30 UTC do dia 17 ainda é 16 em Brasília, qualquer que seja o fuso da máquina
+        revisaoDoMotor(2, { resolvedAt: Date.UTC(2026, 10, 17, 1, 30) }),
         revisaoDoMotor(3, { resolvedAt: Date.UTC(2026, 10, 16, 12, 0) }),
         revisaoDoMotor(4, { resolvedAt: Date.UTC(2026, 10, 14, 12, 0) }),
       ])),
     });
     await assentar();
     const grupos = within(revisoes()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-    expect(grupos).toEqual(['Hoje', 'Ontem', 'sábado, 14/11']);
-    const hoje = within(revisoes()).getByRole('region', { name: 'Hoje' });
-    expect([...hoje.querySelectorAll('details')].map((d) => tituloDa(d as HTMLDetailsElement))).toEqual(['Título do PR 1', 'Título do PR 2']);
-    // a hora curta fica na ponta da linha
-    expect(linhas()[0]?.querySelector('summary')?.children[3]?.textContent).toMatch(/^\d{2}:\d{2}$/);
+    expect(grupos).toEqual(['Hoje, 17 de novembro · 1 revisão', 'Ontem, 16 de novembro · 2 revisões', 'sábado, 14 de novembro · 1 revisão']);
+    const ontem = within(revisoes()).getByRole('region', { name: 'Ontem, 16 de novembro' });
+    expect([...ontem.querySelectorAll('article')].map((c) => tituloDa(c as HTMLElement))).toEqual(['Título do PR 2', 'Título do PR 3']);
+    // a hora em Brasília abre a linha de contexto do cartão
+    expect(within(ontem).getByText('22:30 · card BT-2')).toBeTruthy();
   });
 
-  it('a linha abre num clique: o PR, o autor, o desfecho em texto e Abrir a revisão', async () => {
+  it('sem a hora da resolução, o dia do grupo e a hora do cartão saem do mesmo instante, o da criação', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 17/11, 15:00 em Brasília
+    vi.setSystemTime(Date.UTC(2026, 10, 17, 18, 0));
+    montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1, { resolvedAt: undefined, createdAt: Date.UTC(2026, 10, 17, 14, 0) })])) });
+    await assentar();
+    const grupos = within(revisoes()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(grupos).toEqual(['Hoje, 17 de novembro · 1 revisão']);
+    expect(within(revisoes()).getByText('11:00 · card BT-1')).toBeTruthy();
+  });
+
+  it('com mais de uma página, a contagem do dia diz que é desta página', async () => {
+    montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1)], { pages: 2, total: 31 })) });
+    await assentar();
+    expect(within(revisoes()).getAllByRole('heading', { level: 3 })[0]?.textContent).toMatch(/· 1 revisão nesta página$/);
+  });
+
+  it('o cartão fechado: autor, chave, hora, título e o selo do que foi publicado; a seta abre o detalhe nele', async () => {
     montar({ responder: umaPagina });
     await assentar();
     const [primeira, segunda] = linhas();
-    expect(primeira?.open).toBe(false);
+    expect(within(primeira as HTMLElement).getByRole('link', { name: /^dono\/repo#12\s?\(abre em nova aba\)$/ }).getAttribute('href')).toBe('https://github.com/dono/repo/pull/12');
+    expect(within(primeira as HTMLElement).getByText('ana')).toBeTruthy();
+    expect(within(primeira as HTMLElement).getByText('Aprovado')).toBeTruthy();
+    expect(within(segunda as HTMLElement).getByText('Pediu mudanças')).toBeTruthy();
+    // fechado, nada do detalhe
+    expect(seta(primeira).getAttribute('aria-expanded')).toBe('false');
+    // o nome da seta é fixo: o estado está só no aria-expanded
+    expect(seta(primeira).getAttribute('aria-label')).toBe('Detalhe de PR #12 de dono/repo');
+    expect(within(primeira as HTMLElement).queryByRole('region')).toBeNull();
+    expect(within(primeira as HTMLElement).queryByRole('list', { name: 'Resumo' })).toBeNull();
     await abrirLinha(primeira);
-    expect(primeira?.open).toBe(true);
-    const corpoDaLinha = within(primeira as HTMLElement);
-    expect(corpoDaLinha.getByText('dono/repo#12 · ana · Aprovação')).toBeTruthy();
-    expect(corpoDaLinha.getByText(/^Publicado automaticamente; card BT-12; \d{2}\/11\/2026, \d{2}:\d{2}$/)).toBeTruthy();
-    expect(corpoDaLinha.getByRole('button', { name: /^Abrir a revisão de PR #12 de dono\/repo, de / })).toBeTruthy();
-    // revisão publicada não oferece Revisar de novo na linha
-    expect(corpoDaLinha.queryByRole('button', { name: /Revisar de novo/ })).toBeNull();
-    // o parecer só aparece quando difere do que foi publicado
-    expect(within(segunda as HTMLElement).getByText(/^Publicado por você; parecer da revisão: aprovar/)).toBeTruthy();
+    expect(seta(primeira).getAttribute('aria-expanded')).toBe('true');
+    expect(seta(primeira).getAttribute('aria-label')).toBe('Detalhe de PR #12 de dono/repo');
+    const detalhe = within(primeira as HTMLElement).getByRole('region', { name: 'Revisão de PR #12 de dono/repo' });
+    expect(seta(primeira).getAttribute('aria-controls')).toBe(detalhe.id);
+    // a lista continua na tela
+    expect(screen.getByRole('search')).toBeTruthy();
+    // revisão publicada não oferece Revisar de novo fechada
+    expect(within(segunda as HTMLElement).queryByRole('button', { name: /Revisar de novo/ })).toBeNull();
   });
 
-  it('a bolinha diz o desfecho ao leitor, e a legenda das cores fica no pé', async () => {
+  it('a borda do cartão segue o que foi publicado', async () => {
     montar({ responder: () => corpo(paginaDoMotor([
       revisaoDoMotor(1), revisaoDoMotor(2, { action: 'comment' }), revisaoDoMotor(3, { action: 'request_changes' }), revisaoDoMotor(4, { action: 'skip', status: 'skipped' }),
     ])) });
     await assentar();
-    expect(linhas().map((l) => l.querySelector('summary')?.children[1]?.textContent)).toEqual(['Aprovação:', 'Comentário:', 'Pedido de mudanças:', 'Nada publicado:']);
-    expect(linhas().map((l) => l.querySelector('summary [aria-hidden]')?.getAttribute('data-tom'))).toEqual(['ok', 'aviso', 'ruim', 'neutro']);
-    const legenda = screen.getByRole('list', { name: 'Legenda das cores' });
-    expect(within(legenda).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['aprovado', 'comentado', 'pediu mudanças', 'nada postado']);
+    expect(linhas().map((c) => c.getAttribute('data-tom'))).toEqual(['ok', 'aviso', 'falha', 'fila']);
+    expect(linhas().map((c) => c.getAttribute('aria-label'))).toEqual(['dono/repo#1: Aprovado', 'dono/repo#2: Comentado', 'dono/repo#3: Pediu mudanças', 'dono/repo#4: Nada postado']);
   });
 
-  it('revisão que não publicou nada oferece Revisar de novo na própria linha', async () => {
+  it('revisão que não publicou nada oferece Revisar de novo no cartão fechado', async () => {
     const t = montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(3, { action: 'skip', status: 'superseded' })])) });
     await assentar();
-    await abrirLinha(linhas()[0]);
     await clicar('Revisar de novo PR #3 de dono/repo');
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/review', { urls: ['https://github.com/dono/repo/pull/3'] }]);
   });
@@ -145,13 +169,15 @@ describe('Histórico: a lista', () => {
     montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1, { status: 'status_novo', action: 'acao_nova' }), { id: 'x', key: 'dono/repo#3' }])) });
     await assentar();
     const [primeira, pobre] = linhas();
-    expect(within(primeira as HTMLElement).getByText(/^status_novo/)).toBeTruthy();
+    expect(within(primeira as HTMLElement).getByText('Nada postado')).toBeTruthy();
+    await abrirLinha(primeira);
+    expect(within(primeira as HTMLElement).getAllByText(/^status_novo/).length).toBeGreaterThan(0);
     // action desconhecido aparece cru, mas não conta como publicado (a régua do motor)
-    expect(within(primeira as HTMLElement).getByText('dono/repo#1 · ana · Nada publicado (o motor registrou "acao_nova")')).toBeTruthy();
-    expect(tituloDa(pobre as HTMLDetailsElement)).toBe('dono/repo#3');
-    expect(pobre?.querySelector('summary')?.children[3]?.textContent).toBe('sem hora');
-    expect(within(pobre as HTMLElement).getByText('dono/repo#3 · Nada publicado')).toBeTruthy();
-    expect(within(pobre as HTMLElement).getByText('Sem registro de como foi resolvida')).toBeTruthy();
+    expect(within(primeira as HTMLElement).getAllByText('Nada publicado (o motor registrou "acao_nova")').length).toBeGreaterThan(0);
+    const [, pobreDepois] = linhas();
+    expect(tituloDa(pobreDepois as HTMLElement)).toBe('dono/repo#3');
+    expect(within(pobre as HTMLElement).getByText('Nada postado')).toBeTruthy();
+    expect(within(pobre as HTMLElement).queryByText(/\d{2}:\d{2}/)).toBeNull();
   });
 
   it('texto de fora é texto', async () => {
@@ -162,7 +188,7 @@ describe('Histórico: a lista', () => {
     await assentar();
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('b')).toBeNull();
-    expect(tituloDa(linhas()[0] as HTMLDetailsElement)).toBe(marcado);
+    expect(tituloDa(linhas()[0] as HTMLElement)).toBe(marcado);
     // URL que não é de PR do GitHub não vira botão de revisar
     expect(screen.queryByRole('button', { name: /Revisar de novo/ })).toBeNull();
   });
@@ -183,7 +209,6 @@ describe('Histórico: a lista', () => {
     expect(anuncio()).toBe('Nenhuma revisão');
     expect(screen.queryByRole('navigation', { name: 'Páginas do histórico' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Limpar busca e filtros' })).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Legenda das cores' })).toBeNull();
     cleanup();
     const t = montar({ url: '/historico?q=nada', responder: () => corpo(paginaDoMotor([])) });
     await assentar();
@@ -198,22 +223,24 @@ describe('Histórico: a lista', () => {
 describe('Histórico: filtros e busca no endereço', () => {
   const gaveta = () => screen.getByText(/^Filtrar/).closest('details') as HTMLDetailsElement;
 
+  const pilulas = () => screen.getByRole('group', { name: 'Filtrar pelo que foi publicado' });
+  const apertada = () => within(pilulas()).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent);
+
   it('o endereço com filtros vira o pedido; a busca e os filtros mostram o que o endereço diz', async () => {
     const t = montar({ url: '/historico?q=proj-9&veredito=skip&repo=dono%2Frepo&pagina=2', responder: () => corpo(paginaDoMotor([revisaoDoMotor(1)], { page: 2, pages: 2, total: 31 })) });
     await assentar();
     expect(t.pedidos()).toEqual(['/api/decisions?page=2&q=proj-9&veredito=skip&repo=dono%2Frepo']);
     const busca = screen.getByRole('search', { name: 'Busca e filtros do histórico' });
     expect((within(busca).getByLabelText('Buscar') as HTMLInputElement).value).toBe('proj-9');
-    expect((within(busca).getByLabelText('O que foi publicado') as HTMLSelectElement).value).toBe('skip');
+    expect(apertada()).toEqual(['Não publicados']);
     expect((within(busca).getByLabelText('Repositório') as HTMLSelectElement).value).toBe('dono/repo');
-    expect(screen.getByText('Filtrar (2)')).toBeTruthy();
+    expect(screen.getByText('Filtrar (1)')).toBeTruthy();
     const valendo = screen.getByRole('group', { name: 'Filtros valendo' });
     expect(within(valendo).getByRole('button', { name: 'Tirar o filtro Repositório: dono/repo' })).toBeTruthy();
-    expect(within(valendo).getByRole('button', { name: 'Tirar o filtro O que foi publicado: Não publicados' })).toBeTruthy();
     expect(anuncio()).toBe('31 revisões, página 2 de 2');
   });
 
-  it('os filtros ficam atrás de Filtrar, a busca fica à vista, e sem filtro não há chips', async () => {
+  it('o desfecho fica à vista em pílulas, o resto atrás de Filtrar, e sem filtro não há chips', async () => {
     montar({ responder: umaPagina });
     await assentar();
     expect(gaveta().open).toBe(false);
@@ -221,7 +248,10 @@ describe('Histórico: filtros e busca no endereço', () => {
     expect(gaveta().contains(screen.getByLabelText('Repositório'))).toBe(true);
     expect(screen.queryByRole('group', { name: 'Filtros valendo' })).toBeNull();
     const opcoes = (rotulo: string) => [...(screen.getByLabelText(rotulo) as HTMLSelectElement).options].map((o) => o.textContent);
-    expect(opcoes('O que foi publicado')).toEqual(['Todos', 'Aprovados', 'Mudanças pedidas', 'Comentados', 'Não publicados']);
+    // as pílulas são botões de verdade, fora da gaveta, com Todos apertado sem filtro
+    expect(within(pilulas()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Todos', 'Aprovados', 'Mudanças pedidas', 'Comentados', 'Não publicados']);
+    expect(apertada()).toEqual(['Todos']);
+    expect(gaveta().contains(pilulas())).toBe(false);
     expect(opcoes('Repositório')).toEqual(['Todos', 'dono/outro', 'dono/repo']);
     expect(gaveta().contains(screen.getByLabelText('Período'))).toBe(true);
     expect(opcoes('Período')).toEqual(['Todo o histórico', 'Últimos 7 dias', 'Últimos 30 dias']);
@@ -231,16 +261,24 @@ describe('Histórico: filtros e busca no endereço', () => {
     const t = montar({ url: '/historico?pagina=3', responder: umaPagina });
     await assentar();
     const entradas = window.history.length;
-    await act(async () => { fireEvent.change(screen.getByLabelText('O que foi publicado'), { target: { value: 'request_changes' } }); });
+    await clicar('Mudanças pedidas');
     expect(window.location.search).toBe('?veredito=request_changes');
     expect(window.history.length).toBe(entradas + 1);
     expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&veredito=request_changes');
+    expect(apertada()).toEqual(['Mudanças pedidas']);
+    // a pílula já apertada não pede de novo
+    const quantos = t.pedidos().length;
+    await clicar('Mudanças pedidas');
+    expect(t.pedidos()).toHaveLength(quantos);
     await act(async () => { fireEvent.change(screen.getByLabelText('Repositório'), { target: { value: 'dono/outro' } }); });
     expect(window.location.search).toBe('?veredito=request_changes&repo=dono%2Foutro');
     expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&veredito=request_changes&repo=dono%2Foutro');
+    // Todos tira só o desfecho
+    await clicar('Todos');
+    expect(window.location.search).toBe('?repo=dono%2Foutro');
   });
 
-  it('o X de um chip tira só aquele filtro; Limpar filtros tira os dois e mantém a busca', async () => {
+  it('o X de um chip tira só aquele filtro; Limpar filtros tira os da gaveta e mantém a busca e o desfecho', async () => {
     const t = montar({ url: '/historico?q=ana&veredito=approve&repo=dono%2Frepo', responder: umaPagina });
     await assentar();
     await clicar('Tirar o filtro Repositório: dono/repo');
@@ -248,9 +286,9 @@ describe('Histórico: filtros e busca no endereço', () => {
     expect(document.activeElement).toBe(screen.getByText(/^Filtrar/).closest('summary'));
     expect(window.location.search).toBe('?q=ana&veredito=approve');
     expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&q=ana&veredito=approve');
-    await act(async () => { voltarPara('/historico?q=ana&veredito=approve&repo=dono%2Frepo'); });
+    await act(async () => { voltarPara('/historico?q=ana&veredito=approve&repo=dono%2Frepo&periodo=7'); });
     await clicar('Limpar filtros');
-    expect(window.location.search).toBe('?q=ana');
+    expect(window.location.search).toBe('?q=ana&veredito=approve');
     expect(screen.queryByRole('group', { name: 'Filtros valendo' })).toBeNull();
     expect(screen.getByText('Filtrar')).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByText('Filtrar').closest('summary'));
@@ -296,12 +334,12 @@ describe('Histórico: filtros e busca no endereço', () => {
   it('o voltar do navegador refaz a consulta do endereço, e o campo de busca acompanha', async () => {
     const t = montar({ url: '/historico?q=ana', responder: umaPagina });
     await assentar();
-    await act(async () => { fireEvent.change(screen.getByLabelText('O que foi publicado'), { target: { value: 'skip' } }); });
+    await clicar('Não publicados');
     expect(window.location.search).toBe('?q=ana&veredito=skip');
     await act(async () => { voltarPara('/historico?q=bia'); });
     expect(t.pedidos().at(-1)).toBe('/api/decisions?page=1&q=bia');
     expect((screen.getByLabelText('Buscar') as HTMLInputElement).value).toBe('bia');
-    expect((screen.getByLabelText('O que foi publicado') as HTMLSelectElement).value).toBe('');
+    expect(apertada()).toEqual(['Todos']);
   });
 
   it('filtro do endereço que a tela não conhece vai ao motor, e a recusa diz o campo', async () => {
@@ -313,8 +351,7 @@ describe('Histórico: filtros e busca no endereço', () => {
     expect(t.pedidos()).toEqual(['/api/decisions?page=1&veredito=xyz']);
     const erro = screen.getByRole('alert');
     expect(erro.textContent).toContain('Erro: O motor recusou o filtro de desfecho (campo "veredito").');
-    expect((screen.getByLabelText('O que foi publicado') as HTMLSelectElement).value).toBe('xyz');
-    expect(screen.getByRole('button', { name: 'Tirar o filtro O que foi publicado: xyz (valor do endereço)' })).toBeTruthy();
+    expect(apertada()).toEqual(['xyz (valor do endereço)']);
     // recusa de parâmetro não se resolve tentando de novo
     expect(within(erro).queryByRole('button', { name: 'Tentar de novo' })).toBeNull();
     await act(async () => { fireEvent.click(within(erro).getByRole('button', { name: 'Limpar busca e filtros' })); });
@@ -570,38 +607,53 @@ describe('Histórico: detalhe da revisão', () => {
   });
   const comRica: Responder = () => corpo(paginaDoMotor([rica, revisaoDoMotor(7)]));
   const NOME = 'PR #12 de dono/repo';
-  const abrir = async () => { await clicar(new RegExp(`^Abrir a revisão de ${NOME}`)); };
+  const abrir = async () => { await clicar(`Detalhe de ${NOME}`); };
+  const cartao = () => screen.getByRole('article', { name: /^dono\/repo#12: / });
   const detalhe = () => screen.getByRole('region', { name: `Revisão de ${NOME}` });
   const campos = (raiz: HTMLElement) => [...raiz.querySelectorAll('dl > div')].map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
 
-  it('abre na própria página, com o foco no título e a revisão no endereço', async () => {
+  it('abre no próprio cartão, com a revisão no endereço, e só um cartão aberto por vez', async () => {
     montar({ responder: comRica });
     await assentar();
     const entradas = window.history.length;
     await abrir();
     expect(window.location.search).toBe('?id=d12&pr=dono%2Frepo%2312');
     expect(window.history.length).toBe(entradas + 1);
-    const titulo = screen.getByRole('heading', { level: 1, name: 'Título do PR 12' });
-    expect(document.activeElement).toBe(titulo);
-    // a lista sai da frente, sem ser desmontada
-    expect(screen.queryByRole('search')).toBeNull();
-    expect(screen.queryByRole('heading', { level: 1, name: 'Histórico' })).toBeNull();
+    // o detalhe mora no cartão; a lista e o título da página ficam
+    expect(cartao().contains(detalhe())).toBe(true);
+    expect(screen.getByRole('search')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Histórico' })).toBeTruthy();
+    await clicar(/^Detalhe de PR #7 de dono\/repo/);
+    expect(window.location.search).toBe('?id=d7&pr=dono%2Frepo%237');
+    expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Revisão de PR #7 de dono/repo' })).toBeTruthy();
   });
 
-  it('o topo diz o PR, o autor, a rodada e o card; o chip do desfecho, a hora e o link do GitHub', async () => {
+  it('o cartão aberto diz a rodada e o card, as pílulas, o selo do desfecho e o link do GitHub', async () => {
     montar({ responder: comRica });
     await assentar();
     await abrir();
-    const d = detalhe();
-    expect(within(d).getByText('dono/repo#12 · ana · 2ª rodada · BT-12')).toBeTruthy();
-    expect(within(d).getByText('Pediu mudanças')).toBeTruthy();
-    expect(within(d).getByText(/^publicado em \d{2}\/11\/2026, \d{2}:\d{2}$/)).toBeTruthy();
-    const github = within(d).getByRole('link', { name: 'Ver no GitHub (abre em nova aba)' });
+    await assentar();
+    const c = cartao();
+    expect(within(c).getByText(/^\d{2}:\d{2} · 2ª rodada · card BT-12$/)).toBeTruthy();
+    // o selo do desfecho e o parecer na pílula
+    expect(within(c).getAllByText('Pediu mudanças')).toHaveLength(2);
+    const pilulas = within(c).getByRole('list', { name: 'Resumo' });
+    expect(within(pilulas).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '\u2013Checks obrigatóriosSem leitura gravada', '\u2013CardBT-12: critérios não declarados', '✕ParecerPediu mudanças',
+    ]);
+    const github = within(c).getByRole('link', { name: 'Abrir no GitHub: dono/repo#12 (abre em nova aba)' });
     expect(github.getAttribute('href')).toBe('https://github.com/dono/repo/pull/12');
     expect(github.getAttribute('rel')).toBe('noreferrer noopener');
-    // a frase é a avaliação técnica que o motor manda
-    // (e volta, como campo, em Execução)
-    expect(within(d).getAllByText('Critérios técnicos comprovados.').map((e) => e.tagName)).toEqual(['P', 'DD']);
+    // a frase é a avaliação técnica que o motor manda (e volta, como campo, em Execução)
+    expect(within(detalhe()).getAllByText('Critérios técnicos comprovados.').map((e) => e.tagName)).toEqual(['P', 'DD']);
+  });
+
+  it('o rodapé do cartão aberto: a hora e o tempo das etapas quando o diário não mandou a rodada', async () => {
+    montar({ responder: comRica });
+    await assentar();
+    await abrir();
+    expect(within(cartao()).getByText(/^\d{2}:\d{2} · 2 min 5 s$/)).toBeTruthy();
   });
 
   it('os achados: o bloqueio aberto, motivos e pontos de atenção fechados, uma linha cada', async () => {
@@ -652,7 +704,8 @@ describe('Histórico: detalhe da revisão', () => {
     await assentar();
     await abrir();
     const texto = screen.getByRole('group', { name: 'Review completo' });
-    expect(within(texto).getByRole('heading', { level: 5, name: 'Achados', hidden: true })).toBeTruthy();
+    // no cartão, o texto do review fica abaixo de Mais detalhes (h5)
+    expect(within(texto).getByRole('heading', { level: 6, name: 'Achados', hidden: true })).toBeTruthy();
     expect(texto.querySelector('strong')?.textContent).toBe('Um');
     expect(texto.querySelector('code')?.textContent).toBe('codigo');
     expect([...texto.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://exemplo.com/a']);
@@ -666,9 +719,8 @@ describe('Histórico: detalhe da revisão', () => {
     await assentar();
     await abrir();
     expect(screen.getByText(/O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR\./)).toBeTruthy();
-    await clicar('Voltar ao Histórico');
     // publicado igual ao parecer: sem o aviso
-    await clicar(/^Abrir a revisão de PR #7 de dono\/repo/);
+    await clicar(/^Detalhe de PR #7 de dono\/repo/);
     expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
     cleanup();
     montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'skipped', action: 'skip' })])) });
@@ -681,7 +733,7 @@ describe('Histórico: detalhe da revisão', () => {
     montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'posted', action: 'acao_nova', verdict: 'approve' })])) });
     await assentar();
     expect(campos(detalhe())).toContain('Publicado: Nada publicado (o motor registrou "acao_nova")');
-    expect(within(detalhe()).getByText('Nada postado')).toBeTruthy();
+    expect(within(cartao()).getByText('Nada postado')).toBeTruthy();
     expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
   });
 
@@ -710,44 +762,109 @@ describe('Histórico: detalhe da revisão', () => {
     expect(within(review).getByText('Esta revisão ficou sem texto gravado.')).toBeTruthy();
   });
 
-  it('revisão que não postou nada diz isso, com o chip cinza e Revisar de novo como ação principal', async () => {
+  it('revisão que não postou nada diz isso, com o selo cinza e Revisar de novo como ação principal', async () => {
     montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'superseded', action: 'skip' })])) });
     await assentar();
-    const d = detalhe();
-    expect(within(d).getByText('Nada postado').getAttribute('data-tom')).toBe('neutro');
-    expect(within(d).getByText('Substituído por rodada nova. Nada desta revisão foi postado no GitHub.')).toBeTruthy();
-    expect(within(d).getByText(/^resolvida em /)).toBeTruthy();
-    expect(within(d).getByRole('button', { name: `Revisar de novo ${NOME}` })).toBeTruthy();
+    expect(within(cartao()).getByText('Nada postado').getAttribute('data-tom')).toBe('neutro');
+    expect(within(detalhe()).getByText('Substituído por rodada nova. Nada desta revisão foi postado no GitHub.')).toBeTruthy();
+    const revisar = within(detalhe()).getByRole('button', { name: `Revisar de novo ${NOME}` });
+    expect(revisar.className).toMatch(/primario/);
+    // aberto, o Revisar de novo fica só no rodapé
+    expect(within(cartao()).getAllByRole('button', { name: /Revisar de novo/ })).toHaveLength(1);
+    // sem nada postado o botão do texto diz isso
+    expect(within(detalhe()).getByRole('button', { name: `Ver o texto da revisão de ${NOME}` })).toBeTruthy();
   });
 
-  it('Escape fecha, o endereço perde a revisão e o foco volta ao botão que abriu', async () => {
+  it('Escape fecha, o endereço perde a revisão e o foco volta à seta do cartão', async () => {
     montar({ responder: comRica });
     await assentar();
     await abrir();
-    await act(async () => { fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' }); });
+    const dentro = within(detalhe()).getAllByRole('button')[0] as HTMLElement;
+    dentro.focus();
+    await act(async () => { fireEvent.keyDown(dentro, { key: 'Escape' }); });
     expect(window.location.search).toBe('');
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: new RegExp(`^Abrir a revisão de ${NOME}`) }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Detalhe de ${NOME}` }));
     expect(screen.getByRole('search')).toBeTruthy();
   });
 
-  it('Voltar ao Histórico fecha do mesmo jeito, e a lista não é pedida de novo', async () => {
+  it('a seta fecha do mesmo jeito, e a lista não é pedida de novo; o voltar do navegador reabre', async () => {
     const t = montar({ responder: comRica });
     await assentar();
     await abrir();
-    expect(screen.getByRole('button', { name: 'Voltar ao Histórico' }).textContent).toBe('← Histórico');
-    await clicar('Voltar ao Histórico');
+    await clicar(`Detalhe de ${NOME}`);
     expect(window.location.search).toBe('');
+    expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Detalhe de ${NOME}` }));
     expect(t.pedidos().filter((p) => p.startsWith('/api/decisions'))).toHaveLength(1);
     expect(titulosDosItens()).toHaveLength(2);
+    await act(async () => { voltarPara('/historico?id=d12&pr=dono%2Frepo%2312'); });
+    expect(cartao().contains(detalhe())).toBe(true);
   });
 
-  it('endereço com a revisão que está na página abre direto, e pede ao motor só o complemento', async () => {
+  it('Ver o review postado abre a linha do review completo e leva o foco a ela', async () => {
+    montar({ responder: comRica });
+    await assentar();
+    await abrir();
+    const review = screen.getByRole('group', { name: 'Review completo' }) as HTMLDetailsElement;
+    expect(review.open).toBe(false);
+    const ver = screen.getByRole('button', { name: `Ver o review postado de ${NOME}` });
+    expect(ver.getAttribute('aria-controls')).toBe(review.id);
+    await act(async () => { fireEvent.click(ver); });
+    expect(review.open).toBe(true);
+    expect(document.activeElement).toBe(review.querySelector('summary'));
+    // revisão sem texto gravado não tem o botão
+    cleanup();
+    montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { reportMarkdown: '' })])) });
+    await assentar();
+    expect(screen.queryByRole('button', { name: /^Ver o (review postado|texto da revisão)/ })).toBeNull();
+  });
+
+  it('endereço com a revisão que está na página abre direto no cartão, e pede ao motor só o complemento', async () => {
     const t = montar({ url: '/historico?id=d12&pr=dono%2Frepo%2312', responder: comRica });
     expect(screen.getByText('Carregando a revisão.').getAttribute('role')).toBe('status');
     await assentar();
-    expect(screen.getByRole('group', { name: 'Review completo' })).toBeTruthy();
+    expect(cartao().contains(screen.getByRole('group', { name: 'Review completo' }))).toBe(true);
     expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312&id=d12']);
+  });
+
+  it('endereço só com o id de uma revisão da página pede o complemento pela chave do item, e o Carregando some', async () => {
+    const t = montar({
+      url: '/historico?id=d12',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([rica, revisaoDoMotor(7)])) : corpo({ found: true, decision: rica })),
+    });
+    await assentar();
+    await assentar();
+    expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312&id=d12']);
+    expect(within(cartao()).queryByText(/Carregando os achados/)).toBeNull();
+    const pilulas = within(within(cartao()).getByRole('list', { name: 'Resumo' })).getAllByRole('listitem').map((li) => li.textContent);
+    expect(pilulas.some((p) => p?.includes('Carregando'))).toBe(false);
+  });
+
+  it('os títulos do cartão aberto ficam abaixo do h4 dele; no detalhe de fora da página, seguem do h1', async () => {
+    const execucao = { tentativas: 1, modelos: [], sessoes: [{ id: 't1', status: 'ok' }] };
+    const snapshot = { decisions: resolvidas('d12'), pushbacks: { 'dono/repo#12': { author: 'ana', outcome: 'mixed', note: 'n', status: 'confirmed' } } } as unknown as Snapshot;
+    const comExecucao = { ...rica, execucao };
+    const titulos = (raiz: HTMLElement) => [...raiz.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => `${h.tagName} ${h.textContent}`);
+    montar({
+      url: '/historico?id=d12&pr=dono%2Frepo%2312',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([rica])) : corpo({ found: true, decision: comExecucao })),
+      snapshot,
+    });
+    await assentar();
+    await assentar();
+    // o "## Achados" do texto do review, dentro de Mais detalhes, é h6
+    expect(titulos(cartao())).toEqual(['H4 Título do PR 12', 'H5 Achados', 'H5 Mais detalhes', 'H6 Sessões da rodada', 'H6 Achados', 'H5 Contestação do autor']);
+    cleanup();
+    // fora da página, o detalhe é a página: os mesmos títulos seguem do h1, como antes
+    montar({
+      url: '/historico?id=d12&pr=dono%2Frepo%2312',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([])) : corpo({ found: true, decision: comExecucao })),
+      snapshot,
+    });
+    await assentar();
+    await assentar();
+    expect(titulos(detalhe())).toEqual(['H1 Título do PR 12', 'H2 Achados', 'H2 Mais detalhes', 'H3 Sessões da rodada', 'H5 Achados', 'H2 Contestação do autor', 'H2 Revisar de novo']);
   });
 
   it('revisão que não está na página é pedida pela chave do PR', async () => {
@@ -819,7 +936,6 @@ describe('Histórico: ações do detalhe', () => {
 
   it('Revisar de novo manda a URL canônica do PR, sem pergunta, e diz o que acontece', async () => {
     const t = await abrir();
-    expect(screen.getByText(/O clique não publica nada: quando a análise termina, o motor segue a política da conta, que pode publicar sozinha\./)).toBeTruthy();
     await clicar(`Revisar de novo ${NOME}`);
     expect(t.post).toHaveBeenCalledTimes(1);
     expect(t.post.mock.calls[0]?.slice(0, 2)).toEqual(['/api/review', { urls: ['https://github.com/dono/repo/pull/12'] }]);
@@ -830,8 +946,8 @@ describe('Histórico: ações do detalhe', () => {
     montar({ url: '/historico?id=d12&pr=dono%2Frepo%2312', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { pr: { url: 'https://exemplo.com/x' } })])) });
     await assentar();
     expect(screen.queryByRole('button', { name: /Revisar de novo/ })).toBeNull();
-    expect(screen.queryByRole('link', { name: /Ver no GitHub/ })).toBeNull();
-    expect(screen.getByText(/não traz o endereço do PR no GitHub/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /GitHub/ })).toBeNull();
+    expect(screen.getByText(/Sem o endereço do PR no GitHub, não dá para pedir revisão nova daqui\./)).toBeTruthy();
   });
 
   it('sem contestação registrada para o PR, a seção não aparece', async () => {
@@ -912,7 +1028,7 @@ describe('Histórico: ações do detalhe', () => {
       expect(window.location.search).toBe('?id=d12&pr=dono%2Frepo%2312');
     }
     // fora de campo, Escape continua fechando
-    await act(async () => { fireEvent.keyDown(screen.getByRole('button', { name: 'Voltar ao Histórico' }), { key: 'Escape' }); });
+    await act(async () => { fireEvent.keyDown(screen.getByRole('button', { name: `Detalhe de ${NOME}` }), { key: 'Escape' }); });
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
   });
 
@@ -1021,6 +1137,41 @@ describe('Histórico: critérios do card, checks do head e execução', () => {
     expect(campos('Checks do head')).toEqual(['osv: Falha também na base (herdado, não pesa)']);
     expect(campos('Execução').slice(0, 4)).toEqual(['Duração da rodada: 7 min', 'Custo estimado: US$ 2,84', 'Modelo: Opus 4.1', 'Tentativas de revisão na rodada: 2']);
     expect(screen.queryByText(/pode faltar tentativa do começo/)).toBeNull();
+  });
+
+  it('a execução diz os perfis do Claude e cada sessão da rodada, e o rodapé do cartão junta o que o diário mandou', async () => {
+    const execucao = {
+      ...complemento.execucao,
+      perfis: ['perfil-b'],
+      sessoes: [
+        { id: 't1', em: Date.UTC(2026, 10, 16, 17, 2), modelo: 'Opus 4.1', perfil: 'perfil-b', status: 'erro', gatilho: 'primeira', retomada: null, duracaoMs: 60_000, custoUsd: 0.5 },
+        { id: 't2', em: Date.UTC(2026, 10, 16, 17, 30), modelo: 'Opus 4.1', perfil: 'perfil-b', status: 'ok', gatilho: 'rodada_extra', retomada: 'retomada', duracaoMs: 360_000, custoUsd: 2.34 },
+      ],
+    };
+    const snapshot = { decisions: resolvidas('d12'), config: { claudeProfiles: [{ id: 'perfil-b', label: 'Assinatura B' }] } } as unknown as Snapshot;
+    const t = montar({ url: pedirAberta, responder: responder({ ...complemento, execucao }), snapshot });
+    await assentar();
+    await assentar();
+    expect(t.pedidos().at(-1)).toBe('/api/decision?key=dono%2Frepo%2312&id=d12');
+    expect(campos('Execução')).toContain('Perfil do Claude: Assinatura B');
+    const sessoes = screen.getByRole('list', { name: 'Sessões da rodada, da mais antiga para a mais nova' });
+    expect([...sessoes.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      '14:02 · primeira revisão · Opus 4.1 · Assinatura B · 1 min · US$ 0,50 · terminou com erro',
+      '14:30 · rodada extra no mesmo commit · Opus 4.1 · Assinatura B · 6 min · US$ 2,34 · retomou a conversa anterior',
+    ]);
+    expect(screen.getByText(/^\d{2}:\d{2} · 7 min · 2 sessões · US\$ 2,84 · perfil Assinatura B$/)).toBeTruthy();
+  });
+
+  it('as pílulas do cartão aberto dizem Carregando até o complemento chegar', async () => {
+    let soltar: (r: Resposta) => void = () => {};
+    montar({ url: pedirAberta, responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([daPagina])) : new Promise<Resposta>((r) => { soltar = r; })) });
+    await assentar();
+    const pilulas = () => within(screen.getByRole('list', { name: 'Resumo' })).getAllByRole('listitem').map((li) => li.textContent);
+    expect(pilulas()[0]).toBe('\u2013Checks obrigatóriosCarregando');
+    expect(screen.getByText('Carregando os achados, os critérios e a execução desta revisão.')).toBeTruthy();
+    await act(async () => { soltar(corpo({ found: true, decision: complemento })); await Promise.resolve(); await Promise.resolve(); });
+    expect(pilulas()[0]).toBe('✓Checks obrigatóriosVerdes · osv herdado da base');
+    expect(screen.queryByText(/Carregando os achados/)).toBeNull();
   });
 
   it('sem complemento (motor antigo, outra revisão ou falha) as linhas novas não aparecem', async () => {

@@ -184,3 +184,23 @@ test('o destrave também ignora pedido feito pela própria conta; linha antiga s
   assert.equal(ler(t('review_requested', '2026-10-03T07:04:08Z', 'eu', '', 'autora'), desde, 'eu').tipo, 'pedido');
   assert.equal(ler(t('review_requested', '2026-10-03T07:04:08Z', 'eu', ''), desde, 'eu').tipo, 'pedido', 'formato antigo, sem ator');
 });
+
+// Medido em 19/11/2026 no motor hospedado: 11 avisos "voltaram à fila: marcados como vistos por
+// revisão que não chegou a decidir" em 16 horas, e os PRs eram novos, sem sessão anterior. O PR
+// tinha saído da fila e fazia as leituras no GitHub de antes da sessão (`headlessIniciando`); o
+// ciclo que caía nesse intervalo não o via em curso, devolvia à fila e gravava o aviso. Em
+// biud-core#655: pedido 19:42:21, aviso 19:42:36, sessão aberta 19:42:58.
+test('PR que saiu da fila e ainda prepara a sessão está em curso: não volta à fila nem gera aviso', () => {
+  const e = motor(mundo());
+  const pr = PR();
+  e.seen.add(pr.key);
+  e.headlessIniciando = new Set([pr.key]);
+  assert.equal(reconciliarVistos(e, [pr]), 0);
+  assert.equal(e.seen.has(pr.key), true, 'continua visto');
+  assert.deepEqual(e.avisos, []);
+  // contraprova: a revisão acabou sem decisão e o PR saiu da marca, aí sim ele volta
+  e.headlessIniciando.delete(pr.key);
+  assert.equal(reconciliarVistos(e, [pr]), 1);
+  assert.equal(e.seen.has(pr.key), false);
+  assert.equal(e.avisos.length, 1);
+});

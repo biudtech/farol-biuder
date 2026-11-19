@@ -154,3 +154,51 @@ describe('pushbacks do snapshot', () => {
     for (const torto of [null, [], 'x', 3]) expect(LEITORES.pushbacks(torto, () => {})).toBeUndefined();
   });
 });
+
+// GET /api/decision, execucao.perfis e execucao.sessoes (redesenho, lote 2:
+// lib/engine/detalhe-da-decisao.js, sessaoDaLinha).
+describe('execução da rodada: perfis e sessões', () => {
+  const comExecucao = (execucao: unknown) => lerRevisao({ id: 'd1', key: 'dono/repo#1', execucao })?.execucao;
+
+  it('lê os perfis e as sessões como o motor emite, na ordem dele', () => {
+    const lida = comExecucao({
+      tentativas: 2, modelos: ['opus'], duracaoMs: 600000, custoUsd: 1.5,
+      perfis: ['perfil-a', 'perfil-b'],
+      sessoes: [
+        { id: 't1', em: 1000, modelo: 'opus', perfil: 'perfil-a', status: 'ok', gatilho: 'primeira', retomada: null, duracaoMs: 240000, custoUsd: 0.5 },
+        { id: 't2', em: 2000, modelo: null, perfil: 'perfil-b', status: 'falhou', gatilho: 'commit_novo', retomada: 'retomada' },
+      ],
+    });
+    expect(lida?.perfis).toEqual(['perfil-a', 'perfil-b']);
+    expect(lida?.sessoes).toEqual([
+      { id: 't1', em: 1000, modelo: 'opus', perfil: 'perfil-a', status: 'ok', gatilho: 'primeira', duracaoMs: 240000, custoUsd: 0.5 },
+      { id: 't2', em: 2000, perfil: 'perfil-b', status: 'falhou', gatilho: 'commit_novo', retomada: 'retomada' },
+    ]);
+  });
+
+  it('entrada torta: item que não é objeto sai, campo de forma errada conta como ausente, lista vazia é ausente', () => {
+    const lida = comExecucao({
+      tentativas: 1, modelos: [],
+      perfis: ['ok', '', 3, null, '  '],
+      sessoes: [
+        'texto', null, 7,
+        { id: 9, em: 'ontem', modelo: 5, perfil: {}, status: 3, gatilho: 'inventado', retomada: 'talvez', duracaoMs: -1, custoUsd: 'caro' },
+      ],
+    });
+    expect(lida?.perfis).toEqual(['ok']);
+    // o item com tudo torto fica, sem campo nenhum: ele é uma tentativa do diário
+    expect(lida?.sessoes).toEqual([{ id: '', status: 'desconhecido' }]);
+    expect(comExecucao({ tentativas: 1, modelos: [], perfis: 'a', sessoes: {} })).toEqual({ tentativas: 1, modelos: [] });
+    expect(comExecucao({ tentativas: 1, modelos: [], perfis: [], sessoes: [] })).toEqual({ tentativas: 1, modelos: [] });
+  });
+
+  it('o texto de fora passa pela máscara de segredo', () => {
+    const segredo = `ghp_${'a1B2'.repeat(9)}`;
+    const lida = comExecucao({ tentativas: 1, modelos: [], perfis: [segredo], sessoes: [{ id: 't1', perfil: segredo, modelo: segredo, status: 'ok' }] });
+    expect(JSON.stringify(lida)).not.toContain(segredo);
+    // o desfecho da sessão também é texto de fora
+    const comStatus = comExecucao({ tentativas: 1, modelos: [], sessoes: [{ id: 't1', status: `falhou ${segredo}` }] });
+    expect(JSON.stringify(comStatus)).not.toContain(segredo);
+    expect(comStatus?.sessoes?.[0]?.status).toBeTruthy();
+  });
+});

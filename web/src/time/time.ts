@@ -4,7 +4,7 @@
 // e o que vale como perfil são do motor.
 import type { Contestacao } from '@/contratos/historico';
 import { ehObjeto, mesmoJson } from '@/contratos/formas';
-import type { Autor, Pessoa, Pessoas, PessoasCruas } from '@/contratos/time';
+import type { Autor, NumerosDoAutor, Pessoa, Pessoas, PessoasCruas } from '@/contratos/time';
 import { ROTULO_DA_ACAO } from '@/historico/rotulos';
 import { nomeDoPr } from '@/radar/formato';
 import type { Conexao } from '@/transporte/cliente';
@@ -340,4 +340,61 @@ export function rodadasPorPr(n: { prs: number; rodadas: number }): string {
 
 export function textoDosNumeros(n: { janelaDias: number; prs: number; aprovadosDePrimeira: number }): string {
   return `${n.prs === 1 ? '1 PR' : `${n.prs} PRs`} em ${n.janelaDias} dias · ${taxaDePrimeira(n)} aprovados de primeira`;
+}
+
+// ---------- o cartão da pessoa (redesenho, lote 4) ----------
+
+// "O que o Farol já aprendeu": os pontos que o motor anotou nas entradas do dossiê, na ordem dele
+// (a entrada mais recente primeiro), sem repetir, até o teto. O motor não resume o dossiê: o
+// cartão mostra os pontos mais recentes, e o dossiê inteiro fica em "Ver dossiê".
+export function aprendizados(autor: Autor | undefined, teto = 2): string[] {
+  const vistos = new Set<string>();
+  const lista: string[] = [];
+  for (const entrada of autor?.entries ?? []) {
+    for (const bruto of entrada.bullets) {
+      const ponto = bruto.trim();
+      if (!ponto || vistos.has(ponto)) continue;
+      vistos.add(ponto);
+      lista.push(ponto);
+      if (lista.length >= teto) return lista;
+    }
+  }
+  return lista;
+}
+
+// Os domínios do perfil com o nível ("Frontend: Autoridade"), na ordem da taxonomia do motor.
+export function dominiosDoCartao(perfil: Pessoa | undefined): string[] {
+  return dominiosEmOrdem(perfil).map(([d, nivel]) => `${rotuloDoDominio(d)}: ${rotuloDoNivel(nivel)}`);
+}
+
+export interface NumeroDoCartao {
+  rotulo: string;
+  valor: string;
+  tom?: 'ok' | 'falha';
+}
+
+// As caixas dos 30 dias, só com o que o motor mandou (numeros-do-time.js, na raiz): os PRs, os
+// aprovados de primeira e, quando o motor os conta, os pedidos de mudança (as revisões publicadas
+// desses PRs que pediram mudanças). Sem os números, nenhuma caixa: a tela não inventa zero.
+// A janela dos números, escrita na tela acima das caixas ("Últimos 30 dias").
+export function rotuloDaJanela(n: Pick<NumerosDoAutor, 'janelaDias'>): string {
+  return `Últimos ${n.janelaDias} dias`;
+}
+
+// O motor marca os números com `historicoNoTeto` quando o histórico guardado chegou ao limite e
+// manda a tela dizer isso (numeros-do-time.js, na raiz). A frase é uma só, no cartão e no dossiê.
+export const FRASE_DO_TETO = 'O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.';
+
+export function avisoDoTeto(n: NumerosDoAutor | undefined): string {
+  return n?.historicoNoTeto ? FRASE_DO_TETO : '';
+}
+
+export function numerosDoCartao(n: NumerosDoAutor | undefined): NumeroDoCartao[] {
+  if (!n) return [];
+  const caixas: NumeroDoCartao[] = [
+    { rotulo: 'PRs revisados', valor: String(n.prs) },
+    { rotulo: 'aprovados de primeira', valor: String(n.aprovadosDePrimeira), tom: 'ok' },
+  ];
+  if (n.bloqueios !== undefined) caixas.push({ rotulo: 'pedidos de mudança', valor: String(n.bloqueios), tom: 'falha' });
+  return caixas;
 }

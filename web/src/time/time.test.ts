@@ -7,7 +7,53 @@ import {
   avisoDeIlegiveis, lerEnderecoDoTime, marcaDoPerfil, markdownDosPontos, motivoQueImpedeSalvar, outrasQueDiferem, perfilDe, perfilLimpo,
   prDaEntrada, soComPerfil, textoDaCompetencia, textoDoPapel, textoDoPerfil, textoDoResultado,
   contagemDosDesfechos, iniciais, nomeDaPessoa, papelCurto, quantasPessoas, resumoDaCalibracao, tipoDoDesfecho,
+  aprendizados, avisoDoTeto, dominiosDoCartao, numerosDoCartao, rotuloDaJanela,
 } from './time';
+
+// O cartão de uma pessoa na grade do Time (redesenho, lote 4).
+describe('o cartão de uma pessoa', () => {
+  it('o que o Farol já aprendeu: os pontos mais recentes que o motor anotou, sem repetir, até o teto', () => {
+    const autor = {
+      login: 'ana',
+      entries: [
+        { date: '2026-11-18', bullets: ['Esquece o teste do caso vazio', ' Nomes claros '] },
+        { date: '2026-11-10', bullets: [] },
+        { date: '2026-11-01', bullets: ['Esquece o teste do caso vazio', 'PRs pequenos'] },
+      ],
+    };
+    expect(aprendizados(autor)).toEqual(['Esquece o teste do caso vazio', 'Nomes claros']);
+    expect(aprendizados(autor, 3)).toEqual(['Esquece o teste do caso vazio', 'Nomes claros', 'PRs pequenos']);
+    expect(aprendizados({ login: 'bia', entries: [] })).toEqual([]);
+    expect(aprendizados(undefined)).toEqual([]);
+  });
+
+  it('os domínios do perfil com o nível, na ordem da taxonomia, e o valor desconhecido cru', () => {
+    expect(dominiosDoCartao({ dominios: { infra: 'basico', frontend: 'autoridade', novo: 'x' } })).toEqual(['Frontend: Autoridade', 'Infra/DevOps: Básico', 'novo: x']);
+    expect(dominiosDoCartao({ papel: 'pleno' })).toEqual([]);
+    expect(dominiosDoCartao(undefined)).toEqual([]);
+  });
+
+  it('os números de 30 dias saem só do que o motor mandou; sem os bloqueios, a caixa não aparece', () => {
+    const n = { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20, bloqueios: 4 };
+    expect(numerosDoCartao(n)).toEqual([
+      { rotulo: 'PRs revisados', valor: '14' },
+      { rotulo: 'aprovados de primeira', valor: '9', tom: 'ok' },
+      { rotulo: 'pedidos de mudança', valor: '4', tom: 'falha' },
+    ]);
+    const antigo = { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20 };
+    expect(numerosDoCartao(antigo).map((c) => c.rotulo)).toEqual(['PRs revisados', 'aprovados de primeira']);
+    expect(numerosDoCartao(undefined)).toEqual([]);
+  });
+
+  it('a janela dos números e o aviso do teto do histórico, que o motor manda dizer na tela', () => {
+    const n = { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20 };
+    expect(rotuloDaJanela(n)).toBe('Últimos 30 dias');
+    expect(rotuloDaJanela({ ...n, janelaDias: 7 })).toBe('Últimos 7 dias');
+    expect(avisoDoTeto(n)).toBe('');
+    expect(avisoDoTeto(undefined)).toBe('');
+    expect(avisoDoTeto({ ...n, historicoNoTeto: true })).toBe('O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.');
+  });
+});
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 

@@ -42,8 +42,18 @@ export function Pagina({ titulo, sub, acoes, estreita, tituloMenor, idDoTitulo, 
   );
 }
 
+// O nível de um título de seção. O padrão é 2 (a seção da página); dentro de um cartão, o título
+// fica abaixo do título do cartão.
+export type NivelDoTitulo = 2 | 3 | 4 | 5 | 6;
+
+export function TituloDeNivel({ nivel, className, id, children }: { nivel: NivelDoTitulo; className?: string; id?: string; children: ReactNode }) {
+  const Titulo = `h${nivel}` as const;
+  return <Titulo id={id} className={className}>{children}</Titulo>;
+}
+
 interface PropsDaSecao {
   titulo: string;
+  nivel?: NivelDoTitulo;
   // o que fica à direita do título (um link, uma pílula)
   extra?: ReactNode;
   // a contagem logo depois do título, numa pílula (a marca, na seção que roda agora)
@@ -52,12 +62,12 @@ interface PropsDaSecao {
   rotulo?: string;
 }
 
-export function Secao({ titulo, extra, contagem, children, rotulo }: PropsDaSecao) {
+export function Secao({ titulo, nivel = 2, extra, contagem, children, rotulo }: PropsDaSecao) {
   return (
     <section className={estilos.secao} aria-label={rotulo ?? titulo}>
       <div className={estilos.secaoCabecalho}>
         <div className={estilos.secaoTituloEContagem}>
-          <h2 className={estilos.secaoTitulo}>{titulo}</h2>
+          <TituloDeNivel nivel={nivel} className={estilos.secaoTitulo}>{titulo}</TituloDeNivel>
           {contagem ? (
             <span className={estilos.secaoContagem} data-tom={contagem.tom}>
               {contagem.n}<span className={estilos.soLeitor}> {contagem.rotulo}</span>
@@ -81,17 +91,19 @@ interface PropsDaLinha {
   aoAlternar?: (aberta: boolean) => void;
   className?: string;
   rotulo?: string;
+  // para quem precisa abrir a linha de fora (o "Ver o review postado" do Histórico)
+  id?: string;
 }
 
 // Uma linha por item e o detalhe num clique. É o <details> do navegador: o teclado (Enter e
 // espaço no resumo) e o leitor de tela (expandido ou recolhido) vêm de graça, e nada some da
 // árvore quando fecha. `aberta` é só o estado inicial.
-export function Linha({ resumo, children, aberta, aoAlternar, className, rotulo }: PropsDaLinha) {
+export function Linha({ resumo, children, aberta, aoAlternar, className, rotulo, id }: PropsDaLinha) {
   const alternar = aoAlternar
     ? (evento: SyntheticEvent<HTMLDetailsElement>) => aoAlternar(evento.currentTarget.open)
     : undefined;
   return (
-    <details className={classes(estilos.linha, className)} open={aberta} onToggle={alternar} aria-label={rotulo}>
+    <details id={id} className={classes(estilos.linha, className)} open={aberta} onToggle={alternar} aria-label={rotulo}>
       <summary className={estilos.resumo}>{resumo}</summary>
       <div className={estilos.corpo}>{children}</div>
     </details>

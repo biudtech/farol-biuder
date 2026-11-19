@@ -13,7 +13,7 @@ import type { Acao, DesfechoDaContestacao } from '@/radar/acoes';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import { ui } from '../ui';
+import { TituloDeNivel, ui, type NivelDoTitulo } from '../ui';
 import estilos from './Historico.module.css';
 
 // o teto da nota no motor (recordPushback)
@@ -27,9 +27,11 @@ interface Props {
   revisao: Revisao;
   registro: Registro;
   controle: ControleDeAcoes;
+  // o nível do título: 2 no detalhe de fora da página, abaixo do título do cartão dentro dele
+  nivel?: NivelDoTitulo;
 }
 
-export function Contestacao({ revisao, registro, controle }: Props) {
+export function Contestacao({ revisao, registro, controle, nivel = 2 }: Props) {
   const [desfecho, setDesfecho] = useState<DesfechoDaContestacao | ''>(ehDesfecho(registro.outcome) ? registro.outcome : '');
   const [nota, setNota] = useState(registro.note ?? '');
   const idDoTitulo = useId();
@@ -52,7 +54,7 @@ export function Contestacao({ revisao, registro, controle }: Props) {
 
   return (
     <section className={`${ui.cartao} ${estilos.contestacao}`} aria-labelledby={idDoTitulo}>
-      <h2 id={idDoTitulo} className={estilos.tituloDaContestacao}>Contestação do autor</h2>
+      <TituloDeNivel nivel={nivel} id={idDoTitulo} className={estilos.tituloDaContestacao}>Contestação do autor</TituloDeNivel>
       {suspeita ? (
         <p className={ui.texto}>
           O motor suspeita que o autor contestou a revisão deste PR{registro.note ? `: ${registro.note}` : ''}. Confirme o desfecho, ou diga que não houve contestação.

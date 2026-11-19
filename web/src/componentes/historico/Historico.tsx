@@ -1,6 +1,7 @@
 'use client';
 
-// A tela Histórico: as revisões que o motor já resolveu, uma página por vez, lidas de
+// A tela Histórico: as revisões que o motor já resolveu, uma página por vez, no cartão único do
+// Radar (Lista.tsx), agrupadas por dia, com o detalhe aberto no próprio cartão. Lidas de
 // GET /api/decisions (não do snapshot, que só leva as 30 mais recentes). A busca e os filtros
 // são do motor; a tela escolhe, pede e mostra. A consulta mora no endereço da página.
 //
@@ -19,11 +20,10 @@ import {
   CONSULTA_VAZIA, TEXTO_DO_INDISPONIVEL, ehHistoricoIndisponivel, ehRecusaDeParametro, marcaDasResolvidas, mensagemDaFalha, temFiltro,
   textoDosRecentes, textoDoResultado, textoDoVazio,
 } from '@/historico/consulta';
-import { LEGENDA_DAS_CORES } from '@/historico/rotulos';
 import { ABA_INICIAL } from '@/navegacao/abas';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes } from '../radar/useAcoes';
-import { BarraDeCarga, Bolinha, Botao, Esqueleto, Pagina, ui } from '../ui';
+import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { Detalhe } from './Detalhe';
 import { ExportarCsv } from './ExportarCsv';
 import { Filtros } from './Filtros';
@@ -47,6 +47,7 @@ export function Historico({ app = appDoNavegador }: Props) {
   const ilegiveis = useApp((e) => e.snapshot?.decisions?.ilegiveis, app) ?? 0;
   const contestacoes = useApp((e) => e.snapshot?.pushbacks, app);
   const recados = useApp((e) => e.recados, app);
+  const perfis = useApp((e) => e.snapshot?.config?.claudeProfiles, app);
   const marca = useMemo(() => marcaDasResolvidas(resolvidas), [resolvidas]);
 
   const [recarga, setRecarga] = useState(0);
@@ -75,10 +76,15 @@ export function Historico({ app = appDoNavegador }: Props) {
     // o foco vai ao título da lista: quem estava no pé da página volta ao começo dela
     tituloDaLista.current?.focus();
   }, [consulta, ir]);
-  const aoAbrir = useCallback((revisao: Revisao) => {
+  // a seta do cartão abre o detalhe nele, ou fecha o que está aberto
+  const aoAlternar = useCallback((revisao: Revisao) => {
+    if (detalhe?.id === revisao.id) {
+      ir(consulta, null, 'empilhar');
+      return;
+    }
     abertoPor.current = idDoBotao(revisao.id);
     ir(consulta, { id: revisao.id, chave: revisao.key }, 'empilhar');
-  }, [consulta, ir]);
+  }, [consulta, detalhe, ir]);
   const aoAbrirPendencia = useCallback((pendencia: Pendencia) => {
     abertoPor.current = idDoBotaoDaPendencia(pendencia.id);
     ir(consulta, { id: pendencia.id, chave: pendencia.key }, 'empilhar');
@@ -99,6 +105,24 @@ export function Historico({ app = appDoNavegador }: Props) {
   }, [idAberto]);
 
   const mostrada = alemDoFim ? null : pagina;
+  // A revisão aberta está na página mostrada: o detalhe abre no próprio cartão; fora dela (endereço
+  // colado, pendência da mesa), no lugar da lista
+  const noCartao = detalhe !== null && mostrada !== null && mostrada.items.some((item) => item.id === detalhe.id);
+
+  // Escape fecha o cartão aberto de qualquer lugar da página, menos de dentro de um campo de texto
+  // ou de um seletor (ali Escape é do campo). A pergunta de confirmação de uma ação trata o próprio
+  // Escape e não deixa o evento chegar aqui. O detalhe de fora da página trata o dele.
+  useEffect(() => {
+    if (!noCartao) return undefined;
+    const aoTeclar = (evento: KeyboardEvent): void => {
+      if (evento.key !== 'Escape' || evento.defaultPrevented) return;
+      const alvo = evento.target;
+      if (alvo instanceof HTMLElement && (alvo.isContentEditable || alvo.matches('input, textarea, select'))) return;
+      aoFechar();
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  }, [noCartao, aoFechar]);
   const esperando = carregando || alemDoFim;
   const anuncio = mostrada && !esperando ? textoDoResultado(mostrada) : '';
   // a contagem dos últimos 7 dias é do motor e não depende dos filtros; a da última carga fica
@@ -112,7 +136,7 @@ export function Historico({ app = appDoNavegador }: Props) {
 
   return (
     <div className={estilos.historico}>
-      <div className={estilos.listagem} hidden={detalhe !== null}>
+      <div className={estilos.listagem} hidden={detalhe !== null && !noCartao}>
         <Pagina
           titulo="Histórico"
           sub={(
@@ -159,7 +183,19 @@ export function Historico({ app = appDoNavegador }: Props) {
                     Atenção: {mostrada.descartados} revisão(ões) desta página chegaram em formato que esta tela não lê e ficaram de fora.
                   </p>
                 ) : null}
-                {mostrada.items.length ? <Lista itens={mostrada.items} agora={lidaEm} aoAbrir={aoAbrir} controle={controle} /> : null}
+                {mostrada.items.length ? (
+                  <Lista
+                    itens={mostrada.items}
+                    agora={lidaEm}
+                    variasPaginas={mostrada.pages > 1}
+                    abertoId={noCartao ? detalhe.id : null}
+                    leitura={noCartao ? leitura : null}
+                    contestacoes={contestacoes}
+                    perfis={perfis}
+                    aoAlternar={aoAlternar}
+                    controle={controle}
+                  />
+                ) : null}
                 {mostrada.total === 0 && !temFiltro(consulta) ? (
                   <div className={ui.cartao}>
                     <h3 className={estilos.tituloDoVazio}>Nenhuma revisão ainda</h3>
@@ -179,24 +215,18 @@ export function Historico({ app = appDoNavegador }: Props) {
               </div>
             ) : null}
 
-            {mostrada?.items.length || pendencias.length ? (
-              <ul className={estilos.legenda} aria-label="Legenda das cores">
-                {LEGENDA_DAS_CORES.map(([tom, rotulo]) => (
-                  <li key={tom} className={ui.mini}><Bolinha tom={tom} />{rotulo}</li>
-                ))}
-              </ul>
-            ) : null}
           </section>
         </Pagina>
       </div>
 
-      {detalhe && leitura ? (
+      {detalhe && leitura && !noCartao ? (
         <Detalhe
           key={detalhe.id}
           aberto={detalhe}
           leitura={leitura}
           contestacoes={contestacoes}
           controle={controle}
+          perfis={perfis}
           aoFechar={aoFechar}
           aoTentarDeNovo={() => setTentativaDoDetalhe((n) => n + 1)}
         />

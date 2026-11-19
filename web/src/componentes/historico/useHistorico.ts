@@ -75,7 +75,8 @@ export function usePagina(cliente: Pick<Cliente, 'get'>, consulta: Consulta, rec
 export type LeituraDoDetalhe =
   | { fase: 'carregando' }
   // `outra`: a revisão veio pela chave do PR e não é a que o endereço pedia
-  | { fase: 'pronto'; revisao: Revisao; outra: boolean }
+  // `complementando`: a revisão é a da página, e o complemento de GET /api/decision ainda não voltou
+  | { fase: 'pronto'; revisao: Revisao; outra: boolean; complementando?: true }
   | { fase: 'ausente' }
   | { fase: 'erro'; texto: string };
 
@@ -112,8 +113,9 @@ export function useDetalhe(
 ): LeituraDoDetalhe | null {
   const [buscado, setBuscado] = useState<{ pedido: string; r: Resultado<DetalheDaRevisao> } | null>(null);
   const id = aberto?.id ?? '';
-  const chave = aberto?.chave ?? '';
   const daPagina = useMemo(() => (id ? itens?.find((item) => item.id === id) : undefined), [itens, id]);
+  // O endereço pode trazer só o id (sem `pr`): da página, a chave é a do próprio item.
+  const chave = aberto?.chave || daPagina?.key || '';
   const buscar = id !== '' && chave !== '' && (daPagina !== undefined || listaLida);
   // da página, a revisão é certa e vai pelo id; fora dela, o endereço pode ser velho, e vale a
   // mais recente do PR (com o aviso de que é outra)
@@ -131,7 +133,12 @@ export function useDetalhe(
 
   return useMemo<LeituraDoDetalhe | null>(() => {
     if (!id) return null;
-    if (daPagina) return { fase: 'pronto', revisao: comOComplemento(daPagina, buscado?.pedido === pedido ? buscado.r : null), outra: false };
+    if (daPagina) {
+      const chegou = buscado?.pedido === pedido;
+      const pronta = { fase: 'pronto' as const, revisao: comOComplemento(daPagina, chegou ? buscado.r : null), outra: false };
+      // "complementando" só quando há pedido no ar: sem ele, a resposta nunca chegaria
+      return chegou || !buscar ? pronta : { ...pronta, complementando: true as const };
+    }
     if (!listaLida) return CARREGANDO;
     if (!chave) return AUSENTE;
     if (buscado?.pedido !== pedido) return CARREGANDO;
@@ -139,5 +146,5 @@ export function useDetalhe(
     if (!r.ok) return { fase: 'erro', texto: mensagemDaFalha(r) || 'A busca da revisão foi interrompida.' };
     if (!r.dados.encontrada) return AUSENTE;
     return { fase: 'pronto', revisao: r.dados.revisao, outra: r.dados.revisao.id !== id };
-  }, [id, chave, daPagina, listaLida, buscado, pedido]);
+  }, [id, chave, daPagina, listaLida, buscado, pedido, buscar]);
 }

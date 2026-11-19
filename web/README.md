@@ -440,15 +440,18 @@ ao store e nenhuma tela as lê. Aqui a lacuna é do front.
 A aba `/historico` é `src/componentes/historico/Historico.tsx`. Ela mostra as revisões que o
 motor já resolveu (até 3.000), uma página de 30 por vez, lidas de `GET /api/decisions`, e, antes
 delas, as pendências da mesa que o snapshot traz. Não lê a lista das resolvidas do snapshot, que
-só leva as 30 mais recentes. Segue o desenho enxuto: uma linha por item, o detalhe num clique.
+só leva as 30 mais recentes. Desde o redesenho (lote 4, 19/11/2026) a lista usa o cartão único
+do Radar (`src/componentes/cartao/`): um cartão por revisão, agrupado por dia, com o detalhe
+aberto no próprio cartão.
 
 | Parte | Componente | De onde vem |
 |---|---|---|
 | Topo | `Historico.tsx` (`Pagina`), `ExportarCsv.tsx` | "Histórico", "N revisões nos últimos 7 dias" (`recentes7Dias` da resposta, sem os filtros) e a frase do resultado (`total`, `page` e `pages`); o botão "Exportar CSV" pede `GET /api/decisions?formato=csv` com a busca e os filtros do endereço, sem página, e entrega o texto como arquivo `farol-historico-AAAA-MM-DD.csv` |
-| Busca e filtros | `Filtros.tsx` | `q`, `veredito` e `repo` da rota; as opções de repositório são o `repos` da resposta |
+| Busca e filtros | `Filtros.tsx` | `q`, `veredito` (as pílulas do desfecho), `repo` e o período da rota; as opções de repositório são o `repos` da resposta |
 | Sem nada postado ainda | `Lista.tsx` (`Pendencias`) | `decisions.pending` e `decisions.ilegiveis` do snapshot |
-| Lista por dia e paginação | `Lista.tsx`, `Paginacao.tsx`, `src/historico/dias.ts` | `items`, `page`, `pages` e `total` da resposta |
-| Detalhe da revisão | `Detalhe.tsx` | o item da página, com `criteriosDoCard`, `checks`, `execucao`, `achados`, `rodadasDoPr` e `tamanhoDoPr` de `GET /api/decision?key=`; fora dela, só a rota |
+| Cartões por dia e paginação | `Lista.tsx` (`CartaoDaRevisao`), `Paginacao.tsx`, `src/historico/dias.ts`, `src/historico/cartao.ts` | `items`, `page`, `pages` e `total` da resposta |
+| Detalhe no cartão | `Lista.tsx`, `Detalhe.tsx` (`Analise`) | o item da página, com `criteriosDoCard`, `checks`, `execucao` (com `perfis` e `sessoes`), `achados`, `rodadasDoPr` e `tamanhoDoPr` de `GET /api/decision?key=&id=` |
+| Detalhe de fora da página | `Detalhe.tsx` | só `GET /api/decision?key=` (endereço colado com revisão que a página não traz, e as pendências da mesa) |
 | Contestação do autor | `Contestacao.tsx` | a chave `pushbacks` do snapshot, pelo PR |
 
 Regras que valem para quem mexer nela:
@@ -457,10 +460,13 @@ Regras que valem para quem mexer nela:
   voltou; não filtra nem ordena nada. O filtro de desfecho olha o que foi publicado (`action`),
   e por isso os rótulos dele dizem isso: Aprovados, Mudanças pedidas, Comentados, Não
   publicados.
-- **Busca à vista, filtros atrás de Filtrar.** O campo de busca fica sempre na tela; repositório,
-  "O que foi publicado" e "Período" (os filtros que a rota aceita) ficam no painel do botão Filtrar
+- **Busca e desfecho à vista, o resto atrás de Filtrar.** O campo de busca fica sempre na tela,
+  e o filtro pelo que foi publicado também, em pílulas (Todos, Aprovados, Mudanças pedidas,
+  Comentados, Não publicados): cada uma é um botão de 44 px com `aria-pressed`, e a apertada usa o
+  par da aba ativa. Valor de `veredito` do endereço que a tela não conhece vira uma pílula a mais,
+  apertada, com "(valor do endereço)". Repositório e "Período" ficam no painel do botão Filtrar
   (`ui.gaveta`), que diz quantos estão valendo. Os que valem aparecem embaixo como chips; o X de
-  cada um tira só aquele, e "Limpar filtros" tira todos e mantém a busca. O período (últimos 7 ou
+  cada um tira só aquele, e "Limpar filtros" tira os dois e mantém a busca e o desfecho. O período (últimos 7 ou
   30 dias, hoje incluído) mora no endereço como `periodo`, e vai ao motor como `desde`, o primeiro
   dia no fuso do motor (`desdeDoPeriodo`): a hora em que a revisão foi resolvida.
 - **A consulta mora no endereço.** `q`, `veredito`, `repo`, `periodo`, `pagina` e a revisão aberta (`id`
@@ -480,17 +486,23 @@ Regras que valem para quem mexer nela:
   400 e o nome do campo, e a tela diz qual campo foi recusado. Só a página é saneada aqui
   (inteiro a partir de 1). Página além do fim (200 com `items` vazio e `pages` maior que zero)
   volta para a última.
-- **Lista por dia.** As revisões da página são agrupadas pelo dia de `resolvedAt` no fuso do
-  navegador (`src/historico/dias.ts`): Hoje, Ontem, depois o dia da semana e a data (com o ano,
-  se não é o de agora); sem hora, "Sem data registrada". O "hoje" é o da hora em que a página
-  chegou. A ordem é a do motor: itens seguidos do mesmo dia formam um grupo.
-- **Uma linha por revisão.** Fechada: a bolinha do que foi publicado (aprovação verde,
-  comentário âmbar, pedido de mudanças vermelho, nada postado cinza, com o texto escondido
-  para o leitor e a legenda das cores no pé), o título do PR (ou a chave) e a hora. Aberta: o
-  motivo fixo do motor (`blockedReason`), quando há; "repo#n · autor · o que foi publicado";
-  a situação, o parecer quando difere, o card e a data; e "Abrir a revisão". O motor não manda
-  resumo curto do parecer, e a linha não inventa um. Revisão que não publicou nada oferece
-  "Revisar de novo" ali mesmo.
+- **Cartões por dia, no fuso de Brasília.** As revisões da página são agrupadas pelo dia de
+  `resolvedAt` no fuso do motor (`FUSO_DO_HISTORICO`, `America/Sao_Paulo`, o mesmo do Período e
+  do nome do CSV; `src/historico/dias.ts`): "Hoje, 19 de novembro", "Ontem, 18 de novembro",
+  depois o dia da semana e a data por extenso (com o ano, se não é o de agora); sem hora, "Sem
+  data registrada". O título do dia (h3) diz quantas revisões a página traz dele ("· 9
+  revisões"); com mais de uma página, "nesta página", porque o dia pode continuar na outra. O
+  "hoje" é o da hora em que a página chegou. A ordem é a do motor: itens seguidos do mesmo dia
+  formam um grupo. As horas dos cartões também são de Brasília.
+- **Um cartão por revisão** (`CartaoDaRevisao`, em `Lista.tsx`, com o `Cartao` do lote 3). A
+  borda segue o que foi publicado (aprovado verde, comentado âmbar, pediu mudanças vermelho,
+  nada postado neutra; `tomDoCartao`, `src/historico/cartao.ts`), e o estado vai em texto no
+  nome do cartão. Fechado: a foto do autor, a chave (link para o PR), o autor, a hora, a rodada e
+  o card (`contextoDoCartao`), o título do PR (h4) e, à direita, o selo do desfecho e a seta
+  (botão de 44 px com `aria-expanded` e `aria-controls`, "Abrir o detalhe de PR #n de dono/repo").
+  O motivo fixo do motor (`blockedReason`) fica embaixo, quando há. O motor não manda resumo
+  curto do parecer, e o cartão não inventa um. Revisão que não publicou nada oferece "Revisar de
+  novo" também fechada.
 - **Pendências da mesa: "Sem nada postado ainda".** O front não tem mais mesa (aprovar, pedir
   mudanças, comentar, pular), e o motor não mudou: o que ele deixa em `decisions.pending`
   aparece no topo da aba, num grupo próprio antes da lista paginada, fora da busca, dos filtros
@@ -524,11 +536,20 @@ Regras que valem para quem mexer nela:
   `historico_indisponivel`) diz isso e tem Tentar de novo. Item sem `id` ou sem `key` é
   descartado, contado e avisado. O resultado ("61 revisões, página 2 de 3") é a frase do topo,
   numa região viva educada.
-- **Detalhe.** Abre na própria página, no lugar da lista (que continua montada), com o foco
-  no título (o do PR); Escape ou "← Histórico" fecham, e o foco volta ao botão que abriu.
-  Escape dentro de um campo de texto ou de um seletor é do campo, e não fecha o detalhe. Mostra
-  "repo#n · autor · Nª rodada · card", o título, o chip do que foi publicado, a hora e "Ver no
-  GitHub" (só para `https://github.com/`); a frase da avaliação técnica (`technical.message`,
+- **Detalhe no próprio cartão.** A seta abre o detalhe dentro do cartão (uma região "Revisão
+  de PR #n de dono/repo"), e a lista continua na tela; um cartão aberto por vez, porque a revisão
+  aberta mora no endereço (`id` e `pr`) e o voltar do navegador fecha e reabre. O foco fica na
+  seta; Escape (fora de campo de texto e de seletor) ou a seta fecham, e o foco volta à seta.
+  Aberto, o cartão ganha as pílulas do Radar (checks, card e parecer, `pilulasDaPostada`), que
+  dizem "Carregando" até o complemento de `GET /api/decision` chegar, a análise (`Analise`, a
+  mesma do detalhe de fora da página) e o rodapé: a hora, o tempo (o do diário quando ele sabe a
+  rodada, senão o das etapas), as sessões, o custo e os perfis do Claude (`rodapeDoCartao`), e as
+  ações "Ver o review postado" (ou "Ver o texto da revisão", quando nada saiu; só com texto
+  gravado), "Abrir no GitHub" e "Revisar de novo" (principal quando nada foi postado). Revisão que
+  a página não traz (endereço colado, ou a pendência da mesa) abre no detalhe de fora da página,
+  no lugar da lista, como antes: foco no título, "← Histórico", e "repo#n · autor · Nª rodada ·
+  card", o título, o chip do que foi publicado, a hora e "Ver no GitHub" (só para
+  `https://github.com/`). Nos dois, a análise mostra a frase da avaliação técnica (`technical.message`,
   o texto curto que o motor manda); e "Achados", uma linha por item: o bloqueio
   (`blockedReason`) aberto; os achados da sessão (`achados`), com a severidade (Bloqueia,
   Sugestão, Pergunta, Detalhe) e o título na linha, o que bloqueia e não foi resolvido aberto, e,
@@ -538,7 +559,10 @@ Regras que valem para quem mexer nela:
   (`criteriosDoCard`, com o resumo "2 de 3 atendidos" e uma linha por critério, com a marca e o
   estado em texto: atende, não atende ou não conferido; só quando a sessão declarou), Checks do
   head (`checks`, com o resumo "tudo verde · osv herdado"), Execução (com `execucao`, o resumo "7 min · US$ 2,84" e
-  duração, custo e modelo; com `tamanhoDoPr`, "14 arquivos, +612 −148", ou só os arquivos nas
+  duração, custo, modelo e os perfis do Claude da rodada pelo rótulo de `config.claudeProfiles`;
+  "Sessões da rodada", uma por linha, da mais antiga para a mais nova, com a hora, por que rodou
+  (primeira revisão, commit novo, rodada extra no mesmo commit, contestação do autor), o modelo, o
+  perfil, o tempo, o custo, se retomou a conversa e o desfecho quando não foi `ok`; com `tamanhoDoPr`, "14 arquivos, +612 −148", ou só os arquivos nas
   revisões gravadas antes de 17/11/2026; sem ela, o que foi publicado; e sempre publicado,
   parecer, situação, card, datas, avaliação técnica, conferência de afirmações), Rodadas
   (`rodadasDoPr`, uma por linha, a mais nova primeiro: "3ª · 17/11/2026, 13:21 · a3f91c2 · pediu
@@ -546,10 +570,12 @@ Regras que valem para quem mexer nela:
   `rounds` quando há), Etapas da sessão (`stages`) e o review completo, desenhado de markdown (ou "Esta
   revisão ficou sem texto gravado."). Revisão que não postou nada diz isso logo abaixo do
   chip.
-- **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Revisar de novo", no pé do
-  detalhe, manda `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o
-  clique não publica, mas a análise que ele abre termina pela política da conta, que pode
-  publicar sozinha, e a tela diz isso. A contestação só aparece quando há registro para o PR, e
+- **Ações.** Passam por `executar` e `useAcoes`, como no Radar. "Ver o review postado" abre a
+  linha "Review completo" da análise e leva o foco ao resumo dela (não há cópia do texto em outro
+  lugar do cartão). "Revisar de novo", no rodapé do cartão aberto (e no pé do detalhe de fora da
+  página), manda `POST /api/review` com a URL canônica do PR (`prDaUrl`) e não pergunta: o clique
+  não publica, mas a análise que ele abre termina pela política da conta, que pode publicar
+  sozinha, e o detalhe de fora da página diz isso. A contestação só aparece quando há registro para o PR, e
   as duas ações dela (`POST /api/pushback`) perguntam antes. Nenhuma publica no GitHub, mas
   gravar um desfecho tem efeito além da tela (`lib/engine/pushback.js`): o registro fica
   confirmado e marcado como manual, entra no prompt das próximas revisões dos PRs do autor
@@ -603,6 +629,19 @@ Regras que valem para quem mexer nela:
   aberta.
 - **Sessão em curso por revisão.** O item não diz se o PR já está sendo revisado de novo. A
   tela oferece "Revisar de novo" e mostra a resposta do motor.
+- **Do desenho do redesenho (lote 4), o que o motor não manda:**
+  - "Ver o review postado" no GitHub: o motor não guarda o endereço do review publicado (nem o id
+    dele). O botão abre o texto que o motor gravou (`reportMarkdown`), e "Abrir no GitHub" leva ao
+    PR.
+  - "Aprovado com ressalva" como selo: a projeção não separa a aprovação limpa da com ressalvas
+    (`lib/engine/ressalvas.js` decide, mas o item não diz). O selo é o do que foi publicado.
+  - "rodada 2 de 2" no cartão fechado: o "de N" vem de `rodadasDoPr`, que só chega com o detalhe;
+    fechado, o cartão diz "2ª rodada" (`rounds.ordinal`), e aberto, "rodada 2 de 2".
+  - A contagem de revisões do dia: o motor não manda total por dia; a do título é a da página.
+  - Pílula "N bloqueios" à parte: os bloqueios entram na pílula do parecer ("Pediu mudanças · 2
+    bloqueios"), como no Radar, e só com os `achados` do detalhe.
+  - Os checks verdes por nome: o motor guarda só o que faltava, e a pílula diz "Verdes".
+  - A cor do avatar: o cartão usa a foto do GitHub, ou as iniciais em cinza.
 
 ## A tela Time
 
@@ -613,7 +652,7 @@ o login de quem está com o dossiê aberto (`?autor=`), que é o identificador q
 
 | Parte | Componente | De onde vem |
 |---|---|---|
-| Lista e busca | `Time.tsx`, `ListaDoTime.tsx` | `GET /api/team` (a lista inteira) e `config.people` do snapshot |
+| Grade de cartões e busca | `Time.tsx`, `ListaDoTime.tsx` (`CartaoDaPessoa`) | `GET /api/team` (a lista inteira, com `numeros`) e `config.people` do snapshot |
 | Dossiê | `Dossie.tsx` | o item da lista, `config.people` e `pushbacks` do snapshot, pelo autor |
 | Papel e competência | `EditorDoPerfil.tsx` | `config.people`; grava com `POST /api/settings` |
 | Remover do Time | `RemoverDoTime.tsx` | grava com `POST /api/team/remove` |
@@ -621,10 +660,19 @@ o login de quem está com o dossiê aberto (`?autor=`), que é o identificador q
 
 O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
 
-- **Lista.** "Time" e "N pessoas" no alto, a busca e uma linha por pessoa: o avatar com as
-  iniciais (`iniciais`, enfeite escondido do leitor de tela), o nome (o do dossiê, ou o login)
-  e o papel à direita, ou "Sem papel" em âmbar. A linha é um botão (`ui.linhaLink`) que abre o
-  dossiê; o nome acessível leva também o login quando o nome é outro. Estados: esqueleto na
+- **Grade de cartões** (redesenho, lote 4). "Time" e "N pessoas" no alto, com "Adicionar
+  pessoa" como botão principal, a busca e uma grade (`auto-fill`, mínimo de 340 px; uma coluna no
+  celular) com um cartão por pessoa, na casca do cartão único: a foto do GitHub (as iniciais
+  quando o login não tem a forma do GitHub ou a foto falha; enfeite, `alt` vazio), o nome (h2; o
+  do dossiê, ou o login), o @login, o papel numa pílula ("Sem papel" em âmbar); os números de
+  30 dias que o motor manda (`numerosDoCartao`: PRs revisados, aprovados de primeira e, quando o
+  motor conta, pedidos de mudança), ou a frase de que o motor não os mandou (nunca zero
+  inventado); "O que o Farol já aprendeu", os dois pontos mais recentes que o motor anotou nas
+  entradas do dossiê, sem repetir, de markdown (`aprendizados`); os domínios do perfil com o
+  nível ("Frontend: Autoridade", `dominiosDoCartao`); e as ações "Ver dossiê" e "Editar papel",
+  botões de verdade com o nome da pessoa para o leitor de tela. "Editar papel" abre o dossiê com
+  "Como revisar os PRs desta pessoa" aberta e o foco no seletor do papel; o salvar é o mesmo do
+  dossiê. Estados: esqueleto na
   primeira carga, barra no topo com a lista anterior apagada na recarga, "Ninguém do Time passa
   pela busca." com o Limpar, o cartão "Ninguém no Time ainda" e o erro com o Tentar de novo
   (com a lista anterior, quando há).
@@ -687,8 +735,8 @@ Regras que valem para quem mexer nela:
   os níveis de `lib/taxonomy.js`, com os rótulos; `taxonomia.test.ts` lê aquele arquivo e
   reprova se uma chave ou um rótulo divergir.
 - **Dossiê.** Abre na própria página, com o foco no título (o h1 do dossiê, que já existe
-  enquanto a lista carrega); Escape ou "Voltar à lista do Time" fecham, e o foco volta à linha
-  que abriu (ou ao título da lista, se a pessoa não está mais nela). As entradas aparecem com o
+  enquanto a lista carrega), ou no papel, pelo "Editar papel"; Escape ou "Voltar à lista do Time"
+  fecham, e o foco volta ao "Ver dossiê" do cartão (ou ao título da lista, se a pessoa não está mais nela). As entradas aparecem com o
   dia, o PR e o que foi publicado quando o motor diz; os pontos são desenhados de markdown,
   que é como o motor os grava. "Números" traz os de 30 dias que o motor manda (`numeros`:
   PRs, aprovação de primeira, rodadas por PR e, quando o motor manda, os bloqueios, as
@@ -782,6 +830,17 @@ Regras que valem para quem mexer nela:
   e a remoção dele é recusada com "login inválido".
 - **A recusa de `POST /api/settings` tem outra forma.** Vem em `code` e `erro`, e a das
   outras ações em `blocked` e `error`; `lerRespostaDeAcao` lê as duas.
+- **Do desenho do redesenho (lote 4), o que o motor não manda:**
+  - "O que o Farol já aprendeu" como síntese: o motor não resume o dossiê. O cartão mostra os
+    pontos mais recentes que a sessão anotou, como vieram; o resto fica em "Ver dossiê".
+  - O nome da pessoa: só vem quando o título do dossiê traz um; senão o cartão mostra o login.
+  - "pedidos de mudança" são revisões, não PRs: `bloqueios` conta as revisões publicadas dos PRs
+    da janela que pediram mudanças, e motor antigo não manda (a caixa some).
+  - Os domínios do desenho eram repositórios e produtos ("MIA", "engine-ai"); o motor só conhece
+    os quatro domínios da taxonomia (`lib/taxonomy.js`) com o nível, e é isso que o cartão mostra.
+  - O papel do desenho ("Dev pleno", "Infra") é texto livre; o motor aceita só os papéis da
+    taxonomia.
+  - A cor do avatar: o cartão usa a foto do GitHub, ou as iniciais em cinza.
 
 ## A tela Consumo
 
