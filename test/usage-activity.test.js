@@ -72,23 +72,25 @@ test('IDs curtos reutilizados entre boots não unem PRs nem inventam conclusões
   assert.equal(r.retries, 0);
 });
 
+// O custo por modelo fecha com o da linha (1): sem isso a linha vira a parte única
+// (test/usage-redesenho-dados.test.js).
 test('modelos cumulativos inativos não participam da tentativa; uso só de cache ou custo participa', () => {
   const r = report([row({ modelUsage: {
-    inactive: { inputTokens: 0, outputTokens: 0 }, active: { inputTokens: 10, outputTokens: 5 },
-    cache: { cacheReadInputTokens: 20 }, cost: { costUSD: .1 },
+    inactive: { inputTokens: 0, outputTokens: 0 }, active: { inputTokens: 10, outputTokens: 5, costUSD: .9 },
+    cache: { cacheReadInputTokens: 20, costUSD: 0 }, cost: { costUSD: .1 },
   } })]);
   assert.deepEqual(r.models.map(m => m.name).sort(), ['active', 'cache', 'cost']);
   assert.equal(r.models.find(m => m.name === 'active').attempts, 1);
-  assert.equal(report([row({ inputTokens: 0, outputTokens: 0, modelUsage: { inactive: {} } })]).models.length, 0);
+  assert.equal(report([row({ inputTokens: 0, outputTokens: 0, costUsd: 0, modelUsage: { inactive: {} } })]).models.length, 0);
 });
 
 test('uso de subagentes aparece no modelo que consumiu, sem criar execuções extras', () => {
-  const r = report([row({ modelUsage: { primary: { inputTokens: 6, outputTokens: 2 }, secondary: { inputTokens: 4, outputTokens: 3 } } })]);
+  const r = report([row({ modelUsage: { primary: { inputTokens: 6, outputTokens: 2, costUSD: .6 }, secondary: { inputTokens: 4, outputTokens: 3, costUSD: .4 } } })]);
   assert.equal(r.totals.attempts, 1);
   assert.equal(r.completed.reviews, 1);
   assert.equal(r.models.length, 2);
   assert.deepEqual(r.models.map(m => m.inputTokens + m.outputTokens).sort(), [7, 8]);
-  const aliases = report([row({ modelUsage: { 'claude-opus-5-5-20261001': { inputTokens: 6, outputTokens: 2 }, 'claude-opus-5-5-20261002': { inputTokens: 4, outputTokens: 3 } } })]);
+  const aliases = report([row({ modelUsage: { 'claude-opus-5-5-20261001': { inputTokens: 6, outputTokens: 2, costUSD: .6 }, 'claude-opus-5-5-20261002': { inputTokens: 4, outputTokens: 3, costUSD: .4 } } })]);
   assert.equal(aliases.models.length, 1);
   assert.equal(aliases.models[0].attempts, 1);
 });

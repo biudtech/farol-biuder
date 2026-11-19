@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Relatorio } from '@/contratos/consumo';
 import {
@@ -55,12 +56,26 @@ describe('o pedido ao motor', () => {
     const relatorio = fonte('lib/usage/report.js');
     expect(diario).toContain('const end = query.end ?? activityDay(now);');
     expect(diario).toContain('const start = query.start ?? activityDay(now - 29 * TEMPOS.DIA_MS);');
-    expect(diario).toContain("const fields = ['account', 'provider', 'model', 'kind', 'device'];");
+    // os filtros por igualdade: os nomes que a tela manda (kind, model) estão entre eles
+    expect(diario).toContain("const FILTER_FIELDS = ['account', 'provider', 'model', 'kind', 'device', 'profile'];");
+    expect(diario).toContain("if (FILTER_FIELDS.some(field => query[field] && query[field] !== 'all' && row[field] !== query[field])) return false;");
     expect(diario).toContain("return !query.repo || query.repo === 'all' || row.ref.split('#')[0] === query.repo;");
     expect(relatorio).toContain(`const search = String(query.search || '').toLocaleLowerCase().slice(0, ${TETO_DA_BUSCA});`);
-    // 8 por página, a partir de zero, e página além do fim volta como a última
+    // a partir de zero, e página além do fim volta como a última
     expect(relatorio).toContain('const page = Math.min(Math.max(0, Math.floor(Number(query.page) || 0)), pages - 1);');
-    expect(relatorio).toContain('rows: rows.slice(page * 8, page * 8 + 8)');
+    expect(relatorio).toContain('rows: rows.slice(page * size, page * size + size)');
+    // a tela não manda pageSize: vale o padrão do motor, 8 por página
+    expect(relatorio).toContain('const PAGE_SIZE = 8;');
+    expect(caminhoDoRelatorio(cheia)).not.toContain('pageSize');
+  });
+
+  it('sem pageSize, o motor devolve 8 operações por página', async () => {
+    type Relatar = (fontes: unknown[], consulta: Record<string, string>, agora: number) => { history: { rows: unknown[]; pages: number; pageSize: number } };
+    const { activityReport } = await import(/* @vite-ignore */ pathToFileURL(path.join(RAIZ, 'lib/usage/report.js')).href) as { activityReport: Relatar };
+    const agora = Date.UTC(2026, 10, 16, 18, 0);
+    const rows = Array.from({ length: 9 }, (_, i) => ({ id: `a-00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, at: agora - (i + 1) * 60_000, kind: 'review', status: 'ok', ref: `dono/repo#${i + 1}`, account: 'rev', model: 'Sonnet 5', costUsd: 1, costSource: 'medido' }));
+    const historico = activityReport([{ device: 'local', rows }], {}, agora).history;
+    expect([historico.rows.length, historico.pages, historico.pageSize]).toEqual([8, 2, 8]);
   });
 
   it('o dia do diário vira à meia-noite de Brasília', () => {

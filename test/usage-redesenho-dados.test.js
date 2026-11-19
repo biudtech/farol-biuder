@@ -179,3 +179,88 @@ test('sem formato a rota responde o JSON de sempre; formato desconhecido é 400 
   const invalido = await usageDaRota(engine, new URLSearchParams('formato=csv&start=2099-01-01'));
   assert.equal(invalido.body.ok, false, 'período inválido segue a resposta de sempre, mesmo no CSV');
 });
+
+/* ---------- a rodada de correção do lote 2 ---------- */
+
+const { activityDay } = await import('../lib/usage/activity.js');
+const { autoresDosPrs, consumoEmCsv, indiceDasDecisoes, decisoesConhecidas } = await import('../lib/engine/consumo-das-sessoes.js');
+
+// O CSV de um recorte, como mapa de coluna para valor por linha (sem o BOM).
+function linhasDoCsv(csv) {
+  const [cabecalho, ...corpo] = csv.slice(1).trimEnd().split('\n').map((l) => l.split(','));
+  return corpo.map((l) => Object.fromEntries(cabecalho.map((c, i) => [c, l[i]])));
+}
+
+test('CSV: a linha da operação soma só as tentativas do período e do filtro, e o CSV fecha com os totais', async () => {
+  const id = uuid(70);
+  const tentativa = (n, at, extra) => ({ ...row(70), id, attemptId: `t-${n}`, ref: 'acme/app#7', at, iniciadaEm: at - 2000, ...extra });
+  const sessions = [
+    tentativa(1, T - 3 * 86_400_000, { costUsd: 100, inputTokens: 1000, status: 'erro' }),
+    tentativa(2, T, { model: 'Sonnet', costUsd: 2, inputTokens: 20, outputTokens: 4, thinkingTokens: 3, status: 'parcial' }),
+    tentativa(3, T + 10, { model: 'Opus', costUsd: 4, inputTokens: 40, outputTokens: 8, thinkingTokens: 5 }),
+    { ...row(71), ref: 'acme/app#8', at: T + 20, model: 'Opus', costUsd: 9, costSource: 'desconhecido' },
+  ];
+  const engine = engineDoConsumo(sessions, []);
+  for (const filtro of ['', '&model=Opus']) {
+    const params = `start=${activityDay(T)}${filtro}`;
+    const json = await usageDaRota(engine, new URLSearchParams(params));
+    const csv = await usageDaRota(engine, new URLSearchParams(`${params}&formato=csv`));
+    const linhas = linhasDoCsv(csv.csv);
+    const soma = (col) => linhas.reduce((n, l) => n + Number(l[col] || 0), 0);
+    assert.equal(soma('Tentativas'), json.body.totals.attempts, `tentativas ${filtro}`);
+    assert.equal(soma('Custo (USD)'), json.body.totals.costUsd, `custo ${filtro}`);
+    assert.equal(soma('Entrada'), json.body.totals.inputTokens, `entrada ${filtro}`);
+    assert.equal(soma('Pensamento'), json.body.totals.thinkingTokens, `pensamento ${filtro}`);
+  }
+  const op = linhasDoCsv((await usageDaRota(engine, new URLSearchParams(`start=${activityDay(T)}&formato=csv`))).csv)
+    .find((l) => l.PR === 'acme/app#7');
+  assert.deepEqual([op.Tentativas, op['Custo (USD)'], op['Duração (s)'], op.Entrada, op['Saída']], ['2', '6', '4', '60', '12'],
+    'duas tentativas do período, sem a de fora');
+  const soOpus = linhasDoCsv((await usageDaRota(engine, new URLSearchParams(`start=${activityDay(T)}&model=Opus&formato=csv`))).csv)
+    .find((l) => l.PR === 'acme/app#7');
+  assert.deepEqual([soOpus.Tentativas, soOpus['Custo (USD)']], ['1', '4'], 'só a tentativa do filtro');
+});
+
+test('custo por modelo: medição que não fecha com o custo da linha vira a parte única com o custo da linha', () => {
+  const naoFecha = report([row(1, { costUsd: 3, modelUsage: { 'claude-opus-4-1': { inputTokens: 6, outputTokens: 2, costUSD: 2 }, 'claude-haiku-4-5': { inputTokens: 4, outputTokens: 3, costUSD: 0.5 } } })]);
+  assert.deepEqual(naoFecha.models.map((m) => [m.name, m.costUsd, m.inputTokens]), [['Sem atribuição por modelo', 3, 10]]);
+  const semCusto = report([row(1, { costUsd: 3, modelUsage: { 'claude-opus-4-1': { inputTokens: 6, outputTokens: 2 }, 'claude-haiku-4-5': { inputTokens: 4, outputTokens: 3 } } })]);
+  assert.deepEqual(semCusto.models.map((m) => [m.name, m.costUsd]), [['Sem atribuição por modelo', 3]], 'sem custo por modelo não fecha');
+  const fecha = report([row(1, { costUsd: 3, modelUsage: { 'claude-opus-4-1': { inputTokens: 6, outputTokens: 2, costUSD: 2.5 }, 'claude-haiku-4-5': { inputTokens: 4, outputTokens: 3, costUSD: 0.5 } } })]);
+  assert.equal(fecha.models.reduce((n, m) => n + m.costUsd, 0), fecha.totals.costUsd);
+  assert.equal(fecha.models.length, 2);
+});
+
+test('o filtro author apara os espaços, e as opções de perfil não têm o vazio', () => {
+  const contexto = { autorDe: () => 'ana' };
+  const rows = [row(1), row(2, { profileId: '' })];
+  assert.equal(report(rows, { author: '  Ana ' }, contexto).totals.attempts, 2);
+  assert.deepEqual(report(rows).options.profile, ['p1']);
+});
+
+test('as decisões são indexadas por chave uma vez, e o índice dá a mesma decisão que a lista', () => {
+  const d1 = decisao('d1', T + 100);
+  const d2 = decisao('d2', T + 200);
+  const decisoes = [d2, { ...decisao('x', T + 150), key: 'acme/app#8' }, d1];
+  const indice = indiceDasDecisoes(decisoes);
+  assert.ok(indice instanceof Map);
+  for (const at of [T + 50, T + 100, T + 150, T + 250]) {
+    const linha = { kind: 'review', ref: 'ACME/app#7', at };
+    assert.equal(decisaoDaLinha(linha, indice), decisaoDaLinha(linha, decisoes), `at ${at - T}`);
+  }
+  assert.equal(autoresDosPrs(decisoes).get('acme/app#7'), 'Ana');
+  assert.match(consumoEmCsv([{ ...linhaDoPr(1, T + 50), attempts: [] }], indice), /acme\/app#7/);
+});
+
+test('a rota lê as decisões conhecidas uma vez só, também no CSV', async () => {
+  let leituras = 0;
+  const engine = engineDoConsumo([linhaDoPr(1, T)], []);
+  const pendentes = engine.decisions.pending;
+  Object.defineProperty(engine.decisions, 'pending', { get() { leituras++; return pendentes; } });
+  decisoesConhecidas(engine);
+  const umaLeitura = leituras;
+  leituras = 0;
+  await usageDaRota(engine, new URLSearchParams('formato=csv'));
+  assert.ok(umaLeitura > 0);
+  assert.equal(leituras, umaLeitura, 'o CSV não relê as decisões');
+});
