@@ -22,7 +22,63 @@
 
 .carga { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-.semMarcador { margin: 0; padding: 0; list-style: none; }
+/* ---------- a grade de cartões (redesenho, lote 4) ----------
+   A casca é a do cartão único (componentes/cartao); aqui fica o miolo do cartão da pessoa. */
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.itemDaGrade { display: flex; min-width: 0; }
+.cartaoDaPessoa { flex: 1; gap: 16px; padding: 20px; }
+.cabecaDaPessoa { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.nomeDaPessoa { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nome { font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
+.login { font-size: 13px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.papel {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.papel[data-sem-papel="sim"] { background: var(--aviso-soft); color: var(--aviso-texto); }
+
+.numerosDoCartao { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.caixa { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.caixa dt { font-size: 12px; font-weight: 600; color: var(--muted); }
+.caixa dd { margin: 0; font-size: 20px; font-weight: 800; color: var(--text); }
+.caixa dd[data-tom="ok"] { color: var(--ok-texto); }
+.caixa dd[data-tom="falha"] { color: var(--danger-texto); }
+
+.aprendeu { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.tituloDoAprendeu { font-size: 13px; font-weight: 800; }
+
+.dominios { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dominio {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--borda-botao);
+  color: var(--neutro-texto);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.peDaPessoa {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda-suave);
+}
 
 /* o avatar das iniciais (o "av" do desenho) */
 .avatar {

@@ -1,6 +1,7 @@
 'use client';
 
-// A tela Time: quem o motor conhece, com o que ele guarda sobre cada pessoa. A lista vem
+// A tela Time: quem o motor conhece, com o que ele guarda sobre cada pessoa, numa grade de
+// cartões (ListaDoTime.tsx, redesenho de 19/11/2026). A lista vem
 // inteira de GET /api/team, na ordem do motor; o papel e a competência vêm de `config.people`
 // do snapshot, e as contestações, de `pushbacks`. A tela fatia e formata, e a busca por nome
 // é feita aqui porque a rota não pagina nem filtra.
@@ -64,6 +65,8 @@ export function Time({ app = appDoNavegador }: Props) {
   const [busca, setBusca] = useState('');
   const [removidas, setRemovidas] = useState<readonly Removida[]>([]);
   const [adicionando, setAdicionando] = useState(false);
+  // o login do Editar papel clicado: o dossiê dele abre com o papel no foco
+  const [editarDe, setEditarDe] = useState<string | null>(null);
   const { carregando, time, falha, haNovas } = useTime(app.cliente, recarga, marca);
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
   // a releitura de `people` logo antes de gravar (time.ts): o corpo sai do que o motor tem agora
@@ -120,8 +123,25 @@ export function Time({ app = appDoNavegador }: Props) {
   const total = autores.length + semDossie.length;
   const mostradas = autoresMostrados.length + semDossieMostrados.length;
 
-  const aoAbrir = useCallback((login: string) => ir(login), [ir]);
-  const aoFechar = useCallback(() => ir(null), [ir]);
+  const aoAbrir = useCallback((login: string) => {
+    setEditarDe(null);
+    ir(login);
+  }, [ir]);
+  const aoEditar = useCallback((login: string) => {
+    setEditarDe(chaveDaPessoa(login));
+    ir(login);
+  }, [ir]);
+  const aoFechar = useCallback(() => {
+    setEditarDe(null);
+    ir(null);
+  }, [ir]);
+  // O Editar papel vale só para o dossiê que ele abriu: o endereço que muda por fora (o voltar e
+  // o avançar do navegador, um link) o esquece. Acerto feito no desenho, quando o endereço muda.
+  const [abertoVisto, setAbertoVisto] = useState(aberto);
+  if (abertoVisto !== aberto) {
+    setAbertoVisto(aberto);
+    if (editarDe !== null && (aberto === null || chaveDaPessoa(aberto) !== editarDe)) setEditarDe(null);
+  }
   const aoRecarregar = useCallback(() => setRecarga((n) => n + 1), []);
 
   // Ao fechar o dossiê, o foco volta ao botão que o abriu (ou ao título da lista, se a pessoa
@@ -178,7 +198,7 @@ export function Time({ app = appDoNavegador }: Props) {
           titulo="Time"
           idDoTitulo={idDoTitulo}
           sub={time ? quantasPessoas(total) : undefined}
-          acoes={adicionando ? undefined : <Botao onClick={() => setAdicionando(true)}>Adicionar pessoa</Botao>}
+          acoes={adicionando ? undefined : <Botao primario onClick={() => setAdicionando(true)}>Adicionar pessoa</Botao>}
         >
           {aberto === null ? avisos : null}
 
@@ -224,7 +244,7 @@ export function Time({ app = appDoNavegador }: Props) {
                     Atenção: {time.descartados} pessoa(s) chegaram do motor em formato que esta tela não lê e ficaram de fora.
                   </p>
                 ) : null}
-                {mostradas ? <ListaDoTime autores={autoresMostrados} soComPerfil={semDossieMostrados} pessoas={pessoas} aoAbrir={aoAbrir} /> : null}
+                {mostradas ? <ListaDoTime autores={autoresMostrados} soComPerfil={semDossieMostrados} pessoas={pessoas} aoAbrir={aoAbrir} aoEditar={aoEditar} /> : null}
                 {total === 0 ? (
                   <div className={`${ui.cartao} ${estilos.vazioDoTime}`}>
                     <h2 className={estilos.tituloDoVazio}>Ninguém no Time ainda</h2>
@@ -248,6 +268,7 @@ export function Time({ app = appDoNavegador }: Props) {
           key={chaveDaPessoa(aberto)}
           login={aberto}
           leitura={leitura}
+          editar={editarDe !== null && editarDe === chaveDaPessoa(aberto)}
           cru={cru}
           ilegiveis={ilegiveis}
           conexao={conexao}

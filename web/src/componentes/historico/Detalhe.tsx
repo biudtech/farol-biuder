@@ -1,6 +1,9 @@
 'use client';
 
-// O detalhe de uma revisão, aberto na própria página, no desenho enxuto: o PR, o título, o
+// O detalhe de uma revisão. Na lista, ele abre no próprio cartão (CartaoDaRevisao.tsx), com a
+// Analise daqui. Este componente inteiro é o detalhe de fora da página (endereço colado com uma
+// revisão que a página não traz, ou a pendência da mesa), aberto no lugar da lista, no desenho
+// enxuto: o PR, o título, o
 // chip do que foi publicado e a hora; a frase da avaliação técnica; os achados, uma linha por
 // achado da sessão (com arquivo, linha e o trecho do diff quando o motor manda) e por motivo,
 // com o bloqueio aberto e o resto fechado; e "Mais detalhes" (critérios do card, checks,
@@ -8,7 +11,12 @@
 // ao título ao abrir, e Escape fecha. As ações são duas: revisar de novo e, quando o PR tem
 // contestação registrada, o desfecho dela.
 import { useEffect, useId, useRef } from 'react';
-import type { AchadoDaRevisao, Contestacao as Registro, Revisao } from '@/contratos/historico';
+import type { AchadoDaRevisao, Contestacao as Registro, Revisao, SessaoDaRodada } from '@/contratos/historico';
+import { textoDaSessao } from '@/historico/cartao';
+import { rotuloDoPerfil } from '@/radar/cartao';
+
+// os perfis do Claude (config.claudeProfiles do snapshot), para o rótulo de cada um
+export type PerfisDoClaude = readonly { id: string; label?: string }[] | undefined;
 import type { Motivo } from '@/contratos/radar';
 import { textoDaDuracao, type DetalheAberto } from '@/historico/consulta';
 import {
@@ -21,7 +29,7 @@ import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/rad
 import { Markdown } from '../Markdown';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import { Chip, Esqueleto, Linha, Secao, ui, type Tom } from '../ui';
+import { Chip, Esqueleto, Linha, Secao, TituloDeNivel, ui, type NivelDoTitulo, type Tom } from '../ui';
 import { Contestacao } from './Contestacao';
 import type { LeituraDoDetalhe } from './useHistorico';
 import estilos from './Historico.module.css';
@@ -103,10 +111,10 @@ function AchadoDaSessao({ achado: a }: { achado: AchadoDaRevisao }) {
 // Os achados com o que o motor manda: o bloqueio (`blockedReason`), aberto; os achados da sessão
 // (`achados`, só pela rota do detalhe), com o que bloqueia aberto; os motivos (`reasons`) e os
 // pontos de atenção (`attention`), fechados.
-function Achados({ revisao: r }: { revisao: Revisao }) {
+function Achados({ revisao: r, nivel }: { revisao: Revisao; nivel: NivelDoTitulo }) {
   if (!r.blockedReason && !r.achados?.length && !r.reasons.length && !r.attention.length) return null;
   return (
-    <Secao titulo="Achados">
+    <Secao titulo="Achados" nivel={nivel}>
       {r.blockedReason ? <Achado rotulo="Bloqueio" tom="ruim" aberta motivo={{ text: r.blockedReason, kind: 'gate' }} /> : null}
       {(r.achados ?? []).map((a, i) => <AchadoDaSessao key={`s${i}`} achado={a} />)}
       {r.reasons.map((m, i) => <Achado key={`m${i}`} rotulo="Motivo" tom="ruim" motivo={m} />)}
@@ -245,7 +253,19 @@ function ChecksDoHead({ checks: c }: { checks: NonNullable<Revisao['checks']> })
   );
 }
 
-function Execucao({ revisao: r }: { revisao: Revisao }) {
+// As tentativas da rodada, da mais antiga para a mais nova, como o diário as registrou.
+function Sessoes({ sessoes, perfis, nivel }: { sessoes: readonly SessaoDaRodada[]; perfis: PerfisDoClaude; nivel: NivelDoTitulo }) {
+  return (
+    <>
+      <TituloDeNivel nivel={nivel} className={ui.grupo}>Sessões da rodada</TituloDeNivel>
+      <ol className={estilos.rodadas} aria-label="Sessões da rodada, da mais antiga para a mais nova">
+        {sessoes.map((s, i) => <li key={`${s.id}|${i}`}>{textoDaSessao(s, perfis)}</li>)}
+      </ol>
+    </>
+  );
+}
+
+function Execucao({ revisao: r, perfis, nivel }: { revisao: Revisao; perfis: PerfisDoClaude; nivel: NivelDoTitulo }) {
   const parecer = parecerQueDifere(r);
   const resolvida = dataComAno(r.resolvedAt);
   const criada = dataComAno(r.createdAt);
@@ -265,6 +285,9 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
         {e?.duracaoMs !== undefined ? <Campo nome="Duração da rodada">{textoDaDuracao(e.duracaoMs)}</Campo> : null}
         {e?.custoUsd !== undefined ? <Campo nome={e.custoEstimado ? 'Custo estimado (parte calculada pelo motor)' : 'Custo estimado'}>{dolar(e.custoUsd)}</Campo> : null}
         {e?.modelos.length ? <Campo nome={e.modelos.length === 1 ? 'Modelo' : 'Modelos'}>{e.modelos.join(', ')}</Campo> : null}
+        {e?.perfis?.length ? (
+          <Campo nome={e.perfis.length === 1 ? 'Perfil do Claude' : 'Perfis do Claude'}>{e.perfis.map((p) => rotuloDoPerfil(p, perfis)).join(', ')}</Campo>
+        ) : null}
         {e ? <Campo nome="Tentativas de revisão na rodada">{String(e.tentativas)}</Campo> : null}
         {r.tamanhoDoPr ? <Campo nome="Tamanho do PR">{textoDoTamanho(r.tamanhoDoPr)}</Campo> : null}
         <Campo nome="Publicado">{textoDoPublicado(r)}</Campo>
@@ -280,6 +303,7 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
           </Campo>
         ) : null}
       </dl>
+      {e?.sessoes?.length ? <Sessoes sessoes={e.sessoes} perfis={perfis} nivel={nivel} /> : null}
       {e ? (
         <p className={ui.mini}>
           A rodada são as tentativas de revisão deste PR desde a revisão anterior dele até esta, inclusive a que caiu e foi refeita.
@@ -290,10 +314,10 @@ function Execucao({ revisao: r }: { revisao: Revisao }) {
   );
 }
 
-function ReviewCompleto({ revisao: r }: { revisao: Revisao }) {
-  const parecer = parecerQueDifere(r);
+function ReviewCompleto({ revisao: r, id, nivelDoTexto }: { revisao: Revisao; id?: string; nivelDoTexto: 4 | 5 | 6 }) {
   return (
     <Linha
+      id={id}
       rotulo="Review completo"
       resumo={(
         <>
@@ -302,16 +326,7 @@ function ReviewCompleto({ revisao: r }: { revisao: Revisao }) {
         </>
       )}
     >
-      {r.reportMarkdown && parecer && r.status !== 'pending' && foiPublicado(r.action) ? (
-        <p className={ui.nota}>
-          O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
-        </p>
-      ) : null}
-      {r.reportMarkdown ? (
-        <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} /></div>
-      ) : (
-        <p className={ui.vazio}>Esta revisão ficou sem texto gravado.</p>
-      )}
+      <TextoDoReview revisao={r} nivelDoTexto={nivelDoTexto} />
     </Linha>
   );
 }
@@ -338,7 +353,69 @@ function Cabecalho({ revisao: r }: { revisao: Revisao }) {
   );
 }
 
-function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; outra: boolean; registro: Registro | undefined; controle: ControleDeAcoes }) {
+// O texto do review que o motor gravou, desenhado de markdown, com o aviso quando o publicado
+// difere do parecer: o corpo da linha "Review completo".
+function TextoDoReview({ revisao: r, nivelDoTexto }: { revisao: Revisao; nivelDoTexto: 4 | 5 | 6 }) {
+  const parecer = parecerQueDifere(r);
+  return (
+    <>
+      {r.reportMarkdown && parecer && r.status !== 'pending' && foiPublicado(r.action) ? (
+        <p className={ui.nota}>
+          O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR. O motor não diz de qual dos dois ele é.
+        </p>
+      ) : null}
+      {r.reportMarkdown ? (
+        <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} nivelBase={nivelDoTexto} /></div>
+      ) : (
+        <p className={ui.vazio}>Esta revisão ficou sem texto gravado.</p>
+      )}
+    </>
+  );
+}
+
+interface PropsDaAnalise {
+  revisao: Revisao;
+  registro: Registro | undefined;
+  controle: ControleDeAcoes;
+  perfis: PerfisDoClaude;
+  // o id da linha "Review completo": o "Ver o review postado" do cartão a abre
+  idDoReview?: string;
+  // o nível dos títulos das seções: 2 no detalhe de fora da página (abaixo do h1), e abaixo do
+  // título do cartão dentro dele; o título de dentro de uma seção fica um nível abaixo
+  nivel?: 2 | 3 | 4 | 5;
+}
+
+// O que a revisão concluiu e como rodou: a frase técnica, os achados, "Mais detalhes" e a
+// contestação. É o mesmo no cartão aberto da lista e no detalhe de fora da página.
+export function Analise({ revisao: r, registro, controle, perfis, idDoReview, nivel = 2 }: PropsDaAnalise) {
+  const naoPostou = r.status === 'pending' || !foiPublicado(r.action);
+  const dentro = (nivel + 1) as NivelDoTitulo;
+  // os títulos do texto do review: no detalhe de fora da página, a partir do h4 de sempre; no
+  // cartão, abaixo da seção que o contém
+  const nivelDoTexto = Math.max(4, dentro) as 4 | 5 | 6;
+  return (
+    <>
+      {r.technical ? <p className={estilos.frase}>{r.technical.message}</p> : null}
+      {naoPostou ? <p className={ui.mini}>{textoDoStatus(r.status)}. Nada desta revisão foi postado no GitHub.</p> : null}
+      {r.prProprio ? <p className={ui.nota}>PR da própria conta revisora: o GitHub não aceita aprovação nem pedido de mudanças do autor.</p> : null}
+
+      <Achados revisao={r} nivel={nivel} />
+
+      <Secao titulo="Mais detalhes" nivel={nivel}>
+        {r.criteriosDoCard ? <CriteriosDoCard criterios={r.criteriosDoCard} card={r.card} /> : null}
+        {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
+        <Execucao revisao={r} perfis={perfis} nivel={dentro} />
+        {r.rounds || r.rodadasDoPr ? <Rodadas rodadas={r.rounds} doPr={r.rodadasDoPr} /> : null}
+        {r.stages ? <Etapas etapas={r.stages} /> : null}
+        <ReviewCompleto revisao={r} id={idDoReview} nivelDoTexto={nivelDoTexto} />
+      </Secao>
+
+      {registro ? <Contestacao key={`${registro.outcome}|${registro.status ?? ''}|${registro.at ?? ''}`} revisao={r} registro={registro} controle={controle} nivel={nivel} /> : null}
+    </>
+  );
+}
+
+function Corpo({ revisao: r, outra, registro, controle, perfis }: { revisao: Revisao; outra: boolean; registro: Registro | undefined; controle: ControleDeAcoes; perfis: PerfisDoClaude }) {
   const idDasAcoes = useId();
   const nome = nomeDoPr(r.key);
   // a URL canônica do PR: é ela que vai ao motor, não a que veio no item
@@ -354,22 +431,7 @@ function Corpo({ revisao: r, outra, registro, controle }: { revisao: Revisao; ou
       ) : null}
 
       <Cabecalho revisao={r} />
-      {r.technical ? <p className={estilos.frase}>{r.technical.message}</p> : null}
-      {naoPostou ? <p className={ui.mini}>{textoDoStatus(r.status)}. Nada desta revisão foi postado no GitHub.</p> : null}
-      {r.prProprio ? <p className={ui.nota}>PR da própria conta revisora: o GitHub não aceita aprovação nem pedido de mudanças do autor.</p> : null}
-
-      <Achados revisao={r} />
-
-      <Secao titulo="Mais detalhes">
-        {r.criteriosDoCard ? <CriteriosDoCard criterios={r.criteriosDoCard} card={r.card} /> : null}
-        {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
-        <Execucao revisao={r} />
-        {r.rounds || r.rodadasDoPr ? <Rodadas rodadas={r.rounds} doPr={r.rodadasDoPr} /> : null}
-        {r.stages ? <Etapas etapas={r.stages} /> : null}
-        <ReviewCompleto revisao={r} />
-      </Secao>
-
-      {registro ? <Contestacao key={`${registro.outcome}|${registro.status ?? ''}|${registro.at ?? ''}`} revisao={r} registro={registro} controle={controle} /> : null}
+      <Analise revisao={r} registro={registro} controle={controle} perfis={perfis} />
 
       <section className={estilos.pe} aria-labelledby={idDasAcoes}>
         <h2 id={idDasAcoes} className={ui.soLeitor}>Revisar de novo</h2>
@@ -394,11 +456,13 @@ interface Props {
   // `pushbacks` do snapshot, por chave de PR
   contestacoes: Readonly<Record<string, Registro>> | undefined;
   controle: ControleDeAcoes;
+  // os perfis do Claude (config.claudeProfiles), para dizer o rótulo de cada um
+  perfis: PerfisDoClaude;
   aoFechar(): void;
   aoTentarDeNovo(): void;
 }
 
-export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoTentarDeNovo }: Props) {
+export function Detalhe({ aberto, leitura, contestacoes, controle, perfis, aoFechar, aoTentarDeNovo }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const pronta = leitura.fase === 'pronto' ? leitura.revisao : null;
   const chave = pronta ? pronta.key : aberto.chave;
@@ -458,6 +522,7 @@ export function Detalhe({ aberto, leitura, contestacoes, controle, aoFechar, aoT
           outra={leitura.outra}
           registro={contestacoes && Object.hasOwn(contestacoes, pronta.key) ? contestacoes[pronta.key] : undefined}
           controle={controle}
+          perfis={perfis}
         />
       ) : null}
     </section>
