@@ -121,9 +121,13 @@ const SID = 'f3b1c0de-0000-4000-8000-000000000001';
 const linha = (at, extra = {}) => ({ id: 'a-1', at, iniciadaEm: at - 420_000, kind: 'review', ref: 'acme/app#7', account: 'revisora', model: 'Opus 4.1',
   costUsd: 2, costSource: 'medido', status: 'ok', inputTokens: 1, outputTokens: 1, accounting: { version: 1, sessionId: SID }, ...extra });
 
+// as tentativas uma a uma e os perfis (lote 2 do redesenho) têm o caso próprio em
+// test/detalhe-da-decisao-sessoes.test.js; aqui valem as somas
+const semSessoes = (e) => { const { sessoes, perfis, ...resto } = e; return resto; };
+
 test('a execução soma as tentativas; o que alguma tentativa não sabe fica ausente, sem soma parcial', () => {
   assert.equal(execucaoDasLinhas([]), null);
-  assert.deepEqual(execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { iniciadaEm: 1_940_000, costUsd: 0.84, model: 'Sonnet 4.5' })]),
+  assert.deepEqual(semSessoes(execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { iniciadaEm: 1_940_000, costUsd: 0.84, model: 'Sonnet 4.5' })])),
     { tentativas: 2, modelos: ['Opus 4.1', 'Sonnet 4.5'], duracaoMs: 480_000, custoUsd: 2.84, custoEstimado: false });
   assert.equal(execucaoDasLinhas([linha(1_000_000, { costSource: 'estimado' })]).custoEstimado, true);
   assert.equal('duracaoMs' in execucaoDasLinhas([linha(1_000_000), linha(2_000_000, { iniciadaEm: undefined })]), false);
@@ -163,11 +167,11 @@ test('duas rodadas no mesmo session_id: cada decisão mostra só a própria, com
     const ultima = detalheDaDecisao(engine, consulta('key=acme/app%237'));
     assert.equal(ultima.status, 200);
     assert.equal(ultima.body.decision.id, 'r2');
-    assert.deepEqual(ultima.body.decision.execucao, { tentativas: 1, modelos: ['Opus 4.1'], duracaoMs: 300_000, custoUsd: 5, custoEstimado: false });
+    assert.deepEqual(semSessoes(ultima.body.decision.execucao), { tentativas: 1, modelos: ['Opus 4.1'], duracaoMs: 300_000, custoUsd: 5, custoEstimado: false });
     assert.equal('checks' in ultima.body.decision, false, 'rodada sem checks gravados');
     const primeira = detalheDaDecisao(engine, consulta('key=acme/app%237&id=r1'));
     assert.equal(primeira.body.decision.id, 'r1');
-    assert.deepEqual(primeira.body.decision.execucao, { tentativas: 2, modelos: ['Opus 4.1'], duracaoMs: 840_000, custoUsd: 3, custoEstimado: false });
+    assert.deepEqual(semSessoes(primeira.body.decision.execucao), { tentativas: 2, modelos: ['Opus 4.1'], duracaoMs: 840_000, custoUsd: 3, custoEstimado: false });
     assert.deepEqual(primeira.body.decision.checks, { conferidoNoHead: true, semExigencia: false, naoVerdes: [], herdados: [{ nome: 'osv', estado: 'vermelho' }] });
     assert.equal(primeira.body.decision.provas, undefined, 'as provas brutas não saem');
     assert.equal(primeira.body.decision.sessionId, undefined, 'o id da sessão não sai');

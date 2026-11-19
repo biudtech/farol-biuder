@@ -756,7 +756,11 @@ O contrato, lido do motor:
   inclusivos; sem eles, os 30 dias que terminam no hoje do motor), `kind`, `model`, `repo`,
   `account`, `provider` e `device` (igualdade exata; ausente ou `all` não filtra), `search`
   (até 200 caracteres, na referência, no tipo e no modelo), `focus` (`review` ou `pr`) e
-  `page` (a partir de zero, 8 operações por página). `kind`, `model` e `repo` recortam as
+  `page` (a partir de zero, 8 operações por página). Desde 19/11/2026 também `profile`,
+  `author`, `pageSize` (teto 50) e `formato=csv`, e a resposta leva `thinkingTokens`, o custo
+  por modelo, o `gatilho` de cada linha, `porGatilho` e, na página, as etapas, o card e os
+  arquivos lidos da decisão da rodada: o contrato está em
+  [`docs/CONSUMO-REVIEWS.md`](../docs/CONSUMO-REVIEWS.md#get-apiusage), e a tela ainda não os lê. `kind`, `model` e `repo` recortam as
   somas, a série e as quebras; `search`, `focus` e `page`, só o diário. `model` compara com o
   modelo principal da execução: `models` ainda pode trazer outros, que são partes das mesmas
   execuções. Cada operação do diário vem com todas as tentativas dela, inclusive as de fora
@@ -882,8 +886,8 @@ Regras que valem para quem mexer nela:
 - **O motivo da falha de uma sessão** (`usage.falhasPorSessao`) não é mostrado: é texto
   de erro do motor. As falhas registradas aparecem no relatório do motor, na tela Sistema.
 - **Sem gasto por perfil.** O snapshot não traz mais linha por perfil do Claude (ela existia
-  para o teto, que saiu). Cada sessão recente vem com o `profileId`, que a tela não lê, e
-  `GET /api/usage` não filtra por perfil.
+  para o teto, que saiu). Cada sessão recente vem com o `profileId`, que a tela não lê; ela
+  também não filtra por perfil, embora `GET /api/usage` aceite `profile` desde 19/11/2026.
 
 ## A tela Sistema
 
