@@ -184,6 +184,19 @@ test('PR fechado enquanto aguardava o retry: a referência sai junto', async () 
 
 /* ---------- Tarefa 3: a referência nasce durável e os desfechos a consomem ---------- */
 
+// o gatilho (redesenho, lote 2): o do PR enfileirado viaja até o opts da sessão, que o leva ao
+// registro de consumo; o PR sem marca é a revisão pedida, a primeira
+test('o gatilho do PR enfileirado chega ao opts da sessão; sem marca é primeira', async () => {
+  for (const [pr, esperado] of [[{ ...PR, gatilho: 'commit_novo' }, 'commit_novo'], [{ ...PR }, 'primeira']]) {
+    const e = motor();
+    const vistos = [];
+    e.runClaudeStream = async (prompt, opts) => { vistos.push(opts.gatilho); return RESPOSTA(); };
+    await e.runHeadlessReview(pr);
+    assert.ok(vistos.length >= 1);
+    assert.ok(vistos.every((g) => g === esperado), JSON.stringify(vistos));
+  }
+});
+
 test('o sid da sessão nova vai pro disco com head e contexto enquanto ela roda', async () => {
   const e = motor();
   let visto = null;

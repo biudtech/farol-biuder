@@ -52,3 +52,26 @@ test('modalidade e provedor são registrados na execução e não seguem mudanç
   assert.equal(linha.billingKind, 'apikey');
   assert.equal(linha.provider, 'claude');
 });
+
+test('rota real do consumo em CSV: texto para baixar, com o nome do motor', async () => {
+  const engine = new Engine();
+  engine.config.port = 0;
+  engine.config.localAuth = 'exigir';
+  diario(engine).inserir({ id: 'a-00000000-0000-4000-8000-000000000009', kind: 'review', status: 'ok', at: Date.now(), ref: 'org/repo#9', account: 'dev', inputTokens: 3, outputTokens: 2 });
+  const server = startServer(engine);
+  await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}/api/usage?formato=csv`;
+  try {
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${emitirSessao('teste consumo csv')}` } });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /^text\/csv/);
+    assert.match(response.headers.get('content-disposition'), /^attachment; filename="farol-consumo-\d{4}-\d{2}-\d{2}\.csv"$/);
+    const texto = await response.text();
+    assert.match(texto, /org\/repo#9/);
+    const ruim = await fetch(`http://127.0.0.1:${server.address().port}/api/usage?formato=xml`, { headers: { Authorization: `Bearer ${emitirSessao('teste consumo csv 2')}` } });
+    assert.equal(ruim.status, 400);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

@@ -17,7 +17,7 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 438,
+    "maxLines": 427,
     "profundidadeExcedida": 3
   },
   "lib/engine/session.js": {

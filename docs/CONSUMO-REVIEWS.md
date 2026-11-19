@@ -99,8 +99,10 @@ Cada linha do diário carrega `costSource` (`lib/engine/usage.js`):
 O uso que o evento final informa cobre só o coordenador; `modelUsage`, quando vem completo,
 cobre a árvore inteira, com os subagentes (`lib/engine/usage-accounting.js`). Uma sessão com
 dois modelos participa dos dois, e é uma sessão só no total. Se a soma por modelo não fecha
-com o total da linha, os tokens ficam como "Sem atribuição por modelo", em vez de serem
-distribuídos por suposição.
+com o total da linha, nos tokens ou no custo (todo modelo com custo medido e a soma igual ao custo
+da linha, a mesma conferência do agregado), a linha inteira, com o custo dela, fica como "Sem
+atribuição por modelo", em vez de ser distribuída por suposição. Assim a soma de `models` fecha
+com os totais.
 
 Numa sessão retomada (`--resume`) o CLI devolve o total acumulado. O registro guarda um
 cursor por conta, perfil e sessão do provedor (`accounting`), e a retomada grava a diferença
@@ -116,15 +118,37 @@ Lê o diário inteiro, sob demanda: o snapshot leva só um resumo e as 100 sess�
 | Parâmetro | Valor |
 |---|---|
 | `start`, `end` | Dias inclusivos, `AAAA-MM-DD`, no dia de Brasília. Padrão: os últimos 30 dias. Data futura ou intervalo invertido responde `{ ok: false, motivo }` |
-| `account`, `provider`, `model`, `kind`, `repo`, `device` | Filtro por igualdade; ausente ou `all` não filtra. `kind` é `review`, `pushback`, `chat`, `tool` ou `outro` (`chat` e `tool` só aparecem em registro antigo: o motor não abre mais essas sessões). `device` só tem o valor `local` |
+| `account`, `provider`, `model`, `kind`, `repo`, `device`, `profile` | Filtro por igualdade; ausente ou `all` não filtra. `profile` é o perfil do Claude da sessão. `kind` é `review`, `pushback`, `chat`, `tool` ou `outro` (`chat` e `tool` só aparecem em registro antigo: o motor não abre mais essas sessões). `device` só tem o valor `local` |
 | `search` | Até 200 caracteres, sem caixa, sobre a referência, o tipo e o modelo. Restringe só o histórico |
 | `focus` | `review` (operações de revisão concluídas no período) ou `pr` (um por PR). Restringe só o histórico |
-| `page` | Página do histórico, base zero, oito operações por página |
+| `author` | O autor do PR, sem caixa. Vem das decisões pelo `ref` da linha (a pendente e a mais recente primeiro); linha de PR sem decisão não tem autor |
+| `page`, `pageSize` | Página do histórico, base zero; `pageSize` operações por página, padrão 8, teto 50 (valor torto vale o padrão) |
+| `formato` | `csv` (o único): as operações do histórico que passam nos filtros, todas e sem página, como `text/csv` para baixar, com o escape do CSV do Histórico. Uma linha por operação, como a tabela da tela: tentativas, duração, custo e tokens somam só as tentativas dela no período e nos filtros, e o arquivo fecha com `totals` (sem `search` nem `focus`, que recortam só o histórico). Outro valor, ou repetido, responde 400 com `campo: "formato"` |
 
 A resposta traz `range`, `options` (os valores de cada filtro), `totals`, `byKind`,
 `completed` (`reviews` e `prs`), `retries`, `unidentified`, `since` e `sinceDay` (o instante e o dia da linha mais antiga do diário),
 `series` (por dia),
-`models`, `history` e `incomplete` (o diário tem menos linhas que o agregado espera).
+`models`, `repos`, `porGatilho`, `history` e `incomplete` (o diário tem menos linhas que o agregado espera).
+
+Desde 19/11/2026 (redesenho, lote 2):
+
+- `thinkingTokens` (os tokens de pensamento) entra nos totais, em cada balde, nas linhas e em
+  `models`. Cada modelo leva também `costUsd` (o custo que o provedor mediu por modelo quando a
+  medição fecha com a linha, senão o da linha, em "Sem atribuição por modelo") e `unknownCost` (as
+  linhas de custo desconhecido, que não somam).
+- Cada linha tem `gatilho`, por que a sessão rodou: `primeira` (a revisão pedida, pela fila ou
+  pelo clique), `commit_novo` (o round automático depois de um push), `rodada_extra` (o motor
+  revisando de novo o mesmo commit: o desfecho sem mesa, a busca da prova e a reconferência
+  técnica) ou `contestacao` (a leitura do pushback). É gravado no registro daqui em diante
+  (`lib/engine/gatilho-da-sessao.js`); o registro antigo sem marca, e o que perdeu a marca num
+  reinício, conta como `primeira` na revisão e `contestacao` no pushback; conversa e ferramenta
+  ficam vazias. `porGatilho` soma o período por gatilho, com o vazio à parte, como `repos`.
+- Cada linha tem `author` e, na página, a decisão da rodada dela (`lib/engine/consumo-das-sessoes.js`):
+  das decisões do mesmo PR, a primeira criada no registro da linha ou depois. Dela saem
+  `decisaoId`, `etapas` (`[{ id, label, ms }]`), `card` e `arquivosLidos` (das provas), cada um
+  só quando a decisão o tem. A rodada que ainda não decidiu, e o pushback, ficam sem eles. Com o
+  histórico indisponível o relatório sai igual, sem autor e sem esses campos.
+- `history.pageSize` diz o tamanho da página usado.
 
 Como ler:
 

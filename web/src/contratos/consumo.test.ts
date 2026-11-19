@@ -122,11 +122,20 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
     expect(lerRespostaDoConsumo(bruto)).toEqual({ ok: false, motivo: 'Selecione um intervalo válido, sem datas futuras.' });
   });
 
-  it('a rota responde 200 também na recusa, e não tem código nem campo', () => {
+  it('a recusa de período responde 200 com { ok: false, motivo }, também no CSV, e sem código nem campo', () => {
     const rota = fonte('lib/engine/usage-activity.js');
-    expect(rota).toContain("return { ok: false, motivo: 'Selecione um intervalo válido, sem datas futuras.' }");
-    expect(rota).not.toMatch(/code:|campo:/);
-    expect(fonte('lib/http-server.js')).toContain("if (p === '/api/usage' && req.method === 'GET') return send(200, await usageActivity(engine, url.searchParams));");
+    expect(rota).toContain("{ ok: false, motivo: 'Selecione um intervalo válido, sem datas futuras.' }");
+    expect(rota).toContain('if (formatos[0] !== \'csv\') return { status: 200, body: await usageActivity(engine, params) };');
+    expect(rota).toContain('if (!recorte.ok) return { status: 200, body: recorte };');
+    expect(fonte('lib/http-server.js')).toContain("if (p === '/api/usage' && req.method === 'GET') return enviarHistorico(res, send, await usageDaRota(engine, url.searchParams));");
+  });
+
+  it('o único 400 da rota é o do formato torto, com o campo "formato"', () => {
+    const rota = fonte('lib/engine/usage-activity.js');
+    expect(rota.match(/status: 400/g)).toHaveLength(1);
+    expect(rota.match(/code:/g)).toHaveLength(1);
+    expect(rota.match(/campo:/g)).toHaveLength(1);
+    expect(rota).toContain("if (formatos.length > 1 || (formatos.length === 1 && !['', 'csv'].includes(formatos[0]))) {\n    return { status: 400, body: { ok: false, code: 'parametro_invalido', campo: 'formato' } };");
   });
 });
 
