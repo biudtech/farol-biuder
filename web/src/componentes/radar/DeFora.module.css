@@ -1,0 +1,166 @@
+/* "De fora da fila": o botão flutuante, a pílula ao lado do título da Fila e o painel lateral.
+   Só as variáveis de globals.css, nos dois temas. O fundo escurecido é a cor do bloco de código
+   (escura nos dois temas) misturada com transparência. */
+
+/* ---------- o botão flutuante ---------- */
+.flutuante {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 20px 10px 10px;
+  border: 1px solid var(--divisor-marca);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: left;
+}
+.flutuante:hover { background: var(--hover); }
+.numeroDoFlutuante {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 14px;
+  font-weight: 800;
+}
+.textoDoFlutuante { display: flex; flex-direction: column; line-height: 1.2; }
+.rotuloDoFlutuante { font-size: 14px; font-weight: 800; }
+.subDoFlutuante { font-size: 12px; font-weight: 600; color: var(--muted); }
+.seta { flex: none; color: var(--accent-texto); }
+
+/* o espaço no pé da tela para o botão não cobrir o último cartão */
+.respiro { height: 72px; }
+
+/* ---------- a pílula ao lado do título da Fila ---------- */
+.pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pilula:hover { background: var(--hover); }
+.numeroDaPilula {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ---------- o painel ---------- */
+.camada { position: fixed; inset: 0; z-index: 40; }
+.fundo { position: absolute; inset: 0; background: color-mix(in srgb, var(--codigo-fundo) 40%, transparent); }
+.painel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.cabecaDoPainel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.tituloDoPainel { font-size: 20px; font-weight: 800; }
+.fraseDoPainel { margin-top: 6px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.fechar {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--borda-botao);
+  border-radius: var(--radius-botao);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.fechar:hover { background: var(--hover); }
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.filtro {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--borda-botao);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.filtro:hover { background: var(--hover); }
+.filtro[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
+.numeroDoFiltro { opacity: .8; }
+
+.lista { flex: 1 1 auto; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 18px 24px 32px; }
+/* o resultado da última ação, preso ao pé do painel enquanto ele está aberto */
+.peDoPainel { flex: 0 0 auto; padding: 0 24px 16px; }
+.peDoPainel:has(> :empty) { display: none; }
+
+/* o motivo em destaque, no alto de cada cartão */
+.motivo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+}
+.motivo[data-tom="ok"] { background: var(--ok-soft); color: var(--ok-texto); }
+.motivo[data-tom="aviso"] { background: var(--aviso-soft); color: var(--aviso-texto); }
+.motivo[data-tom="falha"] { background: var(--danger-soft); color: var(--danger-texto); }
+.iconeDoMotivo { flex: none; margin-top: 1px; }
+.textoDoMotivo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tituloDoMotivo { font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+.detalheDoMotivo { font-size: 13px; overflow-wrap: anywhere; }
+
+/* Tela de celular: o botão flutuante encosta no canto, o painel ocupa a tela inteira. */
+@media (max-width: 760px) {
+  .flutuante { right: 16px; bottom: 16px; min-height: 48px; padding: 6px 14px 6px 6px; }
+  .subDoFlutuante { font-size: 11px; }
+  .cabecaDoPainel, .filtros { padding-left: 16px; padding-right: 16px; }
+  .lista { padding: 14px 16px 24px; }
+  .peDoPainel { padding: 0 16px 12px; }
+}

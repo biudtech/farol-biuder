@@ -1,6 +1,7 @@
 // Como o Radar fatia o snapshot nas seções da tela. Nada aqui decide: cada corte lê um campo
 // que o motor já mandou pronto. As pendências da mesa (`decisions.pending`) não entram no
 // Radar: o revisor é autônomo, e a revisão que não publicou nada aparece no Histórico.
+import type { PrDeFora } from '@/contratos/de-fora';
 import type { ChecagemEmCurso, ItemDaFila, PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Snapshot } from '@/contratos/snapshot';
 import { dataHora, dia, horaCurta } from './formato';
@@ -9,15 +10,19 @@ import { dataHora, dia, horaCurta } from './formato';
 // - PR com sessão em curso está em "Em análise", e sai da fila e da espera;
 // - PR em espera de execução que ainda está na fila aparece uma vez, na fila.
 // A ordem é a do motor, e a chave do PR é comparada sem diferenciar caixa.
+// - PR de De fora (`deFora`, lib/engine/de-fora.js) não vai ser revisado sozinho: sai da fila,
+//   da espera e da contagem, e aparece só no painel "De fora da fila".
 export function fatiarFila(
   fila: readonly ItemDaFila[],
   emEspera: readonly PrEmEspera[],
   sessoes: readonly SessaoAtiva[],
+  deFora: readonly Pick<PrDeFora, 'key'>[] = [],
 ): { fila: ItemDaFila[]; emEspera: PrEmEspera[] } {
   const igual = (chave: string): string => chave.toLowerCase();
   const emSessao = new Set(sessoes.flatMap((s) => [...(s.keys ?? []), ...(s.pr?.key ? [s.pr.key] : [])]).map(igual));
-  const naFila = fila.filter((pr) => !emSessao.has(igual(pr.key)));
-  const jaNaTela = new Set([...emSessao, ...naFila.map((pr) => igual(pr.key))]);
+  const fora = new Set(deFora.map((pr) => igual(pr.key)));
+  const naFila = fila.filter((pr) => !emSessao.has(igual(pr.key)) && !fora.has(igual(pr.key)));
+  const jaNaTela = new Set([...emSessao, ...fora, ...naFila.map((pr) => igual(pr.key))]);
   const vistos = new Set<string>();
   const esperando = emEspera.filter((pr) => {
     const chave = igual(pr.key);

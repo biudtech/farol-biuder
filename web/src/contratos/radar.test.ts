@@ -85,6 +85,18 @@ describe('listas do Radar: só o que identifica o item é exigido', () => {
     expect(lidas?.[2]).toEqual({ id: 'a3' });
   });
 
+  it('activeSessions lê o card lido e o perfil do Claude, e larga o torto', () => {
+    const { registrar } = coletor();
+    const lidas = LEITORES.activeSessions([
+      { id: 'a1', card: 'BT-3120', perfilId: 'biud-2' },
+      { id: 'a2', card: 'não é chave', perfilId: '' },
+      { id: 'a3', card: { key: 'BT-1' }, perfilId: 7 },
+    ], registrar);
+    expect(lidas?.[0]).toEqual({ id: 'a1', card: 'BT-3120', perfilId: 'biud-2' });
+    expect(lidas?.[1]).toEqual({ id: 'a2' });
+    expect(lidas?.[2]).toEqual({ id: 'a3' });
+  });
+
   it('activeSessions lê o progresso da revisão quando ele vem inteiro, e ignora o torto', () => {
     const { registrar } = coletor();
     const progresso = { percentual: 42, etapa: 3, totalEtapas: 5, rotuloDaEtapa: 'código', arquivosLidos: 9, arquivosTotais: 20, restanteEstimadoMs: 240000 };

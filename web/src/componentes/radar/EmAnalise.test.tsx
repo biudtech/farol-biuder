@@ -76,7 +76,7 @@ describe('seção Em análise: o cartão', () => {
     expect(container.querySelector('[style]')).toBeNull();
   });
 
-  it('buscando o código: a primeira etapa com o spinner e aria-current, o tempo e quanto costuma levar', () => {
+  it('buscando o código: a primeira etapa com o pulso e aria-current, a porcentagem, o tempo e o típico', () => {
     montar(sessao({ progresso: progresso(1), estimativa: { tipicoMs: 300000, ateOFimMs: 420000 } }), {}, [sessao({ id: 'a2', pr: { key: 'x/y#1' } })]);
     const [fontes] = etapas();
     expect(estados()).toEqual(['agora', 'falta', 'falta', 'falta', 'falta']);
@@ -84,37 +84,49 @@ describe('seção Em análise: o cartão', () => {
     expect(fontes?.querySelector('[class*="giro"]')).toBeTruthy();
     expect(within(faixa()).getByText('18 s')).toBeTruthy();
     expect(within(faixa()).getByText('Buscando o código do PR, com 1 outra revisão em andamento.')).toBeTruthy();
-    expect(within(faixa()).getByText('costuma levar 7 min')).toBeTruthy();
-    // trilho indefinido: progressbar sem valor
-    const trilho = within(faixa()).getByRole('progressbar');
-    expect(trilho.hasAttribute('aria-valuenow')).toBe(false);
+    expect(within(faixa()).getByText('típico 7 min')).toBeTruthy();
+    // a barra única é a porcentagem da revisão inteira, grande ao lado
+    expect(within(faixa()).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('5');
+    expect(within(faixa()).getByText('5%')).toBeTruthy();
   });
 
-  it('lendo o card: a primeira etapa feita com o traço verde, e a pílula do card diz que lê os critérios', () => {
+  it('sem o progresso do motor: a barra indefinida, sem número', () => {
+    montar(sessao());
+    const barra = within(faixa()).getByRole('progressbar');
+    expect(barra.hasAttribute('aria-valuenow')).toBe(false);
+    expect(within(faixa()).queryByText(/%$/)).toBeNull();
+  });
+
+  it('lendo o card: a primeira etapa feita, e a pílula do card diz que lê os critérios', () => {
     montar(sessao({ progresso: progresso(2) }));
     expect(estados()).toEqual(['feita', 'agora', 'falta', 'falta', 'falta']);
-    expect(etapas()[1]?.querySelector('[data-feita="true"]')).toBeTruthy();
-    expect(etapas()[2]?.querySelector('[data-feita="false"]')).toBeTruthy();
     expect(within(faixa()).getByText('Lendo o card no Jira.')).toBeTruthy();
-    expect(pilulas()).toEqual(['\u2013Checks obrigatóriosLidos no fim da revisão', '\u2013CardLendo os critérios', '\u2013ParecerEm análise']);
+    expect(pilulas()).toEqual(['–Checks obrigatóriosLidos no fim da revisão', '–CardLendo os critérios', '–ParecerEm análise']);
   });
 
-  it('lendo o código: o arquivo da vez, a contagem, quanto falta e o trilho definido pela porcentagem dos arquivos', () => {
+  it('o card lido e o perfil do Claude: a pílula com a chave e o rótulo do perfil no contexto', () => {
+    const { controle } = controleFalso();
+    render(<EmAnalise sessoes={[sessao({ progresso: progresso(3), card: 'BT-3120', perfilId: 'p2' })]} feeds={{}} controle={controle} perfis={[{ id: 'p2', label: 'biud-2' }]} />);
+    expect(pilulas()[1]).toBe('✓CardBT-3120 lido');
+    expect(screen.getByText(/Claude: biud-2$/)).toBeTruthy();
+  });
+
+  it('lendo o código: a contagem, o arquivo da vez e a porcentagem da revisão inteira com quando termina', () => {
     montar(sessao({ progresso: progresso(3, { arquivosLidos: 9, arquivosTotais: 20, arquivoAtual: 'src/survey/remanejamento.ts', restanteEstimadoMs: 240000 }) }));
     expect(estados()).toEqual(['feita', 'feita', 'agora', 'falta', 'falta']);
-    expect(within(faixa()).getByText('Lendo src/survey/remanejamento.ts')).toBeTruthy();
-    expect(within(faixa()).getByText('9 de 20 arquivos · faltam ~4 min')).toBeTruthy();
-    const trilho = within(faixa()).getByRole('progressbar');
-    expect(trilho.getAttribute('aria-valuenow')).toBe('45');
-    expect(trilho.getAttribute('aria-valuetext')).toBe('45%, 9 de 20 arquivos');
+    expect(within(faixa()).getByText(/^Lendo o código: 9 de 20 arquivos · agora em/)).toBeTruthy();
+    expect(within(faixa()).getByText('src/survey/remanejamento.ts').tagName).toBe('CODE');
+    const barra = within(faixa()).getByRole('progressbar');
+    expect(barra.getAttribute('aria-valuenow')).toBe('45');
+    expect(barra.getAttribute('aria-valuetext')).toBe('45%, da revisão inteira · termina em cerca de 4 min');
+    expect(within(faixa()).getByText('da revisão inteira · termina em cerca de 4 min')).toBeTruthy();
     // a largura é atributo do SVG, nunca estilo em linha
-    expect(trilho.querySelector('rect')?.getAttribute('width')).toBe('45');
+    expect(barra.querySelector('rect')?.getAttribute('width')).toBe('45');
   });
 
-  it('lendo o código sem a contagem: trilho indefinido e o texto sem arquivo', () => {
+  it('lendo o código sem a contagem: o texto sem arquivo', () => {
     montar(sessao({ progresso: progresso(3) }));
     expect(within(faixa()).getByText('Lendo o código do PR.')).toBeTruthy();
-    expect(within(faixa()).getByRole('progressbar').hasAttribute('aria-valuenow')).toBe(false);
   });
 
   it('conferindo e postando: o texto de cada etapa, e o botão vira Postando na postagem, com a conta', () => {

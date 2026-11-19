@@ -89,9 +89,9 @@ corrigida sozinho, o `overrides` sai.
 | Pasta | O que mora nela |
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
-| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só. `Markdown.tsx` desenha o texto de um review |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
-| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`), o que o cartão de um PR diz (`cartao.ts`), a sessão que some sem resultado (`falhas.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
+| `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só (o Radar tem também o do painel De fora). `cartao/` é o cartão único de um PR, que todas as telas usam (redesenho de 19/11/2026). `Markdown.tsx` desenha o texto de um review |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa, e `de-fora.ts`, as chaves `deFora` e `emRetentativa`; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico e testes; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
+| `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`), o que o cartão de um PR diz (`cartao.ts`), o painel De fora da fila em frases (`de-fora.ts`), a sessão que some sem resultado (`falhas.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action`, com o tom e o chip de cada desfecho (`rotulos.ts`), os dias da lista (`dias.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e a auditoria do registro em frases (`auditoria.ts`) |
@@ -198,17 +198,20 @@ prompt).
 ## A tela Radar
 
 A aba `/radar` é `src/componentes/radar/Radar.tsx`: o que o revisor autônomo está fazendo
-agora. Ela lê o snapshot do store, fatia nas seções e liga os botões às ações. Cada PR é um
-cartão no molde do cartão da autoanálise do Farol (canvas aprovado em 18/11/2026; `Cartao.tsx`,
-com o que cada peça diz em `src/radar/cartao.ts`), descrito em "O cartão de um PR", abaixo:
+agora. Ela lê o snapshot do store, fatia nas seções e liga os botões às ações. Cada PR é o
+cartão único (redesenho de 19/11/2026, no molde do cartão da autoanálise do Farol;
+`src/componentes/cartao/Cartao.tsx`, com o que cada peça diz em `src/radar/cartao.ts`), descrito
+em "O cartão de um PR", abaixo. O cartão mora fora da pasta do Radar para as outras telas o
+usarem:
 
 | Seção | Componente | De onde vem |
 |---|---|---|
 | Topo: "Radar", "N em análise · N na fila" e o botão "Revisar um PR" | `Radar.tsx`, `RevisarUmPr.tsx` | a contagem do que está na tela (depois de `fatiarFila`); o painel do botão tem o campo da URL, o Revisar e o Checar agora com o estado da checagem (`status`, `lastCheckAt`, `nextCheckAt` e, com o ciclo em curso, `checagem`) |
 | Checagem em curso | `Radar.tsx` | `checagem` com `status` `checking`: "Checando as N organizações · K de N · agora: dono", com o spinner pequeno, numa linha sem região viva (muda a cada segundo). O ciclo do motor busca por organização, e não por repositório: o desenho dizia "repositórios", e a tela diz a unidade que o motor conta |
 | Avisos do topo | `Radar.tsx` | `account`, `status`, `error` e `buscasPausadas`; a checagem que falhou leva o Checar agora junto |
-| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`, `pedido`, `estimativa`, `arquivosPr` e `pr.account`) e o último evento de cada sessão em `activity`. Um cartão por sessão; depois, as sessões que sumiram sem resultado e cujo PR não está mais na fila (`useFalhas.ts`) |
-| Fila | `Fila.tsx` | `queue`, com `parked`, `inicioAutomatico` e `esperaConflito`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. Um cartão por PR, com a borda neutra, sem pílulas: as marcas (rascunho, parada, em conflito, esperando vaga) ao lado do autor, Revisar agora, Ignorar e Abrir no GitHub, e o rodapé com a posição e o que segura o PR |
+| Em análise | `EmAnalise.tsx` | `activeSessions` (com `progresso`, `pedido`, `estimativa`, `arquivosPr`, `pr.account`, `card` e `perfilId`, este com o rótulo de `config.claudeProfiles`) e o último evento de cada sessão em `activity`. A contagem ao lado do título; um cartão por sessão, com a porcentagem grande e a barra única; depois, as sessões que sumiram sem resultado e cujo PR não está mais na fila (`useFalhas.ts`) |
+| Fila | `Fila.tsx` | `queue` sem os PRs de `deFora`, com `parked`, `inicioAutomatico`, `esperaConflito` e `emRetentativa`; depois `headlessWaitingPrs` com `headlessWaitingDetails`. A contagem e a pílula de De fora ao lado do título. Um cartão por PR, com a borda neutra, sem pílulas: a posição no canto, as marcas (rascunho, parada, em conflito, esperando vaga) ao lado do autor, e o rodapé com o ponto e o que segura o PR (a vaga, o conflito com a base, o limite do plano, a retentativa automática), com Revisar agora, Ignorar e Abrir no GitHub |
+| De fora da fila | `DeFora.tsx` | `deFora`: o botão flutuante no canto ("De fora da fila", "Ver os PRs e o motivo de cada um" e o número), a pílula ao lado do título da Fila e o painel lateral que os dois abrem, descrito em "De fora da fila", abaixo. Com zero PRs de fora, o botão e a pílula não aparecem |
 | Postadas hoje | `PostadasHoje.tsx` | `decisions.resolved`, cortado por `postadasDeHoje` (`src/radar/postadas.ts`), e o detalhe de cada uma em `GET /api/decision?key=&id=` (checks, `criteriosDoCard`, achados, `rodadasDoPr`, `tamanhoDoPr` e `execucao`), buscado uma vez por revisão. A borda e o parecer pelo que saiu (aprovado verde, pediu mudanças vermelho, comentado âmbar), Revisar de novo, Abrir no GitHub e, na faixa, Ver resultado (o Histórico com a revisão aberta) |
 | Ignorados | `Ignorados.tsx` | só o que foi ignorado nesta aba (o snapshot não traz a lista); some quando não há nada |
 
@@ -232,6 +235,10 @@ Regras que valem para quem mexer nela:
 - **Um PR aparece uma vez.** `fatiarFila` tira da Fila o PR com sessão em curso, e da espera
   de execução o que ainda está na fila. É só exibição: a lista do motor não muda, e a contagem
   do topo conta o que está na tela.
+- **A Fila mostra só o que o motor vai revisar.** O PR de `deFora` (o motor não vai revisá-lo
+  sozinho, `lib/engine/de-fora.js`) sai da Fila, da espera e das duas contagens (`fatiarFila`),
+  e aparece só no painel De fora. Quem decide o que é de fora é o motor: a tela não olha label,
+  review nem regra.
 - **Ação.** Todo POST passa por `executar` (`src/radar/acoes.ts`) e pelo gancho `useAcoes`,
   que guarda o que está no ar por alvo (o PR ou a sessão), desabilita os botões do alvo e
   publica o envio e o resultado na região viva. O botão clicado mostra o spinner e o texto do
@@ -268,39 +275,54 @@ Regras que valem para quem mexer nela:
   `memo`: a seção só é redesenhada quando a fatia dela muda de referência
   (`Radar.desempenho.test.tsx`). Ao passar uma lista derivada a uma seção, use `useMemo`. O
   cartão da sessão recebe o último evento como número, para a linha nova do feed de uma sessão
-  não redesenhar as outras. O trilho definido é SVG com a largura em atributo: a CSP recusa
-  estilo em linha.
+  não redesenhar as outras. A barra é SVG com a largura em atributo: a CSP recusa estilo em
+  linha.
 
 ### O cartão de um PR
 
-- **Borda esquerda de 3 px pelo estado**: rodando, a primária; postada aprovada, ok; pediu
-  mudanças ou falha, perigo; sem sinal ou comentada, aviso; fila, neutra. O estado também vai em
-  texto: no nome do cartão (`article`), no rodapé e nas pílulas.
+O cartão único (`src/componentes/cartao/Cartao.tsx`, com o CSS Module ao lado) serve a todas as
+telas: `Cartao` (a casca e o cabeçalho), `Pilulas`, `Faixa`, `Rodape`, `FaixaDaFila`, `Avatar`,
+`AbrirNoGitHub` e `BotaoOcupado`. Muda só a borda e o que o cartão mostra pelo estado.
+
+- **Borda pelo estado**: cartão na superfície, raio 16, borda de 1,5 px; rodando, 2 px da
+  primária e a sombra leve (o único com sombra); postada aprovada, ok; pediu mudanças ou falha,
+  perigo; sem sinal ou comentada, aviso; fila, neutra. As cores de estado na borda são misturadas
+  com a superfície (`color-mix`), para ficarem leves nos dois temas. O estado também vai em texto:
+  no nome do cartão (`article`), no rodapé e nas pílulas.
 - **Cabeçalho**: a foto do GitHub do autor (`https://avatars.githubusercontent.com/<login>?s=72`,
-  `alt` vazio, 36 px, `loading="lazy"`, sem referer; a origem é a única imagem de fora no
-  `img-src` da CSP; login que não tem forma de login e foto que falha caem nas iniciais), a
-  chave como link do PR, o login do autor, o título e a linha de contexto, só com o que existe
-  (arquivos e quem pediu, na sessão; a rodada, o card, o tamanho e a hora, na postada; a hora da
-  última atualização, na fila).
+  `alt` vazio, 44 px (40 no painel De fora), `loading="lazy"`, sem referer; a origem é a única
+  imagem de fora no `img-src` da CSP; login que não tem forma de login e foto que falha caem nas
+  iniciais), e numa linha a chave como link do PR, o login do autor, o ramo (quando a tela tem) e
+  o contexto, só com o que existe (arquivos, quem pediu e o perfil do Claude, na sessão; a
+  rodada, o card, o tamanho e a hora, na postada; a hora da última atualização, na fila); embaixo,
+  o título. No canto, os botões, ou a posição na fila.
 - **Botões**: rodando, "Revisando" ocupado ("Postando" na postagem); parado, Revisar agora (fila),
   Revisar de novo (postada) ou Tentar de novo (falha); Abrir no GitHub e Ignorar onde a ação
   existe. O botão ocupado é focável (`aria-disabled`): quando o botão clicado vira "Revisando",
   o foco vai para ele, e depois para o "Revisando" do cartão da sessão que abriu, nunca para o
   body (`marcarFoco` e `BotaoOcupado`, em `Cartao.tsx`); quem estava em outro lugar não é puxado.
-- **Três pílulas** (sessão, falha e postada): Checks obrigatórios (os `checks` do detalhe; enquanto
-  roda, "Lidos no fim da revisão", porque o motor só lê os checks no fim), Card (os critérios de
-  `criteriosDoCard`; enquanto roda, "Ainda não lido", "Lendo os critérios" ou "Conferido no
-  parecer") e Parecer (o que foi publicado, com os bloqueios; "Em análise" ou "Nada foi
-  publicado"). Sem dado, o traço com texto neutro.
-- **Faixa** (`role="group"`): as etapas Fontes, Card, Código, Conferência e Postagem, a feita com ✓,
-  a atual com o spinner e `aria-current="step"`, a da falha com "!", e os traços verdes até a
-  atual; o tempo decorrido (um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
-  cabeçalho, o avatar e as pílulas não redesenham a cada segundo, e a borda do "sem sinal" vira com
-  um disparo só, na hora) e
-  a ação (Cancelar, Ver resultado ou Dispensar); o trilho de 4 px, definido com `aria-valuenow` só
-  no código com a contagem de arquivos, indefinido nas outras etapas e ausente quando terminou; e
-  o rodapé, com o que a sessão faz agora à esquerda e o apoio à direita. Com movimento reduzido o
-  spinner para e o trilho indefinido vira uma faixa parada.
+- **Três pílulas** (sessão, falha e postada), chips na cor do estado: Checks obrigatórios (os
+  `checks` do detalhe; enquanto roda, "Lidos no fim da revisão", porque o motor só lê os checks no
+  fim), Card (os critérios de `criteriosDoCard`; enquanto roda, "Ainda não lido", "Lendo os
+  critérios", e depois da etapa o card lido pela chave `card` da sessão, "BT-1 lido", ou "Nenhum
+  card lido" quando ela não veio) e Parecer (o que foi publicado, com os bloqueios; "Em análise"
+  ou "Nada foi publicado"). Sem dado, o traço com texto neutro.
+- **Faixa** (`role="group"`): primeiro a barra única, a porcentagem da revisão inteira
+  (`progresso.percentual`, arredondada) grande ao lado e a barra de 10 px com `aria-valuenow`,
+  com a frase embaixo ("da revisão inteira · termina em cerca de N min", quando o motor estima
+  o restante); sem o progresso, a barra indefinida, sem número; terminada, nenhuma. Depois as
+  cinco etapas como detalhe, Fontes, Card, Código, Conferência e Postagem, cada uma com o traço
+  e o nome, a feita com ✓ e verde, a atual na primária com `aria-current="step"`, a da falha com
+  "!". Por último o rodapé: o que a sessão faz agora à esquerda (no código, "Lendo o código: K
+  de N arquivos · agora em" o arquivo da vez, em código) e à direita o tempo decorrido, o típico
+  ("típico N min", da `estimativa`) ou a conta que posta, e a ação (Cancelar, Ver resultado ou
+  Dispensar). O tempo é um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
+  cabeçalho, o avatar e as pílulas não redesenham a cada segundo, e a borda do "sem sinal" vira
+  com um disparo só, na hora. Com movimento reduzido o pulso da etapa para e a barra
+  indefinida vira uma faixa parada.
+- **Rodapé da fila** (`FaixaDaFila`): o ponto na cor do que segura o PR (segue sozinho, ok;
+  espera conflito, limite do plano, retentativa ou o clique, aviso; parada, perigo) e o texto,
+  com as ações à direita.
 - **A etapa nunca recua**: é a do `progresso`, e o cartão guarda o piso para um estado atrasado
   não fazer a faixa voltar.
 - **Estados**: ao clicar em Revisar, "Iniciando a revisão." na hora, antes do servidor
@@ -322,14 +344,60 @@ Regras que valem para quem mexer nela:
   (`useDesvio.ts`), e o tempo decorrido e o "sem sinal" contam na hora do motor. O `agora` sozinho
   não vira evento do SSE (`semMudanca`, `lib/estado-delta.js`): vai junto de toda mudança de verdade.
 
+### De fora da fila
+
+Os PRs pedidos à conta que o motor não vai revisar sozinho, cada um com o motivo
+(`deFora`, montada por `lib/engine/de-fora.js` e lida em `src/contratos/de-fora.ts`). A tela não
+decide quem é de fora: tira esses PRs da Fila e da contagem e os mostra aqui.
+
+- **Botão e pílula.** O botão flutuante fica no canto de baixo da tela ("De fora da fila", "Ver
+  os PRs e o motivo de cada um" e o número; o nome acessível diz "De fora da fila: N PRs."), e a
+  pílula com o número fica ao lado do título da Fila. Os dois são botões de verdade, com
+  `aria-haspopup="dialog"` e `aria-expanded`, e abrem o mesmo painel. Com zero PRs de fora,
+  nenhum dos dois aparece. Embaixo da tela fica um respiro, para o botão não cobrir o último
+  cartão. Com a fila vazia e PR de fora, a Fila continua na tela, dizendo que está vazia, com a
+  pílula: o painel não depende só do botão flutuante.
+- **Painel.** Um diálogo modal (`role="dialog"`, `aria-modal`) que entra pela direita, até
+  560 px e a tela inteira no celular: o título "De fora com justificativa", quantos PRs ficaram
+  de fora e que o Revisar continua funcionando em todos; os filtros por motivo (botões com
+  `aria-pressed`: Todos e um por motivo com PR, na ordem de precedência do motor, cada um com a
+  contagem); e um cartão por PR. Fecha no X, no Esc e no fundo escurecido; ao abrir, o foco vai
+  ao X; Tab e Shift+Tab giram dentro dele; ao fechar, o foco volta a quem o abriu (o botão ou a
+  pílula), ou ao conteúdo principal se ele saiu da tela. Quando o cartão com o foco sai do
+  painel (o PR foi para a revisão), o foco vai ao cartão que ficou no lugar dele, ao último, ou
+  ao X com a lista vazia, nunca à página. Enquanto o painel está aberto, a região de resultado
+  das ações mora dentro dele, no pé, e sai do pé da página: o envio, o aceite e a recusa do
+  "Revisar mesmo assim" são vistos e anunciados no modal.
+- **O cartão de fora.** O cartão único, compacto, abre com o motivo em destaque, na cor do
+  motivo e com um ícone: o título e o que aconteceu, e no rodapé quando o PR volta à fila, com
+  Abrir no GitHub e "Revisar mesmo assim" (`POST /api/review` com a URL do PR, o mesmo pedido do
+  Revisar de hoje; o motor aceita o clique em todos os motivos). O ignorado tem também o
+  Restaurar, o mesmo da seção Ignorados do Radar. As frases moram em
+  `src/radar/de-fora.ts` (`fraseDoMotivo`), uma por motivo:
+
+| Motivo do motor | Filtro | Destaque | Quando volta |
+|---|---|---|---|
+| `decisao_de_gente` | Revisado por gente | "bia aprovou este commit" ou "pediu mudanças neste commit", com o head e a hora do review | no próximo commit |
+| `outra_conta` | Outra conta revisando | "Outra conta está revisando", com quem e, pela label, desde quando | pela label, se ela sair sem review naquele commit ou quando ela caduca (`SINAL_REVISAO_TTL_MS`, 3 horas de label vista pelo Farol, sem contar o tempo com a máquina dormindo; `VALIDADE_DA_LABEL_HORAS` repete o número e o teste confere); pela saída de cena, no próximo commit |
+| `estacionado` | Parado por falha | "Parado por falha", com a frase da parada e o motivo do motor | com commit novo ou pedido novo de revisão (`lib/engine/destrava.js`); a sessão cancelada e a parada sem motivo gravado (`legado`) não voltam sozinhas |
+| `pedido_retirado` | Pedido retirado | "Pedido de revisão retirado", com a hora | quando a revisão for pedida de novo |
+| `regra_manual` | Regra: só no clique | "Regra: só no clique", com a organização ou o autor da regra (`source` `organizacao` ou `autor`); com `escopo_desconhecido` ou `autor_desconhecido`, que há regra mas a organização ou o autor do PR é desconhecido | não volta sozinho: a regra muda no Sistema |
+| `auto_desligado` | Revisar sozinho desligado | "Revisar sozinho está desligado" | quando o revisar sozinho for ligado no Sistema |
+| `ignorado` | Ignorado | "Ignorado" | não volta sozinho |
+
+Rascunho não é motivo (o motor não segura a primeira revisão por isso), e o desenho aprovado o
+listava: a tela segue o motor. Quando volta é a regra que o motor já tem para cada motivo, dita em
+texto; a tela não tem relógio para ela.
+
 ### Lacunas do contrato
 
 O que a tela não faz porque o motor não manda. Cada item se resolve no snapshot ou na resposta
 do motor, não com regra na tela:
 
 - **O que o cartão não mostra.** As branches de origem e destino (a busca da fila, `gh search
-  prs`, não as traz, e a sessão só lê a de origem quando há site do Jira), a chave do card
-  enquanto a sessão roda (ela só aparece na decisão), o estado dos checks enquanto roda (o motor
+  prs`, não as traz, e a sessão só lê a de origem quando há site do Jira: o cartão tem o lugar
+  do ramo, e o Radar o deixa vazio), os checks em números ("4 de 4 verdes", que o desenho
+  mostra: o motor guarda só os que não estão verdes), o estado dos checks enquanto roda (o motor
   só os lê no fim), quanto uma revisão costuma levar para um PR da fila (a estimativa existe só na
   sessão aberta) e qual review vai sair na postagem: a linha some, ou a pílula diz o traço. As falhas
   e os cliques em curso são desta aba: recarregar a página esquece.

@@ -46,8 +46,10 @@ export function Casca({ children, app = appDoNavegador }: Props) {
         <Link href={ABA_INICIAL} className={estilos.marca} aria-label="Farol, ir para o Radar">
           <Logo />
           <i className={estilos.divisor} aria-hidden="true" />
-          <span className={estilos.nome}>Farol</span>
-          {versao ? <span className={estilos.versao}>v{versao}</span> : null}
+          <span className={estilos.nomeEVersao}>
+            <span className={estilos.nome}>Farol</span>
+            {versao ? <span className={estilos.versao} title="Versão do motor">v{versao}</span> : null}
+          </span>
         </Link>
 
         <nav className={estilos.abas} aria-label="Seções do Farol">

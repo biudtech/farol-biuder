@@ -92,6 +92,14 @@ describe('fila sem PR repetido na tela', () => {
     expect(r.fila.map((p) => p.key)).toEqual(['z/z#9', 'a/b#1']);
     expect(r.emEspera.map((p) => p.key)).toEqual(['c/d#4', 'a/a#2']);
   });
+
+  it('o PR de De fora sai da Fila e da espera, e por isso da contagem do topo', () => {
+    const deFora = [{ key: 'A/B#2', motivo: 'decisao_de_gente' as const, detalhe: {} }, { key: 'c/d#4', motivo: 'ignorado' as const, detalhe: {} }];
+    const r = fatiarFila([pr('a/b#1'), pr('a/b#2'), pr('a/b#3')], [pr('c/d#4'), pr('c/d#5')], [], deFora);
+    expect(r.fila.map((p) => p.key)).toEqual(['a/b#1', 'a/b#3']);
+    expect(r.emEspera.map((p) => p.key)).toEqual(['c/d#5']);
+    expect(resumoDoTopo(0, r.fila.length + r.emEspera.length)).toBe('0 em análise · 3 na fila');
+  });
 });
 
 describe('o topo e o tudo em dia', () => {

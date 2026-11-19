@@ -82,6 +82,78 @@ describe('tela Radar: carga, topo e estados', () => {
     expect(sub()).toBe('1 em análise · 3 na fila');
   });
 
+  it('De fora da fila: o PR sai da Fila e da contagem, e o botão e a pílula abrem o painel com ele', () => {
+    montar(estado({
+      queue: [pr('dono/repo#12', { title: 'Fica na fila' }), pr('dono/fora#5', { title: 'Aprovado por gente' })],
+      deFora: [{ key: 'dono/fora#5', url: 'https://github.com/dono/fora/pull/5', title: 'Aprovado por gente', motivo: 'decisao_de_gente', detalhe: { decisivos: [{ quem: 'bia', estado: 'APPROVED' }] } }],
+    }));
+    expect(sub()).toBe('0 em análise · 1 na fila');
+    const fila = screen.getByRole('region', { name: 'Fila' });
+    expect(within(fila).getAllByRole('article').map((a) => within(a).getByRole('heading', { level: 3 }).textContent)).toEqual(['Fica na fila']);
+    const pilula = within(fila).getByRole('button', { name: /de fora da fila, ver os PRs/ });
+    fireEvent.click(pilula);
+    const painel = screen.getByRole('dialog', { name: 'De fora com justificativa' });
+    expect(within(painel).getByText('bia aprovou este commit')).toBeTruthy();
+    fireEvent.keyDown(painel, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(pilula);
+    expect(screen.getByRole('button', { name: /^De fora da fila: 1 PR\./ })).toBeTruthy();
+  });
+
+  it('fila vazia com PR de fora: a Fila fica, vazia, com a pílula que abre o painel', () => {
+    montar(estado({
+      queue: [],
+      deFora: [{ key: 'dono/fora#5', url: 'https://github.com/dono/fora/pull/5', title: 'Aprovado por gente', motivo: 'decisao_de_gente', detalhe: {} }],
+    }));
+    const fila = screen.getByRole('region', { name: 'Fila' });
+    expect(within(fila).getByText('Nenhum PR na fila.')).toBeTruthy();
+    expect(within(fila).queryAllByRole('article')).toEqual([]);
+    fireEvent.click(within(fila).getByRole('button', { name: /de fora da fila, ver os PRs/ }));
+    expect(screen.getByRole('dialog', { name: 'De fora com justificativa' })).toBeTruthy();
+  });
+
+  it('Revisar mesmo assim recusado (4xx): o erro aparece e é anunciado dentro do painel aberto', async () => {
+    montar(estado({
+      deFora: [{ key: 'dono/fora#5', url: 'https://github.com/dono/fora/pull/5', title: 'Aprovado por gente', motivo: 'decisao_de_gente', detalhe: {} }],
+    }), { ok: false, falha: 'recusado', status: 409 });
+    fireEvent.click(screen.getByRole('button', { name: /^De fora da fila: 1 PR\./ }));
+    const painel = screen.getByRole('dialog', { name: 'De fora com justificativa' });
+    await act(async () => { fireEvent.click(within(painel).getByRole('button', { name: 'Revisar mesmo assim PR #5 de dono/fora' })); });
+    const dentro = within(painel).getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
+    expect(dentro.getAttribute('aria-live')).toBe('polite');
+    expect(dentro.textContent).toMatch(/^Erro: .*HTTP 409/);
+    // uma região só: a do pé da página sai enquanto o painel está aberto
+    expect(screen.getAllByRole('status', { name: 'Resultado da última ação e avisos do motor' })).toHaveLength(1);
+    fireEvent.keyDown(painel, { key: 'Escape' });
+    expect(regiao().textContent).toMatch(/HTTP 409/);
+  });
+
+  it('Revisar mesmo assim aceito: o envio e o aceite aparecem dentro do painel aberto', async () => {
+    montar(estado({
+      deFora: [{ key: 'dono/fora#5', url: 'https://github.com/dono/fora/pull/5', title: 'Aprovado por gente', motivo: 'decisao_de_gente', detalhe: {} }],
+    }));
+    fireEvent.click(screen.getByRole('button', { name: /^De fora da fila: 1 PR\./ }));
+    const painel = screen.getByRole('dialog', { name: 'De fora com justificativa' });
+    await act(async () => { fireEvent.click(within(painel).getByRole('button', { name: 'Revisar mesmo assim PR #5 de dono/fora' })); });
+    const dentro = within(painel).getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
+    expect(dentro.textContent).not.toBe('');
+    expect(dentro.textContent).not.toMatch(/^Erro/);
+  });
+
+  it('sem PR de fora, nem o botão flutuante nem a pílula aparecem', () => {
+    montar(estado({ queue: [pr('dono/repo#12')], deFora: [] }));
+    expect(screen.queryByRole('button', { name: /de fora da fila/i })).toBeNull();
+  });
+
+  it('a fila diz a retentativa automática e o limite do plano pelo emRetentativa', () => {
+    montar(estado({
+      queue: [pr('dono/repo#12'), pr('dono/outro#3')],
+      emRetentativa: { 'dono/repo#12': { tentativas: 2, aPartirDe: null }, 'dono/outro#3': { tentativas: 1, aPartirDe: Date.UTC(2026, 10, 16, 18) } },
+    }));
+    expect(screen.getByText('1º na fila: nova tentativa automática (2ª) quando abrir uma vaga.')).toBeTruthy();
+    expect(screen.getByText(/^2º na fila, esperando o limite do plano: tenta de novo a partir de /)).toBeTruthy();
+  });
+
   it('tudo em dia: o símbolo da BIUD, "Tudo revisado" e a fila vazia, sem as seções vazias', () => {
     const { store } = montar(estado({ nextCheckAt: null }));
     expect(sub()).toBe('0 em análise · 0 na fila');

@@ -213,8 +213,11 @@ describe.each(TEMAS)('o cartão do Radar no tema %s', (_nome, v) => {
   });
 });
 
-describe('o CSS do Radar', () => {
-  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../componentes/radar/Radar.module.css'), 'utf8');
+// O CSS do Radar, do cartão único (src/componentes/cartao) e do painel De fora da fila.
+const CSS_DO_RADAR = ['componentes/radar/Radar.module.css', 'componentes/cartao/Cartao.module.css', 'componentes/radar/DeFora.module.css'];
+
+describe.each(CSS_DO_RADAR)('o CSS de %s', (arquivo) => {
+  const css = fs.readFileSync(path.resolve(import.meta.dirname, '..', arquivo), 'utf8');
 
   it('não tem cor fora das variáveis de globals.css', () => {
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
@@ -226,12 +229,16 @@ describe('o CSS do Radar', () => {
   // texto sobre o fundo suave de um estado é sempre o texto daquele estado
   it('fundo suave de estado só com o texto do mesmo estado', () => {
     for (const regra of css.match(/\{[^}]*\}/g) ?? []) {
-      const fundo = /background: var\(--(ok|aviso|danger|accent)-soft\)/.exec(regra)?.[1];
+      const fundo = /background: var\(--(ok|aviso|danger|accent|neutro)-soft\)/.exec(regra)?.[1];
       if (fundo && /color:/.test(regra)) expect(regra).toContain(`color: var(--${fundo}-texto)`);
     }
   });
+});
 
-  it('o spinner da etapa e o trilho indefinido param com movimento reduzido', () => {
+describe('o cartão único', () => {
+  const css = fs.readFileSync(path.resolve(import.meta.dirname, '../componentes/cartao/Cartao.module.css'), 'utf8');
+
+  it('o pulso da etapa e a barra indefinida param com movimento reduzido', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.giro, \.corre \{ animation: none; \}/);
   });
 });
