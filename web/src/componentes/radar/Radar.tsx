@@ -111,6 +111,38 @@ export function Radar({ app = appDoNavegador }: Props) {
   const tudoEmDia = temEstado && !ausentes.length && Boolean(ultimaChecagem) && emAnalise === 0 && naFila === 0 && pendentes === 0 && !falhasSoltas.length;
   // "Hoje" é lido quando a próxima checagem muda: a tela não tem relógio próprio.
   const fraseDoTudoEmDia = useMemo(() => textoDoTudoEmDia({ nextCheckAt: proximaChecagem }), [proximaChecagem]);
+  const elementoDaFila = (
+    <Fila
+      fila={fila}
+      emEspera={emEspera}
+      detalhes={detalhes}
+      estacionados={estacionados}
+      inicioAutomatico={inicioAutomatico}
+      emConflito={emConflito}
+      emRetentativa={emRetentativa}
+      extra={pilulaDeFora}
+      vazio={textoDaFilaVazia(doTopo)}
+      checando={status === 'checking' && !ultimaChecagem}
+      falhas={falhasDaFila}
+      iniciadas={iniciadas}
+      controle={controle}
+      aoDispensarFalha={dispensarFalha}
+    />
+  );
+  // A região de resultado das ações: dentro do painel De fora enquanto ele está aberto (o modal
+  // esconde o resto da página do leitor de tela e cobre o pé da janela), no pé da página fora dele.
+  const regiaoDeResultado = (
+    <RegiaoDeResultado
+      regiao={regiao}
+      resultado={resultado}
+      recados={recados}
+      aoDispensar={() => {
+        dispensar();
+        app.dispensarRecados();
+      }}
+    />
+  );
+  const painelAberto = temEstado && painelDeFora.aberto;
 
   return (
     <Pagina
@@ -152,11 +184,15 @@ export function Radar({ app = appDoNavegador }: Props) {
           ) : null}
 
           {tudoEmDia ? (
-            <section className={`${ui.cartao} ${estilos.tudoEmDia}`} aria-labelledby={idDoTudoEmDia}>
-              <Simbolo />
-              <h2 id={idDoTudoEmDia} className={estilos.tituloDoTudoEmDia}>Tudo revisado</h2>
-              <p className={ui.mini}>{fraseDoTudoEmDia}</p>
-            </section>
+            <>
+              <section className={`${ui.cartao} ${estilos.tudoEmDia}`} aria-labelledby={idDoTudoEmDia}>
+                <Simbolo />
+                <h2 id={idDoTudoEmDia} className={estilos.tituloDoTudoEmDia}>Tudo revisado</h2>
+                <p className={ui.mini}>{fraseDoTudoEmDia}</p>
+              </section>
+              {/* com PR de fora, a Fila vazia fica, com a pílula: o painel não depende só do botão flutuante */}
+              {nDeFora ? elementoDaFila : null}
+            </>
           ) : (
             <>
               <EmAnalise
@@ -169,43 +205,26 @@ export function Radar({ app = appDoNavegador }: Props) {
                 aoDispensarFalha={dispensarFalha}
                 perfis={perfis}
               />
-              <Fila
-                fila={fila}
-                emEspera={emEspera}
-                detalhes={detalhes}
-                estacionados={estacionados}
-                inicioAutomatico={inicioAutomatico}
-                emConflito={emConflito}
-                emRetentativa={emRetentativa}
-                extra={pilulaDeFora}
-                vazio={textoDaFilaVazia(doTopo)}
-                checando={status === 'checking' && !ultimaChecagem}
-                falhas={falhasDaFila}
-                iniciadas={iniciadas}
-                controle={controle}
-                aoDispensarFalha={dispensarFalha}
-              />
+              {elementoDaFila}
             </>
           )}
           <PostadasHoje resolvidas={decisoes?.resolved ?? NENHUM} cliente={app.cliente} controle={controle} iniciadas={iniciadas} />
           <Ignorados ignorados={ignoradosFora} controle={controle} />
           {nDeFora ? <div className={estilosDeFora.respiro} aria-hidden="true" /> : null}
           <BotaoDeFora n={nDeFora} aoAbrir={painelDeFora.abrir} aberto={painelDeFora.aberto} />
-          <PainelDeFora itens={deFora ?? NENHUM} aberto={painelDeFora.aberto} aoFechar={painelDeFora.fechar} controle={controle} />
+          <PainelDeFora
+            itens={deFora ?? NENHUM}
+            aberto={painelDeFora.aberto}
+            aoFechar={painelDeFora.fechar}
+            controle={controle}
+            resultado={painelAberto ? regiaoDeResultado : undefined}
+          />
         </>
       ) : (
         <Esqueleto texto="Carregando o estado do motor." linhas={3} bloco />
       )}
 
-      <RegiaoDeResultado
-        regiao={regiao}
-        resultado={resultado}
-        recados={recados}
-        aoDispensar={() => {
-          dispensar();
-          app.dispensarRecados();
-        }}
-      />
+      {painelAberto ? null : regiaoDeResultado}
     </Pagina>
   );
 }

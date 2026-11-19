@@ -134,6 +134,9 @@
 .numeroDoFiltro { opacity: .8; }
 
 .lista { flex: 1 1 auto; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 18px 24px 32px; }
+/* o resultado da última ação, preso ao pé do painel enquanto ele está aberto */
+.peDoPainel { flex: 0 0 auto; padding: 0 24px 16px; }
+.peDoPainel:has(> :empty) { display: none; }
 
 /* o motivo em destaque, no alto de cada cartão */
 .motivo {
@@ -159,4 +162,5 @@
   .subDoFlutuante { font-size: 11px; }
   .cabecaDoPainel, .filtros { padding-left: 16px; padding-right: 16px; }
   .lista { padding: 14px 16px 24px; }
+  .peDoPainel { padding: 0 16px 12px; }
 }

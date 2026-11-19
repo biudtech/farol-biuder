@@ -9,8 +9,11 @@
 //   src/radar/de-fora.ts), quando volta à fila e "Revisar mesmo assim", que é o mesmo pedido do
 //   Revisar de hoje (POST /api/review com a URL do PR).
 // Com zero PRs de fora, o botão e a pílula não aparecem. O painel é um diálogo modal: fecha no X,
-// no Esc e no fundo, prende o foco enquanto aberto e devolve o foco a quem o abriu.
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+// no Esc e no fundo, prende o foco enquanto aberto e devolve o foco a quem o abriu. O resultado
+// das ações (`resultado`, a região de resultado do Radar) vai dentro dele enquanto está aberto,
+// para ser visto e anunciado no modal; e quando o cartão com o foco sai (o PR foi para a revisão),
+// o foco vai ao cartão seguinte, ou ao X, e nunca fica solto na página.
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import type { MotivoDeFora, PrDeFora } from '@/contratos/de-fora';
 import { contarPorMotivo, filtrarDeFora, fraseDoMotivo } from '@/radar/de-fora';
 import { nomeDoPr } from '@/radar/formato';
@@ -100,12 +103,14 @@ const CartaoDeFora = memo(function CartaoDeFora({ item, controle }: { item: PrDe
       </div>
     </div>
   );
+  // o ignorado ganha o Restaurar, o mesmo da seção Ignorados do Radar
+  const restaurar = item.motivo === 'ignorado' ? [{ acao: { tipo: 'restaurar' as const, chave: item.key, alvo: item.key, nome } }] : [];
+  const revisar = item.url ? [{ acao: { tipo: 'revisar' as const, url: item.url, mesmoAssim: true as const, alvo: item.key, nome } }] : [];
+  const botoes = [...restaurar, ...revisar];
   const acoes = (
     <>
       <AbrirNoGitHub chave={item.key} url={item.url} />
-      {item.url ? (
-        <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', url: item.url, mesmoAssim: true, alvo: item.key, nome } }]} controle={controle} />
-      ) : null}
+      {botoes.length ? <AcoesDoItem pequeno botoes={botoes} controle={controle} /> : null}
     </>
   );
   return (
@@ -133,9 +138,11 @@ interface PropsDoPainel {
   aberto: boolean;
   aoFechar: () => void;
   controle: ControleDeAcoes;
+  // a região de resultado das ações, que vem para dentro do painel enquanto ele está aberto
+  resultado?: ReactNode;
 }
 
-export function PainelDeFora({ itens, aberto, aoFechar, controle }: PropsDoPainel) {
+export function PainelDeFora({ itens, aberto, aoFechar, controle, resultado }: PropsDoPainel) {
   const idDoTitulo = useId();
   const idDaFrase = useId();
   const caixa = useRef<HTMLDivElement>(null);
@@ -145,11 +152,36 @@ export function PainelDeFora({ itens, aberto, aoFechar, controle }: PropsDoPaine
   // o motivo escolhido que ficou sem PR volta a "Todos"
   const filtro = escolhido !== null && contagens.some((c) => c.motivo === escolhido) ? escolhido : null;
   const visiveis = useMemo(() => filtrarDeFora(itens, filtro), [itens, filtro]);
+  const lista = useRef<HTMLDivElement>(null);
+  // a posição do cartão que tem o foco, para saber aonde ir quando ele sai
+  const posicaoDoFoco = useRef<number | null>(null);
 
   // ao abrir, o foco vai ao fechar, o primeiro controle do painel
   useEffect(() => {
     if (aberto) fechar.current?.focus();
   }, [aberto]);
+
+  // O cartão com o foco saiu da lista: o foco vai ao cartão que ficou no lugar dele (o seguinte),
+  // ou ao último, ou ao X quando a lista esvaziou.
+  useLayoutEffect(() => {
+    const posicao = posicaoDoFoco.current;
+    if (!aberto || posicao === null || !caixa.current) return;
+    const ativo = document.activeElement;
+    if (ativo instanceof Node && ativo !== document.body && caixa.current.contains(ativo)) return;
+    posicaoDoFoco.current = null;
+    const cartoes = [...(lista.current?.querySelectorAll<HTMLElement>('article') ?? [])];
+    const alvo = cartoes[Math.min(posicao, cartoes.length - 1)];
+    const focavel = alvo?.querySelector<HTMLElement>(FOCAVEIS);
+    (focavel ?? fechar.current)?.focus();
+  }, [aberto, visiveis]);
+
+  // guarda a posição do cartão que recebeu o foco; o foco fora dos cartões apaga a posição
+  const aoFocar = (evento: FocusEvent<HTMLDivElement>) => {
+    const cartao = evento.target instanceof Element ? evento.target.closest('article') : null;
+    const cartoes = [...(lista.current?.querySelectorAll('article') ?? [])];
+    const posicao = cartao ? cartoes.indexOf(cartao) : -1;
+    posicaoDoFoco.current = posicao >= 0 ? posicao : null;
+  };
 
   if (!aberto) return null;
 
@@ -188,6 +220,7 @@ export function PainelDeFora({ itens, aberto, aoFechar, controle }: PropsDoPaine
         aria-labelledby={idDoTitulo}
         aria-describedby={idDaFrase}
         onKeyDown={teclas}
+        onFocus={aoFocar}
       >
         <div className={estilos.cabecaDoPainel}>
           <div>
@@ -216,11 +249,12 @@ export function PainelDeFora({ itens, aberto, aoFechar, controle }: PropsDoPaine
           </div>
         ) : null}
 
-        <div className={estilos.lista}>
+        <div ref={lista} className={estilos.lista}>
           {visiveis.length ? visiveis.map((item) => <CartaoDeFora key={item.key} item={item} controle={controle} />) : (
             <p className={ui.vazio}>Nenhum PR de fora da fila agora.</p>
           )}
         </div>
+        {resultado ? <div className={estilos.peDoPainel}>{resultado}</div> : null}
       </div>
     </div>
   );

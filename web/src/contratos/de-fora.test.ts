@@ -50,14 +50,14 @@ describe('deFora: o leitor tipado', () => {
     const lidos = LEITORES.deFora([
       { key: 'a#1', motivo: 'estacionado', detalhe: { tipo: 'esgotado', motivo: 'timeout', token: 'ghp_x' } },
       { key: 'a#2', motivo: 'outra_conta', detalhe: { fonte: 'label', extra: 1 }, quem: ['carla'] },
-      { key: 'a#3', motivo: 'regra_manual', detalhe: { source: 'organization', organization: 'acme', author: 7 } },
+      { key: 'a#3', motivo: 'regra_manual', detalhe: { source: 'organizacao', organization: 'acme', author: 7 } },
       { key: 'a#4', motivo: 'decisao_de_gente', detalhe: { decisivos: [{ quem: 'bia', estado: 'CHANGES_REQUESTED', em: '' }, { estado: 'APPROVED' }, 'x'] } },
       { key: 'a#5', motivo: 'ignorado', detalhe: { qualquer: true } },
     ], registrar) ?? [];
     expect(lidos.map((i) => i.detalhe)).toEqual([
       { tipo: 'esgotado', motivo: 'timeout' },
       { fonte: 'label' },
-      { source: 'organization', organization: 'acme' },
+      { source: 'organizacao', organization: 'acme' },
       { decisivos: [{ quem: 'bia', estado: 'CHANGES_REQUESTED' }] },
       {},
     ]);

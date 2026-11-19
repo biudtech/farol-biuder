@@ -35,8 +35,10 @@ function Tela({ itens, controle }: { itens: readonly PrDeFora[]; controle: Contr
 
 function montar(itens: readonly PrDeFora[] = ITENS) {
   const { controle, disparar } = controleFalso();
-  render(<Tela itens={itens} controle={controle} />);
-  return { disparar };
+  const { rerender } = render(<Tela itens={itens} controle={controle} />);
+  // o snapshot novo, com outra lista de PRs de fora
+  const trocar = (novos: readonly PrDeFora[]) => rerender(<Tela itens={novos} controle={controle} />);
+  return { disparar, trocar };
 }
 
 const flutuante = () => screen.getByRole('button', { name: /^De fora da fila/ });
@@ -130,5 +132,63 @@ describe('De fora da fila: o painel', () => {
     expect(nomes(within(primeiro).getAllByRole('button'))).toEqual(['Revisar mesmo assim PR #12 de dono/repo']);
     fireEvent.click(within(primeiro).getByRole('button', { name: 'Revisar mesmo assim PR #12 de dono/repo' }));
     expect(disparar).toHaveBeenCalledWith({ tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', mesmoAssim: true, alvo: 'dono/repo#12', nome: 'PR #12 de dono/repo' });
+  });
+
+  it('o ignorado tem Restaurar, o mesmo da seção Ignorados, além do Revisar mesmo assim', () => {
+    const ignorado: PrDeFora = { key: 'dono/repo#20', url: 'https://github.com/dono/repo/pull/20', title: 'Ignorado', motivo: 'ignorado', detalhe: {} };
+    const { disparar } = montar([ignorado]);
+    fireEvent.click(flutuante());
+    const cartao = within(painel()).getByRole('article');
+    expect(nomes(within(cartao).getAllByRole('button'))).toEqual(['Restaurar PR #20 de dono/repo', 'Revisar mesmo assim PR #20 de dono/repo']);
+    fireEvent.click(within(cartao).getByRole('button', { name: 'Restaurar PR #20 de dono/repo' }));
+    expect(disparar).toHaveBeenCalledWith({ tipo: 'restaurar', chave: 'dono/repo#20', alvo: 'dono/repo#20', nome: 'PR #20 de dono/repo' });
+  });
+
+  it('o resultado das ações aparece dentro do painel, no modal', () => {
+    const { controle } = controleFalso();
+    render(<PainelDeFora itens={ITENS} aberto aoFechar={() => {}} controle={controle} resultado={<div role="status">Erro: recusado</div>} />);
+    expect(within(painel()).getByRole('status').textContent).toBe('Erro: recusado');
+  });
+});
+
+describe('De fora da fila: o foco quando o cartão sai', () => {
+  const revisar = (n: number) => within(painel()).getByRole('button', { name: `Revisar mesmo assim PR #${n} de dono/repo` });
+
+  it('o cartão com o foco saiu (o PR foi para a revisão): o foco vai ao cartão seguinte', () => {
+    const { trocar } = montar();
+    fireEvent.click(flutuante());
+    revisar(12).focus();
+    trocar(ITENS.slice(1));
+    const primeiro = within(painel()).getAllByRole('article')[0] as HTMLElement;
+    expect(document.activeElement).not.toBe(document.body);
+    expect(primeiro.contains(document.activeElement)).toBe(true);
+    expect(within(primeiro).getByRole('heading', { level: 3 }).textContent).toBe('Nova tela');
+  });
+
+  it('o último cartão saiu: o foco vai ao que ficou por último', () => {
+    const { trocar } = montar();
+    fireEvent.click(flutuante());
+    revisar(14).focus();
+    trocar(ITENS.slice(0, 2));
+    const cartoes = within(painel()).getAllByRole('article');
+    expect((cartoes[cartoes.length - 1] as HTMLElement).contains(document.activeElement)).toBe(true);
+  });
+
+  it('a lista esvaziou: o foco vai ao X', () => {
+    const { trocar } = montar(ITENS.slice(0, 1));
+    fireEvent.click(flutuante());
+    revisar(12).focus();
+    trocar([]);
+    expect(document.activeElement).toBe(within(painel()).getByRole('button', { name: 'Fechar o painel e voltar à fila' }));
+  });
+
+  it('o foco fora dos cartões não muda quando a lista muda', () => {
+    const { trocar } = montar();
+    fireEvent.click(flutuante());
+    const filtroTodos = within(painel()).getByRole('button', { name: /^Todos/ });
+    revisar(12).focus();
+    filtroTodos.focus();
+    trocar(ITENS.slice(1));
+    expect(document.activeElement).toBe(filtroTodos);
   });
 });

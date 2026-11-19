@@ -355,27 +355,33 @@ decide quem é de fora: tira esses PRs da Fila e da contagem e os mostra aqui.
   pílula com o número fica ao lado do título da Fila. Os dois são botões de verdade, com
   `aria-haspopup="dialog"` e `aria-expanded`, e abrem o mesmo painel. Com zero PRs de fora,
   nenhum dos dois aparece. Embaixo da tela fica um respiro, para o botão não cobrir o último
-  cartão.
+  cartão. Com a fila vazia e PR de fora, a Fila continua na tela, dizendo que está vazia, com a
+  pílula: o painel não depende só do botão flutuante.
 - **Painel.** Um diálogo modal (`role="dialog"`, `aria-modal`) que entra pela direita, até
   560 px e a tela inteira no celular: o título "De fora com justificativa", quantos PRs ficaram
   de fora e que o Revisar continua funcionando em todos; os filtros por motivo (botões com
   `aria-pressed`: Todos e um por motivo com PR, na ordem de precedência do motor, cada um com a
   contagem); e um cartão por PR. Fecha no X, no Esc e no fundo escurecido; ao abrir, o foco vai
   ao X; Tab e Shift+Tab giram dentro dele; ao fechar, o foco volta a quem o abriu (o botão ou a
-  pílula), ou ao conteúdo principal se ele saiu da tela.
+  pílula), ou ao conteúdo principal se ele saiu da tela. Quando o cartão com o foco sai do
+  painel (o PR foi para a revisão), o foco vai ao cartão que ficou no lugar dele, ao último, ou
+  ao X com a lista vazia, nunca à página. Enquanto o painel está aberto, a região de resultado
+  das ações mora dentro dele, no pé, e sai do pé da página: o envio, o aceite e a recusa do
+  "Revisar mesmo assim" são vistos e anunciados no modal.
 - **O cartão de fora.** O cartão único, compacto, abre com o motivo em destaque, na cor do
   motivo e com um ícone: o título e o que aconteceu, e no rodapé quando o PR volta à fila, com
   Abrir no GitHub e "Revisar mesmo assim" (`POST /api/review` com a URL do PR, o mesmo pedido do
-  Revisar de hoje; o motor aceita o clique em todos os motivos). As frases moram em
+  Revisar de hoje; o motor aceita o clique em todos os motivos). O ignorado tem também o
+  Restaurar, o mesmo da seção Ignorados do Radar. As frases moram em
   `src/radar/de-fora.ts` (`fraseDoMotivo`), uma por motivo:
 
 | Motivo do motor | Filtro | Destaque | Quando volta |
 |---|---|---|---|
 | `decisao_de_gente` | Revisado por gente | "bia aprovou este commit" ou "pediu mudanças neste commit", com o head e a hora do review | no próximo commit |
-| `outra_conta` | Outra conta revisando | "Outra conta está revisando", com quem e, pela label, desde quando | pela label, se ela sair sem review naquele commit; pela saída de cena, no próximo commit |
-| `estacionado` | Parado por falha | "Parado por falha", com a frase da parada e o motivo do motor | com commit novo ou pedido novo de revisão |
+| `outra_conta` | Outra conta revisando | "Outra conta está revisando", com quem e, pela label, desde quando | pela label, se ela sair sem review naquele commit ou quando ela caduca (`SINAL_REVISAO_TTL_MS`, 3 horas depois de o Farol vê-la; `VALIDADE_DA_LABEL_HORAS` repete o número e o teste confere); pela saída de cena, no próximo commit |
+| `estacionado` | Parado por falha | "Parado por falha", com a frase da parada e o motivo do motor | com commit novo ou pedido novo de revisão (`lib/engine/destrava.js`); a sessão cancelada e a parada sem motivo gravado (`legado`) não voltam sozinhas |
 | `pedido_retirado` | Pedido retirado | "Pedido de revisão retirado", com a hora | quando a revisão for pedida de novo |
-| `regra_manual` | Regra: só no clique | "Regra: só no clique", com a organização ou o autor da regra | não volta sozinho: a regra muda no Sistema |
+| `regra_manual` | Regra: só no clique | "Regra: só no clique", com a organização ou o autor da regra (`source` `organizacao` ou `autor`); com `escopo_desconhecido` ou `autor_desconhecido`, que há regra mas a organização ou o autor do PR é desconhecido | não volta sozinho: a regra muda no Sistema |
 | `auto_desligado` | Revisar sozinho desligado | "Revisar sozinho está desligado" | quando o revisar sozinho for ligado no Sistema |
 | `ignorado` | Ignorado | "Ignorado" | não volta sozinho |
 

@@ -30,6 +30,15 @@ export const ROTULO_DO_FILTRO: Readonly<Record<MotivoDeFora, string>> = {
 
 const NO_PROXIMO_COMMIT = 'Volta à fila no próximo commit.';
 
+// Quantas horas a label `<conta>:revisando` de outra pessoa vale antes de o motor tratá-la como
+// esquecida e voltar a revisar (SINAL_REVISAO_TTL_MS, lib/constants.js). O front não importa a
+// constante do motor; o teste confere que as duas batem.
+export const VALIDADE_DA_LABEL_HORAS = 3;
+
+// Os tipos de parada que o destrave do motor não devolve sozinho (lib/engine/destrava.js): a
+// sessão cancelada é decisão de alguém, e a parada sem motivo gravado não diz se foi cancelamento.
+const PARADA_QUE_NAO_VOLTA = new Set(['cancelado', 'legado']);
+
 const quando = (instante: number | string | undefined, fuso?: string): string => {
   const texto = dataHora(instante, fuso);
   return texto ? ` em ${texto}` : '';
@@ -77,13 +86,16 @@ function outraConta(item: PrDeFora, fuso?: string): FraseDoMotivo {
   return {
     ...base,
     detalhe: `O PR está com a label de revisão de ${quem || 'outra conta'}${item.desde ? ` desde ${dataHora(item.desde, fuso)}` : ''}.`,
-    volta: 'Volta sozinho se a label sair sem review naquele commit.',
+    volta: `Volta sozinho se a label sair sem review naquele commit, ou ${VALIDADE_DA_LABEL_HORAS} horas depois de o Farol ver a label, quando ela vale como esquecida.`,
   };
 }
 
+// `source` é a origem que o motor manda (regraDoPr, lib/engine/review-scope.js).
 function regraManual(item: PrDeFora): string {
   const { source, organization, author } = item.detalhe;
-  if (source === 'author' && author) return `A regra do autor ${author} manda revisar só no clique.`;
+  if (source === 'autor' && author) return `A regra do autor ${author} manda revisar só no clique.`;
+  if (source === 'escopo_desconhecido') return 'Há regra de revisão na conta, mas não deu para saber a organização deste PR. Na dúvida, só no clique.';
+  if (source === 'autor_desconhecido') return 'A organização deste PR tem regra por autor, mas não deu para saber o autor deste PR. Na dúvida, só no clique.';
   if (organization) return `A regra da organização ${organization} manda revisar só no clique.`;
   return 'Uma regra da conta manda revisar só no clique.';
 }
@@ -99,7 +111,10 @@ export function fraseDoMotivo(item: PrDeFora, fuso?: string): FraseDoMotivo {
       // "falhou várias vezes seguidas" já é o verbo; o resto pede o "parou"
       const comeco = item.detalhe.tipo === 'esgotado' ? 'A revisão automática' : 'A revisão automática parou:';
       const detalhe = `${comeco} ${frase}${quando(item.desde, fuso)}.`;
-      return { tom: 'falha', titulo: 'Parado por falha', detalhe, volta: 'Volta sozinho com commit novo ou pedido novo de revisão.' };
+      const volta = PARADA_QUE_NAO_VOLTA.has(item.detalhe.tipo ?? 'legado')
+        ? 'Não volta sozinho: Revisar mesmo assim abre a revisão.'
+        : 'Volta sozinho com commit novo ou pedido novo de revisão.';
+      return { tom: 'falha', titulo: 'Parado por falha', detalhe, volta };
     }
     case 'pedido_retirado':
       return {
