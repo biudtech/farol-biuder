@@ -248,8 +248,10 @@ class Engine extends EventEmitter {
     // persistido: após reinício, um 1º ciclo já com falha preserva um Set vazio, igual
     // ao comportamento antigo nesse canto (seen e baseline cobrem o essencial entre boots).
     this.mineKeys = new Set();
-    this.token = null; this.tokenOk = false;
-    this.doctorInfo = null; this.timer = null;
+    this.token = null;
+    this.tokenOk = false;
+    this.doctorInfo = null;
+    this.timer = null;
     this.checking = false;
 
     this.prepareHome();
@@ -1242,15 +1244,8 @@ class Engine extends EventEmitter {
   }
 
   // Outra PESSOA já revisando este PR? Registra no acumulador do ciclo e devolve
-  // true pro filtro do toReview cortar. Extraído do próprio filtro porque o corpo
-  // dele já era um if por trava, e mais um bloco estourava a profundidade do gate
-  // de qualidade. Ver lib/engine/skip-review.js.
-  _registraPulo(pr, pulados) {
-    const outros = skipMod.outrosQueSeguram(this, pr);
-    if (!outros.length) return false;
-    pulados.push({ pr, outros });
-    return true;
-  }
+  // true pro filtro do toReview cortar (registraPulo, lib/engine/skip-review.js).
+  _registraPulo(pr, pulados) { return skipMod.registraPulo(this, pr, pulados); }
 
   // Consumo de tokens: colaborador lib/engine/usage.js (registro permanente, sem custo);
   // ref é a referência amigável (PR/chat/ferramenta) que alimenta a tabela de sessões.

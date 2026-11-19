@@ -86,11 +86,29 @@ test('fila comum: nada fica de fora', () => {
   assert.deepEqual(deForaParaTela(e), []);
 });
 
-test('conflito com a base, limite do plano e retentativa: o motor ainda revisa sozinho', () => {
+test('conflito com a base, limite do plano e retentativa: o motor ainda revisa sozinho', async () => {
   const e = comFila(motor(), PR(1), PR(2), PR(3));
+  // o PR 2 foi segurado por decisão de gente num head anterior; o registro ficou na memória
+  gh.alheios = [{ quem: 'carla', tipo: 'User', state: 'APPROVED', commit_id: HEAD, em: '2026-11-19T08:30:00Z' }];
+  assert.equal(await e.bloqueiaAutomatico(PR(2)), true);
   e.esperaConflito = { 'acme/app#1': { at: 1, head: HEAD, updatedAt: 'x' } };
   e.limiteDoPlanoAte = () => Date.now() + 60000;
   e.retryAfterNet.set('acme/app#3', { tries: 1, pr: PR(3), notBefore: null });
+  // commit novo no PR 2 com o plano no limite: o gate não roda, e o registro velho não vale
+  comFila(e, PR(1), PR(2, { updatedAt: '2026-11-19T12:00:00Z' }), PR(3));
+  assert.deepEqual(deForaParaTela(e), []);
+});
+
+test('head novo sem o gate rodar (limite do plano): a decisão de gente do head anterior não segura o PR em De fora', async () => {
+  const e = comFila(motor(), PR(24));
+  gh.alheios = [{ quem: 'carla', tipo: 'User', state: 'APPROVED', commit_id: HEAD, em: '2026-11-19T08:30:00Z' }];
+  assert.equal(await e.bloqueiaAutomatico(PR(24)), true);
+  assert.deepEqual(motivos(e), [['acme/app#24', 'decisao_de_gente']]);
+  e.limiteDoPlanoAte = () => Date.now() + 3 * 3600000;
+  const headB = PR(24, { updatedAt: '2026-11-19T13:00:00Z' });
+  comFila(e, headB);
+  // o ciclo corta no limite do plano antes do launchReview: o gate não roda
+  await e._dispararAutomacoes([]);
   assert.deepEqual(deForaParaTela(e), []);
 });
 
@@ -199,6 +217,8 @@ test('pedido retirado: o pedido não está mais com a conta', async () => {
   const [item] = deForaParaTela(e);
   assert.equal(item.motivo, 'pedido_retirado');
   assert.ok(Number.isFinite(item.desde));
+  // o gate do pedido não lê o head
+  assert.equal(item.head, null);
 });
 
 test('a recusa na boca da sessão grava o mesmo registro (pedido retirado e decisão de gente)', async () => {
@@ -246,9 +266,9 @@ test('precedência quando há dois motivos', () => {
   e.autoReviewParked.add('acme/app#19');
   e.skipComentado = { 'acme/app#19': { head: 'h', quem: ['ana'], at: 1 }, 'acme/app#20': { head: 'h', quem: ['ana'], at: 1 } };
   e.seguradoPorGente = new Map([
-    ['acme/app#20', { head: HEAD, motivo: 'decisao_de_gente', decisivos: [{ quem: 'carla', estado: 'APPROVED', em: '' }], desde: 5 }],
-    ['acme/app#21', { head: HEAD, motivo: 'pedido_retirado', decisivos: [], desde: 5 }],
-    ['acme/app#22', { head: HEAD, motivo: 'decisao_de_gente', decisivos: [{ quem: 'carla', estado: 'APPROVED', em: '' }], desde: 5 }],
+    ['acme/app#20', { head: HEAD, updatedAt: PR(20).updatedAt, motivo: 'decisao_de_gente', decisivos: [{ quem: 'carla', estado: 'APPROVED', em: '' }], desde: 5 }],
+    ['acme/app#21', { head: HEAD, updatedAt: PR(21).updatedAt, motivo: 'pedido_retirado', decisivos: [], desde: 5 }],
+    ['acme/app#22', { head: HEAD, updatedAt: PR(22).updatedAt, motivo: 'decisao_de_gente', decisivos: [{ quem: 'carla', estado: 'APPROVED', em: '' }], desde: 5 }],
   ]);
   e.config.conta.reviewRules = { acme: { mode: 'manual' } };
   assert.deepEqual(motivos(e).sort(), [
@@ -270,8 +290,8 @@ test('Revisar mesmo assim (POST /api/review) atravessa cada motivo', async () =>
   const casos = {
     estacionado: (e, p) => { e.queue = []; e.autoReviewParked.add(p.key); },
     outra_conta: (e, p) => { e.skipComentado = { [p.key]: { head: 'h', quem: ['ana'], at: 1 } }; },
-    decisao_de_gente: (e, p) => { gh.alheios = [{ quem: 'carla', tipo: 'User', state: 'APPROVED', commit_id: HEAD, em: '' }]; e.seguradoPorGente = new Map([[p.key, { head: HEAD, motivo: 'decisao_de_gente', decisivos: [], desde: 1 }]]); },
-    pedido_retirado: (e, p) => { gh.pedidos = []; e.seguradoPorGente = new Map([[p.key, { head: '', motivo: 'pedido_retirado', decisivos: [], desde: 1 }]]); },
+    decisao_de_gente: (e, p) => { gh.alheios = [{ quem: 'carla', tipo: 'User', state: 'APPROVED', commit_id: HEAD, em: '' }]; e.seguradoPorGente = new Map([[p.key, { head: HEAD, updatedAt: p.updatedAt, motivo: 'decisao_de_gente', decisivos: [], desde: 1 }]]); },
+    pedido_retirado: (e, p) => { gh.pedidos = []; e.seguradoPorGente = new Map([[p.key, { head: '', updatedAt: p.updatedAt, motivo: 'pedido_retirado', decisivos: [], desde: 1 }]]); },
     regra_manual: (e) => { e.config.conta.reviewRules = { acme: { mode: 'manual' } }; },
     auto_desligado: (e) => { e.autoReviewFor = () => false; },
     ignorado: (e, p) => { e.queue = []; e.ignorados = new Set([p.key]); },

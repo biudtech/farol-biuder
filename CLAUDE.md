@@ -383,8 +383,11 @@ do que o motor já decide, sem regra nova de gate, fila ou postagem:
   da Fila e da contagem é da tela. A decisão de gente e o pedido retirado vêm de
   `engine.seguradoPorGente` (`lib/engine/segurado-por-gente.js`), gravado onde o motor já decide
   segurar (`bloqueiaAutomatico`, a recusa na boca da sessão, o Revisar tudo e o pedido retirado),
-  apagado quando o gate deixa de segurar e quando o PR sai do panorama. É memória: o reinício
-  zera, e o próximo ciclo que segura grava de novo.
+  apagado quando o gate deixa de segurar e quando o PR sai do panorama. O registro guarda o
+  `updatedAt` do PR, e a projeção o ignora quando o PR mudou depois dele, mesmo que o gate não
+  tenha rodado de novo (limite do plano, conta sem token). O pedido retirado vai sem `head` (o
+  gate do pedido não lê o head). É memória: o reinício zera, e o próximo ciclo que segura grava
+  de novo.
 - `emRetentativa`: `{ [key]: { tentativas, aPartirDe } }` da retentativa por PR
   (`engine.retryAfterNet`); `aPartirDe` é o epoch a partir do qual ela roda, ou `null`.
 - `card` em cada `activeSessions[]`: a chave do card do Jira lido pela sessão, gravada logo depois
