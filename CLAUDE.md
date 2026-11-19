@@ -119,7 +119,7 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Assunto | Arquivos |
 |---|---|
 | Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
-| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
+| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `diff-vazio-de-linhagem.js` (o PR de diff vazio que só alinha a história, decidido sem sessão), `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
 | Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `trecho-do-achado.js` (o trecho do diff de cada achado, lido no desfecho e gravado nas provas), `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
 | Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `segurado-por-gente.js` (o registro de quem segurou e quando), `de-fora.js` (a projeção `deFora` e `emRetentativa` do snapshot), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
@@ -215,6 +215,28 @@ saem de `lib/technical-review/evidence.js`; o que separa limpo de com ressalvas 
 `lib/engine/ressalvas.js`. O que é ressalva e o que é lacuna quem decide é o motor, nunca o modelo.
 No PR de sincronização entre branches contínuas sem defeito (`lib/engine/pr-de-sincronizacao.js`,
 critério do app), a falta de card e os itens de processo não são ressalva e o resultado é limpo.
+
+**Diff vazio que só alinha a história** (regra do dono de 19/11/2026,
+`lib/engine/diff-vazio-de-linhagem.js`). O sync ou merge-back do GitFlow que não muda nenhum
+arquivo, mas traz os merge commits das releases, é aprovado pelo motor, de qualquer autor, sem
+sessão do Claude e sem ler o card. Logo depois do preparo das fontes, quando o inventário aponta
+zero arquivos no head da revisão, o motor faz uma medição própria e estável pela conta do PR: a
+leitura do PR (head, base, arquivos e commits), a lista paginada de arquivos vazia, a lista
+paginada de commits com os pais e a mesma leitura do PR de novo, igual. Com pelo menos um merge
+commit (dois ou mais pais) sai APPROVE de texto fixo ("Este PR não muda nenhum arquivo em relação
+à base (diff vazio no commit `abc1234`); ele só alinha a história, trazendo N merge commits.
+Aprovo."); sem merge commit é PR vazio por engano e sai um COMMENT neutro, sem aprovar nem pedir
+mudanças. Medição que falha, diverge ou lê outro head segue o caminho normal, e a lista de commits
+cortada (o GitHub para em 250) só prova o merge commit que achou. Continua valendo: a origem do
+dono, o PR da própria conta, a decisão de gente no head e a label de outra conta (encerram sem
+postar), o head que andou (marca `stale_head`), o dedup por head, a política da conta para o
+parecer limpo, os checks obrigatórios com o tratamento de sempre (não seguram, viram aviso no
+card) e todos os portões de `postReview`. Com `reviewRoundsMode: "enforce"` a revisão segue o
+caminho normal. A avaliação técnica na publicação aceita o APPROVE só pela prova que o motor
+grava na memória (`technicalApprovals`, com `diffVazio` no mesmo commit do payload). A decisão
+fica no histórico com `caminho: 'diff_vazio_linhagem'` (projetado para a tela) e `linhagem`
+(`commits` e `mergeCommits`), e uma linha INFO no `farol.log`. Travado em
+`test/diff-vazio-de-linhagem.test.js`.
 
 **Decisão sem mesa.** Regra do dono de 17/11/2026: o revisor nunca espera decisão de gente, e não
 existe mais mesa ("Precisa de você"). `config.conta` traz `autoReview` (o liga e desliga do
