@@ -152,10 +152,14 @@ interface PropsDoCartao {
   estado: string;
   // o cartão dentro de um painel estreito: foto e título um pouco menores
   compacto?: boolean;
+  // o nível do título do PR: 3 no Radar (debaixo do título da seção), 4 no Histórico (debaixo do
+  // título do dia)
+  nivelDoTitulo?: 3 | 4;
 }
 
-export function Cartao({ tom, chave, url, autor, ramo, titulo, contexto, marcas, botoes, pilulas, topo, children, estado, compacto }: PropsDoCartao) {
+export function Cartao({ tom, chave, url, autor, ramo, titulo, contexto, marcas, botoes, pilulas, topo, children, estado, compacto, nivelDoTitulo = 3 }: PropsDoCartao) {
   const href = linkDoPr(url);
+  const Titulo = nivelDoTitulo === 4 ? 'h4' : 'h3';
   return (
     <article className={estilos.cartao} data-tom={tom} data-compacto={compacto ? 'sim' : undefined} aria-label={`${chave}: ${estado}`}>
       {topo}
@@ -174,7 +178,7 @@ export function Cartao({ tom, chave, url, autor, ramo, titulo, contexto, marcas,
             {marcas}
             <span className={ui.soLeitor}>{`, ${estado}`}</span>
           </div>
-          <h3 className={estilos.titulo}>{titulo}</h3>
+          <Titulo className={estilos.titulo}>{titulo}</Titulo>
         </div>
         {botoes ? <div className={estilos.botoes}>{botoes}</div> : null}
       </div>

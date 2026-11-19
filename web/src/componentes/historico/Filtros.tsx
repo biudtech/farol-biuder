@@ -2,9 +2,11 @@
 
 // A busca e os filtros do Histórico. Quem filtra é o motor: aqui só se escolhe. A busca fica
 // sempre à vista e espera um instante depois da última tecla antes de ir ao endereço (e dali
-// ao motor); Enter manda na hora. Os filtros (repositório, o que foi publicado e o período,
-// que GET /api/decisions aceita) ficam atrás do botão Filtrar e mandam ao trocar; os que estão
-// valendo aparecem embaixo como chips, cada um com o seu X.
+// ao motor); Enter manda na hora. O filtro pelo que foi publicado (o `veredito` de
+// GET /api/decisions) fica à vista, em pílulas (Todos, Aprovados, Mudanças pedidas, Comentados,
+// Não publicados), cada uma um botão com aria-pressed. O repositório e o período ficam atrás do
+// botão Filtrar e mandam ao trocar; os que estão valendo aparecem embaixo como chips, cada um com
+// o seu X.
 import { useEffect, useId, useRef, useState } from 'react';
 import { PERIODOS, TETO_DA_BUSCA, rotuloDoPeriodo, type Consulta } from '@/historico/consulta';
 import { FILTROS_DE_DESFECHO } from '@/historico/rotulos';
@@ -20,10 +22,6 @@ interface Props {
   repos: readonly string[];
   aoBuscar(q: string): void;
   aoFiltrar(filtro: { veredito?: string; repo?: string; periodo?: string }): void;
-}
-
-function rotuloDoDesfecho(valor: string): string {
-  return FILTROS_DE_DESFECHO.find(([v]) => v === valor)?.[1] ?? `${valor} (valor do endereço)`;
 }
 
 export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
@@ -56,13 +54,18 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
     aoFiltrar(mudanca);
   };
   const idDaDica = useId();
-  const idDoDesfecho = useId();
   const idDoRepo = useId();
   const idDoPeriodo = useId();
   const desfechoConhecido = consulta.veredito === '' || FILTROS_DE_DESFECHO.some(([valor]) => valor === consulta.veredito);
   const repoNaLista = consulta.repo === '' || repos.some((repo) => repo.toLowerCase() === consulta.repo.toLowerCase());
   const repoEscolhido = repos.find((repo) => repo.toLowerCase() === consulta.repo.toLowerCase()) ?? consulta.repo;
-  const ativos = (consulta.repo ? 1 : 0) + (consulta.veredito ? 1 : 0) + (consulta.periodo ? 1 : 0);
+  const ativos = (consulta.repo ? 1 : 0) + (consulta.periodo ? 1 : 0);
+  // as pílulas: Todos, as do motor e, se o endereço traz um valor que a tela não conhece, ele
+  const pilulas: ReadonlyArray<readonly [string, string]> = [
+    ['', 'Todos'],
+    ...FILTROS_DE_DESFECHO,
+    ...(desfechoConhecido ? [] : [[consulta.veredito, `${consulta.veredito} (valor do endereço)`] as const]),
+  ];
 
   return (
     <div className={estilos.consulta}>
@@ -106,14 +109,6 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
               </select>
             </div>
             <div className={ui.rotulo}>
-              <label htmlFor={idDoDesfecho}>O que foi publicado</label>
-              <select id={idDoDesfecho} className={ui.campo} value={consulta.veredito} onChange={(evento) => aoFiltrar({ veredito: evento.target.value })}>
-                <option value="">Todos</option>
-                {FILTROS_DE_DESFECHO.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
-                {desfechoConhecido ? null : <option value={consulta.veredito}>{consulta.veredito} (valor do endereço)</option>}
-              </select>
-            </div>
-            <div className={ui.rotulo}>
               <label htmlFor={idDoPeriodo}>Período</label>
               <select id={idDoPeriodo} className={ui.campo} value={consulta.periodo} onChange={(evento) => aoFiltrar({ periodo: evento.target.value })}>
                 <option value="">Todo o histórico</option>
@@ -125,6 +120,20 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
         </details>
       </form>
 
+      <div className={estilos.pilulasDeFiltro} role="group" aria-label="Filtrar pelo que foi publicado">
+        {pilulas.map(([valor, rotulo]) => (
+          <button
+            key={valor || 'todos'}
+            type="button"
+            className={estilos.pilulaDeFiltro}
+            aria-pressed={consulta.veredito === valor}
+            onClick={() => { if (consulta.veredito !== valor) aoFiltrar({ veredito: valor }); }}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
       {ativos ? (
         <div className={ui.fila} role="group" aria-label="Filtros valendo">
           {consulta.repo ? (
@@ -132,22 +141,12 @@ export function Filtros({ consulta, repos, aoBuscar, aoFiltrar }: Props) {
               <Chip tom="marca">Repositório: {repoEscolhido} <span aria-hidden="true">✕</span></Chip>
             </button>
           ) : null}
-          {consulta.veredito ? (
-            <button
-              type="button"
-              className={estilos.chipQueSai}
-              aria-label={`Tirar o filtro O que foi publicado: ${rotuloDoDesfecho(consulta.veredito)}`}
-              onClick={() => tirar({ veredito: '' })}
-            >
-              <Chip tom="marca">Publicado: {rotuloDoDesfecho(consulta.veredito)} <span aria-hidden="true">✕</span></Chip>
-            </button>
-          ) : null}
           {consulta.periodo ? (
             <button type="button" className={estilos.chipQueSai} aria-label={`Tirar o filtro Período: ${rotuloDoPeriodo(consulta.periodo)}`} onClick={() => tirar({ periodo: '' })}>
               <Chip tom="marca">Período: {rotuloDoPeriodo(consulta.periodo)} <span aria-hidden="true">✕</span></Chip>
             </button>
           ) : null}
-          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', veredito: '', periodo: '' })}>
+          <button type="button" className={`${ui.botao} ${ui.fantasma} ${ui.pequeno}`} onClick={() => tirar({ repo: '', periodo: '' })}>
             Limpar filtros
           </button>
         </div>

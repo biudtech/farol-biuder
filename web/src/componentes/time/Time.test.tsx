@@ -96,13 +96,13 @@ const clicar = async (nome: string | RegExp) => { await act(async () => { fireEv
 const escolher = (rotulo: string, valor: string) => { act(() => { fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } }); }); };
 const anuncio = () => screen.getByRole('status', { name: 'Resultado da lista' }).textContent;
 const regiao = () => screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
-// o texto de cada linha da lista, sem o avatar (que é enfeite, escondido do leitor de tela)
-const textoSemAvatar = (botao: Element) => [...botao.childNodes].filter((n) => !(n instanceof Element && n.getAttribute('aria-hidden'))).map((n) => n.textContent).join('');
-const linhas = () => {
+// os cartões da grade, um por pessoa, e o nome de cada um (o título do cartão)
+const cartoes = (): HTMLElement[] => {
   const lista = screen.queryByRole('list', { name: 'Pessoas do Time' });
-  return lista ? within(lista).getAllByRole('button').map(textoSemAvatar) : [];
+  return lista ? within(lista).queryAllByRole('article') : [];
 };
-const nomes = () => linhas().map((linha) => linha.split(/ \(@|, /)[0]);
+const nomes = () => cartoes().map((c) => c.querySelector('h2')?.textContent ?? '');
+const cartaoDe = (nome: string) => screen.getByRole('article', { name: nome });
 const botaoDe = (login: string) => document.getElementById(idDoBotao(login)) as HTMLButtonElement;
 const abrir = async (login: string) => { await act(async () => { fireEvent.click(botaoDe(login)); }); };
 const dossie = () => screen.getByRole('region', { name: /^Dossiê de @/ });
@@ -137,19 +137,47 @@ describe('Time: a lista', () => {
     expect(nomes()).toEqual(['Ana Souza', 'bruno', 'caio']);
   });
 
-  it('uma linha por pessoa: avatar com as iniciais, o nome e o papel à direita; a linha é o botão do dossiê', async () => {
+  it('um cartão por pessoa: a foto, o nome, o login, o papel, os domínios e as ações', async () => {
     montar();
     await assentar();
-    // o login vai ao leitor de tela quando o nome é outro
-    expect(linhas()).toEqual(['Ana Souza (@Ana-Souza), Sênior', 'bruno, Júnior', 'caio, Pleno']);
-    const ana = botaoDe('Ana-Souza');
-    expect(ana.tagName).toBe('BUTTON');
-    expect(ana.closest('details')).toBeNull();
-    expect(ana.querySelector('[aria-hidden="true"]')?.textContent).toBe('AS');
-    expect(screen.getByRole('button', { name: 'Ana Souza (@Ana-Souza), Sênior' })).toBe(ana);
+    const ana = cartaoDe('Ana Souza');
+    // a foto do GitHub é enfeite: o nome vai escrito ao lado
+    expect(ana.querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/Ana-Souza?s=72');
+    expect(ana.querySelector('img')?.getAttribute('alt')).toBe('');
+    expect(within(ana).getByText('@Ana-Souza')).toBeTruthy();
+    expect(within(ana).getByText('Sênior')).toBeTruthy();
+    expect(within(within(ana).getByRole('list', { name: 'Domínios' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Backend: Avançado']);
+    // as ações são botões de verdade, com o nome da pessoa para o leitor de tela
+    expect(within(ana).getAllByRole('button').map((b) => b.textContent)).toEqual(['Ver dossiê de Ana Souza', 'Editar papel de Ana Souza']);
+    expect(botaoDe('Ana-Souza')).toBe(within(ana).getByRole('button', { name: 'Ver dossiê de Ana Souza' }));
+    // sem domínio no perfil, sem a lista
+    expect(within(cartaoDe('bruno')).queryByRole('list', { name: 'Domínios' })).toBeNull();
   });
 
-  it('a linha leva ao dossiê', async () => {
+  it('o que o Farol já aprendeu: os pontos mais recentes do dossiê, de markdown', async () => {
+    montar();
+    await assentar();
+    const aprendeu = within(cartaoDe('Ana Souza')).getByRole('region', { name: 'O que o Farol já aprendeu' });
+    expect([...aprendeu.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Cobriu o caso de borda com Map.', 'Teste novo para o limite.']);
+    expect(aprendeu.querySelector('code')?.textContent).toBe('Map');
+    // só perfil, sem dossiê: diz que o dossiê nasce na primeira revisão
+    expect(within(cartaoDe('caio')).getByText(/o dossiê nasce na primeira revisão resolvida/)).toBeTruthy();
+  });
+
+  it('os números de 30 dias saem do motor; sem eles, o cartão diz isso em vez de mostrar zero', async () => {
+    const comNumeros = { ...ANA, numeros: { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20, bloqueios: 4 } };
+    montar({ responder: () => corpo([comNumeros, BRUNO]) });
+    await assentar();
+    const caixas = cartaoDe('Ana Souza').querySelector('dl') as HTMLElement;
+    expect(caixas.getAttribute('aria-label')).toBe('Últimos 30 dias');
+    expect([...caixas.querySelectorAll('div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`)).toEqual([
+      'PRs revisados: 14', 'aprovados de primeira: 9', 'pedidos de mudança: 4',
+    ]);
+    expect(cartaoDe('bruno').querySelector('dl')).toBeNull();
+    expect(within(cartaoDe('bruno')).getByText(/^Sem números dos últimos 30 dias/)).toBeTruthy();
+  });
+
+  it('Ver dossiê leva ao dossiê', async () => {
     montar();
     await assentar();
     await abrir('bruno');
@@ -160,8 +188,10 @@ describe('Time: a lista', () => {
   it('sem papel a linha diz "Sem papel", e autor só com login aparece com o que há', async () => {
     montar({ responder: () => corpo([{ login: 'dora' }]), snapshot: { decisions: resolvidas('d1') } });
     await assentar();
-    expect(linhas()).toEqual(['dora, Sem papel']);
-    expect(botaoDe('dora').textContent).toBe('DOdora, Sem papel');
+    expect(nomes()).toEqual(['dora']);
+    const dora = cartaoDe('dora');
+    expect(within(dora).getByText('Sem papel').closest('[data-sem-papel="sim"]')).toBeTruthy();
+    expect(within(dora).getByText('O motor ainda não anotou nenhum ponto no dossiê.')).toBeTruthy();
   });
 
   it('pessoa que chega sem login fica de fora, contada e avisada', async () => {
@@ -263,7 +293,10 @@ describe('Time: a lista', () => {
     const { container } = montar({ responder: () => corpo([{ login: 'ana', name: marcado, entries: [{ date: marcado, ref: marcado, verdict: marcado, bullets: [marcado] }] }]) });
     await assentar();
     await abrir('ana');
-    expect(container.querySelector('img')).toBeNull();
+    // as únicas imagens são as fotos do GitHub dos cartões; nada do texto vira marcação
+    const fotos = [...container.querySelectorAll('img')].map((i) => i.getAttribute('src') ?? '');
+    expect(fotos.length).toBeGreaterThan(0);
+    for (const src of fotos) expect(src).toMatch(/^https:\/\/avatars\.githubusercontent\.com\/[\w-]+\?s=72$/);
     expect(container.querySelector('b')).toBeNull();
     expect(screen.getAllByText(marcado, { exact: false }).length).toBeGreaterThan(0);
   });
@@ -1067,5 +1100,43 @@ describe('Time: releitura antes de gravar', () => {
     await assentar();
     expect(t.post).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Não deu para reler os perfis no motor antes de gravar, e nada foi enviado.');
+  });
+});
+
+describe('Time: as ações do cartão', () => {
+  it('Editar papel abre o dossiê com "Como revisar" aberta e o foco no papel; fechar devolve o foco ao Ver dossiê', async () => {
+    montar();
+    await assentar();
+    await clicar('Editar papel de bruno');
+    expect(window.location.search).toBe('?autor=bruno');
+    expect(dossieDe('bruno')).toBeTruthy();
+    expect(secao('Como revisar os PRs desta pessoa').open).toBe(true);
+    expect(document.activeElement).toBe(screen.getByLabelText('Papel'));
+    // trocar o papel e salvar segue o caminho do dossiê
+    escolher('Papel', 'pleno');
+    expect(screen.getByRole('button', { name: 'Salvar papel e competência de @bruno' })).toBeTruthy();
+    escolher('Papel', 'junior');
+    await clicar(VOLTAR);
+    expect(document.activeElement).toBe(botaoDe('bruno'));
+  });
+
+  it('Ver dossiê depois de um Editar papel abre o dossiê do jeito de sempre, com o foco no título', async () => {
+    montar();
+    await assentar();
+    await clicar('Editar papel de bruno');
+    await clicar(VOLTAR);
+    await clicar('Ver dossiê de bruno');
+    expect(document.activeElement).toBe(tituloDoDossie());
+    expect(secao('Como revisar os PRs desta pessoa').open).toBe(false);
+  });
+
+  it('Adicionar pessoa é o botão principal do topo e abre o formulário', async () => {
+    montar();
+    await assentar();
+    const adicionar = screen.getByRole('button', { name: 'Adicionar pessoa' });
+    expect(adicionar.className).toMatch(/primario/);
+    await clicar('Adicionar pessoa');
+    expect(screen.queryByRole('button', { name: 'Adicionar pessoa' })).toBeNull();
+    expect(screen.getByLabelText(/Login do GitHub/)).toBeTruthy();
   });
 });

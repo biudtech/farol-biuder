@@ -1,26 +1,35 @@
 'use client';
 
-// A lista do Histórico, no desenho enxuto: uma linha por revisão, agrupada pelo dia em que foi
-// resolvida (Hoje, Ontem, depois a data, no fuso do navegador). Fechada, a linha diz o que foi
-// publicado (a bolinha, com o texto escondido para o leitor), o título do PR e a hora; aberta,
-// o PR, o autor, o desfecho em texto e "Abrir a revisão". A revisão que não publicou nada
-// oferece "Revisar de novo" ali mesmo.
+// A lista do Histórico no cartão único (redesenho, lote 4): um cartão por revisão, agrupado pelo
+// dia em que foi resolvida, no fuso de Brasília ("Hoje, 19 de novembro · 9 revisões"). Fechado, o
+// cartão diz o autor, a chave, a hora e a rodada, o título e o selo do que foi publicado; a seta
+// abre o detalhe no próprio cartão (o mesmo endereço de antes, `?id=&chave=`, e o voltar do
+// navegador fecha). Aberto, ele ganha as pílulas (checks, card e parecer), a análise inteira
+// (Analise, Detalhe.tsx) e o rodapé com a hora, o tempo, as sessões, o custo e os perfis, e as
+// ações "Ver o review postado" (abre a linha do review completo e leva o foco a ela) e "Revisar
+// de novo". A revisão que não publicou nada oferece
+// "Revisar de novo" também fechada.
 //
 // As pendências da mesa (`decisions.pending` do snapshot) vêm antes, num grupo próprio: o front
 // não tem mais mesa, e elas não podem sumir. Aparecem como "nada postado", sem nenhuma ação de
 // mesa (aprovar, pedir mudanças, comentar, pular).
-import { memo } from 'react';
-import type { Revisao } from '@/contratos/historico';
+import { memo, useId } from 'react';
+import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import type { Pendencia } from '@/contratos/radar';
-import { agruparPorDia, horaCurta } from '@/historico/dias';
-import { foiPublicado, parecerQueDifere, textoDoPublicado, textoDoStatus, tomDoDesfecho } from '@/historico/rotulos';
-import { dataComAno, nomeDoPr, prDaUrl } from '@/radar/formato';
+import { contextoDoCartao, rodapeDoCartao, temTextoDoReview, tomDoCartao } from '@/historico/cartao';
+import { agruparPorDia, horaCurta, tituloDoGrupo } from '@/historico/dias';
+import { foiPublicado, rotuloDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
+import { pilulasDaPostada } from '@/radar/cartao';
+import { nomeDoPr, prDaUrl } from '@/radar/formato';
+import { AbrirNoGitHub, Cartao, Rodape } from '../cartao/Cartao';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import { Bolinha, Linha, ui } from '../ui';
+import { Bolinha, Chip, Linha, ui } from '../ui';
+import { Analise, type PerfisDoClaude } from './Detalhe';
+import type { LeituraDoDetalhe } from './useHistorico';
 import estilos from './Historico.module.css';
 
-// O id do botão que abre a revisão: é para ele que o foco volta quando o detalhe fecha.
+// O id do botão que abre e fecha o cartão: é para ele que o foco volta quando o detalhe fecha.
 export function idDoBotao(id: string): string {
   return `ver-revisao-${id}`;
 }
@@ -34,54 +43,110 @@ function meta(chave: string, autor: string | undefined, desfecho: string): strin
   return [chave, autor, desfecho].filter(Boolean).join(' · ');
 }
 
-function RevisarDeNovo({ chave, url, controle }: { chave: string; url: string | undefined; controle: ControleDeAcoes }) {
+function RevisarDeNovo({ chave, url, controle, primario }: { chave: string; url: string | undefined; controle: ControleDeAcoes; primario?: boolean }) {
   const pr = prDaUrl(url ?? '');
   if (!pr) return null;
-  return <AcoesDoItem botoes={[{ acao: { tipo: 'revisar', alvo: chave, nome: nomeDoPr(chave), url: pr.url, deNovo: true } }]} controle={controle} />;
+  return <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', alvo: chave, nome: nomeDoPr(chave), url: pr.url, deNovo: true }, primario }]} controle={controle} />;
 }
 
-interface PropsDaLinha {
+// A seta do cartão: um botão de verdade, com o estado em aria-expanded.
+function Seta({ id, aberto, controla, nome, aoClicar }: { id: string; aberto: boolean; controla: string; nome: string; aoClicar(): void }) {
+  return (
+    <button
+      id={id}
+      type="button"
+      className={`${ui.botao} ${ui.pequeno} ${estilos.seta}`}
+      aria-expanded={aberto}
+      aria-controls={aberto ? controla : undefined}
+      aria-label={`${aberto ? 'Fechar' : 'Abrir'} o detalhe de ${nome}`}
+      data-aberto={aberto ? 'sim' : undefined}
+      onClick={aoClicar}
+    >
+      <svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+  );
+}
+
+interface PropsDoCartao {
   revisao: Revisao;
-  aoAbrir(revisao: Revisao): void;
+  // a leitura do detalhe, quando este cartão é o aberto
+  leitura: LeituraDoDetalhe | null;
+  registro: Registro | undefined;
+  perfis: PerfisDoClaude;
+  aoAlternar(revisao: Revisao): void;
   controle: ControleDeAcoes;
 }
 
-const LinhaDaRevisao = memo(function LinhaDaRevisao({ revisao: r, aoAbrir, controle }: PropsDaLinha) {
+const CartaoDaRevisao = memo(function CartaoDaRevisao({ revisao: daPagina, leitura, registro, perfis, aoAlternar, controle }: PropsDoCartao) {
+  const idDoCorpo = useId();
+  const idDoReview = useId();
+  const aberto = leitura !== null;
+  const complementando = leitura?.fase === 'pronto' && leitura.complementando === true;
+  // a revisão da página com o complemento de GET /api/decision, quando ele chegou
+  const r = leitura?.fase === 'pronto' ? leitura.revisao : daPagina;
   const nome = nomeDoPr(r.key);
-  const publicado = textoDoPublicado(r);
-  const parecer = parecerQueDifere(r);
-  const quando = dataComAno(r.resolvedAt);
+  const naoPostou = r.status === 'pending' || !foiPublicado(r.action);
+  const desfecho = rotuloDoDesfecho(r);
+  const texto = temTextoDoReview(r);
+  const rodape = rodapeDoCartao(r, perfis);
+  // "Ver o review postado" abre a linha do review completo e leva o foco a ela
+  const verReview = (): void => {
+    const linha = document.getElementById(idDoReview);
+    if (!(linha instanceof HTMLDetailsElement)) return;
+    linha.open = true;
+    linha.scrollIntoView?.({ block: 'nearest' });
+    linha.querySelector('summary')?.focus();
+  };
+
   return (
-    <Linha
-      resumo={(
+    <Cartao
+      tom={tomDoCartao(r)}
+      chave={r.key}
+      url={r.pr?.url}
+      autor={r.pr?.author}
+      titulo={r.pr?.title || r.key}
+      contexto={contextoDoCartao(r)}
+      estado={desfecho}
+      botoes={(
         <>
-          <Bolinha tom={tomDoDesfecho(r)} rotulo={`${publicado}:`} />
-          <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{r.pr?.title || r.key}</span>
-          <span className={ui.r}>{horaCurta(r.resolvedAt) || 'sem hora'}</span>
+          <Chip tom={tomDoDesfecho(r)}>{desfecho}</Chip>
+          {!aberto && naoPostou ? <RevisarDeNovo chave={r.key} url={r.pr?.url} controle={controle} /> : null}
+          <Seta id={idDoBotao(daPagina.id)} aberto={aberto} controla={idDoCorpo} nome={nome} aoClicar={() => aoAlternar(daPagina)} />
         </>
       )}
+      pilulas={aberto ? pilulasDaPostada(r.action, r.card, r, complementando) : undefined}
+      nivelDoTitulo={4}
     >
-      {r.blockedReason ? <p className={ui.texto}>{r.blockedReason}</p> : null}
-      <p className={ui.mini}>{meta(r.key, r.pr?.author, publicado)}</p>
-      <p className={ui.mini}>
-        {textoDoStatus(r.status)}
-        {parecer ? `; parecer da revisão: ${parecer}` : ''}
-        {r.card ? `; card ${r.card}` : ''}
-        {quando ? `; ${quando}` : ''}
-      </p>
-      <div className={ui.fila}>
-        <button
-          id={idDoBotao(r.id)}
-          type="button"
-          className={ui.link}
-          aria-label={`Abrir a revisão de ${nome}${quando ? `, de ${quando}` : ''}`}
-          onClick={() => aoAbrir(r)}
-        >
-          Abrir a revisão
-        </button>
-      </div>
-      {foiPublicado(r.action) ? null : <RevisarDeNovo chave={r.key} url={r.pr?.url} controle={controle} />}
-    </Linha>
+      {r.blockedReason && !aberto ? <p className={`${ui.mini} ${estilos.motivoFechado}`}>{r.blockedReason}</p> : null}
+      {aberto ? (
+        <div id={idDoCorpo} className={estilos.corpoDoCartao} role="region" aria-label={`Revisão de ${nome}`}>
+          {complementando ? <p className={ui.mini} role="status">Carregando os achados, os critérios e a execução desta revisão.</p> : null}
+          <Analise revisao={r} registro={registro} controle={controle} perfis={perfis} idDoReview={idDoReview} />
+          <Rodape
+            tom="fila"
+            texto={rodape || 'Sem hora, tempo nem custo registrados'}
+            acao={(
+              <span className={estilos.acoesDoCartao}>
+                {texto !== 'sem' ? (
+                  <button type="button" className={`${ui.botao} ${ui.pequeno}`} aria-controls={idDoReview} onClick={verReview}>
+                    {texto === 'postado' ? 'Ver o review postado' : 'Ver o texto da revisão'}
+                    {' '}<span className={ui.soLeitor}>de {nome}</span>
+                  </button>
+                ) : null}
+                <AbrirNoGitHub chave={r.key} url={r.pr?.url} />
+                {prDaUrl(r.pr?.url ?? '') ? (
+                  <RevisarDeNovo chave={r.key} url={r.pr?.url} controle={controle} primario={naoPostou} />
+                ) : (
+                  <span className={ui.mini}>Sem o endereço do PR no GitHub, não dá para pedir revisão nova daqui.</span>
+                )}
+              </span>
+            )}
+          />
+        </div>
+      ) : null}
+    </Cartao>
   );
 });
 
@@ -89,18 +154,35 @@ interface Props {
   itens: readonly Revisao[];
   // o "hoje" dos grupos: quando a página chegou
   agora: number;
-  aoAbrir(revisao: Revisao): void;
+  // a página carregada é uma de várias: a contagem do dia é desta página
+  variasPaginas: boolean;
+  // o id da revisão aberta e a leitura dela
+  abertoId: string | null;
+  leitura: LeituraDoDetalhe | null;
+  contestacoes: Readonly<Record<string, Registro>> | undefined;
+  perfis: PerfisDoClaude;
+  aoAlternar(revisao: Revisao): void;
   controle: ControleDeAcoes;
 }
 
-export const Lista = memo(function Lista({ itens, agora, aoAbrir, controle }: Props) {
+export const Lista = memo(function Lista({ itens, agora, variasPaginas, abertoId, leitura, contestacoes, perfis, aoAlternar, controle }: Props) {
   const grupos = agruparPorDia(itens, (r) => r.resolvedAt, agora);
   return (
-    <div className={ui.lista}>
+    <div className={estilos.grupos}>
       {grupos.map((grupo) => (
-        <section key={grupo.chave} className={ui.lista} aria-label={grupo.rotulo}>
-          <h3 className={ui.grupo}>{grupo.rotulo}</h3>
-          {grupo.itens.map((revisao) => <LinhaDaRevisao key={revisao.id} revisao={revisao} aoAbrir={aoAbrir} controle={controle} />)}
+        <section key={grupo.chave} className={estilos.grupoDoDia} aria-label={grupo.rotulo}>
+          <h3 className={estilos.tituloDoDia}>{tituloDoGrupo(grupo.rotulo, grupo.itens.length, variasPaginas)}</h3>
+          {grupo.itens.map((revisao) => (
+            <CartaoDaRevisao
+              key={revisao.id}
+              revisao={revisao}
+              leitura={revisao.id === abertoId ? leitura : null}
+              registro={revisao.id === abertoId && contestacoes && Object.hasOwn(contestacoes, revisao.key) ? contestacoes[revisao.key] : undefined}
+              perfis={perfis}
+              aoAlternar={aoAlternar}
+              controle={controle}
+            />
+          ))}
         </section>
       ))}
     </div>

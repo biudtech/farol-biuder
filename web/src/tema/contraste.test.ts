@@ -213,8 +213,13 @@ describe.each(TEMAS)('o cartão do Radar no tema %s', (_nome, v) => {
   });
 });
 
-// O CSS do Radar, do cartão único (src/componentes/cartao) e do painel De fora da fila.
-const CSS_DO_RADAR = ['componentes/radar/Radar.module.css', 'componentes/cartao/Cartao.module.css', 'componentes/radar/DeFora.module.css'];
+// O CSS do Radar, do cartão único (src/componentes/cartao), do painel De fora da fila e das telas
+// que usam o cartão.
+const CSS_DO_RADAR = [
+  'componentes/radar/Radar.module.css', 'componentes/cartao/Cartao.module.css', 'componentes/radar/DeFora.module.css',
+  // o Histórico e o Time no cartão único (redesenho, lote 4)
+  'componentes/historico/Historico.module.css', 'componentes/time/Time.module.css',
+];
 
 describe.each(CSS_DO_RADAR)('o CSS de %s', (arquivo) => {
   const css = fs.readFileSync(path.resolve(import.meta.dirname, '..', arquivo), 'utf8');

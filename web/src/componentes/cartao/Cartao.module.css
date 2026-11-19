@@ -51,7 +51,7 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 .quem { overflow-wrap: anywhere; }
 .meta { overflow-wrap: anywhere; }
 .meta::before { content: "·"; margin-right: 8px; color: var(--apagado); }
-.titulo { font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; text-wrap: pretty; }
+.titulo { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; text-wrap: pretty; }
 .cartao[data-tom="rodando"] .titulo { font-size: 17px; }
 .cartao[data-compacto="sim"] .titulo { font-size: 15px; }
 .botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }

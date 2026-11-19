@@ -81,17 +81,19 @@ interface PropsDaLinha {
   aoAlternar?: (aberta: boolean) => void;
   className?: string;
   rotulo?: string;
+  // para quem precisa abrir a linha de fora (o "Ver o review postado" do Histórico)
+  id?: string;
 }
 
 // Uma linha por item e o detalhe num clique. É o <details> do navegador: o teclado (Enter e
 // espaço no resumo) e o leitor de tela (expandido ou recolhido) vêm de graça, e nada some da
 // árvore quando fecha. `aberta` é só o estado inicial.
-export function Linha({ resumo, children, aberta, aoAlternar, className, rotulo }: PropsDaLinha) {
+export function Linha({ resumo, children, aberta, aoAlternar, className, rotulo, id }: PropsDaLinha) {
   const alternar = aoAlternar
     ? (evento: SyntheticEvent<HTMLDetailsElement>) => aoAlternar(evento.currentTarget.open)
     : undefined;
   return (
-    <details className={classes(estilos.linha, className)} open={aberta} onToggle={alternar} aria-label={rotulo}>
+    <details id={id} className={classes(estilos.linha, className)} open={aberta} onToggle={alternar} aria-label={rotulo}>
       <summary className={estilos.resumo}>{resumo}</summary>
       <div className={estilos.corpo}>{children}</div>
     </details>

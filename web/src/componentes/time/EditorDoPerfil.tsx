@@ -6,7 +6,7 @@
 // alterada (comPerfil). Por isso a tela só oferece o salvar com a lista presente e com o
 // estado desta conexão já chegado (motivoQueImpedeSalvar), e avisa quando o perfil mudou no
 // motor com a edição aberta.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Pessoa, PessoasCruas } from '@/contratos/time';
 import { idDa, type Acao } from '@/radar/acoes';
 import { DOMINIOS, NIVEIS, PAPEIS, ehConhecido, type Opcao } from '@/time/taxonomia';
@@ -55,9 +55,13 @@ interface Props {
   relerPessoas: RelerPessoas;
   // avisa quem está em volta se há edição por salvar
   aoMudar(alterado: boolean): void;
+  // o seletor do papel pega o foco ao montar (o Editar papel do cartão do Time)
+  focar?: boolean;
 }
 
-export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, controle, relerPessoas, aoMudar }: Props) {
+export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, controle, relerPessoas, aoMudar, focar }: Props) {
+  const papel = useRef<HTMLSelectElement>(null);
+  useEffect(() => { if (focar) papel.current?.focus(); }, [focar]);
   const [rascunho, setRascunho] = useState(() => rascunhoDo(perfil));
   const [relendo, setRelendo] = useState(false);
   const [falhaDaReleitura, setFalhaDaReleitura] = useState('');
@@ -100,7 +104,7 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
         <div className={estilos.seletores}>
           <div className={estilos.seletor}>
             <label className={ui.rotulo} htmlFor={idDoPapel}>Papel</label>
-            <select id={idDoPapel} className={ui.campo} value={rascunho.papel} onChange={(evento) => setRascunho({ ...rascunho, papel: evento.target.value })}>
+            <select ref={papel} id={idDoPapel} className={ui.campo} value={rascunho.papel} onChange={(evento) => setRascunho({ ...rascunho, papel: evento.target.value })}>
               <option value="">Sem papel</option>
               {opcoesCom(PAPEIS, rascunho.papel).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
             </select>

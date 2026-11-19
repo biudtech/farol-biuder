@@ -193,6 +193,8 @@ interface Props {
   // o login do endereço
   login: string;
   leitura: LeituraDoDossie;
+  // aberto pelo Editar papel do cartão: "Como revisar" vem aberta e o foco vai ao papel
+  editar?: boolean;
   // `config.people` do snapshot como o motor mandou
   cru: PessoasCruas | undefined;
   ilegiveis: number;
@@ -208,7 +210,7 @@ interface Props {
   aoFechar(): void;
 }
 
-export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contestacoes, controle, relerPessoas, ocupado, avisos, aoFechar }: Props) {
+export function Dossie({ login, leitura, editar, cru, ilegiveis, conexao, emDia, contestacoes, controle, relerPessoas, ocupado, avisos, aoFechar }: Props) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const continuar = useRef<HTMLButtonElement>(null);
   // onde o foco estava quando a pergunta de descarte abriu: é para lá que ele volta
@@ -224,7 +226,9 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
   // a pergunta só existe com edição por salvar: se o estado do motor igualou o rascunho, some
   const pergunta = perguntando && alterado && pronto !== null;
 
-  useEffect(() => { titulo.current?.focus(); }, []);
+  // o foco vai ao título; pelo Editar papel, quem o pega é o seletor do papel (EditorDoPerfil)
+  const [editarAoAbrir] = useState(editar === true);
+  useEffect(() => { if (!editarAoAbrir) titulo.current?.focus(); }, [editarAoAbrir]);
 
   // Fechar o dossiê: direto quando não há edição por salvar, com pergunta quando há.
   const pedirFechar = useCallback(() => {
@@ -320,10 +324,11 @@ export function Dossie({ login, leitura, cru, ilegiveis, conexao, emDia, contest
           <div className={ui.lista}>
             <Observa login={doMotor} autor={pronto.autor} />
             <Linha
+              aberta={editarAoAbrir || undefined}
               rotulo="Como revisar os PRs desta pessoa"
               resumo={<><span className={ui.t}>Como revisar os PRs desta pessoa</span><span className={`${ui.r} ${ui.empurra}`}>{resumoDaCalibracao(pronto.perfil)}</span></>}
             >
-              <EditorDoPerfil login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} relerPessoas={relerPessoas} aoMudar={setAlterado} />
+              <EditorDoPerfil focar={editarAoAbrir} login={doMotor} perfil={pronto.perfil} cru={cru} ilegiveis={ilegiveis} conexao={conexao} emDia={emDia} controle={controle} relerPessoas={relerPessoas} aoMudar={setAlterado} />
             </Linha>
             {pronto.autor?.entries.length || pronto.autor?.numeros ? <Numeros autor={pronto.autor} contestacoes={contestacoes.length} /> : null}
             {pronto.autor?.entries.length ? <Ultimas autor={pronto.autor} /> : null}

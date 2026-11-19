@@ -75,7 +75,30 @@ export interface ExecucaoDaRevisao {
   custoUsd?: number;
   custoEstimado?: boolean;
   inicioIncerto?: true;
+  // desde 19/11/2026 (redesenho, lote 2): os perfis do Claude da rodada e as tentativas uma a
+  // uma, da mais antiga para a mais nova; ausentes no motor antigo e quando vêm vazios
+  perfis?: string[];
+  sessoes?: SessaoDaRodada[];
 }
+
+// Uma tentativa da rodada (sessaoDaLinha, lib/engine/detalhe-da-decisao.js): o id, a hora do
+// registro (o fim dela), o modelo, o perfil do Claude, o desfecho, por que rodou (o gatilho), se
+// retomou a conversa anterior e, quando o diário sabe, a duração e o custo.
+export interface SessaoDaRodada {
+  id: string;
+  em?: number;
+  modelo?: string;
+  perfil?: string;
+  status: string;
+  gatilho?: Gatilho;
+  retomada?: string;
+  duracaoMs?: number;
+  custoUsd?: number;
+}
+
+export const GATILHOS = ['primeira', 'commit_novo', 'rodada_extra', 'contestacao'] as const;
+export type Gatilho = (typeof GATILHOS)[number];
+const RETOMADAS: readonly string[] = ['retomada', 'recusada', 'nova', 'nenhuma'];
 
 // Um critério do card como a sessão o declarou (só em GET /api/decision, desde 17/11/2026,
 // lib/engine/criterios-do-card.js): o texto e se foi atendido; `null` é "não deu para conferir".
@@ -216,7 +239,39 @@ function lerExecucaoDaRevisao(v: unknown): ExecucaoDaRevisao | undefined {
     custoUsd: campo(v.custoUsd, ehQuantia),
     custoEstimado: campo(v.custoEstimado, ehBooleano),
     inicioIncerto: v.inicioIncerto === true ? (true as const) : undefined,
+    perfis: lerPerfisDaRodada(v.perfis),
+    sessoes: lerSessoesDaRodada(v.sessoes),
   });
+}
+
+const textoCheio = (v: unknown): v is string => ehTexto(v) && v.trim() !== '';
+
+function lerPerfisDaRodada(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const lista = v.filter(textoCheio).map((p) => mascararSegredos(p.trim()));
+  return lista.length ? lista : undefined;
+}
+
+// Item que não é objeto sai; campo de forma errada conta como ausente. O item com tudo torto fica:
+// ele é uma tentativa que o diário registrou.
+function lerSessoesDaRodada(v: unknown): SessaoDaRodada[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const lista: SessaoDaRodada[] = [];
+  for (const s of v) {
+    if (!ehObjeto(s)) continue;
+    lista.push(semAusentes({
+      id: textoCheio(s.id) ? mascararSegredos(s.id) : '',
+      em: ehInteiroPositivo(s.em) ? s.em : undefined,
+      modelo: textoCheio(s.modelo) ? mascararSegredos(s.modelo) : undefined,
+      perfil: textoCheio(s.perfil) ? mascararSegredos(s.perfil) : undefined,
+      status: textoCheio(s.status) ? s.status : 'desconhecido',
+      gatilho: ehTexto(s.gatilho) && (GATILHOS as readonly string[]).includes(s.gatilho) ? (s.gatilho as Gatilho) : undefined,
+      retomada: ehTexto(s.retomada) && RETOMADAS.includes(s.retomada) ? s.retomada : undefined,
+      duracaoMs: campo(s.duracaoMs, ehQuantia),
+      custoUsd: campo(s.custoUsd, ehQuantia),
+    }));
+  }
+  return lista.length ? lista : undefined;
 }
 
 // Item sem texto sai; `atende` fora de booleano conta como não conferido. Lista vazia é ausente.

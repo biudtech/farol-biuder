@@ -67,16 +67,37 @@
   gap: 8px 16px;
 }
 
-.legenda {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* as pílulas do filtro pelo que foi publicado: botões de 44 px, a escolhida no par da aba ativa */
+.pilulasDeFiltro { display: flex; flex-wrap: wrap; gap: 8px; }
+.pilulaDeFiltro {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--borda-botao);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
-.legenda > li { display: inline-flex; align-items: center; gap: 6px; }
+.pilulaDeFiltro:hover { background: var(--hover); }
+.pilulaDeFiltro[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-texto); }
+
+/* os grupos por dia e os cartões (o cartão em si é de componentes/cartao) */
+.grupos { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.grupoDoDia { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tituloDoDia { font-size: 15px; font-weight: 800; color: var(--muted); }
+.seta { width: 44px; min-height: 44px; padding: 0; }
+.seta svg { transition: transform .15s ease; }
+.seta[data-aberto="sim"] svg { transform: rotate(180deg); }
+.motivoFechado { overflow-wrap: anywhere; }
+.corpoDoCartao { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.acoesDoCartao { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .seta svg { transition: none; }
+}
 
 /* ---------- o detalhe ---------- */
 .detalhe {

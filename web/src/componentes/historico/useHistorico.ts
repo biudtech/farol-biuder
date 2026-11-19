@@ -75,7 +75,8 @@ export function usePagina(cliente: Pick<Cliente, 'get'>, consulta: Consulta, rec
 export type LeituraDoDetalhe =
   | { fase: 'carregando' }
   // `outra`: a revisão veio pela chave do PR e não é a que o endereço pedia
-  | { fase: 'pronto'; revisao: Revisao; outra: boolean }
+  // `complementando`: a revisão é a da página, e o complemento de GET /api/decision ainda não voltou
+  | { fase: 'pronto'; revisao: Revisao; outra: boolean; complementando?: true }
   | { fase: 'ausente' }
   | { fase: 'erro'; texto: string };
 
@@ -131,7 +132,11 @@ export function useDetalhe(
 
   return useMemo<LeituraDoDetalhe | null>(() => {
     if (!id) return null;
-    if (daPagina) return { fase: 'pronto', revisao: comOComplemento(daPagina, buscado?.pedido === pedido ? buscado.r : null), outra: false };
+    if (daPagina) {
+      const chegou = buscado?.pedido === pedido;
+      const pronta = { fase: 'pronto' as const, revisao: comOComplemento(daPagina, chegou ? buscado.r : null), outra: false };
+      return chegou ? pronta : { ...pronta, complementando: true as const };
+    }
     if (!listaLida) return CARREGANDO;
     if (!chave) return AUSENTE;
     if (buscado?.pedido !== pedido) return CARREGANDO;
