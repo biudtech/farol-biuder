@@ -116,6 +116,18 @@ test('falha que chegou à rede nunca repete dentro da sessão: pode ter chegado 
   assert.equal(esperas.length, 0);
 });
 
+// infra-aws#366, 18/11/2026: o APPROVE falhou com HTTP 500 do GitHub, a falha era classificada
+// como permanente e nenhum reenvio foi armado; o PR foi mesclado 8 minutos depois sem o review.
+test('HTTP 500 do GitHub na postagem não repete na sessão e arma o reenvio dos ciclos seguintes', async () => {
+  esperas.length = 0;
+  const e = motor({ ok: false, attempted: true, error: 'gh: Unprocessable Entity (HTTP 500) · An internal error occurred, please try again.' }, 'approve');
+  await e.runHeadlessReview(prDe('o/r#14'));
+  assert.equal(e.chamadas.length, 1, 'pode ter chegado ao GitHub: quem repete é o reenvio, que confere o head antes');
+  assert.equal(esperas.length, 0);
+  const item = e.decisions.pending.find((d) => d.key === 'o/r#14');
+  assert.equal(item && item.postRetry && item.postRetry.event, 'approve');
+});
+
 test('PR fechado não repete nem arma reenvio', async () => {
   esperas.length = 0;
   const e = motor(FECHADO, 'request_changes');

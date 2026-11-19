@@ -29,6 +29,9 @@ const MSG = {
   tempoEsgotado: 'tempo esgotado (30min) na sessão autônoma',
   ghBuscas: 'ciclo de monitoramento: todas as buscas gh falharam (veja o log)',
   githubIndisponivel: 'postar review biudtech/biud-frontend#774 (APPROVE): gh: No server is currently available to service your request. Sorry about that. Please try resubmitting your request and contact us if the problem persists. (HTTP 503)',
+  // 18/11/2026, infra-aws#366 no motor hospedado: o 500 caía em 'desconhecido' (permanente), o
+  // reenvio não era armado e o PR foi mesclado sem o APPROVE que o gate já tinha decidido
+  github500: 'postar review biudtech/infra-aws#366 (APPROVE): gh: Unprocessable Entity (HTTP 500) · An internal error occurred, please try again.',
   // 03/09/2026, sete vezes no mesmo farol.log entre 10:47 e 11:56: caía em 'desconhecido'
   // e estacionava o PR em silêncio, que foi o caso do biud-core#317 no Farol de um colega
   provedor: 'sessão retornou erro: API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.',
@@ -132,6 +135,7 @@ const CASOS = [
   ['rede', MSG.ghBuscas],
   ['tempo-esgotado', MSG.tempoEsgotado],
   ['github-indisponivel', MSG.githubIndisponivel],
+  ['github-indisponivel', MSG.github500],
   ['provedor-indisponivel', MSG.provedor],
   ['provedor-indisponivel', MSG.provedor500],
   ['token-gh', MSG.token],
@@ -790,4 +794,16 @@ test('sem perfil de chave de API é permanente e de credencial: esperar não res
   const atual = classify('sem perfil do Claude utilizável (assinatura ou chave de API): faça o login do perfil ou cadastre a chave pela API do motor (docs/CONFIGURATION.md, Perfis do Claude)');
   assert.equal(atual.id, 'sem-perfil-de-chave');
   assert.equal(atual.kind, 'permanente');
+});
+
+// 19/11/2026: a linha que a SESSÃO anexa ao farol.log saía sem fuso, ao lado das do motor com
+// fuso. Quem mede a janela pelo carimbo (a validação do motor hospedado) contou 1 erro de 4.
+test('a linha de falha que a sessão anexa ao farol.log leva o fuso, como as do motor', async () => {
+  const fs = await import('node:fs');
+  const protocolo = fs.readFileSync(new URL('../workspace-template/CLAUDE.md', import.meta.url), 'utf8');
+  const comando = protocolo.split('\n').find((l) => l.includes('>> state/farol.log'));
+  assert.ok(comando, 'o protocolo ensina a anexar a linha');
+  assert.match(comando, /date '\+%Y-%m-%d %H:%M:%S %:z'/);
+  const linha = parseLine('[2026-11-18 20:50:51 -03:00] [ERROR] review o/r#1: jq falhou');
+  assert.deepEqual(linha, { ts: '2026-11-18 20:50:51', level: 'ERROR', msg: 'review o/r#1: jq falhou' });
 });
