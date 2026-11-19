@@ -91,6 +91,13 @@ describe('get e post', () => {
     expect(await t.cliente.get('/api/decisions?formato=csv', (b) => (typeof b === 'string' ? b : null))).toEqual({ ok: false, falha: 'resposta_invalida', status: 200 });
   });
 
+  it('com cabecalhos, o leitor recebe o corpo e os cabeçalhos pedidos (o que faltou vem null)', async () => {
+    const t = montar();
+    t.respostas.push(() => new Response('a,b\n', { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="x.csv"' } }));
+    const r = await t.cliente.get('/api/usage?formato=csv', (b) => b, { texto: true, cabecalhos: ['Content-Disposition', 'content-type', 'x-falta'] });
+    expect(r).toEqual({ ok: true, dados: { corpo: 'a,b\n', cabecalhos: { 'content-disposition': 'attachment; filename="x.csv"', 'content-type': 'text/csv; charset=utf-8', 'x-falta': null } } });
+  });
+
   it('post manda x-farol: 1, o Bearer e o corpo em JSON', async () => {
     const t = montar();
     t.respostas.push(() => json({ ok: true }));

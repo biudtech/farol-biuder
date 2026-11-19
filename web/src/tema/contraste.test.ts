@@ -142,6 +142,18 @@ describe.each(TEMAS)('contraste AA no tema %s', (nome, v) => {
     }
   });
 
+  // No redesenho (lote 5) as barras horizontais são --accent sobre o trilho --surface-2; a barra
+  // do dia escolhido é --text; o nome do repositório é --link e, escolhido, --accent-ink sobre
+  // --accent; o período marcado e a pílula são --surface sobre --text; a nota dos números é
+  // --apagado.
+  it('as barras, os botões que viram filtro e as pílulas do Consumo: 3:1 no gráfico, 4,5:1 no texto', () => {
+    expect(contraste(de('--accent'), de('--surface-2')), '--accent sobre --surface-2').toBeGreaterThanOrEqual(3);
+    expect(contraste(de('--text'), de('--surface')), '--text sobre --surface').toBeGreaterThanOrEqual(3);
+    for (const [texto, fundo] of [['--link', '--surface'], ['--accent-ink', '--accent'], ['--surface', '--text'], ['--apagado', '--surface']] as const) {
+      expect(contraste(de(texto), de(fundo)), `${texto} sobre ${fundo}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it('anel de foco e contorno de campo: 3:1', () => {
     for (const fundo of fundos) {
       expect(contraste(de('--foco'), de(fundo)), `--foco sobre ${fundo}`).toBeGreaterThanOrEqual(3);
@@ -162,11 +174,17 @@ describe('o CSS do Consumo', () => {
     for (const [tema, v] of TEMAS) for (const nome of usadas) expect(v.has(nome), `${nome} no tema ${tema}`).toBe(true);
   });
 
-  it('a barra, o eixo e os rótulos do gráfico usam os pares conferidos', () => {
-    expect(css).toContain('.barra { fill: var(--accent); }');
-    expect(css).toContain('.eixo { stroke: var(--borda-campo); stroke-width: 1; }');
-    // no desenho enxuto os dias das pontas são texto da página, embaixo do SVG: cor, não fill
-    expect(css).toMatch(/\.rotuloDoEixo \{ color: var\(--muted\);/);
+  it('as barras, os rótulos e os botões que viram filtro usam os pares conferidos', () => {
+    expect(css).toContain('.barraDoDia { fill: var(--accent); }');
+    expect(css).toContain('.botaoDeBarra[aria-pressed="true"] .barraDoDia { fill: var(--text); }');
+    expect(css).toMatch(/\.trilho \{[^}]*background: var\(--surface-2\);/);
+    expect(css).toContain('.cheio { fill: var(--accent); }');
+    expect(css).toMatch(/\.valorDoDia \{[^}]*color: var\(--muted\);/);
+    expect(css).toMatch(/\.nomeClicavel \{[^}]*color: var\(--link\);/);
+    expect(css).toContain('.nomeClicavel[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }');
+    expect(css).toContain('.periodo[aria-pressed="true"] { background: var(--text); color: var(--surface); font-weight: 800; }');
+    expect(css).toMatch(/\.tirar \{[^}]*background: var\(--text\);\s*color: var\(--surface\);/);
+    expect(css).toMatch(/outline: 2px solid var\(--foco\);/);
     expect(css).toMatch(/\.rolagem \{[^}]*background: var\(--surface\);/);
   });
 });

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { lerConsumoDoSnapshot, lerRespostaDoConsumo, type Relatorio } from './consumo';
+import { lerConsumoDoSnapshot, lerCsvDoConsumo, lerRespostaDoConsumo, type Relatorio } from './consumo';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 const fonte = (arquivo: string): string => fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
@@ -43,17 +43,18 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
     expect(r.range).toEqual({ start: '2026-10-18', end: '2026-11-16' });
     // três por assinatura; a de chave de API tem custo desconhecido, e por isso não soma em apiUsd
     expect(r.totals).toEqual({
-      attempts: 4, inputTokens: 317, outputTokens: 125, cacheReadTokens: 900, cacheCreationTokens: 30, costUsd: 3.75, estimatedUsd: 0.25, unknownCost: 1,
+      attempts: 4, inputTokens: 317, outputTokens: 125, thinkingTokens: 0, cacheReadTokens: 900, cacheCreationTokens: 30, costUsd: 3.75, estimatedUsd: 0.25, unknownCost: 1,
       subscription: 3, unknownBilling: 0, apiUsd: 0, apiEstimatedUsd: 0, apiUnknown: 1,
     });
     expect(r.series.map((dia) => [dia.name, dia.attempts, dia.costUsd])).toEqual([['2026-11-14', 1, 1.5], ['2026-11-15', 2, 2.25], ['2026-11-16', 1, 0]]);
     // todos os tipos, na ordem do motor, inclusive os zerados
     expect(r.byKind.map((tipo) => [tipo.name, tipo.attempts])).toEqual([['review', 3], ['pushback', 1], ['chat', 0], ['tool', 0], ['outro', 0]]);
+    // o custo por modelo é o que o motor somou; a de custo desconhecido conta à parte
     expect(r.models).toEqual([
-      { name: 'Sonnet 5', attempts: 3, inputTokens: 310, outputTokens: 125 },
-      { name: 'Opus 5', attempts: 1, inputTokens: 7, outputTokens: 0 },
+      { name: 'Sonnet 5', attempts: 3, inputTokens: 310, outputTokens: 125, thinkingTokens: 0, costUsd: 3.75, unknownCost: 0 },
+      { name: 'Opus 5', attempts: 1, inputTokens: 7, outputTokens: 0, thinkingTokens: 0, costUsd: 0, unknownCost: 1 },
     ]);
-    expect(r.options).toEqual({ kind: ['pushback', 'review'], model: ['Opus 5', 'Sonnet 5'], repo: ['Dono/Repo', 'dono/outro', 'dono/repo'] });
+    expect(r.options).toEqual({ kind: ['pushback', 'review'], model: ['Opus 5', 'Sonnet 5'], repo: ['Dono/Repo', 'dono/outro', 'dono/repo'], author: [], profile: [] });
     expect(r.completed).toEqual({ reviews: 2, prs: 2 });
     expect(r.retries).toBe(1);
     expect(r.unidentified).toBe(0);
@@ -139,6 +140,82 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
   });
 });
 
+describe('GET /api/usage: o que o redesenho acrescentou (lote 2)', () => {
+  type RelatarComContexto = (fontes: unknown[], consulta: Record<string, string>, agora: number, contexto?: Record<string, unknown>) => unknown;
+  const comLote2 = [
+    { id: id(1), at: AGORA - 3 * HORA, iniciadaEm: AGORA - 3 * HORA - 90_000, kind: 'review', status: 'ok', ref: 'dono/repo#12', account: 'rev', profileId: 'perfil-a', gatilho: 'commit_novo', model: 'Sonnet 5', billingKind: 'dir', inputTokens: 10, outputTokens: 4, thinkingTokens: 6, cacheReadTokens: 100, cacheCreationTokens: 20, costUsd: 0.5, costSource: 'medido' },
+    { id: id(2), at: AGORA - 2 * HORA, kind: 'review', status: 'ok', ref: 'dono/outro#3', account: 'rev', profileId: 'perfil-b', model: 'Opus 5', billingKind: 'dir', inputTokens: 1, outputTokens: 1, thinkingTokens: 0, costUsd: 1, costSource: 'medido' },
+  ];
+
+  async function relatarCom(consulta: Record<string, string> = {}): Promise<Relatorio> {
+    const { activityReport } = await import(/* @vite-ignore */ pathToFileURL(path.join(RAIZ, 'lib/usage/report.js')).href) as { activityReport: RelatarComContexto };
+    const autorDe = (ref: string) => (ref === 'dono/repo#12' ? 'Ana' : '');
+    const lido = lerRespostaDoConsumo(activityReport([{ device: 'local', rows: comLote2 }], consulta, AGORA, { autorDe }));
+    if (!lido?.ok) throw new Error('não leu');
+    return lido.relatorio;
+  }
+
+  it('lê o pensamento, o perfil, o gatilho, o autor e a duração de cada linha, e as opções de autor e perfil', async () => {
+    const r = await relatarCom();
+    expect(r.totals.thinkingTokens).toBe(6);
+    expect(r.options).toMatchObject({ author: ['ana'], profile: ['perfil-a', 'perfil-b'] });
+    const [maisNova, maisAntiga] = r.history.rows;
+    expect(maisAntiga).toMatchObject({ profile: 'perfil-a', gatilho: 'commit_novo', author: 'ana', thinkingTokens: 6, duracaoMs: 90_000 });
+    // sem a hora de início o motor não sabe a duração: a linha fica sem ela, e não com zero
+    expect(maisNova?.duracaoMs).toBeUndefined();
+    // registro sem marca conta como primeira na revisão; linha sem autor fica sem ele
+    expect(maisNova).toMatchObject({ gatilho: 'primeira', profile: 'perfil-b' });
+    expect(maisNova?.author).toBeUndefined();
+    expect(r.history.pageSize).toBe(8);
+  });
+
+  it('o custo e o pensamento por modelo, e a soma por gatilho', async () => {
+    const r = await relatarCom();
+    expect(r.models).toEqual([
+      { name: 'Sonnet 5', attempts: 1, inputTokens: 10, outputTokens: 4, thinkingTokens: 6, costUsd: 0.5, unknownCost: 0 },
+      { name: 'Opus 5', attempts: 1, inputTokens: 1, outputTokens: 1, thinkingTokens: 0, costUsd: 1, unknownCost: 0 },
+    ]);
+    expect(r.porGatilho?.map((g) => [g.name, g.attempts, g.costUsd])).toEqual([['commit_novo', 1, 0.5], ['primeira', 1, 1]]);
+  });
+
+  it('os filtros de autor e perfil são do motor', async () => {
+    expect((await relatarCom({ author: 'ANA' })).totals.attempts).toBe(1);
+    expect((await relatarCom({ profile: 'perfil-b' })).history.rows.map((op) => op.pr)).toEqual(['dono/outro#3']);
+  });
+
+  it('a decisão da rodada: etapas, card e arquivos lidos, cada um só quando vem', () => {
+    const lido = lerRespostaDoConsumo({
+      ok: true, range: { start: '2026-11-01', end: '2026-11-16' }, totals: {},
+      porGatilho: [{ name: '', attempts: 1 }, { name: 'primeira', attempts: 2 }, { attempts: 3 }],
+      history: {
+        total: 2, page: 0, pages: 1, pageSize: 8,
+        rows: [
+          { key: 'k1', at: 5, decisaoId: 'd1', card: 'PROJ-9', arquivosLidos: 12, etapas: [{ id: 'fontes', label: 'Fontes', ms: 300 }, { id: 'x', label: 'Torta', ms: -1 }, { label: 'sem id', ms: 3 }, 'nada'], attempts: [{ at: 5 }] },
+          { key: 'k2', at: 6, card: '', arquivosLidos: 1.5, etapas: 'x', attempts: [] },
+        ],
+      },
+    });
+    if (!lido?.ok) throw new Error('não leu');
+    const [primeira, segunda] = lido.relatorio.history.rows;
+    expect(primeira).toMatchObject({ decisaoId: 'd1', card: 'PROJ-9', arquivosLidos: 12, etapas: [{ id: 'fontes', label: 'Fontes', ms: 300 }, { id: 'x', label: 'Torta' }] });
+    expect(segunda).toEqual({ key: 'k2', at: 6, attempts: [] });
+    // o gatilho vazio (conversa e ferramenta) fica, como o repositório vazio; sem nome é descartado
+    expect(lido.relatorio.porGatilho?.map((g) => g.name)).toEqual(['', 'primeira']);
+    expect(lido.relatorio.descartados).toBe(1);
+  });
+
+  it('os nomes lidos são os que o motor grava', () => {
+    const sessoes = fonte('lib/engine/consumo-das-sessoes.js');
+    for (const trecho of ["const out = { ...linha, decisaoId: String(d.id || '') };", 'out.etapas = etapas;', 'out.card = card;', 'out.arquivosLidos = lidos;', "({ id: String(s.id || '').slice(0, 40), label: String(s.label || '').slice(0, 80), ms: Number(s.ms) >= 0 ? Number(s.ms) : 0 })"]) {
+      expect(sessoes, trecho).toContain(trecho);
+    }
+    const diario = fonte('lib/usage/activity.js');
+    expect(diario).toContain('duration: number(s.at) - number(s.iniciadaEm), durationKnown: number(s.iniciadaEm) > 0,');
+    expect(diario).toContain("modelParts: modelParts(s), gatilho: gatilhoDaLinha({ kind, gatilho: s.gatilho }), author: '',");
+    expect(fonte('lib/usage/report.js')).toContain("repos: aggregateRepos(attempts), porGatilho: aggregate(attempts, 'gatilho'),");
+  });
+});
+
 describe('GET /api/usage: forma inesperada', () => {
   const minimo = { ok: true, range: { start: '2026-11-01', end: '2026-11-16' }, totals: {}, history: { total: 0, page: 0, pages: 1, rows: [] } };
 
@@ -146,7 +223,7 @@ describe('GET /api/usage: forma inesperada', () => {
     const lido = lerRespostaDoConsumo(minimo);
     expect(lido).toEqual({
       ok: true,
-      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [] }, descartados: 0 },
+      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, descartados: 0 },
     });
   });
 
@@ -175,7 +252,7 @@ describe('GET /api/usage: forma inesperada', () => {
     expect(r.byKind).toEqual([{ name: 'review' }]);
     expect(r.models).toEqual([{ name: 'Sonnet 5', attempts: 1 }]);
     expect(r.descartados).toBe(4);
-    expect(r.options).toEqual({ kind: ['review'], model: [], repo: [] });
+    expect(r.options).toEqual({ kind: ['review'], model: [], repo: [], author: [], profile: [] });
     // a operação sem hora válida entra com o que há; a tentativa sem hora fica de fora
     expect(r.history.rows).toEqual([{ key: 'k1', attempts: [{ at: 5, costUsd: 1 }] }]);
     expect(r.history.descartados).toBe(1);
@@ -201,7 +278,7 @@ describe('a chave usage do snapshot', () => {
       retentionDays: 120,
     }, registrar);
     expect(lido).toEqual({
-      recentSessions: [{ at: 1000, day: '2026-11-16', kind: 'review', status: 'ok', ref: 'dono/repo#12', model: 'Sonnet 5', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido' }],
+      recentSessions: [{ at: 1000, day: '2026-11-16', kind: 'review', status: 'ok', ref: 'dono/repo#12', model: 'Sonnet 5', profile: 'p1', inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, costUsd: 0.5, costSource: 'medido' }],
       auditoria: { total: parte(42, 900), util: parte(40, 880), perdido: parte(2, 20), medido: parte(41, 890), estimado: parte(1, 10), desconhecido: parte(0, 0) },
       sessionsSince: 500,
       sessoesContadas: 42,
@@ -246,5 +323,35 @@ describe('a chave usage do snapshot', () => {
     for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: d.auditoria()', 'sessionsSince:']) expect(resumo, nome).toContain(nome);
     // o motor não tem teto de gasto: nem a lista por perfil, nem o gate
     expect(resumo).not.toMatch(/budgets|budgetBlockedFor|profileBudgetStatus/);
+  });
+});
+
+describe('o CSV de GET /api/usage?formato=csv', () => {
+  const csv = (corpo: unknown, cabecalhos: Record<string, string | null> = {}) => lerCsvDoConsumo({ corpo, cabecalhos: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': null, ...cabecalhos } });
+
+  it('o texto do arquivo, com o nome que o motor deu no Content-Disposition', () => {
+    expect(csv('Quando,Tipo\n', { 'content-disposition': 'attachment; filename="farol-consumo-2026-11-16.csv"' })).toEqual({ ok: true, csv: 'Quando,Tipo\n', nome: 'farol-consumo-2026-11-16.csv' });
+    // sem o cabeçalho (o motor em outra origem não o expõe ao navegador), o nome fica com a tela
+    expect(csv('Quando,Tipo\n')).toEqual({ ok: true, csv: 'Quando,Tipo\n', nome: null });
+    // nome que não é um arquivo simples não é seguido
+    for (const ruim of ['attachment; filename="../x.csv"', 'attachment; filename="a/b.csv"', 'attachment; filename=""', 'attachment; filename="x.exe"', 'inline']) {
+      expect(csv('a\n', { 'content-disposition': ruim }), ruim).toEqual({ ok: true, csv: 'a\n', nome: null });
+    }
+  });
+
+  it('a resposta em JSON não é arquivo: a recusa do motor volta com a frase dele', () => {
+    const recusa = JSON.stringify({ ok: false, motivo: 'Período inválido.' });
+    expect(csv(recusa, { 'content-type': 'application/json; charset=utf-8' })).toEqual({ ok: false, motivo: 'Período inválido.' });
+    // mesmo sem o tipo, um corpo que é o objeto JSON da recusa não vira arquivo
+    expect(csv(recusa, { 'content-type': null })).toEqual({ ok: false, motivo: 'Período inválido.' });
+    // JSON que não é a recusa é resposta torta
+    expect(csv(JSON.stringify({ ok: true }), { 'content-type': 'application/json' })).toBeNull();
+    expect(csv('{torto', { 'content-type': 'application/json' })).toBeNull();
+  });
+
+  it('o que não é texto com cabeçalhos é resposta torta', () => {
+    expect(lerCsvDoConsumo('a,b\n')).toBeNull();
+    expect(lerCsvDoConsumo({ corpo: 1, cabecalhos: {} })).toBeNull();
+    expect(lerCsvDoConsumo(null)).toBeNull();
   });
 });

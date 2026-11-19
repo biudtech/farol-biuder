@@ -5,7 +5,7 @@
 export function somaDoMotor(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     attempts: 0, ok: 0, erro: 0, cancelada: 0, interrompida: 0, parcial: 0, descartada: 0, desconhecido: 0,
-    inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
+    inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
     costUsd: 0, estimatedUsd: 0, unknownCost: 0, apiUsd: 0, apiEstimatedUsd: 0, apiUnknown: 0, subscription: 0, unknownBilling: 0,
     ...extra,
   };
@@ -15,9 +15,10 @@ export function somaDoMotor(extra: Record<string, unknown> = {}): Record<string,
 export function tentativaDoMotor(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     key: '5:local|3:rev|0:|6:review|38:a-1', identified: true, attemptId: '', at: Date.UTC(2026, 10, 15, 14, 30), day: '2026-11-15',
-    kind: 'review', status: 'ok', account: 'rev', profile: '', ref: 'dono/repo#12', pr: 'dono/repo#12', device: 'local',
+    kind: 'review', status: 'ok', account: 'rev', profile: 'perfil-a', ref: 'dono/repo#12', pr: 'dono/repo#12', device: 'local',
     model: 'Sonnet 5', provider: 'claude', billing: 'dir', costUsd: 1.5, costSource: 'medido', duration: 0, durationKnown: false, modelParts: null,
-    inputTokens: 1200, outputTokens: 340, cacheReadTokens: 90000, cacheCreationTokens: 2500,
+    gatilho: 'primeira', author: 'ana',
+    inputTokens: 1200, outputTokens: 340, thinkingTokens: 60, cacheReadTokens: 90000, cacheCreationTokens: 2500,
     ...extra,
   };
 }
@@ -33,7 +34,7 @@ export function relatorioDoMotor(extra: Record<string, unknown> = {}): Record<st
   return {
     ok: true,
     range: { start: '2026-10-18', end: '2026-11-16', valid: true },
-    options: { account: ['rev'], provider: ['claude'], model: ['Opus 5', 'Sonnet 5'], kind: ['pushback', 'review'], device: ['local'], repo: ['dono/outro', 'dono/repo'] },
+    options: { account: ['rev'], provider: ['claude'], model: ['Opus 5', 'Sonnet 5'], kind: ['pushback', 'review'], device: ['local'], profile: ['perfil-a', 'perfil-b'], repo: ['dono/outro', 'dono/repo'], author: ['ana', 'bia'] },
     totals: somaDoMotor({ attempts: 5, ok: 4, erro: 1, inputTokens: 6000, outputTokens: 2000, cacheReadTokens: 400000, cacheCreationTokens: 12000, costUsd: 12.5, subscription: 5 }),
     byKind: [
       { name: 'review', ...somaDoMotor({ attempts: 4, inputTokens: 5000, outputTokens: 1800, cacheReadTokens: 390000, cacheCreationTokens: 11000, costUsd: 10 }) },
@@ -53,10 +54,19 @@ export function relatorioDoMotor(extra: Record<string, unknown> = {}): Record<st
       { name: '2026-11-16', ...somaDoMotor({ attempts: 1, inputTokens: 1000, outputTokens: 200, cacheReadTokens: 50000, cacheCreationTokens: 1000, costUsd: 1.4 }) },
     ],
     models: [
-      { name: 'Opus 5', attempts: 1, inputTokens: 1000, outputTokens: 200 },
-      { name: 'Sonnet 5', attempts: 4, inputTokens: 5000, outputTokens: 1800 },
+      { name: 'Opus 5', attempts: 1, inputTokens: 1000, outputTokens: 200, thinkingTokens: 10, costUsd: 2.5, unknownCost: 0 },
+      { name: 'Sonnet 5', attempts: 4, inputTokens: 5000, outputTokens: 1800, thinkingTokens: 90, costUsd: 10, unknownCost: 0 },
     ],
-    history: { total: 2, page: 0, pages: 1, rows: [operacaoDoMotor(12), operacaoDoMotor(7, { kind: 'pushback', model: 'Opus 5', status: 'erro', costUsd: 0, costSource: 'desconhecido' })] },
+    repos: [
+      { name: 'dono/outro', ...somaDoMotor({ attempts: 1, costUsd: 2.5 }) },
+      { name: 'dono/repo', ...somaDoMotor({ attempts: 4, costUsd: 10 }) },
+    ],
+    porGatilho: [
+      { name: 'primeira', ...somaDoMotor({ attempts: 3, costUsd: 8 }) },
+      { name: 'commit_novo', ...somaDoMotor({ attempts: 1, costUsd: 2 }) },
+      { name: 'contestacao', ...somaDoMotor({ attempts: 1, costUsd: 2.5 }) },
+    ],
+    history: { total: 2, page: 0, pages: 1, pageSize: 8, rows: [operacaoDoMotor(12), operacaoDoMotor(7, { kind: 'pushback', gatilho: 'contestacao', model: 'Opus 5', status: 'erro', costUsd: 0, costSource: 'desconhecido' })] },
     incomplete: false,
     ...extra,
   };

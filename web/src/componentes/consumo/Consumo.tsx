@@ -1,34 +1,41 @@
 'use client';
 
-// A tela Consumo, no desenho enxuto: no topo o período e o botão Filtrar; um número grande (o
-// custo estimado do período) com o gráfico por dia; e, fechados numa linha cada, os detalhes
-// do período, as quebras, as execuções, as sessões recentes e a auditoria do registro.
+// A tela Consumo (redesenho, lote 5): no topo os períodos prontos; a barra de filtros (busca,
+// repositório, autor, modelo e perfil) e as pílulas do que está escolhido; os números do período;
+// o plano de cada perfil do Claude; o custo por dia e por repositório (clicáveis: o clique vira
+// filtro); por modelo e por gatilho; e cada sessão, paginada, com a linha que abre e Baixar CSV.
 //
-// A auditoria do registro e as sessões recentes vêm da chave `usage` do snapshot; o período
-// (somas, gasto por dia, quebras e diário) vem de GET /api/usage, onde quem soma, filtra e
-// pagina é o motor. A tela fatia e formata: não soma itens e não tem preço por modelo. Ela só
-// mede: o motor não tem teto de gasto, e nada aqui pausa revisão. A consulta mora no endereço
-// da página.
+// O período vem de GET /api/usage, onde quem soma, filtra e pagina é o motor. Com um dia clicado
+// vão dois pedidos: o do dia (tudo na tela) e o do período inteiro, só para o gráfico por dia e os
+// períodos prontos. O plano, as sessões recentes e a auditoria vêm do snapshot. A tela fatia e
+// formata: não soma itens e não tem preço por modelo. Ela só mede: o motor não tem teto de
+// gasto, e nada aqui pausa revisão. A consulta mora no endereço da página.
 //
 // O relatório não se refaz a cada evento do fluxo: quando o snapshot passa a contar sessão que
 // o relatório não viu, aparece um aviso com o botão Atualizar, e a pessoa decide quando.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import {
-  CONSULTA_VAZIA, ehRecusaDeCampo, marcaDoConsumo, mensagemDaFalha, temPeriodo, textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
+  CONSULTA_VAZIA, caminhoDoPeriodo, caminhoDoRelatorio, comDia, ehRecusaDeCampo, marcaDoConsumo, mensagemDaFalha, temPeriodo, textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
 } from '@/consumo/consulta';
+import { perfisDoPlano } from '@/consumo/plano';
+import type { Relatorio } from '@/contratos/consumo';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
-import { Diario } from './Diario';
-import { Filtrar, FiltrosAtivos, SeletorDePeriodo } from './Filtros';
-import { TabelaPorDia } from './GraficoPorDia';
-import { PorModelo, PorRepositorio, PorTipo } from './Quebras';
-import { CustoDoPeriodo, DetalhesDoPeriodo } from './ResumoDoPeriodo';
+import { CustoPorDia } from './CustoPorDia';
+import { BarraDeFiltros, Periodos, Pilulas } from './Filtros';
+import { Numeros, PlanoDosPerfis } from './Numeros';
+import { PorGatilho, PorModelo, PorRepositorio } from './Quebras';
+import { DetalhesDoPeriodo, notasDoPeriodo } from './ResumoDoPeriodo';
+import { BaixarCsv, Sessoes } from './Sessoes';
 import { SessoesRecentes } from './SessoesRecentes';
 import { useEnderecoDoConsumo, useRelatorio } from './useConsumo';
 import estilos from './Consumo.module.css';
+
+const ID_DO_TITULO = 'consumo-titulo';
+const SEM_SESSOES: readonly string[] = Object.freeze([]);
 
 interface Props {
   // existe para o teste trocar a instância
@@ -42,18 +49,45 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const sessoesDescartadas = useApp((e) => e.snapshot?.usage?.sessoesDescartadas, app);
   const desde = useApp((e) => e.snapshot?.usage?.sessionsSince, app);
   const sessoesContadas = useApp((e) => e.snapshot?.usage?.sessoesContadas, app);
+  const config = useApp((e) => e.snapshot?.config, app);
+  const claudePerfis = useApp((e) => e.snapshot?.claudePerfis, app);
+  const ativas = useApp((e) => e.snapshot?.activeSessions, app);
+  const temSnapshot = useApp((e) => e.snapshot !== null, app);
   const recados = useApp((e) => e.recados, app);
 
   const [recarga, setRecarga] = useState(0);
-  const { carregando, relatorio, motivo, falha, opcoes, fim, haNovo } = useRelatorio(app.cliente, consulta, recarga, marcaDoConsumo(sessoesContadas));
+  const marca = marcaDoConsumo(sessoesContadas);
+  const { carregando, relatorio, motivo, falha, opcoes, fim, haNovo } = useRelatorio(app.cliente, caminhoDoRelatorio(consulta), recarga, marca);
+  // com um dia clicado, o período inteiro para o gráfico e os períodos prontos
+  const doPeriodo = useRelatorio(app.cliente, caminhoDoPeriodo(consulta), recarga, marca);
+
+  // O último relatório do período inteiro que a tela teve sem dia clicado, com a chave dele (o
+  // pedido do período sem dia, busca e página, que não mudam a série). No primeiro clique num dia
+  // o pedido do período ainda não voltou: o gráfico segue com este, em vez de desmontar e levar
+  // junto o foco do botão clicado, e os períodos prontos seguem valendo.
+  const chaveDoPeriodo = caminhoDoRelatorio({ ...consulta, dia: '', q: '', pagina: 1 });
+  const [anterior, setAnterior] = useState<{ chave: string; relatorio: Relatorio } | null>(null);
+  if (!consulta.dia && !carregando && relatorio && (anterior?.relatorio !== relatorio || anterior.chave !== chaveDoPeriodo)) {
+    setAnterior({ chave: chaveDoPeriodo, relatorio });
+  }
+  const reserva = anterior?.chave === chaveDoPeriodo ? anterior.relatorio : null;
+  const relatorioDoPeriodo = consulta.dia
+    ? (doPeriodo.carregando ? reserva ?? doPeriodo.relatorio : doPeriodo.relatorio)
+    : relatorio;
+  const fimDoPeriodo = consulta.dia ? doPeriodo.fim ?? reserva?.range.end ?? null : fim;
+
+  const emUso = useMemo(() => (ativas ?? []).map((s) => s.perfilId).filter((id): id is string => Boolean(id)), [ativas]);
+  const perfis = useMemo(() => perfisDoPlano(config, claudePerfis, emUso.length ? emUso : SEM_SESSOES), [config, claudePerfis, emUso]);
+  const nomes = useMemo(() => new Map((config?.claudeProfiles ?? []).map((p) => [p.id, p.label || p.id])), [config]);
+  const rotuloDoPerfil = useCallback((id: string) => nomes.get(id) ?? id, [nomes]);
 
   const regiao = useRef<HTMLDivElement>(null);
-  // O X do chip e o Limpar filtros somem com o clique: o foco vai ao Filtrar, que fica.
-  const botaoDeFiltrar = useRef<HTMLElement>(null);
-  const focarFiltrar = useCallback(() => { botaoDeFiltrar.current?.focus(); }, []);
+  const tituloDasSessoes = useRef<HTMLHeadingElement>(null);
+  // A pílula e o Limpar filtros somem com o clique: o foco vai ao título, que fica.
+  const focarTitulo = useCallback(() => { document.getElementById(ID_DO_TITULO)?.focus(); }, []);
 
-  // Página do diário além do fim: o motor devolve a última. O endereço passa a dizer a página
-  // que está na tela, trocando a entrada em vez de empilhar outra.
+  // Página além do fim: o motor devolve a última. O endereço passa a dizer a página que está na
+  // tela, trocando a entrada em vez de empilhar outra.
   const paginaDoMotor = !carregando && relatorio ? relatorio.history.page + 1 : null;
   const foraDoFim = paginaDoMotor !== null && paginaDoMotor !== consulta.pagina;
   useEffect(() => {
@@ -64,27 +98,29 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const aoMudar = useCallback((para: Consulta, modo: 'empilhar' | 'trocar') => ir(para, modo), [ir]);
   const aoLimpar = useCallback(() => ir(CONSULTA_VAZIA, 'empilhar'), [ir]);
   const aoIrParaPagina = useCallback((para: number) => ir({ ...consulta, pagina: para }, 'empilhar'), [consulta, ir]);
+  const aoEscolherDia = useCallback((dia: string) => ir(comDia(consulta, dia), 'empilhar'), [consulta, ir]);
+  const aoEscolherRepo = useCallback((repo: string) => ir({ ...consulta, repo, pagina: 1 }, 'empilhar'), [consulta, ir]);
   const aoAtualizar = useCallback(() => setRecarga((n) => n + 1), []);
 
-  const esperando = carregando || foraDoFim;
+  // com um dia clicado, a tela espera também o pedido do período
+  const esperando = carregando || foraDoFim || (consulta.dia !== '' && doPeriodo.carregando);
   // só o zero que o motor mandou é "sem execução"
   const semExecucao = relatorio?.totals.attempts === 0;
   // a página sem nada ainda: o esqueleto fala por ela, e a região viva espera o resultado
   const primeiraCarga = esperando && !relatorio && !falha && !motivo;
   const anuncio = relatorio && !esperando ? textoDoResultado(relatorio) : '';
-  const periodo = relatorio?.range ?? null;
-  const sub = periodo ? `${textoDoPeriodo(periodo)}, em dias de Brasília` : 'Quanto as sessões de IA do motor consumiram.';
-
-  const acoes = (
-    <>
-      <SeletorDePeriodo consulta={consulta} periodo={periodo} fim={fim} aoMudar={aoMudar} />
-      <Filtrar consulta={consulta} opcoes={opcoes} periodo={periodo} aoMudar={aoMudar} refDoBotao={botaoDeFiltrar} />
-    </>
-  );
+  const periodo = relatorioDoPeriodo?.range ?? null;
+  const notas = relatorio && !semExecucao ? notasDoPeriodo(relatorio) : [];
 
   return (
-    <Pagina titulo="Consumo" sub={sub} acoes={acoes}>
-      <FiltrosAtivos consulta={consulta} periodo={periodo} aoMudar={aoMudar} aoLimpar={aoLimpar} aoSair={focarFiltrar} />
+    <Pagina
+      titulo="Consumo"
+      idDoTitulo={ID_DO_TITULO}
+      sub={periodo ? `Quanto o Farol gastou para revisar, de ${textoDoPeriodo(periodo)} em dias de Brasília, e quanto ainda há de plano em cada perfil do Claude. Só mede: nada aqui segura revisão.` : 'Quanto o Farol gastou para revisar e quanto ainda há de plano em cada perfil do Claude. Só mede: nada aqui segura revisão.'}
+      acoes={<Periodos consulta={consulta} periodo={periodo} fim={fimDoPeriodo} aoMudar={aoMudar} />}
+    >
+      <BarraDeFiltros consulta={consulta} opcoes={opcoes} periodo={periodo} rotuloDoPerfil={rotuloDoPerfil} aoMudar={aoMudar} aoBuscar={aoBuscar} />
+      <Pilulas consulta={consulta} periodo={periodo} rotuloDoPerfil={rotuloDoPerfil} aoMudar={aoMudar} aoLimpar={aoLimpar} aoSair={focarTitulo} />
 
       {haNovo ? (
         <p className={`${ui.nota} ${estilos.novas}`} role="status">
@@ -98,11 +134,21 @@ export function Consumo({ app = appDoNavegador }: Props) {
       {falha ? (
         <div className={ui.erro} role="alert">
           <span><strong>Erro:</strong> {mensagemDaFalha(falha) || 'A carga do consumo foi interrompida.'}</span>
-          {ehRecusaDeCampo(falha) ? (
-            <Botao onClick={aoLimpar}>Limpar período e filtros</Botao>
-          ) : (
-            <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
-          )}
+          {ehRecusaDeCampo(falha) ? <Botao onClick={aoLimpar}>Limpar período e filtros</Botao> : <Botao onClick={aoAtualizar}>Tentar de novo</Botao>}
+        </div>
+      ) : null}
+
+      {consulta.dia && doPeriodo.falha ? (
+        <div className={ui.erro} role="alert">
+          <span><strong>Gráfico do período:</strong> {mensagemDaFalha(doPeriodo.falha) || 'A carga do período foi interrompida.'}</span>
+          <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
+        </div>
+      ) : null}
+
+      {consulta.dia && doPeriodo.motivo ? (
+        <div className={ui.erro} role="alert">
+          <span><strong>Gráfico do período:</strong> o motor não entrega o período inteiro. O que ele disse: {doPeriodo.motivo}</span>
+          <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
         </div>
       ) : null}
 
@@ -110,8 +156,8 @@ export function Consumo({ app = appDoNavegador }: Props) {
         <div className={ui.erro} role="alert">
           <span><strong>Sem relatório:</strong> o motor respondeu que não entrega o consumo deste pedido. O que ele disse: {motivo}</span>
           <span className={ui.fila}>
-            {temPeriodo(consulta) ? (
-              <Botao onClick={() => ir({ ...consulta, inicio: '', fim: '', pagina: 1 }, 'empilhar')}>Voltar ao período padrão</Botao>
+            {temPeriodo(consulta) || consulta.dia ? (
+              <Botao onClick={() => ir({ ...consulta, inicio: '', fim: '', dia: '', pagina: 1 }, 'empilhar')}>Voltar ao período padrão</Botao>
             ) : null}
             <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
           </span>
@@ -125,28 +171,38 @@ export function Consumo({ app = appDoNavegador }: Props) {
           {esperando ? <BarraDeCarga rotulo="Carregando o consumo do novo pedido" /> : null}
           <div className={`${ui.lista} ${esperando ? ui.apagada : ''}`} aria-busy={esperando}>
             {relatorio.descartados ? (
-              <p className={ui.nota}>
-                Atenção: {relatorio.descartados} linha(s) deste relatório chegaram em formato que esta tela não lê e ficaram de fora das tabelas.
-              </p>
+              <p className={ui.nota}>Atenção: {relatorio.descartados} linha(s) deste relatório chegaram em formato que esta tela não lê e ficaram de fora.</p>
             ) : null}
-            <CustoDoPeriodo relatorio={relatorio} vazio={textoDoVazio(consulta)} />
-            {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
-            {semExecucao ? null : <TabelaPorDia relatorio={relatorio} />}
-            {semExecucao ? null : <PorRepositorio relatorio={relatorio} />}
-            {semExecucao ? null : <PorTipo relatorio={relatorio} />}
-            {semExecucao ? null : <PorModelo relatorio={relatorio} />}
-            <Diario
-              diario={relatorio.history}
-              periodo={relatorio.range}
-              q={consulta.q}
-              vazio={textoDoDiarioVazio(consulta)}
-              ocupado={esperando}
-              abertaDeInicio={consulta.q !== '' || consulta.pagina > 1}
-              aoBuscar={aoBuscar}
-              aoIr={aoIrParaPagina}
-            />
+            {semExecucao ? <p className={ui.vazio}>{textoDoVazio(consulta)}</p> : null}
+            {notas.map((nota) => <p key={nota} className={ui.nota}>{nota}</p>)}
+            <Numeros relatorio={relatorio} />
           </div>
         </>
+      ) : null}
+
+      <PlanoDosPerfis perfis={perfis} semSnapshot={!temSnapshot} />
+
+      {relatorio ? (
+        <div className={`${ui.lista} ${esperando ? ui.apagada : ''}`} aria-busy={esperando}>
+          <div className={estilos.grade2}>
+            {relatorioDoPeriodo ? <CustoPorDia relatorio={relatorioDoPeriodo} dia={consulta.dia} aoEscolher={aoEscolherDia} /> : null}
+            <PorRepositorio relatorio={relatorio} escolhido={consulta.repo} aoEscolher={aoEscolherRepo} />
+          </div>
+          <div className={estilos.grade2}>
+            <PorModelo relatorio={relatorio} />
+            <PorGatilho relatorio={relatorio} />
+          </div>
+          <Sessoes
+            diario={relatorio.history}
+            vazio={textoDoDiarioVazio(consulta)}
+            ocupado={esperando}
+            aoIr={aoIrParaPagina}
+            refDoTitulo={tituloDasSessoes}
+            rotuloDoPerfil={rotuloDoPerfil}
+            baixar={<BaixarCsv cliente={app.cliente} consulta={consulta} esperando={esperando} />}
+          />
+          {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
+        </div>
       ) : null}
 
       <div className={ui.lista}>
