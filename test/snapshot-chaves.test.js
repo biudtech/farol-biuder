@@ -21,10 +21,12 @@ after(() => fs.rmSync(home, { recursive: true, force: true }));
 //   mostra (lib/engine/checagem-em-curso.js); fora do ciclo vai null.
 // - `agora` está (18/11/2026): a hora do motor quando o retrato foi montado, com que o cartão do
 //   Radar mede a diferença entre o relógio do motor e o do navegador.
+// - `deFora` e `emRetentativa` estão (19/11/2026, redesenho, lote 1): os PRs pedidos que o motor
+//   não revisa sozinho, com o motivo, e a retentativa por PR (lib/engine/de-fora.js).
 const CHAVES = [
   'app', 'modelos', 'claudePerfis', 'agora', 'status', 'error', 'baseline', 'account', 'accounts',
   'pushbacks', 'config', 'jiraSites', 'lastCheckAt', 'nextCheckAt', 'checagem', 'buscasPausadas', 'queue',
-  'inicioAutomatico', 'esperaConflito', 'parked', 'reRounds', 'activeSessions', 'activity',
+  'inicioAutomatico', 'esperaConflito', 'parked', 'deFora', 'emRetentativa', 'reRounds', 'activeSessions', 'activity',
   'headlessWaiting', 'headlessWaitingPrs', 'headlessWaitingDetails', 'filaJusta', 'decisions',
   'reviewActions', 'usage', 'doctor', 'paths',
 ];

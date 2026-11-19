@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { iniciarManutencaoDoEngine } from './lib/technical-review/material-session-proof.js';
 import { snapshotDecisions, snapshotReviewActions } from './lib/engine/snapshot-decisions.js';
 import { snapshotUsage } from './lib/engine/snapshot-usage.js';
+import { deForaParaTela, emRetentativaParaTela } from './lib/engine/de-fora.js';
 import { iniciarChecagem, buscarOrganizacao, checagemParaTela } from './lib/engine/checagem-em-curso.js';
 
 // Camada base: versão, plataforma e caminhos (compartilhada com os módulos de lib/).
@@ -247,10 +248,8 @@ class Engine extends EventEmitter {
     // persistido: após reinício, um 1º ciclo já com falha preserva um Set vazio, igual
     // ao comportamento antigo nesse canto (seen e baseline cobrem o essencial entre boots).
     this.mineKeys = new Set();
-    this.token = null;
-    this.tokenOk = false;
-    this.doctorInfo = null;
-    this.timer = null;
+    this.token = null; this.tokenOk = false;
+    this.doctorInfo = null; this.timer = null;
     this.checking = false;
 
     this.prepareHome();
@@ -1218,6 +1217,9 @@ class Engine extends EventEmitter {
       // PRs da fila que estacionaram (falha, cancelamento, label retirada): o card mostra
       // quando e por quê, senão "nunca revisou" e "revisou e caiu" são idênticos na tela
       parked: this.parkedParaUi(),
+      // De fora da fila: os pedidos que o motor não revisa sozinho, com o motivo, e a retentativa
+      // por PR, { tentativas, aPartirDe } (lib/engine/de-fora.js). A `queue` não muda: a tela fatia
+      deFora: deForaParaTela(this), emRetentativa: emRetentativaParaTela(this),
       // card de commit novo (pendência stale_head): o que o round automático vai fazer e
       // quando, ou por que não vai. Sem isto o card pedia clique no caso em que o app agia sozinho
       reRounds: this.reRoundParaUi(),
