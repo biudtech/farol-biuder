@@ -22,6 +22,8 @@ import assert from 'node:assert/strict';
 const HEAD = '706cc81f09f3cef5043ec47e5eebbc5e8c44eb9c';
 const BASE = 'b'.repeat(40);
 const OUTRO = 'c'.repeat(40);
+const MB = 'a'.repeat(40);
+const TREE = 'e589266' + '0'.repeat(33);
 const sha = (n) => String(n).padStart(40, 'd');
 
 const io = (await import('../lib/io.js')).default;
@@ -34,7 +36,9 @@ io.run = async (_cmd, args) => {
   const sub = (args || []).join(' ');
   chamadas.push(sub);
   if (/pulls\/\d+\/reviews --input/.test(sub)) {
-    envios.push(JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8')));
+    const payload = JSON.parse(fs.readFileSync(args[args.indexOf('--input') + 1], 'utf8'));
+    if (gh.postFalha) return { ok: false, code: 1, stdout: '', stderr: gh.postFalha };
+    envios.push(payload);
     return { ok: true, code: 0, stdout: '{"id":1}', stderr: '' };
   }
   if (/pulls\/\d+\/reviews/.test(sub)) return { ok: true, code: 0, stdout: '[]', stderr: '' };
@@ -44,13 +48,20 @@ io.run = async (_cmd, args) => {
   }
   if (/^api repos\/acme\/api\/pulls\/\d+\/files --paginate/.test(sub)) return { ok: true, code: 0, stdout: gh.arquivos, stderr: '' };
   if (/^api repos\/acme\/api\/pulls\/\d+\/commits --paginate/.test(sub)) return { ok: true, code: 0, stdout: gh.commits, stderr: '' };
+  const compare = /^api repos\/acme\/api\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40}) --jq \.merge_base_commit\.sha$/.exec(sub);
+  if (compare) return gh.mergeBase ? { ok: true, code: 0, stdout: `${gh.mergeBase}\n`, stderr: '' } : { ok: false, code: 1, stdout: '', stderr: 'HTTP 502' };
+  const arvore = /^api repos\/acme\/api\/git\/commits\/([0-9a-f]{40}) --jq \.tree\.sha$/.exec(sub);
+  if (arvore) {
+    const t = gh.trees[arvore[1]];
+    return t ? { ok: true, code: 0, stdout: `${t}\n`, stderr: '' } : { ok: false, code: 1, stdout: '', stderr: 'HTTP 404' };
+  }
   return { ok: true, code: 0, stdout: '', stderr: '' };
 };
 
 const { Engine } = await import('../server.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
-const { technicalPublication, approvalRefusal } = await import('../lib/technical-review/publication.js');
+const { technicalPublication, approvalRefusal, ORIGEM_DIFF_VAZIO } = await import('../lib/technical-review/publication.js');
 const diffVazio = await import('../lib/engine/diff-vazio-de-linhagem.js');
 
 after(() => { io.run = runReal; try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
@@ -60,7 +71,7 @@ const commits = (pais) => JSON.stringify(pais.map((p, i) => ({ sha: sha(i + 1), 
 beforeEach(() => {
   envios = [];
   chamadas = [];
-  gh = { leituras: [leitura()], arquivos: '[]', commits: commits([1, 2, 2]) };
+  gh = { leituras: [leitura()], arquivos: '[]', commits: commits([1, 2, 2]), mergeBase: MB, trees: { [HEAD]: TREE, [MB]: TREE }, postFalha: '' };
 });
 
 function motor() {
@@ -243,7 +254,7 @@ test('a avaliação técnica na publicação aceita só a prova do motor no mesm
   try {
     technicalPublication.approvalRefusal = approvalRefusal;
     // uma lacuna na prova: sem a marca do diff vazio, ela recusaria o APPROVE
-    e.technicalApprovals = new Map([[pr.key, { report: null, evidence: ['lacuna da fixture'], evidenceVersion: 2, diffVazio: { head: HEAD } }]]);
+    e.technicalApprovals = new Map([[pr.key, { report: null, evidence: ['lacuna da fixture'], evidenceVersion: 2, diffVazio: { head: HEAD, origem: ORIGEM_DIFF_VAZIO } }]]);
     assert.equal(await approvalRefusal(e, pr, { event: 'APPROVE', body: 'ok', commit_id: HEAD }), null);
     const outro = await approvalRefusal(e, pr, { event: 'APPROVE', body: 'ok', commit_id: OUTRO });
     assert.equal(outro.blocked, 'technical_review', 'outro commit não herda a prova');
@@ -269,4 +280,145 @@ test('a medição é pura e conservadora', () => {
   assert.equal(diffVazio.candidato({ changedFiles: 0, headSha: OUTRO }, HEAD), false);
   assert.equal(diffVazio.candidato({ changedFiles: null }, HEAD), false);
   assert.equal(diffVazio.candidato({ changedFiles: 0 }, ''), false);
+});
+
+// Revisão independente de 19/11/2026, item 2: a contagem do GitHub não basta; a tree do head tem de
+// ser a tree do merge-base com a base.
+test('trees do head e do merge-base iguais: aprova, lendo as trees pela conta do PR', async () => {
+  const e = await revisar(40);
+  assert.equal(e.sessoes, 0);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.ok(chamadas.includes(`api repos/acme/api/git/commits/${HEAD} --jq .tree.sha`), 'a tree do head é lida');
+  assert.ok(chamadas.includes(`api repos/acme/api/git/commits/${MB} --jq .tree.sha`), 'a tree do merge-base é lida');
+});
+
+test('o merge-base do preparo, na mesma base, dispensa o compare', async () => {
+  const e = await revisar(41, (m) => {
+    m.fetchPrInventory = async () => ({ status: 'unavailable', reason: 'x', headSha: HEAD, baseSha: BASE, mergeBaseSha: MB, changedFiles: 0, files: [] });
+  });
+  assert.equal(e.sessoes, 0);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  assert.equal(chamadas.some((c) => c.includes('/compare/')), false);
+});
+
+for (const [nome, ajustar] of Object.entries({
+  'trees diferentes com a contagem 0': () => { gh.trees = { [HEAD]: TREE, [MB]: 'f'.repeat(40) }; },
+  'a tree do head não é legível': () => { gh.trees = { [MB]: TREE }; },
+  'a tree do merge-base não é legível': () => { gh.trees = { [HEAD]: TREE }; },
+  'o merge-base não é legível': () => { gh.mergeBase = ''; },
+})) {
+  test(`prova das trees que não fecha (${nome}): caminho normal, com sessão`, async () => {
+    ajustar();
+    const e = await revisar(42);
+    assert.equal(e.sessoes, 1, 'a revisão segue pela sessão');
+    assert.notEqual(decisao(e, 42)?.caminho, 'diff_vazio_linhagem');
+    assert.equal(envios.some((p) => /diff vazio/.test(p.body || '')), false);
+  });
+}
+
+// Item 1: o reenvio do COMMENT neutro passa pelas conferências do primeiro envio e publica com o
+// status do comentário inconclusivo, sem escrever no dossiê.
+async function comentarioQueFalhou(n) {
+  gh.commits = commits([1, 1, 1]);
+  gh.postFalha = 'HTTP 502: Bad Gateway';
+  let dossie = 0;
+  const e = await revisar(n, (m) => { m.writeMemory = () => { dossie += 1; }; });
+  gh.postFalha = '';
+  const d = decisao(e, n);
+  assert.equal(d.status, 'pending');
+  assert.deepEqual(d.postRetry, { event: 'comment', attempts: 0, statusAoPublicar: 'commented_inconclusive' });
+  assert.equal(d.payloads.comment.event, 'COMMENT');
+  return { e, dossie: () => dossie };
+}
+
+test('reenvio do COMMENT neutro com decisão de gente surgida no head: barra, nada sai', async () => {
+  const { e, dossie } = await comentarioQueFalhou(50);
+  e.bloqueadoPorHistorico = async () => ({ bloqueado: true, head: HEAD, quem: ['ana'], decisivos: [] });
+  await e.retryFailedPosts();
+  assert.equal(envios.length, 0);
+  const d = decisao(e, 50);
+  assert.equal(d.status, 'not_posted');
+  assert.equal(d.postRetry, null);
+  assert.equal(dossie(), 0);
+});
+
+test('reenvio do COMMENT neutro que sai: commented_inconclusive, sem dossiê', async () => {
+  const { e, dossie } = await comentarioQueFalhou(51);
+  assert.equal(await e.retryFailedPosts(), 1);
+  assert.deepEqual(envios.map((p) => p.event), ['COMMENT']);
+  assert.equal(decisao(e, 51).status, 'commented_inconclusive');
+  assert.equal(dossie(), 0, 'o comentário neutro não diz nada do autor');
+});
+
+// O reenvio do APPROVE é o reenvio normal: head conferido, dedup, portões e o aviso da aprovação.
+async function aprovacaoQueFalhou(n, ajuste) {
+  gh.postFalha = 'HTTP 502: Bad Gateway';
+  const e = await revisar(n, ajuste);
+  gh.postFalha = '';
+  const d = decisao(e, n);
+  assert.equal(d.status, 'pending');
+  assert.equal(d.postRetry.event, 'approve');
+  assert.equal(d.postRetry.statusAoPublicar, undefined, 'o APPROVE volta pelo reenvio normal');
+  return e;
+}
+
+test('reenvio do APPROVE que sai: auto_approved com o aviso da aprovação', async () => {
+  const e = await aprovacaoQueFalhou(52, (m) => {
+    m.bloqueadoPorChecks = async () => ({ faltando: [{ nome: 'ci', estado: 'vermelho' }], herdados: [], verifiedHead: HEAD });
+  });
+  assert.equal(await e.retryFailedPosts(), 1);
+  assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
+  const d = decisao(e, 52);
+  assert.equal(d.status, 'auto_approved');
+  assert.match(d.attention.map((r) => r.text).join(' '), /aprovado com check obrigatório vermelho no head \(ci\)/);
+});
+
+test('reenvio do APPROVE com head andado: nada sai, commit novo marcado', async () => {
+  const e = await aprovacaoQueFalhou(53);
+  e.headSha = async () => OUTRO;
+  await e.retryFailedPosts();
+  assert.equal(envios.length, 0);
+  assert.equal(decisao(e, 53).blockedKind, 'stale_head');
+});
+
+test('reenvio do APPROVE com aprovação minha já no head: não posta de novo', async () => {
+  const e = await aprovacaoQueFalhou(54);
+  e.myReviewStates = async () => ['APPROVED'];
+  await e.retryFailedPosts();
+  assert.equal(envios.length, 0);
+});
+
+// Item 3: a prova em memória só vive enquanto pode servir ao APPROVE desta regra.
+test('postagem recusada de vez: a prova técnica em memória é apagada', async () => {
+  gh.postFalha = 'HTTP 422: Unprocessable Entity (pull request is locked)';
+  const e = await revisar(60);
+  assert.equal(envios.length, 0);
+  assert.equal(decisao(e, 60).postRetry ?? null, null, 'não vai ao reenvio');
+  assert.equal(e.technicalApprovals?.has('acme/api#60') === true, false);
+});
+
+test('APPROVE já publicado na postagem: a prova técnica em memória é apagada', async () => {
+  const e = await revisar(61, (m) => {
+    let n = 0;
+    m.myReviewStates = async () => (n++ ? ['APPROVED'] : []);
+  });
+  assert.equal(envios.length, 0);
+  assert.equal(decisao(e, 61).status, 'already_reviewed');
+  assert.equal(e.technicalApprovals?.has('acme/api#61') === true, false);
+});
+
+test('a exceção da publicação exige relatório nulo e a marca de origem do motor', async () => {
+  const e = motor();
+  const pr = PR(62);
+  const isolada = technicalPublication.approvalRefusal;
+  try {
+    technicalPublication.approvalRefusal = approvalRefusal;
+    const prova = (extra) => new Map([[pr.key, { report: null, evidence: ['lacuna da fixture'], evidenceVersion: 2, ...extra }]]);
+    e.technicalApprovals = prova({ diffVazio: { head: HEAD } });
+    assert.equal((await approvalRefusal(e, pr, { event: 'APPROVE', body: 'ok', commit_id: HEAD }))?.blocked, 'technical_review', 'sem a marca de origem não vale');
+    e.technicalApprovals = prova({ diffVazio: { head: HEAD, origem: 'diff_vazio_linhagem' } });
+    assert.equal((await approvalRefusal(e, pr, { event: 'APPROVE', body: 'ok', commit_id: HEAD }))?.blocked, 'technical_review', 'marca serializável não vale');
+    e.technicalApprovals = prova({ report: { head: HEAD }, diffVazio: { head: HEAD, origem: ORIGEM_DIFF_VAZIO } });
+    assert.equal((await approvalRefusal(e, pr, { event: 'APPROVE', body: 'ok', commit_id: HEAD }))?.blocked, 'technical_review', 'com relatório de modelo não vale');
+  } finally { technicalPublication.approvalRefusal = isolada; }
 });

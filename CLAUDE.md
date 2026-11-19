@@ -222,18 +222,24 @@ arquivo, mas traz os merge commits das releases, é aprovado pelo motor, de qual
 sessão do Claude e sem ler o card. Logo depois do preparo das fontes, quando o inventário aponta
 zero arquivos no head da revisão, o motor faz uma medição própria e estável pela conta do PR: a
 leitura do PR (head, base, arquivos e commits), a lista paginada de arquivos vazia, a lista
-paginada de commits com os pais e a mesma leitura do PR de novo, igual. Com pelo menos um merge
+paginada de commits com os pais e a mesma leitura do PR de novo, igual. Além da contagem do
+GitHub, a tree do head tem de ser a tree do merge-base com a base (o merge-base do preparo quando
+ele mediu a mesma base, senão o do compare). Com pelo menos um merge
 commit (dois ou mais pais) sai APPROVE de texto fixo ("Este PR não muda nenhum arquivo em relação
 à base (diff vazio no commit `abc1234`); ele só alinha a história, trazendo N merge commits.
 Aprovo."); sem merge commit é PR vazio por engano e sai um COMMENT neutro, sem aprovar nem pedir
-mudanças. Medição que falha, diverge ou lê outro head segue o caminho normal, e a lista de commits
+mudanças. Medição que falha, diverge, lê outro head ou acha tree diferente segue o caminho normal, e a lista de commits
 cortada (o GitHub para em 250) só prova o merge commit que achou. Continua valendo: a origem do
 dono, o PR da própria conta, a decisão de gente no head e a label de outra conta (encerram sem
 postar), o head que andou (marca `stale_head`), o dedup por head, a política da conta para o
 parecer limpo, os checks obrigatórios com o tratamento de sempre (não seguram, viram aviso no
 card) e todos os portões de `postReview`. Com `reviewRoundsMode: "enforce"` a revisão segue o
 caminho normal. A avaliação técnica na publicação aceita o APPROVE só pela prova que o motor
-grava na memória (`technicalApprovals`, com `diffVazio` no mesmo commit do payload). A decisão
+grava na memória (`technicalApprovals`, com `diffVazio` no mesmo commit do payload, a marca de
+origem do motor e sem relatório), e a prova sai da memória quando a postagem não sai e não vai ao
+reenvio. A falha passageira vai ao reenvio: o do APPROVE é o normal, com o aviso da aprovação; o do
+COMMENT neutro, no formato do desfecho sem mesa, confere gente, label, estado e head de novo e
+publica como `commented_inconclusive`, sem escrever no dossiê. A decisão
 fica no histórico com `caminho: 'diff_vazio_linhagem'` (projetado para a tela) e `linhagem`
 (`commits` e `mergeCommits`), e uma linha INFO no `farol.log`. Travado em
 `test/diff-vazio-de-linhagem.test.js`.
