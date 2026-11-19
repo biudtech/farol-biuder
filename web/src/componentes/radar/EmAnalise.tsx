@@ -1,21 +1,23 @@
 'use client';
 
-// A seção "Em análise": um cartão por sessão em curso, no molde do cartão da autoanálise. O
-// cabeçalho diz o PR, o autor e o contexto; as pílulas, o que já se sabe dos checks, do card e
-// do parecer; a faixa, a etapa do motor (que nunca recua), o tempo, o trilho e o que a sessão faz
-// agora. Depois das sessões vêm as que sumiram sem resultado e cujo PR não está mais na fila
+// A seção "Em análise": um cartão por sessão em curso (o cartão único, src/componentes/cartao). O
+// cabeçalho diz o PR, o autor e o contexto, com o perfil do Claude; as pílulas, o que já se sabe
+// dos checks, do card (a chave `card` da sessão) e do parecer; a faixa, a porcentagem da revisão
+// inteira com a barra única, as etapas do motor (que nunca recuam), o tempo, o típico e o que a
+// sessão faz agora. Depois das sessões vêm as que sumiram sem resultado e cujo PR não está mais na fila
 // (com o PR na fila, a falha aparece no cartão da fila).
 import { memo, useState, type ReactNode } from 'react';
 import type { LinhaDoFeed, SessaoAtiva } from '@/contratos/radar';
+import type { PerfilDoClaude } from '@/contratos/sistema';
 import { Botao, Secao, ui } from '@/componentes/ui';
 import {
   andamentoDaFalha, andamentoDaSessao, andamentoIniciando, contextoDaSessao, etapaDoProgresso, pilulasDaFalha, pilulasDaSessao,
-  SEM_SINAL_MS, tempoDecorrido, ultimoEvento,
+  rotuloDoPerfil, SEM_SINAL_MS, tempoDecorrido, ultimoEvento,
 } from '@/radar/cartao';
 import type { Falha } from '@/radar/falhas';
 import { nomeDoPr } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
-import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, useAgora, usePassou } from './Cartao';
+import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, useAgora, usePassou } from '@/componentes/cartao/Cartao';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
 
@@ -55,12 +57,14 @@ interface PropsDaSessao {
   // a diferença entre o relógio do navegador e o do motor, em ms
   desvio: number;
   controle: ControleDeAcoes;
+  // o rótulo do perfil do Claude que a sessão usa, já lido de config.claudeProfiles
+  perfil?: string;
 }
 
 // Com memo: a linha nova do feed de uma sessão não redesenha as outras. O cabeçalho, o avatar e
 // as pílulas não têm relógio: só a faixa redesenha a cada segundo, e a borda do "sem sinal" vira
 // com um disparo só, na hora (usePassou).
-const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras, desvio, controle }: PropsDaSessao) {
+const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras, desvio, controle, perfil }: PropsDaSessao) {
   const chave = s.pr?.key ?? s.keys?.[0] ?? '';
   const de = chave ? nomeDoPr(chave) : (s.label ?? `Sessão ${s.id}`);
   const doMotor = etapaDoProgresso(s.progresso);
@@ -90,7 +94,7 @@ const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras,
       url={s.pr?.url}
       autor={s.pr?.author}
       titulo={s.pr?.title || de}
-      contexto={contextoDaSessao(s)}
+      contexto={contextoDaSessao(s, undefined, perfil)}
       estado={mudo ? 'em análise, sem sinal do modelo' : 'em análise'}
       botoes={(
         <>
@@ -98,7 +102,7 @@ const CartaoDaSessao = memo(function CartaoDaSessao({ sessao: s, ultimo, outras,
           {chave ? <AbrirNoGitHub chave={chave} url={s.pr?.url} /> : null}
         </>
       )}
-      pilulas={pilulasDaSessao(etapa)}
+      pilulas={pilulasDaSessao(etapa, s.card)}
     >
       <FaixaDaSessao sessao={s} etapa={etapa} ultimo={ultimo} outras={outras} desvio={desvio} de={de} acao={acao} />
       {!s.cancelled && s.cancellable === false ? <p className={estilos.nota}>A revisão já está sendo concluída e não pode mais ser cancelada.</p> : null}
@@ -169,16 +173,18 @@ interface Props {
   desvio?: number;
   controle: ControleDeAcoes;
   aoDispensarFalha?: (chave: string) => void;
+  // os perfis do Claude (config.claudeProfiles), para dizer o rótulo do perfil de cada sessão
+  perfis?: readonly PerfilDoClaude[];
 }
 
 const NENHUMA_FALHA: ReadonlyArray<Falha & { motivo: string }> = [];
 const NENHUMA_INICIADA: ReadonlyMap<string, number> = new Map<string, number>();
 const NADA = (): void => {};
 
-export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, aoDispensarFalha = NADA }: Props) {
+export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, aoDispensarFalha = NADA, perfis }: Props) {
   const vazio = !sessoes.length && !falhas.length;
   return (
-    <Secao titulo="Em análise">
+    <Secao titulo="Em análise" contagem={sessoes.length ? { n: sessoes.length, tom: 'marca', rotulo: sessoes.length === 1 ? 'sessão' : 'sessões' } : undefined}>
       {vazio ? <p className={ui.vazio}>Nenhuma sessão em curso.</p> : (
         <div className={estilos.cartoes}>
           {sessoes.map((s) => (
@@ -189,6 +195,7 @@ export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENH
               outras={sessoes.length - 1}
               desvio={desvio}
               controle={controle}
+              perfil={rotuloDoPerfil(s.perfilId, perfis)}
             />
           ))}
           {falhas.map((f) => (

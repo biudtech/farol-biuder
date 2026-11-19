@@ -47,6 +47,14 @@ describe('ações do Histórico: revisar de novo e contestação', () => {
     expect(pedidoDa(falhou)).toEqual({ rota: '/api/review', corpo: { urls: ['https://github.com/dono/repo/pull/12'] } });
   });
 
+  it('revisar mesmo assim (De fora da fila): o mesmo POST /api/review, com o rótulo do painel', () => {
+    const mesmoAssim: Acao = { ...base, tipo: 'revisar', url: 'https://github.com/dono/repo/pull/12', mesmoAssim: true };
+    expect(rotuloDa(mesmoAssim)).toBe('Revisar mesmo assim');
+    expect(nomeDa(mesmoAssim)).toBe('Revisar mesmo assim PR #12 de dono/repo');
+    expect(confirmacaoDa(mesmoAssim)).toBeNull();
+    expect(pedidoDa(mesmoAssim)).toEqual({ rota: '/api/review', corpo: { urls: ['https://github.com/dono/repo/pull/12'] } });
+  });
+
   // lib/engine/pushback.js: recordPushback grava confirmado e manual; pushbacksFor leva o
   // registro ao prompt das revisões do autor; licoesDoRepo leva author_right e mixed ao das
   // revisões de outros autores do repositório; pushbackTargets pula o PR com registro manual.

@@ -44,17 +44,26 @@ export function Pagina({ titulo, sub, acoes, estreita, tituloMenor, idDoTitulo, 
 
 interface PropsDaSecao {
   titulo: string;
-  // o que fica à direita do título (um link, uma contagem)
+  // o que fica à direita do título (um link, uma pílula)
   extra?: ReactNode;
+  // a contagem logo depois do título, numa pílula (a marca, na seção que roda agora)
+  contagem?: { n: number; tom?: 'marca'; rotulo: string };
   children: ReactNode;
   rotulo?: string;
 }
 
-export function Secao({ titulo, extra, children, rotulo }: PropsDaSecao) {
+export function Secao({ titulo, extra, contagem, children, rotulo }: PropsDaSecao) {
   return (
     <section className={estilos.secao} aria-label={rotulo ?? titulo}>
       <div className={estilos.secaoCabecalho}>
-        <h2 className={estilos.secaoTitulo}>{titulo}</h2>
+        <div className={estilos.secaoTituloEContagem}>
+          <h2 className={estilos.secaoTitulo}>{titulo}</h2>
+          {contagem ? (
+            <span className={estilos.secaoContagem} data-tom={contagem.tom}>
+              {contagem.n}<span className={estilos.soLeitor}> {contagem.rotulo}</span>
+            </span>
+          ) : null}
+        </div>
         {extra}
       </div>
       {children}

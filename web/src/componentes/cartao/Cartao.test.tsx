@@ -12,7 +12,7 @@ describe('avatar do autor', () => {
     const img = container.querySelector('img') as HTMLImageElement;
     expect(img.getAttribute('src')).toBe('https://avatars.githubusercontent.com/thiago-prado?s=72');
     expect(img.getAttribute('alt')).toBe('');
-    expect([img.getAttribute('width'), img.getAttribute('height')]).toEqual(['36', '36']);
+    expect([img.getAttribute('width'), img.getAttribute('height')]).toEqual(['44', '44']);
     expect(img.getAttribute('loading')).toBe('lazy');
     expect(img.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(container.querySelector('[style]')).toBeNull();

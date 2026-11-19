@@ -29,11 +29,14 @@
   gap: 8px 32px;
 }
 
-.marca { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--text); text-decoration: none; }
+/* A marca com o respiro do desenho (19/11/2026): o logo, o divisor, "Farol" e a versão do motor
+   numa etiqueta ao lado, alinhados pela linha de base. */
+.marca { display: flex; align-items: center; gap: 18px; min-width: 0; padding-right: 8px; color: var(--text); text-decoration: none; }
 .marca:hover { color: var(--text); }
-.divisor { width: 1px; height: 24px; background: var(--divisor-marca); }
-.nome { font-size: 18px; font-weight: 800; }
-.versao { color: var(--apagado); font-size: 12px; font-weight: 700; }
+.divisor { width: 1px; height: 28px; background: var(--divisor-marca); }
+.nomeEVersao { display: inline-flex; align-items: baseline; gap: 10px; }
+.nome { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; }
+.versao { padding: 3px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700; }
 
 .abas { min-width: 0; }
 .abas ul {

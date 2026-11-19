@@ -6,11 +6,12 @@
 //
 // Cada lote de tela tipa as chaves que usa: troca o `unknown` da chave em FormasDoSnapshot
 // pelo tipo lido do que o motor emite, e o `qualquer` dela em LEITORES pelo leitor. As do
-// Radar estão em ./radar, a do Histórico (`pushbacks`) em ./historico, a do Time (`config`,
+// Radar estão em ./radar e ./de-fora, a do Histórico (`pushbacks`) em ./historico, a do Time (`config`,
 // os perfis de review) em ./time, a do Consumo (`usage`) em ./consumo e as do Sistema
 // (`accounts`, `doctor`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`) em
 // ./sistema.
 import { lerConsumoDoSnapshot, type ConsumoDoSnapshot } from './consumo';
+import { lerDeFora, lerEmRetentativa, type PrDeFora, type Retentativa } from './de-fora';
 import { ehObjeto, ehTexto, type Leitor } from './formas';
 import { lerContestacoes, type Contestacao } from './historico';
 import {
@@ -67,9 +68,9 @@ export interface FormasDoSnapshot {
   inicioAutomatico: InicioAutomatico;
   esperaConflito: EsperaConflito;
   parked: Record<string, Estacionado>;
-  // De fora da fila e a retentativa por PR (lib/engine/de-fora.js): o leitor é do lote 3
-  deFora: unknown;
-  emRetentativa: unknown;
+  // De fora da fila e a retentativa por PR (lib/engine/de-fora.js), em ./de-fora
+  deFora: PrDeFora[];
+  emRetentativa: Record<string, Retentativa>;
   reRounds: unknown;
   activeSessions: SessaoAtiva[];
   activity: Record<string, LinhaDoFeed[]>;
@@ -123,8 +124,8 @@ export const LEITORES: { readonly [C in ChaveDoSnapshot]: Leitor<FormasDoSnapsho
   inicioAutomatico: lerInicioAutomatico,
   esperaConflito: lerEsperaConflito,
   parked: lerEstacionados,
-  deFora: qualquer,
-  emRetentativa: qualquer,
+  deFora: lerDeFora,
+  emRetentativa: lerEmRetentativa,
   reRounds: qualquer,
   activeSessions: lerSessoes,
   activity: lerAtividade,

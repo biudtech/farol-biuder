@@ -1,0 +1,156 @@
+/* O cartão único de um PR (redesenho de 19/11/2026): cartão na superfície, raio 16, borda pela cor
+   do estado, sombra leve só no em análise. Só as variáveis de globals.css: texto de estado usa as
+   variáveis -texto, sobre a superfície ou sobre o fundo suave do estado (pares de
+   src/tema/contraste.test.ts). A borda mistura a cor do estado com a superfície, para ficar
+   leve nos dois temas. */
+
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px 22px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+}
+.cartao[data-tom="rodando"] { border: 2px solid var(--accent); box-shadow: var(--shadow); }
+.cartao[data-tom="ok"] { border-color: color-mix(in srgb, var(--ok) 40%, var(--surface)); }
+.cartao[data-tom="falha"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--surface)); }
+.cartao[data-tom="aviso"] { border-color: color-mix(in srgb, var(--aviso) 55%, var(--surface)); }
+.cartao[data-compacto="sim"] { gap: 12px; padding: 16px 18px; }
+
+.cabeca { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.avatar {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+}
+.avatar[data-pequeno="sim"] { flex-basis: 40px; width: 40px; height: 40px; font-size: 14px; }
+.corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.linhaDaChave {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chave { font-weight: 700; color: var(--link); text-decoration: none; overflow-wrap: anywhere; }
+a.chave:hover { color: var(--link-hover); text-decoration: underline; }
+.quem { overflow-wrap: anywhere; }
+.meta { overflow-wrap: anywhere; }
+.meta::before { content: "·"; margin-right: 8px; color: var(--apagado); }
+.titulo { font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; text-wrap: pretty; }
+.cartao[data-tom="rodando"] .titulo { font-size: 17px; }
+.cartao[data-compacto="sim"] .titulo { font-size: 15px; }
+.botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.botaoLink { text-decoration: none; white-space: nowrap; }
+.botaoOcupado { gap: 8px; background: var(--accent-soft); border-color: transparent; color: var(--accent-texto); }
+.botaoOcupado, .botaoOcupado:hover { cursor: default; background: var(--accent-soft); color: var(--accent-texto); }
+
+/* as pílulas: chips arredondados na cor do estado, com o texto do mesmo estado */
+.pilulas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pilula {
+  display: inline-block;
+  min-width: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.pilula[data-tom="ok"] { background: var(--ok-soft); color: var(--ok-texto); }
+.pilula[data-tom="aviso"] { background: var(--aviso-soft); color: var(--aviso-texto); }
+.pilula[data-tom="falha"] { background: var(--danger-soft); color: var(--danger-texto); }
+.iconeDaPilula { margin-right: 6px; font-weight: 800; }
+.rotuloDaPilula { margin-right: 4px; font-weight: 600; }
+.rotuloDaPilula::after { content: ":"; }
+
+/* a faixa: a barra única, as etapas e o rodapé */
+.faixa { display: flex; flex-direction: column; gap: 14px; }
+.percentual { display: flex; align-items: center; gap: 16px; }
+.numero {
+  min-width: 92px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.8px;
+  color: var(--accent-texto);
+  font-variant-numeric: tabular-nums;
+}
+.colunaDaBarra { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.barra { position: relative; display: block; height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.barra[data-indefinida="sim"] { height: 6px; }
+.barra svg { display: block; width: 100%; height: 10px; }
+.cheio { fill: var(--accent); }
+.legenda { font-size: 12px; font-weight: 700; color: var(--muted); }
+.corre { position: absolute; top: 0; bottom: 0; left: -32%; width: 32%; border-radius: 999px; background: var(--accent); animation: correDaFaixa 1.5s ease-in-out infinite; }
+@keyframes correDaFaixa { 0% { left: -32%; } 100% { left: 100%; } }
+
+.etapas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.etapa { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--apagado); }
+.tracoDaEtapa { position: relative; display: block; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.etapa[data-estado="feita"] { color: var(--ok-texto); font-weight: 700; }
+.etapa[data-estado="feita"] .tracoDaEtapa { background: var(--ok); }
+.etapa[data-estado="agora"] { color: var(--accent-texto); font-weight: 800; }
+.etapa[data-estado="agora"] .tracoDaEtapa { background: var(--accent); }
+.etapa[data-estado="erro"] { color: var(--danger-texto); font-weight: 800; }
+.etapa[data-estado="erro"] .tracoDaEtapa { background: var(--danger); }
+.nomeDaEtapa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a etapa da vez pulsa no traço; com movimento reduzido fica parada */
+.giro { position: absolute; inset: 0; background: var(--surface); opacity: .35; animation: giroDaEtapa 1.2s ease-in-out infinite; }
+@keyframes giroDaEtapa { 0%, 100% { opacity: 0; } 50% { opacity: .35; } }
+
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda-suave);
+  font-size: 13px;
+  color: var(--muted);
+}
+.textoDoRodape { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.textoDoRodape[data-tom="fila"] { color: var(--muted); }
+.textoDoRodape[data-tom="ok"] { color: var(--ok-texto); }
+.textoDoRodape[data-tom="falha"] { color: var(--danger-texto); }
+.textoDoRodape[data-tom="aviso"] { color: var(--aviso-texto); }
+.arquivo { font-size: 12px; }
+.ponto { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 999px; background: var(--ok); }
+.ponto[data-tom="aviso"] { background: var(--aviso); }
+.ponto[data-tom="falha"] { background: var(--danger); }
+.ladoDoRodape { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tempoEApoio { display: inline-flex; flex-wrap: wrap; gap: 0 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tempo + .apoio::before { content: "·"; margin-right: 6px; }
+
+/* Movimento reduzido: o pulso da etapa para, e a barra indefinida vira uma faixa parada. */
+@media (prefers-reduced-motion: reduce) {
+  .giro, .corre { animation: none; }
+  .giro { opacity: 0; }
+  .corre { left: 0; width: 100%; opacity: .45; }
+}
+
+/* Janela estreita: os botões descem para baixo do título, a porcentagem encolhe e as etapas ficam
+   só com o traço e o nome menor. */
+@media (max-width: 760px) {
+  .cartao { padding: 16px; }
+  .cabeca { flex-wrap: wrap; }
+  .botoes { flex-basis: 100%; justify-content: flex-start; }
+  .numero { min-width: 0; font-size: 28px; }
+  .etapa { font-size: 11px; }
+}

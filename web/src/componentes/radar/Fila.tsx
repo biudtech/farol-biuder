@@ -1,22 +1,25 @@
 'use client';
 
 // A seção "Fila": um cartão por PR, no molde do cartão da autoanálise, com a borda neutra. O
-// rodapé diz a posição e o que segura o PR (a parada, o conflito, o início que espera o
-// clique); os botões, Revisar agora, Ignorar e Abrir no GitHub. Primeiro vêm os PRs da fila, na
+// canto diz a posição; o rodapé, o que segura o PR (a parada, o conflito, o limite do plano, a
+// retentativa automática, o início que espera o clique), com Revisar agora, Ignorar e Abrir no
+// GitHub. Primeiro vêm os PRs da fila, na
 // ordem do motor; depois os que já saíram dela e esperam vaga de execução. Esses não têm botão,
 // porque um segundo disparo abriria duas revisões do mesmo commit. Quem tira daqui o PR que já
-// está em "Em análise" é fatiarFila (src/radar/fatias.ts), antes de a lista chegar.
+// está em "Em análise", e o de De fora da fila, é fatiarFila (src/radar/fatias.ts), antes de a
+// lista chegar.
 //
 // Ao clicar em Revisar agora o cartão vira "Iniciando a revisão." na hora, antes do motor; e o
 // PR cuja última sessão sumiu sem resultado mostra a falha no próprio cartão, com Tentar de novo.
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
+import type { Retentativa } from '@/contratos/de-fora';
 import type { DetalheDaEspera, EsperaConflito, Estacionado, InicioAutomatico, ItemDaFila, PrEmEspera } from '@/contratos/radar';
 import { Botao, Chip, Secao, Spinner, ui } from '@/componentes/ui';
-import { andamentoDaFalha, contextoDaFila, pilulasDaFalha, tempoDecorrido, textoDaFila } from '@/radar/cartao';
+import { andamentoDaFalha, contextoDaFila, pilulasDaFalha, tempoDecorrido, textoDaFila, tomDaFila } from '@/radar/cartao';
 import type { Falha } from '@/radar/falhas';
 import { nomeDoPr, textoDaEspera, textoDoEstacionado } from '@/radar/formato';
 import { AcoesDoItem } from './AcoesDoItem';
-import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, FaixaDaFila } from './Cartao';
+import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa, FaixaDaFila } from '@/componentes/cartao/Cartao';
 import { FaixaIniciando } from './EmAnalise';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
@@ -33,6 +36,10 @@ interface Props {
   estacionados?: Readonly<Record<string, Estacionado>>;
   inicioAutomatico?: Readonly<InicioAutomatico>;
   emConflito?: Readonly<EsperaConflito>;
+  // a retentativa automática por PR (emRetentativa), com o limite do plano
+  emRetentativa?: Readonly<Record<string, Retentativa>>;
+  // a pílula de De fora da fila, ao lado do título (só quando há PR de fora)
+  extra?: ReactNode;
   // a linha de quando não há nada (depende de a primeira checagem já ter terminado)
   vazio: string;
   // a primeira checagem está em curso: a linha de vazio ganha o spinner
@@ -47,12 +54,13 @@ interface Props {
 
 const NENHUMA: ReadonlyMap<string, never> = new Map<string, never>();
 
-function CartaoDaFila({ pr, posicao, parada, conflito, manual, falha, iniciadaEm, controle, aoDispensarFalha }: {
+function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falha, iniciadaEm, controle, aoDispensarFalha }: {
   pr: ItemDaFila;
   posicao: number;
   parada?: Estacionado;
   conflito: boolean;
   manual: boolean;
+  retentativa?: Retentativa;
   falha?: Falha & { motivo: string };
   iniciadaEm?: number;
   controle: ControleDeAcoes;
@@ -103,39 +111,44 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, falha, iniciadaEm
       </Cartao>
     );
   }
+  const espera = { parada: parada ? textoDoEstacionado(parada) : undefined, conflito, manual, retentativa };
   return (
     <Cartao
       {...comum}
       tom="fila"
       estado={`${posicao}º na fila`}
-      botoes={(
-        <>
-          <AcoesDoItem
-            pequeno
-            botoes={[{ acao: { ...base, tipo: 'revisar', url: pr.url }, primario: true }, { acao: { ...base, tipo: 'ignorar', chave: pr.key }, fantasma: true }]}
-            controle={controle}
-          />
-          <AbrirNoGitHub chave={pr.key} url={pr.url} />
-        </>
-      )}
+      botoes={<span className={estilos.posicao} aria-hidden="true">{posicao}º</span>}
     >
-      <FaixaDaFila texto={textoDaFila(posicao, { parada: parada ? textoDoEstacionado(parada) : undefined, conflito, manual })} apoio="" />
+      <FaixaDaFila
+        texto={textoDaFila(posicao, espera)}
+        ponto={tomDaFila(espera)}
+        acoes={(
+          <>
+            <AcoesDoItem
+              pequeno
+              botoes={[{ acao: { ...base, tipo: 'revisar', url: pr.url }, primario: true }, { acao: { ...base, tipo: 'ignorar', chave: pr.key }, fantasma: true }]}
+              controle={controle}
+            />
+            <AbrirNoGitHub chave={pr.key} url={pr.url} />
+          </>
+        )}
+      />
     </Cartao>
   );
 }
 
 export const Fila = memo(function Fila({
-  fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, vazio, checando, falhas = NENHUMA, iniciadas = NENHUMA, controle, aoDispensarFalha,
+  fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, emRetentativa, extra, vazio, checando, falhas = NENHUMA, iniciadas = NENHUMA, controle, aoDispensarFalha,
 }: Props) {
   if (!fila.length && !emEspera.length) {
     return (
-      <Secao titulo="Fila">
+      <Secao titulo="Fila" extra={extra}>
         <p className={ui.vazio}>{checando ? <><Spinner tamanho="p" /> </> : null}{vazio}</p>
       </Secao>
     );
   }
   return (
-    <Secao titulo="Fila">
+    <Secao titulo="Fila" extra={extra} contagem={{ n: fila.length + emEspera.length, rotulo: fila.length + emEspera.length === 1 ? 'PR na fila' : 'PRs na fila' }}>
       <div className={estilos.cartoes}>
         {fila.map((pr, i) => (
           <CartaoDaFila
@@ -145,6 +158,7 @@ export const Fila = memo(function Fila({
             parada={de(estacionados, pr.key)}
             conflito={de(emConflito, pr.key) !== undefined}
             manual={de(inicioAutomatico, pr.key) === false}
+            retentativa={de(emRetentativa, pr.key)}
             falha={falhas.get(pr.key)}
             iniciadaEm={iniciadas.get(pr.key)}
             controle={controle}
@@ -168,7 +182,7 @@ export const Fila = memo(function Fila({
               marcas={<Chip pequeno tom="aviso">{vaga}</Chip>}
               botoes={<AbrirNoGitHub chave={pr.key} url={pr.url} />}
             >
-              <FaixaDaFila texto={textoDaEspera(detalhe)} apoio="" />
+              <FaixaDaFila texto={textoDaEspera(detalhe)} ponto="aviso" />
             </Cartao>
           );
         })}

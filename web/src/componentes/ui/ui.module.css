@@ -25,9 +25,21 @@
 .sub { font-size: 15px; color: var(--muted); }
 .cabecalhoAcoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; position: relative; }
 
-.secao { display: flex; flex-direction: column; gap: 10px; }
-.secaoCabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.secaoTitulo { font-size: 16px; font-weight: 800; color: var(--muted); }
+.secao { display: flex; flex-direction: column; gap: 14px; }
+.secaoCabecalho { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.secaoTituloEContagem { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.secaoTitulo { font-size: 18px; font-weight: 800; color: var(--text); }
+.secaoContagem {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--neutro-soft);
+  color: var(--neutro-texto);
+  font-size: 13px;
+  font-weight: 700;
+}
+.secaoContagem[data-tom="marca"] { background: var(--accent-soft); color: var(--accent-texto); }
 .lista { display: flex; flex-direction: column; gap: 8px; }
 .grupo { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--apagado); }
 .grupo:first-child { margin-top: 4px; }

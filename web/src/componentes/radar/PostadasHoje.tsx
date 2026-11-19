@@ -18,7 +18,7 @@ import { nomeDoPr } from '@/radar/formato';
 import { postadasDeHoje, type Postada } from '@/radar/postadas';
 import type { Cliente } from '@/transporte/cliente';
 import { AcoesDoItem } from './AcoesDoItem';
-import { AbrirNoGitHub, BotaoOcupado, Cartao, Faixa } from './Cartao';
+import { AbrirNoGitHub, BotaoOcupado, Cartao, estilosDoCartao, Faixa } from '@/componentes/cartao/Cartao';
 import { FaixaIniciando } from './EmAnalise';
 import type { ControleDeAcoes } from './useAcoes';
 import estilos from './Radar.module.css';
@@ -67,7 +67,7 @@ function CartaoDaPostada({ p, detalhe, carregando, iniciadaEm, controle }: {
   const nome = nomeDoPr(p.chave);
   const andamento = andamentoDaPostada(p.acao, detalhe);
   const verResultado = (
-    <Link className={`${ui.botao} ${ui.pequeno} ${estilos.botaoLink}`} href={p.endereco}>
+    <Link className={`${ui.botao} ${ui.pequeno} ${estilosDoCartao.botaoLink}`} href={p.endereco}>
       Ver resultado{' '}<span className={ui.soLeitor}>de {p.chave}</span>
     </Link>
   );
@@ -114,7 +114,7 @@ export const PostadasHoje = memo(function PostadasHoje({ resolvidas, cliente, co
   const { postadas, ilegiveis } = useMemo(() => postadasDeHoje(resolvidas, agora), [resolvidas, agora]);
   const detalhes = useDetalhes(postadas, cliente);
   return (
-    <Secao titulo="Postadas hoje" extra={<Link className={ui.link} href="/historico">Ver histórico</Link>}>
+    <Secao titulo="Postadas hoje" contagem={postadas.length ? { n: postadas.length, rotulo: postadas.length === 1 ? 'revisão' : 'revisões' } : undefined} extra={<Link className={ui.link} href="/historico">Ver histórico</Link>}>
       {ilegiveis ? (
         <p className={ui.nota}>
           {ilegiveis === 1

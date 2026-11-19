@@ -215,7 +215,16 @@ export interface SessaoAtiva {
   // o último sinal de vida da sessão, na hora do motor: a linha do feed ou o modelo escrevendo
   // (lib/engine/sinal-de-vida.js, no máximo a cada 5 s)
   ultimoSinalEm?: number;
+  // a chave do card do Jira lido pela sessão (cardNaSessao, lib/engine/jira.js); ausente enquanto
+  // o card não foi lido ou quando a leitura falhou
+  card?: string;
+  // o perfil do Claude que a sessão usa (contextoDaConta, lib/engine/retomada-duravel.js); o rótulo
+  // vem de config.claudeProfiles
+  perfilId?: string;
 }
+
+// A chave do card: projeto e número, como o Jira escreve ("BT-3120"), até 40 caracteres.
+const ehChaveDoCard = (v: unknown): v is string => ehTexto(v) && v.length <= 40 && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(v);
 
 function lerPrDaSessao(v: unknown): PrDaSessao | undefined {
   if (!ehObjeto(v)) return undefined;
@@ -247,6 +256,8 @@ const lerSessaoAtiva: LeitorDeItem<SessaoAtiva> = (v) => {
     estimativa: lerEstimativa(v.estimativa),
     arquivosPr: campo(v.arquivosPr, (n: unknown): n is number => ehInteiro(n) && n > 0),
     ultimoSinalEm: campo(v.ultimoSinalEm, (n: unknown): n is number => ehNumero(n) && n > 0),
+    card: campo(v.card, ehChaveDoCard),
+    perfilId: campo(v.perfilId, (t: unknown): t is string => ehTexto(t) && t.length > 0 && t.length <= 80),
   });
 };
 

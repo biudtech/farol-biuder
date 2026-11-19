@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PrEmEspera, SessaoAtiva } from '@/contratos/radar';
 import type { Acao } from '@/radar/acoes';
-import { marcarFoco } from './Cartao';
+import { marcarFoco } from '@/componentes/cartao/Cartao';
 import type { ControleDeAcoes } from './useAcoes';
 
 export const PRAZO_DO_INICIO_MS = 120000;

@@ -124,9 +124,14 @@ const PARADA: Record<string, (motivo: string) => string> = {
   legado: () => 'parou sem motivo registrado',
 };
 
+// O que aconteceu, numa frase curta: "falhou várias vezes seguidas (último erro: timeout)".
+export function fraseDaParada(tipo: string | undefined, motivo: string | undefined): string {
+  const m = (motivo ?? '').trim().replace(/[.\s]+$/, '');
+  return proprio(PARADA, tipo)?.(m) ?? (m ? `falhou (${m})` : 'falhou');
+}
+
 export function textoDoEstacionado(parada: Estacionado, fuso?: string): string {
-  const motivo = parada.motivo.trim();
-  const frase = proprio(PARADA, parada.tipo)?.(motivo) ?? (motivo ? `falhou (${motivo})` : 'falhou');
+  const frase = fraseDaParada(parada.tipo, parada.motivo);
   const quando = dataHora(parada.at, fuso);
   return `Revisão automática parada${quando ? ` em ${quando}` : ''}: ${frase}. Ela não relança sozinha.`;
 }

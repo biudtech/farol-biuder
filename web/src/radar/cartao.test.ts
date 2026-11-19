@@ -3,7 +3,7 @@ import type { ProgressoDaRevisao } from '@/contratos/radar';
 import {
   SEM_SINAL_MS, andamentoDaFalha, desvioDoRelogio, andamentoDaPostada, andamentoDaSessao, andamentoIniciando, contextoDaPostada, contextoDaSessao,
   etapaDoProgresso, etapasDaFaixa, iniciais, pilulaDosChecks, pilulaDosCriterios, pilulasDaPostada, pilulasDaSessao, tempoDecorrido,
-  textoDaFila, ultimoEvento, urlDoAvatar,
+  textoDaFila, tomDaFila, ultimoEvento, urlDoAvatar,
 } from './cartao';
 
 const AGORA = Date.UTC(2026, 10, 16, 14, 32);
@@ -44,16 +44,19 @@ describe('o cartão do Radar, sem React', () => {
     expect(ultimoEvento([], undefined)).toBeUndefined();
   });
 
-  it('cada etapa diz o que faz, e o trilho só é definido no código com a contagem', () => {
+  it('cada etapa diz o que faz; a barra é a porcentagem da revisão inteira, e o típico vai ao lado do tempo', () => {
     const base = { agora: AGORA, outras: 0 };
-    expect(andamentoDaSessao({ ...base, etapa: 0, costumaMs: 420000 })).toMatchObject({ texto: 'Buscando o código do PR.', apoio: 'costuma levar 7 min', barra: { tipo: 'indefinida' } });
+    expect(andamentoDaSessao({ ...base, etapa: 0, costumaMs: 420000 })).toMatchObject({ texto: 'Buscando o código do PR.', apoio: 'típico 7 min', barra: { tipo: 'indefinida' } });
     expect(andamentoDaSessao({ ...base, etapa: 0, outras: 2 }).texto).toBe('Buscando o código do PR, com 2 outras revisões em andamento.');
     expect(andamentoDaSessao({ ...base, etapa: 1 }).texto).toBe('Lendo o card no Jira.');
-    expect(andamentoDaSessao({ ...base, etapa: 2, progresso: progresso(3, { arquivosLidos: 1, arquivosTotais: 3 }) })).toMatchObject({
-      texto: 'Lendo o código do PR.', apoio: '1 de 3 arquivos', barra: { tipo: 'definida', pct: 33, texto: '1 de 3 arquivos' },
+    expect(andamentoDaSessao({ ...base, etapa: 2, progresso: progresso(3, { percentual: 57.6, arquivosLidos: 1, arquivosTotais: 3, arquivoAtual: 'src/a.ts', restanteEstimadoMs: 180000 }) })).toMatchObject({
+      texto: 'Lendo o código: 1 de 3 arquivos', arquivo: 'src/a.ts', apoio: '',
+      barra: { tipo: 'definida', pct: 58, texto: 'da revisão inteira · termina em cerca de 3 min' },
     });
-    expect(andamentoDaSessao({ ...base, etapa: 3, progresso: progresso(4, { restanteEstimadoMs: 20000 }) }).apoio).toBe('falta menos de 1 min');
+    expect(andamentoDaSessao({ ...base, etapa: 2, progresso: progresso(3) })).toMatchObject({ texto: 'Lendo o código do PR.', barra: { tipo: 'definida', pct: 50, texto: 'da revisão inteira' } });
+    expect(andamentoDaSessao({ ...base, etapa: 3, progresso: progresso(4, { restanteEstimadoMs: 20000 }) }).barra).toMatchObject({ texto: 'da revisão inteira · termina em menos de 1 min' });
     expect(andamentoDaSessao({ ...base, etapa: 4 })).toMatchObject({ texto: 'Postando a revisão no GitHub.', apoio: '' });
+    expect(andamentoDaSessao({ ...base, etapa: 4, conta: 'rev' }).apoio).toBe('pela conta @rev');
     expect(andamentoIniciando()).toMatchObject({ tipo: 'iniciando', etapa: 0, texto: 'Iniciando a revisão.', barra: { tipo: 'indefinida' } });
   });
 
@@ -71,6 +74,13 @@ describe('o cartão do Radar, sem React', () => {
     expect(andamentoDaPostada('approve', undefined)).toMatchObject({ etapa: 5, tom: 'ok', texto: 'Revisão postada: aprovada.', apoio: '', barra: null });
     expect(andamentoDaPostada('comment', undefined).tom).toBe('aviso');
     expect(andamentoDaPostada('request_changes', undefined).tom).toBe('falha');
+  });
+
+  it('a pílula do card na sessão: pela etapa, e o card lido pela chave que o motor grava', () => {
+    expect(pilulasDaSessao(0)[1]?.texto).toBe('Ainda não lido');
+    expect(pilulasDaSessao(1, 'BT-1')[1]?.texto).toBe('Lendo os critérios');
+    expect(pilulasDaSessao(2, 'BT-1')[1]).toMatchObject({ tom: 'ok', icone: '✓', texto: 'BT-1 lido' });
+    expect(pilulasDaSessao(2)[1]).toMatchObject({ tom: 'neutro', texto: 'Nenhum card lido' });
   });
 
   it('pílulas sem dado: o traço neutro, com o texto do que falta', () => {
@@ -100,6 +110,7 @@ describe('o cartão do Radar, sem React', () => {
     expect(contextoDaSessao({}, 'UTC')).toBe('');
     expect(contextoDaSessao({ startedAt: AGORA }, 'UTC')).toBe('começou às 14:32');
     expect(contextoDaSessao({ arquivosPr: 1, pedido: { por: 'ana', em: '2026-11-16T14:03:00Z' }, startedAt: AGORA }, 'UTC')).toBe('1 arquivo · pedido por @ana às 14:03');
+    expect(contextoDaSessao({ startedAt: AGORA }, 'UTC', 'biud-2')).toBe('começou às 14:32 · Claude: biud-2');
     expect(contextoDaPostada({}, undefined, 'UTC')).toBe('');
     expect(contextoDaPostada({ card: 'BT-1', resolvedAt: AGORA }, undefined, 'UTC')).toBe('card BT-1 · postado às 14:32');
   });
@@ -115,5 +126,16 @@ describe('o cartão do Radar, sem React', () => {
   it('o rodapé da fila', () => {
     expect(textoDaFila(1, {})).toBe('1º na fila: começa quando abrir uma vaga.');
     expect(textoDaFila(2, { parada: 'Parada.' })).toBe('Parada.');
+    expect(textoDaFila(3, { conflito: true })).toBe('3º na fila, em conflito com a base: volta sozinho quando o conflito for resolvido. Revisar agora não espera.');
+    expect(textoDaFila(1, { retentativa: { tentativas: 2, aPartirDe: AGORA } }, 'UTC')).toBe('1º na fila, esperando o limite do plano: tenta de novo a partir de 16/11, 14:32.');
+    expect(textoDaFila(1, { retentativa: { tentativas: 2, aPartirDe: null } })).toBe('1º na fila: nova tentativa automática (2ª) quando abrir uma vaga.');
+  });
+
+  it('a cor do ponto da fila diz o mesmo que o texto', () => {
+    expect(tomDaFila({})).toBe('ok');
+    expect(tomDaFila({ conflito: true })).toBe('aviso');
+    expect(tomDaFila({ retentativa: { tentativas: 1, aPartirDe: null } })).toBe('aviso');
+    expect(tomDaFila({ manual: true })).toBe('aviso');
+    expect(tomDaFila({ parada: 'x' })).toBe('falha');
   });
 });
