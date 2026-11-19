@@ -312,13 +312,31 @@ linha de comando. Travado em
 
 ### Qual perfil a sessão usa
 
-`authDaConta` (`lib/engine/perfil-claude.js`): o perfil padrão (`claudeProfileId`), se ele
-resolver; senão o primeiro perfil utilizável da lista; senão nenhum, e a sessão não abre. O
-motor não troca de perfil sozinho. Quando o plano chega ao limite, a fila espera a hora do
-reset no mesmo perfil, sem estacionar e sem abrir sessão; sem hora informada, espera uma hora
-e tenta de novo (`aposLimite` em `lib/engine/limite-plano.js`, registro em
-`state/limite-plano.json`). Uma sessão que dá certo libera o perfil antes. O clique manual
-atravessa a espera.
+A sessão usa o perfil que `resolveClaudeAuth` devolve (`server.js`), escolhido a cada
+chamada. Os candidatos são os perfis utilizáveis (`candidatosDaConta` em
+`lib/engine/perfil-claude.js`): o padrão (`claudeProfileId`) primeiro, depois os demais na
+ordem da lista. Entre eles (`escolherPerfil` em `lib/engine/limite-plano.js`, regra do dono de
+18/11/2026):
+
+1. usa o primeiro que não está no limite do plano;
+2. com todos no limite, usa o de reset mais cedo, e a fila espera só até ele, sem estacionar e
+   sem abrir sessão;
+3. sem perfil utilizável, nenhum, e a sessão não abre.
+
+Só o limite do plano registrado faz trocar (`state/limite-plano.json`); login inválido ou
+credencial vencida não entram nessa conta. Perfil de assinatura sem login gravado na pasta não
+vira alternativa: a troca para ele faria a sessão recusar. Assim que o limite do padrão vence,
+ele volta a ser usado sozinho. A troca deixa uma linha `WARN` no `farol.log` ("perfil X no
+limite até HH:MM; usando o perfil Y"), uma por mudança.
+
+Quando a sessão bate no limite (`aposLimite`), o limite fica no perfil que ela usou, até a hora
+do reset que a mensagem informa; sem hora informada, por uma hora. Se outro perfil está livre,
+o PR relança no próximo ciclo nele, como sessão nova (a conversa do outro perfil não é
+retomada), sem gastar tentativa e sem estacionar, e o aviso diz para qual perfil trocou. Uma
+sessão que dá certo libera só o perfil que ela usou. O clique manual atravessa a espera.
+
+O diagnóstico e a tela leem `authDaConta`, que é o padrão sem olhar limite: perfil no limite
+continua sendo o perfil da conta, e não aparece como "sem perfil".
 
 `problemasDePerfil` aponta o `claudeProfileId` que não existe ou não resolve; a seção Saúde
 da tela Sistema e o diagnóstico (`GET /api/diagnostics`) mostram.
