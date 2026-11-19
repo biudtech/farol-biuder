@@ -106,6 +106,18 @@ test('2: provasDaDecisao resume decision, cobertura, alcance, checks, protocolo 
   assert.deepEqual(p.protocolo, { prReviewer: 'dispensado', motivo: 'diff só de configuração' });
 });
 
+// 19/11/2026: a leitura do card pelo motor só deixava rastro quando falhava (WARN no log). Na
+// validação do motor hospedado não havia como contar as revisões com card lido.
+test('2: a leitura do card pelo motor fica nas provas: lido, do cache, ou o código de por que não', () => {
+  assert.deepEqual(provasDaDecisao(envelope({ cardLeitura: { ok: true, fromCache: true } })).card.leitura, { lido: true, cache: true });
+  assert.deepEqual(provasDaDecisao(envelope({ cardLeitura: { ok: true } })).card.leitura, { lido: true, cache: false });
+  assert.deepEqual(provasDaDecisao(envelope({ cardLeitura: { ok: false, code: 'sem_chave' } })).card.leitura, { lido: false, codigo: 'sem_chave' });
+  assert.deepEqual(provasDaDecisao(envelope({ cardLeitura: { ok: false, code: 'x'.repeat(200) } })).card.leitura, { lido: false, codigo: 'x'.repeat(60) });
+  for (const torto of [undefined, null, 'lido', 7, [], {}]) {
+    assert.equal('leitura' in provasDaDecisao(envelope({ cardLeitura: torto })).card, false, `sem leitura registrada: ${JSON.stringify(torto)}`);
+  }
+});
+
 test('2: protocolo omitido ou com valor fora da lista vira "nao_declarado", nunca "rodou"', () => {
   assert.equal(provasDaDecisao(envelope()).protocolo.prReviewer, 'nao_declarado');
   assert.equal(provasDaDecisao(envelope({ protocolo: { prReviewer: 'sim' } })).protocolo.prReviewer, 'nao_declarado');

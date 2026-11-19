@@ -139,13 +139,13 @@ No passo 3 do próximo PR da pessoa, use isso para reconhecer progresso ("2º PR
 Se **qualquer ferramenta/comando falhar** durante o review — `Write` retornar erro, `gh` falhar (buscar/postar), busca do Jira falhar, etc. — **mesmo que você recupere logo depois** — registre **uma linha** no log antes de seguir:
 
 ```
-[AAAA-MM-DD HH:MM:SS] [ERROR] review <repo#NN>: <ferramenta/comando> falhou — <mensagem>
+[AAAA-MM-DD HH:MM:SS ±HH:MM] [ERROR] review <repo#NN>: <ferramenta/comando> falhou — <mensagem>
 ```
 
 Anexe via shell (o cwd já é o workspace do Farol):
 
 ```
-printf '[%s] [ERROR] review biudtech/biud-clients#38: Write payload falhou — %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "Error writing file" >> state/farol.log
+printf '[%s] [ERROR] review biudtech/biud-clients#38: Write payload falhou — %s\n' "$(date '+%Y-%m-%d %H:%M:%S %:z')" "Error writing file" >> state/farol.log
 ```
 
 Regras:
