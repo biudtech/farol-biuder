@@ -7,7 +7,7 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { lerRespostaDoConsumo, type OpcoesDeFiltro, type Relatorio } from '@/contratos/consumo';
-import { caminhoDoRelatorio, enderecoDa, lerEndereco, type Consulta } from '@/consumo/consulta';
+import { enderecoDa, lerEndereco, type Consulta } from '@/consumo/consulta';
 import type { Cliente, Resultado } from '@/transporte/cliente';
 
 // empilhar: entra no histórico do navegador (período, filtro, página).
@@ -34,7 +34,7 @@ export function useEnderecoDoConsumo(): Endereco {
 
 type Falha = Extract<Resultado<never>, { ok: false }>;
 
-const SEM_OPCOES: OpcoesDeFiltro = Object.freeze({ kind: [], model: [], repo: [] });
+const SEM_OPCOES: OpcoesDeFiltro = Object.freeze({ kind: [], model: [], repo: [], author: [], profile: [] });
 
 interface Guardado {
   pedido: string;
@@ -62,14 +62,16 @@ export interface LeituraDoConsumo {
   haNovo: boolean;
 }
 
-export function useRelatorio(cliente: Pick<Cliente, 'get'>, consulta: Consulta, recarga: number, marcaAtual: string | null): LeituraDoConsumo {
+// `caminho` null não pede nada: é o segundo relatório (o do período, para o gráfico) quando não
+// há dia clicado.
+export function useRelatorio(cliente: Pick<Cliente, 'get'>, caminho: string | null, recarga: number, marcaAtual: string | null): LeituraDoConsumo {
   const [guardado, setGuardado] = useState<Guardado | null>(null);
-  const caminho = caminhoDoRelatorio(consulta);
   const pedido = `${recarga}|${caminho}`;
   const marca = useRef(marcaAtual);
   useEffect(() => { marca.current = marcaAtual; });
 
   useEffect(() => {
+    if (caminho === null) return undefined;
     const controle = new AbortController();
     void cliente.get(caminho, lerRespostaDoConsumo, { sinal: controle.signal }).then((r) => {
       // o pedido foi trocado por outro: a resposta dele não vale mais
@@ -85,7 +87,7 @@ export function useRelatorio(cliente: Pick<Cliente, 'get'>, consulta: Consulta, 
     return () => controle.abort();
   }, [cliente, caminho, pedido]);
 
-  const carregando = guardado?.pedido !== pedido;
+  const carregando = caminho !== null && guardado?.pedido !== pedido;
   // O relatório chegou antes do primeiro snapshot: a primeira marca que aparecer vale como a
   // da carga, em vez de virar "há consumo novo" sem ter entrado nenhum.
   if (guardado && !carregando && guardado.relatorio && guardado.marca === null && marcaAtual !== null) setGuardado({ ...guardado, marca: marcaAtual });

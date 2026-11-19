@@ -143,6 +143,49 @@ export function textoDoCusto(execucao: Pick<Execucao, 'costUsd' | 'costSource'>)
   return `${valor} (origem "${origem}")`;
 }
 
+// Por que a sessão rodou (lib/engine/gatilho-da-sessao.js). O vazio é conversa e ferramenta, que
+// o motor deixa sem gatilho; o que a tela não conhece aparece cru.
+const GATILHO: Record<string, string> = {
+  primeira: 'Primeira revisão',
+  commit_novo: 'Revisão de commit novo',
+  rodada_extra: 'Rodada extra no mesmo commit',
+  contestacao: 'Contestação do autor',
+  '': 'Conversa ou ferramenta',
+};
+
+export function rotuloDoGatilho(gatilho: string | undefined): string {
+  if (gatilho === undefined) return 'Gatilho não informado';
+  return proprio(GATILHO, gatilho) ?? gatilho;
+}
+
+const COMPACTO = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+
+// Tokens curtos, para caber na linha: 950, 1,2 mil, 1,2 mi. O número inteiro vai no detalhe.
+export function tokensCurtos(valor: number | undefined): string {
+  if (valor === undefined) return SEM_DADO;
+  // o Intl separa a unidade com espaço inseparável: troca pelo comum, como no resto da tela
+  return serve(valor) ? COMPACTO.format(valor).replace(/ /g, ' ') : VALOR_INVALIDO;
+}
+
+// A duração em segundos, minutos e horas, sem casas: 42 s, 4 min 50 s, 1 h 5 min.
+export function duracao(ms: number | undefined): string {
+  if (ms === undefined) return SEM_DADO;
+  if (!serve(ms)) return VALOR_INVALIDO;
+  const segundos = Math.round(ms / 1000);
+  if (segundos < 60) return `${segundos} s`;
+  const minutos = Math.floor(segundos / 60);
+  if (minutos < 60) return segundos % 60 ? `${minutos} min ${segundos % 60} s` : `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  return minutos % 60 ? `${horas} h ${minutos % 60} min` : `${horas} h`;
+}
+
+// A largura de uma barra, de 0 a 100: a parte sobre o maior da lista. É comparação para
+// desenhar, não soma. O que existe e arredondaria para zero fica com 1, para não sumir.
+export function fracao(valor: number | undefined, maior: number | undefined): number {
+  if (valor === undefined || maior === undefined || !serve(valor) || !serve(maior) || maior === 0 || valor === 0) return 0;
+  return Math.min(100, Math.max(1, Math.round((valor / maior) * 100)));
+}
+
 // dono no formato de login do GitHub; repositório com letras, dígitos, ponto, hífen e sublinhado
 const CHAVE_DE_PR = /^([A-Za-z0-9][A-Za-z0-9-]*)\/([\w.-]+)#(\d+)$/;
 

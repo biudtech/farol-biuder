@@ -786,28 +786,38 @@ Regras que valem para quem mexer nela:
 ## A tela Consumo
 
 A aba `/consumo` é `src/componentes/consumo/Consumo.tsx`. Ela mostra quanto as sessões de IA do
-motor consumiram: tokens e custo em dólar. Só lê: não há ação nela. E só mede: o motor não tem
-teto de gasto (decisão de 16/11/2026), então a tela não mostra teto, bloqueio nem pausa.
+motor consumiram (tokens e custo em dólar) e quanto ainda há de plano em cada perfil do Claude.
+Só lê: a única ação é baixar o CSV. E só mede: o motor não tem teto de gasto (decisão de
+16/11/2026), então a tela não mostra teto, bloqueio nem pausa.
 
-No desenho enxuto (17/11/2026) a tela tem, à vista, só o topo e um cartão. O topo é o título, a
-frase com o período (em dia de Brasília) e, à direita, o seletor de período (últimos 7, 30 ou
-90 dias) e o botão Filtrar, que abre o painel (`ui.gaveta` e `ui.painel`) com o período
-personalizado (De e Até) e os filtros de tipo, modelo e repositório. O que está escolhido fica
-à vista em chips, cada um com o botão que o tira, e Limpar filtros. O cartão traz um número
-grande, o custo estimado do período, a frase das execuções, o gráfico por dia e de onde vem o
-custo, com a modalidade. Todo o resto fica fechado, uma linha por parte (`Linha`), com o
-destaque no resumo da própria linha: Detalhes do período, Por dia, Por repositório (quando o
-motor manda `repos`), Por tipo, Por modelo,
-Execuções (com a busca e a paginação dentro), Sessões recentes e Auditoria do registro.
+No redesenho (lote 5, 19/11/2026, referência visual aprovada no canvas do Consumo) a tela tem,
+de cima para baixo:
+
+1. o título, a frase com o período (em dia de Brasília) e, à direita, os períodos prontos
+   (Hoje, 7, 30 e 90 dias), botões com `aria-pressed`;
+2. a barra de filtros: Buscar sessão, Repositório, Autor do PR, Modelo e Perfil do Claude, e
+   "Outro período" (De e Até) que abre;
+3. as pílulas do que está escolhido ("Filtrando:"), cada uma o botão que a tira, e Limpar filtros;
+4. os números do período: custo estimado, revisões concluídas, sessões de IA e tokens de saída;
+5. o plano de cada perfil do Claude, um cartão por perfil com o selo e as janelas do plano;
+6. lado a lado, o custo por dia (uma barra por dia, cada uma um botão que vira o filtro do dia) e
+   o custo por repositório (o nome é um botão que vira o filtro de repositório);
+7. lado a lado, o custo por modelo e "Para que foi o gasto" (por gatilho);
+8. "Cada sessão": a tabela paginada, uma linha por operação, que abre com os tokens por tipo, o
+   tempo por etapa, as tentativas, os arquivos lidos, o card, Ver no Histórico e Abrir o PR, e
+   o botão Baixar CSV;
+9. fechadas numa linha cada (`Linha`): Detalhes do período, Sessões recentes e Auditoria do
+   registro.
 
 | Parte | Componente | De onde vem |
 |---|---|---|
-| Seletor de período, Filtrar, chips e busca | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
-| Número grande, frase e modalidade; Detalhes do período | `ResumoDoPeriodo.tsx` | `range`, `totals`, `completed`, `retries` de `GET /api/usage` |
-| Gráfico por dia; linha Por dia (a tabela) | `GraficoPorDia.tsx` | `series` |
-| Por repositório, por tipo e por modelo | `Quebras.tsx` | `repos`, `byKind` e `models` |
-| Execuções (o diário) | `Diario.tsx`, `TabelaDeExecucoes.tsx` | `history` |
-| Sessões recentes | `SessoesRecentes.tsx` | `usage.recentSessions` do snapshot |
+| Períodos prontos, barra de filtros e pílulas | `Filtros.tsx` | o endereço; as opções são o `options` da resposta |
+| Números do período; plano de cada perfil | `Numeros.tsx` (`src/consumo/plano.ts`) | `totals`, `completed`, `retries`; `config.claudeProfiles`, `config.claudeProfileId`, `claudePerfis` e `activeSessions[].perfilId` do snapshot |
+| Custo por dia e a tabela "Ver em tabela" | `CustoPorDia.tsx` | `series` (com dia clicado, do segundo pedido) |
+| Por repositório, por modelo e por gatilho | `Quebras.tsx` | `repos`, `models` e `porGatilho` |
+| Cada sessão, Baixar CSV | `Sessoes.tsx` (`src/consumo/sessao.ts`) | `history`; `formato=csv` |
+| Detalhes do período e as notas | `ResumoDoPeriodo.tsx` | `totals`, `completed`, `retries`, `unidentified`, `incomplete`, `sinceDay` |
+| Sessões recentes | `SessoesRecentes.tsx`, `TabelaDeExecucoes.tsx` | `usage.recentSessions` do snapshot |
 | Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |
 
 O contrato, lido do motor:
@@ -818,144 +828,146 @@ O contrato, lido do motor:
   `stackedSeries`, `matrixSeries`, até 120 dias), que a tela não usa: com elas a soma de um
   período teria de ser feita aqui.
 - **`usage.recentSessions`**: as 100 sessões mais recentes, a mais nova primeiro, com `at`,
-  `kind`, `ref`, `model`, os quatro contadores de tokens, `costUsd`, `costSource` e `status`.
-- **`GET /api/usage`** (`lib/engine/usage-activity.js`, `lib/usage/report.js`) lê o diário
-  inteiro, que não tem poda. Parâmetros, todos opcionais: `start` e `end` (dias `AAAA-MM-DD`,
-  inclusivos; sem eles, os 30 dias que terminam no hoje do motor), `kind`, `model`, `repo`,
-  `account`, `provider` e `device` (igualdade exata; ausente ou `all` não filtra), `search`
-  (até 200 caracteres, na referência, no tipo e no modelo), `focus` (`review` ou `pr`) e
-  `page` (a partir de zero, 8 operações por página). Desde 19/11/2026 também `profile`,
-  `author`, `pageSize` (teto 50) e `formato=csv`, e a resposta leva `thinkingTokens`, o custo
-  por modelo, o `gatilho` de cada linha, `porGatilho` e, na página, as etapas, o card e os
-  arquivos lidos da decisão da rodada: o contrato está em
-  [`docs/CONSUMO-REVIEWS.md`](../docs/CONSUMO-REVIEWS.md#get-apiusage), e a tela ainda não os lê. `kind`, `model` e `repo` recortam as
-  somas, a série e as quebras; `search`, `focus` e `page`, só o diário. `model` compara com o
-  modelo principal da execução: `models` ainda pode trazer outros, que são partes das mesmas
-  execuções. Cada operação do diário vem com todas as tentativas dela, inclusive as de fora
-  do período ou do filtro. Responde sempre 200:
-  `{ ok: true, range, options, totals, byKind, completed, retries, unidentified, since,
-  sinceDay, series, models, history, incomplete }`, ou `{ ok: false, motivo }` com uma frase.
-  A tela manda `start`, `end`, `kind`, `model`, `repo`, `search` e `page`.
+  `kind`, `ref`, `model`, `profileId`, os contadores de tokens, `costUsd`, `costSource` e
+  `status`.
+- **O plano por perfil** sai do que o snapshot já traz para o Sistema: a lista e a ordem dos
+  perfis (`config.claudeProfiles`, o padrão em `config.claudeProfileId`), o uso do plano lido
+  pelo motor (`claudePerfis.uso[id]`: `lido`, `ok`, `erro`, `desatualizado` e as `janelas`, cada
+  uma com `nome`, `usado` de 0 a 1 e `resetTexto`), os problemas (`claudePerfis.problemas`) e o
+  perfil de cada sessão em curso (`activeSessions[].perfilId`). O selo, nesta ordem: "Com
+  problema: código", "Em uso agora", "Perfil padrão" ou "Reserva". Uso acima de 100% aparece
+  como veio, com a barra cheia.
+- **`GET /api/usage`** (`lib/engine/usage-activity.js`, `lib/usage/report.js`,
+  `lib/engine/consumo-das-sessoes.js`) lê o diário inteiro. O contrato está em
+  [`docs/CONSUMO-REVIEWS.md`](../docs/CONSUMO-REVIEWS.md#get-apiusage). A tela manda `start`,
+  `end`, `kind` (só o que vem de um endereço antigo), `model`, `repo`, `author`, `profile`,
+  `search` e `page`, e no CSV `formato=csv`. Não manda `pageSize`: vale o padrão do motor, 8
+  operações por página. Lê `range`, `options` (com `author` e `profile`), `totals` (com
+  `thinkingTokens`), `completed`, `retries`, `unidentified`, `sinceDay`, `series`, `models`
+  (com `thinkingTokens`, `costUsd` e `unknownCost`), `repos`, `porGatilho`, `history` (com
+  `pageSize`) e `incomplete`; em cada linha, `profile`, `gatilho`, `author`, `thinkingTokens`,
+  a duração (`duration`, só com `durationKnown`) e, na página, `decisaoId`, `etapas`, `card` e
+  `arquivosLidos`. Responde sempre 200, ou `{ ok: false, motivo }` com uma frase; o único 400 é
+  o do formato torto.
 
 Regras que valem para quem mexer nela:
 
-- **A tela não soma.** Toda soma é do motor: `totals` para o período, `series` por dia,
-  `byKind` por tipo, `models` por modelo, `auditoria` para o registro inteiro. A tela não soma
-  linhas de uma página nem tentativas de uma operação. As contas daqui são de exibição e
-  estão ditas: a participação percentual (a fatia de uma linha no total do motor, também no
-  resumo das linhas Por tipo e Por modelo) e entrada mais saída da mesma linha (para ordenar
-  os modelos). Ao lado do número grande vai só a contagem de execuções do motor
-  (`fraseDasExecucoes`): média por execução seria conta da tela, e saiu.
+- **A tela não soma entre linhas.** Toda soma é do motor: `totals` para o período, `series`
+  por dia, `models` por modelo, `repos` por repositório, `porGatilho` por gatilho, `auditoria`
+  para o registro inteiro. A tela não soma linhas de uma página nem tentativas de uma operação.
+  As contas daqui são de exibição e ficam dentro de uma mesma linha: a largura de cada barra (a
+  parte sobre a maior da lista, `fracao`), e os cinco tipos de token da mesma tentativa, somados
+  para a coluna Tokens e para a largura das faixas da linha aberta (`somaDosTokens`). Custo médio
+  por revisão seria conta da tela, e não entra.
 - **O custo é sempre "estimado".** `costUsd` é o `total_cost_usd` que a sessão do Claude Code
-  informa ao terminar; o motor não tem tabela de preço. Em perfil de assinatura ninguém cobra
-  esse valor, e a tela diz isso no cartão do número grande ("É uma estimativa...") e, por
-  extenso, em Detalhes do período. A modalidade aparece nas três parcelas em que o motor a
-  separa, sem "N de M": as execuções por assinatura (`subscription`) e o dólar das de chave
-  de API (`apiUsd`, `apiEstimatedUsd`, `apiUnknown`) no cartão, e as sem modalidade
-  registrada (`unknownBilling`) numa nota à vista. Cada execução mostra a origem do custo
-  (`costSource`): informado pela sessão, "calculado pelo motor" (a sessão morreu antes de
-  informar, e o motor usa a mediana do custo por token de saída das sessões concluídas do
-  mesmo modelo) ou "Desconhecido", que não mostra o zero gravado.
-- **O dia é o de Brasília.** O período e o diário são em "dia de Brasília" (`FUSO_DO_DIA`,
-  `lib/constants.js`). A tela escreve o dia trocando a ordem do texto, sem `Date`. A hora de
-  cada execução (`at`) sai no fuso do navegador, como nas outras telas.
-- **A auditoria em texto.** `linhasDaAuditoria` (`src/consumo/auditoria.ts`) escreve o total
-  do registro inteiro, o que não virou resultado, o que o motor calculou e o que ficou com
-  custo desconhecido. É medição: nenhuma dessas frases fala de limite, e nada na tela pausa
-  revisão. A lista de teto por perfil que um motor antigo ainda mande em `usage` não é lida.
-- **A consulta mora no endereço.** `inicio`, `fim`, `tipo`, `modelo`, `repo`, `q` e `pagina`
-  (`src/consumo/consulta.ts`), no molde do Histórico: filtro, período pronto e página
-  empilham; busca, datas e página corrigida trocam a entrada. Tirar um chip empilha. A busca
-  espera 300 ms, e cada pedido novo aborta o anterior. Valor que a tela não conhece vai ao
-  motor como veio. Com `q` ou página no endereço, a linha Execuções já abre aberta.
-- **O hoje é o do motor.** Os períodos prontos do seletor do topo (últimos 7, 30 e 90 dias)
-  terminam no `range.end` do relatório na tela e gravam as duas datas no endereço; antes da
-  primeira resposta o seletor fica desabilitado. A tela não lê o relógio. O seletor só mostra
-  um período pronto quando as duas datas do endereço são as do relatório, ou quando não há
-  data nenhuma (o padrão do motor, sempre 30 dias); fora disso diz "Período personalizado", e
-  o período vira chip. Com uma data só, a dica diz o que o motor faz: só "De" cresce a cada dia; só "Até"
-  começa 30 dias antes do hoje do motor, e com data mais antiga ele não entrega o relatório.
+  informa ao terminar; o motor não tem tabela de preço, e por isso não há custo por tipo de
+  token (não-meta do desenho): a linha aberta mostra os tokens de cada tipo e o custo da sessão
+  inteira. Cada execução mostra a origem do custo (`costSource`): informado pela sessão,
+  "calculado pelo motor" ou "Desconhecido", que não mostra o zero gravado. A modalidade
+  (assinatura, chave de API, sem registro) fica em Detalhes do período, e as sem modalidade
+  viram nota à vista.
+- **O clique vira filtro.** O nome do repositório filtra pelo repositório; a barra de um dia
+  filtra pelo dia (`dia` no endereço). O motor só sabe recortar por período, então o dia vai
+  como `start` e `end` iguais, e a tela faz um segundo pedido, o do período inteiro com os
+  mesmos filtros e sem a busca nem a página (`caminhoDoPeriodo`), só para o gráfico por dia e os
+  períodos prontos continuarem mostrando o período. Clicar de novo no mesmo dia ou repositório
+  tira o filtro, e a pílula também.
+- **Pílulas.** Uma por filtro ativo (`filtrosAtivos`, `src/consumo/consulta.ts`): período fora
+  dos prontos, dia, tipo (de endereço antigo), repositório, autor, modelo, perfil (com o nome
+  que a configuração dá) e busca. Tirar uma pílula empilha o endereço, e o foco vai ao título da
+  página.
+- **A linha que abre.** O botão da coluna Quando tem `aria-expanded` e `aria-controls`; a linha
+  aberta mostra os tokens da tentativa mais recente por tipo (com a faixa e a lista em texto), o
+  tempo de cada etapa (relativo à mais longa), as tentativas com o desfecho de cada uma e, com
+  mais de uma, o custo e os tokens de cada tentativa, sem somar; os arquivos lidos, o card e o
+  autor quando o motor os manda, e "o motor não informou", "nenhum card lido" ou "Sem etapas"
+  quando não. A linha de uma operação com retomada diz "última de N tentativas".
+- **A consulta mora no endereço.** `inicio`, `fim`, `dia`, `tipo`, `modelo`, `repo`, `autor`,
+  `perfil`, `q` e `pagina` (`src/consumo/consulta.ts`): filtro, período pronto, clique e página
+  empilham; busca, datas e página corrigida trocam a entrada. A busca espera 300 ms (Enter manda
+  na hora), e cada pedido novo aborta o anterior. Valor que a tela não conhece vai ao motor como
+  veio, e o seletor o mostra com "(valor do endereço)".
+- **O hoje é o do motor.** Os períodos prontos terminam no `range.end` do relatório do período e
+  gravam as duas datas no endereço; antes da primeira resposta ficam desabilitados. A tela não
+  lê o relógio, a não ser para o nome do arquivo do CSV (o mesmo dia de Brasília que o motor
+  usa). Fora dos prontos, nenhum botão fica marcado, o período vira pílula e "Outro período"
+  nasce aberto, com a dica do que o motor faz com uma data só.
 - **Data digitada só vira pedido quando serve.** O campo guarda o que se digita e só manda ao
-  endereço um dia que existe, de 1970 em diante (`dataAceita`): enquanto se digita o ano, o
-  navegador entrega 0002, 0020, 0202. Data do endereço não é julgada aqui: vai ao motor.
-- **O diário mostra as tentativas de fora.** As de fora do período saem marcadas com "fora
-  do período" na coluna Quando, e a tela diz por que as linhas não fecham com o total.
-- **O gráfico é complemento.** SVG próprio, sem biblioteca, com `role="img"` e um nome que
-  resume o período, o maior dia e o total do motor. A mesma informação está na tabela da
-  linha Por dia. No desenho enxuto são só as barras (na primária, `--accent`) e a linha de
-  base, sem eixo vertical escrito: o SVG estica na largura do cartão
-  (`preserveAspectRatio="none"`, área `AREA_ENXUTA`), e os dias do começo e do fim do período
-  ficam embaixo, em texto da página, para não esticar com ele. Cada barra tem um `<title>` com
-  o dia e o valor. A geometria é função pura (`src/consumo/grafico.ts`): escala de passo
-  redondo, dia sem execução com barra vazia. Período com mais de 120 dias não é desenhado.
-  Cores só das variáveis de `globals.css`.
-- **Tabela larga rola no próprio contêiner,** que tem nome e recebe foco. A página não rola
-  para o lado em 375 px.
-- **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda,
-  aparece o aviso de sessão nova com o botão Atualizar, dizendo que ela pode não entrar no
-  recorte (o aviso não olha período nem filtro). A auditoria e as sessões recentes vêm do
-  snapshot e andam sozinhas.
-- **Estados.** Na primeira carga, sem relatório nenhum, a tela mostra o esqueleto
-  (`Esqueleto`, com "Carregando o consumo." para o leitor); as linhas do snapshot (sessões e
-  auditoria) não esperam. Ao trocar período, filtro ou página, a barra de carga aparece no
-  topo e o relatório anterior fica na tela, apagado (`ui.apagada`) e com `aria-busy`. Sem
-  execução no período, o cartão mostra o zero do motor e a frase (com filtro ela muda), sem
-  gráfico, detalhes nem quebras. Filtro sem resultado deixa os chips à vista, com Limpar
-  filtros. Falha de rede tem Tentar de novo; recusa que nomeia um campo oferece limpar.
-  `{ ok: false, motivo }` mostra a frase do motor e oferece voltar ao período padrão. Parte
-  do snapshot que ainda não chegou diz isso no resumo da linha ("ainda não chegou"). As sem
-  modalidade, o diário incompleto e o período anterior ao primeiro registro (histórico que
-  não existe) viram nota à vista; o calculado pelo motor, o custo desconhecido e as sem
-  identidade ficam em Detalhes do período, contados no resumo da linha. Item sem o que o
-  identifica é descartado, contado e avisado; número que não veio aparece como "sem dado",
-  não como zero. A região viva ("Resultado da consulta", escondida da vista) anuncia o
-  resultado de cada carga.
+  endereço um dia que existe, de 1970 em diante (`dataAceita`).
+- **Baixar CSV** pede `GET /api/usage?formato=csv` com o mesmo recorte da tela (filtros, dia e
+  busca, sem página), pelo cliente: o pedido leva o Bearer ou passa pelo portão, como todo
+  pedido do front, e um link direto para a rota não levaria a credencial. O texto vira arquivo
+  no navegador, com a marca de ordem de bytes, como no Histórico.
+- **Gráfico com alternativa em texto.** As barras são SVG próprio, sem biblioteca, com a altura
+  e a largura em atributo do SVG (a CSP recusa `style`). Cada barra do dia é um botão cujo nome
+  diz o dia e o valor; a frase do período, o maior dia e o total ficam para o leitor de tela; e
+  "Ver em tabela" traz os dias com execução. Nas quebras o valor está escrito ao lado da barra,
+  que é decorativa. Período com mais de 120 dias não desenha as barras.
+- **Cores só das variáveis** de `globals.css`, nos pares que `src/tema/contraste.test.ts`
+  confere nos dois temas: barra `--accent` sobre o trilho `--surface-2`, barra do dia escolhido
+  `--text`, nome clicável `--link` e, escolhido, `--accent-ink` sobre `--accent`, período marcado
+  e pílula `--surface` sobre `--text`, foco `--foco`.
+- **Celular.** Os blocos lado a lado viram coluna, a barra de filtros quebra linha, as barras
+  das quebras descem para baixo do nome, e a tabela larga rola no próprio contêiner, que tem
+  nome e recebe foco. A página não rola para o lado em 375 px.
+- **O relatório não se refaz sozinho.** Quando `usage.totals.sessions` do snapshot muda, aparece
+  o aviso de sessão nova com o botão Atualizar. O plano, as sessões recentes e a auditoria vêm do
+  snapshot e andam sozinhos.
+- **Estados.** Na primeira carga, o esqueleto; o plano, as sessões recentes e a auditoria não
+  esperam. Ao trocar período, filtro ou página, a barra de carga aparece e o relatório anterior
+  fica apagado (`ui.apagada`) e com `aria-busy`. Sem execução no período, a frase (com filtro ela
+  muda) e os números zerados do motor. Falha de rede tem Tentar de novo; recusa que nomeia um
+  campo oferece limpar; `{ ok: false, motivo }` mostra a frase do motor e oferece voltar ao
+  período padrão (sem datas e sem dia). Item sem o que o identifica é descartado, contado e
+  avisado; número que não veio aparece como "sem dado", não como zero. A região viva
+  ("Resultado da consulta", escondida da vista) anuncia o resultado de cada carga.
 - **Número torto não vira "US$ NaN".** Negativo, infinito ou que não é número aparece como
-  "valor inválido"; fracionário onde se espera inteiro aparece com as casas que tem;
-  participação acima de 100% aparece como veio. `dolarDoEixo` (as casas que o passo pede, 0,025 pede três) continua em
-  `formato.ts`, sem uso na tela enxuta, que não escreve o eixo vertical. As funções puras não
-  lançam com valor denormal, enorme ou `NaN`.
+  "valor inválido". As funções puras não lançam com valor denormal, enorme ou `NaN`.
 
 ### Lacunas do contrato
 
+- **Sem custo médio por revisão.** O desenho tem "Custo médio por revisão" e a mediana do tempo
+  por revisão; o motor conta as revisões concluídas e soma o custo do período (que inclui erro,
+  contestação e rodada extra), mas não manda nem a média nem a mediana. O número saiu da tela.
+- **O dia clicado é um período de um dia.** O motor não tem filtro por dia: a tela manda
+  `start` e `end` iguais e faz um segundo pedido para o gráfico. Um parâmetro `day` (ou a série
+  do período junto do recorte do dia) tiraria o segundo pedido.
+- **A busca não olha título, autor nem card.** `search` procura na referência, no tipo e no
+  modelo; o desenho sugeria "PR, título, autor ou card". O autor tem filtro próprio; título e
+  card o diário não guarda.
+- **Arquivos lidos é uma contagem.** `arquivosLidos` é `provas.cobertura.lidos`; o total do PR
+  (o "de N" do desenho) e a conferência do uso fora do diff não vêm.
+- **O card vem só com a chave.** Sem o texto de "lido e cumprido" ou "parte deste PR
+  comprovada": isso está no detalhe da decisão, em `GET /api/decision`.
+- **Rodada que ainda não decidiu fica sem etapas, card e arquivos**, e a contestação também.
+- **Gatilho com limite conhecido.** A revisão retomada depois de um reinício e o clique manual
+  contam como `primeira` (`gatilho-da-sessao.js`). Registro antigo sem marca também.
+- **Sem total por operação na página.** A linha mostra a tentativa mais recente; aberta, cada
+  tentativa com o custo e os tokens dela. O CSV soma as tentativas do recorte (o motor faz).
+- **Desfecho é o da sessão, não o do review.** A pílula da tabela é o `status` da sessão
+  (Concluída, Erro, Parcial); o veredito publicado (aprovado, pediu mudanças) está no Histórico,
+  e o diário não o traz.
+- **Um perfil só por linha.** `profile` é o perfil da tentativa mais recente da operação.
+- **O plano não vem por período.** O uso de cada janela é o de agora, lido pelo motor; não há
+  série do uso do plano nem gasto por perfil no período (a quebra por perfil não existe;
+  `byProfileDay` é gravado e não tem leitor).
 - **A recusa não tem código nem campo.** Período inválido volta como 200 com
-  `{ ok: false, motivo }`, e a mesma forma serve para o diário indisponível. A tela não tem
-  como dizer qual parâmetro foi recusado, nem separar recusa de indisponibilidade: mostra a
-  frase. Filtro com valor que não existe não é recusado: volta vazio. O cliente já lê `code`
-  e `campo` de um 400, se a rota passar a responder assim.
+  `{ ok: false, motivo }`. Filtro com valor que não existe não é recusado: volta vazio.
 - **Dois dias diferentes.** O diário e `GET /api/usage` usam o dia de Brasília; o agregado
-  (`usage.series`) usa o dia local do processo do motor (`localDay`), que só é o de Brasília
-  se o processo rodar nesse fuso. A tela não usa o agregado, e por isso só fala no dia de
-  Brasília.
-- **As execuções por chave de API não são contadas.** O motor soma o dólar delas e conta só
-  as de custo desconhecido. A tela não tira a contagem por diferença.
-- **A tentativa de fora do filtro não vem marcada.** A tela marca a de fora do período
-  comparando o dia dela com `range`; para o filtro teria de repetir a regra do motor.
-- **Por repositório é o que o diário guarda.** `repos` soma pelo `ref` de cada linha
-  (`aggregateRepos`, `lib/usage/report.js`); o que não é de PR vem com o nome vazio, e a tela o
-  chama de "Sem repositório".
-- **Sem custo por revisão.** O motor conta as revisões concluídas (`completed.reviews`), mas
-  não diz quanto elas custaram: o custo do período inclui erro, contestação e chat. A tela
-  não divide o total por conta própria.
-- **Sem custo nem cache por modelo no período.** `models` traz execuções e tokens de entrada
-  e de saída. O custo por modelo existe só nas séries diárias do snapshot, que a tela teria
-  de somar.
-- **Sem total por operação.** Uma operação com retomada traz as tentativas, cada uma com os
-  tokens e o custo dela, e nenhuma soma. A tela mostra uma linha por tentativa.
+  (`usage.series`) usa o dia local do processo do motor. A tela não usa o agregado.
+- **As execuções por chave de API não são contadas.** O motor soma o dólar delas e conta só as
+  de custo desconhecido.
 - **Sem endereço do PR.** Vem só a chave `dono/repo#n`; a tela monta o endereço do GitHub
   (`urlDoPr`), e referência de outro formato fica como texto.
-- **Os períodos não vêm do motor.** Ele aceita qualquer intervalo e não lista os oferecidos:
-  7, 30 e 90 são escolha da tela, e o hoje dele só se conhece pela resposta.
+- **Os períodos não vêm do motor.** Hoje, 7, 30 e 90 são escolha da tela.
 - **Página além do fim não é dita.** O motor devolve a última página sem avisar; a tela
   compara `history.page` com o pedido e corrige o endereço.
-- **`account`, `provider`, `device` e `focus` não são oferecidos.** Uma instância tem uma
-  conta, um provedor e um aparelho; `focus` (só revisões concluídas, ou uma por PR) ficou
-  de fora.
-- **O motivo da falha de uma sessão** (`usage.falhasPorSessao`) não é mostrado: é texto
-  de erro do motor. As falhas registradas aparecem no relatório do motor, na tela Sistema.
-- **Sem gasto por perfil.** O snapshot não traz mais linha por perfil do Claude (ela existia
-  para o teto, que saiu). Cada sessão recente vem com o `profileId`, que a tela não lê; ela
-  também não filtra por perfil, embora `GET /api/usage` aceite `profile` desde 19/11/2026.
+- **`account`, `provider`, `device`, `focus` e o tipo não são oferecidos.** Uma instância tem uma
+  conta, um provedor e um aparelho; o tipo saiu da barra no redesenho (o gatilho diz mais), e o
+  `tipo` de um endereço antigo continua valendo, como pílula.
+- **O baixar do CSV repete o do Histórico.** `baixar` de `Sessoes.tsx` é o mesmo de
+  `ExportarCsv.tsx`; ficou duplicado para este lote não tocar o Histórico (lote 4). Pode virar
+  um módulo comum depois dos dois.
 
 ## A tela Sistema
 

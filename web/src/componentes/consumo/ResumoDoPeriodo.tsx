@@ -1,14 +1,12 @@
 'use client';
 
-// O resumo do período no desenho enxuto: um número grande (o custo estimado que o motor somou),
-// a frase das execuções, o gráfico por dia e de onde vem o custo. O resto das somas (tokens,
-// revisões concluídas, retentativas) e os avisos menores ficam numa linha que abre. Nenhum
-// número daqui é somado na tela.
-import { memo, useId } from 'react';
+// O detalhe do período (redesenho, lote 5): as notas que pesam na leitura dos números, à vista, e
+// numa linha que abre o resto das somas do motor, a modalidade e os avisos menores. Nenhum número
+// daqui é somado na tela.
+import { memo } from 'react';
 import type { Relatorio, Soma } from '@/contratos/consumo';
 import { diaPorExtenso, dolar, inteiro, tokens } from '@/consumo/formato';
 import { Linha, ui } from '../ui';
-import { GraficoPorDia } from './GraficoPorDia';
 import estilos from './Consumo.module.css';
 
 function Par({ nome, children }: { nome: string; children: string }) {
@@ -75,48 +73,6 @@ export function avisosDoPeriodo(relatorio: Relatorio): string[] {
   return avisos;
 }
 
-const serve = (n: number | undefined): n is number => n !== undefined && Number.isFinite(n) && n >= 0;
-
-// A frase ao lado do número grande: só as execuções que o motor contou. Média por execução não
-// entra: seria conta da tela, e a tela não inventa número que o motor não manda.
-export function fraseDasExecucoes(totals: Soma): string {
-  if (!serve(totals.attempts)) return '';
-  return `${execucoes(totals.attempts)} de IA`;
-}
-
-interface PropsDoCusto {
-  relatorio: Relatorio;
-  vazio: string;
-}
-
-export const CustoDoPeriodo = memo(function CustoDoPeriodo({ relatorio, vazio }: PropsDoCusto) {
-  const id = useId();
-  const { totals } = relatorio;
-  // só o zero que o motor mandou é "sem execução"; contagem ausente mostra o que houver
-  const semExecucao = totals.attempts === 0;
-  const frase = fraseDasExecucoes(totals);
-  const notas = semExecucao ? [] : notasDoPeriodo(relatorio);
-  return (
-    <>
-      <section className={`${ui.cartao} ${estilos.destaque}`} aria-labelledby={id}>
-        <div className={estilos.topoDoDestaque}>
-          <div>
-            <h2 id={id} className={estilos.rotuloDoNumero}>Custo estimado</h2>
-            <p className={estilos.numero}>{dolar(totals.costUsd)}</p>
-          </div>
-          {frase ? <p className={ui.mini}>{frase}</p> : null}
-        </div>
-        {semExecucao ? <p className={ui.vazio}>{vazio}</p> : <GraficoPorDia relatorio={relatorio} />}
-        <div className={estilos.frases}>
-          <p className={ui.mini}>É uma estimativa, que serve para comparar dias: o valor que cada sessão do Claude Code informa ao terminar, não uma cobrança.</p>
-          {semExecucao ? null : modalidades(totals).map((linha) => <p key={linha} className={ui.mini}>{linha}</p>)}
-        </div>
-      </section>
-      {notas.map((nota) => <p key={nota} className={ui.nota}>{nota}</p>)}
-    </>
-  );
-});
-
 // O detalhe do período: o resto das somas do motor e os avisos menores.
 export const DetalhesDoPeriodo = memo(function DetalhesDoPeriodo({ relatorio }: { relatorio: Relatorio }) {
   const { totals, completed } = relatorio;
@@ -138,9 +94,11 @@ export const DetalhesDoPeriodo = memo(function DetalhesDoPeriodo({ relatorio }: 
         {completed ? <Par nome="PRs com revisão concluída">{inteiro(completed.prs)}</Par> : null}
         <Par nome="Entrada">{tokens(totals.inputTokens)}</Par>
         <Par nome="Saída">{tokens(totals.outputTokens)}</Par>
+        <Par nome="Pensamento">{tokens(totals.thinkingTokens)}</Par>
         <Par nome="Cache lido">{tokens(totals.cacheReadTokens)}</Par>
         <Par nome="Cache criado">{tokens(totals.cacheCreationTokens)}</Par>
       </dl>
+      {modalidades(totals).map((linha) => <p key={linha} className={ui.texto}>{linha}</p>)}
       {avisos.map((aviso) => <p key={aviso} className={ui.texto}>{aviso}</p>)}
       <p className={ui.mini}>
         De onde vem o custo: é o valor em dólar que a sessão do Claude Code informa ao terminar. Em perfil de assinatura ninguém cobra esse valor por sessão: ele é uma estimativa, que serve para comparar dias.

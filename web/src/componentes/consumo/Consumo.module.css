@@ -1,68 +1,266 @@
-/* A tela Consumo, no desenho enxuto. Página, linha que abre, botão, cartão, nota, erro e
+/* A tela Consumo, no redesenho (lote 5). Página, linha que abre, botão, cartão, nota, erro e
    esqueleto vêm de src/componentes/ui; aqui fica só o que é desta tela. Só as variáveis de
-   globals.css, nos pares que src/tema/contraste.test.ts confere: a barra do gráfico é
-   --accent, a linha de base é --borda-campo, os rótulos do eixo são --muted e o texto das
-   tabelas é --text, sobre --surface. */
+   globals.css, nos pares que src/tema/contraste.test.ts confere: as barras são --accent sobre o
+   trilho --surface-2, o contorno do que está escolhido é --foco, os rótulos são --muted e o texto
+   é --text, sobre --surface. Largura e altura de barra são atributos do SVG: a CSP recusa o
+   atributo style. */
 
-/* ---------- topo: período e Filtrar ---------- */
-.periodo { width: 190px; }
-.botaoDeFiltrar { list-style: none; }
-.contagemDeFiltros { color: var(--muted); font-weight: 600; }
-.painelDeFiltros { gap: 14px; }
+/* ---------- topo: os períodos prontos ---------- */
+.periodos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.periodo {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.periodo:hover:not(:disabled) { background: var(--hover); }
+.periodo[aria-pressed="true"] { background: var(--text); color: var(--surface); font-weight: 800; }
+.periodo:disabled { cursor: default; opacity: .6; }
+.periodo:focus-visible, .botaoDeBarra:focus-visible, .nomeClicavel:focus-visible, .abrir:focus-visible, .tirar:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+
+/* ---------- a barra de filtros ---------- */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.campoDaBusca { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.campoDoFiltro { flex: 0 1 180px; min-width: 140px; display: flex; flex-direction: column; gap: 6px; }
+.outroPeriodo { flex: 1 1 100%; }
+.outroPeriodo > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 700; padding: 4px 0; }
 .datas {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+  padding-top: 8px;
 }
-.legenda { padding: 0; margin-bottom: 6px; }
-.grupoDoPeriodo { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .erroDoCampo { color: var(--danger-texto); font-size: 13px; font-weight: 600; }
 
-/* os filtros ativos, cada um com o botão que o tira */
-.ativos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* as pílulas dos filtros ativos, cada uma com o botão que a tira */
+.ativos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.filtrando { font-weight: 700; color: var(--muted); }
 .tirar {
   display: inline-flex;
-  padding: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
   border: 0;
-  background: transparent;
   border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
   font: inherit;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
-.tirar:hover { filter: brightness(.97); }
 
 /* ---------- avisos ---------- */
 .novas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 
-/* ---------- o número grande e o gráfico ---------- */
-.destaque { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.topoDoDestaque {
+/* ---------- os números ---------- */
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.numeroCartao {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 16px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
 }
 .rotuloDoNumero { font-size: 13px; font-weight: 700; color: var(--muted); }
 .numero {
-  font-size: 40px;
+  font-size: 30px;
   font-weight: 800;
-  letter-spacing: -1px;
+  letter-spacing: -0.6px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.grafico {
-  display: block;
-  width: 100%;
-  height: 160px;
+.notaDoNumero { font-size: 12px; font-weight: 600; color: var(--apagado); }
+
+/* ---------- blocos lado a lado ---------- */
+.bloco { display: flex; flex-direction: column; gap: 12px; }
+.tituloDoBloco { margin: 0; font-size: 18px; font-weight: 800; }
+.grade2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
 }
-.barra { fill: var(--accent); }
-.eixo { stroke: var(--borda-campo); stroke-width: 1; }
-/* os dias do começo e do fim do período, embaixo do gráfico */
-.pontas { display: flex; justify-content: space-between; gap: 12px; margin-top: -8px; }
-.rotuloDoEixo { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.frases { display: flex; flex-direction: column; gap: 4px; }
+.painel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+}
+.tituloDoPainel { margin: 0; font-size: 16px; font-weight: 800; }
+
+/* ---------- o plano de cada perfil ---------- */
+.perfis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.perfil[data-tom="marca"] { border-color: var(--accent); }
+.topoDoPerfil { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nomeDoPerfil { margin: 0; font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
+.janela { display: flex; flex-direction: column; gap: 6px; }
+.textoDaJanela { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.textoDaJanela span:last-child { color: var(--muted); text-align: right; }
+
+/* ---------- a barra horizontal (SVG) ---------- */
+.trilho { display: block; width: 100%; height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.trilho svg { display: block; width: 100%; height: 100%; }
+.cheio { fill: var(--accent); }
+
+/* uma linha de quebra: nome, barra e valor */
+.quebras { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.quebra {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) minmax(60px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.nomeDaQuebra { font-weight: 700; overflow-wrap: anywhere; }
+.valorDaQuebra { color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.valorDaQuebra b { color: var(--text); }
+.notaDaQuebra { grid-column: 1 / -1; margin-top: -6px; }
+.nomeClicavel {
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.nomeClicavel:hover { background: var(--accent-soft); }
+.nomeClicavel[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* ---------- custo por dia ---------- */
+.dias {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 200px;
+}
+.botaoDeBarra {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.botaoDeBarra:hover { background: var(--hover); }
+.colunaDaBarra { flex: 1 1 auto; width: 100%; max-width: 40px; display: flex; align-items: flex-end; min-height: 0; }
+.colunaDaBarra svg { display: block; width: 100%; height: 100%; }
+.barraDoDia { fill: var(--accent); }
+.botaoDeBarra[aria-pressed="true"] .barraDoDia { fill: var(--text); }
+.botaoDeBarra[aria-pressed="true"] { outline: 2px solid var(--foco); outline-offset: 1px; }
+.valorDoDia { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.rotuloDoDia { font-size: 12px; font-weight: 700; white-space: nowrap; min-height: 16px; }
+
+/* ---------- cada sessão ---------- */
+.topoDasSessoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.abrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.seta { transition: transform .15s; flex: none; }
+.abrir[aria-expanded="true"] .seta { transform: rotate(90deg); }
+.linhaAberta > td, .linhaAberta > th { background: var(--accent-soft); }
+.detalheDaSessao > td { background: var(--hover); white-space: normal; text-align: left; }
+.blocosDaSessao {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px;
+  padding: 12px 4px 4px;
+}
+.blocoDaSessao { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 13px; }
+.tituloDoBlocoDaSessao { margin: 0; font-size: 13px; font-weight: 800; }
+.faixas { display: block; width: 100%; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.faixas svg { display: block; width: 100%; height: 100%; }
+.faixa[data-tipo="cacheRead"], .marca[data-tipo="cacheRead"] { fill: var(--neutro); background: var(--neutro); }
+.faixa[data-tipo="input"], .marca[data-tipo="input"] { fill: var(--accent); background: var(--accent); }
+.faixa[data-tipo="cacheCreation"], .marca[data-tipo="cacheCreation"] { fill: var(--aviso); background: var(--aviso); }
+.faixa[data-tipo="output"], .marca[data-tipo="output"] { fill: var(--info); background: var(--info); }
+.faixa[data-tipo="thinking"], .marca[data-tipo="thinking"] { fill: var(--ok); background: var(--ok); }
+.partes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.parte { display: flex; align-items: center; gap: 8px; }
+.marca { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.parte span:nth-child(2) { flex: 1 1 auto; }
+.parte b { font-variant-numeric: tabular-nums; }
+.etapa {
+  display: grid;
+  grid-template-columns: minmax(0, 110px) minmax(40px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.etapa span:last-child { color: var(--muted); text-align: right; white-space: nowrap; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
 
 /* ---------- detalhe dentro das linhas ---------- */
 .pares {
@@ -85,8 +283,6 @@
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-
-.busca { display: flex; flex-direction: column; gap: 6px; }
 
 /* Tabela larga rola aqui dentro, nunca a página. O contêiner recebe foco, para rolar pelo
    teclado, e tem nome. */
@@ -117,12 +313,16 @@
   padding: 8px 12px;
   border-top: 1px solid var(--border);
   text-align: right;
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
 }
-.tabela thead th { color: var(--muted); font-size: 12px; font-weight: 600; }
-/* a primeira coluna nomeia a linha: fica à esquerda */
-.tabela th:first-child, .tabela td:first-child { text-align: left; }
+.tabela thead th { color: var(--muted); font-size: 12px; font-weight: 700; }
+/* as colunas de texto ficam à esquerda */
+.tabela th:first-child, .tabela td:first-child, .tabela .esquerda { text-align: left; }
+/* as colunas de texto quebram linha, para a tabela de sessões caber no cartão sem rolar */
+.tabela td.esquerda { white-space: normal; min-width: 96px; }
+/* a chave do PR não parte no meio */
+.tabela td.esquerda:nth-child(2) { white-space: nowrap; }
 .tabela tbody th { font-weight: 600; }
 .observacao { color: var(--muted); font-weight: 500; }
 
@@ -132,11 +332,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
+  font-size: 13px;
+  color: var(--muted);
 }
-.onde { color: var(--muted); font-size: 13px; text-align: center; }
+.botoesDaPagina { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 @media (max-width: 760px) {
-  .numero { font-size: 32px; }
+  .numero { font-size: 26px; }
   .datas { grid-template-columns: 1fr; }
+  .campoDoFiltro { flex: 1 1 140px; }
   .paginacao { justify-content: center; }
+  .quebra { grid-template-columns: minmax(0, 1fr) auto; }
+  .quebra .trilho { grid-column: 1 / -1; grid-row: 2; }
+  .dias { height: 160px; }
 }

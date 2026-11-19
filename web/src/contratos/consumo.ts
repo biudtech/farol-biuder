@@ -45,8 +45,18 @@ export interface Execucao {
   // a chave do PR (dono/repo#n) ou o rótulo do trabalho
   ref?: string;
   model?: string;
+  // o perfil do Claude da sessão (`profile` no diário, `profileId` no snapshot)
+  profile?: string;
+  // por que a sessão rodou: primeira, commit_novo, rodada_extra ou contestacao
+  // (lib/engine/gatilho-da-sessao.js); conversa e ferramenta vêm sem ele
+  gatilho?: string;
+  // o autor do PR, sem caixa, que o motor leu das decisões pelo `ref`
+  author?: string;
+  // quanto a sessão durou, só quando o motor sabe a hora de início (`durationKnown`)
+  duracaoMs?: number;
   inputTokens?: number;
   outputTokens?: number;
+  thinkingTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   costUsd?: number;
@@ -63,8 +73,13 @@ const lerExecucao: LeitorDeItem<Execucao> = (v) => {
     status: campo(v.status, ehTextoComConteudo),
     ref: campo(v.ref, ehTextoComConteudo),
     model: campo(v.model, ehTextoComConteudo),
+    profile: campo(v.profile, ehTextoComConteudo) ?? campo(v.profileId, ehTextoComConteudo),
+    gatilho: campo(v.gatilho, ehTextoComConteudo),
+    author: campo(v.author, ehTextoComConteudo),
+    duracaoMs: v.durationKnown === true ? campo(v.duration, ehQuantia) : undefined,
     inputTokens: campo(v.inputTokens, ehQuantia),
     outputTokens: campo(v.outputTokens, ehQuantia),
+    thinkingTokens: campo(v.thinkingTokens, ehQuantia),
     cacheReadTokens: campo(v.cacheReadTokens, ehQuantia),
     cacheCreationTokens: campo(v.cacheCreationTokens, ehQuantia),
     costUsd: campo(v.costUsd, ehQuantia),
@@ -148,6 +163,7 @@ export interface Soma {
   attempts?: number;
   inputTokens?: number;
   outputTokens?: number;
+  thinkingTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   costUsd?: number;
@@ -170,6 +186,7 @@ function lerSoma(v: Record<string, unknown>): Soma {
     attempts: campo(v.attempts, ehContagem),
     inputTokens: campo(v.inputTokens, ehQuantia),
     outputTokens: campo(v.outputTokens, ehQuantia),
+    thinkingTokens: campo(v.thinkingTokens, ehQuantia),
     cacheReadTokens: campo(v.cacheReadTokens, ehQuantia),
     cacheCreationTokens: campo(v.cacheCreationTokens, ehQuantia),
     costUsd: campo(v.costUsd, ehQuantia),
@@ -195,13 +212,17 @@ const lerSomaDoRepo: LeitorDeItem<SomaComNome> = (v) => {
   return { name: v.name, ...lerSoma(v) };
 };
 
-// A quebra por modelo (aggregateModels): o motor soma execuções e tokens de entrada e de
-// saída. Não manda custo nem cache por modelo.
+// A quebra por modelo (aggregateModels): o motor soma execuções, tokens de entrada, de saída e
+// de pensamento e, desde 19/11/2026, o custo (o que o provedor mediu por modelo quando fecha com
+// a linha, senão o da linha) e as de custo desconhecido. Não manda cache por modelo.
 export interface SomaDoModelo {
   name: string;
   attempts?: number;
   inputTokens?: number;
   outputTokens?: number;
+  thinkingTokens?: number;
+  costUsd?: number;
+  unknownCost?: number;
 }
 
 const lerSomaDoModelo: LeitorDeItem<SomaDoModelo> = (v) => {
@@ -209,7 +230,21 @@ const lerSomaDoModelo: LeitorDeItem<SomaDoModelo> = (v) => {
   return semAusentes({
     name: v.name, attempts: campo(v.attempts, ehContagem),
     inputTokens: campo(v.inputTokens, ehQuantia), outputTokens: campo(v.outputTokens, ehQuantia),
+    thinkingTokens: campo(v.thinkingTokens, ehQuantia), costUsd: campo(v.costUsd, ehQuantia),
+    unknownCost: campo(v.unknownCost, ehContagem),
   });
+};
+
+// Uma etapa da revisão, da decisão da rodada da linha (etapasDa, lib/engine/consumo-das-sessoes.js).
+export interface EtapaDaSessao {
+  id: string;
+  label?: string;
+  ms?: number;
+}
+
+const lerEtapa: LeitorDeItem<EtapaDaSessao> = (v) => {
+  if (!ehObjeto(v) || !ehTextoComConteudo(v.id)) return undefined;
+  return semAusentes({ id: v.id, label: campo(v.label, ehTextoComConteudo), ms: campo(v.ms, ehQuantia) });
 };
 
 // Uma operação do diário (groupActivity): os campos são os da tentativa mais recente, e
@@ -221,16 +256,27 @@ export interface Operacao extends Partial<Execucao> {
   // a chave canônica do PR, quando o trabalho é de um PR
   pr?: string;
   attempts: Execucao[];
+  // da decisão da rodada (lib/engine/consumo-das-sessoes.js), só na página e só quando a decisão
+  // os tem: a revisão que ainda não decidiu e a contestação vêm sem eles
+  decisaoId?: string;
+  etapas?: EtapaDaSessao[];
+  card?: string;
+  arquivosLidos?: number;
 }
 
 const lerOperacao: LeitorDeItem<Operacao> = (v) => {
   if (!ehObjeto(v) || !ehTextoComConteudo(v.key)) return undefined;
   const ultima = lerExecucao(v) ?? {};
+  const etapas = lerItens(v.etapas, lerEtapa)?.itens;
   return semAusentes({
     ...ultima,
     key: v.key,
     pr: campo(v.pr, ehTextoComConteudo),
     attempts: lerItens(v.attempts, lerExecucao)?.itens ?? [],
+    decisaoId: campo(v.decisaoId, ehTextoComConteudo),
+    etapas: etapas?.length ? etapas : undefined,
+    card: campo(v.card, ehTextoComConteudo),
+    arquivosLidos: campo(v.arquivosLidos, ehContagem),
   });
 };
 
@@ -240,6 +286,8 @@ export interface PaginaDoDiario {
   total: number;
   page: number;
   pages: number;
+  // o tamanho da página que o motor usou (8 sem pedir outro)
+  pageSize?: number;
   rows: Operacao[];
   // Não vem do motor: quantas operações da página a tela não leu.
   descartados: number;
@@ -249,7 +297,7 @@ function lerPaginaDoDiario(v: unknown): PaginaDoDiario | null {
   if (!ehObjeto(v) || !ehContagem(v.total) || !ehContagem(v.page) || !ehContagem(v.pages)) return null;
   const lido = lerItens(v.rows, lerOperacao);
   if (!lido) return null;
-  return { total: v.total, page: v.page, pages: v.pages, rows: lido.itens, descartados: lido.descartados };
+  return semAusentes({ total: v.total, page: v.page, pages: v.pages, pageSize: campo(v.pageSize, ehContagem), rows: lido.itens, descartados: lido.descartados });
 }
 
 // O que o motor oferece em cada filtro (activityOptions): os valores que existem no registro.
@@ -257,6 +305,9 @@ export interface OpcoesDeFiltro {
   kind: string[];
   model: string[];
   repo: string[];
+  // os autores (sem caixa) e os perfis do Claude do diário
+  author: string[];
+  profile: string[];
 }
 
 function textos(v: unknown): string[] {
@@ -276,6 +327,8 @@ export interface Relatorio {
   models: SomaDoModelo[];
   // por repositório, na ordem do motor; ausente quando o motor não manda a quebra
   repos?: SomaComNome[];
+  // por gatilho, na ordem do motor; o nome vazio é conversa e ferramenta
+  porGatilho?: SomaComNome[];
   history: PaginaDoDiario;
   options: OpcoesDeFiltro;
   // operações concluídas no período: revisões, e PRs distintos entre elas
@@ -289,6 +342,11 @@ export interface Relatorio {
   incomplete?: boolean;
   // Não vem do motor: quantos itens de `series`, `byKind`, `models` e `repos` a tela não leu.
   descartados: number;
+}
+
+// O corpo de GET /api/usage?formato=csv: o texto do arquivo, que o cliente entrega sem ler JSON.
+export function lerCsvDoConsumo(bruto: unknown): string | null {
+  return typeof bruto === 'string' ? bruto : null;
 }
 
 // A resposta de GET /api/usage. A rota responde sempre 200: quando não entrega o relatório,
@@ -312,6 +370,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
   const byKind = lerItens(bruto.byKind, lerSomaComNome);
   const models = lerItens(bruto.models, lerSomaDoModelo);
   const repos = lerItens(bruto.repos, lerSomaDoRepo);
+  const porGatilho = lerItens(bruto.porGatilho, lerSomaDoRepo);
   const opcoes = ehObjeto(bruto.options) ? bruto.options : {};
   const relatorio: Relatorio = semAusentes({
     range: { start: bruto.range.start, end: bruto.range.end },
@@ -320,14 +379,18 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
     byKind: byKind?.itens ?? [],
     models: models?.itens ?? [],
     repos: repos?.itens,
+    porGatilho: porGatilho?.itens,
     history,
-    options: { kind: textos(opcoes.kind), model: textos(opcoes.model), repo: textos(opcoes.repo) },
+    options: {
+      kind: textos(opcoes.kind), model: textos(opcoes.model), repo: textos(opcoes.repo),
+      author: textos(opcoes.author), profile: textos(opcoes.profile),
+    },
     completed: lerConcluidas(bruto.completed),
     retries: campo(bruto.retries, ehContagem),
     unidentified: campo(bruto.unidentified, ehContagem),
     sinceDay: campo(bruto.sinceDay, ehDia),
     incomplete: campo(bruto.incomplete, ehBooleano),
-    descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0) + (repos?.descartados ?? 0),
+    descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0) + (repos?.descartados ?? 0) + (porGatilho?.descartados ?? 0),
   });
   return { ok: true, relatorio };
 }

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Relatorio } from '@/contratos/consumo';
 import {
-  ANO_MINIMO, CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoRelatorio, comPeriodo, dataAceita, dicaDoPeriodo, ehRecusaDeCampo, enderecoDa, lerEndereco, marcaDoConsumo, mensagemDaFalha, periodoPronto, temFiltro,
+  ANO_MINIMO, CONSULTA_VAZIA, PERIODOS, TETO_DA_BUSCA, caminhoDoCsv, caminhoDoPeriodo, caminhoDoRelatorio, comDia, comPeriodo, dataAceita, dicaDoPeriodo, ehRecusaDeCampo, enderecoDa, filtrosAtivos, lerEndereco, marcaDoConsumo, mensagemDaFalha, nomeDoCsv, periodoPronto, temFiltro,
   temPeriodo,
   textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
 } from './consulta';
@@ -12,7 +12,9 @@ import {
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 const fonte = (arquivo: string): string => fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
 const de = (query: string): Consulta => lerEndereco(new URLSearchParams(query));
-const cheia: Consulta = { inicio: '2026-11-01', fim: '2026-11-16', tipo: 'review', modelo: 'Sonnet 5', repo: 'dono/repo', q: 'repo#12', pagina: 3 };
+const cheia: Consulta = { ...CONSULTA_VAZIA, inicio: '2026-11-01', fim: '2026-11-16', tipo: 'review', modelo: 'Sonnet 5', repo: 'dono/repo', q: 'repo#12', pagina: 3 };
+// com os filtros do redesenho (lote 5): o dia clicado no gráfico, o autor e o perfil
+const nova: Consulta = { ...cheia, dia: '2026-11-14', autor: 'Ana', perfil: 'perfil-a' };
 
 describe('a consulta no endereço', () => {
   it('endereço vazio é a consulta padrão', () => {
@@ -32,10 +34,16 @@ describe('a consulta no endereço', () => {
     expect(de('inicio=ontem&tipo=tipo_novo&fim=31/12')).toMatchObject({ inicio: 'ontem', tipo: 'tipo_novo', fim: '31/12' });
   });
 
+  it('o dia, o autor e o perfil também moram no endereço', () => {
+    const query = enderecoDa(nova);
+    expect(query).toBe('inicio=2026-11-01&fim=2026-11-16&dia=2026-11-14&tipo=review&modelo=Sonnet+5&repo=dono%2Frepo&autor=Ana&perfil=perfil-a&q=repo%2312&pagina=3');
+    expect(de(query)).toEqual(nova);
+  });
+
   it('filtro e período são coisas diferentes', () => {
     expect(temFiltro(CONSULTA_VAZIA)).toBe(false);
     expect(temFiltro({ ...CONSULTA_VAZIA, inicio: '2026-11-01', pagina: 2 })).toBe(false);
-    for (const campo of ['tipo', 'modelo', 'repo', 'q'] as const) expect(temFiltro({ ...CONSULTA_VAZIA, [campo]: 'x' }), campo).toBe(true);
+    for (const campo of ['tipo', 'modelo', 'repo', 'autor', 'perfil', 'dia', 'q'] as const) expect(temFiltro({ ...CONSULTA_VAZIA, [campo]: 'x' }), campo).toBe(true);
     expect(temPeriodo(CONSULTA_VAZIA)).toBe(false);
     expect(temPeriodo({ ...CONSULTA_VAZIA, fim: '2026-11-01' })).toBe(true);
   });
@@ -49,6 +57,29 @@ describe('o pedido ao motor', () => {
   it('usa os nomes da rota, e a página do motor começa em zero', () => {
     expect(caminhoDoRelatorio(cheia)).toBe('/api/usage?start=2026-11-01&end=2026-11-16&kind=review&model=Sonnet+5&repo=dono%2Frepo&search=repo%2312&page=2');
     expect(caminhoDoRelatorio({ ...CONSULTA_VAZIA, pagina: 2 })).toBe('/api/usage?page=1');
+  });
+
+  it('autor e perfil vão como author e profile; o dia clicado vira o período de um dia só', () => {
+    expect(caminhoDoRelatorio(nova)).toBe('/api/usage?start=2026-11-14&end=2026-11-14&kind=review&model=Sonnet+5&repo=dono%2Frepo&author=Ana&profile=perfil-a&search=repo%2312&page=2');
+    // o gráfico continua mostrando o período inteiro, com os mesmos filtros, sem a busca nem a página
+    expect(caminhoDoPeriodo(nova)).toBe('/api/usage?start=2026-11-01&end=2026-11-16&kind=review&model=Sonnet+5&repo=dono%2Frepo&author=Ana&profile=perfil-a');
+    // sem dia não há segundo pedido
+    expect(caminhoDoPeriodo(cheia)).toBeNull();
+  });
+
+  it('o CSV leva o mesmo recorte em formato=csv, sem a página', () => {
+    expect(caminhoDoCsv(CONSULTA_VAZIA)).toBe('/api/usage?formato=csv');
+    expect(caminhoDoCsv(nova)).toBe('/api/usage?formato=csv&start=2026-11-14&end=2026-11-14&kind=review&model=Sonnet+5&repo=dono%2Frepo&author=Ana&profile=perfil-a&search=repo%2312');
+    // o mesmo nome que o motor dá, com o dia de Brasília
+    expect(nomeDoCsv(Date.UTC(2026, 10, 20, 2, 30))).toBe('farol-consumo-2026-11-19.csv');
+    expect(fonte('lib/engine/consumo-das-sessoes.js')).toContain('function nomeDoCsv(agora = Date.now()) { return `farol-consumo-${quando(agora).slice(0, 10)}.csv`; }');
+  });
+
+  it('autor, perfil e formato são parâmetros que o motor lê', () => {
+    const diario = fonte('lib/usage/activity.js');
+    expect(diario).toContain("const author = String(query.author || '').trim().toLowerCase();");
+    expect(diario).toContain("const FILTER_FIELDS = ['account', 'provider', 'model', 'kind', 'device', 'profile'];");
+    expect(fonte('lib/engine/usage-activity.js')).toContain("if (formatos[0] !== 'csv') return { status: 200, body: await usageActivity(engine, params) };");
   });
 
   it('os parâmetros são os que o motor lê', () => {
@@ -99,7 +130,10 @@ describe('os períodos prontos', () => {
   });
 
   it('o período pronto só fica marcado quando as duas datas do endereço são as do relatório', () => {
-    expect(PERIODOS).toEqual([7, 30, 90]);
+    // 1 é o Hoje: o último dia do relatório
+    expect(PERIODOS).toEqual([1, 7, 30, 90]);
+    expect(periodoPronto({ inicio: '2026-11-16', fim: '2026-11-16' }, { start: '2026-11-16', end: '2026-11-16' })).toBe(1);
+    expect(comPeriodo(CONSULTA_VAZIA, '2026-11-16', 1)).toMatchObject({ inicio: '2026-11-16', fim: '2026-11-16' });
     const sete = { start: '2026-11-10', end: '2026-11-16' };
     expect(periodoPronto({ inicio: '2026-11-10', fim: '2026-11-16' }, sete)).toBe(7);
     expect(periodoPronto({ inicio: '2026-10-18', fim: '2026-11-16' }, { start: '2026-10-18', end: '2026-11-16' })).toBe(30);
@@ -126,6 +160,30 @@ describe('os períodos prontos', () => {
   });
 });
 
+describe('o clique que vira filtro e as pílulas', () => {
+  it('o dia clicado entra, volta à primeira página, e o mesmo dia de novo sai', () => {
+    const com = comDia({ ...CONSULTA_VAZIA, pagina: 3 }, '2026-11-14');
+    expect(com).toEqual({ ...CONSULTA_VAZIA, dia: '2026-11-14' });
+    expect(comDia(com, '2026-11-14')).toEqual(CONSULTA_VAZIA);
+    expect(comDia(com, '2026-11-15').dia).toBe('2026-11-15');
+  });
+
+  it('uma pílula por filtro ativo, cada uma com a consulta sem ela', () => {
+    const periodo = { start: '2026-11-01', end: '2026-11-16' };
+    const perfil = (id: string) => (id === 'perfil-a' ? 'Assinatura A' : id);
+    const ativos = filtrosAtivos(nova, periodo, perfil);
+    expect(ativos.map((a) => a.texto)).toEqual([
+      'Período: de 01/11/2026 até 16/11/2026', 'Dia: 14/11/2026', 'Tipo: Revisão', 'Repositório: dono/repo', 'Autor: Ana', 'Modelo: Sonnet 5', 'Perfil: Assinatura A', 'Busca: repo#12',
+    ]);
+    for (const ativo of ativos) expect(ativo.sem.pagina, ativo.chave).toBe(1);
+    expect(ativos.find((a) => a.chave === 'dia')?.sem).toEqual({ ...nova, dia: '', pagina: 1 });
+    expect(ativos.find((a) => a.chave === 'periodo')?.sem).toMatchObject({ inicio: '', fim: '', dia: '2026-11-14' });
+    // o período pronto não vira pílula: ele está nos botões do topo
+    expect(filtrosAtivos({ ...CONSULTA_VAZIA, inicio: '2026-11-10', fim: '2026-11-16' }, { start: '2026-11-10', end: '2026-11-16' })).toEqual([]);
+    expect(filtrosAtivos(CONSULTA_VAZIA, null)).toEqual([]);
+  });
+});
+
 describe('as datas do campo', () => {
   it('só dia que existe, de 1970 em diante, vira pedido', () => {
     expect(ANO_MINIMO).toBe(1970);
@@ -149,7 +207,7 @@ describe('as datas do campo', () => {
 describe('as frases', () => {
   const base: Relatorio = {
     range: { start: '2026-10-18', end: '2026-11-16' }, totals: { attempts: 4, costUsd: 3.75 }, series: [], byKind: [], models: [],
-    history: { total: 9, page: 1, pages: 2, rows: [], descartados: 0 }, options: { kind: [], model: [], repo: [] }, descartados: 0,
+    history: { total: 9, page: 1, pages: 2, rows: [], descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, descartados: 0,
   };
 
   it('o período com as duas pontas e a contagem de dias', () => {
