@@ -1,8 +1,8 @@
 'use client';
 
-// A seção Sessões pareadas: os navegadores com token válido no motor, com a sessão atual
-// marcada, e o Encerrar de cada uma (que revoga o token no motor). É só o miolo: a linha que
-// abre e a carga da lista são do Sistema.tsx, porque o resumo da linha depende dela. A lista
+// O assunto Quem está conectado: os navegadores com token válido no motor, com a sessão atual
+// marcada, o Sair (a deste navegador) e o Revogar (as outras); os dois revogam o token no
+// motor. A carga da lista é do Sistema.tsx, porque o resumo do menu depende dela. A lista
 // vem de POST /api/auth/sessions e não está no snapshot: a tela a pede ao abrir, depois de cada
 // encerramento e pelo botão Atualizar. Do token nada vem: o `id` de cada sessão é um pedaço do
 // hash dele.
@@ -39,7 +39,7 @@ export function Sessoes({ controle, lista, aoAtualizar }: Props) {
   return (
     <>
       <p className={ui.mini}>
-        Cada navegador pareado tem uma sessão no motor. Encerrar faz o token dela deixar de valer na hora. O Sair do topo desta página encerra a sessão deste navegador antes de apagar o token daqui.
+        Os navegadores com acesso a esta tela: cada um tem uma sessão no motor. Revogar faz o token de outro navegador deixar de valer na hora; Sair faz o mesmo com este, que volta ao pareamento.
       </p>
       <div className={ui.fila}>
         <Botao pequeno ocupado={carregando ? 'Carregando…' : false} onClick={aoAtualizar}>Atualizar a lista</Botao>
@@ -75,7 +75,7 @@ export function Sessoes({ controle, lista, aoAtualizar }: Props) {
                       Criada em {dataComAno(sessao.criadoEm) || 'data não informada'}, usada pela última vez em {dataComAno(sessao.ultimoUsoEm) || 'data não informada'}. Identificador {sessao.id}.
                     </p>
                   </div>
-                  <AcaoComPergunta acao={acaoDeEncerrar(sessao)} controle={controle} ocupado="Encerrando…" pequeno />
+                  <AcaoComPergunta acao={acaoDeEncerrar(sessao)} controle={controle} ocupado={sessao.atual ? 'Saindo…' : 'Revogando…'} pequeno />
                 </li>
               ))}
             </ul>

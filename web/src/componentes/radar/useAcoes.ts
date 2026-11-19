@@ -4,7 +4,7 @@
 // nesta aba. Nada aqui mexe no snapshot: depois do POST, quem muda a tela é o estado que o
 // motor empurra pelo fluxo.
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { executar, idDa, textoDoEnvio, type Acao } from '@/radar/acoes';
+import { executar, idDa, textoDoEnvio, type Acao, type DesfechoAceito } from '@/radar/acoes';
 import type { Cliente } from '@/transporte/cliente';
 
 // info: o pedido está no ar ("Enviando"). ok e erro: o que o motor respondeu.
@@ -31,7 +31,9 @@ export interface ControleDeAcoes {
   focarResultado(): void;
 }
 
-export function useAcoes(cliente: Pick<Cliente, 'post'>) {
+// `aoAceitar`: chamado depois de cada aceite do motor, com a ação e o desfecho (o Sistema usa
+// para ir ao pareamento quando a sessão revogada era a deste navegador).
+export function useAcoes(cliente: Pick<Cliente, 'post'>, aoAceitar?: (acao: Acao, desfecho: DesfechoAceito) => void) {
   const [noAr, setNoAr] = useState<ReadonlyMap<string, string>>(() => new Map());
   // a trava de verdade contra o clique dobrado: o estado só chega no próximo desenho
   const alvosNoAr = useRef(new Set<string>());
@@ -39,6 +41,9 @@ export function useAcoes(cliente: Pick<Cliente, 'post'>) {
   const regiao: RefObject<HTMLDivElement | null> = useRef<HTMLDivElement>(null);
   const [resultado, setResultado] = useState<ResultadoDaAcao | null>(null);
   const [ignorados, setIgnorados] = useState<readonly Ignorado[]>([]);
+  // a versão mais nova do aviso, sem refazer o `disparar` a cada desenho
+  const avisarAceite = useRef(aoAceitar);
+  useEffect(() => { avisarAceite.current = aoAceitar; }, [aoAceitar]);
 
   useEffect(() => {
     montado.current = true;
@@ -68,6 +73,7 @@ export function useAcoes(cliente: Pick<Cliente, 'post'>) {
     if (desfecho.tipo !== 'ok') return false;
     if (acao.tipo === 'ignorar') setIgnorados((antes) => [...antes.filter((i) => i.chave !== acao.chave), { chave: acao.chave, nome: acao.nome }]);
     if (acao.tipo === 'restaurar') setIgnorados((antes) => antes.filter((i) => i.chave !== acao.chave));
+    avisarAceite.current?.(acao, desfecho);
     return true;
   }, [cliente]);
 

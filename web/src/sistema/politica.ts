@@ -284,3 +284,25 @@ export function textoDoToken(tokenOk: boolean | undefined): string {
   if (tokenOk === false) return 'Ausente: o motor não tem token do gh para esta conta. Sem ele as buscas são puladas e nada é publicado.';
   return 'O motor não informou.';
 }
+
+function lista(itens: readonly string[]): string {
+  if (itens.length <= 1) return itens.join('');
+  return `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}`;
+}
+
+// A política inteira numa frase, como o motor a aplica hoje (do valor do motor, não do
+// rascunho): quem revisa, onde, o que publica em cada desfecho e se há exceção por regra.
+export function fraseDaPolitica(conta: Pick<ContaRevisora, 'user' | 'owners' | 'autoReview' | 'onClean' | 'onCaveats' | 'onReject' | 'regras'>): string {
+  if (!conta.user) return 'Sem conta revisora, o motor não revisa nada.';
+  const onde = conta.owners.length ? `nas organizações ${lista(conta.owners)}` : 'em organização nenhuma (a lista está vazia, e a fila fica vazia)';
+  const n = conta.regras.length;
+  const excecoes = !n ? '' : n === 1 ? ' A regra por organização e autor vem antes disto.' : ` As ${n} regras por organização e autor vêm antes disto.`;
+  if (conta.autoReview === false) {
+    return `A revisão automática está desligada: os PRs pedidos a @${conta.user} ${onde} só são revisados no clique.${excecoes}`;
+  }
+  const esperando = desfechosEmEspera(conta);
+  const desfechos = esperando
+    ? `${esperando} ${esperando === 1 ? 'desfecho espera' : 'desfechos esperam'} (definido no motor), e o resto é publicado sozinho`
+    : 'aprova sozinho o que sai limpo ou com ressalvas e pede mudanças sozinho quando acha defeito, sempre depois dos gates do motor';
+  return `O Farol revisa sozinho todo PR pedido a @${conta.user} ${onde}: ${desfechos}.${excecoes}`;
+}

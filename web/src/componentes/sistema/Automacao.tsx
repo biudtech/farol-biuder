@@ -1,7 +1,7 @@
 'use client';
 
-// A seção Automação: revisões ao mesmo tempo, modelo e esforço. É só o miolo: a linha que abre
-// é do Sistema.tsx. Os modelos vêm do catálogo do motor (`modelos` do snapshot); os níveis de
+// O bloco de modelo e sessões do assunto Claude: revisões ao mesmo tempo, modelo, esforço e
+// modo rápido. Os modelos vêm do catálogo do motor (`modelos` do snapshot); os níveis de
 // esforço e a faixa do paralelismo são cópia conferida por teste contra o motor
 // (src/sistema/automacao.ts). O salvar manda a POST /api/settings só as chaves que a pessoa
 // alterou nesta edição, e a resposta é conferida. A espera do CI antes de aprovar não está
@@ -12,7 +12,7 @@ import { ui } from '@/componentes/ui';
 import type { ConfigDoSistema, Modelos } from '@/contratos/sistema';
 import type { Acao } from '@/radar/acoes';
 import {
-  EFEITO_DO_ESFORCO, EFEITO_DO_MODELO, EFEITO_DO_PARALELO, ESFORCOS, NOME_DO_CAMPO_DE_ESFORCO, PARALELO_MAXIMO, PARALELO_MINIMO, aceitaEsforco,
+  EFEITO_DO_ESFORCO, EFEITO_DO_MODELO, EFEITO_DO_MODO_RAPIDO, EFEITO_DO_PARALELO, ESFORCOS, NOME_DO_CAMPO_DE_ESFORCO, PARALELO_MAXIMO, PARALELO_MINIMO, aceitaEsforco,
   automacaoDe, conflitosDaAutomacao, corpoDaAutomacao, marcaDaAutomacao, notaDoLimiteTotal, paraleloValido, rotuloDoEsforco, rotuloDoModelo, selecaoDe,
   type Automacao as Chaves,
 } from '@/sistema/automacao';
@@ -42,6 +42,7 @@ function EditorDaAutomacao({ chaves, modelos, limiteTotal, controle, impedimento
   const idDoParalelo = useId();
   const idDoModelo = useId();
   const idDoEsforco = useId();
+  const idDoRapido = useId();
   useEffect(() => {
     aoMudar(alterado);
     return () => aoMudar(false);
@@ -83,6 +84,22 @@ function EditorDaAutomacao({ chaves, modelos, limiteTotal, controle, impedimento
             {rascunho.reviewEffort !== '' && !(ESFORCOS as readonly string[]).includes(rascunho.reviewEffort) ? <option value={rascunho.reviewEffort}>{rotuloDoEsforco(rascunho.reviewEffort)}</option> : null}
           </select>
           <p id={`${idDoEsforco}-efeito`} className={ui.mini}>{EFEITO_DO_ESFORCO}</p>
+        </div>
+      </div>
+      <div className={estilos.opcao}>
+        <input
+          id={idDoRapido}
+          type="checkbox"
+          checked={rascunho.reviewFast === true}
+          disabled={rascunho.reviewFast === null}
+          aria-describedby={`${idDoRapido}-efeito`}
+          onChange={(evento) => editar({ ...rascunho, reviewFast: evento.target.checked })}
+        />
+        <div>
+          <label htmlFor={idDoRapido}>Modo rápido</label>
+          <p id={`${idDoRapido}-efeito`} className={ui.mini}>
+            {rascunho.reviewFast === null ? 'O motor não mandou este campo: ele não muda por aqui até o motor mandar. ' : ''}{EFEITO_DO_MODO_RAPIDO}
+          </p>
         </div>
       </div>
       {nota ? <p className={ui.mini}>{nota}</p> : null}

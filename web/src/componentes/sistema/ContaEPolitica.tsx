@@ -9,13 +9,15 @@
 // rascunho e o valor que ela viu ao começar), e toda mudança que amplia a publicação
 // automática pergunta antes, dizendo o efeito exato contra o valor atual do motor
 // (confirmacaoDoSistema).
+import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ui } from '@/componentes/ui';
 import type { ContaRevisora } from '@/contratos/sistema';
 import type { Acao } from '@/radar/acoes';
 import { dataHora } from '@/radar/formato';
+import { rotaDoAssunto } from '@/sistema/assuntos';
 import {
-  OPCOES_DA_TELA, REGRAS_FIXAS, ROTULO_DO_DESFECHO, ampliacoesDaConta, camposAlterados, efeitoDaRevisaoAutomatica, efeitoDoDesfecho, marcaDaConta,
+  OPCOES_DA_TELA, REGRAS_FIXAS, ROTULO_DO_DESFECHO, ampliacoesDaConta, camposAlterados, efeitoDaRevisaoAutomatica, efeitoDoDesfecho, fraseDaPolitica, marcaDaConta,
   notaDasRessalvasTravadas, organizacaoValida, rascunhoDaConta, refazerConta, rotuloDoValor, temOrganizacao, textoDoToken, textosDosConflitos,
   type Desfecho, type RascunhoDaConta,
 } from '@/sistema/politica';
@@ -215,6 +217,7 @@ export function ContaEPolitica({ conta, controle, impedimento, aoMudar, ultimo }
   if (!conta) return <p className={ui.nota}>Atenção: o motor não mandou a conta revisora a esta tela.</p>;
   return (
     <>
+      <p className={estilos.frase}>{fraseDaPolitica(conta)}</p>
       <dl className={estilos.pares}>
         <Par nome="Conta revisora">{conta.user ? `@${conta.user}` : 'O motor ainda não tem conta revisora.'}</Par>
         <Par nome="Token do GitHub">{textoDoToken(conta.tokenOk)}</Par>
@@ -222,11 +225,11 @@ export function ContaEPolitica({ conta, controle, impedimento, aoMudar, ultimo }
         {conta.limitePlanoAte ? <Par nome="Limite do plano do Claude">A assinatura está no limite até {dataHora(conta.limitePlanoAte) || 'hora não informada'}.</Par> : null}
       </dl>
       <p className={ui.mini}>
-        O login da conta e o token do GitHub não mudam por esta tela: o login vem do arquivo de configuração ou do gh, e o token fica só no motor. Do token o motor informa a presença, não a validade: se ele vale, quem diz é o GitHub na próxima busca (veja Saúde).
+        O login da conta e o token do GitHub não mudam por esta tela: o login vem do arquivo de configuração ou do gh, e o token fica só no motor. Do token o motor informa a presença, não a validade: se ele vale, quem diz é o GitHub na próxima busca.
       </p>
       {conta.regrasDeReview > 0 ? (
         <p className={ui.nota}>
-          Aviso: a conta tem regra de review própria para {conta.regrasDeReview} {conta.regrasDeReview === 1 ? 'organização' : 'organizações'} (automático ou manual, por organização ou autor). Essas regras decidem quem é revisado sozinho antes da revisão automática abaixo, e esta tela não as mostra nem edita.
+          Aviso: a conta tem regra de review própria para {conta.regrasDeReview} {conta.regrasDeReview === 1 ? 'organização' : 'organizações'} (automático ou manual, por organização ou autor). Essas regras decidem quem é revisado sozinho antes da revisão automática abaixo: veja e mude em <Link href={rotaDoAssunto('regras')}>Regras por organização e autor</Link>.
         </p>
       ) : null}
       {conta.user ? (

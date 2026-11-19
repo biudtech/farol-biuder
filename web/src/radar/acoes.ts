@@ -297,10 +297,14 @@ function desfechoDaRemocao(acao: Extract<Acao, { tipo: 'removerAutor' }>, dados:
 }
 
 // cancelado: a sessão acabou com o pedido no ar; a tela não mostra nada por isso.
+// `encerrouEstaSessao`: o motor respondeu que a sessão revogada era a deste navegador
+// (`eraAtual`), e a tela vai ao pareamento.
 export type Desfecho =
-  | { tipo: 'ok'; texto: string }
+  | { tipo: 'ok'; texto: string; encerrouEstaSessao?: true }
   | { tipo: 'erro'; texto: string }
   | { tipo: 'cancelado' };
+
+export type DesfechoAceito = Extract<Desfecho, { tipo: 'ok' }>;
 
 // Depois de `{ ok: true }` a tela só diz que o motor aceitou o pedido: o que aconteceu de fato
 // (a revisão que começou, o review que saiu) vem no estado e no aviso do motor (`toast`).

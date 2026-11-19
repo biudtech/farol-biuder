@@ -3,24 +3,29 @@
 //   lib/engine/contas-config.js), `modelos` (catalogoParaTela, lib/modelos.js), `claudePerfis`
 //   (perfisParaTela, lib/engine/perfil-claude.js), `jiraSites` (maskJiraSites,
 //   lib/jira/sites.js) e, de `config` (configParaFora, lib/engine/chave-do-perfil.js), as
-//   chaves de automação, os perfis do Claude e as chaves que só mudam por arquivo;
+//   chaves de automação e os perfis do Claude. Do `doctor`, só o que o assunto Claude usa: a
+//   tela não mostra mais a saúde do motor nem a rede (decisão do dono), e o diagnóstico fica na
+//   API do motor (GET /api/doctor e GET /api/diagnostics), que a tela não chama;
 // - das rotas: POST /api/auth/sessions e /api/auth/revoke (lib/local-auth/acesso.js),
-//   GET /api/doctor e /api/diagnostics, POST /api/claude/profile-test e /api/jira/test.
+//   POST /api/claude/profile-test e /api/jira/test, e as
+//   respostas do login da assinatura (POST /api/claude/login-web/*, lib/engine/login-web.js) e
+//   da troca da credencial do Jira (POST /api/jira/credential).
 //
 // Segredo não passa daqui. Os tipos lidos só têm campo que a tela mostra, montados um a um, e
 // nenhum deles é token, chave, senha ou credencial: do segredo a tela só conhece a presença
-// (`tokenOk`, `temChave`, `hasCredential`), que é booleano. Nada daqui é guardado como veio: a
-// tela não manda perfil de volta ao motor, então não há lista crua no store. Valor curto que
+// (`tokenOk`, `temChave`, `hasCredential`), que é booleano. Nada daqui é guardado como veio: o
+// único corpo de perfis que a tela manda (Subir na ordem, src/sistema/perfis.ts) é remontado
+// campo a campo destes tipos, sem chave nem pasta, e o motor repõe as duas que já guardava. Valor curto que
 // chega em formato de credencial conta como ausente (`textoSeguro`), e mensagem do motor
-// (erro, motivo, aviso, o relatório de diagnóstico) fica, com o trecho trocado por
+// (erro, motivo, aviso) fica, com o trecho trocado por
 // "[segredo omitido]" (`mensagemSegura`, ./segredos).
 import {
-  campo, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, semAusentes,
+  campo, ehBooleano, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, semAusentes,
   type Leitor, type LeitorDeItem, type Registrar,
 } from './formas';
 import { mascararSegredos, mensagemSegura, semSegredos, textoSeguro } from './segredos';
 
-// ---------- `config`: automação, perfis do Claude e chaves só de arquivo ----------
+// ---------- `config`: automação e perfis do Claude ----------
 
 // Um perfil do Claude como a tela o mostra. A chave (`apiKey`) e a pasta do perfil de
 // assinatura (`dir`) não são lidas nem guardadas: da chave só a presença (`temChave`), e a
@@ -38,19 +43,21 @@ export interface PerfilDoClaude {
 export interface ConfigDoSistema {
   aguardarCiParaAprovar?: boolean;
   parallelReviews?: number;
+  // o modo rápido da revisão e o ritmo: o intervalo da checagem, a retomada da sessão na
+  // rodada nova e a análise automática da contestação do autor (lib/settings.js, na raiz)
+  reviewFast?: boolean;
+  intervalSeconds?: number;
+  reReviewResume?: boolean;
+  autoPushback?: boolean;
   globalParallelReviews?: number;
   reviewModel?: string;
   reviewEffort?: string;
   claudeProfiles?: PerfilDoClaude[];
   claudeProfileId?: string;
-  // só por arquivo, com reinício do motor
-  bind?: string;
-  hostPublico?: string;
-  origensPermitidas?: string[];
-  port?: number;
-  localAuth?: string;
   // Não vem do motor: quantas coisas com cara de segredo a borda descartou desta chave.
   segredosDescartados?: number;
+  // Não vem do motor: quantos perfis chegaram fora da forma e ficaram de fora da lista.
+  perfisIlegiveis?: number;
 }
 
 const lerPerfil: LeitorDeItem<PerfilDoClaude> = (v) => {
@@ -71,20 +78,21 @@ export function lerConfigDoSistema(valor: unknown, registrar: Registrar): Config
   const config: ConfigDoSistema = semAusentes({
     aguardarCiParaAprovar: campo(valor.aguardarCiParaAprovar, ehBooleano),
     parallelReviews: campo(valor.parallelReviews, ehNumero),
+    reviewFast: campo(valor.reviewFast, ehBooleano),
+    intervalSeconds: campo(valor.intervalSeconds, ehNumero),
+    reReviewResume: campo(valor.reReviewResume, ehBooleano),
+    autoPushback: campo(valor.autoPushback, ehBooleano),
     globalParallelReviews: campo(valor.globalParallelReviews, ehNumero),
     reviewModel: campo(valor.reviewModel, ehTexto),
     reviewEffort: campo(valor.reviewEffort, ehTexto),
     claudeProfileId: campo(valor.claudeProfileId, ehTexto),
-    bind: campo(valor.bind, ehTexto),
-    hostPublico: campo(valor.hostPublico, ehTexto),
-    origensPermitidas: campo(valor.origensPermitidas, ehListaDeTextos),
-    port: campo(valor.port, ehNumero),
-    localAuth: campo(valor.localAuth, ehTexto),
   });
   if (Array.isArray(valor.claudeProfiles)) {
     // a lista passa por `semSegredos` só para contar o que chegou com cara de segredo
     const { limpo, descartados } = semSegredos(valor.claudeProfiles);
-    config.claudeProfiles = lerItens(limpo, lerPerfil)?.itens ?? [];
+    const lidos = lerItens(limpo, lerPerfil);
+    config.claudeProfiles = lidos?.itens ?? [];
+    if (lidos?.descartados) config.perfisIlegiveis = lidos.descartados;
     // só a contagem vai ao registro: nem o nome do campo nem o valor
     if (descartados) {
       config.segredosDescartados = descartados;
@@ -112,10 +120,55 @@ export interface ContaRevisora {
   onReject?: string;
   // Não vem assim do motor: quantas organizações têm regra de review própria (`reviewRules`).
   regrasDeReview: number;
+  // As regras de review por organização e autor (`reviewRules`, normalizarRegras,
+  // lib/engine/review-scope.js), uma por linha. A de organização vem sem `autor`.
+  regras: RegraDeReview[];
+  // Não vem do motor: quantas regras chegaram fora da forma e ficaram de fora.
+  regrasIlegiveis: number;
+  // Os padrões do time (`padroesRevisao`, lib/engine/padroes-do-time.js), com o trecho em
+  // formato de credencial trocado; `padroesComSegredo` diz que houve troca.
+  padroes?: string;
+  padroesComSegredo?: true;
+}
+
+// O modo de uma regra: `auto` revisa sozinho, `manual` só no clique.
+export type ModoDaRegra = 'auto' | 'manual';
+
+export interface RegraDeReview {
+  organizacao: string;
+  autor?: string;
+  modo: ModoDaRegra;
+}
+
+const ehModo = (v: unknown): v is ModoDaRegra => v === 'auto' || v === 'manual';
+
+// `reviewRules` como o motor guarda: `{ org: { mode?, authors: { login: mode } } }`. O que não
+// tem essa forma é contado e fica de fora: a tela só mostra regra que sabe dizer o que faz.
+function lerRegras(v: unknown): { regras: RegraDeReview[]; ilegiveis: number } {
+  const regras: RegraDeReview[] = [];
+  let ilegiveis = 0;
+  if (!ehObjeto(v)) return { regras, ilegiveis };
+  for (const [organizacao, regra] of Object.entries(v)) {
+    if (!organizacao || !ehObjeto(regra)) {
+      ilegiveis += 1;
+      continue;
+    }
+    if (regra.mode !== undefined) {
+      if (ehModo(regra.mode)) regras.push({ organizacao, modo: regra.mode });
+      else ilegiveis += 1;
+    }
+    for (const [autor, modo] of Object.entries(ehObjeto(regra.authors) ? regra.authors : {})) {
+      if (autor && ehModo(modo)) regras.push({ organizacao, autor, modo });
+      else ilegiveis += 1;
+    }
+  }
+  return { regras, ilegiveis };
 }
 
 const lerContaRevisora: LeitorDeItem<ContaRevisora> = (v) => {
   if (!ehObjeto(v) || !ehTexto(v.user)) return undefined;
+  const regras = lerRegras(v.reviewRules);
+  const padroes = ehTexto(v.padroesRevisao) ? mascararSegredos(v.padroesRevisao) : undefined;
   return semAusentes({
     user: v.user,
     owners: Array.isArray(v.owners) ? v.owners.filter(ehTexto) : [],
@@ -127,12 +180,16 @@ const lerContaRevisora: LeitorDeItem<ContaRevisora> = (v) => {
     onCaveats: campo(v.onCaveats, ehTexto),
     onReject: campo(v.onReject, ehTexto),
     regrasDeReview: ehObjeto(v.reviewRules) ? Object.keys(v.reviewRules).length : 0,
+    regras: regras.regras,
+    regrasIlegiveis: regras.ilegiveis,
+    padroes,
+    padroesComSegredo: padroes !== undefined && padroes !== v.padroesRevisao ? (true as const) : undefined,
   });
 };
 
 export const lerContas: Leitor<ContaRevisora[]> = lerLista('accounts', lerContaRevisora);
 
-// ---------- `doctor`: a saúde ----------
+// ---------- `doctor`: o que o assunto Claude usa ----------
 
 export interface PerfilNaSaude {
   id: string;
@@ -141,62 +198,12 @@ export interface PerfilNaSaude {
   tipo: 'chave' | 'assinatura' | 'desconhecido';
 }
 
-// A avaliação técnica dos PRs revisados, como o motor a mediu (lib/technical-review/estado.js):
-// `pronta` diz se ela roda para alguém, e `detalhe` é o texto do motor (a ferramenta, o
-// cadastro e o efeito do que falta), que a tela escreve sem remontar.
-export interface AvaliacaoTecnicaNaSaude {
-  pronta: boolean;
-  detalhe: string;
-}
-
-// O que o diagnóstico do motor mede (Engine.doctor, server.js). Os caminhos de pasta que ele
-// traz (`home`, `workspace`) não são lidos.
-// `doctor.saude`: a saúde do próprio motor (saudeDoMotor, lib/engine/saude-do-motor.js), medida a
-// cada diagnóstico: o início do processo, o commit do código (null na imagem, que não leva a pasta
-// .git), o disco da pasta de dados e a telemetria gravando no banco.
-export interface SaudeDoMotor {
-  medidoEm?: number;
-  noArDesde?: number;
-  commit?: string;
-  disco?: { livreBytes: number; totalBytes: number };
-  telemetria?: { consumoNoBanco: boolean; historicoNoBanco: boolean; ultimaEscritaEm?: number };
-}
-
-function lerSaudeDoMotor(v: unknown): SaudeDoMotor | undefined {
-  if (!ehObjeto(v)) return undefined;
-  const motor: SaudeDoMotor = {};
-  if (ehNumero(v.medidoEm)) motor.medidoEm = v.medidoEm;
-  if (ehNumero(v.noArDesde) && v.noArDesde > 0) motor.noArDesde = v.noArDesde;
-  if (ehTexto(v.commit) && /^[0-9a-f]{7,40}$/.test(v.commit)) motor.commit = v.commit;
-  const d = v.disco;
-  if (ehObjeto(d) && ehNumero(d.livreBytes) && ehNumero(d.totalBytes) && d.totalBytes > 0 && d.livreBytes >= 0 && d.livreBytes <= d.totalBytes) motor.disco = { livreBytes: d.livreBytes, totalBytes: d.totalBytes };
-  const t = v.telemetria;
-  if (ehObjeto(t) && ehBooleano(t.consumoNoBanco) && ehBooleano(t.historicoNoBanco)) {
-    motor.telemetria = { consumoNoBanco: t.consumoNoBanco, historicoNoBanco: t.historicoNoBanco };
-    if (ehNumero(t.ultimaEscritaEm) && t.ultimaEscritaEm > 0) motor.telemetria.ultimaEscritaEm = t.ultimaEscritaEm;
-  }
-  return motor;
-}
-
+// Do diagnóstico do motor (Engine.doctor, server.js) a tela lê só o estado de cada perfil do
+// Claude (`claudeAuth`) e se o perfil em uso está pronto (`claudePerfilPronto`): é o que o
+// assunto Claude e o resumo dele no menu mostram. Os caminhos de pasta não são lidos.
 export interface Saude {
-  node?: string;
-  gh?: string;
-  claude?: string;
-  ghAuth?: boolean;
-  root?: boolean;
-  instanciaIsolada?: boolean;
   claudeAuth: PerfilNaSaude[];
   claudePerfilPronto?: boolean;
-  claudePerfilTipo?: string;
-  claudePerfilFalta?: string;
-  avaliacaoTecnica?: AvaliacaoTecnicaNaSaude;
-  motor?: SaudeDoMotor;
-  checkedAt?: number;
-}
-
-function lerAvaliacaoTecnica(v: unknown): AvaliacaoTecnicaNaSaude | undefined {
-  if (!ehObjeto(v) || !ehBooleano(v.pronta) || !ehTexto(v.detalhe)) return undefined;
-  return { pronta: v.pronta, detalhe: v.detalhe };
 }
 
 const lerPerfilNaSaude: LeitorDeItem<PerfilNaSaude> = (v) => {
@@ -205,34 +212,15 @@ const lerPerfilNaSaude: LeitorDeItem<PerfilNaSaude> = (v) => {
   return semAusentes({ id: v.id, label: textoSeguro(v.label) || undefined, ready: campo(v.ready, ehBooleano), tipo });
 };
 
-function saudeDe(v: Record<string, unknown>): Saude {
-  return semAusentes({
-    node: campo(v.node, ehTexto) || undefined,
-    gh: campo(v.gh, ehTexto) || undefined,
-    claude: campo(v.claude, ehTexto) || undefined,
-    ghAuth: campo(v.ghAuth, ehBooleano),
-    root: campo(v.root, ehBooleano),
-    instanciaIsolada: campo(v.instanciaIsolada, ehBooleano),
-    claudeAuth: lerItens(v.claudeAuth, lerPerfilNaSaude)?.itens ?? [],
-    claudePerfilPronto: campo(v.claudePerfilPronto, ehBooleano),
-    claudePerfilTipo: campo(v.claudePerfilTipo, ehTexto),
-    claudePerfilFalta: campo(v.claudePerfilFalta, ehTexto),
-    avaliacaoTecnica: lerAvaliacaoTecnica(v.avaliacaoTecnica),
-    motor: lerSaudeDoMotor(v.saude),
-    checkedAt: campo(v.checkedAt, ehNumero),
-  });
-}
-
 // `null` é valor do motor: o diagnóstico ainda não rodou.
 export const lerSaude: Leitor<Saude | null> = (valor) => {
   if (valor === null) return null;
-  return ehObjeto(valor) ? saudeDe(valor) : undefined;
+  if (!ehObjeto(valor)) return undefined;
+  return semAusentes({
+    claudeAuth: lerItens(valor.claudeAuth, lerPerfilNaSaude)?.itens ?? [],
+    claudePerfilPronto: campo(valor.claudePerfilPronto, ehBooleano),
+  });
 };
-
-// A resposta de GET /api/doctor: o mesmo objeto, sem envelope.
-export function lerSaudeDaRota(bruto: unknown): Saude | null {
-  return ehObjeto(bruto) ? saudeDe(bruto) : null;
-}
 
 // ---------- `modelos`: o catálogo e a versão do Claude Code ----------
 
@@ -474,17 +462,47 @@ export function lerTesteDoJira(bruto: unknown): TesteDoJira | null {
     : semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo) });
 }
 
-// A resposta de GET /api/diagnostics: o relatório em markdown, que o motor já entrega com os
-// segredos mascarados (lib/engine/diagnostico.js), e as falhas registradas, de que a tela só
-// usa a contagem. É texto livre: a borda não tem como conferir campo a campo. O que ainda
-// vier em formato de credencial é trocado por "[segredo omitido]", e a tela o desenha como
-// markdown, sem HTML.
-export interface Diagnostico {
-  markdown: string;
-  falhas: number;
+// ---------- o login da assinatura e a credencial do Jira ----------
+
+// A resposta de POST /api/claude/login-web/start (iniciar, lib/engine/login-web.js): o id do
+// login aberto e o endereço da página de autorização da Anthropic, ou a recusa. `perfilAberto`
+// vem quando já há outro login aberto no motor, para a tela oferecer cancelá-lo. O endereço só
+// vale em https: outro esquema conta como resposta torta.
+export type InicioDoLogin =
+  | { ok: true; loginId: string; url: string }
+  | { ok: false; code?: string; motivo?: string; perfilAberto?: string };
+
+const ENDERECO_HTTPS = /^https:\/\/[^\s"'<>]+$/;
+
+export function lerInicioDoLogin(bruto: unknown): InicioDoLogin | null {
+  if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
+  if (!bruto.ok) {
+    return semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo), perfilAberto: textoSeguro(bruto.perfilAberto) || undefined });
+  }
+  if (!ehTexto(bruto.loginId) || !bruto.loginId || !ehTexto(bruto.url) || !ENDERECO_HTTPS.test(bruto.url)) return null;
+  return { ok: true, loginId: bruto.loginId, url: bruto.url };
 }
 
-export function lerDiagnostico(bruto: unknown): Diagnostico | null {
-  if (!ehObjeto(bruto) || bruto.ok !== true || !ehTexto(bruto.markdown)) return null;
-  return { markdown: mascararSegredos(bruto.markdown), falhas: Array.isArray(bruto.falhas) ? bruto.falhas.length : 0 };
+// A resposta de POST /api/claude/login-web/code: o login concluído, ou a recusa com o motivo
+// (que o motor já devolve sem o link e sem o código).
+export type FimDoLogin = { ok: true } | { ok: false; code?: string; motivo?: string };
+
+export function lerFimDoLogin(bruto: unknown): FimDoLogin | null {
+  if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
+  return bruto.ok ? { ok: true } : semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo) });
+}
+
+// A resposta de POST /api/claude/login-web/cancel: sempre `{ ok: true }` (é idempotente).
+export function lerCancelamentoDoLogin(bruto: unknown): { ok: true } | null {
+  return ehObjeto(bruto) && bruto.ok === true ? { ok: true } : null;
+}
+
+// A resposta de POST /api/jira/credential: `{ ok: true }` ou `{ ok: false, error }`. Só o `ok`
+// e a frase da recusa são lidos: qualquer outro campo, mesmo que o motor um dia ecoe o que
+// recebeu, não passa daqui.
+export type GravacaoDaCredencial = { ok: true } | { ok: false; erro?: string };
+
+export function lerGravacaoDaCredencial(bruto: unknown): GravacaoDaCredencial | null {
+  if (!ehObjeto(bruto) || !ehBooleano(bruto.ok)) return null;
+  return bruto.ok ? { ok: true } : semAusentes({ ok: false as const, erro: mensagemSegura(bruto.error) });
 }

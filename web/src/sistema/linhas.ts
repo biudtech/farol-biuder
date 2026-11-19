@@ -1,11 +1,13 @@
-// As sete linhas da tela Sistema, sem React: o estado de cada uma (a bolinha) e o resumo que
-// fica à direita com a linha fechada. Tudo sai do que a tela já recebe do motor e do estado
-// que cada seção já calcula (a saúde pelas verificações, a conta pela presença do token, e
-// assim por diante): nada é medido aqui. O topo conta quantas linhas pedem atenção.
+// O resumo de cada assunto do menu da tela Sistema, sem React: o estado (a bolinha) e a frase
+// curta abaixo do nome. Tudo sai do que a tela já recebe do motor e do estado que cada assunto
+// já calcula (a conta pela presença do token, o Claude pelo perfil em uso, e assim por diante):
+// nada é medido aqui.
 import type { ConfigDoSistema, ContaRevisora, Modelos, PerfisDoClaude, Saude, SessoesPareadas, SiteDoJira } from '@/contratos/sistema';
 import { automacaoDe, resumoDaAutomacao } from './automacao';
+import { resumoDosPadroes } from './padroes';
 import { desfechosEmEspera, resumoDaPolitica } from './politica';
-import { ehGrave, type Verificacao } from './saude';
+import { resumoDasRegras } from './regras';
+import { resumoDoRitmo, ritmoDe } from './ritmo';
 
 // ok: verde. aviso: âmbar. ruim: vermelho. neutro: cinza (sem dado, desligado, carregando).
 export type TomDaLinha = 'ok' | 'aviso' | 'ruim' | 'neutro';
@@ -20,20 +22,6 @@ export const ROTULO_DO_TOM: Record<TomDaLinha, string> = { ok: 'OK', aviso: 'Ate
 
 const plural = (n: number, um: string, varios: string): string => `${n} ${n === 1 ? um : varios}`;
 
-// `saude`: `undefined` é a chave que não veio, `null` o diagnóstico que ainda não rodou.
-export function linhaDaSaude(saude: Saude | null | undefined, verificacoes: readonly Verificacao[]): EstadoDaLinha {
-  const graves = verificacoes.filter(ehGrave);
-  const atencao = verificacoes.filter((v) => v.estado === 'atencao');
-  const primeira = graves[0] ?? atencao[0];
-  if (primeira) {
-    const resumo = atencao.length > 1 ? `${primeira.nome} e mais ${atencao.length - 1}` : `${primeira.nome}: ${primeira.detalhe}`;
-    return { tom: graves.length ? 'ruim' : 'aviso', resumo };
-  }
-  if (saude === undefined) return { tom: 'neutro', resumo: 'o motor não mandou o diagnóstico' };
-  if (saude === null) return { tom: 'neutro', resumo: 'diagnóstico ainda não rodou' };
-  return { tom: 'ok', resumo: plural(verificacoes.length, 'verificação OK', 'verificações OK') };
-}
-
 export function linhaDaConta(conta: ContaRevisora | undefined): EstadoDaLinha {
   if (!conta) return { tom: 'neutro', resumo: 'o motor não mandou a conta' };
   if (!conta.user) return { tom: 'ruim', resumo: 'sem conta revisora' };
@@ -46,6 +34,23 @@ export function linhaDaConta(conta: ContaRevisora | undefined): EstadoDaLinha {
   // tela nunca espera. Pede atenção, e o resumo diz que veio do motor.
   if (conta.autoReview !== false && desfechosEmEspera(conta)) return { tom: 'aviso', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
   return { tom: 'ok', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
+}
+
+export function linhaDasRegras(conta: ContaRevisora | undefined): EstadoDaLinha {
+  if (!conta) return { tom: 'neutro', resumo: 'o motor não mandou a conta' };
+  if (conta.regrasIlegiveis) return { tom: 'aviso', resumo: `${resumoDasRegras(conta.regras)}, ${plural(conta.regrasIlegiveis, 'ilegível', 'ilegíveis')}` };
+  return { tom: conta.regras.length ? 'ok' : 'neutro', resumo: resumoDasRegras(conta.regras) };
+}
+
+export function linhaDosPadroes(conta: ContaRevisora | undefined): EstadoDaLinha {
+  if (!conta) return { tom: 'neutro', resumo: 'o motor não mandou a conta' };
+  return { tom: conta.padroes?.trim() ? 'ok' : 'neutro', resumo: resumoDosPadroes(conta.padroes) };
+}
+
+export function linhaDoRitmo(config: ConfigDoSistema | undefined): EstadoDaLinha {
+  const ritmo = ritmoDe(config);
+  if (!ritmo) return { tom: 'neutro', resumo: 'o motor não mandou as chaves' };
+  return { tom: 'ok', resumo: resumoDoRitmo(ritmo) };
 }
 
 export function linhaDaAutomacao(config: ConfigDoSistema | undefined, modelos: Modelos | undefined): EstadoDaLinha {
@@ -94,13 +99,6 @@ export function linhaDasSessoes(estado: { carregando: boolean; dados: SessoesPar
   const total = estado.dados.sessoes.length;
   if (!total) return { tom: 'neutro', resumo: 'nenhuma' };
   return { tom: 'ok', resumo: plural(total, 'ativa', 'ativas') };
-}
-
-export function linhaDaRede(config: ConfigDoSistema | undefined): EstadoDaLinha {
-  if (!config) return { tom: 'neutro', resumo: 'o motor não informou' };
-  if (config.hostPublico) return { tom: 'ok', resumo: config.hostPublico };
-  if (config.bind !== undefined || config.port !== undefined) return { tom: 'ok', resumo: `${config.bind ?? '?'}:${config.port ?? '?'}` };
-  return { tom: 'neutro', resumo: 'o motor não informou' };
 }
 
 // A frase do topo: quantas linhas pedem atenção (âmbar ou vermelho).

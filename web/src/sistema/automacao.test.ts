@@ -10,7 +10,7 @@ import {
 
 const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
 
-const ANTES: Automacao = { parallelReviews: 1, reviewModel: 'opus', reviewEffort: '' };
+const ANTES = { parallelReviews: 1, reviewModel: 'opus', reviewEffort: '', reviewFast: false } satisfies Automacao;
 const SELECOES: SelecaoDeModelo[] = [
   { valor: '', rotulo: 'Padrão do Claude', aceitaEsforco: true },
   { valor: 'auto', rotulo: 'Auto (qualidade primeiro)', auto: true, aceitaEsforco: false },
@@ -48,6 +48,14 @@ describe('automacaoDe', () => {
     expect(automacaoDe({ ...ANTES, aguardarCiParaAprovar: true })).toEqual(ANTES);
     expect(automacaoDe(undefined)).toBeNull();
   });
+
+  it('o modo rápido que não veio fica sem edição, sem derrubar as outras chaves', () => {
+    expect(automacaoDe({ parallelReviews: 1, reviewModel: 'opus', reviewEffort: '' })).toEqual({ ...ANTES, reviewFast: null });
+    expect(corpoDaAutomacao({ ...ANTES, reviewFast: null }, { ...ANTES, reviewFast: null, parallelReviews: 2 })).toEqual({ parallelReviews: 2 });
+    expect(corpoDaAutomacao(ANTES, { ...ANTES, reviewFast: true })).toEqual({ reviewFast: true });
+    expect(textoDaAutomacao({ reviewFast: true })).toBe('modo rápido: ligado');
+    expect(diferencasDaAutomacao({ reviewFast: true }, { reviewFast: false })).toEqual(['modo rápido ficou desligado, e o pedido era ligado']);
+  });
 });
 
 describe('corpoDaAutomacao: só as chaves que mudaram', () => {
@@ -65,7 +73,7 @@ describe('corpoDaAutomacao: só as chaves que mudaram', () => {
 
 describe('a espera do CI saiu da tela (o revisor nunca espera)', () => {
   it('não é chave da automação, e nenhum fonte da tela Sistema a manda nem a lê', () => {
-    expect([...CHAVES_DA_AUTOMACAO]).toEqual(['parallelReviews', 'reviewModel', 'reviewEffort']);
+    expect([...CHAVES_DA_AUTOMACAO]).toEqual(['parallelReviews', 'reviewModel', 'reviewEffort', 'reviewFast']);
     const pastas = [path.resolve(import.meta.dirname), path.resolve(import.meta.dirname, '../componentes/sistema')];
     const fontes = pastas.flatMap((pasta) => fs.readdirSync(pasta).filter((nome) => /\.tsx?$/.test(nome) && !/\.test\.tsx?$/.test(nome)).map((nome) => [nome, fs.readFileSync(path.join(pasta, nome), 'utf8')] as const));
     expect(fontes.length).toBeGreaterThan(10);

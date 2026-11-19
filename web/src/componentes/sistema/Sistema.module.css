@@ -24,9 +24,9 @@
 .par dt { color: var(--muted); font-weight: 700; }
 .par dd { margin: 0; min-width: 0; text-align: right; }
 
-/* as listas de linhas: verificações e sessões */
+/* a lista das sessões */
 .linhas { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-.verificacao, .sessao {
+.sessao {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,7 +35,7 @@
   border-bottom: 1px solid var(--borda-suave);
   min-width: 0;
 }
-.verificacao:last-child, .sessao:last-child { border-bottom: 0; }
+.sessao:last-child { border-bottom: 0; }
 .texto { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .nome { font-weight: 700; }
 .anuncio { display: flex; align-items: center; gap: 8px; }
@@ -56,6 +56,9 @@
 
 /* os formulários */
 .campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* O token do Jira: campo de texto com o valor em bolinhas. Campo de senha o navegador oferece
+   ao gerenciador de senhas mesmo com autocomplete="off"; texto mascarado por CSS não. */
+.mascarado { -webkit-text-security: disc; }
 .grade, .desfechos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .opcao { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; min-width: 0; }
 .opcao input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
@@ -102,17 +105,127 @@
 .tituloDaPergunta { font-size: 15px; font-weight: 800; }
 .botoesDaPergunta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
-.relatorio {
-  padding: 12px 14px;
-  max-height: 480px;
-  overflow: auto;
-  border: 1px solid var(--borda-suave);
-  border-radius: var(--radius-linha);
+/* O menu dos assuntos à esquerda e o assunto aberto à direita (redesenho de 19/11/2026). */
+.sistema { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }
+.menu {
+  flex: 1 1 240px;
+  max-width: 290px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
+.listaDoMenu { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.itemDoMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+.itemDoMenu:hover { background: var(--hover); color: var(--text); }
+.itemDoMenu[aria-current="page"] { background: var(--accent-soft); color: var(--accent-texto); }
+.itemDoMenu:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+.nomeDoMenu { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; }
+.resumoDoMenu { padding-left: 18px; font-size: 12px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.paineis { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.voltar { display: none; align-self: flex-start; font-size: 14px; font-weight: 700; padding: 10px 0; min-height: 44px; }
+.assunto {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.assunto[hidden] { display: none; }
+.cabecaDoAssunto { display: flex; flex-direction: column; gap: 4px; }
+.tituloDoAssunto { margin: 0; font-size: 18px; font-weight: 800; }
+.tituloDoAssunto:focus { outline: none; }
+.tituloDoAssunto:focus-visible { outline: 2px solid var(--foco); outline-offset: 4px; }
+.subbloco { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--borda-suave); }
+.frase { margin: 0; padding: 14px 16px; font-size: 15px; font-weight: 600; line-height: 1.5; background: var(--surface-2); border-radius: 12px; }
+.bloco { display: flex; flex-direction: column; gap: 10px; }
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-linha);
+  min-width: 0;
+}
+.enderecoDoLogin { margin: 0; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.ajuste { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+.areaDeTexto { min-height: 180px; resize: vertical; line-height: 1.5; font-family: inherit; }
+
+/* os perfis do Claude, na ordem de uso: a linha que abre e o detalhe */
+.perfis { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.perfil { border: 1.5px solid var(--border); border-radius: var(--radius-linha); overflow: hidden; }
+.perfil[data-padrao="sim"] { border-color: var(--accent); }
+.cabecaDoPerfil { margin: 0; font-size: inherit; font-weight: inherit; }
+.abreOPerfil {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.abreOPerfil:hover { background: var(--hover); }
+.abreOPerfil:focus-visible { outline: 2px solid var(--foco); outline-offset: -2px; }
+.posicao { flex: none; width: 22px; font-size: 13px; font-weight: 800; color: var(--muted); }
+.nomeDoPerfil { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.seta { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.abreOPerfil[aria-expanded="true"] .seta { transform: rotate(180deg); }
+.detalheDoPerfil { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px 50px; }
+.detalheDoPerfil[hidden] { display: none; }
+.janela { display: flex; flex-direction: column; gap: 6px; }
+.cabecaDaJanela { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13px; }
+.barraDoUso { display: block; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.barraDoUso svg { display: block; width: 100%; height: 8px; }
+.cheioDoUso { fill: var(--accent); }
+
+/* as regras por organização e autor */
+.regra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.textoDaRegra { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.gradeDaRegra { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+/* as organizações e os projetos de um site do Jira */
+.etiquetas { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.etiqueta { padding: 4px 10px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 700; }
 
 @media (max-width: 760px) {
   .grade, .desfechos { grid-template-columns: 1fr; }
   .resumoDaLinha { max-width: 45%; }
   .par dd { text-align: left; }
+  .etiquetas { justify-content: flex-start; }
   .opcao input { width: 22px; height: 22px; }
+  /* no celular o menu vira a lista; com um assunto no endereço, o assunto abre no lugar dela */
+  .menu { max-width: none; flex-basis: 100%; }
+  .semAssunto .paineis { display: none; }
+  .comAssunto .menu { display: none; }
+  .comAssunto .voltar { display: inline-flex; align-items: center; }
+  .assunto { padding: 18px 16px; }
+  .detalheDoPerfil { padding-left: 16px; }
 }

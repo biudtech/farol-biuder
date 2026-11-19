@@ -1,5 +1,5 @@
-// As três chaves de automação que a tela Sistema edita, sem React: paralelismo, modelo e
-// esforço. A espera do CI antes de aprovar saiu da tela (desenho de 17/11/2026: o revisor é
+// As chaves de automação que a tela Sistema edita no assunto Claude, sem React: paralelismo,
+// modelo, esforço e o modo rápido (`reviewFast`, desde o redesenho de 19/11/2026). A espera do CI antes de aprovar saiu da tela (desenho de 17/11/2026: o revisor é
 // autônomo e nunca espera): o motor ainda aceita a chave, mas só pelo arquivo ou pela API, e
 // nenhum corpo daqui a manda. São preferências de topo de `config`, e POST /api/settings
 // mescla por chave (updateSettings, server.js, na raiz): só a chave que vai no corpo muda, e
@@ -26,29 +26,32 @@ export interface Automacao {
   parallelReviews: number;
   reviewModel: string;
   reviewEffort: string;
+  // null: o motor não mandou a chave, e a tela não a edita
+  reviewFast: boolean | null;
 }
 
-export const CHAVES_DA_AUTOMACAO = ['parallelReviews', 'reviewModel', 'reviewEffort'] as const;
+export const CHAVES_DA_AUTOMACAO = ['parallelReviews', 'reviewModel', 'reviewEffort', 'reviewFast'] as const;
 export type ChaveDaAutomacao = (typeof CHAVES_DA_AUTOMACAO)[number];
-export type CorpoDaAutomacao = Partial<Automacao>;
+export type CorpoDaAutomacao = Partial<{ parallelReviews: number; reviewModel: string; reviewEffort: string; reviewFast: boolean }>;
 
-// As três chaves como o motor as mandou, ou null se faltar alguma: sem o valor de agora a
-// tela não tem de onde partir, e mostra a seção sem edição.
+// As chaves como o motor as mandou, ou null se faltar uma das três primeiras: sem o valor de
+// agora a tela não tem de onde partir, e mostra a seção sem edição. O modo rápido que não veio
+// fica sem edição sozinho.
 export function automacaoDe(config: ConfigDoSistema | undefined): Automacao | null {
   if (!config) return null;
   const { parallelReviews, reviewModel, reviewEffort } = config;
   if (parallelReviews === undefined || reviewModel === undefined || reviewEffort === undefined) return null;
-  return { parallelReviews, reviewModel, reviewEffort };
+  return { parallelReviews, reviewModel, reviewEffort, reviewFast: config.reviewFast ?? null };
 }
 
 export function marcaDaAutomacao(a: Automacao): string {
-  return JSON.stringify([a.parallelReviews, a.reviewModel, a.reviewEffort]);
+  return JSON.stringify([a.parallelReviews, a.reviewModel, a.reviewEffort, a.reviewFast]);
 }
 
-// O corpo de POST /api/settings: só as chaves que mudaram, e só as três desta seção.
+// O corpo de POST /api/settings: só as chaves que mudaram, e só as desta seção.
 export function corpoDaAutomacao(antes: Automacao, rascunho: Automacao): CorpoDaAutomacao {
   const corpo: Record<string, unknown> = {};
-  for (const chave of CHAVES_DA_AUTOMACAO) if (rascunho[chave] !== antes[chave]) corpo[chave] = rascunho[chave];
+  for (const chave of CHAVES_DA_AUTOMACAO) if (rascunho[chave] !== null && rascunho[chave] !== antes[chave]) corpo[chave] = rascunho[chave];
   return corpo as CorpoDaAutomacao;
 }
 
@@ -83,6 +86,8 @@ export function rotuloDoEsforco(valor: string): string {
 export const EFEITO_DO_PARALELO = `Quantas sessões de revisão a conta roda ao mesmo tempo, de ${PARALELO_MINIMO} a ${PARALELO_MAXIMO}. Mais sessões juntas esvaziam a fila mais rápido e gastam o plano ou a chave mais depressa.`;
 export const EFEITO_DO_MODELO = 'Vira a flag --model da sessão de revisão do Claude Code. As opções são apelidos de família: quem decide a versão é o Claude Code instalado no motor. O Auto é do Farol, não vira flag: o motor escolhe modelo e effort pelo PR. Um nome completo de modelo (claude-...) só entra pelo arquivo de configuração.';
 export const EFEITO_DO_ESFORCO = 'Vira a flag --effort da sessão de revisão. Mais effort deixa a sessão mais longa e mais cara.';
+// lib/engine/review.js (modo rápido) e lib/modelos.js: corta o tempo sem afrouxar gate nenhum
+export const EFEITO_DO_MODO_RAPIDO = 'Corta o tempo da revisão: menos experimento para provar o que a sessão afirma, e o effort cai para medium (salvo low escolhido). Nenhum gate fica mais frouxo: o que não dá para provar a tempo vira lacuna, nunca afirmação.';
 
 // O limite total de sessões da instância, que esta tela não edita: com ele ligado vale o menor dos dois.
 export function notaDoLimiteTotal(total: number | undefined): string | null {
@@ -94,11 +99,13 @@ const NOME_DA_CHAVE: Record<ChaveDaAutomacao, string> = {
   parallelReviews: 'revisões ao mesmo tempo',
   reviewModel: 'modelo',
   reviewEffort: 'esforço (effort)',
+  reviewFast: 'modo rápido',
 };
 
 function valorDaChave(chave: ChaveDaAutomacao, valor: unknown): string {
-  if (valor === undefined) return 'sem valor na resposta';
+  if (valor === undefined || valor === null) return 'sem valor na resposta';
   if (chave === 'parallelReviews') return String(valor);
+  if (chave === 'reviewFast') return valor === true ? 'ligado' : 'desligado';
   return valor === '' ? 'padrão do Claude Code' : String(valor);
 }
 

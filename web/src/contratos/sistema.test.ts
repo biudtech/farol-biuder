@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { aplicarEstadoInteiro } from '@/transporte/estado';
 import {
-  lerConfigDoSistema, lerContas, lerDiagnostico, lerModelos, lerPerfisDoClaude, lerRevogacao, lerSaude, lerSaudeDaRota,
+  lerConfigDoSistema, lerContas, lerModelos, lerPerfisDoClaude, lerRevogacao, lerSaude,
   lerSessoes, lerSitesDoJira, lerTesteDePerfil, lerTesteDoJira,
 } from './sistema';
 
@@ -31,6 +31,7 @@ const CONFIG = {
     { id: 'plano', label: 'Assinatura', kind: 'dir', dir: '/home/farol/.farol/claude/plano' },
     { id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '', temChave: true },
   ],
+  // as chaves de rede só mudam por arquivo, e a tela não as mostra mais
   bind: '0.0.0.0',
   hostPublico: 'farol.exemplo.com',
   origensPermitidas: ['https://painel.exemplo.com'],
@@ -38,12 +39,13 @@ const CONFIG = {
 };
 
 describe('lerConfigDoSistema', () => {
-  it('lê a automação, os perfis e as chaves só de arquivo; a pasta do perfil e a lista crua não ficam', () => {
+  it('lê a automação e os perfis; a pasta do perfil, a lista crua e as chaves de rede não ficam', () => {
     const registrar = vi.fn();
     const lido = lerConfigDoSistema(CONFIG, registrar);
     expect(lido).toEqual({
       aguardarCiParaAprovar: false,
       parallelReviews: 2,
+      intervalSeconds: 300,
       globalParallelReviews: 0,
       reviewModel: 'opus',
       reviewEffort: 'high',
@@ -52,10 +54,6 @@ describe('lerConfigDoSistema', () => {
         { id: 'plano', label: 'Assinatura', kind: 'dir' },
         { id: 'api', label: 'Chave', kind: 'apikey', temChave: true },
       ],
-      bind: '0.0.0.0',
-      hostPublico: 'farol.exemplo.com',
-      origensPermitidas: ['https://painel.exemplo.com'],
-      port: 47170,
     });
     // nada do perfil é guardado como veio: nem a pasta, nem uma lista crua
     expect(JSON.stringify(lido)).not.toContain('/home/farol');
@@ -64,7 +62,7 @@ describe('lerConfigDoSistema', () => {
   });
 
   it('chave ausente ou de forma errada fica ausente, e config que não é objeto vira vazia', () => {
-    expect(lerConfigDoSistema({ parallelReviews: '2', reviewModel: 3, origensPermitidas: [1], claudeProfiles: 'x' }, vi.fn())).toEqual({});
+    expect(lerConfigDoSistema({ parallelReviews: '2', reviewModel: 3, claudeProfiles: 'x' }, vi.fn())).toEqual({});
     expect(lerConfigDoSistema(null, vi.fn())).toEqual({});
   });
 
@@ -151,7 +149,7 @@ describe('o snapshot com segredo não chega ao store', () => {
     expect(JSON.stringify([snapshot?.config, snapshot?.doctor])).not.toContain('/home/farol');
   });
 
-  it('texto longo que a tela mostra fica, com o trecho trocado: o review, o feed e o relatório de diagnóstico', () => {
+  it('texto longo que a tela mostra fica, com o trecho trocado: o review e o feed', () => {
     const review = `## Review\n\n${'O código lê a variável e segue. '.repeat(10)}\n\nNo log do CI apareceu ${TOKEN_DO_GITHUB} em texto claro.`;
     const snapshot = aplicarEstadoInteiro(null, {
       decisions: { pending: [{ id: 'd1', key: 'dono/repo#1', reportMarkdown: review, reasons: [{ text: `o gh respondeu com ${TOKEN_DO_GITHUB}`, kind: 'infra' }] }], resolved: [] },
@@ -162,8 +160,6 @@ describe('o snapshot com segredo não chega ao store', () => {
     expect(snapshot?.decisions?.pending[0]?.reportMarkdown).toContain('## Review');
     expect(snapshot?.decisions?.pending[0]?.reasons[0]?.text).toBe('o gh respondeu com [segredo omitido]');
     expect(snapshot?.activity?.s1?.[0]?.text).toBe('export GH_TOKEN=[segredo omitido]');
-    const diagnostico = lerDiagnostico({ ok: true, markdown: `# Diagnóstico do Farol\n\n- erro: Authorization: Basic dXN1YXJpbzpzZW5oYS1sb25nYQ==\n`, falhas: [] });
-    expect(diagnostico?.markdown).toBe('# Diagnóstico do Farol\n\n- erro: Authorization: Basic [segredo omitido]\n');
   });
 });
 
@@ -174,42 +170,19 @@ describe('leitores do snapshot', () => {
       { user: 'farol-bot', owners: ['biudtech', 7], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', reviewRules: { acme: { mode: 'manual' } }, padroesRevisao: 'texto' },
       { owners: [] },
     ], registrar);
-    expect(lido).toEqual([{ user: 'farol-bot', owners: ['biudtech'], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', regrasDeReview: 1 }]);
+    expect(lido).toEqual([{ user: 'farol-bot', owners: ['biudtech'], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', regrasDeReview: 1, regras: [{ organizacao: 'acme', modo: 'manual' }], regrasIlegiveis: 0, padroes: 'texto' }]);
     expect(registrar).toHaveBeenCalledTimes(1);
     expect(lerContas({}, vi.fn())).toBeUndefined();
   });
 
-  it('doctor: nulo é valor (ainda não rodou), e os caminhos de pasta não são lidos', () => {
+  it('doctor: nulo é valor (ainda não rodou); só o que o assunto Claude usa é lido, e os caminhos de pasta não', () => {
     expect(lerSaude(null, vi.fn())).toBeNull();
     expect(lerSaude('x', vi.fn())).toBeUndefined();
     expect(lerSaude({ node: 'v24.22.1', gh: null, claude: '2.1.300', ghAuth: false, root: false, instanciaIsolada: true, home: '/h', workspace: '/w', claudeAuth: [{ id: 'a', label: 'A', ready: true, apiKeyMode: true }, { id: 'b', ready: false, assinaturaMode: true }, { id: 'c' }], claudePerfilPronto: false, claudePerfilTipo: 'assinatura', claudePerfilFalta: 'login', avaliacaoTecnica: { pronta: false, detalhe: 'ferramenta ausente', ferramenta: 'ausente' }, checkedAt: 9 }, vi.fn())).toEqual({
-      node: 'v24.22.1',
-      claude: '2.1.300',
-      ghAuth: false,
-      root: false,
-      instanciaIsolada: true,
       claudeAuth: [{ id: 'a', label: 'A', ready: true, tipo: 'chave' }, { id: 'b', ready: false, tipo: 'assinatura' }, { id: 'c', tipo: 'desconhecido' }],
       claudePerfilPronto: false,
-      claudePerfilTipo: 'assinatura',
-      claudePerfilFalta: 'login',
-      avaliacaoTecnica: { pronta: false, detalhe: 'ferramenta ausente' },
-      checkedAt: 9,
     });
-    // avaliação técnica torta (sem o booleano ou sem o texto) fica de fora, e a tela diz sem dado
-    expect(lerSaudeDaRota({ node: 'v24', avaliacaoTecnica: { pronta: 'sim', detalhe: 'x' } })).toEqual({ node: 'v24', claudeAuth: [] });
-    expect(lerSaudeDaRota({ node: 'v24', avaliacaoTecnica: { pronta: true } })).toEqual({ node: 'v24', claudeAuth: [] });
-    expect(lerSaudeDaRota({ node: 'v24' })).toEqual({ node: 'v24', claudeAuth: [] });
-    expect(lerSaudeDaRota(null)).toBeNull();
-  });
-
-  it('doctor.saude: a saúde do motor campo a campo, e o torto sai', () => {
-    const motor = { medidoEm: 5000, noArDesde: 1000, commit: 'a'.repeat(40), disco: { livreBytes: 30, totalBytes: 100 },
-      telemetria: { consumoNoBanco: true, historicoNoBanco: false, ultimaEscritaEm: 4000 }, caminho: '/home/farol' };
-    expect(lerSaudeDaRota({ saude: motor })?.motor).toEqual({ medidoEm: 5000, noArDesde: 1000, commit: 'a'.repeat(40), disco: { livreBytes: 30, totalBytes: 100 },
-      telemetria: { consumoNoBanco: true, historicoNoBanco: false, ultimaEscritaEm: 4000 } });
-    expect(lerSaudeDaRota({ saude: { commit: null, disco: null, telemetria: null } })?.motor).toEqual({});
-    expect(lerSaudeDaRota({ saude: { commit: 'não é sha', disco: { livreBytes: 200, totalBytes: 100 }, telemetria: { consumoNoBanco: 'sim' } } })?.motor).toEqual({});
-    expect(lerSaudeDaRota({ saude: 'x' })).toEqual({ claudeAuth: [] });
+    expect(lerSaude({ node: 'v24', claudePerfilPronto: 'sim' }, vi.fn())).toEqual({ claudeAuth: [] });
   });
 
   it('modelos: as seleções do catálogo e a versão do Claude Code', () => {
@@ -279,8 +252,4 @@ describe('leitores das rotas', () => {
     expect(lerTesteDoJira([])).toBeNull();
   });
 
-  it('diagnóstico: o markdown do motor e a contagem das falhas', () => {
-    expect(lerDiagnostico({ ok: true, markdown: '# Diagnóstico do Farol\n', falhas: [{}, {}] })).toEqual({ markdown: '# Diagnóstico do Farol\n', falhas: 2 });
-    expect(lerDiagnostico({ ok: true })).toBeNull();
-  });
 });
