@@ -16,7 +16,7 @@
 import { memo, useId } from 'react';
 import type { Contestacao as Registro, Revisao } from '@/contratos/historico';
 import type { Pendencia } from '@/contratos/radar';
-import { contextoDoCartao, rodapeDoCartao, temTextoDoReview, tomDoCartao } from '@/historico/cartao';
+import { contextoDoCartao, instanteDoCartao, rodapeDoCartao, temTextoDoReview, tomDoCartao } from '@/historico/cartao';
 import { agruparPorDia, horaCurta, tituloDoGrupo } from '@/historico/dias';
 import { foiPublicado, rotuloDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { pilulasDaPostada } from '@/radar/cartao';
@@ -49,7 +49,8 @@ function RevisarDeNovo({ chave, url, controle, primario }: { chave: string; url:
   return <AcoesDoItem pequeno botoes={[{ acao: { tipo: 'revisar', alvo: chave, nome: nomeDoPr(chave), url: pr.url, deNovo: true }, primario }]} controle={controle} />;
 }
 
-// A seta do cartão: um botão de verdade, com o estado em aria-expanded.
+// A seta do cartão: um botão de verdade, com um nome fixo e o estado só em aria-expanded (o
+// leitor de tela já diz "expandido" ou "recolhido"; um nome que muda repetiria isso).
 function Seta({ id, aberto, controla, nome, aoClicar }: { id: string; aberto: boolean; controla: string; nome: string; aoClicar(): void }) {
   return (
     <button
@@ -58,7 +59,7 @@ function Seta({ id, aberto, controla, nome, aoClicar }: { id: string; aberto: bo
       className={`${ui.botao} ${ui.pequeno} ${estilos.seta}`}
       aria-expanded={aberto}
       aria-controls={aberto ? controla : undefined}
-      aria-label={`${aberto ? 'Fechar' : 'Abrir'} o detalhe de ${nome}`}
+      aria-label={`Detalhe de ${nome}`}
       data-aberto={aberto ? 'sim' : undefined}
       onClick={aoClicar}
     >
@@ -123,7 +124,8 @@ const CartaoDaRevisao = memo(function CartaoDaRevisao({ revisao: daPagina, leitu
       {aberto ? (
         <div id={idDoCorpo} className={estilos.corpoDoCartao} role="region" aria-label={`Revisão de ${nome}`}>
           {complementando ? <p className={ui.mini} role="status">Carregando os achados, os critérios e a execução desta revisão.</p> : null}
-          <Analise revisao={r} registro={registro} controle={controle} perfis={perfis} idDoReview={idDoReview} />
+          {/* debaixo do h4 do cartão, as seções da análise são h5 */}
+          <Analise revisao={r} registro={registro} controle={controle} perfis={perfis} idDoReview={idDoReview} nivel={5} />
           <Rodape
             tom="fila"
             texto={rodape || 'Sem hora, tempo nem custo registrados'}
@@ -166,7 +168,8 @@ interface Props {
 }
 
 export const Lista = memo(function Lista({ itens, agora, variasPaginas, abertoId, leitura, contestacoes, perfis, aoAlternar, controle }: Props) {
-  const grupos = agruparPorDia(itens, (r) => r.resolvedAt, agora);
+  // o mesmo instante da hora do contexto do cartão
+  const grupos = agruparPorDia(itens, instanteDoCartao, agora);
   return (
     <div className={estilos.grupos}>
       {grupos.map((grupo) => (

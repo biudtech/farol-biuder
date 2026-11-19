@@ -196,5 +196,9 @@ describe('execução da rodada: perfis e sessões', () => {
     const segredo = `ghp_${'a1B2'.repeat(9)}`;
     const lida = comExecucao({ tentativas: 1, modelos: [], perfis: [segredo], sessoes: [{ id: 't1', perfil: segredo, modelo: segredo, status: 'ok' }] });
     expect(JSON.stringify(lida)).not.toContain(segredo);
+    // o desfecho da sessão também é texto de fora
+    const comStatus = comExecucao({ tentativas: 1, modelos: [], sessoes: [{ id: 't1', status: `falhou ${segredo}` }] });
+    expect(JSON.stringify(comStatus)).not.toContain(segredo);
+    expect(comStatus?.sessoes?.[0]?.status).toBeTruthy();
   });
 });

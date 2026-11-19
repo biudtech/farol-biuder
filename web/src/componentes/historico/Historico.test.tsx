@@ -58,7 +58,7 @@ const titulosDosItens = (): string[] => linhas().map(tituloDa);
 // a seta do cartão: o botão que abre e fecha o detalhe nele
 const seta = (cartao: HTMLElement | undefined): HTMLButtonElement => {
   if (!cartao) throw new Error('cartão ausente');
-  return within(cartao).getByRole('button', { name: /^(Abrir|Fechar) o detalhe de / }) as HTMLButtonElement;
+  return within(cartao).getByRole('button', { name: /^Detalhe de / }) as HTMLButtonElement;
 };
 const abrirLinha = async (cartao: HTMLElement | undefined) => {
   await act(async () => { fireEvent.click(seta(cartao)); });
@@ -107,6 +107,17 @@ describe('Histórico: a lista', () => {
     expect(within(ontem).getByText('22:30 · card BT-2')).toBeTruthy();
   });
 
+  it('sem a hora da resolução, o dia do grupo e a hora do cartão saem do mesmo instante, o da criação', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 17/11, 15:00 em Brasília
+    vi.setSystemTime(Date.UTC(2026, 10, 17, 18, 0));
+    montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1, { resolvedAt: undefined, createdAt: Date.UTC(2026, 10, 17, 14, 0) })])) });
+    await assentar();
+    const grupos = within(revisoes()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(grupos).toEqual(['Hoje, 17 de novembro · 1 revisão']);
+    expect(within(revisoes()).getByText('11:00 · card BT-1')).toBeTruthy();
+  });
+
   it('com mais de uma página, a contagem do dia diz que é desta página', async () => {
     montar({ responder: () => corpo(paginaDoMotor([revisaoDoMotor(1)], { pages: 2, total: 31 })) });
     await assentar();
@@ -123,11 +134,13 @@ describe('Histórico: a lista', () => {
     expect(within(segunda as HTMLElement).getByText('Pediu mudanças')).toBeTruthy();
     // fechado, nada do detalhe
     expect(seta(primeira).getAttribute('aria-expanded')).toBe('false');
+    // o nome da seta é fixo: o estado está só no aria-expanded
+    expect(seta(primeira).getAttribute('aria-label')).toBe('Detalhe de PR #12 de dono/repo');
     expect(within(primeira as HTMLElement).queryByRole('region')).toBeNull();
     expect(within(primeira as HTMLElement).queryByRole('list', { name: 'Resumo' })).toBeNull();
     await abrirLinha(primeira);
     expect(seta(primeira).getAttribute('aria-expanded')).toBe('true');
-    expect(seta(primeira).getAttribute('aria-label')).toBe('Fechar o detalhe de PR #12 de dono/repo');
+    expect(seta(primeira).getAttribute('aria-label')).toBe('Detalhe de PR #12 de dono/repo');
     const detalhe = within(primeira as HTMLElement).getByRole('region', { name: 'Revisão de PR #12 de dono/repo' });
     expect(seta(primeira).getAttribute('aria-controls')).toBe(detalhe.id);
     // a lista continua na tela
@@ -594,7 +607,7 @@ describe('Histórico: detalhe da revisão', () => {
   });
   const comRica: Responder = () => corpo(paginaDoMotor([rica, revisaoDoMotor(7)]));
   const NOME = 'PR #12 de dono/repo';
-  const abrir = async () => { await clicar(`Abrir o detalhe de ${NOME}`); };
+  const abrir = async () => { await clicar(`Detalhe de ${NOME}`); };
   const cartao = () => screen.getByRole('article', { name: /^dono\/repo#12: / });
   const detalhe = () => screen.getByRole('region', { name: `Revisão de ${NOME}` });
   const campos = (raiz: HTMLElement) => [...raiz.querySelectorAll('dl > div')].map((par) => `${par.querySelector('dt')?.textContent}: ${par.querySelector('dd')?.textContent}`);
@@ -610,7 +623,7 @@ describe('Histórico: detalhe da revisão', () => {
     expect(cartao().contains(detalhe())).toBe(true);
     expect(screen.getByRole('search')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1, name: 'Histórico' })).toBeTruthy();
-    await clicar(/^Abrir o detalhe de PR #7 de dono\/repo/);
+    await clicar(/^Detalhe de PR #7 de dono\/repo/);
     expect(window.location.search).toBe('?id=d7&pr=dono%2Frepo%237');
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
     expect(screen.getByRole('region', { name: 'Revisão de PR #7 de dono/repo' })).toBeTruthy();
@@ -691,7 +704,8 @@ describe('Histórico: detalhe da revisão', () => {
     await assentar();
     await abrir();
     const texto = screen.getByRole('group', { name: 'Review completo' });
-    expect(within(texto).getByRole('heading', { level: 5, name: 'Achados', hidden: true })).toBeTruthy();
+    // no cartão, o texto do review fica abaixo de Mais detalhes (h5)
+    expect(within(texto).getByRole('heading', { level: 6, name: 'Achados', hidden: true })).toBeTruthy();
     expect(texto.querySelector('strong')?.textContent).toBe('Um');
     expect(texto.querySelector('code')?.textContent).toBe('codigo');
     expect([...texto.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://exemplo.com/a']);
@@ -706,7 +720,7 @@ describe('Histórico: detalhe da revisão', () => {
     await abrir();
     expect(screen.getByText(/O que foi publicado difere do parecer da revisão: o texto abaixo pode não ser o que saiu no PR\./)).toBeTruthy();
     // publicado igual ao parecer: sem o aviso
-    await clicar(/^Abrir o detalhe de PR #7 de dono\/repo/);
+    await clicar(/^Detalhe de PR #7 de dono\/repo/);
     expect(screen.queryByText(/O que foi publicado difere/)).toBeNull();
     cleanup();
     montar({ url: '/historico?id=d12', responder: () => corpo(paginaDoMotor([revisaoDoMotor(12, { status: 'skipped', action: 'skip' })])) });
@@ -770,7 +784,7 @@ describe('Histórico: detalhe da revisão', () => {
     await act(async () => { fireEvent.keyDown(dentro, { key: 'Escape' }); });
     expect(window.location.search).toBe('');
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Abrir o detalhe de ${NOME}` }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Detalhe de ${NOME}` }));
     expect(screen.getByRole('search')).toBeTruthy();
   });
 
@@ -778,10 +792,10 @@ describe('Histórico: detalhe da revisão', () => {
     const t = montar({ responder: comRica });
     await assentar();
     await abrir();
-    await clicar(`Fechar o detalhe de ${NOME}`);
+    await clicar(`Detalhe de ${NOME}`);
     expect(window.location.search).toBe('');
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Abrir o detalhe de ${NOME}` }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Detalhe de ${NOME}` }));
     expect(t.pedidos().filter((p) => p.startsWith('/api/decisions'))).toHaveLength(1);
     expect(titulosDosItens()).toHaveLength(2);
     await act(async () => { voltarPara('/historico?id=d12&pr=dono%2Frepo%2312'); });
@@ -812,6 +826,45 @@ describe('Histórico: detalhe da revisão', () => {
     await assentar();
     expect(cartao().contains(screen.getByRole('group', { name: 'Review completo' }))).toBe(true);
     expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312&id=d12']);
+  });
+
+  it('endereço só com o id de uma revisão da página pede o complemento pela chave do item, e o Carregando some', async () => {
+    const t = montar({
+      url: '/historico?id=d12',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([rica, revisaoDoMotor(7)])) : corpo({ found: true, decision: rica })),
+    });
+    await assentar();
+    await assentar();
+    expect(t.pedidos()).toEqual(['/api/decisions?page=1', '/api/decision?key=dono%2Frepo%2312&id=d12']);
+    expect(within(cartao()).queryByText(/Carregando os achados/)).toBeNull();
+    const pilulas = within(within(cartao()).getByRole('list', { name: 'Resumo' })).getAllByRole('listitem').map((li) => li.textContent);
+    expect(pilulas.some((p) => p?.includes('Carregando'))).toBe(false);
+  });
+
+  it('os títulos do cartão aberto ficam abaixo do h4 dele; no detalhe de fora da página, seguem do h1', async () => {
+    const execucao = { tentativas: 1, modelos: [], sessoes: [{ id: 't1', status: 'ok' }] };
+    const snapshot = { decisions: resolvidas('d12'), pushbacks: { 'dono/repo#12': { author: 'ana', outcome: 'mixed', note: 'n', status: 'confirmed' } } } as unknown as Snapshot;
+    const comExecucao = { ...rica, execucao };
+    const titulos = (raiz: HTMLElement) => [...raiz.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => `${h.tagName} ${h.textContent}`);
+    montar({
+      url: '/historico?id=d12&pr=dono%2Frepo%2312',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([rica])) : corpo({ found: true, decision: comExecucao })),
+      snapshot,
+    });
+    await assentar();
+    await assentar();
+    // o "## Achados" do texto do review, dentro de Mais detalhes, é h6
+    expect(titulos(cartao())).toEqual(['H4 Título do PR 12', 'H5 Achados', 'H5 Mais detalhes', 'H6 Sessões da rodada', 'H6 Achados', 'H5 Contestação do autor']);
+    cleanup();
+    // fora da página, o detalhe é a página: os mesmos títulos seguem do h1, como antes
+    montar({
+      url: '/historico?id=d12&pr=dono%2Frepo%2312',
+      responder: (caminho) => (caminho.startsWith('/api/decisions') ? corpo(paginaDoMotor([])) : corpo({ found: true, decision: comExecucao })),
+      snapshot,
+    });
+    await assentar();
+    await assentar();
+    expect(titulos(detalhe())).toEqual(['H1 Título do PR 12', 'H2 Achados', 'H2 Mais detalhes', 'H3 Sessões da rodada', 'H5 Achados', 'H2 Contestação do autor', 'H2 Revisar de novo']);
   });
 
   it('revisão que não está na página é pedida pela chave do PR', async () => {
@@ -975,7 +1028,7 @@ describe('Histórico: ações do detalhe', () => {
       expect(window.location.search).toBe('?id=d12&pr=dono%2Frepo%2312');
     }
     // fora de campo, Escape continua fechando
-    await act(async () => { fireEvent.keyDown(screen.getByRole('button', { name: `Fechar o detalhe de ${NOME}` }), { key: 'Escape' }); });
+    await act(async () => { fireEvent.keyDown(screen.getByRole('button', { name: `Detalhe de ${NOME}` }), { key: 'Escape' }); });
     expect(screen.queryByRole('region', { name: `Revisão de ${NOME}` })).toBeNull();
   });
 

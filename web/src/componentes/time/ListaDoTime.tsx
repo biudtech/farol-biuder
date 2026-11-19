@@ -9,7 +9,7 @@
 // sem os números do motor, o cartão diz isso em vez de mostrar zero.
 import { memo, useId } from 'react';
 import type { Autor, Pessoa, Pessoas } from '@/contratos/time';
-import { aprendizados, dominiosDoCartao, iniciais, markdownDosPontos, nomeDaPessoa, numerosDoCartao, papelCurto, perfilDe } from '@/time/time';
+import { aprendizados, avisoDoTeto, dominiosDoCartao, iniciais, markdownDosPontos, nomeDaPessoa, numerosDoCartao, papelCurto, perfilDe, rotuloDaJanela } from '@/time/time';
 import { Avatar as FotoDoAutor, estilosDoCartao } from '../cartao/Cartao';
 import { Markdown } from '../Markdown';
 import { ui } from '../ui';
@@ -36,8 +36,10 @@ interface PropsDoCartao {
 
 const CartaoDaPessoa = memo(function CartaoDaPessoa({ login, autor, perfil, aoAbrir, aoEditar }: PropsDoCartao) {
   const idDoNome = useId();
+  const idDaJanela = useId();
   const nome = nomeDaPessoa(login, autor);
   const numeros = numerosDoCartao(autor?.numeros);
+  const teto = avisoDoTeto(autor?.numeros);
   const pontos = aprendizados(autor);
   const dominios = dominiosDoCartao(perfil);
   let semNumeros = 'Sem números dos últimos 30 dias: o motor só os manda para quem teve PR com a primeira revisão publicada na janela, e com o histórico no ar.';
@@ -56,15 +58,19 @@ const CartaoDaPessoa = memo(function CartaoDaPessoa({ login, autor, perfil, aoAb
           </span>
         </div>
 
-        {numeros.length ? (
-          <dl className={estilos.numerosDoCartao} aria-label={`Últimos ${autor?.numeros?.janelaDias ?? 30} dias`}>
-            {numeros.map((n) => (
-              <div key={n.rotulo} className={estilos.caixa}>
-                <dt>{n.rotulo}</dt>
-                <dd data-tom={n.tom}>{n.valor}</dd>
-              </div>
-            ))}
-          </dl>
+        {numeros.length && autor?.numeros ? (
+          <div>
+            <p id={idDaJanela} className={ui.mini}>{rotuloDaJanela(autor.numeros)}</p>
+            <dl className={estilos.numerosDoCartao} aria-labelledby={idDaJanela}>
+              {numeros.map((n) => (
+                <div key={n.rotulo} className={estilos.caixa}>
+                  <dt>{n.rotulo}</dt>
+                  <dd data-tom={n.tom}>{n.valor}</dd>
+                </div>
+              ))}
+            </dl>
+            {teto ? <p className={ui.mini}>{teto}</p> : null}
+          </div>
         ) : <p className={ui.mini}>{semNumeros}</p>}
 
         <section className={estilos.aprendeu} aria-label="O que o Farol já aprendeu">

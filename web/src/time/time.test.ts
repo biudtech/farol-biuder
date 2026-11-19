@@ -7,7 +7,7 @@ import {
   avisoDeIlegiveis, lerEnderecoDoTime, marcaDoPerfil, markdownDosPontos, motivoQueImpedeSalvar, outrasQueDiferem, perfilDe, perfilLimpo,
   prDaEntrada, soComPerfil, textoDaCompetencia, textoDoPapel, textoDoPerfil, textoDoResultado,
   contagemDosDesfechos, iniciais, nomeDaPessoa, papelCurto, quantasPessoas, resumoDaCalibracao, tipoDoDesfecho,
-  aprendizados, dominiosDoCartao, numerosDoCartao,
+  aprendizados, avisoDoTeto, dominiosDoCartao, numerosDoCartao, rotuloDaJanela,
 } from './time';
 
 // O cartão de uma pessoa na grade do Time (redesenho, lote 4).
@@ -43,6 +43,15 @@ describe('o cartão de uma pessoa', () => {
     const antigo = { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20 };
     expect(numerosDoCartao(antigo).map((c) => c.rotulo)).toEqual(['PRs revisados', 'aprovados de primeira']);
     expect(numerosDoCartao(undefined)).toEqual([]);
+  });
+
+  it('a janela dos números e o aviso do teto do histórico, que o motor manda dizer na tela', () => {
+    const n = { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20 };
+    expect(rotuloDaJanela(n)).toBe('Últimos 30 dias');
+    expect(rotuloDaJanela({ ...n, janelaDias: 7 })).toBe('Últimos 7 dias');
+    expect(avisoDoTeto(n)).toBe('');
+    expect(avisoDoTeto(undefined)).toBe('');
+    expect(avisoDoTeto({ ...n, historicoNoTeto: true })).toBe('O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.');
   });
 });
 

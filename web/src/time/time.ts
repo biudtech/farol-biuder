@@ -376,6 +376,19 @@ export interface NumeroDoCartao {
 // As caixas dos 30 dias, só com o que o motor mandou (numeros-do-time.js, na raiz): os PRs, os
 // aprovados de primeira e, quando o motor os conta, os pedidos de mudança (as revisões publicadas
 // desses PRs que pediram mudanças). Sem os números, nenhuma caixa: a tela não inventa zero.
+// A janela dos números, escrita na tela acima das caixas ("Últimos 30 dias").
+export function rotuloDaJanela(n: Pick<NumerosDoAutor, 'janelaDias'>): string {
+  return `Últimos ${n.janelaDias} dias`;
+}
+
+// O motor marca os números com `historicoNoTeto` quando o histórico guardado chegou ao limite e
+// manda a tela dizer isso (numeros-do-time.js, na raiz). A frase é uma só, no cartão e no dossiê.
+export const FRASE_DO_TETO = 'O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.';
+
+export function avisoDoTeto(n: NumerosDoAutor | undefined): string {
+  return n?.historicoNoTeto ? FRASE_DO_TETO : '';
+}
+
 export function numerosDoCartao(n: NumerosDoAutor | undefined): NumeroDoCartao[] {
   if (!n) return [];
   const caixas: NumeroDoCartao[] = [

@@ -29,7 +29,7 @@ import { ROTULO_DO_MOTIVO, dataComAno, linkDoPr, nomeDoPr, prDaUrl } from '@/rad
 import { Markdown } from '../Markdown';
 import { AcoesDoItem } from '../radar/AcoesDoItem';
 import type { ControleDeAcoes } from '../radar/useAcoes';
-import { Chip, Esqueleto, Linha, Secao, ui, type Tom } from '../ui';
+import { Chip, Esqueleto, Linha, Secao, TituloDeNivel, ui, type NivelDoTitulo, type Tom } from '../ui';
 import { Contestacao } from './Contestacao';
 import type { LeituraDoDetalhe } from './useHistorico';
 import estilos from './Historico.module.css';
@@ -111,10 +111,10 @@ function AchadoDaSessao({ achado: a }: { achado: AchadoDaRevisao }) {
 // Os achados com o que o motor manda: o bloqueio (`blockedReason`), aberto; os achados da sessão
 // (`achados`, só pela rota do detalhe), com o que bloqueia aberto; os motivos (`reasons`) e os
 // pontos de atenção (`attention`), fechados.
-function Achados({ revisao: r }: { revisao: Revisao }) {
+function Achados({ revisao: r, nivel }: { revisao: Revisao; nivel: NivelDoTitulo }) {
   if (!r.blockedReason && !r.achados?.length && !r.reasons.length && !r.attention.length) return null;
   return (
-    <Secao titulo="Achados">
+    <Secao titulo="Achados" nivel={nivel}>
       {r.blockedReason ? <Achado rotulo="Bloqueio" tom="ruim" aberta motivo={{ text: r.blockedReason, kind: 'gate' }} /> : null}
       {(r.achados ?? []).map((a, i) => <AchadoDaSessao key={`s${i}`} achado={a} />)}
       {r.reasons.map((m, i) => <Achado key={`m${i}`} rotulo="Motivo" tom="ruim" motivo={m} />)}
@@ -254,10 +254,10 @@ function ChecksDoHead({ checks: c }: { checks: NonNullable<Revisao['checks']> })
 }
 
 // As tentativas da rodada, da mais antiga para a mais nova, como o diário as registrou.
-function Sessoes({ sessoes, perfis }: { sessoes: readonly SessaoDaRodada[]; perfis: PerfisDoClaude }) {
+function Sessoes({ sessoes, perfis, nivel }: { sessoes: readonly SessaoDaRodada[]; perfis: PerfisDoClaude; nivel: NivelDoTitulo }) {
   return (
     <>
-      <h3 className={ui.grupo}>Sessões da rodada</h3>
+      <TituloDeNivel nivel={nivel} className={ui.grupo}>Sessões da rodada</TituloDeNivel>
       <ol className={estilos.rodadas} aria-label="Sessões da rodada, da mais antiga para a mais nova">
         {sessoes.map((s, i) => <li key={`${s.id}|${i}`}>{textoDaSessao(s, perfis)}</li>)}
       </ol>
@@ -265,7 +265,7 @@ function Sessoes({ sessoes, perfis }: { sessoes: readonly SessaoDaRodada[]; perf
   );
 }
 
-function Execucao({ revisao: r, perfis }: { revisao: Revisao; perfis: PerfisDoClaude }) {
+function Execucao({ revisao: r, perfis, nivel }: { revisao: Revisao; perfis: PerfisDoClaude; nivel: NivelDoTitulo }) {
   const parecer = parecerQueDifere(r);
   const resolvida = dataComAno(r.resolvedAt);
   const criada = dataComAno(r.createdAt);
@@ -303,7 +303,7 @@ function Execucao({ revisao: r, perfis }: { revisao: Revisao; perfis: PerfisDoCl
           </Campo>
         ) : null}
       </dl>
-      {e?.sessoes?.length ? <Sessoes sessoes={e.sessoes} perfis={perfis} /> : null}
+      {e?.sessoes?.length ? <Sessoes sessoes={e.sessoes} perfis={perfis} nivel={nivel} /> : null}
       {e ? (
         <p className={ui.mini}>
           A rodada são as tentativas de revisão deste PR desde a revisão anterior dele até esta, inclusive a que caiu e foi refeita.
@@ -314,7 +314,7 @@ function Execucao({ revisao: r, perfis }: { revisao: Revisao; perfis: PerfisDoCl
   );
 }
 
-function ReviewCompleto({ revisao: r, id }: { revisao: Revisao; id?: string }) {
+function ReviewCompleto({ revisao: r, id, nivelDoTexto }: { revisao: Revisao; id?: string; nivelDoTexto: 4 | 5 | 6 }) {
   return (
     <Linha
       id={id}
@@ -326,7 +326,7 @@ function ReviewCompleto({ revisao: r, id }: { revisao: Revisao; id?: string }) {
         </>
       )}
     >
-      <TextoDoReview revisao={r} />
+      <TextoDoReview revisao={r} nivelDoTexto={nivelDoTexto} />
     </Linha>
   );
 }
@@ -355,7 +355,7 @@ function Cabecalho({ revisao: r }: { revisao: Revisao }) {
 
 // O texto do review que o motor gravou, desenhado de markdown, com o aviso quando o publicado
 // difere do parecer: o corpo da linha "Review completo".
-function TextoDoReview({ revisao: r }: { revisao: Revisao }) {
+function TextoDoReview({ revisao: r, nivelDoTexto }: { revisao: Revisao; nivelDoTexto: 4 | 5 | 6 }) {
   const parecer = parecerQueDifere(r);
   return (
     <>
@@ -365,7 +365,7 @@ function TextoDoReview({ revisao: r }: { revisao: Revisao }) {
         </p>
       ) : null}
       {r.reportMarkdown ? (
-        <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} /></div>
+        <div className={estilos.parecer}><Markdown texto={r.reportMarkdown} nivelBase={nivelDoTexto} /></div>
       ) : (
         <p className={ui.vazio}>Esta revisão ficou sem texto gravado.</p>
       )}
@@ -380,30 +380,37 @@ interface PropsDaAnalise {
   perfis: PerfisDoClaude;
   // o id da linha "Review completo": o "Ver o review postado" do cartão a abre
   idDoReview?: string;
+  // o nível dos títulos das seções: 2 no detalhe de fora da página (abaixo do h1), e abaixo do
+  // título do cartão dentro dele; o título de dentro de uma seção fica um nível abaixo
+  nivel?: 2 | 3 | 4 | 5;
 }
 
 // O que a revisão concluiu e como rodou: a frase técnica, os achados, "Mais detalhes" e a
 // contestação. É o mesmo no cartão aberto da lista e no detalhe de fora da página.
-export function Analise({ revisao: r, registro, controle, perfis, idDoReview }: PropsDaAnalise) {
+export function Analise({ revisao: r, registro, controle, perfis, idDoReview, nivel = 2 }: PropsDaAnalise) {
   const naoPostou = r.status === 'pending' || !foiPublicado(r.action);
+  const dentro = (nivel + 1) as NivelDoTitulo;
+  // os títulos do texto do review: no detalhe de fora da página, a partir do h4 de sempre; no
+  // cartão, abaixo da seção que o contém
+  const nivelDoTexto = Math.max(4, dentro) as 4 | 5 | 6;
   return (
     <>
       {r.technical ? <p className={estilos.frase}>{r.technical.message}</p> : null}
       {naoPostou ? <p className={ui.mini}>{textoDoStatus(r.status)}. Nada desta revisão foi postado no GitHub.</p> : null}
       {r.prProprio ? <p className={ui.nota}>PR da própria conta revisora: o GitHub não aceita aprovação nem pedido de mudanças do autor.</p> : null}
 
-      <Achados revisao={r} />
+      <Achados revisao={r} nivel={nivel} />
 
-      <Secao titulo="Mais detalhes">
+      <Secao titulo="Mais detalhes" nivel={nivel}>
         {r.criteriosDoCard ? <CriteriosDoCard criterios={r.criteriosDoCard} card={r.card} /> : null}
         {r.checks ? <ChecksDoHead checks={r.checks} /> : null}
-        <Execucao revisao={r} perfis={perfis} />
+        <Execucao revisao={r} perfis={perfis} nivel={dentro} />
         {r.rounds || r.rodadasDoPr ? <Rodadas rodadas={r.rounds} doPr={r.rodadasDoPr} /> : null}
         {r.stages ? <Etapas etapas={r.stages} /> : null}
-        <ReviewCompleto revisao={r} id={idDoReview} />
+        <ReviewCompleto revisao={r} id={idDoReview} nivelDoTexto={nivelDoTexto} />
       </Secao>
 
-      {registro ? <Contestacao key={`${registro.outcome}|${registro.status ?? ''}|${registro.at ?? ''}`} revisao={r} registro={registro} controle={controle} /> : null}
+      {registro ? <Contestacao key={`${registro.outcome}|${registro.status ?? ''}|${registro.at ?? ''}`} revisao={r} registro={registro} controle={controle} nivel={nivel} /> : null}
     </>
   );
 }

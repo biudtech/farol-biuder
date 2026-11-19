@@ -16,7 +16,7 @@ import type { Autor, EntradaDeMemoria, Pessoa, PessoasCruas } from '@/contratos/
 import { textoDoDesfecho, tomDoDesfecho } from '@/historico/rotulos';
 import { dataComAno, nomeDoPr } from '@/radar/formato';
 import {
-  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
+  CONTESTACOES_NO_PROMPT, TETO_DE_ENTRADAS, acaoDaEntrada, avisoDoTeto, contagemDosDesfechos, dataDaEntrada, desfechoDaEntrada, marcaDoPerfil, markdownDosPontos, nomeDaPessoa, papelCurto,
   prDaEntrada, resumoDaCalibracao, rodadasPorPr, taxaDePrimeira, textoDosNumeros, type ContestacaoDoAutor, type RelerPessoas,
 } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
@@ -127,7 +127,7 @@ function Numeros({ autor, contestacoes }: { autor: Autor; contestacoes: number }
           </dl>
           <p className={ui.mini}>
             Dos últimos {n.janelaDias} dias, contados no histórico de revisões do motor: os PRs cuja primeira revisão publicada caiu na janela, quantos foram aprovados nessa primeira e quantas revisões publicadas eles somam{n.bloqueios !== undefined ? ', e quantas dessas revisões pediram mudanças' : ''}.
-            {n.historicoNoTeto ? ' O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.' : ''}
+            {n.historicoNoTeto ? ` ${avisoDoTeto(n)}` : ''}
           </p>
         </>
       ) : null}
@@ -226,9 +226,12 @@ export function Dossie({ login, leitura, editar, cru, ilegiveis, conexao, emDia,
   // a pergunta só existe com edição por salvar: se o estado do motor igualou o rascunho, some
   const pergunta = perguntando && alterado && pronto !== null;
 
-  // o foco vai ao título; pelo Editar papel, quem o pega é o seletor do papel (EditorDoPerfil)
+  // o foco vai ao título; pelo Editar papel, quem o pega é o seletor do papel (EditorDoPerfil).
+  // Sem a leitura pronta não há seletor: o foco vai ao título, e não fica perdido.
   const [editarAoAbrir] = useState(editar === true);
+  const semLeitura = leitura.fase !== 'pronto';
   useEffect(() => { if (!editarAoAbrir) titulo.current?.focus(); }, [editarAoAbrir]);
+  useEffect(() => { if (editarAoAbrir && semLeitura) titulo.current?.focus(); }, [editarAoAbrir, semLeitura]);
 
   // Fechar o dossiê: direto quando não há edição por salvar, com pergunta quando há.
   const pedirFechar = useCallback(() => {

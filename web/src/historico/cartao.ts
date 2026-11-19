@@ -20,10 +20,16 @@ export function tomDoCartao(r: Pick<Revisao, 'action' | 'status'>): TomDoCartao 
   return TOM[tomDoDesfecho(r)];
 }
 
+// O instante do cartão: a resolução e, sem ela, a criação. É o mesmo para o grupo do dia (Lista)
+// e para a hora do contexto e do rodapé: os dois nunca discordam.
+export function instanteDoCartao(r: Pick<Revisao, 'resolvedAt' | 'createdAt'>): number | undefined {
+  return r.resolvedAt ?? r.createdAt;
+}
+
 // "14:32 · rodada 2 de 2 · card BT-9": a rodada vem das rodadas do PR quando o detalhe chegou, e
 // da comparação entre rodadas (a ordem desta) sem ele.
 export function contextoDoCartao(r: Revisao, fuso: string = FUSO_DO_HISTORICO): string {
-  const hora = horaCurta(r.resolvedAt ?? r.createdAt, fuso);
+  const hora = horaCurta(instanteDoCartao(r), fuso);
   const desta = r.rodadasDoPr?.itens.find((item) => item.id === r.id);
   let rodada = '';
   if (desta && r.rodadasDoPr) rodada = `rodada ${desta.rodada} de ${r.rodadasDoPr.itens.length}`;
@@ -41,7 +47,7 @@ function nomesDosPerfis(ids: readonly string[] | undefined, perfis: Perfis): str
 // rodada inteira, senão o das etapas desta sessão; as sessões são as que o motor listou (ou o
 // total de tentativas, quando a lista não veio).
 export function rodapeDoCartao(r: Revisao, perfis: Perfis, fuso: string = FUSO_DO_HISTORICO): string {
-  const hora = horaCurta(r.resolvedAt ?? r.createdAt, fuso);
+  const hora = horaCurta(instanteDoCartao(r), fuso);
   const e = r.execucao;
   const ms = e?.duracaoMs ?? (r.stages?.totalMs ? r.stages.totalMs : undefined);
   const n = e ? (e.sessoes?.length ?? e.tentativas) : 0;
@@ -66,6 +72,7 @@ const RETOMADA: Record<string, string> = {
 };
 
 // O desfecho da tentativa no diário (DESFECHOS, lib/engine/usage-desfechos.js); `ok` não precisa ser dito.
+// O que a tabela não conhece vira um texto neutro: o valor cru do diário não vai à tela.
 const DESFECHO: Record<string, string> = {
   ok: '',
   erro: 'terminou com erro',
@@ -81,7 +88,7 @@ const proprio = (tabela: Record<string, string>, chave: string | undefined): str
 
 // "14:32 · commit novo · opus · perfil · 4 min · US$ 0,40 · retomou a conversa anterior".
 export function textoDaSessao(s: SessaoDaRodada, perfis: Perfis, fuso: string = FUSO_DO_HISTORICO): string {
-  const desfecho = proprio(DESFECHO, s.status) ?? `desfecho ${s.status}`;
+  const desfecho = proprio(DESFECHO, s.status) ?? 'desfecho não reconhecido';
   return juntar(
     horaCurta(s.em, fuso) || 'hora não registrada',
     s.gatilho ? ROTULO_DO_GATILHO[s.gatilho] : '',

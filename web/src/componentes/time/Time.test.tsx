@@ -8,6 +8,8 @@ import { registrarNoConsole } from '@/estado/instancia';
 import { criarStore } from '@/estado/store';
 import type { Resultado } from '@/transporte/cliente';
 import { voltarPara } from '../historico/apoio-de-teste';
+import type { ControleDeAcoes } from '../radar/useAcoes';
+import { Dossie } from './Dossie';
 import { idDoBotao } from './ListaDoTime';
 import { Time } from './Time';
 
@@ -169,12 +171,28 @@ describe('Time: a lista', () => {
     montar({ responder: () => corpo([comNumeros, BRUNO]) });
     await assentar();
     const caixas = cartaoDe('Ana Souza').querySelector('dl') as HTMLElement;
-    expect(caixas.getAttribute('aria-label')).toBe('Últimos 30 dias');
+    // a janela está escrita na tela, e é ela que dá nome às caixas
+    const janela = within(cartaoDe('Ana Souza')).getByText('Últimos 30 dias');
+    expect(caixas.getAttribute('aria-labelledby')).toBe(janela.id);
+    expect(caixas.hasAttribute('aria-label')).toBe(false);
     expect([...caixas.querySelectorAll('div')].map((d) => `${d.querySelector('dt')?.textContent}: ${d.querySelector('dd')?.textContent}`)).toEqual([
       'PRs revisados: 14', 'aprovados de primeira: 9', 'pedidos de mudança: 4',
     ]);
+    // fora do teto do histórico, nada a avisar
+    expect(within(cartaoDe('Ana Souza')).queryByText(/histórico guardado está no teto/)).toBeNull();
     expect(cartaoDe('bruno').querySelector('dl')).toBeNull();
     expect(within(cartaoDe('bruno')).getByText(/^Sem números dos últimos 30 dias/)).toBeTruthy();
+  });
+
+  it('com o histórico no teto, o cartão diz, abaixo das caixas, o que o motor manda dizer', async () => {
+    const noTeto = { ...ANA, numeros: { janelaDias: 30, prs: 14, aprovadosDePrimeira: 9, rodadas: 20, historicoNoTeto: true } };
+    montar({ responder: () => corpo([noTeto, BRUNO]) });
+    await assentar();
+    const cartao = cartaoDe('Ana Souza');
+    const aviso = within(cartao).getByText('O histórico guardado está no teto: valem para os PRs com histórico completo, e um PR com revisão anterior já descartada pode contar como novo.');
+    const caixas = cartao.querySelector('dl') as HTMLElement;
+    // abaixo das caixas
+    expect(caixas.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('Ver dossiê leva ao dossiê', async () => {
@@ -1128,6 +1146,52 @@ describe('Time: as ações do cartão', () => {
     await clicar('Ver dossiê de bruno');
     expect(document.activeElement).toBe(tituloDoDossie());
     expect(secao('Como revisar os PRs desta pessoa').open).toBe(false);
+  });
+
+  it('o Editar papel não sobrevive ao fechar: o mesmo dossiê, reaberto pelo endereço, abre do jeito de sempre', async () => {
+    montar();
+    await assentar();
+    await clicar('Editar papel de bruno');
+    await clicar(VOLTAR);
+    // o avançar do navegador volta ao dossiê
+    await act(async () => { voltarPara('/time?autor=bruno'); });
+    expect(document.activeElement).toBe(tituloDoDossie());
+    expect(secao('Como revisar os PRs desta pessoa').open).toBe(false);
+  });
+
+  it('o Editar papel não sobrevive ao endereço que muda por fora', async () => {
+    montar();
+    await assentar();
+    await clicar('Editar papel de bruno');
+    // o voltar do navegador fecha, e o avançar reabre o mesmo dossiê
+    await act(async () => { voltarPara('/time'); });
+    expect(dossieDe('bruno')).toBeNull();
+    await act(async () => { voltarPara('/time?autor=bruno'); });
+    expect(document.activeElement).toBe(tituloDoDossie());
+    expect(secao('Como revisar os PRs desta pessoa').open).toBe(false);
+  });
+
+  it('Editar papel com o dossiê sem leitura pronta leva o foco ao título, e não o perde', () => {
+    for (const leitura of [{ fase: 'carregando' }, { fase: 'ausente' }, { fase: 'semLista' }] as const) {
+      render(
+        <Dossie
+          login="bruno"
+          leitura={leitura}
+          editar
+          cru={undefined}
+          ilegiveis={0}
+          conexao="conectado"
+          emDia
+          contestacoes={[]}
+          controle={{} as unknown as ControleDeAcoes}
+          relerPessoas={async () => ({ ok: false, texto: '' })}
+          ocupado={false}
+          aoFechar={() => {}}
+        />,
+      );
+      expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: '@bruno' }));
+      cleanup();
+    }
   });
 
   it('Adicionar pessoa é o botão principal do topo e abre o formulário', async () => {

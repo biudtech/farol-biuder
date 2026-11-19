@@ -131,7 +131,17 @@ export function Time({ app = appDoNavegador }: Props) {
     setEditarDe(chaveDaPessoa(login));
     ir(login);
   }, [ir]);
-  const aoFechar = useCallback(() => ir(null), [ir]);
+  const aoFechar = useCallback(() => {
+    setEditarDe(null);
+    ir(null);
+  }, [ir]);
+  // O Editar papel vale só para o dossiê que ele abriu: o endereço que muda por fora (o voltar e
+  // o avançar do navegador, um link) o esquece. Acerto feito no desenho, quando o endereço muda.
+  const [abertoVisto, setAbertoVisto] = useState(aberto);
+  if (abertoVisto !== aberto) {
+    setAbertoVisto(aberto);
+    if (editarDe !== null && (aberto === null || chaveDaPessoa(aberto) !== editarDe)) setEditarDe(null);
+  }
   const aoRecarregar = useCallback(() => setRecarga((n) => n + 1), []);
 
   // Ao fechar o dossiê, o foco volta ao botão que o abriu (ou ao título da lista, se a pessoa

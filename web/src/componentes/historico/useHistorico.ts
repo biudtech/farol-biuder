@@ -113,8 +113,9 @@ export function useDetalhe(
 ): LeituraDoDetalhe | null {
   const [buscado, setBuscado] = useState<{ pedido: string; r: Resultado<DetalheDaRevisao> } | null>(null);
   const id = aberto?.id ?? '';
-  const chave = aberto?.chave ?? '';
   const daPagina = useMemo(() => (id ? itens?.find((item) => item.id === id) : undefined), [itens, id]);
+  // O endereço pode trazer só o id (sem `pr`): da página, a chave é a do próprio item.
+  const chave = aberto?.chave || daPagina?.key || '';
   const buscar = id !== '' && chave !== '' && (daPagina !== undefined || listaLida);
   // da página, a revisão é certa e vai pelo id; fora dela, o endereço pode ser velho, e vale a
   // mais recente do PR (com o aviso de que é outra)
@@ -135,7 +136,8 @@ export function useDetalhe(
     if (daPagina) {
       const chegou = buscado?.pedido === pedido;
       const pronta = { fase: 'pronto' as const, revisao: comOComplemento(daPagina, chegou ? buscado.r : null), outra: false };
-      return chegou ? pronta : { ...pronta, complementando: true as const };
+      // "complementando" só quando há pedido no ar: sem ele, a resposta nunca chegaria
+      return chegou || !buscar ? pronta : { ...pronta, complementando: true as const };
     }
     if (!listaLida) return CARREGANDO;
     if (!chave) return AUSENTE;
@@ -144,5 +146,5 @@ export function useDetalhe(
     if (!r.ok) return { fase: 'erro', texto: mensagemDaFalha(r) || 'A busca da revisão foi interrompida.' };
     if (!r.dados.encontrada) return AUSENTE;
     return { fase: 'pronto', revisao: r.dados.revisao, outra: r.dados.revisao.id !== id };
-  }, [id, chave, daPagina, listaLida, buscado, pedido]);
+  }, [id, chave, daPagina, listaLida, buscado, pedido, buscar]);
 }

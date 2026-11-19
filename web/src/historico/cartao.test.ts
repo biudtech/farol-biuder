@@ -1,7 +1,7 @@
 // O que o cartão de uma revisão do Histórico diz, sem React.
 import { describe, expect, it } from 'vitest';
 import type { Revisao } from '@/contratos/historico';
-import { contextoDoCartao, rodapeDoCartao, temTextoDoReview, textoDaSessao, tomDoCartao } from './cartao';
+import { contextoDoCartao, instanteDoCartao, rodapeDoCartao, temTextoDoReview, textoDaSessao, tomDoCartao } from './cartao';
 
 const SP = 'America/Sao_Paulo';
 // 14:32 em Brasília
@@ -28,6 +28,14 @@ describe('cartão de revisão do Histórico', () => {
     expect(contextoDoCartao(revisao({ resolvedAt: undefined }), SP)).toBe('');
   });
 
+  it('o instante do cartão é a resolução e, sem ela, a criação: o grupo do dia e a hora do contexto usam o mesmo', () => {
+    const criada = Date.UTC(2026, 10, 16, 13, 5);
+    expect(instanteDoCartao(revisao())).toBe(RESOLVIDA);
+    expect(instanteDoCartao(revisao({ resolvedAt: undefined, createdAt: criada }))).toBe(criada);
+    expect(instanteDoCartao(revisao({ resolvedAt: undefined }))).toBeUndefined();
+    expect(contextoDoCartao(revisao({ resolvedAt: undefined, createdAt: criada }), SP)).toBe('10:05');
+  });
+
   it('o rodapé junta só o que o motor mandou: hora, tempo, sessões, custo e perfis', () => {
     const r = revisao({
       execucao: {
@@ -50,7 +58,8 @@ describe('cartão de revisão do Histórico', () => {
       id: 't1', em: RESOLVIDA, status: 'ok', gatilho: 'commit_novo', modelo: 'opus', perfil: 'perfil-b', duracaoMs: 240000, custoUsd: 0.4, retomada: 'retomada',
     }, [{ id: 'perfil-b', label: 'Assinatura B' }], SP)).toBe('14:32 · commit novo · opus · Assinatura B · 4 min · US$ 0,40 · retomou a conversa anterior');
     expect(textoDaSessao({ id: 't2', status: 'erro' }, undefined, SP)).toBe('hora não registrada · terminou com erro');
-    expect(textoDaSessao({ id: 't4', status: 'outro-valor' }, undefined, SP)).toBe('hora não registrada · desfecho outro-valor');
+    // o desfecho que a tela não conhece não aparece cru: o texto é neutro
+    expect(textoDaSessao({ id: 't4', status: 'outro-valor' }, undefined, SP)).toBe('hora não registrada · desfecho não reconhecido');
     expect(textoDaSessao({ id: 't3', status: 'ok', gatilho: 'rodada_extra', retomada: 'nenhuma' }, undefined, SP)).toBe('hora não registrada · rodada extra no mesmo commit');
   });
 

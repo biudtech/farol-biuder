@@ -264,7 +264,7 @@ function lerSessoesDaRodada(v: unknown): SessaoDaRodada[] | undefined {
       em: ehInteiroPositivo(s.em) ? s.em : undefined,
       modelo: textoCheio(s.modelo) ? mascararSegredos(s.modelo) : undefined,
       perfil: textoCheio(s.perfil) ? mascararSegredos(s.perfil) : undefined,
-      status: textoCheio(s.status) ? s.status : 'desconhecido',
+      status: textoCheio(s.status) ? mascararSegredos(s.status) : 'desconhecido',
       gatilho: ehTexto(s.gatilho) && (GATILHOS as readonly string[]).includes(s.gatilho) ? (s.gatilho as Gatilho) : undefined,
       retomada: ehTexto(s.retomada) && RETOMADAS.includes(s.retomada) ? s.retomada : undefined,
       duracaoMs: campo(s.duracaoMs, ehQuantia),
