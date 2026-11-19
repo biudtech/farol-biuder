@@ -63,6 +63,18 @@ test('corpoDoPatch: JSON valido, so com o que mudou, reusando o texto ja seriali
   assert.deepEqual(patch.removidos, ['velho']);
 });
 
+// Dois retratos no mesmo milissegundo trazem a mesma hora do motor: o patch da mudanca de
+// verdade leva o carimbo assim mesmo (o defeito que travava test/sse-estado-delta.test.js).
+test('corpoDoPatch: a hora do motor vai junto mesmo quando nao andou', () => {
+  const anterior = camposSerializados({ status: 'idle', agora: 1000 });
+  const serializado = camposSerializados({ status: 'checking', agora: 1000 });
+  const patch = JSON.parse(corpoDoPatch(serializado, mudancas(anterior, serializado)));
+  assert.deepEqual(patch.campos, { status: 'checking', agora: 1000 });
+  assert.deepEqual(patch.removidos, []);
+  const andou = camposSerializados({ status: 'idle', agora: 1001 });
+  assert.deepEqual(JSON.parse(corpoDoPatch(andou, mudancas(serializado, andou))).campos, { status: 'idle', agora: 1001 });
+});
+
 // Mesclar o patch no estado anterior tem que dar exatamente o snapshot novo: e a
 // unica coisa que o cliente faz com ele, e errar aqui seria a tela divergir do engine
 // sem ninguem perceber.

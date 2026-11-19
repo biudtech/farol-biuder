@@ -10,12 +10,27 @@ import http from 'node:http';
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'farol-test-sse-delta-'));
 process.env.FAROL_HOME = HOME;
 
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 const { Engine } = await import('../server.js');
 const { startServer } = await import('../lib/http-server.js');
 
 let server, base, engine;
+
+// Os limites próprios deste arquivo. Um stream SSE não termina sozinho: caso que falhava
+// antes do `fechar()` deixava a conexão aberta, o `server.close()` esperava por ela para
+// sempre e o processo do arquivo nunca saía (o `--test-timeout` do runner vale por caso,
+// não para o processo que sobra depois deles). Agora todo stream aberto é fechado depois
+// de cada caso, passe ou falhe, e o fim do arquivo derruba as conexões com prazo.
+const LIMITE_DO_CASO_MS = 15000;
+const LIMITE_DA_CONEXAO_MS = 5000;
+const LIMITE_DO_FECHAMENTO_MS = 5000;
+const abertos = new Set();
+
+function fecharTodosOsStreams() {
+  for (const req of abertos) req.destroy();
+  abertos.clear();
+}
 
 before(async () => {
   engine = new Engine();
@@ -26,15 +41,37 @@ before(async () => {
   base = `http://127.0.0.1:${server.address().port}`;
 });
 
-after(() => {
-  try { server && server.close(); } catch { /* ok */ }
-  try { fs.rmSync(HOME, { recursive: true, force: true }); } catch { /* best-effort */ }
+afterEach(() => fecharTodosOsStreams());
+
+after(async () => {
+  try {
+    fecharTodosOsStreams();
+    if (!server) return;
+    // derruba do lado do servidor o que o cliente ainda não soltou: o `close()` sozinho
+    // espera cada conexão aberta terminar, e um SSE não termina
+    server.closeAllConnections();
+    let relogio;
+    const fechou = new Promise((resolve) => server.close(() => resolve(true)));
+    const estourou = new Promise((resolve) => { relogio = setTimeout(() => resolve(false), LIMITE_DO_FECHAMENTO_MS); });
+    const ok = await Promise.race([fechou, estourou]);
+    clearTimeout(relogio);
+    if (!ok) {
+      // falha com mensagem em vez de prender o processo: o que sobrou não segura a saída
+      server.unref();
+      const conexoes = await new Promise((resolve) => server.getConnections((e, n) => resolve(e ? '?' : n)));
+      throw new Error(`o servidor do teste não fechou em ${LIMITE_DO_FECHAMENTO_MS} ms (${conexoes} conexões abertas)`);
+    }
+  } finally {
+    try { fs.rmSync(HOME, { recursive: true, force: true }); } catch { /* best-effort */ }
+  }
 });
 
-// Abre o stream e devolve um coletor de eventos já separados por tipo.
+// Abre o stream e devolve um coletor de eventos já separados por tipo. O stream fica
+// registrado até ser fechado: o `afterEach` fecha o que o caso deixou aberto.
 function abrirStream() {
   return new Promise((resolve, reject) => {
     const req = http.get(base + '/api/events', (res) => {
+      clearTimeout(semResposta);
       const eventos = [];
       let buffer = '';
       res.setEncoding('utf8');
@@ -49,9 +86,14 @@ function abrirStream() {
           if (tipo && dado && (tipo[1] === 'state' || tipo[1] === 'state-patch')) eventos.push({ tipo: tipo[1], dados: dado[1] });
         }
       });
-      resolve({ eventos, headers: res.headers, fechar: () => req.destroy() });
+      resolve({ eventos, headers: res.headers, fechar: () => { abertos.delete(req); req.destroy(); } });
     });
-    req.on('error', reject);
+    abertos.add(req);
+    const semResposta = setTimeout(() => {
+      req.destroy();
+      reject(new Error(`/api/events não respondeu em ${LIMITE_DA_CONEXAO_MS} ms`));
+    }, LIMITE_DA_CONEXAO_MS);
+    req.on('error', (err) => { clearTimeout(semResposta); reject(err); });
   });
 }
 
@@ -66,7 +108,7 @@ async function ate(condicao, limiteMs = 3000) {
   return false;
 }
 
-test('abre com o snapshot inteiro e depois só manda o que mudou', async () => {
+test('abre com o snapshot inteiro e depois só manda o que mudou', { timeout: LIMITE_DO_CASO_MS }, async () => {
   const s = await abrirStream();
   assert.ok(await ate(() => s.eventos.length >= 1), 'o primeiro evento não chegou');
   assert.equal(s.eventos[0].tipo, 'state');
@@ -88,7 +130,7 @@ test('abre com o snapshot inteiro e depois só manda o que mudou', async () => {
   s.fechar();
 });
 
-test('empurrão que não muda nada não vira evento nenhum', async () => {
+test('empurrão que não muda nada não vira evento nenhum', { timeout: LIMITE_DO_CASO_MS }, async () => {
   const s = await abrirStream();
   assert.ok(await ate(() => s.eventos.length >= 1));
   engine.pushState();
@@ -99,7 +141,7 @@ test('empurrão que não muda nada não vira evento nenhum', async () => {
   s.fechar();
 });
 
-test('mesclar os patches no snapshot inicial reproduz o estado do engine', async () => {
+test('mesclar os patches no snapshot inicial reproduz o estado do engine', { timeout: LIMITE_DO_CASO_MS }, async () => {
   const s = await abrirStream();
   assert.ok(await ate(() => s.eventos.length >= 1));
   let estado = JSON.parse(s.eventos[0].dados);
@@ -127,7 +169,7 @@ test('mesclar os patches no snapshot inicial reproduz o estado do engine', async
 
 // Quem conecta depois não pode receber a diferença contra o retrato de OUTRO cliente:
 // ele nunca viu aquele estado, e mesclar sobre o que não tem daria tela divergente.
-test('cliente novo recebe o snapshot inteiro, não o patch do vizinho', async () => {
+test('cliente novo recebe o snapshot inteiro, não o patch do vizinho', { timeout: LIMITE_DO_CASO_MS }, async () => {
   const antigo = await abrirStream();
   assert.ok(await ate(() => antigo.eventos.length >= 1));
   engine.status = 'idle';
@@ -145,7 +187,7 @@ test('cliente novo recebe o snapshot inteiro, não o patch do vizinho', async ()
   antigo.fechar(); novo.fechar();
 });
 
-test('o stream pede para não ser bufferizado por intermediário', async () => {
+test('o stream pede para não ser bufferizado por intermediário', { timeout: LIMITE_DO_CASO_MS }, async () => {
   const s = await abrirStream();
   assert.equal(s.headers['x-accel-buffering'], 'no');
   s.fechar();
