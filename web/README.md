@@ -378,7 +378,7 @@ decide quem é de fora: tira esses PRs da Fila e da contagem e os mostra aqui.
 | Motivo do motor | Filtro | Destaque | Quando volta |
 |---|---|---|---|
 | `decisao_de_gente` | Revisado por gente | "bia aprovou este commit" ou "pediu mudanças neste commit", com o head e a hora do review | no próximo commit |
-| `outra_conta` | Outra conta revisando | "Outra conta está revisando", com quem e, pela label, desde quando | pela label, se ela sair sem review naquele commit ou quando ela caduca (`SINAL_REVISAO_TTL_MS`, 3 horas depois de o Farol vê-la; `VALIDADE_DA_LABEL_HORAS` repete o número e o teste confere); pela saída de cena, no próximo commit |
+| `outra_conta` | Outra conta revisando | "Outra conta está revisando", com quem e, pela label, desde quando | pela label, se ela sair sem review naquele commit ou quando ela caduca (`SINAL_REVISAO_TTL_MS`, 3 horas de label vista pelo Farol, sem contar o tempo com a máquina dormindo; `VALIDADE_DA_LABEL_HORAS` repete o número e o teste confere); pela saída de cena, no próximo commit |
 | `estacionado` | Parado por falha | "Parado por falha", com a frase da parada e o motivo do motor | com commit novo ou pedido novo de revisão (`lib/engine/destrava.js`); a sessão cancelada e a parada sem motivo gravado (`legado`) não voltam sozinhas |
 | `pedido_retirado` | Pedido retirado | "Pedido de revisão retirado", com a hora | quando a revisão for pedida de novo |
 | `regra_manual` | Regra: só no clique | "Regra: só no clique", com a organização ou o autor da regra (`source` `organizacao` ou `autor`); com `escopo_desconhecido` ou `autor_desconhecido`, que há regra mas a organização ou o autor do PR é desconhecido | não volta sozinho: a regra muda no Sistema |

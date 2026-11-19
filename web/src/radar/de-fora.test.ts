@@ -48,7 +48,7 @@ describe('a frase de cada motivo de De fora', () => {
       tom: 'neutro',
       titulo: 'Outra conta está revisando',
       detalhe: 'O PR está com a label de revisão de carla desde 19/11, 18:30.',
-      volta: 'Volta sozinho se a label sair sem review naquele commit, ou 3 horas depois de o Farol ver a label, quando ela vale como esquecida.',
+      volta: 'Volta sozinho se a label sair sem review naquele commit, ou depois de o Farol ver a label por 3 horas, quando ela vale como esquecida.',
     });
     const saida = fraseDoMotivo(item({ motivo: 'outra_conta', quem: ['carla', 'davi'], detalhe: { fonte: 'saida_de_cena' } }), FUSO);
     expect(saida.titulo).toBe('Outra conta está revisando');
@@ -60,7 +60,7 @@ describe('a frase de cada motivo de De fora', () => {
     const { TEMPOS } = await import(/* @vite-ignore */ pathToFileURL(path.join(RAIZ, 'lib/constants.js')).href) as { TEMPOS: { SINAL_REVISAO_TTL_MS: number } };
     expect(VALIDADE_DA_LABEL_HORAS * HORA_MS).toBe(TEMPOS.SINAL_REVISAO_TTL_MS);
     const label = fraseDoMotivo(item({ motivo: 'outra_conta', quem: ['carla'], detalhe: { fonte: 'label' } }), FUSO);
-    expect(label.volta).toContain(`${TEMPOS.SINAL_REVISAO_TTL_MS / HORA_MS} horas depois`);
+    expect(label.volta).toContain(`por ${TEMPOS.SINAL_REVISAO_TTL_MS / HORA_MS} horas,`);
   });
 
   it('parado por falha: o motivo do motor, e volta sozinho com commit ou pedido novo', () => {

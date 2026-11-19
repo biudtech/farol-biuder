@@ -86,7 +86,7 @@ function outraConta(item: PrDeFora, fuso?: string): FraseDoMotivo {
   return {
     ...base,
     detalhe: `O PR está com a label de revisão de ${quem || 'outra conta'}${item.desde ? ` desde ${dataHora(item.desde, fuso)}` : ''}.`,
-    volta: `Volta sozinho se a label sair sem review naquele commit, ou ${VALIDADE_DA_LABEL_HORAS} horas depois de o Farol ver a label, quando ela vale como esquecida.`,
+    volta: `Volta sozinho se a label sair sem review naquele commit, ou depois de o Farol ver a label por ${VALIDADE_DA_LABEL_HORAS} horas, quando ela vale como esquecida.`,
   };
 }
 
