@@ -3,7 +3,13 @@
 // Trocar a credencial do Jira de um site (decisão 3 do redesenho de 19/11/2026). O token de API
 // do Atlassian é segredo: o campo é mascarado e não é controlado pelo React (o valor não entra em
 // estado nenhum), é lido só na hora do envio, vai só no corpo de POST /api/jira/credential e é
-// apagado do campo antes de o pedido sair, dê certo ou não. A resposta é lida só no `ok` e na
+// apagado do campo antes de o pedido sair, dê certo ou não.
+//
+// O token não é senha de login e não pode ir para o gerenciador de senhas do navegador. E-mail
+// mais campo de senha é a forma de um login, e o navegador oferece guardar o campo de senha mesmo
+// com autocomplete="off". Por isso o campo é de texto, com o valor em bolinhas pelo CSS
+// (`-webkit-text-security`, a classe `mascarado`), sem autocompletar, com nome e id que não
+// parecem login, e marcado para os gerenciadores mais comuns o ignorarem. A resposta é lida só no `ok` e na
 // frase da recusa (lerGravacaoDaCredencial): nada do que o motor mandasse de volta chega à tela.
 // O e-mail não é segredo e fica no campo quando o envio falha.
 import { useId, useRef, useState } from 'react';
@@ -28,8 +34,9 @@ export function CredencialDoJira({ cliente, siteId, nome, impedimento }: Props) 
   const [mensagem, setMensagem] = useState<{ tom: 'ok' | 'erro'; texto: string } | null>(null);
   const token = useRef<HTMLInputElement>(null);
   const botao = useRef<HTMLDivElement>(null);
-  const idDoEmail = useId();
-  const idDoToken = useId();
+  const base = useId();
+  const idDoEmail = `farol-jira-conta-${base}`;
+  const idDoToken = `farol-jira-token-${base}`;
   const idDaNota = useId();
 
   function fechar(): void {
@@ -72,18 +79,33 @@ export function CredencialDoJira({ cliente, siteId, nome, impedimento }: Props) 
           </Botao>
         </div>
       ) : (
-        <form className={estilos.formulario} aria-label={`Credencial nova de ${nome}`} onSubmit={(evento) => { evento.preventDefault(); void enviar(); }}>
+        <form className={estilos.formulario} aria-label={`Credencial nova de ${nome}`} autoComplete="off" onSubmit={(evento) => { evento.preventDefault(); void enviar(); }}>
           <p id={idDaNota} className={ui.mini}>
             O token vai só para o motor, que o guarda fora da configuração e nunca o devolve: depois de enviado ele não aparece mais aqui. Gere o token em id.atlassian.com, na conta dona do e-mail.
           </p>
           <div className={estilos.gradeDaRegra}>
             <div className={estilos.campo}>
               <label className={ui.rotulo} htmlFor={idDoEmail}>E-mail da conta do Atlassian</label>
-              <input id={idDoEmail} className={ui.campo} type="email" value={email} autoComplete="off" spellCheck={false} disabled={enviando} onChange={(evento) => setEmail(evento.target.value)} />
+              <input id={idDoEmail} name="farol-jira-conta-atlassian" className={ui.campo} type="email" value={email} autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" data-bwignore disabled={enviando} onChange={(evento) => setEmail(evento.target.value)} />
             </div>
             <div className={estilos.campo}>
               <label className={ui.rotulo} htmlFor={idDoToken}>Token de API do Atlassian</label>
-              <input id={idDoToken} ref={token} className={ui.campo} type="password" autoComplete="new-password" spellCheck={false} aria-describedby={idDaNota} disabled={enviando} />
+              <input
+                id={idDoToken}
+                ref={token}
+                name="farol-jira-token-de-api"
+                className={`${ui.campo} ${estilos.mascarado}`}
+                type="text"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore
+                aria-describedby={idDaNota}
+                disabled={enviando}
+              />
             </div>
           </div>
           <div className={ui.fila}>

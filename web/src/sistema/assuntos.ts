@@ -1,7 +1,9 @@
 // Os assuntos da tela Sistema e a rota de cada um, sem React (desenho de 19/11/2026, decisão 4:
 // a rota guarda o assunto aberto, para o link funcionar). O menu à esquerda lista os assuntos
 // nesta ordem, e `/sistema` sem assunto abre o primeiro. Assunto que não existe é página que não
-// existe (404), e não um assunto qualquer aberto no lugar.
+// existe (404), e não um assunto qualquer aberto no lugar. São os sete do desenho aprovado: a
+// saúde do motor e a rede saíram da tela por decisão do dono, e o diagnóstico continua no motor,
+// pela API (GET /api/doctor e GET /api/diagnostics).
 
 export const ROTA_DO_SISTEMA = '/sistema';
 
@@ -13,7 +15,6 @@ export const ASSUNTOS = [
   { id: 'jira', nome: 'Jira' },
   { id: 'ritmo', nome: 'Ritmo da revisão' },
   { id: 'acesso', nome: 'Quem está conectado' },
-  { id: 'saude', nome: 'Saúde do motor' },
 ] as const;
 
 export type IdDoAssunto = (typeof ASSUNTOS)[number]['id'];

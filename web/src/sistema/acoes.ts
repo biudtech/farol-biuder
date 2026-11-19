@@ -46,8 +46,8 @@ export type AcaoDoSistema =
   | (Base & { tipo: 'automacao'; corpo: CorpoDaAutomacao })
   // As chaves do ritmo que a pessoa alterou. Nenhuma muda o que o motor publica.
   | (Base & { tipo: 'ritmo'; corpo: CorpoDoRitmo })
-  // A ordem de uso dos perfis do Claude, com um perfil um lugar acima.
-  | (Base & { tipo: 'ordemDosPerfis'; corpo: CorpoDaOrdem })
+  // A ordem de uso dos perfis do Claude, com o perfil `perfil` (o id) um lugar acima.
+  | (Base & { tipo: 'ordemDosPerfis'; perfil: string; corpo: CorpoDaOrdem })
   // Encerra (revoga) uma sessão pareada pelo `id`. `atual`: é a deste navegador (o Sair).
   | (Base & { tipo: 'revogarSessao'; id: string; rotulo: string; atual: boolean });
 
@@ -130,9 +130,32 @@ function perguntaDaRegra(acao: Extract<AcaoDoSistema, { tipo: 'regra' }>): Pergu
   };
 }
 
+// Os padrões vazios apagam todos: pergunta antes.
+function perguntaDosPadroes(acao: Extract<AcaoDoSistema, { tipo: 'padroes' }>): PerguntaDoSistema | null {
+  if (acao.texto.trim()) return null;
+  return {
+    titulo: `Apagar todos os padrões do time de ${acao.nome}?`,
+    texto: 'O campo está vazio: salvar apaga todos os padrões do time no motor, e a revisão segue sem eles a partir da próxima que começar. Não dá para desfazer: para voltar, é preciso escrever os padrões de novo.',
+    confirmar: 'Apagar os padrões',
+  };
+}
+
+// O perfil que vai para o topo passa a ser o primeiro que o motor usa. Sendo de chave de API,
+// as revisões saem da assinatura e vão para a API paga, cobrada por uso.
+function perguntaDaOrdem(acao: Extract<AcaoDoSistema, { tipo: 'ordemDosPerfis' }>): PerguntaDoSistema | null {
+  const topo = acao.corpo.claudeProfiles[0];
+  if (!topo || topo.id !== acao.perfil || topo.kind !== 'apikey') return null;
+  return {
+    titulo: `Pôr ${acao.nome} no topo da ordem de uso?`,
+    texto: `${acao.nome} é um perfil de chave de API. No topo, ele é o primeiro que o motor usa: as revisões passam a gastar na API paga, cobrada por uso, e não mais na assinatura. Vale a partir da próxima sessão de revisão. Para voltar, suba um perfil de assinatura.`,
+    confirmar: 'Subir e usar a API paga',
+  };
+}
+
 // A pergunta antes do POST. A conta só pergunta quando a mudança AMPLIA o que o motor publica
-// sozinho, dizendo o efeito de cada item; a que reduz vai direto. As preferências não
-// perguntam: nenhuma muda o que é publicado. Sair e Revogar perguntam sempre.
+// sozinho, dizendo o efeito de cada item; a que reduz vai direto. Os padrões vazios (apagam
+// todos) e o perfil de chave de API que vai para o topo (as revisões passam a gastar na API
+// paga) perguntam; o resto das preferências não. Sair e Revogar perguntam sempre.
 export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | null {
   switch (acao.tipo) {
     case 'conta':
@@ -143,10 +166,10 @@ export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | n
         confirmar: 'Salvar e ampliar a publicação automática',
       };
     case 'regra': return perguntaDaRegra(acao);
-    case 'padroes':
+    case 'padroes': return perguntaDosPadroes(acao);
+    case 'ordemDosPerfis': return perguntaDaOrdem(acao);
     case 'automacao':
     case 'ritmo':
-    case 'ordemDosPerfis':
       return null;
     case 'revogarSessao': return perguntaDeRevogar({ rotulo: acao.rotulo, atual: acao.atual });
   }
@@ -164,7 +187,8 @@ export interface AceiteDoSistema {
   eraAtual?: boolean;
 }
 
-export type DesfechoDoSistema = { tipo: 'ok'; texto: string } | { tipo: 'erro'; texto: string };
+// `encerrouEstaSessao`: a revogação derrubou a sessão deste navegador, e a tela vai ao pareamento.
+export type DesfechoDoSistema = { tipo: 'ok'; texto: string; encerrouEstaSessao?: true } | { tipo: 'erro'; texto: string };
 
 const ESTADO_NA_TELA = 'O que ficou gravado aparece nesta tela quando o estado do motor chegar.';
 
@@ -208,7 +232,7 @@ function desfechoDaOrdem(acao: Extract<AcaoDoSistema, { tipo: 'ordemDosPerfis' }
 }
 
 function desfechoDaRevogacao(acao: Extract<AcaoDoSistema, { tipo: 'revogarSessao' }>, dados: AceiteDoSistema): DesfechoDoSistema {
-  if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' };
+  if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.', encerrouEstaSessao: true };
   return { tipo: 'ok', texto: `O motor revogou a sessão ${acao.nome}: o token dela não vale mais.` };
 }
 

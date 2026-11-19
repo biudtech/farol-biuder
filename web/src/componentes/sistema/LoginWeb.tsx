@@ -4,7 +4,9 @@
 // código colado é credencial de uso único: o campo não é controlado pelo React (o valor não entra
 // em estado nenhum), é lido só na hora do envio e limpo antes de o pedido sair, dê certo ou não.
 // Depois do código o motor encerra o login de qualquer jeito: falhou, é começar de novo.
-import { useId, useRef, useState } from 'react';
+// Com outro login aberto no motor, a tela oferece cancelá-lo: o botão diz de qual perfil é, e
+// pergunta antes, porque quem está no meio daquele login perde o que fez.
+import { useEffect, useId, useRef, useState } from 'react';
 import { Botao, ui } from '@/componentes/ui';
 import { lerCancelamentoDoLogin, lerFimDoLogin, lerInicioDoLogin } from '@/contratos/sistema';
 import { mensagemDaFalha } from '@/historico/consulta';
@@ -31,14 +33,34 @@ interface Props {
   profileId: string;
   nome: string;
   impedimento: string | null;
+  // como a tela chama o perfil de um id (o do login aberto pode ser de outro perfil)
+  nomeDoPerfil?(id: string): string;
 }
 
-export function LoginWeb({ cliente, profileId, nome, impedimento }: Props) {
+export function LoginWeb({ cliente, profileId, nome, impedimento, nomeDoPerfil }: Props) {
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
   const [mensagem, setMensagem] = useState<Mensagem | null>(null);
+  const [perguntando, setPerguntando] = useState(false);
   const codigo = useRef<HTMLInputElement>(null);
+  const voltar = useRef<HTMLButtonElement>(null);
   const idDoCodigo = useId();
   const idDosPassos = useId();
+  const idDaPergunta = useId();
+  const idDoTextoDaPergunta = useId();
+  // ao abrir a pergunta o foco vai ao Voltar sem cancelar; ao voltar, ao botão que a abriu
+  const fila = useRef<HTMLDivElement>(null);
+  const devolverFoco = useRef(false);
+  useEffect(() => {
+    if (perguntando) voltar.current?.focus();
+    else if (devolverFoco.current) {
+      devolverFoco.current = false;
+      fila.current?.querySelector<HTMLButtonElement>('button[aria-label^="Cancelar o login aberto"]')?.focus();
+    }
+  }, [perguntando]);
+  const fecharPergunta = (): void => {
+    devolverFoco.current = true;
+    setPerguntando(false);
+  };
 
   async function abrir(): Promise<void> {
     setMensagem(null);
@@ -83,22 +105,26 @@ export function LoginWeb({ cliente, profileId, nome, impedimento }: Props) {
     setMensagem({ tom: 'ok', texto: `Login feito no perfil ${nome}. O motor relê a validade e o uso do plano: a tela atualiza quando o estado chegar.` });
   }
 
-  async function cancelar(corpo: { loginId: string } | { profileId: string }): Promise<void> {
+  async function cancelar(corpo: { loginId: string } | { profileId: string }, deQuem?: string): Promise<void> {
     if (codigo.current) codigo.current.value = '';
+    setPerguntando(false);
     setEstado({ fase: 'cancelando' });
     const r = await cliente.post(ROTA_DO_FIM_DO_LOGIN, corpo, lerCancelamentoDoLogin);
     setEstado({ fase: 'parado' });
-    if (r.ok) setMensagem({ tom: 'ok', texto: 'O motor encerrou o login aberto. Dá para começar de novo.' });
+    if (r.ok) setMensagem({ tom: 'ok', texto: `O motor encerrou o login aberto${deQuem ? ` do perfil ${deQuem}` : ''}. Dá para começar de novo.` });
     else if (r.falha !== 'cancelado') setMensagem({ tom: 'erro', texto: mensagemDaFalha(r) || 'O motor não respondeu ao cancelamento.' });
   }
 
   const aberto = estado.fase === 'aberto' || estado.fase === 'enviando';
   const outroLogin = mensagem?.perfilAberto;
+  // o perfil do login aberto: o que o motor disse, ou este, quando ele não disse
+  const idDoAberto = outroLogin || profileId;
+  const nomeDoAberto = idDoAberto === profileId ? nome : nomeDoPerfil?.(idDoAberto) || idDoAberto;
 
   return (
     <div className={estilos.bloco}>
       {!aberto ? (
-        <div className={ui.fila}>
+        <div ref={fila} className={ui.fila}>
           <Botao
             pequeno
             disabled={impedimento !== null || estado.fase === 'cancelando'}
@@ -108,14 +134,15 @@ export function LoginWeb({ cliente, profileId, nome, impedimento }: Props) {
           >
             Refazer login
           </Botao>
-          {outroLogin !== undefined ? (
+          {outroLogin !== undefined && !perguntando ? (
             <Botao
               pequeno
               fantasma
               ocupado={estado.fase === 'cancelando' ? 'Cancelando…' : false}
-              onClick={() => { void cancelar({ profileId: outroLogin || profileId }); }}
+              aria-label={`Cancelar o login aberto do perfil ${nomeDoAberto}`}
+              onClick={() => setPerguntando(true)}
             >
-              Cancelar o login aberto
+              Cancelar o login aberto de {nomeDoAberto}
             </Botao>
           ) : null}
         </div>
@@ -148,6 +175,28 @@ export function LoginWeb({ cliente, profileId, nome, impedimento }: Props) {
           </div>
         </form>
       )}
+      {!aberto && outroLogin !== undefined && perguntando ? (
+        <div
+          className={estilos.pergunta}
+          role="group"
+          aria-labelledby={idDaPergunta}
+          aria-describedby={idDoTextoDaPergunta}
+          onKeyDown={(evento) => {
+            if (evento.key !== 'Escape') return;
+            evento.stopPropagation();
+            fecharPergunta();
+          }}
+        >
+          <p id={idDaPergunta} className={estilos.tituloDaPergunta}>Cancelar o login aberto do perfil {nomeDoAberto}?</p>
+          <p id={idDoTextoDaPergunta} className={ui.mini}>
+            O motor encerra o login do Claude aberto no perfil {nomeDoAberto}. Se alguém estiver no meio desse login, o código que a página mostrar não vale mais e é preciso começar de novo. O login que já estava feito no perfil não muda.
+          </p>
+          <div className={estilos.botoesDaPergunta}>
+            <button ref={voltar} type="button" className={`${ui.botao} ${ui.fantasma}`} onClick={fecharPergunta}>Voltar sem cancelar</button>
+            <Botao primario onClick={() => { void cancelar({ profileId: idDoAberto }, nomeDoAberto); }}>Cancelar o login do perfil {nomeDoAberto}</Botao>
+          </div>
+        </div>
+      ) : null}
       <div role="status" aria-live="polite" aria-label={`Resultado do login do perfil ${nome}`}>
         {mensagem ? <p className={mensagem.tom === 'ok' ? ui.mini : ui.erro}>{mensagem.tom === 'erro' ? 'Erro: ' : ''}{mensagem.texto}</p> : null}
       </div>

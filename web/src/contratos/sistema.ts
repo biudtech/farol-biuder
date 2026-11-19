@@ -3,9 +3,11 @@
 //   lib/engine/contas-config.js), `modelos` (catalogoParaTela, lib/modelos.js), `claudePerfis`
 //   (perfisParaTela, lib/engine/perfil-claude.js), `jiraSites` (maskJiraSites,
 //   lib/jira/sites.js) e, de `config` (configParaFora, lib/engine/chave-do-perfil.js), as
-//   chaves de automação, os perfis do Claude e as chaves que só mudam por arquivo;
+//   chaves de automação e os perfis do Claude. Do `doctor`, só o que o assunto Claude usa: a
+//   tela não mostra mais a saúde do motor nem a rede (decisão do dono), e o diagnóstico fica na
+//   API do motor (GET /api/doctor e GET /api/diagnostics), que a tela não chama;
 // - das rotas: POST /api/auth/sessions e /api/auth/revoke (lib/local-auth/acesso.js),
-//   GET /api/doctor e /api/diagnostics, POST /api/claude/profile-test e /api/jira/test, e as
+//   POST /api/claude/profile-test e /api/jira/test, e as
 //   respostas do login da assinatura (POST /api/claude/login-web/*, lib/engine/login-web.js) e
 //   da troca da credencial do Jira (POST /api/jira/credential).
 //
@@ -15,15 +17,15 @@
 // único corpo de perfis que a tela manda (Subir na ordem, src/sistema/perfis.ts) é remontado
 // campo a campo destes tipos, sem chave nem pasta, e o motor repõe as duas que já guardava. Valor curto que
 // chega em formato de credencial conta como ausente (`textoSeguro`), e mensagem do motor
-// (erro, motivo, aviso, o relatório de diagnóstico) fica, com o trecho trocado por
+// (erro, motivo, aviso) fica, com o trecho trocado por
 // "[segredo omitido]" (`mensagemSegura`, ./segredos).
 import {
-  campo, ehBooleano, ehListaDeTextos, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, semAusentes,
+  campo, ehBooleano, ehNumero, ehObjeto, ehTexto, lerItens, lerLista, semAusentes,
   type Leitor, type LeitorDeItem, type Registrar,
 } from './formas';
 import { mascararSegredos, mensagemSegura, semSegredos, textoSeguro } from './segredos';
 
-// ---------- `config`: automação, perfis do Claude e chaves só de arquivo ----------
+// ---------- `config`: automação e perfis do Claude ----------
 
 // Um perfil do Claude como a tela o mostra. A chave (`apiKey`) e a pasta do perfil de
 // assinatura (`dir`) não são lidas nem guardadas: da chave só a presença (`temChave`), e a
@@ -52,12 +54,6 @@ export interface ConfigDoSistema {
   reviewEffort?: string;
   claudeProfiles?: PerfilDoClaude[];
   claudeProfileId?: string;
-  // só por arquivo, com reinício do motor
-  bind?: string;
-  hostPublico?: string;
-  origensPermitidas?: string[];
-  port?: number;
-  localAuth?: string;
   // Não vem do motor: quantas coisas com cara de segredo a borda descartou desta chave.
   segredosDescartados?: number;
   // Não vem do motor: quantos perfis chegaram fora da forma e ficaram de fora da lista.
@@ -90,11 +86,6 @@ export function lerConfigDoSistema(valor: unknown, registrar: Registrar): Config
     reviewModel: campo(valor.reviewModel, ehTexto),
     reviewEffort: campo(valor.reviewEffort, ehTexto),
     claudeProfileId: campo(valor.claudeProfileId, ehTexto),
-    bind: campo(valor.bind, ehTexto),
-    hostPublico: campo(valor.hostPublico, ehTexto),
-    origensPermitidas: campo(valor.origensPermitidas, ehListaDeTextos),
-    port: campo(valor.port, ehNumero),
-    localAuth: campo(valor.localAuth, ehTexto),
   });
   if (Array.isArray(valor.claudeProfiles)) {
     // a lista passa por `semSegredos` só para contar o que chegou com cara de segredo
@@ -198,7 +189,7 @@ const lerContaRevisora: LeitorDeItem<ContaRevisora> = (v) => {
 
 export const lerContas: Leitor<ContaRevisora[]> = lerLista('accounts', lerContaRevisora);
 
-// ---------- `doctor`: a saúde ----------
+// ---------- `doctor`: o que o assunto Claude usa ----------
 
 export interface PerfilNaSaude {
   id: string;
@@ -207,62 +198,12 @@ export interface PerfilNaSaude {
   tipo: 'chave' | 'assinatura' | 'desconhecido';
 }
 
-// A avaliação técnica dos PRs revisados, como o motor a mediu (lib/technical-review/estado.js):
-// `pronta` diz se ela roda para alguém, e `detalhe` é o texto do motor (a ferramenta, o
-// cadastro e o efeito do que falta), que a tela escreve sem remontar.
-export interface AvaliacaoTecnicaNaSaude {
-  pronta: boolean;
-  detalhe: string;
-}
-
-// O que o diagnóstico do motor mede (Engine.doctor, server.js). Os caminhos de pasta que ele
-// traz (`home`, `workspace`) não são lidos.
-// `doctor.saude`: a saúde do próprio motor (saudeDoMotor, lib/engine/saude-do-motor.js), medida a
-// cada diagnóstico: o início do processo, o commit do código (null na imagem, que não leva a pasta
-// .git), o disco da pasta de dados e a telemetria gravando no banco.
-export interface SaudeDoMotor {
-  medidoEm?: number;
-  noArDesde?: number;
-  commit?: string;
-  disco?: { livreBytes: number; totalBytes: number };
-  telemetria?: { consumoNoBanco: boolean; historicoNoBanco: boolean; ultimaEscritaEm?: number };
-}
-
-function lerSaudeDoMotor(v: unknown): SaudeDoMotor | undefined {
-  if (!ehObjeto(v)) return undefined;
-  const motor: SaudeDoMotor = {};
-  if (ehNumero(v.medidoEm)) motor.medidoEm = v.medidoEm;
-  if (ehNumero(v.noArDesde) && v.noArDesde > 0) motor.noArDesde = v.noArDesde;
-  if (ehTexto(v.commit) && /^[0-9a-f]{7,40}$/.test(v.commit)) motor.commit = v.commit;
-  const d = v.disco;
-  if (ehObjeto(d) && ehNumero(d.livreBytes) && ehNumero(d.totalBytes) && d.totalBytes > 0 && d.livreBytes >= 0 && d.livreBytes <= d.totalBytes) motor.disco = { livreBytes: d.livreBytes, totalBytes: d.totalBytes };
-  const t = v.telemetria;
-  if (ehObjeto(t) && ehBooleano(t.consumoNoBanco) && ehBooleano(t.historicoNoBanco)) {
-    motor.telemetria = { consumoNoBanco: t.consumoNoBanco, historicoNoBanco: t.historicoNoBanco };
-    if (ehNumero(t.ultimaEscritaEm) && t.ultimaEscritaEm > 0) motor.telemetria.ultimaEscritaEm = t.ultimaEscritaEm;
-  }
-  return motor;
-}
-
+// Do diagnóstico do motor (Engine.doctor, server.js) a tela lê só o estado de cada perfil do
+// Claude (`claudeAuth`) e se o perfil em uso está pronto (`claudePerfilPronto`): é o que o
+// assunto Claude e o resumo dele no menu mostram. Os caminhos de pasta não são lidos.
 export interface Saude {
-  node?: string;
-  gh?: string;
-  claude?: string;
-  ghAuth?: boolean;
-  root?: boolean;
-  instanciaIsolada?: boolean;
   claudeAuth: PerfilNaSaude[];
   claudePerfilPronto?: boolean;
-  claudePerfilTipo?: string;
-  claudePerfilFalta?: string;
-  avaliacaoTecnica?: AvaliacaoTecnicaNaSaude;
-  motor?: SaudeDoMotor;
-  checkedAt?: number;
-}
-
-function lerAvaliacaoTecnica(v: unknown): AvaliacaoTecnicaNaSaude | undefined {
-  if (!ehObjeto(v) || !ehBooleano(v.pronta) || !ehTexto(v.detalhe)) return undefined;
-  return { pronta: v.pronta, detalhe: v.detalhe };
 }
 
 const lerPerfilNaSaude: LeitorDeItem<PerfilNaSaude> = (v) => {
@@ -271,34 +212,15 @@ const lerPerfilNaSaude: LeitorDeItem<PerfilNaSaude> = (v) => {
   return semAusentes({ id: v.id, label: textoSeguro(v.label) || undefined, ready: campo(v.ready, ehBooleano), tipo });
 };
 
-function saudeDe(v: Record<string, unknown>): Saude {
-  return semAusentes({
-    node: campo(v.node, ehTexto) || undefined,
-    gh: campo(v.gh, ehTexto) || undefined,
-    claude: campo(v.claude, ehTexto) || undefined,
-    ghAuth: campo(v.ghAuth, ehBooleano),
-    root: campo(v.root, ehBooleano),
-    instanciaIsolada: campo(v.instanciaIsolada, ehBooleano),
-    claudeAuth: lerItens(v.claudeAuth, lerPerfilNaSaude)?.itens ?? [],
-    claudePerfilPronto: campo(v.claudePerfilPronto, ehBooleano),
-    claudePerfilTipo: campo(v.claudePerfilTipo, ehTexto),
-    claudePerfilFalta: campo(v.claudePerfilFalta, ehTexto),
-    avaliacaoTecnica: lerAvaliacaoTecnica(v.avaliacaoTecnica),
-    motor: lerSaudeDoMotor(v.saude),
-    checkedAt: campo(v.checkedAt, ehNumero),
-  });
-}
-
 // `null` é valor do motor: o diagnóstico ainda não rodou.
 export const lerSaude: Leitor<Saude | null> = (valor) => {
   if (valor === null) return null;
-  return ehObjeto(valor) ? saudeDe(valor) : undefined;
+  if (!ehObjeto(valor)) return undefined;
+  return semAusentes({
+    claudeAuth: lerItens(valor.claudeAuth, lerPerfilNaSaude)?.itens ?? [],
+    claudePerfilPronto: campo(valor.claudePerfilPronto, ehBooleano),
+  });
 };
-
-// A resposta de GET /api/doctor: o mesmo objeto, sem envelope.
-export function lerSaudeDaRota(bruto: unknown): Saude | null {
-  return ehObjeto(bruto) ? saudeDe(bruto) : null;
-}
 
 // ---------- `modelos`: o catálogo e a versão do Claude Code ----------
 
@@ -538,21 +460,6 @@ export function lerTesteDoJira(bruto: unknown): TesteDoJira | null {
   return bruto.ok
     ? semAusentes({ ok: true as const, quem: textoSeguro(bruto.quem) || undefined })
     : semAusentes({ ok: false as const, code: campo(bruto.code, ehTexto), motivo: mensagemSegura(bruto.motivo) });
-}
-
-// A resposta de GET /api/diagnostics: o relatório em markdown, que o motor já entrega com os
-// segredos mascarados (lib/engine/diagnostico.js), e as falhas registradas, de que a tela só
-// usa a contagem. É texto livre: a borda não tem como conferir campo a campo. O que ainda
-// vier em formato de credencial é trocado por "[segredo omitido]", e a tela o desenha como
-// markdown, sem HTML.
-export interface Diagnostico {
-  markdown: string;
-  falhas: number;
-}
-
-export function lerDiagnostico(bruto: unknown): Diagnostico | null {
-  if (!ehObjeto(bruto) || bruto.ok !== true || !ehTexto(bruto.markdown)) return null;
-  return { markdown: mascararSegredos(bruto.markdown), falhas: Array.isArray(bruto.falhas) ? bruto.falhas.length : 0 };
 }
 
 // ---------- o login da assinatura e a credencial do Jira ----------

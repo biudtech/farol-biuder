@@ -24,9 +24,9 @@
 .par dt { color: var(--muted); font-weight: 700; }
 .par dd { margin: 0; min-width: 0; text-align: right; }
 
-/* as listas de linhas: verificações e sessões */
+/* a lista das sessões */
 .linhas { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-.verificacao, .sessao {
+.sessao {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,7 +35,7 @@
   border-bottom: 1px solid var(--borda-suave);
   min-width: 0;
 }
-.verificacao:last-child, .sessao:last-child { border-bottom: 0; }
+.sessao:last-child { border-bottom: 0; }
 .texto { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .nome { font-weight: 700; }
 .anuncio { display: flex; align-items: center; gap: 8px; }
@@ -56,6 +56,9 @@
 
 /* os formulários */
 .campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* O token do Jira: campo de texto com o valor em bolinhas. Campo de senha o navegador oferece
+   ao gerenciador de senhas mesmo com autocomplete="off"; texto mascarado por CSS não. */
+.mascarado { -webkit-text-security: disc; }
 .grade, .desfechos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .opcao { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; min-width: 0; }
 .opcao input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
@@ -101,14 +104,6 @@
 }
 .tituloDaPergunta { font-size: 15px; font-weight: 800; }
 .botoesDaPergunta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-
-.relatorio {
-  padding: 12px 14px;
-  max-height: 480px;
-  overflow: auto;
-  border: 1px solid var(--borda-suave);
-  border-radius: var(--radius-linha);
-}
 
 /* O menu dos assuntos à esquerda e o assunto aberto à direita (redesenho de 19/11/2026). */
 .sistema { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }

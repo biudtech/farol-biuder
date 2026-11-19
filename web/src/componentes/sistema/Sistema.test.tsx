@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '@/contratos/snapshot';
 import { ESTADO_INICIAL, type App, type EstadoDoApp } from '@/estado/app';
@@ -151,7 +153,6 @@ const assentar = async () => { await act(async () => { for (let i = 0; i < 6; i 
 
 // Cada assunto é uma região com o nome do título; dentro de alguns, um bloco também é região.
 // Só o assunto aberto aparece: `secao` abre o assunto da região pedida, como o clique no menu.
-const SAUDE = 'Saúde do motor';
 const CONTA_E_POLITICA = 'Conta revisora';
 const REGRAS = 'Regras por organização e autor';
 const PADROES = 'Padrões do time';
@@ -160,10 +161,9 @@ const AUTOMACAO = 'Modelo e sessões';
 const JIRA = 'Jira';
 const RITMO = 'Ritmo da revisão';
 const SESSOES_PAREADAS = 'Quem está conectado';
-const REDE_E_ACESSO = 'Rede e acesso';
 const ASSUNTO_DA_SECAO: Record<string, IdDoAssunto> = {
-  [SAUDE]: 'saude', [CONTA_E_POLITICA]: 'conta', [REGRAS]: 'regras', [PADROES]: 'padroes', [CLAUDE]: 'claude', [AUTOMACAO]: 'claude',
-  [JIRA]: 'jira', [RITMO]: 'ritmo', [SESSOES_PAREADAS]: 'acesso', [REDE_E_ACESSO]: 'acesso',
+  [CONTA_E_POLITICA]: 'conta', [REGRAS]: 'regras', [PADROES]: 'padroes', [CLAUDE]: 'claude', [AUTOMACAO]: 'claude',
+  [JIRA]: 'jira', [RITMO]: 'ritmo', [SESSOES_PAREADAS]: 'acesso',
 };
 const secao = (nome: string) => {
   const assunto = ASSUNTO_DA_SECAO[nome];
@@ -209,8 +209,26 @@ describe('Sistema: o menu e a rota', () => {
       'OK:Jirabiud.atlassian.net',
       'OK:Ritmo da revisãoChecagem a cada 5 minutos',
       'OK:Quem está conectado2 ativas',
-      'OK:Saúde do motor12 verificações OK',
     ]);
+  });
+
+  it('só os sete assuntos do desenho: sem Saúde do motor e sem Rede e acesso, e /sistema/saude é 404', async () => {
+    montar();
+    await assentar();
+    expect(itensDoMenu()).toHaveLength(7);
+    expect(screen.queryByText('Saúde do motor')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Saúde do motor' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Rede e acesso' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /diagnóstico|relatório/ })).toBeNull();
+    // o assunto Quem está conectado não diz mais por onde o motor escuta
+    secao(SESSOES_PAREADAS);
+    expect(screen.queryByText(/origensPermitidas|hostPublico|localAuth|\(bind\)/)).toBeNull();
+    cleanup();
+    const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', estadoEmDia: true, snapshot: snapshotDe(BRUTO) });
+    const app = { store, cliente: { get: vi.fn(), post: vi.fn(async () => ({ ok: true, dados: { sessoes: [], descartadas: 0 } })) }, dispensarRecados: vi.fn(), esquecerSessao: vi.fn() } as unknown as App;
+    caminhoDaRota.atual = '/sistema/saude';
+    const { container } = render(<SistemaNaRota app={app}><p>página da rota</p></SistemaNaRota>);
+    expect(container.textContent).toBe('página da rota');
   });
 
   it('/sistema abre o primeiro assunto; o caminho do assunto abre ele, marcado no menu', async () => {
@@ -235,6 +253,22 @@ describe('Sistema: o menu e a rota', () => {
     expect((na(PADROES).getByLabelText('Texto dos padrões, um por linha') as HTMLTextAreaElement).value).toBe('Teste em todo endpoint.');
     expect(resumoDe(PADROES).textContent).toContain('alteração por salvar');
     expect(screen.getByText(/^Aviso: há edição por salvar nesta tela \(padrões do time\)\. Trocar de assunto não a perde/)).toBeTruthy();
+  });
+
+  it('no celular, em /sistema sem assunto, nenhum item do menu fica marcado como a página atual', async () => {
+    const celular = vi.fn((consulta: string) => ({ matches: consulta === '(max-width: 760px)', media: consulta, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.stubGlobal('matchMedia', celular);
+    try {
+      montar();
+      await assentar();
+      expect(itensDoMenu().filter((a) => a.hasAttribute('aria-current'))).toEqual([]);
+      // com o assunto no endereço, ele é a página atual
+      secao(JIRA);
+      expect(itensDoMenu().filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.getAttribute('href'))).toEqual(['/sistema/jira']);
+      expect(celular).toHaveBeenCalledWith('(max-width: 760px)');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('no celular o endereço sem assunto é a lista; com assunto, o Voltar aos assuntos leva à lista', async () => {
@@ -284,12 +318,14 @@ describe('Sistema: o menu e a rota', () => {
   it('campo mascarado só para os dois segredos digitados: o token do Jira e o código do login', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/claude/login-web/start' ? corpo({ ok: true, loginId: 'l1', url: 'https://claude.com/cai/oauth/authorize?code=true' }) : undefined) });
     await assentar();
-    expect(t.container.querySelectorAll('input[type="password"]')).toHaveLength(0);
+    // mascarado é o campo de senha ou o de texto com a máscara por CSS (o token do Jira)
+    const camposMascarados = () => [...t.container.querySelectorAll('input')].filter((campo) => campo.type === 'password' || /mascarado/.test(campo.className));
+    expect(camposMascarados()).toHaveLength(0);
     await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
     await clicarEm(na(CLAUDE), /^Assinatura/);
     await clicarEm(na(CLAUDE), 'Refazer o login do perfil Assinatura');
     await assentar();
-    const mascarados = [...t.container.querySelectorAll('input[type="password"]')].map((campo) => ((campo as HTMLInputElement).labels?.[0]?.textContent ?? ''));
+    const mascarados = camposMascarados().map((campo) => (campo.labels?.[0]?.textContent ?? ''));
     expect(mascarados.sort()).toEqual(['Código da página de login', 'Token de API do Atlassian']);
     // nenhum outro rótulo pede segredo
     const rotulos = [...t.container.querySelectorAll('label')].map((l) => l.textContent ?? '').filter((r) => !mascarados.includes(r));
@@ -308,7 +344,6 @@ describe('Sistema: o menu e a rota', () => {
   it('cada assunto diz o que falta quando o motor não mandou a parte dele', async () => {
     montar({ bruto: { app: BRUTO.app } });
     await assentar();
-    expect(na(SAUDE).getByText(/^Atenção: o motor não mandou o diagnóstico/)).toBeTruthy();
     expect(na(CONTA_E_POLITICA).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
     expect(na(REGRAS).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
     expect(na(PADROES).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
@@ -320,99 +355,12 @@ describe('Sistema: o menu e a rota', () => {
   });
 
   it('a bolinha do menu diz o estado de cada assunto', async () => {
-    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false }, accounts: [{ ...CONTA, owners: [] }], jiraSites: [] } });
+    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, claudePerfilPronto: false }, accounts: [{ ...CONTA, owners: [] }], jiraSites: [] } });
     await assentar();
-    expect(resumoDe(SAUDE).querySelector('[data-tom]')?.getAttribute('data-tom')).toBe('ruim');
-    expect(resumoDe(SAUDE).textContent).toBe('Problema:Saúde do motorAutenticação do GitHub e mais 1');
+    expect(resumoDe(CLAUDE).querySelector('[data-tom]')?.getAttribute('data-tom')).toBe('ruim');
+    expect(resumoDe(CLAUDE).textContent).toBe('Problema:Claudeo perfil em uso não está pronto');
     expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Atenção:Conta revisora@farol-bot, sem organização monitorada');
     expect(resumoDe(JIRA).textContent).toBe('Sem dado ou desligado:Jiradesligado');
-  });
-});
-
-describe('Sistema: saúde', () => {
-  const itens = () => within(na(SAUDE).getByRole('list', { name: 'Verificações do diagnóstico' })).getAllByRole('listitem');
-  const textos = () => itens().map((li) => li.textContent);
-
-  it('mostra cada verificação com o estado num chip em texto, e a versão do motor', async () => {
-    montar();
-    await assentar();
-    expect(textos()).toEqual([
-      'Node: v24.22.1OK',
-      'GitHub CLI: gh version 2.80.0OK',
-      'Autenticação do GitHub: autenticadoOK',
-      'Claude Code: 2.1.300 (Claude Code)OK',
-      'Usuário do sistema: usuário comumOK',
-      'Perfil do Claude que o motor usa: pronto (assinatura)OK',
-      'Perfil de assinatura: Assinatura: prontoOK',
-      'Perfil de chave de API: Chave: prontoOK',
-      'Avaliação técnica: ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declaradoOK',
-      'Escrita no GitHub: instância normal: o motor publica pelos gatesOK',
-      'Versão do Claude Code: 2.1.300 é a mais recenteOK',
-      'Monitoramento da conta: @farol-bot vigiando biudtechOK',
-    ]);
-    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, nenhuma pede atenção.');
-    expect(na(SAUDE).getByText(/^Motor 3\.0\.0-dev, diagnóstico feito em/)).toBeTruthy();
-  });
-
-  it('o que não está certo pede atenção em texto; o que para a revisão é vermelho, o resto âmbar', async () => {
-    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false, claudePerfilPronto: false, claudePerfilFalta: 'login' }, modelos: { ...BRUTO.modelos, cli: { instalada: '2.1.200', maisRecente: '2.1.300', atualizada: false, atrasada: true } } } });
-    await assentar();
-    const chip = (trecho: string) => itens().find((li) => li.textContent?.includes(trecho))?.querySelector('[data-tom]');
-    expect(textos()).toContain('Autenticação do GitHub: sem autenticaçãoAtenção');
-    expect(chip('Autenticação do GitHub')?.getAttribute('data-tom')).toBe('ruim');
-    expect(chip('Perfil do Claude que o motor usa')?.getAttribute('data-tom')).toBe('ruim');
-    expect(chip('Versão do Claude Code')?.getAttribute('data-tom')).toBe('aviso');
-    expect(chip('Node')?.getAttribute('data-tom')).toBe('ok');
-    expect(na(SAUDE).getByRole('status', { name: 'Resumo da saúde' }).textContent).toBe('12 verificações, 3 pedem atenção.');
-  });
-
-  it('diagnóstico que ainda não rodou é dito, e não vira lista de falhas', async () => {
-    montar({ bruto: { ...BRUTO, doctor: null } });
-    await assentar();
-    expect(na(SAUDE).getByText(/ainda não rodou nesta execução do motor\. Rode-o abaixo/)).toBeTruthy();
-    expect(textos()).toEqual(['Versão do Claude Code: 2.1.300 é a mais recenteOK', 'Monitoramento da conta: @farol-bot vigiando biudtechOK']);
-    expect(resumoDe(SAUDE).textContent).toBe('Sem dado ou desligado:Saúde do motordiagnóstico ainda não rodou');
-  });
-
-  it('Rodar o diagnóstico de novo chama GET /api/doctor; enquanto roda, as linhas dizem Conferindo e o botão fica ocupado', async () => {
-    const resposta = adiada();
-    const t = montar({ responder: (caminho) => (caminho === '/api/doctor' ? resposta.promessa : REDE) });
-    await assentar();
-    expect(na(SAUDE).getByText(/Não abre sessão de IA e não consome o plano nem a chave/)).toBeTruthy();
-    await clicarEm(na(SAUDE), 'Rodar o diagnóstico de novo');
-    const ocupado = na(SAUDE).getByRole('button', { name: 'Rodando o diagnóstico…' }) as HTMLButtonElement;
-    expect(ocupado.disabled).toBe(true);
-    // as linhas que o doctor refaz dizem Conferindo; as que vêm de outro lugar ficam
-    expect(textos().filter((texto) => texto?.endsWith('Conferindo'))).toHaveLength(10);
-    expect(textos()).toContain('Monitoramento da conta: @farol-bot vigiando biudtechOK');
-    await resposta.soltar(corpo({ ...BRUTO.doctor, checkedAt: 1763300060000 }));
-    expect(t.get.mock.calls.map(([caminho]) => caminho)).toEqual(['/api/doctor']);
-    expect(na(SAUDE).getByRole('status', { name: 'Resultado do diagnóstico' }).textContent).toContain('O motor refez o diagnóstico');
-    expect(textos().some((texto) => texto?.endsWith('Conferindo'))).toBe(false);
-  });
-
-  it('falha ao rodar o diagnóstico aparece como erro, e a lista anterior fica', async () => {
-    montar();
-    await assentar();
-    await clicarEm(na(SAUDE), 'Rodar o diagnóstico de novo');
-    await assentar();
-    expect(na(SAUDE).getByRole('status', { name: 'Resultado do diagnóstico' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede). O que está acima é do diagnóstico anterior.');
-    expect(itens()).toHaveLength(12);
-  });
-
-  it('o relatório é o markdown do motor, pedido em GET /api/diagnostics, com o botão ocupado enquanto carrega', async () => {
-    const resposta = adiada();
-    const t = montar({ responder: (caminho) => (caminho === '/api/diagnostics' ? resposta.promessa : REDE) });
-    await assentar();
-    await clicarEm(na(SAUDE), 'Carregar o relatório');
-    expect((na(SAUDE).getByRole('button', { name: 'Carregando o relatório…' }) as HTMLButtonElement).disabled).toBe(true);
-    await resposta.soltar(corpo({ ok: true, markdown: '# Diagnóstico do Farol\n\n## Ambiente\n\n- ok · Node: v24.22.1\n', falhas: [{}, {}] }));
-    expect(t.get.mock.calls.map(([caminho]) => caminho)).toEqual(['/api/diagnostics']);
-    const relatorio = na(SAUDE).getByRole('region', { name: 'Relatório do motor' });
-    expect(within(relatorio).getByRole('heading', { name: 'Diagnóstico do Farol' })).toBeTruthy();
-    expect(relatorio.textContent).toContain('ok · Node: v24.22.1');
-    expect(na(SAUDE).getByText('O motor tem 2 falhas registradas no relatório.')).toBeTruthy();
-    expect(na(SAUDE).getByRole('button', { name: 'Carregar o relatório de novo' })).toBeTruthy();
   });
 });
 
@@ -1014,10 +962,39 @@ describe('Sistema: Claude', () => {
     await assentar();
     await abrir('Chave');
     await clicarEm(perfil('Chave'), 'Subir Chave na ordem de uso');
+    await clicarEm(perfil('Chave'), 'Subir e usar a API paga: Chave');
     await assentar();
     expect(t.envios()).toEqual([['/api/settings', { claudeProfileId: 'api', claudeProfiles: [{ id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '' }, { id: 'plano', label: 'Assinatura', kind: 'dir' }] }]]);
     expect(JSON.stringify(t.envios())).not.toMatch(/apiKey|\/home\/farol|temChave|budget/);
     expect(regiao().textContent).toContain('O motor gravou a ordem de uso: Chave, Assinatura.');
+  });
+
+  it('o perfil de chave de API que vai para o topo pergunta antes, dizendo que as revisões passam a gastar na API paga', async () => {
+    const t = montar();
+    await assentar();
+    await abrir('Chave');
+    await clicarEm(perfil('Chave'), 'Subir Chave na ordem de uso');
+    const pergunta = perfil('Chave').getByRole('group', { name: 'Pôr Chave no topo da ordem de uso?' });
+    expect(pergunta.textContent).toContain('as revisões passam a gastar na API paga');
+    expect(t.envios()).toEqual([]);
+    await clicarEm(perfil('Chave'), 'Voltar sem enviar');
+    expect(t.envios()).toEqual([]);
+  });
+
+  it('subir sem chegar ao topo, ou subir um perfil de assinatura ao topo, não pergunta', async () => {
+    const OUTRO = { id: 'outro', label: 'Outra assinatura', kind: 'dir', dir: '/home/farol/.farol/claude/outro' };
+    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfileId: 'plano', claudeProfiles: [PLANO, OUTRO, API] } } });
+    await assentar();
+    await abrir('Chave');
+    await clicarEm(perfil('Chave'), 'Subir Chave na ordem de uso');
+    await assentar();
+    expect(perfil('Chave').queryByRole('group')).toBeNull();
+    expect(t.envios().map(([, enviado]) => (enviado as { claudeProfileId: string }).claudeProfileId)).toEqual(['plano']);
+    await abrir('Outra assinatura');
+    await clicarEm(perfil('Outra assinatura'), 'Subir Outra assinatura na ordem de uso');
+    await assentar();
+    expect(perfil('Outra assinatura').queryByRole('group')).toBeNull();
+    expect(t.envios()).toHaveLength(2);
   });
 
   it('com parte da lista descartada na borda, Subir na ordem fica fechado e diz por quê', async () => {
@@ -1078,7 +1055,9 @@ describe('Sistema: Claude', () => {
   });
 
   it('com outro login aberto no motor, a tela oferece cancelá-lo pelo perfil; Cancelar encerra pelo id', async () => {
+    const OUTRA_CONTA = { id: 'outro', label: 'Outra conta', kind: 'dir', dir: '/home/farol/.farol/claude/outro' };
     const t = montar({
+      bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [PLANO, API, OUTRA_CONTA] } },
       aoPostar: (rota) => {
         if (rota === '/api/claude/login-web/start') return t.envios().length > 2 ? inicioDoLogin : corpo({ ok: false, code: 'login-em-curso', perfilAberto: 'outro', motivo: 'já há um login do Claude aberto neste Farol' });
         return undefined;
@@ -1089,14 +1068,42 @@ describe('Sistema: Claude', () => {
     await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
     await assentar();
     expect(perfil('Assinatura').getByRole('status', { name: 'Resultado do login do perfil Assinatura' }).textContent).toContain('Já há um login do Claude aberto neste motor.');
-    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto');
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto do perfil Outra conta');
+    // pergunta antes, dizendo de qual perfil é o login
+    const pergunta = perfil('Assinatura').getByRole('group', { name: 'Cancelar o login aberto do perfil Outra conta?' });
+    expect(pergunta.textContent).toContain('o login do Claude aberto no perfil Outra conta');
+    expect(t.envios()).toHaveLength(1);
+    await clicarEm(perfil('Assinatura'), 'Voltar sem cancelar');
+    expect(t.envios()).toHaveLength(1);
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto do perfil Outra conta');
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login do perfil Outra conta');
     await assentar();
     expect(t.envios()[1]).toEqual(['/api/claude/login-web/cancel', { profileId: 'outro' }]);
+    expect(perfil('Assinatura').getByRole('status', { name: 'Resultado do login do perfil Assinatura' }).textContent).toContain('O motor encerrou o login aberto do perfil Outra conta.');
     await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
     await assentar();
     await clicarEm(perfil('Assinatura'), 'Cancelar');
     await assentar();
     expect(t.envios()[3]).toEqual(['/api/claude/login-web/cancel', { loginId: 'login-1' }]);
+  });
+
+  it('login aberto de perfil que a tela não conhece, ou sem perfil dito, é nomeado pelo id ou por este perfil', async () => {
+    let aberto = 'sumido';
+    const t = montar({ aoPostar: (rota) => (rota === '/api/claude/login-web/start' ? corpo({ ok: false, code: 'login-em-curso', perfilAberto: aberto }) : undefined) });
+    await assentar();
+    await abrir('Assinatura');
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto do perfil sumido');
+    expect(perfil('Assinatura').getByRole('group', { name: 'Cancelar o login aberto do perfil sumido?' })).toBeTruthy();
+    await clicarEm(perfil('Assinatura'), 'Voltar sem cancelar');
+    aberto = '';
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto do perfil Assinatura');
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login do perfil Assinatura');
+    await assentar();
+    expect(t.envios().filter(([rota]) => rota.endsWith('/cancel'))).toEqual([['/api/claude/login-web/cancel', { profileId: 'plano' }]]);
   });
 
   it('perfil com id que parece chave e não é aparece na lista: sk-anthropic-1', async () => {
@@ -1163,7 +1170,7 @@ describe('Sistema: Jira', () => {
     await assentar();
     await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
     const token = na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement;
-    expect(token.type).toBe('password');
+    expect(token.className).toMatch(/mascarado/);
     mudar(na(JIRA).getByLabelText('E-mail da conta do Atlassian'), 'bot@exemplo.com');
     token.value = TOKEN_DO_JIRA;
     await clicarEm(na(JIRA), 'Guardar a credencial');
@@ -1173,6 +1180,37 @@ describe('Sistema: Jira', () => {
     expect(JSON.stringify(t.store.ler())).not.toContain(TOKEN_DO_JIRA);
     expect(na(JIRA).queryByLabelText('Token de API do Atlassian')).toBeNull();
     expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toContain('O motor guardou a credencial nova de BIUD.');
+  });
+
+  it('o token não é oferecido ao gerenciador de senhas: campo de texto mascarado por CSS, sem autocompletar, com nome e id que não parecem login', async () => {
+    montar();
+    await assentar();
+    await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
+    const token = na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement;
+    const email = na(JIRA).getByLabelText('E-mail da conta do Atlassian') as HTMLInputElement;
+    // campo de senha o navegador oferece ao gerenciador mesmo com autocomplete="off"
+    expect(token.type).toBe('text');
+    expect(token.getAttribute('autocomplete')).toBe('off');
+    expect(email.getAttribute('autocomplete')).toBe('off');
+    expect(token.closest('form')?.getAttribute('autocomplete')).toBe('off');
+    expect(token.getAttribute('spellcheck')).toBe('false');
+    expect(token.getAttribute('autocapitalize')).toBe('off');
+    expect(token.getAttribute('autocorrect')).toBe('off');
+    // os gerenciadores mais comuns ignoram o campo marcado assim
+    expect(token.getAttribute('data-1p-ignore')).not.toBeNull();
+    expect(token.getAttribute('data-lpignore')).toBe('true');
+    expect(token.getAttribute('data-bwignore')).not.toBeNull();
+    const pareceLogin = /user|login|e-?mail|pass|senha|pwd|credencial/i;
+    for (const campo of [token, email]) {
+      expect(campo.name).not.toBe('');
+      expect(campo.name).not.toMatch(pareceLogin);
+      expect(campo.id).not.toMatch(pareceLogin);
+    }
+    expect(token.name).toBe('farol-jira-token-de-api');
+    // a máscara é do CSS: o valor aparece como bolinhas, como num campo de senha
+    expect(token.className).toMatch(/mascarado/);
+    const css = fs.readFileSync(path.resolve(import.meta.dirname, 'Sistema.module.css'), 'utf8');
+    expect(css).toMatch(/\.mascarado\s*\{[^}]*-webkit-text-security:\s*disc/);
   });
 
   it('credencial recusada ou sem resposta: o token some do campo, o e-mail fica, e o erro aparece', async () => {
@@ -1300,6 +1338,35 @@ describe('Sistema: padrões do time', () => {
     expect(resumoDe(PADROES).textContent).toBe('OK:Padrões do time2 padrões');
   });
 
+  it('salvar com o texto vazio, que apaga todos os padrões, pergunta antes; voltar não envia nada', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [{ ...CONTA, padroesRevisao: 'Teste em todo endpoint.\nMigração tem volta.' }] } });
+    await assentar();
+    const campo = () => na(PADROES).getByLabelText('Texto dos padrões, um por linha') as HTMLTextAreaElement;
+    mudar(campo(), '   \n ');
+    await clicarEm(na(PADROES), 'Salvar os padrões do time de @farol-bot');
+    const pergunta = na(PADROES).getByRole('group', { name: 'Apagar todos os padrões do time de @farol-bot?' });
+    expect(pergunta.textContent).toContain('apaga todos os padrões do time');
+    expect(pergunta.textContent).toContain('a revisão segue sem eles');
+    expect(t.envios()).toEqual([]);
+    await clicarEm(na(PADROES), 'Voltar sem enviar');
+    expect(t.envios()).toEqual([]);
+    expect(campo().value).toBe('   \n ');
+    await clicarEm(na(PADROES), 'Salvar os padrões do time de @farol-bot');
+    await clicarEm(na(PADROES), 'Apagar os padrões: @farol-bot');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { padroesRevisao: '' } }]]);
+  });
+
+  it('salvar com texto não pergunta', async () => {
+    const t = montar();
+    await assentar();
+    mudar(na(PADROES).getByLabelText('Texto dos padrões, um por linha'), 'Teste em todo endpoint.');
+    await clicarEm(na(PADROES), 'Salvar os padrões do time de @farol-bot');
+    await assentar();
+    expect(na(PADROES).queryByRole('group')).toBeNull();
+    expect(t.envios()).toHaveLength(1);
+  });
+
   it('o trecho com cara de segredo aparece trocado, com o aviso', async () => {
     const t = montar({ bruto: { ...BRUTO, accounts: [{ ...CONTA, padroesRevisao: `Use ${TOKEN_DO_GITHUB} no teste.` }] } });
     await assentar();
@@ -1406,6 +1473,20 @@ describe('Sistema: quem está conectado', () => {
     expect(t.esquecerSessao).toHaveBeenCalledWith('revogada');
   });
 
+  it('Revogar outra sessão que o motor diz ser a deste navegador (eraAtual) leva ao pareamento, como a frase diz', async () => {
+    const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: true, eraAtual: true }) : undefined) });
+    await assentar();
+    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Celular"');
+    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão: "Celular"');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/auth/revoke', { id: OUTRA.id }]]);
+    expect(regiao().textContent).toContain('Voltando ao pareamento.');
+    expect(t.esquecerSessao).toHaveBeenCalledTimes(1);
+    expect(t.esquecerSessao).toHaveBeenCalledWith('revogada');
+    // a sessão foi esquecida: a tela não pede a lista de novo com o token que não vale mais
+    expect(cargas(t)).toHaveLength(1);
+  });
+
   it('Sair cancelado, recusado ou sem resposta não leva ao pareamento', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: false, code: 'sessao_inexistente' }) : undefined) });
     await assentar();
@@ -1451,22 +1532,6 @@ describe('Sistema: quem está conectado', () => {
     montar({ aoPostar: (rota) => (rota === '/api/auth/sessions' ? corpo({ ok: true, sessoes: [OUTRA] }) : undefined) });
     await assentar();
     expect(na(SESSOES_PAREADAS).getByText(/o motor não marcou nenhuma sessão como a deste navegador/)).toBeTruthy();
-  });
-});
-
-describe('Sistema: rede e acesso', () => {
-  it('bind, nome público e origens permitidas aparecem só para leitura, com a nota de que mudam por arquivo', async () => {
-    montar();
-    await assentar();
-    const s = na(REDE_E_ACESSO);
-    expect(s.getByText('127.0.0.1')).toBeTruthy();
-    expect(s.getByText('farol.exemplo.com', { selector: 'dd' })).toBeTruthy();
-    expect(s.getByText('https://painel.exemplo.com')).toBeTruthy();
-    expect(s.getByText('47170')).toBeTruthy();
-    expect(s.getByText(/mudam apenas pelo arquivo de configuração do motor \(config\.json\), com reinício/)).toBeTruthy();
-    expect(s.getByText(/tirar a própria origem daqui a trancaria para fora/)).toBeTruthy();
-    expect(s.queryByRole('textbox')).toBeNull();
-    expect(s.queryByRole('button')).toBeNull();
   });
 });
 

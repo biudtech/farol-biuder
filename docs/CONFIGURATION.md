@@ -341,8 +341,8 @@ sessão que dá certo libera só o perfil que ela usou. O clique manual atravess
 O diagnóstico e a tela leem `authDaConta`, que é o padrão sem olhar limite: perfil no limite
 continua sendo o perfil da conta, e não aparece como "sem perfil".
 
-`problemasDePerfil` aponta o `claudeProfileId` que não existe ou não resolve; a seção Saúde
-da tela Sistema e o diagnóstico (`GET /api/diagnostics`) mostram.
+`problemasDePerfil` aponta o `claudeProfileId` que não existe ou não resolve; o assunto Claude
+da tela Sistema avisa, e o diagnóstico (`GET /api/diagnostics`) mostra.
 
 ### Onde a pasta do perfil de assinatura mora
 
@@ -622,16 +622,16 @@ cada campo que o motor lê, está em
 [`exemplos/repositories.exemplo.json`](exemplos/repositories.exemplo.json), e os campos estão
 explicados em [`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-cadastro-dos-repositórios).
 
-O estado das duas partes aparece em `GET /api/doctor`, na chave `avaliacaoTecnica`, e na linha
-"Avaliação técnica" de Sistema > Saúde do motor: a ferramenta (instalada e íntegra, ausente ou com
+O estado das duas partes aparece em `GET /api/doctor`, na chave `avaliacaoTecnica` (a tela
+Sistema não mostra a saúde do motor desde 19/11/2026): a ferramenta (instalada e íntegra, ausente ou com
 identidade não comprovada, com a versão e o commit do pino) e o cadastro (quantos repositórios
 declarados, ausente ou ilegível), com o efeito do que falta. A conferência é o mesmo
 `requireTool` que a avaliação usa, e por isso respeita `FAROL_ENG_BEHAVIOUR_HOME` (`lib/env.js`)
 quando a variável aponta outra pasta; a instalação grava sempre no lugar padrão. No boot, uma
 linha no `farol.log` diz o estado quando ele é anormal (`lib/technical-review/estado.js`), em
 `WARN`: repositório declarado sem a ferramenta íntegra, ou cadastro que não abre. Com tudo certo,
-ou sem cadastro, não há linha. A linha da tela só muda quando o diagnóstico roda: depois de
-instalar ou de trocar o cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde do motor.
+ou sem cadastro, não há linha. A chave só muda quando o diagnóstico roda: depois de instalar ou
+de trocar o cadastro, chame `GET /api/doctor`, que refaz o diagnóstico.
 
 Esse nome `eng-behaviour` aqui é só a ferramenta que avalia os PRs revisados
 (`lib/technical-review/`). O motor não roda mais a doutrina como gate do próprio repositório.

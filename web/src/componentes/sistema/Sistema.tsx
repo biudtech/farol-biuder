@@ -4,7 +4,9 @@
 // assuntos, cada um com a bolinha e um resumo do estado; à direita o assunto aberto. A rota guarda
 // o assunto (`/sistema/<assunto>`, src/sistema/assuntos.ts), para o link funcionar; `/sistema`
 // abre o primeiro. No celular o menu vira a lista, e o assunto abre em seguida, com o Voltar aos
-// assuntos. Não há faixa de saúde no topo (pedido do dono): a saúde é um assunto do menu.
+// assuntos. São os sete assuntos do desenho aprovado: a saúde do motor e a rede saíram da tela
+// por decisão do dono, e o diagnóstico continua no motor, pela API (GET /api/doctor e
+// GET /api/diagnostics).
 //
 // Todos os assuntos ficam montados e só o aberto aparece: trocar de assunto não perde o que foi
 // digitado em outro. É a tela que mais pode fazer estrago, então:
@@ -18,30 +20,29 @@
 // - só se salva com o estado da conexão atual já chegado (`estadoEmDia`).
 // A tela fatia e formata: quem mede, decide e grava é o motor.
 import Link from 'next/link';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Bolinha, Esqueleto, Pagina, ui } from '@/componentes/ui';
-import { lerSessoes, type ConfigDoSistema, type SessoesPareadas } from '@/contratos/sistema';
+import { lerSessoes, type SessoesPareadas } from '@/contratos/sistema';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
-import { dataHora, horaCurta } from '@/radar/formato';
+import type { Acao, DesfechoAceito } from '@/radar/acoes';
+import { horaCurta } from '@/radar/formato';
 import { impedimentoDeSalvar } from '@/sistema/acoes';
 import { ASSUNTOS, ROTA_DO_SISTEMA, assuntoDoCaminho, nomeDoAssunto, rotaDoAssunto, type IdDoAssunto } from '@/sistema/assuntos';
 import {
-  ROTULO_DO_TOM, linhaDaConta, linhaDaSaude, linhaDasRegras, linhaDasSessoes, linhaDoJira, linhaDoPerfil, linhaDoRitmo, linhaDosPadroes,
+  ROTULO_DO_TOM, linhaDaConta, linhaDasRegras, linhaDasSessoes, linhaDoJira, linhaDoPerfil, linhaDoRitmo, linhaDosPadroes,
   type EstadoDaLinha,
 } from '@/sistema/linhas';
-import { todasAsVerificacoes } from '@/sistema/saude';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { Automacao } from './Automacao';
 import { ContaEPolitica } from './ContaEPolitica';
-import { Par, type UltimoSalvar } from './Formulario';
+import type { UltimoSalvar } from './Formulario';
 import { Jira } from './Jira';
 import { Padroes } from './Padroes';
 import { PerfilDoClaude } from './PerfilDoClaude';
 import { Regras } from './Regras';
 import { Ritmo } from './Ritmo';
-import { Saude } from './Saude';
 import { ROTA_DAS_SESSOES, Sessoes } from './Sessoes';
 import { useChamada } from './useChamada';
 import estilos from './Sistema.module.css';
@@ -64,32 +65,27 @@ const DESCRICAO: Record<IdDoAssunto, string> = {
   claude: 'Os perfis que rodam as revisões, na ordem de uso, e como cada sessão roda.',
   jira: 'De onde o Farol lê o card de cada PR, por organização do GitHub.',
   ritmo: 'Com que frequência ele olha o GitHub e como lida com o que muda no meio.',
-  acesso: 'Os navegadores com acesso a esta tela, e por onde o motor escuta.',
-  saude: 'O que o motor mediu de si e do ambiente na última verificação.',
+  acesso: 'Os navegadores com acesso a esta tela.',
 };
 
-// As chaves que só mudam pelo arquivo de configuração do motor, com reinício. A tela mostra e
-// não edita: é por uma dessas origens que ela fala com o motor, e tirar a própria origem a
-// trancaria para fora. O motor também não as aceita em POST /api/settings.
-function RedeEAcesso({ config }: { config: ConfigDoSistema | undefined }) {
-  const id = useId();
-  return (
-    <section className={estilos.subbloco} aria-labelledby={id}>
-      <h3 id={id} className={estilos.subtitulo}>Rede e acesso</h3>
-      <dl className={estilos.pares}>
-        <Par nome="Endereço em que o motor escuta (bind)">{config?.bind ?? 'O motor não informou.'}</Par>
-        <Par nome="Porta (port)">{config?.port ?? 'O motor não informou.'}</Par>
-        <Par nome="Nome público (hostPublico)">{config?.hostPublico === undefined ? 'Não definido, ou o motor não informou.' : config.hostPublico || 'Não definido.'}</Par>
-        <Par nome="Origens permitidas (origensPermitidas)">
-          {config?.origensPermitidas === undefined ? 'Nenhuma, ou o motor não informou.' : config.origensPermitidas.join(', ') || 'Nenhuma.'}
-        </Par>
-        <Par nome="Autenticação pelo arquivo (localAuth)">{config?.localAuth ? config.localAuth : 'Não definida: o motor decide pela rede (nome público, origens e bind).'}</Par>
-      </dl>
-      <p className={ui.mini}>
-        Só leitura. Estas chaves mudam apenas pelo arquivo de configuração do motor (config.json), com reinício, e o motor não as aceita pela API. É de propósito: esta tela fala com o motor por uma das origens permitidas, e tirar a própria origem daqui a trancaria para fora.
-      </p>
-    </section>
-  );
+// A largura em que o menu vira a lista (a mesma do @media de Sistema.module.css). No celular,
+// `/sistema` sem assunto mostra só a lista: nenhum item é a página atual. Sem `matchMedia` (no
+// servidor e no teste sem janela) a tela é a larga.
+const CELULAR = '(max-width: 760px)';
+
+function assinarCelular(avisar: () => void): () => void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+  const consulta = window.matchMedia(CELULAR);
+  consulta.addEventListener('change', avisar);
+  return () => consulta.removeEventListener('change', avisar);
+}
+
+function ehCelular(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(CELULAR).matches;
+}
+
+function useCelular(): boolean {
+  return useSyncExternalStore(assinarCelular, ehCelular, () => false);
 }
 
 function ModeloESessoes({ children }: { children: ReactNode }) {
@@ -137,13 +133,15 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
   const config = useApp((e) => e.snapshot?.config, app);
   const sites = useApp((e) => e.snapshot?.jiraSites, app);
   const resolvidas = useApp((e) => e.snapshot?.decisions?.resolved, app);
-  const versao = useApp((e) => e.snapshot?.app?.version ?? '', app);
   const temEstado = useApp((e) => e.snapshot !== null, app);
   const conexao = useApp((e) => e.conexao, app);
   const emDia = useApp((e) => e.estadoEmDia, app);
   const recados = useApp((e) => e.recados, app);
 
   const aberto = assuntoDoCaminho(caminho) ?? { id: ASSUNTOS[0].id, explicito: false };
+  // no celular, sem assunto no endereço, a tela é a lista: nenhum assunto está aberto
+  const celular = useCelular();
+  const atualNoMenu: IdDoAssunto | null = celular && !aberto.explicito ? null : aberto.id;
   // O foco vai ao título do assunto quando ele muda depois da carga (o clique no menu): o leitor
   // de tela e o teclado seguem para o conteúdo novo, e no celular a tela mostra o assunto.
   const baseDosTitulos = useId();
@@ -155,7 +153,6 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
     document.getElementById(`${baseDosTitulos}-${aberto.id}`)?.focus();
   }, [aberto.id, baseDosTitulos]);
 
-  const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
   const sessoes = useChamada<SessoesPareadas>();
   const { chamar: chamarSessoes } = sessoes;
   const [porSalvar, setPorSalvar] = useState<readonly Edicao[]>([]);
@@ -168,6 +165,16 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
     void chamarSessoes((sinal) => app.cliente.post(ROTA_DAS_SESSOES, {}, lerSessoes, { sinal }));
   }, [chamarSessoes, app]);
   useEffect(() => { pedirSessoes(); }, [pedirSessoes]);
+
+  // Depois da revogação aceita, quem diz se a sessão era a deste navegador é a resposta do motor
+  // (`eraAtual`), não a lista que a tela tinha: sendo, a tela esquece a sessão e vai ao
+  // pareamento, como a frase diz; não sendo, pede a lista de novo.
+  const aoAceitar = useCallback((acao: Acao, desfecho: DesfechoAceito) => {
+    if (acao.tipo !== 'revogarSessao') return;
+    if (desfecho.encerrouEstaSessao) app.esquecerSessao('revogada');
+    else pedirSessoes();
+  }, [app, pedirSessoes]);
+  const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente, aoAceitar);
 
   const marcar = useCallback((chave: Edicao, alterado: boolean) => {
     setPorSalvar((antes) => {
@@ -191,8 +198,7 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
   }, [haPorSalvar]);
 
   // O salvar tira o próprio botão da tela quando o estado novo chega: o foco vai antes à região
-  // do resultado. Sair (a sessão deste navegador) leva ao pareamento de fato; revogar outra pede
-  // a lista de novo.
+  // do resultado.
   const controle = useMemo<ControleDeAcoes>(() => ({
     ...acoes,
     disparar: async (acao) => {
@@ -200,17 +206,12 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
       if (formulario) acoes.focarResultado();
       const aceito = await acoes.disparar(acao);
       if (formulario) setSalvos((antes) => ({ ...antes, [formulario]: { ok: aceito, hora: horaCurta(Date.now()) } }));
-      if (aceito && acao.tipo === 'revogarSessao') {
-        if (acao.atual) app.esquecerSessao('revogada');
-        else pedirSessoes();
-      }
       return aceito;
     },
-  }), [acoes, app, pedirSessoes]);
+  }), [acoes]);
 
   const impedimento = impedimentoDeSalvar({ conectado: conexao === 'conectado', emDia });
   const conta = contas?.[0];
-  const verificacoes = todasAsVerificacoes(saude, modelos?.cli, perfis, conta, (ms) => dataHora(ms) || 'hora não informada');
 
   const estados: Record<IdDoAssunto, EstadoDaLinha> = {
     conta: linhaDaConta(conta),
@@ -220,7 +221,6 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
     jira: linhaDoJira(sites),
     ritmo: linhaDoRitmo(config),
     acesso: linhaDasSessoes(sessoes),
-    saude: linhaDaSaude(saude, verificacoes),
   };
   const assuntosPorSalvar = new Set<IdDoAssunto>(porSalvar.map((e) => EDICOES[e].assunto));
   const nomesPorSalvar = porSalvar.map((e) => EDICOES[e].nome);
@@ -241,7 +241,7 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
             <ul className={estilos.listaDoMenu}>
               {ASSUNTOS.map(({ id, nome }) => {
                 const estado = estados[id];
-                const atual = id === aberto.id;
+                const atual = id === atualNoMenu;
                 return (
                   <li key={id}>
                     <Link href={rotaDoAssunto(id)} className={estilos.itemDoMenu} aria-current={atual ? 'page' : undefined} data-tom={estado.tom}>
@@ -282,10 +282,6 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
             </Assunto>
             <Assunto id="acesso" aberto={aberto.id === 'acesso'} idDoTitulo={idDoTitulo('acesso')}>
               <Sessoes controle={controle} lista={sessoes} aoAtualizar={pedirSessoes} />
-              <RedeEAcesso config={config} />
-            </Assunto>
-            <Assunto id="saude" aberto={aberto.id === 'saude'} idDoTitulo={idDoTitulo('saude')}>
-              <Saude cliente={app.cliente} saude={saude} verificacoes={verificacoes} versao={versao} />
             </Assunto>
           </div>
         </div>

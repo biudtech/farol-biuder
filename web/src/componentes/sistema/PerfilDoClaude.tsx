@@ -114,9 +114,11 @@ interface PropsDoPerfil {
   subir: Acao | null;
   impedimentoDaOrdem: string | null;
   impedimento: string | null;
+  // o nome de outro perfil pelo id (o login aberto no motor pode ser de outro)
+  nomeDoOutro(id: string): string;
 }
 
-function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento }: PropsDoPerfil) {
+function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento, nomeDoOutro }: PropsDoPerfil) {
   const [aberto, setAberto] = useState(false);
   const teste = useChamada<TesteDePerfil>();
   const idDoDetalhe = useId();
@@ -177,7 +179,7 @@ function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, cliente, controle
         </div>
 
         {entraPorLogin(perfil.kind) ? (
-          <LoginWeb cliente={cliente} profileId={perfil.id} nome={nome} impedimento={impedimento} />
+          <LoginWeb cliente={cliente} profileId={perfil.id} nome={nome} impedimento={impedimento} nomeDoPerfil={nomeDoOutro} />
         ) : (
           <p className={ui.mini}>{SO_PELA_API}</p>
         )}
@@ -202,9 +204,14 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
   const padrao = idDoPadrao(config);
   const semOrdem = impedimentoDaOrdem(config);
 
+  const nomeDoOutro = (id: string): string => {
+    const outro = lista?.find((p) => p.id === id);
+    return outro ? nomeDoPerfil(outro) : id;
+  };
+
   const acaoDeSubir = (perfil: Perfil): Acao | null => {
     const corpo = corpoDeSubir(config, perfil.id);
-    return corpo ? { tipo: 'ordemDosPerfis', alvo: ALVO_DA_ORDEM, nome: nomeDoPerfil(perfil), corpo } : null;
+    return corpo ? { tipo: 'ordemDosPerfis', alvo: ALVO_DA_ORDEM, nome: nomeDoPerfil(perfil), perfil: perfil.id, corpo } : null;
   };
 
   return (
@@ -235,6 +242,7 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
               subir={i > 0 ? acaoDeSubir(perfil) : null}
               impedimentoDaOrdem={semOrdem}
               impedimento={impedimento}
+              nomeDoOutro={nomeDoOutro}
             />
           ))}
         </ol>

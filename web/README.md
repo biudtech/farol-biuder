@@ -90,12 +90,12 @@ corrigida sozinho, o `overrides` sai.
 |---|---|
 | `src/app/` | As rotas (App Router). Uma pasta por aba, o `layout.tsx` da raiz, o `globals.css` com as cores dos dois temas e as páginas de aviso do front (`not-found.tsx`, `error.tsx` e `global-error.tsx`) |
 | `src/componentes/` | Componentes de React, cada um com o CSS Module ao lado. Os de uma tela ficam numa pasta com o nome dela (`radar/`, `historico/`, `time/`, `consumo/`, `sistema/`), com um CSS Module só (o Radar tem também o do painel De fora). `cartao/` é o cartão único de um PR, que todas as telas usam (redesenho de 19/11/2026). `Markdown.tsx` desenha o texto de um review |
-| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa, e `de-fora.ts`, as chaves `deFora` e `emRetentativa`; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor`, `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, diagnóstico, testes, login da assinatura e credencial do Jira; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
+| `src/contratos/` | Os tipos do que o motor manda e os leitores que conferem a forma na borda. `radar.ts` tem as chaves do snapshot que o Radar usa, e `de-fora.ts`, as chaves `deFora` e `emRetentativa`; `historico.ts`, a página de `GET /api/decisions`, o detalhe por chave e a chave `pushbacks`; `time.ts`, a lista de `GET /api/team` e os perfis de `config.people`; `consumo.ts`, a chave `usage` e o relatório de `GET /api/usage`; `sistema.ts`, as chaves `doctor` (só o estado dos perfis do Claude), `accounts`, `modelos`, `claudePerfis`, `jiraSites` e o resto de `config`, mais as respostas das rotas de sessões, testes, login da assinatura e credencial do Jira; `segredos.ts`, a tabela dos nomes de segredo, os formatos de credencial e a máscara de texto |
 | `src/radar/` | A lógica do Radar, sem React: como fatiar o snapshot nas seções (`fatias.ts`), o recorte das postadas de hoje (`postadas.ts`), como escrever o que o motor manda (`formato.ts`), o que o cartão de um PR diz (`cartao.ts`), o painel De fora da fila em frases (`de-fora.ts`), a sessão que some sem resultado (`falhas.ts`) e as ações das telas, com rota, corpo e a mensagem de cada recusa (`acoes.ts`) |
 | `src/historico/` | A lógica do Histórico, sem React: a tabela de rótulos de `status` e `action`, com o tom e o chip de cada desfecho (`rotulos.ts`), os dias da lista (`dias.ts`) e a consulta que mora no endereço, com o pedido que ela vira e as frases do resultado (`consulta.ts`) |
 | `src/time/` | A lógica do Time, sem React: a cópia conferida da taxonomia do perfil (`taxonomia.ts`) e o endereço, as fatias, o corpo de `people` e as frases (`time.ts`) |
 | `src/consumo/` | A lógica do Consumo, sem React: a consulta que mora no endereço e o pedido que ela vira (`consulta.ts`), os números em pt-BR e os rótulos (`formato.ts`), a geometria do gráfico (`grafico.ts`) e a auditoria do registro em frases (`auditoria.ts`) |
-| `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), a saúde em linhas (`saude.ts`), as sessões e o Sair (`sessoes.ts`), as ações, com corpo, pergunta e conferência (`acoes.ts`), o estado e o resumo de cada assunto do menu (`linhas.ts`), os assuntos e a rota de cada um (`assuntos.ts`), as regras por organização e autor (`regras.ts`), os padrões do time (`padroes.ts`), o ritmo (`ritmo.ts`), a ordem de uso dos perfis e o Subir na ordem (`perfis.ts`), o login da assinatura (`login-web.ts`) e os últimos cards e a credencial do Jira (`jira.ts`) |
+| `src/sistema/` | A lógica do Sistema, sem React: a política da conta, o que a pessoa alterou e o que amplia a publicação (`politica.ts`), as chaves de automação (`automacao.ts`), o rascunho refeito sobre o valor novo do motor (`rascunho.ts`), as sessões e o Sair (`sessoes.ts`), as ações, com corpo, pergunta e conferência (`acoes.ts`), o estado e o resumo de cada assunto do menu (`linhas.ts`), os assuntos e a rota de cada um (`assuntos.ts`), as regras por organização e autor (`regras.ts`), os padrões do time (`padroes.ts`), o ritmo (`ritmo.ts`), a ordem de uso dos perfis e o Subir na ordem (`perfis.ts`), o login da assinatura (`login-web.ts`) e os últimos cards e a credencial do Jira (`jira.ts`) |
 | `src/markdown/` | O leitor de markdown próprio: texto para árvore de blocos e trechos, sem HTML e sem dependência |
 | `src/transporte/` | O cliente único do motor: `get`, `post`, o fluxo de eventos, o token e o endereço. Sem React |
 | `src/estado/` | O store e a sessão que liga o cliente ao store. A instância e o gancho `useApp` ficam em `instancia.ts` |
@@ -1022,19 +1022,23 @@ A aba `/sistema` é `src/componentes/sistema/Sistema.tsx`. É a tela que mais po
 muda o que o motor publica sozinho no GitHub, quem tem acesso a ele e duas credenciais. No
 redesenho de 19/11/2026 (lote 6; meta 8 e decisões 3 e 4 do desenho) ela é um menu de assuntos à
 esquerda, cada um com a bolinha de estado (verde OK, âmbar atenção, vermelho problema, cinza sem
-dado ou desligado) e um resumo, e o assunto aberto à direita. Não há faixa de saúde no topo
-(pedido do dono): a saúde é um assunto do menu. O estado e o resumo de cada assunto saem do que
+dado ou desligado) e um resumo, e o assunto aberto à direita. São os sete assuntos do desenho
+aprovado (decisão do dono): a Saúde do motor e o bloco Rede e acesso saíram da tela, com o código
+que só eles usavam. O diagnóstico continua no motor, pela API (`GET /api/doctor` e
+`GET /api/diagnostics`), que a tela não chama. O estado e o resumo de cada assunto saem do que
 ele já calcula (`src/sistema/linhas.ts`). Sem o estado do motor a página mostra o esqueleto.
 
 **A rota guarda o assunto** (`src/sistema/assuntos.ts`): `/sistema/<assunto>`, com `conta`,
-`regras`, `padroes`, `claude`, `jira`, `ritmo`, `acesso` e `saude`, nessa ordem no menu.
+`regras`, `padroes`, `claude`, `jira`, `ritmo` e `acesso`, nessa ordem no menu (`/sistema/saude`
+é 404).
 `/sistema` abre o primeiro, e assunto que não existe é 404. A tela mora no layout de `/sistema`
 (`src/app/sistema/layout.tsx`, `SistemaNaRota.tsx`, que lê o assunto de `usePathname`); a página
 `src/app/sistema/[[...assunto]]/page.tsx` só confere o endereço e chama `notFound()`. Como o
 layout fica montado quando só o assunto muda, e todos os assuntos ficam montados com só o aberto
 visível (`hidden`), **trocar de assunto não perde o que foi digitado em outro**. O clique no menu
 leva o foco ao título do assunto. **No celular** (até 760 px) o menu vira a lista: `/sistema`
-mostra só a lista, e `/sistema/<assunto>` mostra só o assunto, com o link Voltar aos assuntos.
+mostra só a lista, sem item marcado como a página atual (a largura sai de `matchMedia`, a mesma
+do `@media` do CSS), e `/sistema/<assunto>` mostra só o assunto, com o link Voltar aos assuntos.
 
 | Assunto | Componente | De onde vem | O que edita |
 |---|---|---|---|
@@ -1044,8 +1048,7 @@ mostra só a lista, e `/sistema/<assunto>` mostra só o assunto, com o link Volt
 | Claude | `PerfilDoClaude.tsx`, `LoginWeb.tsx` e `Automacao.tsx` (bloco Modelo e sessões) | `config.claudeProfiles` e `claudeProfileId`, `claudePerfis.uso`, `doctor.claudeAuth`, `modelos.claude` | Subir na ordem (`claudeProfileId` e `claudeProfiles`), `parallelReviews`, `reviewModel`, `reviewEffort` e `reviewFast`, por `POST /api/settings`; Testar (`POST /api/claude/profile-test`); Refazer login (`POST /api/claude/login-web/*`) |
 | Jira | `Jira.tsx`, `CredencialDoJira.tsx` | `jiraSites` e, dos últimos cards lidos, `decisions.resolved` do snapshot | Testar (`POST /api/jira/test`) e Trocar credencial (`POST /api/jira/credential`) |
 | Ritmo da revisão | `Ritmo.tsx` | `config` do snapshot | `intervalSeconds`, `reReviewResume` e `autoPushback`, por `POST /api/settings` |
-| Quem está conectado | `Sessoes.tsx` e o bloco Rede e acesso (`Sistema.tsx`) | `POST /api/auth/sessions`; `bind`, `port`, `hostPublico`, `origensPermitidas` e `localAuth` de `config` | Sair (a sessão deste navegador) e Revogar (as outras), por `POST /api/auth/revoke` |
-| Saúde do motor | `Saude.tsx` | `doctor` (com `doctor.saude`), `modelos.cli`, `claudePerfis.problemas`, `accounts` e `app.version`; `GET /api/doctor`; `GET /api/diagnostics` | nada |
+| Quem está conectado | `Sessoes.tsx` | `POST /api/auth/sessions` | Sair (a sessão deste navegador) e Revogar (as outras), por `POST /api/auth/revoke` |
 
 **A tela não tem teto de gasto** (decisão de 16/11/2026): o revisor é autônomo e não trava por
 gasto. O motor não tem mais o gate, e a tela não mostra, não edita nem avisa teto. Nenhum fonte
@@ -1076,7 +1079,8 @@ O contrato, lido do motor:
   | `people` | o mapa INTEIRO (tela Time) | valor fora da taxonomia é descartado | `personProfileBlock`, `lib/engine/review-prompt.js` |
   | `jiraSites` | a lista INTEIRA (o front não manda) | site inválido ou repetido sai da lista | `lib/engine/jira.js` |
 
-  `bind`, `hostPublico`, `origensPermitidas`, `port` e `localAuth` não são aceitas: voltam em
+  `bind`, `hostPublico`, `origensPermitidas`, `port` e `localAuth` não são aceitas (e a tela não
+  as lê nem mostra): voltam em
   `ignoradas`. `aguardarCiParaAprovar` e `aguardarCiParaRevisar` saíram do motor em 17/11/2026 (o
   revisor nunca espera o CI) e também voltam em `ignoradas`.
 - **`reviewModel` aceita dois formatos** (`sanitizeModel`, `lib/parse.js`): um apelido do
@@ -1106,9 +1110,9 @@ O contrato, lido do motor:
 - **`POST /api/auth/sessions`** responde `{ ok, sessoes: [{ id, rotulo, criadoEm, ultimoUsoEm,
   atual }] }`; `id` é um pedaço do hash do token. **`POST /api/auth/revoke`** recebe `{ id }` e
   responde `{ ok: true, eraAtual }` ou `{ ok: false, code: "sessao_inexistente" }`.
-- **`GET /api/doctor`** refaz o diagnóstico e devolve o mesmo objeto da chave `doctor`.
-  **`GET /api/diagnostics`** devolve `{ ok, markdown, falhas }`, com o texto que o motor monta e
-  mascara. **`POST /api/claude/profile-test`** (`{ profileId }`) e **`POST /api/jira/test`**
+- **`GET /api/doctor`** e **`GET /api/diagnostics`** ficam só na API: a tela não as chama. Da
+  chave `doctor` ela lê só `claudeAuth` e `claudePerfilPronto`, para o assunto Claude.
+  **`POST /api/claude/profile-test`** (`{ profileId }`) e **`POST /api/jira/test`**
   (`{ siteId }`) não gravam nada.
 - **O login da assinatura** (`lib/engine/login-web.js`): `POST /api/claude/login-web/start` com
   `{ profileId }` devolve `{ ok: true, loginId, url }` (o endereço da página de autorização da
@@ -1128,8 +1132,14 @@ Regras que valem para quem mexer nela:
 - **Segredo digitado não fica na tela** (decisão 3 do desenho; a antimeta "segredo que volta em
   resposta da API ou aparece na tela depois de gravado"). São dois: o token de API do Atlassian
   (`CredencialDoJira.tsx`) e o código do login da assinatura (`LoginWeb.tsx`). Os dois:
-  - ficam em campo `type="password"` não controlado pelo React: o valor não entra em estado
-    nenhum, nem no store, nem na união `Acao`;
+  - ficam em campo mascarado não controlado pelo React: o valor não entra em estado nenhum, nem
+    no store, nem na união `Acao`. O código do login é `type="password"`. O token do Jira não é
+    senha e não pode ir para o gerenciador de senhas: e-mail mais campo de senha é a forma de um
+    login, e o navegador oferece guardar o campo de senha mesmo com `autocomplete="off"`. Por isso
+    ele é `type="text"` com o valor em bolinhas pelo CSS (`-webkit-text-security: disc`, a classe
+    `mascarado`), `autocomplete="off"` no campo e no formulário, nome e id que não parecem login
+    (`farol-jira-token-de-api`, `farol-jira-conta-atlassian`) e as marcas que 1Password, LastPass
+    e Bitwarden respeitam (`data-1p-ignore`, `data-lpignore`, `data-bwignore`);
   - são lidos só na hora do envio, vão só no corpo do POST e são apagados do campo antes de o
     pedido sair, dê certo ou não (na falha, a pessoa cola de novo; o e-mail do Jira, que não é
     segredo, fica);
@@ -1146,7 +1156,8 @@ Regras que valem para quem mexer nela:
   primeiro que não está no limite do plano. Subir troca o perfil com o de cima, e o primeiro vira
   o padrão: o corpo leva `claudeProfileId` e a lista na ordem nova, com só `id`, `label`, `kind`
   e, no de chave, `baseUrl`; nunca a chave, a pasta, `temChave` nem campo de teto
-  (`sistema/acoes.test.ts` e `sistema/perfis.test.ts` conferem, e só esse arquivo pode montar
+  (`sistema/perfis.test.ts` confere a saída de `corpoDeSubir`, e `sistema/acoes.test.ts`, o corpo
+  que essa saída vira em `pedidoDa`; só esse arquivo pode montar
   `claudeProfiles`). O motor repõe a pasta e a chave guardadas. Com algum perfil descartado na
   borda (cara de segredo, forma torta ou tipo desconhecido) a tela não monta o corpo, porque
   mandar a lista sem ele o tiraria do motor, e diz por quê. A resposta é conferida pela ordem de
@@ -1197,8 +1208,11 @@ Regras que valem para quem mexer nela:
   amplia o que o motor faz ou publica sem clique: ligar a revisão automática, trocar o esperar
   que veio do motor por publicar e acrescentar organização. A regra que revisa sozinho pergunta,
   e tirar uma regra também (o alvo volta à política da conta, que pode ser mais ampla). A regra
-  que põe no clique, os padrões, a automação, o ritmo e a ordem dos perfis não perguntam: nada
-  disso amplia o que é publicado. Sair e Revogar perguntam sempre. A pergunta abre no lugar do
+  que põe no clique, a automação, o ritmo e os padrões com texto não perguntam: nada disso amplia
+  o que é publicado. Duas perguntas não são de publicação: salvar os padrões com o campo vazio,
+  que apaga todos, e Subir na ordem quando o perfil que vai para o topo é de chave de API, porque
+  as revisões passam a gastar na API paga. Sair e Revogar perguntam sempre, e Cancelar o login
+  aberto (o de outro login que o motor tem aberto) diz de qual perfil é e pergunta. A pergunta abre no lugar do
   botão (`AcaoComPergunta.tsx`), com o foco no "Voltar sem enviar".
 - **O que foi digitado não se perde na falha.** Os formulários com rascunho mantêm a edição e
   dizem "Erro ao salvar" no pé; a regra nova só sai do formulário quando o motor aceita; os
@@ -1222,12 +1236,12 @@ Regras que valem para quem mexer nela:
   uma região com o título `h2`, e os blocos de dentro, `h3`. O perfil do Claude abre num botão
   real com `aria-expanded`. O efeito de cada seletor e de cada checkbox está ligado ao campo por
   `aria-describedby`. Toda resposta de teste, login e credencial sai numa região viva.
-- **Saúde é o que o motor mediu.** `verificacoesDaSaude` escreve uma linha por verificação, com
-  o estado em texto. Rodar o diagnóstico de novo não abre sessão de IA.
-- **Sair.** Revogar a sessão `atual` avisa que este navegador volta ao pareamento, e depois do
-  aceite a tela chama `app.esquecerSessao('revogada')`. Revogar outra pede a lista de novo.
+- **Sair.** Revogar a sessão `atual` avisa que este navegador volta ao pareamento. Depois do
+  aceite vale a resposta do motor, não a lista: com `eraAtual: true` (ou o Sair) a tela chama
+  `app.esquecerSessao('revogada')`, mesmo que a lista dissesse que a sessão era outra; sem ela,
+  pede a lista de novo (`aoAceitar` de `useAcoes`).
 - **Só leitura.** Criar e remover perfil do Claude e a chave de API; o site do Jira (endereço,
-  organizações e projetos); o login e o token do GitHub; e as cinco chaves de rede.
+  organizações e projetos); o login e o token do GitHub. As cinco chaves de rede não aparecem.
 
 ### Lacunas do contrato
 
@@ -1260,8 +1274,6 @@ Regras que valem para quem mexer nela:
   O limite total aparece como nota quando está ligado.
 - **Trocar de aba do Farol descarta a edição sem perguntar.** A página só segura o fechar e o
   recarregar.
-- **O diagnóstico não tem mensagem por verificação.** `doctor` traz valores, não frases: os
-  detalhes das linhas são escritos aqui, com os mesmos textos do relatório do motor.
 - **A recusa de `accounts/edit` e a de `auth/revoke` têm formas próprias** (`erro`; `code`),
   diferentes das outras ações; `lerRespostaDeAcao` lê as três.
 

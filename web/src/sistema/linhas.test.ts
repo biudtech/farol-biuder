@@ -1,27 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ContaRevisora, Saude } from '@/contratos/sistema';
 import {
-  fraseDoTopo, linhaDaAutomacao, linhaDaConta, linhaDaRede, linhaDaSaude, linhaDasSessoes, linhaDoJira, linhaDoPerfil, type EstadoDaLinha,
+  fraseDoTopo, linhaDaAutomacao, linhaDaConta, linhaDasSessoes, linhaDoJira, linhaDoPerfil, type EstadoDaLinha,
 } from './linhas';
-import type { Verificacao } from './saude';
 
 const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes', regrasDeReview: 0, regras: [], regrasIlegiveis: 0 };
-const ok = (nome: string): Verificacao => ({ nome, estado: 'ok', detalhe: 'certo' });
 const SAUDE = { claudeAuth: [], claudePerfilPronto: true } as unknown as Saude;
-
-describe('a linha da saúde', () => {
-  it('verde com tudo certo, âmbar com atenção, vermelho com o que para a revisão', () => {
-    expect(linhaDaSaude(SAUDE, [ok('Node'), ok('Claude Code')])).toEqual({ tom: 'ok', resumo: '2 verificações OK' });
-    expect(linhaDaSaude(SAUDE, [ok('Node'), { nome: 'Versão do Claude Code', estado: 'atencao', detalhe: 'atrasada' }])).toEqual({ tom: 'aviso', resumo: 'Versão do Claude Code: atrasada' });
-    const comGrave = linhaDaSaude(SAUDE, [{ nome: 'Versão do Claude Code', estado: 'atencao', detalhe: 'x' }, { nome: 'Autenticação do GitHub', estado: 'atencao', detalhe: 'sem autenticação' }]);
-    expect(comGrave).toEqual({ tom: 'ruim', resumo: 'Autenticação do GitHub e mais 1' });
-  });
-
-  it('cinza sem diagnóstico', () => {
-    expect(linhaDaSaude(undefined, []).tom).toBe('neutro');
-    expect(linhaDaSaude(null, [ok('Monitoramento da conta')])).toEqual({ tom: 'neutro', resumo: 'diagnóstico ainda não rodou' });
-  });
-});
 
 describe('a linha da conta', () => {
   it('diz a conta e a política, e o que falta', () => {
@@ -62,12 +46,6 @@ describe('as outras linhas', () => {
     expect(linhaDasSessoes({ carregando: false, dados: { sessoes: [], descartadas: 0 }, erro: null })).toEqual({ tom: 'neutro', resumo: 'nenhuma' });
     expect(linhaDasSessoes({ carregando: false, dados: { sessoes: [{ id: 'a', rotulo: '', criadoEm: 0, ultimoUsoEm: 0, atual: true }], descartadas: 0 }, erro: null })).toEqual({ tom: 'ok', resumo: '1 ativa' });
     expect(linhaDasSessoes({ carregando: false, dados: null, erro: 'falha' }).tom).toBe('aviso');
-  });
-
-  it('rede: o nome público, ou o endereço e a porta', () => {
-    expect(linhaDaRede({ hostPublico: 'farol.exemplo.com', bind: '127.0.0.1', port: 1 }).resumo).toBe('farol.exemplo.com');
-    expect(linhaDaRede({ bind: '127.0.0.1', port: 47170 }).resumo).toBe('127.0.0.1:47170');
-    expect(linhaDaRede(undefined).tom).toBe('neutro');
   });
 });
 

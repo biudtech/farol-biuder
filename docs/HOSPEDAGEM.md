@@ -515,11 +515,10 @@ e o cadastro do exemplo:
 
 `ferramenta` é `integra`, `ausente` ou `nao-comprovada` (a pasta existe, mas não é o checkout
 limpo do commit do pino com o carimbo de construção); `cadastro` é `legivel`, `ausente` ou
-`ilegivel`. A tela mostra o mesmo `detalhe` na linha "Avaliação técnica" de Sistema > Saúde, com
-o estado em texto: OK quando ela roda para alguém (ferramenta íntegra e pelo menos um
-repositório declarado), Atenção nos outros casos. Nenhum caminho de arquivo sai no diagnóstico.
-A linha só muda quando o diagnóstico roda: depois de instalar a ferramenta ou de trocar o
-cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde (ou chame `GET /api/doctor`).
+`ilegivel`. A ferramenta roda para alguém quando está íntegra e há pelo menos um repositório
+declarado (`pronta`). Nenhum caminho de arquivo sai no diagnóstico. A tela Sistema não mostra a
+saúde do motor desde 19/11/2026: o estado fica na API. A chave só muda quando o diagnóstico
+roda: depois de instalar a ferramenta ou de trocar o cadastro, chame `GET /api/doctor`.
 
 No boot, o `farol.log` só ganha linha quando o estado é anormal: repositório declarado sem a
 ferramenta íntegra (com o comando da instalação) ou cadastro ilegível, as duas em `WARN`. Tudo

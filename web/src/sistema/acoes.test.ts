@@ -3,7 +3,9 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { confirmacaoDa, executar, idDa, lerRespostaDeAcao, nomeDa, pedidoDa, rotuloDa, type Acao } from '@/radar/acoes';
 import type { Resultado } from '@/transporte/cliente';
+import { lerConfigDoSistema } from '@/contratos/sistema';
 import { QUANDO_A_POLITICA_VALE, TIPOS_DO_SISTEMA, impedimentoDeSalvar } from './acoes';
+import { corpoDeSubir } from './perfis';
 
 const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
 
@@ -12,7 +14,10 @@ const automacao = (extra: Partial<Extract<Acao, { tipo: 'automacao' }>> = {}): A
 const padroes = (texto: string): Acao => ({ tipo: 'padroes', alvo: 'sistema:padroes', nome: '@farol-bot', user: 'farol-bot', texto });
 const regra = (modo: 'auto' | 'manual' | 'inherit', autor = 'robo[bot]'): Acao => ({ tipo: 'regra', alvo: 'sistema:regra', nome: autor ? `@${autor} em orga` : 'a organização orga', user: 'farol-bot', organizacao: 'orga', autor: autor || undefined, modo });
 const ritmo = (): Acao => ({ tipo: 'ritmo', alvo: 'sistema:ritmo', nome: 'o ritmo', corpo: { intervalSeconds: 600 } });
-const ordem = (): Acao => ({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'B', corpo: { claudeProfileId: 'b', claudeProfiles: [{ id: 'b', label: 'B', kind: 'dir' }, { id: 'a', label: 'A', kind: 'apikey', baseUrl: '' }] } });
+const ordem = (): Acao => ({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'B', perfil: 'b', corpo: { claudeProfileId: 'b', claudeProfiles: [{ id: 'b', label: 'B', kind: 'dir' }, { id: 'a', label: 'A', kind: 'apikey', baseUrl: '' }] } });
+// o perfil de chave de API que sobe para o topo, e o que sobe sem chegar lá
+const ordemDaChave = (): Acao => ({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'A', perfil: 'a', corpo: { claudeProfileId: 'a', claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', baseUrl: '' }, { id: 'b', label: 'B', kind: 'dir' }] } });
+const chaveSemTopo = (): Acao => ({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'C', perfil: 'c', corpo: { claudeProfileId: 'b', claudeProfiles: [{ id: 'b', label: 'B', kind: 'dir' }, { id: 'c', label: 'C', kind: 'apikey', baseUrl: '' }, { id: 'a', label: 'A', kind: 'dir' }] } });
 const revogar = (atual: boolean): Acao => ({ tipo: 'revogarSessao', alvo: 'sistema:sessao:0123456789abcdef', nome: atual ? '"Este" (este navegador)' : '"Outro"', id: '0123456789abcdef', rotulo: atual ? 'Este' : 'Outro', atual });
 
 // Um cliente de mentira: o corpo cru passa pelo leitor da borda, como no de verdade.
@@ -67,8 +72,20 @@ describe('o pedido de cada ação do Sistema', () => {
   it('não existe ação de teto, e só Subir na ordem manda claudeProfiles, sem segredo', () => {
     expect([...TIPOS_DO_SISTEMA]).toEqual(['conta', 'padroes', 'regra', 'automacao', 'ritmo', 'ordemDosPerfis', 'revogarSessao']);
     for (const acao of [conta(), padroes('x'), regra('auto'), automacao(), ritmo(), revogar(false)]) expect(JSON.stringify(pedidoDa(acao))).not.toContain('claudeProfiles');
-    const corpoDaOrdem = JSON.stringify(pedidoDa(ordem()));
-    for (const proibido of ['apiKey', '"dir":', 'temChave', 'budget']) expect(corpoDaOrdem).not.toContain(proibido);
+    // o corpo que sai de verdade: o config como a borda o lê, remontado por corpoDeSubir e
+    // mandado por pedidoDa (o perfil de chave com a presença dela, o de assinatura com a pasta)
+    const config = lerConfigDoSistema({
+      claudeProfileId: 'a',
+      claudeProfiles: [
+        { id: 'a', label: 'A', kind: 'dir', dir: '/home/farol/.farol/claude/a' },
+        { id: 'b', label: 'B', kind: 'apikey', baseUrl: '', temChave: true, budgetDaily: 5 },
+      ],
+    }, () => {});
+    const corpoReal = corpoDeSubir(config, 'b');
+    if (!corpoReal) throw new Error('sem corpo');
+    const corpoDaOrdem = JSON.stringify(pedidoDa({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'B', perfil: 'b', corpo: corpoReal }));
+    expect(corpoDaOrdem).toContain('claudeProfiles');
+    for (const proibido of ['apiKey', '"dir":', 'temChave', 'budget', '/home/farol']) expect(corpoDaOrdem).not.toContain(proibido);
     // nenhum fonte da tela (fora dos testes) monta perfil para o motor, menos o da ordem
     const pasta = path.resolve(import.meta.dirname, '..');
     const fontes = (fs.readdirSync(pasta, { recursive: true }) as string[])
@@ -137,8 +154,22 @@ describe('a pergunta antes do envio', () => {
     expect(confirmacaoDa(regra('inherit', ''))?.texto).not.toContain('regra da organização');
   });
 
-  it('padrões, ritmo e ordem dos perfis não perguntam: nada disso muda o que é publicado', () => {
-    for (const acao of [padroes('x'), ritmo(), ordem()]) expect(confirmacaoDa(acao)).toBeNull();
+  it('padrões com texto, ritmo e ordem dos perfis sem chave de API no topo não perguntam', () => {
+    for (const acao of [padroes('x'), ritmo(), ordem(), chaveSemTopo()]) expect(confirmacaoDa(acao)).toBeNull();
+  });
+
+  it('padrões vazios apagam todos: pergunta antes', () => {
+    const pergunta = confirmacaoDa(padroes(''));
+    expect(pergunta?.titulo).toBe('Apagar todos os padrões do time de @farol-bot?');
+    expect(pergunta?.texto).toContain('apaga todos os padrões do time');
+    expect(pergunta?.confirmar).toBe('Apagar os padrões');
+  });
+
+  it('o perfil de chave de API que vai para o topo pergunta, dizendo que as revisões passam a gastar na API paga', () => {
+    const pergunta = confirmacaoDa(ordemDaChave());
+    expect(pergunta?.titulo).toBe('Pôr A no topo da ordem de uso?');
+    expect(pergunta?.texto).toContain('as revisões passam a gastar na API paga');
+    expect(pergunta?.confirmar).toBe('Subir e usar a API paga');
   });
 });
 
@@ -214,7 +245,9 @@ describe('o que a tela diz depois', () => {
 
   it('revogação: a de outra sessão, a deste navegador e a que o motor não tinha mais', async () => {
     expect(await executar(cliente({ ok: true, eraAtual: false }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor revogou a sessão "Outro": o token dela não vale mais.' });
-    expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(true))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' });
+    expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(true))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.', encerrouEstaSessao: true });
+    // a lista dizia outra, e o motor respondeu que era a deste navegador: vale a resposta
+    expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.', encerrouEstaSessao: true });
     expect(await executar(cliente({ ok: false, code: 'sessao_inexistente' }), revogar(false))).toEqual({ tipo: 'erro', texto: expect.stringContaining('já foi revogada ou expirou') });
   });
 });

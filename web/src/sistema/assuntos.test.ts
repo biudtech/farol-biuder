@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ASSUNTOS, assuntoDoCaminho, assuntoDosSegmentos, nomeDoAssunto, rotaDoAssunto } from './assuntos';
 
 describe('os assuntos do Sistema', () => {
-  it('a ordem do menu, com a conta primeiro e a saúde por último', () => {
-    expect(ASSUNTOS.map((a) => a.id)).toEqual(['conta', 'regras', 'padroes', 'claude', 'jira', 'ritmo', 'acesso', 'saude']);
+  it('a ordem do menu: os sete assuntos do desenho, com a conta primeiro', () => {
+    expect(ASSUNTOS.map((a) => a.id)).toEqual(['conta', 'regras', 'padroes', 'claude', 'jira', 'ritmo', 'acesso']);
     expect(nomeDoAssunto('acesso')).toBe('Quem está conectado');
     expect(rotaDoAssunto('claude')).toBe('/sistema/claude');
   });
@@ -18,7 +18,8 @@ describe('os assuntos do Sistema', () => {
   });
 
   it('entrada torta não abre assunto nenhum', () => {
-    for (const torto of [['nada'], ['Claude'], ['claude', 'x'], [3], 'claude', null, {}, [''], ['../conta']]) {
+    // a saúde do motor saiu da tela (decisão do dono): o diagnóstico fica só na API do motor
+    for (const torto of [['nada'], ['Claude'], ['claude', 'x'], [3], 'claude', null, {}, [''], ['../conta'], ['saude']]) {
       expect(assuntoDosSegmentos(torto)).toBeNull();
     }
   });
@@ -30,6 +31,7 @@ describe('os assuntos do Sistema', () => {
     expect(assuntoDoCaminho('/sistema/jira/')).toEqual({ id: 'jira', explicito: true });
     expect(assuntoDoCaminho('/sistema/jira?x=1#y')).toEqual({ id: 'jira', explicito: true });
     expect(assuntoDoCaminho('/sistema/nada')).toBeNull();
+    expect(assuntoDoCaminho('/sistema/saude')).toBeNull();
     expect(assuntoDoCaminho('/sistemas')).toBeNull();
     expect(assuntoDoCaminho('/radar')).toBeNull();
     expect(assuntoDoCaminho(undefined)).toBeNull();

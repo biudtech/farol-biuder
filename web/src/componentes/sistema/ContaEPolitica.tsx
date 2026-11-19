@@ -225,7 +225,7 @@ export function ContaEPolitica({ conta, controle, impedimento, aoMudar, ultimo }
         {conta.limitePlanoAte ? <Par nome="Limite do plano do Claude">A assinatura está no limite até {dataHora(conta.limitePlanoAte) || 'hora não informada'}.</Par> : null}
       </dl>
       <p className={ui.mini}>
-        O login da conta e o token do GitHub não mudam por esta tela: o login vem do arquivo de configuração ou do gh, e o token fica só no motor. Do token o motor informa a presença, não a validade: se ele vale, quem diz é o GitHub na próxima busca (veja Saúde do motor).
+        O login da conta e o token do GitHub não mudam por esta tela: o login vem do arquivo de configuração ou do gh, e o token fica só no motor. Do token o motor informa a presença, não a validade: se ele vale, quem diz é o GitHub na próxima busca.
       </p>
       {conta.regrasDeReview > 0 ? (
         <p className={ui.nota}>
