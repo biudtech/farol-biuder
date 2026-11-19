@@ -5,7 +5,7 @@ import {
 } from './linhas';
 import type { Verificacao } from './saude';
 
-const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes', regrasDeReview: 0 };
+const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes', regrasDeReview: 0, regras: [], regrasIlegiveis: 0 };
 const ok = (nome: string): Verificacao => ({ nome, estado: 'ok', detalhe: 'certo' });
 const SAUDE = { claudeAuth: [], claudePerfilPronto: true } as unknown as Saude;
 

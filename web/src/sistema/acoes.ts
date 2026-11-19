@@ -2,14 +2,25 @@
 // depois, conferida contra o que o motor respondeu. Sem React. Elas entram na união `Acao` de
 // src/radar/acoes.ts, e passam pelo mesmo `executar` e pelo mesmo gancho `useAcoes`.
 //
-// Cada ação mexe numa seção só: a da conta vai a POST /api/accounts/edit com os campos que a
-// pessoa alterou; a da automação vai a POST /api/settings só com as chaves de automação que
-// ela alterou; a de sessão (Encerrar) vai a POST /api/auth/revoke. Nenhuma ação manda `claudeProfiles`:
-// a tela não edita perfil nem teto de gasto.
+// Cada ação mexe numa coisa só:
+// - a conta vai a POST /api/accounts/edit com os campos da política que a pessoa alterou; os
+//   padrões do time, pela mesma rota, só com `padroesRevisao`; uma regra por organização ou
+//   autor, pela mesma rota, com a operação pontual `regra-review`;
+// - a automação (modelo, esforço, paralelo, modo rápido) e o ritmo (intervalo, retomada,
+//   contestação) vão a POST /api/settings, cada um só com as chaves que a pessoa alterou;
+// - Subir na ordem vai a POST /api/settings com o padrão e a lista de perfis remontada sem
+//   segredo (src/sistema/perfis.ts, o único lugar que monta `claudeProfiles`);
+// - Sair e Revogar vão a POST /api/auth/revoke.
+// Nada daqui leva segredo: a credencial do Jira e o código do login da assinatura vão por
+// chamada própria dos componentes, que não guardam o valor (CredencialDoJira.tsx, LoginWeb.tsx).
 import type { Objeto } from '@/contratos/formas';
-import type { ConfigDoSistema } from '@/contratos/sistema';
+import type { ConfigDoSistema, ModoDaRegra } from '@/contratos/sistema';
 import { diferencasDaAutomacao, textoDaAutomacao, type CorpoDaAutomacao } from './automacao';
+import { textoDosPadroes } from './padroes';
+import { diferencaDaOrdem, type CorpoDaOrdem } from './perfis';
 import { corpoDaConta, nomeDoCampoDaConta, textoDosCampos, type CamposDaConta } from './politica';
+import { EFEITO_DO_MODO, ROTULO_DO_MODO, corpoDaRegra } from './regras';
+import { diferencasDoRitmo, textoDoRitmo, type CorpoDoRitmo } from './ritmo';
 import { perguntaDeRevogar } from './sessoes';
 
 interface Base {
@@ -25,35 +36,61 @@ export type AcaoDoSistema =
   // motor publica sozinho, já por extenso e calculadas contra o valor atual do motor: havendo
   // alguma, a ação pergunta antes.
   | (Base & { tipo: 'conta'; user: string; campos: CamposDaConta; ampliacoes: readonly string[] })
+  // Os padrões do time da conta: o texto inteiro, que troca o anterior; vazio tira o campo.
+  | (Base & { tipo: 'padroes'; user: string; texto: string })
+  // Uma regra de review por organização, ou por autor dentro dela (editarRegra,
+  // lib/engine/review-scope.js). `inherit` tira a regra.
+  | (Base & { tipo: 'regra'; user: string; organizacao: string; autor?: string; modo: ModoDaRegra | 'inherit' })
   // As chaves de automação que a pessoa alterou, e só elas. Nenhuma amplia o que o motor
   // publica: a espera do CI, cuja mudança ampliava, saiu da tela.
   | (Base & { tipo: 'automacao'; corpo: CorpoDaAutomacao })
-  // Encerra (revoga) uma sessão pareada pelo `id`. `atual`: é a deste navegador.
+  // As chaves do ritmo que a pessoa alterou. Nenhuma muda o que o motor publica.
+  | (Base & { tipo: 'ritmo'; corpo: CorpoDoRitmo })
+  // A ordem de uso dos perfis do Claude, com um perfil um lugar acima.
+  | (Base & { tipo: 'ordemDosPerfis'; corpo: CorpoDaOrdem })
+  // Encerra (revoga) uma sessão pareada pelo `id`. `atual`: é a deste navegador (o Sair).
   | (Base & { tipo: 'revogarSessao'; id: string; rotulo: string; atual: boolean });
 
-export const TIPOS_DO_SISTEMA = ['conta', 'automacao', 'revogarSessao'] as const;
+export const TIPOS_DO_SISTEMA = ['conta', 'padroes', 'regra', 'automacao', 'ritmo', 'ordemDosPerfis', 'revogarSessao'] as const;
 
 export function pedidoDoSistema(acao: AcaoDoSistema): { rota: string; corpo: Objeto } {
   switch (acao.tipo) {
     case 'conta': return { rota: '/api/accounts/edit', corpo: corpoDaConta(acao.user, acao.campos) };
+    case 'padroes': return { rota: '/api/accounts/edit', corpo: { tipo: 'editar', user: acao.user, campos: { padroesRevisao: acao.texto } } };
+    case 'regra': return { rota: '/api/accounts/edit', corpo: { ...corpoDaRegra(acao.user, acao.organizacao, acao.autor, acao.modo) } };
     case 'automacao': return { rota: '/api/settings', corpo: { ...acao.corpo } };
+    case 'ritmo': return { rota: '/api/settings', corpo: { ...acao.corpo } };
+    case 'ordemDosPerfis': return { rota: '/api/settings', corpo: { ...acao.corpo } };
     case 'revogarSessao': return { rota: '/api/auth/revoke', corpo: { id: acao.id } };
   }
+}
+
+function rotuloDaRegra(acao: Extract<AcaoDoSistema, { tipo: 'regra' }>): string {
+  if (acao.modo === 'inherit') return 'Remover';
+  return `Salvar: ${ROTULO_DO_MODO[acao.modo].toLowerCase()}`;
 }
 
 export function rotuloDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return 'Salvar conta e política';
+    case 'padroes': return 'Salvar padrões';
+    case 'regra': return rotuloDaRegra(acao);
     case 'automacao': return 'Salvar automação';
-    case 'revogarSessao': return 'Encerrar';
+    case 'ritmo': return 'Salvar ritmo';
+    case 'ordemDosPerfis': return 'Subir na ordem';
+    case 'revogarSessao': return acao.atual ? 'Sair' : 'Revogar';
   }
 }
 
 export function nomeDoSistema(acao: AcaoDoSistema): string {
   switch (acao.tipo) {
     case 'conta': return `Salvar conta e política de ${acao.nome}`;
+    case 'padroes': return `Salvar os padrões do time de ${acao.nome}`;
+    case 'regra': return acao.modo === 'inherit' ? `Remover a regra de ${acao.nome}` : `Salvar a regra de ${acao.nome}: ${ROTULO_DO_MODO[acao.modo].toLowerCase()}`;
     case 'automacao': return 'Salvar automação';
-    case 'revogarSessao': return `Encerrar a sessão ${acao.nome}`;
+    case 'ritmo': return 'Salvar o ritmo da revisão';
+    case 'ordemDosPerfis': return `Subir ${acao.nome} na ordem de uso`;
+    case 'revogarSessao': return acao.atual ? 'Sair deste navegador' : `Revogar a sessão ${acao.nome}`;
   }
 }
 
@@ -74,9 +111,28 @@ const REGISTRO_DA_POLITICA = 'O motor registra a mudança de política com a dat
 // esperando continua esperando no motor, e esta tela não tem decisão sobre ele.
 export const QUANDO_A_POLITICA_VALE = 'Quando passa a valer: o motor lê a política ao começar cada revisão, ao decidir o resultado de cada uma e quando uma espera do CI fecha. Então vale para os PRs da fila a partir da próxima checagem e para as revisões que terminarem daqui em diante. O PR que a política anterior deixou esperando não é reavaliado: continua esperando no motor, e esta tela não tem decisão sobre ele.';
 
+// A regra que revisa sozinho amplia o que o motor publica; tirar uma regra devolve o alvo à
+// política da conta, que pode ser mais ampla ou mais estreita: as duas perguntam. A que põe
+// no clique só reduz e vai direto.
+function perguntaDaRegra(acao: Extract<AcaoDoSistema, { tipo: 'regra' }>): PerguntaDoSistema | null {
+  if (acao.modo === 'manual') return null;
+  if (acao.modo === 'auto') {
+    return {
+      titulo: `Revisar sozinho ${acao.nome}?`,
+      texto: `${EFEITO_DO_MODO.auto} Toda publicação continua passando pelos gates do motor. A regra vale a partir da próxima checagem. ${REGISTRO_DA_POLITICA}`,
+      confirmar: 'Salvar e revisar sozinho',
+    };
+  }
+  return {
+    titulo: `Remover a regra de ${acao.nome}?`,
+    texto: `Sem a regra, ${acao.nome} volta a seguir ${acao.autor ? 'a regra da organização, se houver, ou ' : ''}a revisão automática da conta: se ela estiver ligada, o motor passa a revisar e publicar sozinho. A mudança vale a partir da próxima checagem. ${REGISTRO_DA_POLITICA}`,
+    confirmar: 'Remover a regra',
+  };
+}
+
 // A pergunta antes do POST. A conta só pergunta quando a mudança AMPLIA o que o motor publica
-// sozinho, dizendo o efeito de cada item; a que reduz vai direto. A automação não pergunta:
-// nenhuma das três chaves muda o que é publicado. Encerrar sessão pergunta sempre.
+// sozinho, dizendo o efeito de cada item; a que reduz vai direto. As preferências não
+// perguntam: nenhuma muda o que é publicado. Sair e Revogar perguntam sempre.
 export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | null {
   switch (acao.tipo) {
     case 'conta':
@@ -86,7 +142,12 @@ export function confirmacaoDoSistema(acao: AcaoDoSistema): PerguntaDoSistema | n
         texto: `Esta mudança amplia o que o motor faz e publica no GitHub sem clique. ${acao.ampliacoes.join(' ')} ${QUANDO_A_POLITICA_VALE} Toda publicação continua passando pelos gates do motor. ${REGISTRO_DA_POLITICA}`,
         confirmar: 'Salvar e ampliar a publicação automática',
       };
-    case 'automacao': return null;
+    case 'regra': return perguntaDaRegra(acao);
+    case 'padroes':
+    case 'automacao':
+    case 'ritmo':
+    case 'ordemDosPerfis':
+      return null;
     case 'revogarSessao': return perguntaDeRevogar({ rotulo: acao.rotulo, atual: acao.atual });
   }
 }
@@ -117,18 +178,38 @@ function desfechoDaConta(acao: Extract<AcaoDoSistema, { tipo: 'conta' }>, dados:
   return { tipo: 'ok', texto: `O motor aceitou a mudança em ${acao.nome}: ${textoDosCampos(acao.campos)}. A resposta dele não traz a conta gravada. ${ESTADO_NA_TELA}` };
 }
 
-function desfechoDaAutomacao(acao: Extract<AcaoDoSistema, { tipo: 'automacao' }>, dados: AceiteDoSistema): DesfechoDoSistema {
-  const ignoradas = (dados.ignoradas ?? []).filter((chave) => Object.hasOwn(acao.corpo, chave));
+function desfechoDosPadroes(acao: Extract<AcaoDoSistema, { tipo: 'padroes' }>, dados: AceiteDoSistema): DesfechoDoSistema {
+  if (dados.ignorados?.includes('padroesRevisao')) return { tipo: 'erro', texto: `O motor ignorou os padrões do time: o texto não foi gravado. ${ESTADO_NA_TELA}` };
+  return { tipo: 'ok', texto: `O motor aceitou: ${textoDosPadroes(acao.texto)}. Vale para as revisões que começarem daqui em diante. ${ESTADO_NA_TELA}` };
+}
+
+function desfechoDaRegra(acao: Extract<AcaoDoSistema, { tipo: 'regra' }>): DesfechoDoSistema {
+  const feito = acao.modo === 'inherit' ? `tirou a regra de ${acao.nome}` : `gravou a regra de ${acao.nome}: ${ROTULO_DO_MODO[acao.modo].toLowerCase()}`;
+  return { tipo: 'ok', texto: `O motor ${feito}. Vale a partir da próxima checagem. ${ESTADO_NA_TELA}` };
+}
+
+function desfechoDeSettings(corpo: Objeto, dados: AceiteDoSistema, texto: string, diferencas: (gravado: ConfigDoSistema) => string[]): DesfechoDoSistema {
+  const ignoradas = (dados.ignoradas ?? []).filter((chave) => Object.hasOwn(corpo, chave));
   if (ignoradas.length) return { tipo: 'erro', texto: `O motor ignorou ${ignoradas.join(', ')}: não foi gravado.` };
-  if (!dados.sistema) return { tipo: 'ok', texto: `O motor aceitou o pedido (${textoDaAutomacao(acao.corpo)}), mas a resposta não trouxe a configuração gravada: confira na tela.` };
-  const diferencas = diferencasDaAutomacao(acao.corpo, dados.sistema);
-  if (diferencas.length) return { tipo: 'erro', texto: `O motor gravou diferente do pedido: ${diferencas.join('; ')}. O que ele não aceita, ele mantém como estava ou ajusta para a faixa.` };
-  return { tipo: 'ok', texto: `O motor gravou: ${textoDaAutomacao(acao.corpo)}.` };
+  if (!dados.sistema) return { tipo: 'ok', texto: `O motor aceitou o pedido (${texto}), mas a resposta não trouxe a configuração gravada: confira na tela.` };
+  const lista = diferencas(dados.sistema);
+  if (lista.length) return { tipo: 'erro', texto: `O motor gravou diferente do pedido: ${lista.join('; ')}. O que ele não aceita, ele mantém como estava ou ajusta para a faixa.` };
+  return { tipo: 'ok', texto: `O motor gravou: ${texto}.` };
+}
+
+function desfechoDaOrdem(acao: Extract<AcaoDoSistema, { tipo: 'ordemDosPerfis' }>, dados: AceiteDoSistema): DesfechoDoSistema {
+  const ignoradas = (dados.ignoradas ?? []).filter((chave) => Object.hasOwn(acao.corpo, chave));
+  if (ignoradas.length) return { tipo: 'erro', texto: `O motor ignorou ${ignoradas.join(', ')}: a ordem não mudou.` };
+  const pedida = acao.corpo.claudeProfiles.map((p) => p.label || p.id).join(', ');
+  if (!dados.sistema) return { tipo: 'ok', texto: `O motor aceitou a ordem ${pedida}, mas a resposta não trouxe os perfis gravados: confira na tela.` };
+  const diferenca = diferencaDaOrdem(acao.corpo, dados.sistema);
+  if (diferenca) return { tipo: 'erro', texto: `O motor gravou diferente do pedido: ${diferenca}.` };
+  return { tipo: 'ok', texto: `O motor gravou a ordem de uso: ${pedida}. A próxima sessão começa pelo primeiro que não estiver no limite do plano.` };
 }
 
 function desfechoDaRevogacao(acao: Extract<AcaoDoSistema, { tipo: 'revogarSessao' }>, dados: AceiteDoSistema): DesfechoDoSistema {
   if (dados.eraAtual || acao.atual) return { tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' };
-  return { tipo: 'ok', texto: `O motor encerrou a sessão ${acao.nome}: o token dela não vale mais.` };
+  return { tipo: 'ok', texto: `O motor revogou a sessão ${acao.nome}: o token dela não vale mais.` };
 }
 
 // O que a tela diz depois de `{ ok: true }`. O `ok` não é o desfecho: a frase sai do que a
@@ -136,7 +217,11 @@ function desfechoDaRevogacao(acao: Extract<AcaoDoSistema, { tipo: 'revogarSessao
 export function desfechoDoSistema(acao: AcaoDoSistema, dados: AceiteDoSistema): DesfechoDoSistema {
   switch (acao.tipo) {
     case 'conta': return desfechoDaConta(acao, dados);
-    case 'automacao': return desfechoDaAutomacao(acao, dados);
+    case 'padroes': return desfechoDosPadroes(acao, dados);
+    case 'regra': return desfechoDaRegra(acao);
+    case 'automacao': return desfechoDeSettings(acao.corpo, dados, textoDaAutomacao(acao.corpo), (gravado) => diferencasDaAutomacao(acao.corpo, gravado));
+    case 'ritmo': return desfechoDeSettings(acao.corpo, dados, textoDoRitmo(acao.corpo), (gravado) => diferencasDoRitmo(acao.corpo, gravado));
+    case 'ordemDosPerfis': return desfechoDaOrdem(acao, dados);
     case 'revogarSessao': return desfechoDaRevogacao(acao, dados);
   }
 }

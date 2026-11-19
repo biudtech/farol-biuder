@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '@/contratos/snapshot';
 import { ESTADO_INICIAL, type App, type EstadoDoApp } from '@/estado/app';
 import { criarStore } from '@/estado/store';
 import { dataComAno } from '@/radar/formato';
+import { ASSUNTOS, type IdDoAssunto } from '@/sistema/assuntos';
 import type { Resultado } from '@/transporte/cliente';
 import { aplicarEstadoInteiro } from '@/transporte/estado';
 import { Sistema } from './Sistema';
+import { SistemaNaRota } from './SistemaNaRota';
+
+const caminhoDaRota = vi.hoisted(() => ({ atual: '/sistema' }));
+vi.mock('next/navigation', () => ({ usePathname: () => caminhoDaRota.atual }));
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...resto }: { href: string; children: ReactNode }) => <a href={href} {...resto}>{children}</a>,
+}));
 
 type Falha = Extract<Resultado<never>, { ok: false }>;
 // O que o motor de mentira devolve: o corpo cru (que passa pelo leitor da borda, como no
@@ -20,6 +29,8 @@ const REDE: Falha = { ok: false, falha: 'rede', status: 0 };
 // Valores com cara de segredo, montados em pedaços para o arquivo não parecer ter um.
 const CHAVE_DA_ANTHROPIC = ['sk', 'ant', 'api03', 'CCCCCCCCCCCCCCCCCCCC'].join('-');
 const TOKEN_DO_GITHUB = `ghp_${'z9Y8x7W6'.repeat(4)}`;
+const TOKEN_DO_JIRA = ['ATATT', 'xFfGF0', 'k9J8h7G6f5D4s3A2'].join('3');
+const CODIGO_DO_LOGIN = ['codigo', 'de', 'uso', 'unico'].join('Q') + '#estadoQ123';
 
 // Os perfis como configParaFora (lib/engine/chave-do-perfil.js) os manda: o de chave sem
 // `apiKey` e com `temChave`.
@@ -31,6 +42,9 @@ const ABERTA = { ...CONTA, autoReview: true, onClean: 'approve', onCaveats: 'app
 
 const CONFIG = {
   intervalSeconds: 300,
+  reReviewResume: true,
+  autoPushback: true,
+  reviewFast: false,
   aguardarCiParaAprovar: true,
   parallelReviews: 1,
   globalParallelReviews: 0,
@@ -64,10 +78,18 @@ const BRUTO = {
       { valor: 'sonnet', rotulo: 'Sonnet', nome: 'Sonnet', auto: false, aceitaEsforco: true },
     ],
   },
-  claudePerfis: { problemas: [], uso: { plano: { lido: true, ok: true, erro: '', em: 1, venceEm: 0, faixaDoLogin: '', desatualizado: false, lidaEm: 1, janelas: [{ id: 's', nome: 'Sessão', usado: 0.4, reset: 5, resetTexto: 'às 18h' }] } } },
+  claudePerfis: { problemas: [], uso: { plano: { lido: true, ok: true, erro: '', em: 1, venceEm: 1766000000000, faixaDoLogin: '', desatualizado: false, lidaEm: 1, janelas: [{ id: 's', nome: 'Sessão', usado: 0.4, reset: 5, resetTexto: 'às 18h' }] } } },
   accounts: [CONTA],
   config: CONFIG,
   jiraSites: [{ id: 'biud', label: 'BIUD', baseUrl: 'https://biud.atlassian.net', owners: ['biudtech'], projectKeys: ['BT'], hasCredential: true }],
+  decisions: {
+    pending: [],
+    resolved: [
+      { id: 'd1', key: 'biudtech/app#1', card: 'BT-10', resolvedAt: 1763200000000 },
+      { id: 'd2', key: 'biudtech/app#2', card: 'BT-11', resolvedAt: 1763300000000 },
+      { id: 'd3', key: 'outra/app#3', card: 'BT-12', resolvedAt: 1763400000000 },
+    ],
+  },
 };
 
 const ATUAL = { id: '0123456789abcdef', rotulo: 'Notebook', criadoEm: 1763200000000, ultimoUsoEm: 1763290000000, atual: true };
@@ -86,26 +108,38 @@ interface Montagem {
   semEstado?: boolean;
   conexao?: EstadoDoApp['conexao'];
   estadoEmDia?: boolean;
+  caminho?: string;
   responder?: (caminho: string) => Resposta | Promise<Resposta>;
   // o corpo cru que cada POST devolve; sem resposta própria, a lista de sessões e `{ ok: true }`
   aoPostar?: (rota: string, enviado: unknown) => Resposta | Promise<Resposta> | undefined;
 }
 
-function montar({ bruto = BRUTO, semEstado = false, conexao = 'conectado', estadoEmDia = true, responder = () => REDE, aoPostar = () => undefined }: Montagem = {}) {
+// A montagem em uso: `irPara` troca o assunto aberto como a rota faria, sem desmontar a tela.
+let emUso: { irPara(caminho: string): void; caminho: string } | null = null;
+
+function montar({ bruto = BRUTO, semEstado = false, conexao = 'conectado', estadoEmDia = true, caminho = '/sistema', responder = () => REDE, aoPostar = () => undefined }: Montagem = {}) {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao, estadoEmDia, snapshot: semEstado ? null : snapshotDe(bruto) });
   const ler = (r: Resposta, leitor: (bruto: unknown) => unknown) => {
     if (!('corpo' in r)) return r;
     const dados = leitor(r.corpo);
     return dados === null ? { ok: false, falha: 'resposta_invalida', status: 200 } : { ok: true, dados };
   };
-  const get = vi.fn(async (caminho: string, leitor: (bruto: unknown) => unknown) => ler(await responder(caminho), leitor));
+  const get = vi.fn(async (caminhoDoGet: string, leitor: (bruto: unknown) => unknown) => ler(await responder(caminhoDoGet), leitor));
   const post = vi.fn(async (rota: string, enviado: unknown, leitor: (bruto: unknown) => unknown) => {
     const propria = await aoPostar(rota, enviado);
     return ler(propria ?? corpo(rota === '/api/auth/sessions' ? SESSOES : { ok: true }), leitor);
   });
   const esquecerSessao = vi.fn();
   const app = { store, cliente: { get, post }, dispensarRecados: () => store.trocar({ recados: [] }), esquecerSessao } as unknown as App;
-  const tela = render(<Sistema app={app} />);
+  const tela = render(<Sistema app={app} caminho={caminho} />);
+  emUso = {
+    caminho,
+    irPara(novo: string) {
+      if (!emUso || emUso.caminho === novo) return;
+      emUso.caminho = novo;
+      act(() => { tela.rerender(<Sistema app={app} caminho={novo} />); });
+    },
+  };
   // os POSTs que não são a carga da lista de sessões
   const envios = (): Array<[string, unknown]> => post.mock.calls.filter(([rota]) => rota !== '/api/auth/sessions').map(([rota, enviado]) => [rota, enviado]);
   const trocar = (novo: unknown) => act(() => { store.trocar({ snapshot: snapshotDe(novo) }); });
@@ -114,27 +148,45 @@ function montar({ bruto = BRUTO, semEstado = false, conexao = 'conectado', estad
 
 // deixa as promessas pendentes (a resposta do motor de mentira) assentarem
 const assentar = async () => { await act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); }); };
-// cada seção é uma Linha: o <details> com o título como nome (papel group)
-const secao = (nome: string | RegExp) => screen.getByRole('group', { name: nome });
-const na = (nome: string | RegExp) => within(secao(nome));
+
+// Cada assunto é uma região com o nome do título; dentro de alguns, um bloco também é região.
+// Só o assunto aberto aparece: `secao` abre o assunto da região pedida, como o clique no menu.
+const SAUDE = 'Saúde do motor';
+const CONTA_E_POLITICA = 'Conta revisora';
+const REGRAS = 'Regras por organização e autor';
+const PADROES = 'Padrões do time';
+const CLAUDE = 'Claude';
+const AUTOMACAO = 'Modelo e sessões';
+const JIRA = 'Jira';
+const RITMO = 'Ritmo da revisão';
+const SESSOES_PAREADAS = 'Quem está conectado';
+const REDE_E_ACESSO = 'Rede e acesso';
+const ASSUNTO_DA_SECAO: Record<string, IdDoAssunto> = {
+  [SAUDE]: 'saude', [CONTA_E_POLITICA]: 'conta', [REGRAS]: 'regras', [PADROES]: 'padroes', [CLAUDE]: 'claude', [AUTOMACAO]: 'claude',
+  [JIRA]: 'jira', [RITMO]: 'ritmo', [SESSOES_PAREADAS]: 'acesso', [REDE_E_ACESSO]: 'acesso',
+};
+const secao = (nome: string) => {
+  const assunto = ASSUNTO_DA_SECAO[nome];
+  if (assunto) emUso?.irPara(`/sistema/${assunto}`);
+  return screen.getByRole('region', { name: nome });
+};
+const na = (nome: string) => within(secao(nome));
 const clicarEm = async (onde: ReturnType<typeof within>, nome: string | RegExp) => { await act(async () => { fireEvent.click(onde.getByRole('button', { name: nome })); }); };
 const mudar = (campo: HTMLElement, valor: string) => { act(() => { fireEvent.change(campo, { target: { value: valor } }); }); };
 const regiao = () => screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
-
-const SAUDE = 'Saúde';
-const CONTA_E_POLITICA = 'Conta revisora e política';
-const AUTOMACAO = 'Automação';
-const CLAUDE = 'Perfil do Claude';
-const JIRA = 'Jira';
-const SESSOES_PAREADAS = 'Sessões pareadas';
-const REDE_E_ACESSO = 'Rede e acesso';
+const menu = () => screen.getByRole('navigation', { name: 'Assuntos do Sistema' });
+const itensDoMenu = () => within(menu()).getAllByRole('link');
+// o item do menu do assunto onde mora a seção
+const resumoDe = (nome: string) => itensDoMenu().find((a) => a.getAttribute('href') === `/sistema/${ASSUNTO_DA_SECAO[nome]}`) as HTMLElement;
 
 afterEach(() => {
   cleanup();
+  emUso = null;
+  caminhoDaRota.atual = '/sistema';
   vi.restoreAllMocks();
 });
 
-// Uma resposta que só chega quando o teste mandar: para ver o "Salvando…", o "Encerrando…" e o
+// Uma resposta que só chega quando o teste mandar: para ver o "Salvando…", o "Revogando…" e o
 // "Conferindo" enquanto o pedido está no ar.
 function adiada() {
   let soltar: (r: Resposta) => void = () => {};
@@ -142,76 +194,74 @@ function adiada() {
   return { promessa, soltar: async (r: Resposta) => { await act(async () => { soltar(r); }); await assentar(); } };
 }
 
-const linhas = (t: ReturnType<typeof montar>) => [...t.container.querySelectorAll('details')];
-const resumoDe = (nome: string) => (secao(nome).querySelector('summary') as HTMLElement);
-
-describe('Sistema: a página', () => {
-  it('tem o título, a frase de quantos pontos pedem atenção e as sete linhas fechadas, com bolinha e resumo', async () => {
-    const t = montar();
-    await assentar();
-    expect(screen.getByRole('heading', { level: 1, name: 'Sistema' })).toBeTruthy();
-    expect(screen.getByText('Nenhum ponto pede atenção')).toBeTruthy();
-    expect(linhas(t).map((d) => d.getAttribute('aria-label'))).toEqual([SAUDE, CONTA_E_POLITICA, AUTOMACAO, CLAUDE, JIRA, SESSOES_PAREADAS, REDE_E_ACESSO]);
-    // nada aberto de início: o detalhe é sob demanda
-    expect(linhas(t).every((d) => !d.open)).toBe(true);
-    // cada resumo: a bolinha (com o estado escrito para o leitor), o título e o resumo à direita
-    expect(linhas(t).map((d) => d.querySelector('summary')?.textContent)).toEqual([
-      'OK:Saúde12 verificações OK',
-      'OK:Conta revisora e política@farol-bot, revisão automática desligada',
-      'OK:Automação1 ao mesmo tempo, Opus',
-      'OK:Perfil do ClaudeAssinatura, pronto',
-      'OK:Jirabiud.atlassian.net',
-      'OK:Sessões pareadas2 ativas',
-      'OK:Rede e acessofarol.exemplo.com',
-    ]);
-    expect(linhas(t).map((d) => d.querySelector('summary [data-tom]')?.getAttribute('data-tom'))).toEqual(['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
-    // o índice do topo saiu: cada seção já é uma linha
-    expect(screen.queryByRole('navigation', { name: 'Seções do Sistema' })).toBeNull();
-    // cada linha é um h2 dentro do <summary>, logo abaixo do h1
-    expect(linhas(t).map((d) => d.querySelector('summary > h2') !== null)).toEqual([true, true, true, true, true, true, true]);
-  });
-
-  it('os títulos não pulam nível: h1 da tela, h2 de cada linha e h3 dentro dela', async () => {
-    const t = montar();
-    await assentar();
-    for (const d of linhas(t)) d.open = true;
-    const niveis = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => Number(h.tagName.slice(1)));
-    expect(niveis[0]).toBe(1);
-    for (let i = 1; i < niveis.length; i += 1) expect((niveis[i] as number) - (niveis[i - 1] as number)).toBeLessThanOrEqual(1);
-    expect(niveis).toContain(3);
-  });
-
-  it('a frase do topo conta as linhas em âmbar e vermelho, e a bolinha diz o estado de cada uma', async () => {
-    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false }, accounts: [{ ...CONTA, owners: [] }], jiraSites: [] } });
-    await assentar();
-    expect(screen.getByText('2 pontos pedem atenção')).toBeTruthy();
-    expect(resumoDe(SAUDE).querySelector('[data-tom]')?.getAttribute('data-tom')).toBe('ruim');
-    expect(resumoDe(SAUDE).textContent).toBe('Problema:SaúdeAutenticação do GitHub e mais 1');
-    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Atenção:Conta revisora e política@farol-bot, sem organização monitorada');
-    // o Jira desligado é cinza e não conta
-    expect(resumoDe(JIRA).textContent).toBe('Sem dado ou desligado:Jiradesligado');
-  });
-
-  it('um clique no resumo abre a linha, e outro fecha', async () => {
+describe('Sistema: o menu e a rota', () => {
+  it('tem o título, sem faixa de saúde no topo, e o menu dos assuntos com bolinha e resumo', async () => {
     montar();
     await assentar();
-    const linha = secao(AUTOMACAO) as HTMLDetailsElement;
-    act(() => { fireEvent.click(resumoDe(AUTOMACAO)); });
-    expect(linha.open).toBe(true);
-    act(() => { fireEvent.click(resumoDe(AUTOMACAO)); });
-    expect(linha.open).toBe(false);
+    expect(screen.getByRole('heading', { level: 1, name: 'Sistema' })).toBeTruthy();
+    expect(screen.queryByText(/pontos? pedem? atenção|Nenhum ponto pede atenção/)).toBeNull();
+    expect(itensDoMenu().map((a) => a.getAttribute('href'))).toEqual(ASSUNTOS.map((a) => `/sistema/${a.id}`));
+    expect(itensDoMenu().map((a) => a.textContent)).toEqual([
+      'OK:Conta revisora@farol-bot, revisão automática desligada',
+      'Sem dado ou desligado:Regras por organização e autorNenhuma exceção',
+      'Sem dado ou desligado:Padrões do timeNenhum padrão',
+      'OK:ClaudeAssinatura, pronto',
+      'OK:Jirabiud.atlassian.net',
+      'OK:Ritmo da revisãoChecagem a cada 5 minutos',
+      'OK:Quem está conectado2 ativas',
+      'OK:Saúde do motor12 verificações OK',
+    ]);
   });
 
-  it('não tem campo de senha nem campo para digitar token, chave ou credencial', async () => {
+  it('/sistema abre o primeiro assunto; o caminho do assunto abre ele, marcado no menu', async () => {
+    montar();
+    await assentar();
+    expect(screen.getAllByRole('region').filter((r) => r.querySelector('h2')).map((r) => r.querySelector('h2')?.textContent)).toEqual([CONTA_E_POLITICA]);
+    expect(itensDoMenu().filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.getAttribute('href'))).toEqual(['/sistema/conta']);
+    cleanup();
+    montar({ caminho: '/sistema/jira' });
+    await assentar();
+    expect(screen.getByRole('heading', { level: 2, name: JIRA })).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 2, name: CONTA_E_POLITICA })).toBeNull();
+    expect(itensDoMenu().filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.getAttribute('href'))).toEqual(['/sistema/jira']);
+  });
+
+  it('trocar de assunto leva o foco ao título dele e não perde o que foi digitado em outro', async () => {
+    montar();
+    await assentar();
+    mudar(na(PADROES).getByLabelText('Texto dos padrões, um por linha'), 'Teste em todo endpoint.');
+    secao(RITMO);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: RITMO }));
+    expect((na(PADROES).getByLabelText('Texto dos padrões, um por linha') as HTMLTextAreaElement).value).toBe('Teste em todo endpoint.');
+    expect(resumoDe(PADROES).textContent).toContain('alteração por salvar');
+    expect(screen.getByText(/^Aviso: há edição por salvar nesta tela \(padrões do time\)\. Trocar de assunto não a perde/)).toBeTruthy();
+  });
+
+  it('no celular o endereço sem assunto é a lista; com assunto, o Voltar aos assuntos leva à lista', async () => {
     const t = montar();
     await assentar();
-    expect(t.container.querySelector('input[type="password"]')).toBeNull();
-    const rotulos = [...t.container.querySelectorAll('label')].map((l) => l.textContent ?? '');
-    expect(rotulos.length).toBeGreaterThan(5);
-    for (const rotulo of rotulos) expect(rotulo).not.toMatch(/token|chave de api|senha|credencial|api key/i);
+    const raiz = t.container.querySelector('nav')?.parentElement as HTMLElement;
+    expect(raiz.className).toMatch(/semAssunto/);
+    secao(JIRA);
+    expect(raiz.className).toMatch(/comAssunto/);
+    expect(screen.getByRole('link', { name: 'Voltar aos assuntos' }).getAttribute('href')).toBe('/sistema');
   });
 
-  it('segredo que venha no estado não aparece na tela, e a seção dos perfis avisa que descartou', async () => {
+  it('presa à rota: o caminho do navegador escolhe o assunto, e assunto que não existe mostra a página da rota (o 404)', async () => {
+    const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', estadoEmDia: true, snapshot: snapshotDe(BRUTO) });
+    const post = vi.fn(async () => ({ ok: true, dados: { sessoes: [], descartadas: 0 } }));
+    const app = { store, cliente: { get: vi.fn(), post }, dispensarRecados: vi.fn(), esquecerSessao: vi.fn() } as unknown as App;
+    caminhoDaRota.atual = '/sistema/ritmo';
+    const { container, rerender } = render(<SistemaNaRota app={app}><p>página da rota</p></SistemaNaRota>);
+    expect(container.textContent).not.toContain('página da rota');
+    expect(screen.getByRole('heading', { level: 2, name: RITMO })).toBeTruthy();
+    caminhoDaRota.atual = '/sistema/nada';
+    rerender(<SistemaNaRota app={app}><p>página da rota</p></SistemaNaRota>);
+    expect(container.textContent).toBe('página da rota');
+    await assentar();
+  });
+
+  it('não guarda segredo: o que vem no estado com cara de segredo não aparece, e o assunto dos perfis avisa que descartou', async () => {
     const t = montar({
       bruto: {
         ...BRUTO,
@@ -226,29 +276,56 @@ describe('Sistema: a página', () => {
     expect(JSON.stringify(t.store.ler().snapshot)).not.toContain(CHAVE_DA_ANTHROPIC);
     expect(na(CLAUDE).getByRole('alert').textContent).toContain('1 campo(s) com cara de segredo');
     // os perfis continuam na tela: o segredo sai, o perfil fica
-    expect(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude' })).getAllByRole('heading', { level: 3 })).toHaveLength(2);
+    expect(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude, na ordem de uso' })).getAllByRole('heading', { level: 3 })).toHaveLength(2);
     // o caminho de pasta do diagnóstico também não é mostrado
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
+  it('campo mascarado só para os dois segredos digitados: o token do Jira e o código do login', async () => {
+    const t = montar({ aoPostar: (rota) => (rota === '/api/claude/login-web/start' ? corpo({ ok: true, loginId: 'l1', url: 'https://claude.com/cai/oauth/authorize?code=true' }) : undefined) });
+    await assentar();
+    expect(t.container.querySelectorAll('input[type="password"]')).toHaveLength(0);
+    await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
+    await clicarEm(na(CLAUDE), /^Assinatura/);
+    await clicarEm(na(CLAUDE), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    const mascarados = [...t.container.querySelectorAll('input[type="password"]')].map((campo) => ((campo as HTMLInputElement).labels?.[0]?.textContent ?? ''));
+    expect(mascarados.sort()).toEqual(['Código da página de login', 'Token de API do Atlassian']);
+    // nenhum outro rótulo pede segredo
+    const rotulos = [...t.container.querySelectorAll('label')].map((l) => l.textContent ?? '').filter((r) => !mascarados.includes(r));
+    for (const rotulo of rotulos) expect(rotulo).not.toMatch(/token|chave de api|senha|credencial|api key|código/i);
+  });
+
   it('sem o estado do motor a página mostra o esqueleto e diz que está esperando, sem salvar nenhum', async () => {
-    const t = montar({ semEstado: true });
+    montar({ semEstado: true });
     await assentar();
     expect(screen.getByText('Esperando o estado do motor')).toBeTruthy();
-    expect(screen.getByRole('status', { name: '' }).textContent).toBe('Esperando o estado do motor: as seções aparecem preenchidas quando ele chegar.');
-    expect(linhas(t)).toHaveLength(0);
+    expect(screen.getByRole('status', { name: '' }).textContent).toBe('Esperando o estado do motor: os assuntos aparecem preenchidos quando ele chegar.');
+    expect(screen.queryByRole('navigation', { name: 'Assuntos do Sistema' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Salvar/ })).toBeNull();
   });
 
-  it('cada linha diz o que falta quando o motor não mandou a parte dela', async () => {
+  it('cada assunto diz o que falta quando o motor não mandou a parte dele', async () => {
     montar({ bruto: { app: BRUTO.app } });
     await assentar();
     expect(na(SAUDE).getByText(/^Atenção: o motor não mandou o diagnóstico/)).toBeTruthy();
     expect(na(CONTA_E_POLITICA).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
+    expect(na(REGRAS).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
+    expect(na(PADROES).getByText(/o motor não mandou a conta revisora/)).toBeTruthy();
     expect(na(AUTOMACAO).getByText(/o motor não mandou as chaves de automação/)).toBeTruthy();
     expect(na(CLAUDE).getByText(/o motor não mandou a lista de perfis/)).toBeTruthy();
     expect(na(JIRA).getByText(/o motor não mandou a lista de sites/)).toBeTruthy();
-    expect(resumoDe(AUTOMACAO).textContent).toBe('Sem dado ou desligado:Automaçãoo motor não mandou as chaves');
+    expect(na(RITMO).getByText(/o motor não mandou as chaves do ritmo/)).toBeTruthy();
+    expect(resumoDe(RITMO).textContent).toBe('Sem dado ou desligado:Ritmo da revisãoo motor não mandou as chaves');
+  });
+
+  it('a bolinha do menu diz o estado de cada assunto', async () => {
+    montar({ bruto: { ...BRUTO, doctor: { ...BRUTO.doctor, ghAuth: false }, accounts: [{ ...CONTA, owners: [] }], jiraSites: [] } });
+    await assentar();
+    expect(resumoDe(SAUDE).querySelector('[data-tom]')?.getAttribute('data-tom')).toBe('ruim');
+    expect(resumoDe(SAUDE).textContent).toBe('Problema:Saúde do motorAutenticação do GitHub e mais 1');
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Atenção:Conta revisora@farol-bot, sem organização monitorada');
+    expect(resumoDe(JIRA).textContent).toBe('Sem dado ou desligado:Jiradesligado');
   });
 });
 
@@ -294,7 +371,7 @@ describe('Sistema: saúde', () => {
     await assentar();
     expect(na(SAUDE).getByText(/ainda não rodou nesta execução do motor\. Rode-o abaixo/)).toBeTruthy();
     expect(textos()).toEqual(['Versão do Claude Code: 2.1.300 é a mais recenteOK', 'Monitoramento da conta: @farol-bot vigiando biudtechOK']);
-    expect(resumoDe(SAUDE).textContent).toBe('Sem dado ou desligado:Saúdediagnóstico ainda não rodou');
+    expect(resumoDe(SAUDE).textContent).toBe('Sem dado ou desligado:Saúde do motordiagnóstico ainda não rodou');
   });
 
   it('Rodar o diagnóstico de novo chama GET /api/doctor; enquanto roda, as linhas dizem Conferindo e o botão fica ocupado', async () => {
@@ -664,7 +741,7 @@ describe('Sistema: conta revisora e política', () => {
     expect(campo(/revisão sai limpa/).value).toBe('approve');
     expect((na(CONTA_E_POLITICA).getByLabelText('Revisão automática') as HTMLInputElement).checked).toBe(true);
     expect(na(CONTA_E_POLITICA).queryByText(/mudou no motor enquanto você editava/)).toBeNull();
-    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('OK:Conta revisora e política@farol-bot, publica sozinho');
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('OK:Conta revisora@farol-bot, publica sozinho');
   });
 
   it('motor sem conta revisora: só leitura, sem formulário, e a linha fica vermelha', async () => {
@@ -673,13 +750,25 @@ describe('Sistema: conta revisora e política', () => {
     expect(na(CONTA_E_POLITICA).getByText('O motor ainda não tem conta revisora.')).toBeTruthy();
     expect(na(CONTA_E_POLITICA).getByText(/Sem conta revisora não há política a editar/)).toBeTruthy();
     expect(na(CONTA_E_POLITICA).queryByLabelText('Revisão automática')).toBeNull();
-    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Problema:Conta revisora e políticasem conta revisora');
+    expect(resumoDe(CONTA_E_POLITICA).textContent).toBe('Problema:Conta revisorasem conta revisora');
   });
 
   it('regra de review por organização é avisada, porque decide antes da revisão automática', async () => {
     montar({ bruto: { ...BRUTO, accounts: [{ ...CONTA, reviewRules: { acme: { mode: 'auto' } } }] } });
     await assentar();
     expect(na(CONTA_E_POLITICA).getByText(/a conta tem regra de review própria para 1 organização/)).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByRole('link', { name: 'Regras por organização e autor' }).getAttribute('href')).toBe('/sistema/regras');
+  });
+
+  it('a política explicada em frase, do valor do motor', async () => {
+    montar({ bruto: { ...BRUTO, accounts: [{ ...ABERTA, owners: ['biudtech', 'acme'], reviewRules: { acme: { mode: 'manual' } } }] } });
+    await assentar();
+    expect(na(CONTA_E_POLITICA).getByText(/^O Farol revisa sozinho todo PR pedido a @farol-bot nas organizações biudtech e acme: aprova sozinho o que sai limpo ou com ressalvas e pede mudanças sozinho quando acha defeito/)).toBeTruthy();
+    expect(na(CONTA_E_POLITICA).getByText(/A regra por organização e autor vem antes disto\.$/)).toBeTruthy();
+    cleanup();
+    montar();
+    await assentar();
+    expect(na(CONTA_E_POLITICA).getByText('A revisão automática está desligada: os PRs pedidos a @farol-bot nas organizações biudtech só são revisados no clique.')).toBeTruthy();
   });
 });
 
@@ -698,10 +787,10 @@ describe('Sistema: automação', () => {
     expect(na(AUTOMACAO).getByText('Sem alteração por salvar.')).toBeTruthy();
   });
 
-  it('não tem o controle da espera do CI: nenhum checkbox, nenhum texto de CI antes de aprovar', async () => {
+  it('não tem o controle da espera do CI: o único checkbox é o modo rápido, e nenhum texto de CI antes de aprovar', async () => {
     montar();
     await assentar();
-    expect(na(AUTOMACAO).queryByRole('checkbox')).toBeNull();
+    expect(na(AUTOMACAO).getAllByRole('checkbox')).toEqual([na(AUTOMACAO).getByLabelText('Modo rápido')]);
     expect(na(AUTOMACAO).queryByLabelText(/CI/)).toBeNull();
     expect(secao(AUTOMACAO).textContent).not.toMatch(/CI obrigatório|antes de aprovar|Esperando o CI/);
   });
@@ -797,6 +886,25 @@ describe('Sistema: automação', () => {
     expect(t.envios()).toEqual([['/api/settings', { parallelReviews: 3, reviewModel: '' }]]);
   });
 
+  it('o modo rápido vai sozinho no corpo, e sem a chave no motor fica sem edição', async () => {
+    const t = montar({ aoPostar: gravou({ ...CONFIG, reviewFast: true }) });
+    await assentar();
+    expect(na(AUTOMACAO).getByText(/Nenhum gate fica mais frouxo/)).toBeTruthy();
+    act(() => { fireEvent.click(na(AUTOMACAO).getByLabelText('Modo rápido')); });
+    await clicarEm(na(AUTOMACAO), SALVAR);
+    await assentar();
+    expect(t.envios()).toEqual([['/api/settings', { reviewFast: true }]]);
+    expect(regiao().textContent).toContain('O motor gravou: modo rápido: ligado.');
+
+    cleanup();
+    const semChave: Record<string, unknown> = { ...CONFIG };
+    delete semChave.reviewFast;
+    montar({ bruto: { ...BRUTO, config: semChave } });
+    await assentar();
+    expect((na(AUTOMACAO).getByLabelText('Modo rápido') as HTMLInputElement).disabled).toBe(true);
+    expect(na(AUTOMACAO).getByText(/O motor não mandou este campo/)).toBeTruthy();
+  });
+
   it('sem conexão o salvar fica fechado', async () => {
     montar({ conexao: 'sem-motor' });
     await assentar();
@@ -806,53 +914,72 @@ describe('Sistema: automação', () => {
   });
 });
 
-describe('Sistema: perfil do Claude', () => {
-  const perfil = (nome: string) => within(within(na(CLAUDE).getByRole('list', { name: 'Perfis do Claude' })).getByRole('heading', { level: 3, name: new RegExp(`^${nome}`) }).closest('li') as HTMLElement);
+describe('Sistema: Claude', () => {
+  const lista = () => na(CLAUDE).getByRole('list', { name: 'Perfis do Claude, na ordem de uso' });
+  const perfil = (nome: string) => within(within(lista()).getByRole('heading', { level: 3, name: new RegExp(`^${nome}`) }).closest('li') as HTMLElement);
+  const abrir = async (nome: string) => { await clicarEm(perfil(nome), new RegExp(`^${nome}`)); };
+  const inicioDoLogin = corpo({ ok: true, loginId: 'login-1', url: 'https://claude.com/cai/oauth/authorize?code=true&state=x' });
 
-  it('mostra os perfis, o tipo, a presença da credencial e o uso do plano, sem chave nem pasta', async () => {
+  it('os perfis na ordem de uso, o padrão primeiro, cada um fechado com o tipo e o estado', async () => {
+    montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [API, PLANO] } } });
+    await assentar();
+    const titulos = within(lista()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(titulos).toEqual(['1AssinaturaAssinatura · perfil padrãoPronto', '2ChaveChave de APIChave presente']);
+    expect(perfil('Assinatura').getByRole('button', { name: /^Assinatura/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(perfil('Assinatura').queryByRole('button', { name: 'Testar o perfil Assinatura' })).toBeNull();
+  });
+
+  it('o perfil abre com o uso do plano, a validade do login, a posição e as ações', async () => {
     const t = montar();
     await assentar();
-    expect(perfil('Assinatura').getByText('Assinatura', { selector: 'span + span' })).toBeTruthy();
-    expect(perfil('Assinatura').getByText('Perfil padrão')).toBeTruthy();
-    expect(perfil('Assinatura').getByText('Login presente').getAttribute('data-tom')).toBe('ok');
-    expect(perfil('Assinatura').getByText(/Login presente na pasta do perfil/)).toBeTruthy();
+    await abrir('Assinatura');
+    expect(perfil('Assinatura').getByRole('button', { name: /^Assinatura/ }).getAttribute('aria-expanded')).toBe('true');
     expect(perfil('Assinatura').getByText('40% usado, volta às 18h')).toBeTruthy();
-    expect(perfil('Chave').getByText('Chave de API')).toBeTruthy();
-    expect(perfil('Chave').getByText(/Chave presente\. O motor não informa se ela vale/)).toBeTruthy();
-    expect(na(CLAUDE).getByText(/Esta seção é só leitura.*não tem campo para segredo/)).toBeTruthy();
+    expect(perfil('Assinatura').getByText(/^Vale até /)).toBeTruthy();
+    expect(perfil('Assinatura').getByText(/1º, o perfil padrão: a sessão começa por ele/)).toBeTruthy();
+    expect(perfil('Assinatura').getByRole('button', { name: 'Testar o perfil Assinatura' })).toBeTruthy();
+    expect(perfil('Assinatura').getByRole('button', { name: 'Refazer o login do perfil Assinatura' })).toBeTruthy();
+    // o primeiro não sobe
+    expect(perfil('Assinatura').queryByRole('button', { name: /na ordem de uso/ })).toBeNull();
     expect(t.container.innerHTML).not.toContain('apiKey');
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
-  it('a seção não tem teto: nenhum campo, nenhum salvar, nenhum valor nem aviso de teto na tela', async () => {
+  it('o perfil por chave de API não tem Refazer login: a tela diz que a chave é só pela API', async () => {
+    montar();
+    await assentar();
+    await abrir('Chave');
+    expect(perfil('Chave').queryByRole('button', { name: /Refazer/ })).toBeNull();
+    expect(perfil('Chave').getByText(/Este perfil usa chave de API: não tem login para refazer\. A chave entra e muda só pela API do motor/)).toBeTruthy();
+    expect(perfil('Chave').getByText(/Chave presente\. O motor não informa se ela vale/)).toBeTruthy();
+    expect(perfil('Chave').queryByRole('textbox')).toBeNull();
+  });
+
+  it('não tem teto nem campo de chave: nenhum valor nem aviso de teto na tela', async () => {
     const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, budgetDaily: 20, budgetTotal: 300, budgetSince: '2026-11-01' }, API] } } });
     await assentar();
-    expect(na(CLAUDE).queryByRole('textbox')).toBeNull();
-    expect(na(CLAUDE).queryByRole('group')).toBeNull();
-    expect(na(CLAUDE).queryByRole('button', { name: /Salvar|teto/i })).toBeNull();
-    expect(na(CLAUDE).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Testar o perfil Assinatura', 'Testar o perfil Chave']);
-    expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|300|2026-11-01|01\/11\/2026|[Tt]eto|pausar/);
+    await abrir('Assinatura');
+    await abrir('Chave');
+    expect(within(lista()).queryByRole('textbox')).toBeNull();
+    expect(within(lista()).queryByRole('button', { name: /teto/i })).toBeNull();
+    expect(within(lista()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+      '1AssinaturaAssinatura · perfil padrãoPronto', 'Testar o perfil Assinatura', 'Refazer o login do perfil Assinatura',
+      '2ChaveChave de APIChave presente', 'Testar o perfil Chave', 'Subir Chave na ordem de uso',
+    ]);
+    expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|2026-11-01|01\/11\/2026|[Tt]eto|pausar/);
     // e o valor do teto nem entra no store
-    expect(JSON.stringify(t.store.ler().snapshot?.config)).not.toMatch(/budget|300|2026-11-01|temTeto/);
+    expect(JSON.stringify(t.store.ler().snapshot?.config)).not.toMatch(/budget|2026-11-01|temTeto/);
   });
 
-  it('nenhum POST /api/settings sai desta seção, e nenhum POST leva claudeProfiles', async () => {
-    const t = montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [{ ...PLANO, budgetDaily: 20 }, API] } } });
-    await assentar();
-    await clicarEm(perfil('Assinatura'), 'Testar o perfil Assinatura');
-    await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
-    await assentar();
-    expect(t.envios().map(([rota]) => rota)).toEqual(['/api/claude/profile-test', '/api/claude/profile-test']);
-    expect(JSON.stringify(t.post.mock.calls.map(([, enviado]) => enviado))).not.toContain('claudeProfiles');
-  });
-
-  it('Testar perfil diz antes o que o teste faz e que não consome, e manda só o id do perfil', async () => {
+  it('Testar diz antes o que faz e que não consome, e manda só o id do perfil', async () => {
     const t = montar({
       aoPostar: (rota) => (rota === '/api/claude/profile-test'
         ? corpo({ ok: true, escreveu: false, perfil: { id: 'plano', label: 'Assinatura', kind: 'dir', aviso: '', campos: { login: { valor: true, origem: 'validado' }, email: { valor: 'bot@biud.com.br', origem: 'validado' }, tipoAuth: { valor: 'claude.ai', origem: 'validado' }, plano: { valor: null, origem: 'desconhecido', motivo: 'o nome comercial do plano não é detectável' } } } })
         : undefined),
     });
     await assentar();
+    await abrir('Assinatura');
+    await abrir('Chave');
     expect(perfil('Assinatura').getByText(/Não chama modelo, não consome o plano e não grava nada/)).toBeTruthy();
     expect(perfil('Chave').getByText(/Não chama a Anthropic: não consome nada, e por isso não prova que a chave vale/)).toBeTruthy();
     await clicarEm(perfil('Assinatura'), 'Testar o perfil Assinatura');
@@ -867,6 +994,7 @@ describe('Sistema: perfil do Claude', () => {
   it('teste que o motor recusa, ou que não chega, aparece como erro', async () => {
     montar({ aoPostar: (rota) => (rota === '/api/claude/profile-test' ? corpo({ ok: false, code: 'perfil-invalido', motivo: 'esse perfil está incompleto: falta a chave, ou a pasta fica fora do HOME do Farol' }) : undefined) });
     await assentar();
+    await abrir('Chave');
     await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
     await assentar();
     expect(perfil('Chave').getByRole('status', { name: 'Resultado do teste do perfil Chave' }).textContent).toBe('Erro: o motor não testou o perfil: esse perfil está incompleto: falta a chave, ou a pasta fica fora do HOME do Farol.');
@@ -874,9 +1002,101 @@ describe('Sistema: perfil do Claude', () => {
     cleanup();
     montar({ aoPostar: (rota) => (rota === '/api/claude/profile-test' ? REDE : undefined) });
     await assentar();
+    await abrir('Chave');
     await clicarEm(perfil('Chave'), 'Testar o perfil Chave');
     await assentar();
     expect(perfil('Chave').getByRole('status', { name: 'Resultado do teste do perfil Chave' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede).');
+  });
+
+  it('Subir na ordem manda o padrão e a lista na ordem nova, sem chave nem pasta, e confere o que voltou', async () => {
+    const gravada = { ...CONFIG, claudeProfileId: 'api', claudeProfiles: [API, PLANO] };
+    const t = montar({ aoPostar: (rota) => (rota === '/api/settings' ? corpo({ ok: true, ignoradas: [], config: gravada }) : undefined) });
+    await assentar();
+    await abrir('Chave');
+    await clicarEm(perfil('Chave'), 'Subir Chave na ordem de uso');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/settings', { claudeProfileId: 'api', claudeProfiles: [{ id: 'api', label: 'Chave', kind: 'apikey', baseUrl: '' }, { id: 'plano', label: 'Assinatura', kind: 'dir' }] }]]);
+    expect(JSON.stringify(t.envios())).not.toMatch(/apiKey|\/home\/farol|temChave|budget/);
+    expect(regiao().textContent).toContain('O motor gravou a ordem de uso: Chave, Assinatura.');
+  });
+
+  it('com parte da lista descartada na borda, Subir na ordem fica fechado e diz por quê', async () => {
+    montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [PLANO, { ...API, apiKey: CHAVE_DA_ANTHROPIC }] } } });
+    await assentar();
+    await abrir('Chave');
+    expect(perfil('Chave').queryByRole('button', { name: /na ordem de uso/ })).toBeNull();
+    expect(perfil('Chave').getByText(/^Subir na ordem fechado: Parte da lista de perfis chegou fora da forma/)).toBeTruthy();
+  });
+
+  it('Refazer login: abre o link do motor, o código vai só no corpo do POST e some do campo', async () => {
+    const enviados: unknown[] = [];
+    const t = montar({
+      aoPostar: (rota, enviado) => {
+        enviados.push(enviado);
+        if (rota === '/api/claude/login-web/start') return inicioDoLogin;
+        if (rota === '/api/claude/login-web/code') return corpo({ ok: true, code: CODIGO_DO_LOGIN });
+        return undefined;
+      },
+    });
+    await assentar();
+    await abrir('Assinatura');
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/claude/login-web/start', { profileId: 'plano' }]]);
+    const link = perfil('Assinatura').getByRole('link', { name: 'Abrir a página de login do Claude' });
+    expect(link.getAttribute('href')).toBe('https://claude.com/cai/oauth/authorize?code=true&state=x');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    const campo = perfil('Assinatura').getByLabelText('Código da página de login') as HTMLInputElement;
+    expect(campo.type).toBe('password');
+    campo.value = CODIGO_DO_LOGIN;
+    await clicarEm(perfil('Assinatura'), 'Enviar o código');
+    await assentar();
+    expect(t.envios()[1]).toEqual(['/api/claude/login-web/code', { loginId: 'login-1', code: CODIGO_DO_LOGIN }]);
+    expect(perfil('Assinatura').getByRole('status', { name: 'Resultado do login do perfil Assinatura' }).textContent).toContain('Login feito no perfil Assinatura.');
+    expect(t.container.innerHTML).not.toContain(CODIGO_DO_LOGIN);
+    expect(enviados.length).toBeGreaterThan(0);
+  });
+
+  it('login recusado: o código some do campo, a frase do motor aparece, e dá para começar de novo', async () => {
+    const t = montar({
+      aoPostar: (rota) => {
+        if (rota === '/api/claude/login-web/start') return inicioDoLogin;
+        if (rota === '/api/claude/login-web/code') return corpo({ ok: false, code: 'recusado', motivo: 'Login failed: Request failed with status code 400' });
+        return undefined;
+      },
+    });
+    await assentar();
+    await abrir('Assinatura');
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    (perfil('Assinatura').getByLabelText('Código da página de login') as HTMLInputElement).value = CODIGO_DO_LOGIN;
+    await clicarEm(perfil('Assinatura'), 'Enviar o código');
+    await assentar();
+    expect(perfil('Assinatura').getByRole('status', { name: 'Resultado do login do perfil Assinatura' }).textContent).toBe('Erro: O Claude Code não aceitou o código: comece de novo e cole o código da página nova. O motor disse: Login failed: Request failed with status code 400.');
+    expect(t.container.innerHTML).not.toContain(CODIGO_DO_LOGIN);
+    expect(perfil('Assinatura').getByRole('button', { name: 'Refazer o login do perfil Assinatura' })).toBeTruthy();
+  });
+
+  it('com outro login aberto no motor, a tela oferece cancelá-lo pelo perfil; Cancelar encerra pelo id', async () => {
+    const t = montar({
+      aoPostar: (rota) => {
+        if (rota === '/api/claude/login-web/start') return t.envios().length > 2 ? inicioDoLogin : corpo({ ok: false, code: 'login-em-curso', perfilAberto: 'outro', motivo: 'já há um login do Claude aberto neste Farol' });
+        return undefined;
+      },
+    });
+    await assentar();
+    await abrir('Assinatura');
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    expect(perfil('Assinatura').getByRole('status', { name: 'Resultado do login do perfil Assinatura' }).textContent).toContain('Já há um login do Claude aberto neste motor.');
+    await clicarEm(perfil('Assinatura'), 'Cancelar o login aberto');
+    await assentar();
+    expect(t.envios()[1]).toEqual(['/api/claude/login-web/cancel', { profileId: 'outro' }]);
+    await clicarEm(perfil('Assinatura'), 'Refazer o login do perfil Assinatura');
+    await assentar();
+    await clicarEm(perfil('Assinatura'), 'Cancelar');
+    await assentar();
+    expect(t.envios()[3]).toEqual(['/api/claude/login-web/cancel', { loginId: 'login-1' }]);
   });
 
   it('perfil com id que parece chave e não é aparece na lista: sk-anthropic-1', async () => {
@@ -886,26 +1106,31 @@ describe('Sistema: perfil do Claude', () => {
     expect(na(CLAUDE).queryByRole('alert')).toBeNull();
   });
 
-  it('sem perfil, a seção diz o que isso significa, e a linha fica vermelha', async () => {
+  it('sem perfil, o assunto diz o que isso significa, e o menu fica vermelho', async () => {
     montar({ bruto: { ...BRUTO, config: { ...CONFIG, claudeProfiles: [] } } });
     await assentar();
     expect(na(CLAUDE).getByText(/O motor não tem perfil do Claude/)).toBeTruthy();
-    expect(resumoDe(CLAUDE).textContent).toBe('Problema:Perfil do Claudenenhum perfil');
+    expect(resumoDe(CLAUDE).textContent).toBe('Problema:Claudenenhum perfil');
   });
 });
 
 describe('Sistema: Jira', () => {
-  it('mostra os sites e a presença da credencial, só para leitura', async () => {
+  const credencial = (t: ReturnType<typeof montar>) => t.post.mock.calls.filter(([rota]) => rota === '/api/jira/credential');
+
+  it('mostra o site, as organizações, os projetos, os últimos cards lidos e a presença da credencial', async () => {
     montar();
     await assentar();
     const s = na(JIRA);
     expect(s.getByRole('heading', { level: 3, name: /^BIUD/ })).toBeTruthy();
     expect(s.getByText('Com credencial').getAttribute('data-tom')).toBe('ok');
     expect(s.getByText('https://biud.atlassian.net')).toBeTruthy();
+    expect(s.getByText('biudtech')).toBeTruthy();
+    expect(s.getByText('BT')).toBeTruthy();
+    // das decisões resolvidas, só as da organização do site, da mais nova para a mais antiga
+    expect(s.getByText(/^BT-11 \(.+\), BT-10 \(.+\)$/)).toBeTruthy();
+    expect(s.queryByText(/BT-12/)).toBeNull();
     expect(s.getByText('Presente. Se ela vale, quem diz é o teste abaixo.')).toBeTruthy();
-    expect(s.getByText(/Esta seção é só leitura/)).toBeTruthy();
     expect(s.queryByRole('textbox')).toBeNull();
-    expect(s.queryByRole('button', { name: /^Salvar/ })).toBeNull();
   });
 
   it('Testar a conexão manda só o id do site e mostra de quem é a credencial', async () => {
@@ -932,21 +1157,194 @@ describe('Sistema: Jira', () => {
     expect(na(JIRA).getByRole('status', { name: 'Resultado do teste de BIUD' }).textContent).toBe('Erro: Não deu para falar com o motor (falha de rede).');
   });
 
-  it('sem site, a seção diz que o recurso está desligado', async () => {
+  it('Trocar credencial: o token vai só no corpo do POST, some do campo e da tela, e não volta da resposta', async () => {
+    // o motor de mentira ecoa o token na resposta: a tela não pode mostrá-lo nem guardá-lo
+    const t = montar({ aoPostar: (rota) => (rota === '/api/jira/credential' ? corpo({ ok: true, token: TOKEN_DO_JIRA, email: 'bot@exemplo.com' }) : undefined) });
+    await assentar();
+    await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
+    const token = na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement;
+    expect(token.type).toBe('password');
+    mudar(na(JIRA).getByLabelText('E-mail da conta do Atlassian'), 'bot@exemplo.com');
+    token.value = TOKEN_DO_JIRA;
+    await clicarEm(na(JIRA), 'Guardar a credencial');
+    await assentar();
+    expect(credencial(t).map(([rota, enviado]) => [rota, enviado])).toEqual([['/api/jira/credential', { siteId: 'biud', email: 'bot@exemplo.com', token: TOKEN_DO_JIRA }]]);
+    expect(t.container.innerHTML).not.toContain(TOKEN_DO_JIRA);
+    expect(JSON.stringify(t.store.ler())).not.toContain(TOKEN_DO_JIRA);
+    expect(na(JIRA).queryByLabelText('Token de API do Atlassian')).toBeNull();
+    expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toContain('O motor guardou a credencial nova de BIUD.');
+  });
+
+  it('credencial recusada ou sem resposta: o token some do campo, o e-mail fica, e o erro aparece', async () => {
+    let resposta: Resposta = corpo({ ok: false, error: 'dados incompletos' });
+    const t = montar({ aoPostar: (rota) => (rota === '/api/jira/credential' ? resposta : undefined) });
+    await assentar();
+    await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
+    mudar(na(JIRA).getByLabelText('E-mail da conta do Atlassian'), 'bot@exemplo.com');
+    (na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement).value = TOKEN_DO_JIRA;
+    await clicarEm(na(JIRA), 'Guardar a credencial');
+    await assentar();
+    expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toBe('Erro: O motor recusou a credencial: dados incompletos. O token foi apagado deste campo: cole de novo para tentar.');
+    expect((na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement).value).toBe('');
+    expect((na(JIRA).getByLabelText('E-mail da conta do Atlassian') as HTMLInputElement).value).toBe('bot@exemplo.com');
+    expect(t.container.innerHTML).not.toContain(TOKEN_DO_JIRA);
+
+    resposta = REDE;
+    (na(JIRA).getByLabelText('Token de API do Atlassian') as HTMLInputElement).value = TOKEN_DO_JIRA;
+    await clicarEm(na(JIRA), 'Guardar a credencial');
+    await assentar();
+    expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toContain('Não dá para saber se a credencial entrou');
+    expect(t.container.innerHTML).not.toContain(TOKEN_DO_JIRA);
+  });
+
+  it('sem e-mail ou sem token nada é enviado', async () => {
+    const t = montar();
+    await assentar();
+    await clicarEm(na(JIRA), 'Trocar a credencial do Jira de BIUD');
+    await clicarEm(na(JIRA), 'Guardar a credencial');
+    expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toContain('Informe o e-mail');
+    mudar(na(JIRA).getByLabelText('E-mail da conta do Atlassian'), 'bot@exemplo.com');
+    await clicarEm(na(JIRA), 'Guardar a credencial');
+    expect(na(JIRA).getByRole('status', { name: 'Resultado da troca da credencial de BIUD' }).textContent).toContain('Cole o token');
+    expect(credencial(t)).toEqual([]);
+  });
+
+  it('sem site, o assunto diz que o recurso está desligado', async () => {
     montar({ bruto: { ...BRUTO, jiraSites: [] } });
     await assentar();
     expect(na(JIRA).getByText(/O motor não tem site do Jira: o recurso está desligado/)).toBeTruthy();
   });
 });
 
-describe('Sistema: sessões pareadas', () => {
+describe('Sistema: regras por organização e autor', () => {
+  const COM_REGRAS = { ...BRUTO, accounts: [{ ...CONTA, reviewRules: { biudtech: { mode: 'manual', authors: { 'robo[bot]': 'auto' } } } }] };
+
+  it('lista cada regra com a frase do que ela faz', async () => {
+    montar({ bruto: COM_REGRAS });
+    await assentar();
+    const itens = within(na(REGRAS).getByRole('list', { name: 'Regras por organização e autor' })).getAllByRole('listitem');
+    expect(itens.map((li) => li.querySelector('h3')?.textContent)).toEqual(['biudtechSó no clique', '@robo[bot] em biudtechRevisa sozinho']);
+    expect(itens[0]?.textContent).toContain('Os PRs de biudtech só são revisados no clique');
+    expect(resumoDe(REGRAS).textContent).toBe('OK:Regras por organização e autor2 exceções');
+  });
+
+  it('criar regra no clique vai direto, com a operação pontual, e limpa o formulário só depois do aceite', async () => {
+    let resposta: Resposta = REDE;
+    const t = montar({ aoPostar: (rota) => (rota === '/api/accounts/edit' ? resposta : undefined) });
+    await assentar();
+    mudar(na(REGRAS).getByLabelText('Organização do GitHub'), 'Acme');
+    mudar(na(REGRAS).getByLabelText('Autor (opcional)'), '@Fulano');
+    await clicarEm(na(REGRAS), 'Salvar a regra de @fulano em acme: só no clique');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'regra-review', user: 'farol-bot', organization: 'acme', author: 'fulano', mode: 'manual' }]]);
+    // a falha não perde o que foi digitado
+    expect((na(REGRAS).getByLabelText('Organização do GitHub') as HTMLInputElement).value).toBe('Acme');
+    resposta = corpo({ ok: true, ignoradas: [], ignorados: [] });
+    await clicarEm(na(REGRAS), 'Salvar a regra de @fulano em acme: só no clique');
+    await assentar();
+    expect(regiao().textContent).toContain('O motor gravou a regra de @fulano em acme: só no clique.');
+    expect((na(REGRAS).getByLabelText('Organização do GitHub') as HTMLInputElement).value).toBe('');
+  });
+
+  it('regra que revisa sozinho pergunta antes; nome torto não deixa enviar', async () => {
+    const t = montar();
+    await assentar();
+    mudar(na(REGRAS).getByLabelText('Organização do GitHub'), 'a/b');
+    expect(na(REGRAS).getByRole('alert').textContent).toContain('letras, dígitos e hífen');
+    expect(na(REGRAS).queryByRole('button', { name: /Salvar a regra/ })).toBeNull();
+    mudar(na(REGRAS).getByLabelText('Organização do GitHub'), 'acme');
+    mudar(na(REGRAS).getByLabelText('O que o motor faz'), 'auto');
+    await clicarEm(na(REGRAS), 'Salvar a regra de a organização acme: revisa sozinho');
+    expect(na(REGRAS).getByRole('group', { name: 'Revisar sozinho a organização acme?' }).textContent).toContain('revisa e publica sozinho');
+    expect(t.envios()).toEqual([]);
+    await clicarEm(na(REGRAS), 'Salvar e revisar sozinho: a organização acme');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'regra-review', user: 'farol-bot', organization: 'acme', mode: 'auto' }]]);
+  });
+
+  it('trocar o modo e remover uma regra; remover pergunta', async () => {
+    const t = montar({ bruto: COM_REGRAS });
+    await assentar();
+    await clicarEm(na(REGRAS), 'Salvar a regra de @robo[bot] em biudtech: só no clique');
+    await assentar();
+    await clicarEm(na(REGRAS), 'Remover a regra de a organização biudtech');
+    expect(na(REGRAS).getByRole('group', { name: 'Remover a regra de a organização biudtech?' })).toBeTruthy();
+    await clicarEm(na(REGRAS), 'Remover a regra: a organização biudtech');
+    await assentar();
+    expect(t.envios()).toEqual([
+      ['/api/accounts/edit', { tipo: 'regra-review', user: 'farol-bot', organization: 'biudtech', author: 'robo[bot]', mode: 'manual' }],
+      ['/api/accounts/edit', { tipo: 'regra-review', user: 'farol-bot', organization: 'biudtech', mode: 'inherit' }],
+    ]);
+  });
+});
+
+describe('Sistema: padrões do time', () => {
+  it('editar e salvar manda o texto inteiro a accounts/edit; a falha não perde o texto', async () => {
+    let resposta: Resposta = REDE;
+    const t = montar({ aoPostar: (rota) => (rota === '/api/accounts/edit' ? resposta : undefined) });
+    await assentar();
+    const campo = () => na(PADROES).getByLabelText('Texto dos padrões, um por linha') as HTMLTextAreaElement;
+    mudar(campo(), 'Teste em todo endpoint.\nMigração tem volta.\n');
+    expect(na(PADROES).getByText('43 de 6.000 caracteres que entram na revisão.')).toBeTruthy();
+    await clicarEm(na(PADROES), 'Salvar os padrões do time de @farol-bot');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/accounts/edit', { tipo: 'editar', user: 'farol-bot', campos: { padroesRevisao: 'Teste em todo endpoint.\nMigração tem volta.' } }]]);
+    expect(campo().value).toBe('Teste em todo endpoint.\nMigração tem volta.\n');
+    expect(na(PADROES).getByText(/^Erro ao salvar/)).toBeTruthy();
+    resposta = corpo({ ok: true, ignoradas: [], ignorados: [] });
+    await clicarEm(na(PADROES), 'Salvar os padrões do time de @farol-bot');
+    await assentar();
+    expect(regiao().textContent).toContain('os padrões do time agora têm 2 padrões');
+    t.trocar({ ...BRUTO, accounts: [{ ...CONTA, padroesRevisao: 'Teste em todo endpoint.\nMigração tem volta.' }] });
+    expect(na(PADROES).getByText('Sem alteração por salvar.')).toBeTruthy();
+    expect(resumoDe(PADROES).textContent).toBe('OK:Padrões do time2 padrões');
+  });
+
+  it('o trecho com cara de segredo aparece trocado, com o aviso', async () => {
+    const t = montar({ bruto: { ...BRUTO, accounts: [{ ...CONTA, padroesRevisao: `Use ${TOKEN_DO_GITHUB} no teste.` }] } });
+    await assentar();
+    expect((na(PADROES).getByLabelText('Texto dos padrões, um por linha') as HTMLTextAreaElement).value).toBe('Use [segredo omitido] no teste.');
+    expect(na(PADROES).getByText(/trecho com cara de credencial/)).toBeTruthy();
+    expect(t.container.innerHTML).not.toContain(TOKEN_DO_GITHUB);
+  });
+});
+
+describe('Sistema: ritmo da revisão', () => {
+  it('intervalo, retomada e contestação, cada um com o efeito; salvar manda só o que mudou e confere', async () => {
+    const t = montar({ aoPostar: (rota) => (rota === '/api/settings' ? corpo({ ok: true, ignoradas: [], config: { ...CONFIG, intervalSeconds: 600, autoPushback: false } }) : undefined) });
+    await assentar();
+    const intervalo = na(RITMO).getByLabelText('Checar o GitHub a cada') as HTMLSelectElement;
+    expect([...intervalo.options].map((o) => o.textContent)).toEqual(['3 minutos', '5 minutos', '10 minutos', '15 minutos', '30 minutos', '1 hora']);
+    expect(intervalo.value).toBe('300');
+    expect((na(RITMO).getByLabelText('Retomar a sessão na rodada nova') as HTMLInputElement).checked).toBe(true);
+    expect(na(RITMO).getByText(/Nada é publicado no PR por causa dela/)).toBeTruthy();
+    mudar(intervalo, '600');
+    act(() => { fireEvent.click(na(RITMO).getByLabelText('Analisar sozinho a contestação do autor')); });
+    await clicarEm(na(RITMO), 'Salvar o ritmo da revisão');
+    await assentar();
+    expect(t.envios()).toEqual([['/api/settings', { intervalSeconds: 600, autoPushback: false }]]);
+    expect(regiao().textContent).toContain('O motor gravou: checagem do GitHub: a cada 10 minutos; análise da contestação: desligada.');
+  });
+
+  it('valor do motor fora da lista aparece como opção, e gravado diferente é erro', async () => {
+    montar({ bruto: { ...BRUTO, config: { ...CONFIG, intervalSeconds: 420 } }, aoPostar: (rota) => (rota === '/api/settings' ? corpo({ ok: true, ignoradas: [], config: { ...CONFIG, intervalSeconds: 420, reReviewResume: true } }) : undefined) });
+    await assentar();
+    expect((na(RITMO).getByLabelText('Checar o GitHub a cada') as HTMLSelectElement).selectedOptions[0]?.textContent).toBe('7 minutos (definido no motor)');
+    act(() => { fireEvent.click(na(RITMO).getByLabelText('Retomar a sessão na rodada nova')); });
+    await clicarEm(na(RITMO), 'Salvar o ritmo da revisão');
+    await assentar();
+    expect(regiao().textContent).toContain('Erro: O motor gravou diferente do pedido: retomada na rodada nova ficou ligada, e o pedido era desligada.');
+  });
+});
+
+describe('Sistema: quem está conectado', () => {
   const itens = () => within(na(SESSOES_PAREADAS).getByRole('list', { name: 'Sessões pareadas' })).getAllByRole('listitem');
   const cargas = (t: ReturnType<typeof montar>) => t.post.mock.calls.filter(([rota]) => rota === '/api/auth/sessions');
 
   it('pede a lista em POST /api/auth/sessions e mostra cada sessão, com a atual marcada', async () => {
     const t = montar();
     expect(na(SESSOES_PAREADAS).getByRole('status', { name: 'Resultado da lista de sessões' }).textContent).toBe('Carregando as sessões pareadas.');
-    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Sessões pareadascarregando');
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Quem está conectadocarregando');
     await assentar();
     expect(cargas(t).map(([rota, enviado]) => [rota, enviado])).toEqual([['/api/auth/sessions', {}]]);
     expect(na(SESSOES_PAREADAS).getByRole('status', { name: 'Resultado da lista de sessões' }).textContent).toBe('2 sessões pareadas');
@@ -954,15 +1352,16 @@ describe('Sistema: sessões pareadas', () => {
     expect(within(atual as HTMLElement).getByRole('heading', { level: 3 }).textContent).toBe('Sessão "Notebook"Este navegador');
     expect(atual?.textContent).toContain(`Criada em ${dataComAno(ATUAL.criadoEm)}`);
     expect(atual?.textContent).toContain(`usada pela última vez em ${dataComAno(ATUAL.ultimoUsoEm)}`);
+    expect(within(atual as HTMLElement).getByRole('button').textContent).toBe('Sair');
     expect(within(outra as HTMLElement).getByRole('heading', { level: 3 }).textContent).toBe('Sessão "Celular"');
-    expect(within(outra as HTMLElement).queryByText('Este navegador')).toBeNull();
+    expect(within(outra as HTMLElement).getByRole('button').textContent).toBe('Revogar');
   });
 
-  it('encerrar outra sessão pergunta antes; cancelar não envia', async () => {
+  it('revogar outra sessão pergunta antes; cancelar não envia', async () => {
     const t = montar();
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Celular"');
-    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Encerrar a sessão "Celular"?' });
+    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Celular"');
+    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Revogar a sessão "Celular"?' });
     expect(pergunta.textContent).toContain('Este navegador continua pareado');
     await clicarEm(na(SESSOES_PAREADAS), 'Voltar sem enviar');
     await assentar();
@@ -970,51 +1369,51 @@ describe('Sistema: sessões pareadas', () => {
     expect(t.esquecerSessao).not.toHaveBeenCalled();
   });
 
-  it('aceita: o botão diz Encerrando… enquanto o motor responde, revoga pelo id, pede a lista de novo, e este navegador continua onde está', async () => {
+  it('aceita: o botão diz Revogando… enquanto o motor responde, revoga pelo id, pede a lista de novo, e este navegador continua onde está', async () => {
     const resposta = adiada();
-    let encerrada = false;
+    let revogada = false;
     const t = montar({
       aoPostar: (rota) => {
-        if (rota === '/api/auth/revoke') { encerrada = true; return resposta.promessa; }
-        return rota === '/api/auth/sessions' && encerrada ? corpo({ ok: true, sessoes: [ATUAL] }) : undefined;
+        if (rota === '/api/auth/revoke') { revogada = true; return resposta.promessa; }
+        return rota === '/api/auth/sessions' && revogada ? corpo({ ok: true, sessoes: [ATUAL] }) : undefined;
       },
     });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Celular"');
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão: "Celular"');
-    const ocupado = na(SESSOES_PAREADAS).getByRole('button', { name: /^Encerrando…/ }) as HTMLButtonElement;
+    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão "Celular"');
+    await clicarEm(na(SESSOES_PAREADAS), 'Revogar a sessão: "Celular"');
+    const ocupado = na(SESSOES_PAREADAS).getByRole('button', { name: /^Revogando…/ }) as HTMLButtonElement;
     expect(ocupado.disabled).toBe(true);
-    expect(ocupado.textContent).toBe('Encerrando…');
+    expect(ocupado.textContent).toBe('Revogando…');
     await resposta.soltar(corpo({ ok: true, eraAtual: false }));
     expect(t.envios()).toEqual([['/api/auth/revoke', { id: OUTRA.id }]]);
-    expect(regiao().textContent).toContain('O motor encerrou a sessão "Celular": o token dela não vale mais.');
+    expect(regiao().textContent).toContain('O motor revogou a sessão "Celular": o token dela não vale mais.');
     expect(cargas(t)).toHaveLength(2);
     expect(itens()).toHaveLength(1);
     expect(t.esquecerSessao).not.toHaveBeenCalled();
   });
 
-  it('encerrar a sessão atual avisa que este navegador volta ao pareamento, e depois do aceite a tela vai de fato', async () => {
+  it('Sair (a sessão atual) avisa que este navegador volta ao pareamento, e depois do aceite a tela vai de fato', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: true, eraAtual: true }) : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
-    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Encerrar a sessão deste navegador?' });
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair deste navegador');
+    const pergunta = na(SESSOES_PAREADAS).getByRole('group', { name: 'Sair deste navegador?' });
     expect(pergunta.textContent).toContain('esta tela volta ao pareamento assim que o motor aceitar');
     expect(t.esquecerSessao).not.toHaveBeenCalled();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(t.envios()).toEqual([['/api/auth/revoke', { id: ATUAL.id }]]);
     expect(t.esquecerSessao).toHaveBeenCalledTimes(1);
     expect(t.esquecerSessao).toHaveBeenCalledWith('revogada');
   });
 
-  it('encerramento da atual cancelado, recusado ou sem resposta não leva ao pareamento', async () => {
+  it('Sair cancelado, recusado ou sem resposta não leva ao pareamento', async () => {
     const t = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? corpo({ ok: false, code: 'sessao_inexistente' }) : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair deste navegador');
     await clicarEm(na(SESSOES_PAREADAS), 'Voltar sem enviar');
     expect(t.envios()).toEqual([]);
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair deste navegador');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(regiao().textContent).toContain('Erro: O motor não tem mais essa sessão: ela já foi revogada ou expirou. Atualize a lista.');
     expect(t.esquecerSessao).not.toHaveBeenCalled();
@@ -1022,8 +1421,8 @@ describe('Sistema: sessões pareadas', () => {
     cleanup();
     const semRede = montar({ aoPostar: (rota) => (rota === '/api/auth/revoke' ? REDE : undefined) });
     await assentar();
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar a sessão "Notebook" (este navegador)');
-    await clicarEm(na(SESSOES_PAREADAS), 'Encerrar e voltar ao pareamento: "Notebook" (este navegador)');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair deste navegador');
+    await clicarEm(na(SESSOES_PAREADAS), 'Sair e voltar ao pareamento: "Notebook" (este navegador)');
     await assentar();
     expect(semRede.esquecerSessao).not.toHaveBeenCalled();
   });
@@ -1034,7 +1433,7 @@ describe('Sistema: sessões pareadas', () => {
     await assentar();
     expect(na(SESSOES_PAREADAS).getByRole('alert').textContent).toBe('Erro: Não deu para falar com o motor (falha de rede).');
     expect(na(SESSOES_PAREADAS).queryByRole('list', { name: 'Sessões pareadas' })).toBeNull();
-    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Atenção:Sessões pareadasa lista não carregou');
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Atenção:Quem está conectadoa lista não carregou');
     falhar = false;
     await clicarEm(na(SESSOES_PAREADAS), 'Atualizar a lista');
     await assentar();
@@ -1047,7 +1446,7 @@ describe('Sistema: sessões pareadas', () => {
     montar({ aoPostar: (rota) => (rota === '/api/auth/sessions' ? corpo({ ok: true, sessoes: [] }) : undefined) });
     await assentar();
     expect(na(SESSOES_PAREADAS).getByText(/O motor não listou sessão pareada.*não há sessão a encerrar/)).toBeTruthy();
-    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Sessões pareadasnenhuma');
+    expect(resumoDe(SESSOES_PAREADAS).textContent).toBe('Sem dado ou desligado:Quem está conectadonenhuma');
     cleanup();
     montar({ aoPostar: (rota) => (rota === '/api/auth/sessions' ? corpo({ ok: true, sessoes: [OUTRA] }) : undefined) });
     await assentar();
@@ -1080,7 +1479,7 @@ describe('Sistema: edição por salvar', () => {
     const ouvindo = () => adicionados.mock.calls.filter(([tipo]) => tipo === 'beforeunload').length - removidos.mock.calls.filter(([tipo]) => tipo === 'beforeunload').length;
     expect(ouvindo()).toBe(0);
     mudar(na(AUTOMACAO).getByLabelText('Revisões ao mesmo tempo'), '2');
-    expect(screen.getByText('Aviso: há edição por salvar nesta tela (automação). Trocar de aba do Farol a descarta sem perguntar.')).toBeTruthy();
+    expect(screen.getByText('Aviso: há edição por salvar nesta tela (modelo e sessões). Trocar de assunto não a perde; trocar de aba do Farol a descarta sem perguntar.')).toBeTruthy();
     expect(resumoDe(AUTOMACAO).textContent).toContain('alteração por salvar');
     expect(ouvindo()).toBe(1);
     const evento = new Event('beforeunload', { cancelable: true });

@@ -44,6 +44,7 @@ describe('lerConfigDoSistema', () => {
     expect(lido).toEqual({
       aguardarCiParaAprovar: false,
       parallelReviews: 2,
+      intervalSeconds: 300,
       globalParallelReviews: 0,
       reviewModel: 'opus',
       reviewEffort: 'high',
@@ -174,7 +175,7 @@ describe('leitores do snapshot', () => {
       { user: 'farol-bot', owners: ['biudtech', 7], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', reviewRules: { acme: { mode: 'manual' } }, padroesRevisao: 'texto' },
       { owners: [] },
     ], registrar);
-    expect(lido).toEqual([{ user: 'farol-bot', owners: ['biudtech'], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', regrasDeReview: 1 }]);
+    expect(lido).toEqual([{ user: 'farol-bot', owners: ['biudtech'], tokenOk: true, limiteGhAte: 0, limitePlanoAte: 0, autoReview: true, onClean: 'approve', onCaveats: 'wait', onReject: 'request_changes', regrasDeReview: 1, regras: [{ organizacao: 'acme', modo: 'manual' }], regrasIlegiveis: 0, padroes: 'texto' }]);
     expect(registrar).toHaveBeenCalledTimes(1);
     expect(lerContas({}, vi.fn())).toBeUndefined();
   });

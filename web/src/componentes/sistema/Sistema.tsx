@@ -1,27 +1,33 @@
 'use client';
 
-// A tela Sistema, no desenho enxuto: o título com quantos pontos pedem atenção e sete linhas
-// (saúde, conta e política, automação, perfil do Claude, Jira, sessões pareadas, rede e
-// acesso), cada uma com a bolinha de estado, o título e um resumo; o formulário ou o detalhe
-// abre num clique. Não há teto de gasto (decisão de 16/11/2026) e o revisor nunca espera
-// (desenho de 17/11/2026): a tela não oferece `wait` na política nem a espera do CI. É a tela
-// que mais pode fazer estrago, então:
-// - nenhum segredo passa por ela: a borda descarta o que tiver cara de segredo
-//   (src/contratos/segredos.ts), e não há campo para digitar token, chave nem credencial;
-// - cada salvar mexe numa seção só, manda só o que a pessoa alterou nesta edição e confere o
-//   que o motor respondeu (src/sistema/acoes.ts);
+// A tela Sistema, no redesenho de 19/11/2026 (meta 8, decisões 3 e 4): à esquerda o menu dos
+// assuntos, cada um com a bolinha e um resumo do estado; à direita o assunto aberto. A rota guarda
+// o assunto (`/sistema/<assunto>`, src/sistema/assuntos.ts), para o link funcionar; `/sistema`
+// abre o primeiro. No celular o menu vira a lista, e o assunto abre em seguida, com o Voltar aos
+// assuntos. Não há faixa de saúde no topo (pedido do dono): a saúde é um assunto do menu.
+//
+// Todos os assuntos ficam montados e só o aberto aparece: trocar de assunto não perde o que foi
+// digitado em outro. É a tela que mais pode fazer estrago, então:
+// - segredo não volta do motor: a borda descarta o que tiver cara de segredo
+//   (src/contratos/segredos.ts). Os dois segredos que a tela recebe digitados (o token do Jira e
+//   o código do login da assinatura) ficam em campo mascarado fora do estado do React, vão só no
+//   corpo do POST e são apagados do campo antes do envio;
+// - cada salvar mexe numa coisa só, manda só o que a pessoa alterou e confere o que o motor
+//   respondeu (src/sistema/acoes.ts);
 // - a mudança que amplia o que o motor publica sozinho no GitHub pergunta antes;
 // - só se salva com o estado da conexão atual já chegado (`estadoEmDia`).
 // A tela fatia e formata: quem mede, decide e grava é o motor.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Bolinha, Esqueleto, Linha, Pagina, ui } from '@/componentes/ui';
+import Link from 'next/link';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Bolinha, Esqueleto, Pagina, ui } from '@/componentes/ui';
 import { lerSessoes, type ConfigDoSistema, type SessoesPareadas } from '@/contratos/sistema';
 import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { dataHora, horaCurta } from '@/radar/formato';
 import { impedimentoDeSalvar } from '@/sistema/acoes';
+import { ASSUNTOS, ROTA_DO_SISTEMA, assuntoDoCaminho, nomeDoAssunto, rotaDoAssunto, type IdDoAssunto } from '@/sistema/assuntos';
 import {
-  ROTULO_DO_TOM, fraseDoTopo, linhaDaAutomacao, linhaDaConta, linhaDaRede, linhaDaSaude, linhaDasSessoes, linhaDoJira, linhaDoPerfil,
+  ROTULO_DO_TOM, linhaDaConta, linhaDaSaude, linhaDasRegras, linhaDasSessoes, linhaDoJira, linhaDoPerfil, linhaDoRitmo, linhaDosPadroes,
   type EstadoDaLinha,
 } from '@/sistema/linhas';
 import { todasAsVerificacoes } from '@/sistema/saude';
@@ -31,45 +37,45 @@ import { Automacao } from './Automacao';
 import { ContaEPolitica } from './ContaEPolitica';
 import { Par, type UltimoSalvar } from './Formulario';
 import { Jira } from './Jira';
+import { Padroes } from './Padroes';
 import { PerfilDoClaude } from './PerfilDoClaude';
+import { Regras } from './Regras';
+import { Ritmo } from './Ritmo';
 import { Saude } from './Saude';
 import { ROTA_DAS_SESSOES, Sessoes } from './Sessoes';
 import { useChamada } from './useChamada';
 import estilos from './Sistema.module.css';
 
-// Como a tela chama cada edição por salvar, no aviso do topo.
-function nomeDaEdicao(chave: string): string {
-  return chave === 'conta' ? 'conta e política' : 'automação';
-}
+// As edições por salvar, por formulário, e o assunto onde cada um mora.
+const EDICOES = {
+  conta: { nome: 'conta e política', assunto: 'conta' },
+  padroes: { nome: 'padrões do time', assunto: 'padroes' },
+  automacao: { nome: 'modelo e sessões', assunto: 'claude' },
+  ritmo: { nome: 'ritmo da revisão', assunto: 'ritmo' },
+} as const satisfies Record<string, { nome: string; assunto: IdDoAssunto }>;
+type Edicao = keyof typeof EDICOES;
+const SALVA_FORMULARIO: readonly string[] = Object.keys(EDICOES);
 
-// O resumo da linha fechada: a bolinha (com o estado escrito para o leitor), o título e o
-// resumo à direita. Só texto: nada clicável dentro do <summary>. Tudo vai num h2 só (o
-// <summary> aceita um título como conteúdo), para as sete seções serem títulos de nível 2
-// abaixo do h1 da tela, e os subtítulos de dentro (h3) não pularem nível.
-function Resumo({ titulo, estado, porSalvar }: { titulo: string; estado: EstadoDaLinha; porSalvar?: boolean }) {
-  return (
-    <h2 className={estilos.cabecaDaLinha}>
-      <Bolinha tom={estado.tom} rotulo={`${ROTULO_DO_TOM[estado.tom]}:`} />
-      <span className={`${ui.t} ${estilos.tituloDaLinha}`}>{titulo}</span>
-      <span className={`${ui.r} ${estilos.resumoDaLinha}`}>{porSalvar ? `${estado.resumo}, alteração por salvar` : estado.resumo}</span>
-    </h2>
-  );
-}
-
-function SecaoEmLinha({ titulo, estado, porSalvar, children }: { titulo: string; estado: EstadoDaLinha; porSalvar?: boolean; children: ReactNode }) {
-  return (
-    <Linha rotulo={titulo} resumo={<Resumo titulo={titulo} estado={estado} porSalvar={porSalvar} />}>
-      {children}
-    </Linha>
-  );
-}
+// A frase curta de cada assunto, abaixo do título dele.
+const DESCRICAO: Record<IdDoAssunto, string> = {
+  conta: 'É por ela que o Farol publica no GitHub: o que ela revisa sozinha, onde e o que faz em cada desfecho.',
+  regras: 'Exceções à conta: quem é revisado sozinho e quem só no clique.',
+  padroes: 'O que o Farol confere em todo PR além das regras do repositório.',
+  claude: 'Os perfis que rodam as revisões, na ordem de uso, e como cada sessão roda.',
+  jira: 'De onde o Farol lê o card de cada PR, por organização do GitHub.',
+  ritmo: 'Com que frequência ele olha o GitHub e como lida com o que muda no meio.',
+  acesso: 'Os navegadores com acesso a esta tela, e por onde o motor escuta.',
+  saude: 'O que o motor mediu de si e do ambiente na última verificação.',
+};
 
 // As chaves que só mudam pelo arquivo de configuração do motor, com reinício. A tela mostra e
 // não edita: é por uma dessas origens que ela fala com o motor, e tirar a própria origem a
 // trancaria para fora. O motor também não as aceita em POST /api/settings.
 function RedeEAcesso({ config }: { config: ConfigDoSistema | undefined }) {
+  const id = useId();
   return (
-    <>
+    <section className={estilos.subbloco} aria-labelledby={id}>
+      <h3 id={id} className={estilos.subtitulo}>Rede e acesso</h3>
       <dl className={estilos.pares}>
         <Par nome="Endereço em que o motor escuta (bind)">{config?.bind ?? 'O motor não informou.'}</Par>
         <Par nome="Porta (port)">{config?.port ?? 'O motor não informou.'}</Par>
@@ -82,54 +88,100 @@ function RedeEAcesso({ config }: { config: ConfigDoSistema | undefined }) {
       <p className={ui.mini}>
         Só leitura. Estas chaves mudam apenas pelo arquivo de configuração do motor (config.json), com reinício, e o motor não as aceita pela API. É de propósito: esta tela fala com o motor por uma das origens permitidas, e tirar a própria origem daqui a trancaria para fora.
       </p>
-    </>
+    </section>
+  );
+}
+
+function ModeloESessoes({ children }: { children: ReactNode }) {
+  const id = useId();
+  return (
+    <section className={estilos.subbloco} aria-labelledby={id}>
+      <h3 id={id} className={estilos.subtitulo}>Modelo e sessões</h3>
+      {children}
+    </section>
+  );
+}
+
+interface PropsDoAssunto {
+  id: IdDoAssunto;
+  aberto: boolean;
+  // o id do título, que recebe o foco quando o assunto abre por um clique no menu
+  idDoTitulo: string;
+  children: ReactNode;
+}
+
+function Assunto({ id, aberto, idDoTitulo, children }: PropsDoAssunto) {
+  return (
+    <section className={estilos.assunto} aria-labelledby={idDoTitulo} hidden={!aberto}>
+      <div className={estilos.cabecaDoAssunto}>
+        <h2 id={idDoTitulo} tabIndex={-1} className={estilos.tituloDoAssunto}>{nomeDoAssunto(id)}</h2>
+        <p className={ui.mini}>{DESCRICAO[id]}</p>
+      </div>
+      {children}
+    </section>
   );
 }
 
 interface Props {
   // existe para o teste trocar a instância
   app?: App;
+  // o caminho da página (`usePathname`), de onde sai o assunto aberto
+  caminho?: string;
 }
 
-export function Sistema({ app = appDoNavegador }: Props) {
+export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Props) {
   const saude = useApp((e) => e.snapshot?.doctor, app);
   const modelos = useApp((e) => e.snapshot?.modelos, app);
   const perfis = useApp((e) => e.snapshot?.claudePerfis, app);
   const contas = useApp((e) => e.snapshot?.accounts, app);
   const config = useApp((e) => e.snapshot?.config, app);
   const sites = useApp((e) => e.snapshot?.jiraSites, app);
+  const resolvidas = useApp((e) => e.snapshot?.decisions?.resolved, app);
   const versao = useApp((e) => e.snapshot?.app?.version ?? '', app);
   const temEstado = useApp((e) => e.snapshot !== null, app);
   const conexao = useApp((e) => e.conexao, app);
   const emDia = useApp((e) => e.estadoEmDia, app);
   const recados = useApp((e) => e.recados, app);
 
+  const aberto = assuntoDoCaminho(caminho) ?? { id: ASSUNTOS[0].id, explicito: false };
+  // O foco vai ao título do assunto quando ele muda depois da carga (o clique no menu): o leitor
+  // de tela e o teclado seguem para o conteúdo novo, e no celular a tela mostra o assunto.
+  const baseDosTitulos = useId();
+  const idDoTitulo = (id: IdDoAssunto): string => `${baseDosTitulos}-${id}`;
+  const anterior = useRef(aberto.id);
+  useEffect(() => {
+    if (anterior.current === aberto.id) return;
+    anterior.current = aberto.id;
+    document.getElementById(`${baseDosTitulos}-${aberto.id}`)?.focus();
+  }, [aberto.id, baseDosTitulos]);
+
   const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
   const sessoes = useChamada<SessoesPareadas>();
   const { chamar: chamarSessoes } = sessoes;
-  // as edições por salvar: "conta" e "automacao"
-  const [porSalvar, setPorSalvar] = useState<readonly string[]>([]);
-  // o desfecho do último salvar de cada seção, para o pé dizer "Salvo às" ou o erro
-  const [salvos, setSalvos] = useState<Readonly<Record<string, UltimoSalvar>>>({});
+  const [porSalvar, setPorSalvar] = useState<readonly Edicao[]>([]);
+  // o desfecho do último salvar de cada formulário, para o pé dizer "Salvo às" ou o erro
+  const [salvos, setSalvos] = useState<Readonly<Partial<Record<Edicao, UltimoSalvar>>>>({});
 
-  // A lista de sessões não está no snapshot: é pedida ao abrir, depois de cada encerramento
-  // aceito e pelo botão Atualizar. Fica aqui porque o resumo da linha depende dela.
+  // A lista de sessões não está no snapshot: é pedida ao abrir, depois de cada revogação aceita
+  // e pelo botão Atualizar. Fica aqui porque o resumo do menu depende dela.
   const pedirSessoes = useCallback(() => {
     void chamarSessoes((sinal) => app.cliente.post(ROTA_DAS_SESSOES, {}, lerSessoes, { sinal }));
   }, [chamarSessoes, app]);
   useEffect(() => { pedirSessoes(); }, [pedirSessoes]);
 
-  const marcar = useCallback((chave: string, alterado: boolean) => {
+  const marcar = useCallback((chave: Edicao, alterado: boolean) => {
     setPorSalvar((antes) => {
       if (antes.includes(chave) === alterado) return antes;
       return alterado ? [...antes, chave] : antes.filter((outra) => outra !== chave);
     });
   }, []);
   const aoMudarConta = useCallback((alterado: boolean) => marcar('conta', alterado), [marcar]);
+  const aoMudarPadroes = useCallback((alterado: boolean) => marcar('padroes', alterado), [marcar]);
   const aoMudarAutomacao = useCallback((alterado: boolean) => marcar('automacao', alterado), [marcar]);
+  const aoMudarRitmo = useCallback((alterado: boolean) => marcar('ritmo', alterado), [marcar]);
 
   // Fechar ou recarregar a página com edição por salvar pergunta antes (o navegador é quem
-  // escreve a pergunta). Trocar de aba do Farol não passa por aqui: a tela avisa no topo.
+  // escreve a pergunta). Trocar de assunto não perde nada: todos ficam montados.
   const haPorSalvar = porSalvar.length > 0;
   useEffect(() => {
     if (!haPorSalvar) return undefined;
@@ -138,16 +190,16 @@ export function Sistema({ app = appDoNavegador }: Props) {
     return () => window.removeEventListener('beforeunload', segurar);
   }, [haPorSalvar]);
 
-  // O salvar tira o próprio botão da tela quando o estado novo chega: o foco vai antes à
-  // região do resultado. Encerrar a sessão deste navegador leva ao pareamento de fato;
-  // encerrar outra pede a lista de novo.
+  // O salvar tira o próprio botão da tela quando o estado novo chega: o foco vai antes à região
+  // do resultado. Sair (a sessão deste navegador) leva ao pareamento de fato; revogar outra pede
+  // a lista de novo.
   const controle = useMemo<ControleDeAcoes>(() => ({
     ...acoes,
     disparar: async (acao) => {
-      const salvar = acao.tipo === 'conta' || acao.tipo === 'automacao';
-      if (salvar) acoes.focarResultado();
+      const formulario = SALVA_FORMULARIO.includes(acao.tipo) ? (acao.tipo as Edicao) : null;
+      if (formulario) acoes.focarResultado();
       const aceito = await acoes.disparar(acao);
-      if (salvar) setSalvos((antes) => ({ ...antes, [acao.tipo]: { ok: aceito, hora: horaCurta(Date.now()) } }));
+      if (formulario) setSalvos((antes) => ({ ...antes, [formulario]: { ok: aceito, hora: horaCurta(Date.now()) } }));
       if (aceito && acao.tipo === 'revogarSessao') {
         if (acao.atual) app.esquecerSessao('revogada');
         else pedirSessoes();
@@ -157,53 +209,85 @@ export function Sistema({ app = appDoNavegador }: Props) {
   }), [acoes, app, pedirSessoes]);
 
   const impedimento = impedimentoDeSalvar({ conectado: conexao === 'conectado', emDia });
-  const nomesPorSalvar = [...new Set(porSalvar.map(nomeDaEdicao))];
   const conta = contas?.[0];
   const verificacoes = todasAsVerificacoes(saude, modelos?.cli, perfis, conta, (ms) => dataHora(ms) || 'hora não informada');
 
-  const estados = {
-    saude: linhaDaSaude(saude, verificacoes),
+  const estados: Record<IdDoAssunto, EstadoDaLinha> = {
     conta: linhaDaConta(conta),
-    automacao: linhaDaAutomacao(config, modelos),
+    regras: linhaDasRegras(conta),
+    padroes: linhaDosPadroes(conta),
     claude: linhaDoPerfil(config, perfis, saude),
     jira: linhaDoJira(sites),
-    sessoes: linhaDasSessoes(sessoes),
-    rede: linhaDaRede(config),
+    ritmo: linhaDoRitmo(config),
+    acesso: linhaDasSessoes(sessoes),
+    saude: linhaDaSaude(saude, verificacoes),
   };
+  const assuntosPorSalvar = new Set<IdDoAssunto>(porSalvar.map((e) => EDICOES[e].assunto));
+  const nomesPorSalvar = porSalvar.map((e) => EDICOES[e].nome);
 
   return (
-    <Pagina titulo="Sistema" sub={temEstado ? fraseDoTopo(Object.values(estados)) : 'Esperando o estado do motor'} estreita>
+    <Pagina titulo="Sistema" sub={temEstado ? 'Cada ajuste do Farol, por assunto. Escolha um no menu e abra o que quiser detalhar.' : 'Esperando o estado do motor'}>
       {haPorSalvar ? (
         <p className={ui.nota} role="status">
-          Aviso: há edição por salvar nesta tela ({nomesPorSalvar.join(', ')}). Trocar de aba do Farol a descarta sem perguntar.
+          Aviso: há edição por salvar nesta tela ({nomesPorSalvar.join(', ')}). Trocar de assunto não a perde; trocar de aba do Farol a descarta sem perguntar.
         </p>
       ) : null}
 
       {!temEstado ? (
-        <Esqueleto texto="Esperando o estado do motor: as seções aparecem preenchidas quando ele chegar." linhas={7} />
+        <Esqueleto texto="Esperando o estado do motor: os assuntos aparecem preenchidos quando ele chegar." linhas={7} />
       ) : (
-        <div className={ui.lista}>
-          <SecaoEmLinha titulo="Saúde" estado={estados.saude}>
-            <Saude cliente={app.cliente} saude={saude} verificacoes={verificacoes} versao={versao} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Conta revisora e política" estado={estados.conta} porSalvar={porSalvar.includes('conta')}>
-            <ContaEPolitica conta={conta} controle={controle} impedimento={impedimento} aoMudar={aoMudarConta} ultimo={salvos.conta ?? null} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Automação" estado={estados.automacao} porSalvar={porSalvar.includes('automacao')}>
-            <Automacao config={config} modelos={modelos} controle={controle} impedimento={impedimento} aoMudar={aoMudarAutomacao} ultimo={salvos.automacao ?? null} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Perfil do Claude" estado={estados.claude}>
-            <PerfilDoClaude cliente={app.cliente} config={config} perfis={perfis} saude={saude} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Jira" estado={estados.jira}>
-            <Jira cliente={app.cliente} sites={sites} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Sessões pareadas" estado={estados.sessoes}>
-            <Sessoes controle={controle} lista={sessoes} aoAtualizar={pedirSessoes} />
-          </SecaoEmLinha>
-          <SecaoEmLinha titulo="Rede e acesso" estado={estados.rede}>
-            <RedeEAcesso config={config} />
-          </SecaoEmLinha>
+        <div className={`${estilos.sistema} ${aberto.explicito ? estilos.comAssunto : estilos.semAssunto}`}>
+          <nav className={estilos.menu} aria-label="Assuntos do Sistema">
+            <ul className={estilos.listaDoMenu}>
+              {ASSUNTOS.map(({ id, nome }) => {
+                const estado = estados[id];
+                const atual = id === aberto.id;
+                return (
+                  <li key={id}>
+                    <Link href={rotaDoAssunto(id)} className={estilos.itemDoMenu} aria-current={atual ? 'page' : undefined} data-tom={estado.tom}>
+                      <span className={estilos.nomeDoMenu}>
+                        <Bolinha tom={estado.tom} rotulo={`${ROTULO_DO_TOM[estado.tom]}:`} />
+                        <span>{nome}</span>
+                      </span>
+                      <span className={estilos.resumoDoMenu}>{assuntosPorSalvar.has(id) ? `${estado.resumo}, alteração por salvar` : estado.resumo}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          <div className={estilos.paineis}>
+            <Link href={ROTA_DO_SISTEMA} className={estilos.voltar}>Voltar aos assuntos</Link>
+            <Assunto id="conta" aberto={aberto.id === 'conta'} idDoTitulo={idDoTitulo('conta')}>
+              <ContaEPolitica conta={conta} controle={controle} impedimento={impedimento} aoMudar={aoMudarConta} ultimo={salvos.conta ?? null} />
+            </Assunto>
+            <Assunto id="regras" aberto={aberto.id === 'regras'} idDoTitulo={idDoTitulo('regras')}>
+              <Regras conta={conta} controle={controle} impedimento={impedimento} />
+            </Assunto>
+            <Assunto id="padroes" aberto={aberto.id === 'padroes'} idDoTitulo={idDoTitulo('padroes')}>
+              <Padroes conta={conta} controle={controle} impedimento={impedimento} aoMudar={aoMudarPadroes} ultimo={salvos.padroes ?? null} />
+            </Assunto>
+            <Assunto id="claude" aberto={aberto.id === 'claude'} idDoTitulo={idDoTitulo('claude')}>
+              <PerfilDoClaude cliente={app.cliente} config={config} perfis={perfis} saude={saude} controle={controle} impedimento={impedimento} />
+              <ModeloESessoes>
+                <Automacao config={config} modelos={modelos} controle={controle} impedimento={impedimento} aoMudar={aoMudarAutomacao} ultimo={salvos.automacao ?? null} />
+              </ModeloESessoes>
+            </Assunto>
+            <Assunto id="jira" aberto={aberto.id === 'jira'} idDoTitulo={idDoTitulo('jira')}>
+              <Jira cliente={app.cliente} sites={sites} resolvidas={resolvidas} impedimento={impedimento} />
+            </Assunto>
+            <Assunto id="ritmo" aberto={aberto.id === 'ritmo'} idDoTitulo={idDoTitulo('ritmo')}>
+              <Ritmo config={config} controle={controle} impedimento={impedimento} aoMudar={aoMudarRitmo} ultimo={salvos.ritmo ?? null} />
+            </Assunto>
+            <Assunto id="acesso" aberto={aberto.id === 'acesso'} idDoTitulo={idDoTitulo('acesso')}>
+              <Sessoes controle={controle} lista={sessoes} aoAtualizar={pedirSessoes} />
+              <RedeEAcesso config={config} />
+            </Assunto>
+            <Assunto id="saude" aberto={aberto.id === 'saude'} idDoTitulo={idDoTitulo('saude')}>
+              <Saude cliente={app.cliente} saude={saude} verificacoes={verificacoes} versao={versao} />
+            </Assunto>
+          </div>
         </div>
       )}
 

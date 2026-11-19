@@ -74,14 +74,14 @@ describe('lerConfig: a chave config do snapshot', () => {
     const registrar = vi.fn();
     const people = { ana: { papel: 'pleno' } };
     const lido = lerConfig({ intervalSeconds: 300, soundEnabled: true, people }, registrar);
-    expect(lido).toEqual({ people: { ana: { papel: 'pleno' } }, peopleCru: people });
+    expect(lido).toEqual({ intervalSeconds: 300, people: { ana: { papel: 'pleno' } }, peopleCru: people });
     // o cru é o próprio objeto do motor, não uma cópia filtrada
     expect(lido?.peopleCru).toBe(people);
     expect(registrar).not.toHaveBeenCalled();
   });
 
   it('sem o mapa de perfis a config chega sem people', () => {
-    expect(lerConfig({ intervalSeconds: 300 }, vi.fn())).toEqual({});
+    expect(lerConfig({ intervalSeconds: 300 }, vi.fn())).toEqual({ intervalSeconds: 300 });
     expect(lerConfig({ people: [] }, vi.fn())).toEqual({});
   });
 

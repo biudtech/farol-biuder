@@ -1,10 +1,13 @@
-// As sete linhas da tela Sistema, sem React: o estado de cada uma (a bolinha) e o resumo que
-// fica à direita com a linha fechada. Tudo sai do que a tela já recebe do motor e do estado
-// que cada seção já calcula (a saúde pelas verificações, a conta pela presença do token, e
-// assim por diante): nada é medido aqui. O topo conta quantas linhas pedem atenção.
+// O resumo de cada assunto do menu da tela Sistema, sem React: o estado (a bolinha) e a frase
+// curta abaixo do nome. Tudo sai do que a tela já recebe do motor e do estado que cada assunto
+// já calcula (a saúde pelas verificações, a conta pela presença do token, e assim por diante):
+// nada é medido aqui.
 import type { ConfigDoSistema, ContaRevisora, Modelos, PerfisDoClaude, Saude, SessoesPareadas, SiteDoJira } from '@/contratos/sistema';
 import { automacaoDe, resumoDaAutomacao } from './automacao';
+import { resumoDosPadroes } from './padroes';
 import { desfechosEmEspera, resumoDaPolitica } from './politica';
+import { resumoDasRegras } from './regras';
+import { resumoDoRitmo, ritmoDe } from './ritmo';
 import { ehGrave, type Verificacao } from './saude';
 
 // ok: verde. aviso: âmbar. ruim: vermelho. neutro: cinza (sem dado, desligado, carregando).
@@ -46,6 +49,23 @@ export function linhaDaConta(conta: ContaRevisora | undefined): EstadoDaLinha {
   // tela nunca espera. Pede atenção, e o resumo diz que veio do motor.
   if (conta.autoReview !== false && desfechosEmEspera(conta)) return { tom: 'aviso', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
   return { tom: 'ok', resumo: `${quem}, ${resumoDaPolitica(conta)}` };
+}
+
+export function linhaDasRegras(conta: ContaRevisora | undefined): EstadoDaLinha {
+  if (!conta) return { tom: 'neutro', resumo: 'o motor não mandou a conta' };
+  if (conta.regrasIlegiveis) return { tom: 'aviso', resumo: `${resumoDasRegras(conta.regras)}, ${plural(conta.regrasIlegiveis, 'ilegível', 'ilegíveis')}` };
+  return { tom: conta.regras.length ? 'ok' : 'neutro', resumo: resumoDasRegras(conta.regras) };
+}
+
+export function linhaDosPadroes(conta: ContaRevisora | undefined): EstadoDaLinha {
+  if (!conta) return { tom: 'neutro', resumo: 'o motor não mandou a conta' };
+  return { tom: conta.padroes?.trim() ? 'ok' : 'neutro', resumo: resumoDosPadroes(conta.padroes) };
+}
+
+export function linhaDoRitmo(config: ConfigDoSistema | undefined): EstadoDaLinha {
+  const ritmo = ritmoDe(config);
+  if (!ritmo) return { tom: 'neutro', resumo: 'o motor não mandou as chaves' };
+  return { tom: 'ok', resumo: resumoDoRitmo(ritmo) };
 }
 
 export function linhaDaAutomacao(config: ConfigDoSistema | undefined, modelos: Modelos | undefined): EstadoDaLinha {

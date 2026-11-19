@@ -409,18 +409,22 @@ O evento `needs-decision` saiu do SSE em 17/11/2026: não há mais mesa.
 Nem toda rota tem tela. O front lê o estado pelo SSE e só chama `GET /api/state` (que serve
 também a `tools/diagnosticar-legados.js` e a quem consulta à mão) para reler `config.people` logo
 antes de gravar um perfil ou uma pessoa nova, para o corpo de `people` sair do mapa atual do motor e
-não apagar o que outra aba gravou. Não usa `GET /api/log`, `GET /api/log/triage`,
-`POST /api/jira/credential`, `POST /api/jira/credential/remove` nem as três de
-`POST /api/claude/login-web/*`, e não cria nem remove perfil do Claude: a credencial do Jira, a
-chave de API e o login da assinatura entram por chamada direta à API (com o Bearer do
-pareamento e `x-farol: 1`). Os corpos estão em
-[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#chamar-a-api-sem-tela) e nas lacunas do
+não apagar o que outra aba gravou. Não usa `GET /api/log`, `GET /api/log/triage` nem
+`POST /api/jira/credential/remove`, e não cria nem remove perfil do Claude: a chave de API entra
+por chamada direta à API (com o Bearer do pareamento e `x-farol: 1`). Desde 19/11/2026
+(redesenho, lote 6, decisão 3 do desenho) o Sistema faz pela tela o login da assinatura (as três
+de `POST /api/claude/login-web/*`, só no perfil de assinatura) e a troca da credencial do Jira
+(`POST /api/jira/credential`): o token e o código ficam em campo mascarado fora do estado da
+tela, vão só no corpo do POST e são apagados do campo antes do envio, e da resposta a tela lê só
+o `ok` e a frase da recusa. Os corpos estão em
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md#chamar-a-api-sem-tela) e no
 [`web/README.md`](web/README.md).
 
 Das preferências de `POST /api/settings`, o front edita `parallelReviews`, `reviewModel`,
-`reviewEffort` e `people`. Só mudam pela API ou pelo arquivo: `jiraSites`, `claudeProfiles`,
-`claudeProfileId`, `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `reviewFast`,
-`autoPushback` e `debugSpawns`. `soundEnabled`, `theme` e `autostart`, da tela antiga, e
+`reviewEffort`, `reviewFast`, `intervalSeconds`, `reReviewResume`, `autoPushback` e `people`, e
+manda `claudeProfileId` com `claudeProfiles` só no Subir na ordem dos perfis (a lista remontada
+sem chave nem pasta, que o motor repõe por `patchDaTela`). Só mudam pela API ou pelo arquivo:
+`jiraSites`, criar e remover perfil do Claude, `globalParallelReviews` e `debugSpawns`. `soundEnabled`, `theme` e `autostart`, da tela antiga, e
 `aguardarCiParaAprovar` e `aguardarCiParaRevisar`, que saíram em 17/11/2026 (o revisor nunca
 espera o CI), não estão na tabela: voltam em `ignoradas`, e num `config.json` antigo são
 descartadas na carga (`test/preferencias-sem-leitor.test.js`).

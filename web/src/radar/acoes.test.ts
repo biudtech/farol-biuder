@@ -267,7 +267,7 @@ describe('ações do Time: papel e competência, e remover do Time', () => {
   });
 
   it('a resposta do salvar traz o mapa de perfis que ficou gravado, como veio', () => {
-    expect(lerRespostaDeAcao({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: pessoas } })).toEqual({ ok: true, pessoas });
+    expect(lerRespostaDeAcao({ ok: true, ignoradas: [], config: { intervalSeconds: 300, people: pessoas } })).toEqual({ ok: true, pessoas, sistema: { intervalSeconds: 300 } });
     expect(lerRespostaDeAcao({ ok: true, ignoradas: ['people', 7], config: {} })).toEqual({ ok: true, ignoradas: ['people'] });
     // pessoa de forma errada na resposta não some: a conferência é que diz
     expect(lerRespostaDeAcao({ ok: true, config: { people: { ana: 3, dora: { squad: 'x' } } } })).toEqual({ ok: true, pessoas: { ana: 3, dora: { squad: 'x' } } });

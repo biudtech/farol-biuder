@@ -11,7 +11,7 @@ import {
 // O motor é lido por texto, como em src/time/taxonomia.test.ts.
 const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
 
-const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait', regrasDeReview: 0 };
+const CONTA: ContaRevisora = { user: 'farol-bot', owners: ['biudtech'], tokenOk: true, autoReview: false, onClean: 'wait', onCaveats: 'wait', onReject: 'wait', regrasDeReview: 0, regras: [], regrasIlegiveis: 0 };
 const ABERTA: ContaRevisora = { ...CONTA, autoReview: true, onClean: 'approve', onCaveats: 'approve', onReject: 'request_changes' };
 
 describe('a política é a do motor', () => {
@@ -82,7 +82,7 @@ describe('camposAlterados: só o que a pessoa alterou nesta edição', () => {
 
   it('valor fora do domínio, ou vazio, nunca vai (vazio faria o motor regravar o padrão, que publica)', () => {
     expect(editar(ABERTA, { onClean: '', onReject: 'merge' })).toEqual({});
-    const semPolitica: ContaRevisora = { user: 'farol-bot', owners: [], regrasDeReview: 0 };
+    const semPolitica: ContaRevisora = { user: 'farol-bot', owners: [], regrasDeReview: 0, regras: [], regrasIlegiveis: 0 };
     expect(editar(semPolitica, {})).toEqual({});
   });
 

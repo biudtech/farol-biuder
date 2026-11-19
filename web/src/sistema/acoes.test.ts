@@ -9,6 +9,10 @@ const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.me
 
 const conta = (extra: Partial<Extract<Acao, { tipo: 'conta' }>> = {}): Acao => ({ tipo: 'conta', alvo: 'sistema:conta', nome: '@farol-bot', user: 'farol-bot', campos: { onReject: 'request_changes' }, ampliacoes: [], ...extra });
 const automacao = (extra: Partial<Extract<Acao, { tipo: 'automacao' }>> = {}): Acao => ({ tipo: 'automacao', alvo: 'sistema:automacao', nome: 'a automação', corpo: { parallelReviews: 3 }, ...extra });
+const padroes = (texto: string): Acao => ({ tipo: 'padroes', alvo: 'sistema:padroes', nome: '@farol-bot', user: 'farol-bot', texto });
+const regra = (modo: 'auto' | 'manual' | 'inherit', autor = 'robo[bot]'): Acao => ({ tipo: 'regra', alvo: 'sistema:regra', nome: autor ? `@${autor} em orga` : 'a organização orga', user: 'farol-bot', organizacao: 'orga', autor: autor || undefined, modo });
+const ritmo = (): Acao => ({ tipo: 'ritmo', alvo: 'sistema:ritmo', nome: 'o ritmo', corpo: { intervalSeconds: 600 } });
+const ordem = (): Acao => ({ tipo: 'ordemDosPerfis', alvo: 'sistema:ordem', nome: 'B', corpo: { claudeProfileId: 'b', claudeProfiles: [{ id: 'b', label: 'B', kind: 'dir' }, { id: 'a', label: 'A', kind: 'apikey', baseUrl: '' }] } });
 const revogar = (atual: boolean): Acao => ({ tipo: 'revogarSessao', alvo: 'sistema:sessao:0123456789abcdef', nome: atual ? '"Este" (este navegador)' : '"Outro"', id: '0123456789abcdef', rotulo: atual ? 'Este' : 'Outro', atual });
 
 // Um cliente de mentira: o corpo cru passa pelo leitor da borda, como no de verdade.
@@ -33,17 +37,46 @@ describe('o pedido de cada ação do Sistema', () => {
     expect(pedidoDa(revogar(false))).toEqual({ rota: '/api/auth/revoke', corpo: { id: '0123456789abcdef' } });
   });
 
-  it('não existe ação de teto nem ação que mande claudeProfiles', () => {
-    expect([...TIPOS_DO_SISTEMA]).toEqual(['conta', 'automacao', 'revogarSessao']);
-    for (const acao of [conta(), automacao(), revogar(false)]) expect(JSON.stringify(pedidoDa(acao))).not.toContain('claudeProfiles');
-    // nenhum fonte da tela (fora dos testes) manda perfil de volta ao motor
+  it('os padrões vão a accounts/edit só com o texto; vazio tira o campo', () => {
+    expect(pedidoDa(padroes('Teste em todo endpoint.'))).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'editar', user: 'farol-bot', campos: { padroesRevisao: 'Teste em todo endpoint.' } } });
+    expect(pedidoDa(padroes(''))).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'editar', user: 'farol-bot', campos: { padroesRevisao: '' } } });
+  });
+
+  it('a regra vai a accounts/edit como a operação pontual do motor', () => {
+    expect(pedidoDa(regra('manual'))).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'regra-review', user: 'farol-bot', organization: 'orga', author: 'robo[bot]', mode: 'manual' } });
+    expect(pedidoDa(regra('inherit', ''))).toEqual({ rota: '/api/accounts/edit', corpo: { tipo: 'regra-review', user: 'farol-bot', organization: 'orga', mode: 'inherit' } });
+    // os nomes e os modos que a rota lê, conferidos no motor
+    const escopo = raiz('lib/engine/review-scope.js');
+    for (const trecho of ['nome(op.organization)', 'nome(op.author)', "[...MODOS, 'inherit'].includes(op.mode)", "const MODOS = ['auto', 'manual'];"]) expect(escopo).toContain(trecho);
+    expect(raiz('lib/engine/contas-config.js')).toContain("if (o.tipo === 'regra-review')");
+  });
+
+  it('o ritmo e a ordem dos perfis vão a settings', () => {
+    expect(pedidoDa(ritmo())).toEqual({ rota: '/api/settings', corpo: { intervalSeconds: 600 } });
+    expect(pedidoDa(ordem())).toEqual({ rota: '/api/settings', corpo: { claudeProfileId: 'b', claudeProfiles: [{ id: 'b', label: 'B', kind: 'dir' }, { id: 'a', label: 'A', kind: 'apikey', baseUrl: '' }] } });
+    // as chaves que a tela manda existem na tabela do motor e ele as aceita pela tela
+    const tabela = raiz('lib/settings.js');
+    for (const chave of ['intervalSeconds', 'reReviewResume', 'autoPushback', 'reviewFast', 'claudeProfiles', 'claudeProfileId']) expect(tabela).toMatch(new RegExp(`key: '${chave}', def: [^,]+, ui: true`));
+  });
+
+  it('a revogação vai a auth/revoke com o id', () => {
+    expect(pedidoDa(revogar(false))).toEqual({ rota: '/api/auth/revoke', corpo: { id: '0123456789abcdef' } });
+    expect(pedidoDa(revogar(true))).toEqual({ rota: '/api/auth/revoke', corpo: { id: '0123456789abcdef' } });
+  });
+
+  it('não existe ação de teto, e só Subir na ordem manda claudeProfiles, sem segredo', () => {
+    expect([...TIPOS_DO_SISTEMA]).toEqual(['conta', 'padroes', 'regra', 'automacao', 'ritmo', 'ordemDosPerfis', 'revogarSessao']);
+    for (const acao of [conta(), padroes('x'), regra('auto'), automacao(), ritmo(), revogar(false)]) expect(JSON.stringify(pedidoDa(acao))).not.toContain('claudeProfiles');
+    const corpoDaOrdem = JSON.stringify(pedidoDa(ordem()));
+    for (const proibido of ['apiKey', '"dir":', 'temChave', 'budget']) expect(corpoDaOrdem).not.toContain(proibido);
+    // nenhum fonte da tela (fora dos testes) monta perfil para o motor, menos o da ordem
     const pasta = path.resolve(import.meta.dirname, '..');
     const fontes = (fs.readdirSync(pasta, { recursive: true }) as string[])
       .filter((nome) => /\.tsx?$/.test(nome) && !/\.test\.tsx?$/.test(nome))
-      .map((nome) => [nome, fs.readFileSync(path.join(pasta, nome), 'utf8')] as const);
+      .map((nome) => [nome.replace(/\\/g, '/'), fs.readFileSync(path.join(pasta, nome), 'utf8')] as const);
     expect(fontes.length).toBeGreaterThan(60);
     // `claudeProfiles:` como chave de um objeto seria um corpo sendo montado (o tipo lido usa `?:`)
-    expect(fontes.filter(([, fonte]) => /claudeProfiles\s*:/.test(fonte)).map(([nome]) => nome)).toEqual([]);
+    expect(fontes.filter(([, fonte]) => /claudeProfiles\s*:/.test(fonte)).map(([nome]) => nome)).toEqual(['sistema/perfis.ts']);
     expect(fontes.filter(([, fonte]) => /claudeProfilesCru|PerfisCrus/.test(fonte)).map(([nome]) => nome)).toEqual([]);
     // o teto de gasto saiu do motor em 16/11/2026: nenhum fonte lê campo de teto nem bloqueio
     const comTeto = fontes.filter(([, fonte]) => /budget(Daily|Total|Since|ByWeekday|Dates|s\b)|temTeto|capHoje|tipicoReview/.test(fonte));
@@ -51,8 +84,12 @@ describe('o pedido de cada ação do Sistema', () => {
   });
 
   it('rótulo, nome acessível e id', () => {
-    expect([conta(), automacao(), revogar(false)].map(rotuloDa)).toEqual(['Salvar conta e política', 'Salvar automação', 'Encerrar']);
-    expect([conta(), automacao(), revogar(false)].map(nomeDa)).toEqual(['Salvar conta e política de @farol-bot', 'Salvar automação', 'Encerrar a sessão "Outro"']);
+    const acoes = [conta(), padroes('x'), regra('auto'), regra('inherit'), automacao(), ritmo(), ordem(), revogar(true), revogar(false)];
+    expect(acoes.map(rotuloDa)).toEqual(['Salvar conta e política', 'Salvar padrões', 'Salvar: revisa sozinho', 'Remover', 'Salvar automação', 'Salvar ritmo', 'Subir na ordem', 'Sair', 'Revogar']);
+    expect(acoes.map(nomeDa)).toEqual([
+      'Salvar conta e política de @farol-bot', 'Salvar os padrões do time de @farol-bot', 'Salvar a regra de @robo[bot] em orga: revisa sozinho', 'Remover a regra de @robo[bot] em orga',
+      'Salvar automação', 'Salvar o ritmo da revisão', 'Subir B na ordem de uso', 'Sair deste navegador', 'Revogar a sessão "Outro"',
+    ]);
     expect([conta(), automacao(), revogar(false)].map(idDa)).toEqual(['conta', 'automacao', 'revogarSessao']);
   });
 });
@@ -88,9 +125,20 @@ describe('a pergunta antes do envio', () => {
     expect(confirmacaoDa(automacao({ corpo: { reviewModel: 'auto', reviewEffort: 'xhigh', parallelReviews: 4 } }))).toBeNull();
   });
 
-  it('encerrar pergunta sempre, e a da sessão atual avisa do pareamento', () => {
-    expect(confirmacaoDa(revogar(false))?.confirmar).toBe('Encerrar a sessão');
+  it('sair e revogar perguntam sempre, e o sair avisa do pareamento', () => {
+    expect(confirmacaoDa(revogar(false))?.confirmar).toBe('Revogar a sessão');
     expect(confirmacaoDa(revogar(true))?.texto).toContain('volta ao pareamento');
+  });
+
+  it('a regra que revisa sozinho e a remoção perguntam; a que põe no clique vai direto', () => {
+    expect(confirmacaoDa(regra('manual'))).toBeNull();
+    expect(confirmacaoDa(regra('auto'))?.texto).toContain('revisa e publica sozinho');
+    expect(confirmacaoDa(regra('inherit'))?.texto).toContain('volta a seguir a regra da organização');
+    expect(confirmacaoDa(regra('inherit', ''))?.texto).not.toContain('regra da organização');
+  });
+
+  it('padrões, ritmo e ordem dos perfis não perguntam: nada disso muda o que é publicado', () => {
+    for (const acao of [padroes('x'), ritmo(), ordem()]) expect(confirmacaoDa(acao)).toBeNull();
   });
 });
 
@@ -140,8 +188,32 @@ describe('o que a tela diz depois', () => {
     expect(await executar(cliente({ ok: true }), automacao())).toEqual({ tipo: 'ok', texto: expect.stringContaining('a resposta não trouxe a configuração gravada') });
   });
 
-  it('encerramento: a de outra sessão, a deste navegador e a que o motor não tinha mais', async () => {
-    expect(await executar(cliente({ ok: true, eraAtual: false }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão "Outro": o token dela não vale mais.' });
+  it('padrões: aceito, e ignorado pelo motor', async () => {
+    expect(await executar(cliente({ ok: true, ignoradas: [], ignorados: [] }), padroes('a\nb'))).toEqual({ tipo: 'ok', texto: expect.stringContaining('os padrões do time agora têm 2 padrões') });
+    expect(await executar(cliente({ ok: true, ignorados: ['padroesRevisao'] }), padroes('a'))).toEqual({ tipo: 'erro', texto: expect.stringContaining('ignorou os padrões do time') });
+  });
+
+  it('regra: gravada, tirada e recusada', async () => {
+    expect(await executar(cliente({ ok: true, ignoradas: [], ignorados: [] }), regra('manual'))).toEqual({ tipo: 'ok', texto: expect.stringContaining('gravou a regra de @robo[bot] em orga: só no clique') });
+    expect(await executar(cliente({ ok: true }), regra('inherit'))).toEqual({ tipo: 'ok', texto: expect.stringContaining('tirou a regra de @robo[bot] em orga') });
+    expect(await executar(cliente({ ok: false, erro: 'Modo de review inválido.' }), regra('auto'))).toEqual({ tipo: 'erro', texto: 'O motor recusou: Modo de review inválido.' });
+  });
+
+  it('ritmo: gravou, e gravou diferente', async () => {
+    expect(await executar(cliente({ ok: true, config: { intervalSeconds: 600 } }), ritmo())).toEqual({ tipo: 'ok', texto: 'O motor gravou: checagem do GitHub: a cada 10 minutos.' });
+    expect(await executar(cliente({ ok: true, config: { intervalSeconds: 300 } }), ritmo())).toEqual({ tipo: 'erro', texto: expect.stringContaining('checagem do GitHub ficou a cada 5 minutos') });
+  });
+
+  it('ordem dos perfis: gravou, gravou diferente, e a recusa do endereço da chave', async () => {
+    const gravada = { claudeProfileId: 'b', claudeProfiles: [{ id: 'a', label: 'A', kind: 'apikey', temChave: true }, { id: 'b', label: 'B', kind: 'dir' }] };
+    expect(await executar(cliente({ ok: true, config: gravada }), ordem())).toEqual({ tipo: 'ok', texto: expect.stringContaining('O motor gravou a ordem de uso: B, A.') });
+    expect(await executar(cliente({ ok: true, config: { ...gravada, claudeProfileId: 'a' } }), ordem())).toEqual({ tipo: 'erro', texto: 'O motor gravou diferente do pedido: a ordem ficou a, b, e o pedido era b, a.' });
+    // recusaDoEndereco (lib/engine/chave-do-perfil.js) responde `code` e `erro`
+    expect(await executar(cliente({ ok: false, code: 'chave_exigida', erro: 'Para mudar o endereço deste perfil, digite a chave de novo.' }), ordem())).toEqual({ tipo: 'erro', texto: 'O motor recusou: Para mudar o endereço deste perfil, digite a chave de novo.' });
+  });
+
+  it('revogação: a de outra sessão, a deste navegador e a que o motor não tinha mais', async () => {
+    expect(await executar(cliente({ ok: true, eraAtual: false }), revogar(false))).toEqual({ tipo: 'ok', texto: 'O motor revogou a sessão "Outro": o token dela não vale mais.' });
     expect(await executar(cliente({ ok: true, eraAtual: true }), revogar(true))).toEqual({ tipo: 'ok', texto: 'O motor encerrou a sessão deste navegador. Voltando ao pareamento.' });
     expect(await executar(cliente({ ok: false, code: 'sessao_inexistente' }), revogar(false))).toEqual({ tipo: 'erro', texto: expect.stringContaining('já foi revogada ou expirou') });
   });

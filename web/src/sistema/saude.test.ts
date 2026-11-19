@@ -134,7 +134,7 @@ describe('as outras verificações', () => {
 
   it('o monitoramento da conta: sem conta, sem organização, sem token, no limite e vigiando', () => {
     const quando = (ms: number) => `hora ${ms}`;
-    const conta: ContaRevisora = { user: 'farol-bot', owners: ['biudtech', 'acme'], tokenOk: true, limiteGhAte: 0, regrasDeReview: 0 };
+    const conta: ContaRevisora = { user: 'farol-bot', owners: ['biudtech', 'acme'], tokenOk: true, limiteGhAte: 0, regrasDeReview: 0, regras: [], regrasIlegiveis: 0 };
     expect(verificacaoDaConta(undefined, quando).estado).toBe('sem-dado');
     expect(verificacaoDaConta({ ...conta, user: '' }, quando).detalhe).toContain('ainda não tem conta revisora');
     expect(verificacaoDaConta({ ...conta, owners: [] }, quando).detalhe).toContain('sem organização monitorada');
@@ -163,16 +163,16 @@ describe('sessões e Sair', () => {
     expect(nomeDaSessao({ rotulo: 'Notebook', atual: true })).toBe('"Notebook" (este navegador)');
   });
 
-  it('encerrar a atual avisa que este navegador volta ao pareamento; a outra, que este continua', () => {
+  it('sair (a atual) avisa que este navegador volta ao pareamento; revogar a outra, que este continua', () => {
     const atual = perguntaDeRevogar({ rotulo: 'Notebook', atual: true });
-    expect(atual.titulo).toBe('Encerrar a sessão deste navegador?');
+    expect(atual.titulo).toBe('Sair deste navegador?');
     expect(atual.texto).toContain('esta tela volta ao pareamento');
     expect(atual.texto).toContain('node tools/farol-parear.js');
-    expect(atual.confirmar).toBe('Encerrar e voltar ao pareamento');
+    expect(atual.confirmar).toBe('Sair e voltar ao pareamento');
     const outra = perguntaDeRevogar({ rotulo: 'Celular', atual: false });
-    expect(outra.titulo).toBe('Encerrar a sessão "Celular"?');
+    expect(outra.titulo).toBe('Revogar a sessão "Celular"?');
     expect(outra.texto).toContain('Este navegador continua pareado');
-    expect(outra.confirmar).toBe('Encerrar a sessão');
+    expect(outra.confirmar).toBe('Revogar a sessão');
   });
 
   it('o Sair diz se a sessão foi revogada no motor ou só esquecida aqui', () => {

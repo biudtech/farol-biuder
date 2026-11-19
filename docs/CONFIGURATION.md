@@ -132,9 +132,10 @@ jq -Rs '{tipo: "editar", user: "login-da-conta", campos: {padroesRevisao: .}}' <
   | curl -sS -X POST "$FAROL/api/accounts/edit" -H @"$CAB" -H "x-farol: 1" -H "Content-Type: application/json" --data @-
 ```
 
-No front, a seção Conta revisora e política da tela Sistema edita as organizações e os quatro
-campos da política, sem a opção `wait`, que o motor também não aceita mais. `padroesRevisao` e as
-regras de review não têm campo lá: mudam pela API, como acima, ou pelo arquivo.
+No front, o assunto Conta revisora da tela Sistema edita as organizações e os quatro campos da
+política, sem a opção `wait`, que o motor também não aceita mais. Desde 19/11/2026 (redesenho,
+lote 6) os assuntos Padrões do time e Regras por organização e autor editam `padroesRevisao` e as
+regras de review pela mesma rota, uma regra por vez; a API e o arquivo continuam valendo.
 
 Toda mudança de política vai a `state/politica-historico.json` (dentro do workspace), com
 data e origem, até 200 entradas. A origem de um pedido pela API é `navegador` sempre que ele
@@ -199,13 +200,14 @@ no padrão.
 | `parallelReviews` | `1` (1 a 4) | Sistema, "Revisões ao mesmo tempo" |
 | `reviewModel`, `reviewEffort` | `""` | Sistema ([modelo e esforço](#modelo-e-esforço-das-sessões-autônomas)) |
 | `people` | `{}` | Time |
-| `jiraSites` | `[]` | API ou arquivo; Sistema só mostra ([Jira](#jira)) |
-| `claudeProfiles`, `claudeProfileId` | `[]`, `""` | API ou arquivo; Sistema só mostra e testa ([perfis](#criar-trocar-e-remover-perfil)) |
-| `intervalSeconds` | `300` (180 a 3600) | API ou arquivo |
+| `jiraSites` | `[]` | API ou arquivo; Sistema mostra, testa e troca a credencial ([Jira](#jira)) |
+| `claudeProfiles`, `claudeProfileId` | `[]`, `""` | API ou arquivo para criar, remover e trocar a chave; Sistema mostra, testa, refaz o login da assinatura e muda a ordem (Subir na ordem) ([perfis](#criar-trocar-e-remover-perfil)) |
+| `intervalSeconds` | `300` (180 a 3600) | Sistema, Ritmo da revisão; API ou arquivo |
 | `globalParallelReviews` | `0` (0 a 8; 0 = sem teto total) | API ou arquivo; Sistema avisa quando está ligado |
-| `reReviewResume` | `true` (retoma a sessão na segunda rodada) | API ou arquivo |
-| `reviewFast` | `false` (modo rápido da revisão) | API ou arquivo |
-| `autoPushback`, `debugSpawns` | `true`, `false` | API ou arquivo |
+| `reReviewResume` | `true` (retoma a sessão na segunda rodada) | Sistema, Ritmo da revisão; API ou arquivo |
+| `reviewFast` | `false` (modo rápido da revisão) | Sistema, Claude ("Modo rápido"); API ou arquivo |
+| `autoPushback` | `true` | Sistema, Ritmo da revisão; API ou arquivo |
+| `debugSpawns` | `false` | API ou arquivo |
 | `reviewSingleOutput` | `false` | arquivo |
 | `reviewRoundsMode` | `"observe"` (`"enforce"` liga os gates de rodada) | arquivo |
 | `reviewContextMode`, `reviewContextTokens`, `reviewContextLimits` | `"off"`, `3000`, `{}` | arquivo ([fontes](#fontes-versionadas-e-contexto-controlado)) |
@@ -219,9 +221,10 @@ no padrão.
 | `hostPublico` | `""` (o nome com que o proxy chega ao motor) | arquivo ([Para hospedar](#para-hospedar)) |
 | `origensPermitidas` | `[]` (as origens de onde o front chama a API) | arquivo ([Para hospedar](#para-hospedar)) |
 
-Desde 16/11/2026, quando a tela antiga saiu, seis chaves que ela editava só mudam pela API ou
-pelo arquivo: `intervalSeconds`, `globalParallelReviews`, `reReviewResume`, `reviewFast`,
-`autoPushback` e `debugSpawns`. Um exemplo:
+Desde 16/11/2026, quando a tela antiga saiu, seis chaves que ela editava ficaram só pela API ou
+pelo arquivo; desde 19/11/2026 o Sistema voltou a editar `intervalSeconds`, `reReviewResume`,
+`reviewFast` e `autoPushback`, e só `globalParallelReviews` e `debugSpawns` continuam fora da
+tela. Um exemplo pela API:
 
 ```sh
 # FAROL e CAB: veja "Chamar a API sem tela"
@@ -379,7 +382,7 @@ curl -sS "$FAROL/api/state" -H @"$CAB" | jq '{status, conta: .account.user}'
 `POST /api/auth/pair` recebe `{ "codigo": "...", "rotulo": "..." }` e responde
 `{ "ok": true, "token": "..." }`; a recusa é uma só, `{ "ok": false, "code": "codigo_invalido" }`,
 e nesse caso o arquivo fica vazio. O token é uma sessão como a do navegador: aparece em
-Sistema, em Sessões pareadas, com o rótulo dado, e se revoga por lá. Todo `POST` leva
+Sistema, em Quem está conectado, com o rótulo dado, e se revoga por lá. Todo `POST` leva
 `x-farol: 1`. Com a autenticação desligada (motor só em loopback, sem `localAuth`), o
 `-H @"$CAB"` é dispensável.
 
@@ -448,9 +451,11 @@ mandar a lista sem o perfil. `claudeProfileId` diz qual perfil as sessões usam.
 
 ### Login da assinatura pela API
 
-O motor não tem terminal, e a tela não tem o botão de login (a tela antiga tinha; ela saiu em
-16/11/2026). O login se faz com três chamadas à API, de qualquer máquina que alcance o motor,
-com o Bearer do pareamento e `x-farol: 1`:
+O motor não tem terminal. Desde 19/11/2026 (redesenho, lote 6) a tela Sistema faz o login pelo
+botão Refazer login de cada perfil de assinatura (assunto Claude), com estas mesmas três rotas:
+o código vai num campo mascarado, só no corpo do POST, e é apagado do campo antes do envio. Sem a
+tela, o login se faz com as três chamadas à API, de qualquer máquina que alcance o motor, com o
+Bearer do pareamento e `x-farol: 1`:
 
 1. `POST /api/claude/login-web/start` com `{ "profileId": "<id do perfil de assinatura>" }`.
    O motor roda `claude auth login` na pasta do perfil e responde
@@ -618,7 +623,7 @@ cada campo que o motor lê, está em
 explicados em [`HOSPEDAGEM.md`](HOSPEDAGEM.md#o-cadastro-dos-repositórios).
 
 O estado das duas partes aparece em `GET /api/doctor`, na chave `avaliacaoTecnica`, e na linha
-"Avaliação técnica" de Sistema > Saúde: a ferramenta (instalada e íntegra, ausente ou com
+"Avaliação técnica" de Sistema > Saúde do motor: a ferramenta (instalada e íntegra, ausente ou com
 identidade não comprovada, com a versão e o commit do pino) e o cadastro (quantos repositórios
 declarados, ausente ou ilegível), com o efeito do que falta. A conferência é o mesmo
 `requireTool` que a avaliação usa, e por isso respeita `FAROL_ENG_BEHAVIOUR_HOME` (`lib/env.js`)
@@ -626,7 +631,7 @@ quando a variável aponta outra pasta; a instalação grava sempre no lugar padr
 linha no `farol.log` diz o estado quando ele é anormal (`lib/technical-review/estado.js`), em
 `WARN`: repositório declarado sem a ferramenta íntegra, ou cadastro que não abre. Com tudo certo,
 ou sem cadastro, não há linha. A linha da tela só muda quando o diagnóstico roda: depois de
-instalar ou de trocar o cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde.
+instalar ou de trocar o cadastro, use "Rodar o diagnóstico de novo" em Sistema > Saúde do motor.
 
 Esse nome `eng-behaviour` aqui é só a ferramenta que avalia os PRs revisados
 (`lib/technical-review/`). O motor não roda mais a doutrina como gate do próprio repositório.
@@ -662,9 +667,11 @@ outros (`mcpArgsFor` em `lib/engine/jira.js`). O modelo chama `getJiraIssue` e
 9. **O conteúdo do card é dado, não instrução.** O texto entra delimitado e rotulado, e as
    marcas do delimitador são removidas do conteúdo antes.
 
-**A tela.** Jira é seção própria de Sistema, só de leitura: mostra os sites, se cada um tem
-credencial, e testa a conexão. Site e credencial entram pela API
-([como chamar](#chamar-a-api-sem-tela)) ou, no caso dos sites, pelo arquivo.
+**A tela.** Jira é assunto próprio de Sistema: mostra os sites, se cada um tem credencial e os
+últimos cards lidos, testa a conexão e, desde 19/11/2026, troca a credencial (Trocar
+credencial: e-mail e token num campo mascarado, só no corpo de `POST /api/jira/credential`, e o
+token some do campo antes do envio). O site em si entra pela API
+([como chamar](#chamar-a-api-sem-tela)) ou pelo arquivo, e tirar a credencial é só pela API.
 
 Um site tem cinco campos (`umSite`, `lib/jira/sites.js`):
 
