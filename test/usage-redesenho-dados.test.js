@@ -18,7 +18,8 @@ import assert from 'node:assert/strict';
 
 const { activityReport } = await import('../lib/usage/report.js');
 const { usageActivity, usageDaRota } = await import('../lib/engine/usage-activity.js');
-const { decisaoDaLinha } = await import('../lib/engine/consumo-das-sessoes.js');
+const { decisaoDaLinha, autoresDosPrs, consumoEmCsv, indiceDasDecisoes, decisoesConhecidas } = await import('../lib/engine/consumo-das-sessoes.js');
+const { activityDay } = await import('../lib/usage/activity.js');
 
 after(() => { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); });
 
@@ -181,9 +182,6 @@ test('sem formato a rota responde o JSON de sempre; formato desconhecido é 400 
 });
 
 /* ---------- a rodada de correção do lote 2 ---------- */
-
-const { activityDay } = await import('../lib/usage/activity.js');
-const { autoresDosPrs, consumoEmCsv, indiceDasDecisoes, decisoesConhecidas } = await import('../lib/engine/consumo-das-sessoes.js');
 
 // O CSV de um recorte, como mapa de coluna para valor por linha (sem o BOM).
 function linhasDoCsv(csv) {
