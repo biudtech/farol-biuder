@@ -344,9 +344,38 @@ export interface Relatorio {
   descartados: number;
 }
 
-// O corpo de GET /api/usage?formato=csv: o texto do arquivo, que o cliente entrega sem ler JSON.
-export function lerCsvDoConsumo(bruto: unknown): string | null {
-  return typeof bruto === 'string' ? bruto : null;
+// Os cabeçalhos que o leitor do CSV pede ao cliente (opção `cabecalhos`).
+export const CABECALHOS_DO_CSV = ['content-type', 'content-disposition'] as const;
+
+// O CSV de GET /api/usage?formato=csv. `nome` é o do Content-Disposition do motor, ou null quando o
+// cabeçalho não chegou ou não traz um nome de arquivo simples.
+// O período que o motor não aceita volta como 200 em JSON, com `{ ok: false, motivo }`, também
+// com formato=csv: isso não é arquivo, é a frase dele.
+export type CsvDoConsumo =
+  | { ok: true; csv: string; nome: string | null }
+  | { ok: false; motivo: string };
+
+// só um nome de arquivo .csv, sem pasta: o resto não é seguido
+const NOME_DO_ARQUIVO = /\bfilename="([A-Za-z0-9._-]+\.csv)"/;
+
+function nomeDoArquivo(disposicao: unknown): string | null {
+  if (typeof disposicao !== 'string') return null;
+  const nome = NOME_DO_ARQUIVO.exec(disposicao)?.[1];
+  return nome && !nome.startsWith('.') ? nome : null;
+}
+
+// O que o cliente entrega com `{ texto: true, cabecalhos: CABECALHOS_DO_CSV }`: o texto do corpo
+// e os cabeçalhos pedidos.
+export function lerCsvDoConsumo(bruto: unknown): CsvDoConsumo | null {
+  if (!ehObjeto(bruto) || typeof bruto.corpo !== 'string' || !ehObjeto(bruto.cabecalhos)) return null;
+  const { corpo, cabecalhos } = bruto;
+  const tipo = typeof cabecalhos['content-type'] === 'string' ? cabecalhos['content-type'] : '';
+  if (/json/i.test(tipo) || corpo.trimStart().startsWith('{')) {
+    let lido: unknown;
+    try { lido = JSON.parse(corpo); } catch { return null; }
+    return ehObjeto(lido) && lido.ok === false && ehTextoComConteudo(lido.motivo) ? { ok: false, motivo: lido.motivo } : null;
+  }
+  return { ok: true, csv: corpo, nome: nomeDoArquivo(cabecalhos['content-disposition']) };
 }
 
 // A resposta de GET /api/usage. A rota responde sempre 200: quando não entrega o relatório,

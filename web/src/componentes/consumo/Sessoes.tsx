@@ -8,7 +8,7 @@
 // o mesmo recorte em `formato=csv`, pelo cliente (que leva o Bearer, ou passa pelo portão).
 import Link from 'next/link';
 import { memo, useId, useState, type ReactNode, type RefObject } from 'react';
-import { lerCsvDoConsumo, type Operacao, type PaginaDoDiario } from '@/contratos/consumo';
+import { CABECALHOS_DO_CSV, lerCsvDoConsumo, type Operacao, type PaginaDoDiario } from '@/contratos/consumo';
 import { caminhoDoCsv, mensagemDaFalha, nomeDoCsv, type Consulta } from '@/consumo/consulta';
 import { duracao, inteiro, rotuloDoDesfecho, rotuloDoGatilho, rotuloDoModelo, rotuloDoTipo, textoDoCusto, tokensCurtos, urlDoPr } from '@/consumo/formato';
 import { barrasDasEtapas, partesDosTokens, somaDosTokens, textoDasTentativas } from '@/consumo/sessao';
@@ -35,21 +35,29 @@ function baixar(texto: string, nome: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function BaixarCsv({ cliente, consulta }: { cliente: Pick<Cliente, 'get'>; consulta: Consulta }) {
+// `esperando`: a tela carrega um pedido novo, e o recorte na tela ainda não é o do endereço. O
+// botão espera junto, para o arquivo não sair de um recorte que a pessoa não está vendo.
+export function BaixarCsv({ cliente, consulta, esperando = false }: { cliente: Pick<Cliente, 'get'>; consulta: Consulta; esperando?: boolean }) {
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState('');
   async function pedir() {
     if (baixando) return;
     setBaixando(true);
     setErro('');
-    const r = await cliente.get(caminhoDoCsv(consulta), lerCsvDoConsumo, { texto: true });
+    const r = await cliente.get(caminhoDoCsv(consulta), lerCsvDoConsumo, { texto: true, cabecalhos: CABECALHOS_DO_CSV });
     setBaixando(false);
-    if (r.ok) baixar(r.dados, nomeDoCsv());
-    else if (r.falha !== 'cancelado') setErro(mensagemDaFalha(r) || 'O arquivo não foi baixado.');
+    // O nome é o do Content-Disposition do motor. nomeDoCsv é só a reserva para quando o cabeçalho
+    // não chega: o motor em outra origem não o expõe (o CORS dele não tem Expose-Headers), e aí o
+    // navegador o esconde. Pelo portão, na mesma origem, ele chega.
+    if (r.ok) {
+      const lido = r.dados;
+      if (lido.ok) baixar(lido.csv, lido.nome ?? nomeDoCsv());
+      else setErro(`o motor não entregou o arquivo. O que ele disse: ${lido.motivo}`);
+    } else if (r.falha !== 'cancelado') setErro(mensagemDaFalha(r) || 'O arquivo não foi baixado.');
   }
   return (
     <>
-      <Botao ocupado={baixando ? 'Baixando…' : false} aria-label="Baixar CSV deste recorte" onClick={() => { void pedir(); }}>Baixar CSV</Botao>
+      <Botao ocupado={baixando ? 'Baixando…' : false} disabled={esperando} aria-label="Baixar CSV deste recorte" onClick={() => { void pedir(); }}>Baixar CSV</Botao>
       {erro ? <p className={ui.erro} role="alert"><span><strong>Erro:</strong> {erro}</span></p> : null}
     </>
   );

@@ -200,8 +200,9 @@ export function BarraDeFiltros({ consulta, opcoes, periodo, rotuloDoPerfil, aoMu
       <details className={estilos.outroPeriodo} open={temPeriodo(consulta) && (periodo === null || periodoPronto(consulta, periodo) === null) ? true : undefined}>
         <summary>Outro período</summary>
         <div className={estilos.datas}>
-          <CampoDeData nome="De" valor={consulta.inicio} aoMudar={(inicio) => aoMudar({ ...consulta, inicio, pagina: 1 }, 'trocar')} />
-          <CampoDeData nome="Até" valor={consulta.fim} aoMudar={(ate) => aoMudar({ ...consulta, fim: ate, pagina: 1 }, 'trocar')} />
+          {/* trocar o período tira o dia clicado, que pode cair fora dele */}
+          <CampoDeData nome="De" valor={consulta.inicio} aoMudar={(inicio) => aoMudar({ ...consulta, inicio, dia: '', pagina: 1 }, 'trocar')} />
+          <CampoDeData nome="Até" valor={consulta.fim} aoMudar={(ate) => aoMudar({ ...consulta, fim: ate, dia: '', pagina: 1 }, 'trocar')} />
         </div>
         <p className={ui.mini} role="note" aria-label="Como o período é lido">{dicaDoPeriodo(consulta, periodo)}</p>
       </details>

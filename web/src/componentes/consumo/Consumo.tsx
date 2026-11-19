@@ -20,6 +20,7 @@ import {
   CONSULTA_VAZIA, caminhoDoPeriodo, caminhoDoRelatorio, comDia, ehRecusaDeCampo, marcaDoConsumo, mensagemDaFalha, temPeriodo, textoDoDiarioVazio, textoDoPeriodo, textoDoResultado, textoDoVazio, type Consulta,
 } from '@/consumo/consulta';
 import { perfisDoPlano } from '@/consumo/plano';
+import type { Relatorio } from '@/contratos/consumo';
 import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
@@ -59,8 +60,21 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const { carregando, relatorio, motivo, falha, opcoes, fim, haNovo } = useRelatorio(app.cliente, caminhoDoRelatorio(consulta), recarga, marca);
   // com um dia clicado, o período inteiro para o gráfico e os períodos prontos
   const doPeriodo = useRelatorio(app.cliente, caminhoDoPeriodo(consulta), recarga, marca);
-  const relatorioDoPeriodo = consulta.dia ? doPeriodo.relatorio : relatorio;
-  const fimDoPeriodo = consulta.dia ? doPeriodo.fim : fim;
+
+  // O último relatório do período inteiro que a tela teve sem dia clicado, com a chave dele (o
+  // pedido do período sem dia, busca e página, que não mudam a série). No primeiro clique num dia
+  // o pedido do período ainda não voltou: o gráfico segue com este, em vez de desmontar e levar
+  // junto o foco do botão clicado, e os períodos prontos seguem valendo.
+  const chaveDoPeriodo = caminhoDoRelatorio({ ...consulta, dia: '', q: '', pagina: 1 });
+  const [anterior, setAnterior] = useState<{ chave: string; relatorio: Relatorio } | null>(null);
+  if (!consulta.dia && !carregando && relatorio && (anterior?.relatorio !== relatorio || anterior.chave !== chaveDoPeriodo)) {
+    setAnterior({ chave: chaveDoPeriodo, relatorio });
+  }
+  const reserva = anterior?.chave === chaveDoPeriodo ? anterior.relatorio : null;
+  const relatorioDoPeriodo = consulta.dia
+    ? (doPeriodo.carregando ? reserva ?? doPeriodo.relatorio : doPeriodo.relatorio)
+    : relatorio;
+  const fimDoPeriodo = consulta.dia ? doPeriodo.fim ?? reserva?.range.end ?? null : fim;
 
   const emUso = useMemo(() => (ativas ?? []).map((s) => s.perfilId).filter((id): id is string => Boolean(id)), [ativas]);
   const perfis = useMemo(() => perfisDoPlano(config, claudePerfis, emUso.length ? emUso : SEM_SESSOES), [config, claudePerfis, emUso]);
@@ -88,7 +102,8 @@ export function Consumo({ app = appDoNavegador }: Props) {
   const aoEscolherRepo = useCallback((repo: string) => ir({ ...consulta, repo, pagina: 1 }, 'empilhar'), [consulta, ir]);
   const aoAtualizar = useCallback(() => setRecarga((n) => n + 1), []);
 
-  const esperando = carregando || foraDoFim;
+  // com um dia clicado, a tela espera também o pedido do período
+  const esperando = carregando || foraDoFim || (consulta.dia !== '' && doPeriodo.carregando);
   // só o zero que o motor mandou é "sem execução"
   const semExecucao = relatorio?.totals.attempts === 0;
   // a página sem nada ainda: o esqueleto fala por ela, e a região viva espera o resultado
@@ -120,6 +135,20 @@ export function Consumo({ app = appDoNavegador }: Props) {
         <div className={ui.erro} role="alert">
           <span><strong>Erro:</strong> {mensagemDaFalha(falha) || 'A carga do consumo foi interrompida.'}</span>
           {ehRecusaDeCampo(falha) ? <Botao onClick={aoLimpar}>Limpar período e filtros</Botao> : <Botao onClick={aoAtualizar}>Tentar de novo</Botao>}
+        </div>
+      ) : null}
+
+      {consulta.dia && doPeriodo.falha ? (
+        <div className={ui.erro} role="alert">
+          <span><strong>Gráfico do período:</strong> {mensagemDaFalha(doPeriodo.falha) || 'A carga do período foi interrompida.'}</span>
+          <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
+        </div>
+      ) : null}
+
+      {consulta.dia && doPeriodo.motivo ? (
+        <div className={ui.erro} role="alert">
+          <span><strong>Gráfico do período:</strong> o motor não entrega o período inteiro. O que ele disse: {doPeriodo.motivo}</span>
+          <Botao onClick={aoAtualizar}>Tentar de novo</Botao>
         </div>
       ) : null}
 
@@ -170,7 +199,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
             aoIr={aoIrParaPagina}
             refDoTitulo={tituloDasSessoes}
             rotuloDoPerfil={rotuloDoPerfil}
-            baixar={<BaixarCsv cliente={app.cliente} consulta={consulta} />}
+            baixar={<BaixarCsv cliente={app.cliente} consulta={consulta} esperando={esperando} />}
           />
           {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
         </div>

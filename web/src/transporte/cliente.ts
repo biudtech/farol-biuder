@@ -41,6 +41,10 @@ export interface OpcoesDaChamada {
   comCookie?: boolean;
   // o corpo do 2xx chega ao leitor como texto, sem ler JSON (o CSV de GET /api/decisions)
   texto?: boolean;
+  // Os cabeçalhos da resposta 2xx que o leitor quer ver. Com esta opção o leitor recebe
+  // { corpo, cabecalhos }, com cada nome pedido em caixa baixa e null quando o cabeçalho não veio.
+  // Em outra origem o navegador só entrega os cabeçalhos que o CORS do motor expõe.
+  cabecalhos?: readonly string[];
 }
 
 // conectando: primeira tentativa. reconectando: caiu e vai tentar. sem-motor: tentou e o
@@ -210,6 +214,11 @@ export function criarCliente({ base, cofre, aoNaoAutenticado, registrar = () => 
         return cancelado() ? CANCELADO : { ok: false, falha: 'resposta_invalida', status: resposta.status };
       }
       if (cancelado()) return CANCELADO;
+      if (opcoes?.cabecalhos) {
+        const lidos: Record<string, string | null> = {};
+        for (const nome of opcoes.cabecalhos) lidos[nome.toLowerCase()] = resposta.headers.get(nome);
+        bruto = { corpo: bruto, cabecalhos: lidos };
+      }
       const dados = ler(bruto);
       return dados === null ? { ok: false, falha: 'resposta_invalida', status: resposta.status } : { ok: true, dados };
     } finally {

@@ -130,10 +130,10 @@ export function rotuloDoPeriodoPronto(dias: number): string {
 // A consulta com o período de `dias` que termina no fim do relatório na tela. O dia de hoje é
 // o que o motor disse (o `range.end` de uma resposta), nunca o relógio do navegador. Grava as
 // duas datas: só o início deixaria o fim correr com o hoje do motor, e o endereço de "7 dias"
-// aberto no dia seguinte mostraria 8.
+// aberto no dia seguinte mostraria 8. O dia clicado sai: ele pode cair fora do período novo.
 export function comPeriodo(consulta: Consulta, fimDoRelatorio: string, dias: number): Consulta {
   const inicio = diaMenos(fimDoRelatorio, dias - 1);
-  return inicio ? { ...consulta, inicio, fim: fimDoRelatorio, pagina: 1 } : consulta;
+  return inicio ? { ...consulta, inicio, fim: fimDoRelatorio, dia: '', pagina: 1 } : consulta;
 }
 
 // Qual dos períodos prontos está na tela, se algum. Só vale quando o endereço pede as duas
@@ -204,15 +204,17 @@ export interface FiltroAtivo {
 }
 
 // O que está escolhido, uma pílula por filtro. O período só vira pílula quando não é um dos
-// prontos: esse já está marcado nos botões do topo. `rotuloDoPerfil` dá o nome do perfil pelo id.
+// prontos: esse já está marcado nos botões do topo. Sem o período do motor (o relatório dele ainda
+// não chegou, ou falhou), as duas datas do endereço respondem por ele: um período pronto escrito
+// nelas não vira pílula. `rotuloDoPerfil` dá o nome do perfil pelo id.
 export function filtrosAtivos(consulta: Consulta, periodo: { start: string; end: string } | null, rotuloDoPerfil: (id: string) => string = (id) => id): FiltroAtivo[] {
   const ativos: FiltroAtivo[] = [];
-  const pronto = periodo ? periodoPronto(consulta, periodo) : null;
+  const pronto = periodoPronto(consulta, periodo ?? { start: consulta.inicio, end: consulta.fim });
   const sem = (mudanca: Partial<Consulta>): Consulta => ({ ...consulta, ...mudanca, pagina: 1 });
   if (temPeriodo(consulta) && pronto === null) {
     const de = consulta.inicio ? diaPorExtenso(consulta.inicio) : 'o começo padrão';
     const ate = consulta.fim ? diaPorExtenso(consulta.fim) : 'o hoje do motor';
-    ativos.push({ chave: 'periodo', texto: `Período: de ${de} até ${ate}`, sem: sem({ inicio: '', fim: '' }) });
+    ativos.push({ chave: 'periodo', texto: `Período: de ${de} até ${ate}`, sem: sem({ inicio: '', fim: '', dia: '' }) });
   }
   if (consulta.dia) ativos.push({ chave: 'dia', texto: `Dia: ${diaPorExtenso(consulta.dia)}`, sem: sem({ dia: '' }) });
   if (consulta.tipo) ativos.push({ chave: 'tipo', texto: `Tipo: ${rotuloDoTipo(consulta.tipo)}`, sem: sem({ tipo: '' }) });

@@ -20,6 +20,11 @@ type Resposta = { corpo: unknown } | Falha;
 type Responder = (caminho: string) => Resposta | Promise<Resposta>;
 
 const corpo = (valor: unknown): Resposta => ({ corpo: valor });
+// O CSV chega ao leitor com os cabeçalhos que a tela pede (o cliente os junta ao texto).
+const arquivo = (texto: string, nome: string | null = null, tipo = 'text/csv; charset=utf-8'): Resposta => corpo({
+  corpo: texto,
+  cabecalhos: { 'content-type': tipo, 'content-disposition': nome === null ? null : `attachment; filename="${nome}"` },
+});
 const REDE: Falha = { ok: false, falha: 'rede', status: 0 };
 
 // O snapshot como a borda o entrega ao store: cada chave crua passa pelo leitor dela.
@@ -105,7 +110,7 @@ describe('Consumo: a tela', () => {
     expect(numeros()).toEqual([
       'Custo estimadoUS$ 12,50O valor que cada sessão informa, não cobrança.',
       'Revisões concluídas3Em 2 PRs. Concluída não quer dizer publicada.',
-      'Sessões de IA51 é retentativa de uma operação.',
+      'Execuções de IA51 é retentativa de uma operação.',
       'Tokens de saída2 milMais 0 de pensamento e 6 mil de entrada.',
     ]);
     expect(document.body.textContent).not.toMatch(/média|NaN/);
@@ -147,13 +152,15 @@ describe('Consumo: a tela', () => {
     await assentar();
     const itens = (titulo: string) => within(painel(titulo)).getAllByRole('listitem').map((li) => li.textContent);
     expect(itens('Por modelo')).toEqual([
-      'Sonnet 5US$ 10,00 · 4 sessõesTokens: entrada 5 mil, saída 1,8 mil, pensamento 90',
-      'Opus 5US$ 2,50 · 1 sessãoTokens: entrada 1 mil, saída 200, pensamento 10',
+      'Sonnet 5US$ 10,00 · 4 execuçõesTokens: entrada 5 mil, saída 1,8 mil, pensamento 90',
+      'Opus 5US$ 2,50 · 1 execuçãoTokens: entrada 1 mil, saída 200, pensamento 10',
     ]);
     expect(itens('Para que foi o gasto')).toEqual([
-      'Primeira revisãoUS$ 8,00 · 3 sessões', 'Contestação do autorUS$ 2,50 · 1 sessão', 'Revisão de commit novoUS$ 2,00 · 1 sessão',
+      'Primeira revisãoUS$ 8,00 · 3 execuções', 'Contestação do autorUS$ 2,50 · 1 execução', 'Revisão de commit novoUS$ 2,00 · 1 execução',
     ]);
-    expect(itens('Por repositório')).toEqual(['repoUS$ 10,00 · 4 sessões', 'outroUS$ 2,50 · 1 sessão']);
+    expect(itens('Por repositório')).toEqual(['repoUS$ 10,00 · 4 execuções', 'outroUS$ 2,50 · 1 execução']);
+    // o número das quebras é de tentativas: nenhuma delas fala em sessão, que é a linha da tabela
+    for (const titulo of ['Por modelo', 'Para que foi o gasto', 'Por repositório']) expect(painel(titulo).textContent, titulo).not.toMatch(/sess(ão|ões)/i);
   });
 });
 
@@ -197,6 +204,106 @@ describe('Consumo: o clique que vira filtro', () => {
     expect(within(screen.getByRole('group', { name: 'Filtros ativos' })).getAllByRole('button')[0]?.getAttribute('aria-label')).toBe('Tirar o filtro Dia: 15/11/2026');
     await clicar('Tirar o filtro do dia 15/11/2026: US$ 9,10');
     expect(window.location.search).toBe('');
+  });
+});
+
+describe('Consumo: o primeiro clique num dia', () => {
+  // O período de 7 dias no endereço: com o dia clicado, o pedido do período inteiro é o mesmo
+  // caminho do relatório que já está na tela. Da segunda vez em diante, quem responde é `doPeriodo`.
+  const SETE = '/api/usage?start=2026-11-10&end=2026-11-16';
+  function comPeriodoPendente(doPeriodo: () => Resposta | Promise<Resposta>) {
+    let vezes = 0;
+    return montar({
+      url: '/consumo?inicio=2026-11-10&fim=2026-11-16',
+      responder: (caminho) => {
+        if (caminho.includes('formato=csv')) return arquivo('a\n');
+        if (caminho === SETE && ++vezes > 1) return doPeriodo();
+        const params = new URLSearchParams(caminho.split('?')[1] ?? '');
+        return corpo(relatorioDoMotor({ range: { start: params.get('start') ?? '', end: params.get('end') ?? '' } }));
+      },
+    });
+  }
+  const pilulas = () => within(screen.getByRole('group', { name: 'Filtros ativos' })).getAllByRole('button', { name: /^Tirar o filtro/ }).map((b) => b.getAttribute('aria-label'));
+
+  it('enquanto o período não chega, o gráfico fica, o foco fica no botão clicado e a tela espera', async () => {
+    let soltar: (r: Resposta) => void = () => {};
+    comPeriodoPendente(() => new Promise<Resposta>((r) => { soltar = r; }));
+    await assentar();
+    const botao = screen.getByRole('button', { name: 'Filtrar pelo dia 15/11/2026: US$ 9,10' });
+    botao.focus();
+    await act(async () => { fireEvent.click(botao); });
+    await assentar();
+    expect(window.location.search).toBe('?inicio=2026-11-10&fim=2026-11-16&dia=2026-11-15');
+    // o mesmo botão, montado e com o foco
+    expect(botao.isConnected).toBe(true);
+    expect(document.activeElement).toBe(botao);
+    expect(botao.getAttribute('aria-pressed')).toBe('true');
+    expect(within(screen.getByRole('group', { name: 'Custo por dia: cada dia filtra a tela' })).getAllByRole('button')).toHaveLength(7);
+    // os períodos prontos seguem valendo, o pronto continua marcado, e não aparece pílula de período
+    expect((periodo('30 dias') as HTMLButtonElement).disabled).toBe(false);
+    expect(periodo('7 dias').getAttribute('aria-pressed')).toBe('true');
+    expect(pilulas()).toEqual(['Tirar o filtro Dia: 15/11/2026']);
+    // o pedido do período ainda corre: a tela espera, e o CSV também
+    expect(screen.getByRole('progressbar', { name: 'Carregando o consumo do novo pedido' })).toBeTruthy();
+    expect(anuncio()).toBe('');
+    expect((screen.getByRole('button', { name: 'Baixar CSV deste recorte' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { soltar(corpo(relatorioDoMotor({ range: { start: '2026-11-10', end: '2026-11-16' } }))); await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(document.activeElement).toBe(botao);
+    expect((screen.getByRole('button', { name: 'Baixar CSV deste recorte' }) as HTMLButtonElement).disabled).toBe(false);
+    // o anúncio é o do dia, que é o recorte da tela
+    expect(anuncio()).toMatch(/^Período de 15\/11\/2026 \(1 dia\)/);
+  });
+
+  it('a falha do pedido do período aparece com o motivo, e Tentar de novo pede outra vez', async () => {
+    const t = comPeriodoPendente(() => REDE);
+    await assentar();
+    await clicar('Filtrar pelo dia 15/11/2026: US$ 9,10');
+    await assentar();
+    expect(screen.getByRole('alert').textContent).toBe('Gráfico do período: Não deu para falar com o motor (falha de rede).Tentar de novo');
+    // sem o período do motor, nada de pílula de período falsa, e os períodos prontos seguem valendo
+    expect(pilulas()).toEqual(['Tirar o filtro Dia: 15/11/2026']);
+    expect((periodo('30 dias') as HTMLButtonElement).disabled).toBe(false);
+    const antes = t.pedidos().length;
+    await clicar('Tentar de novo');
+    expect(t.pedidos().length).toBeGreaterThan(antes);
+  });
+
+  it('o período que o motor não entrega diz a frase dele', async () => {
+    comPeriodoPendente(() => corpo({ ok: false, motivo: 'Período longo demais.' }));
+    await assentar();
+    await clicar('Filtrar pelo dia 15/11/2026: US$ 9,10');
+    await assentar();
+    expect(screen.getByRole('alert').textContent).toBe('Gráfico do período: o motor não entrega o período inteiro. O que ele disse: Período longo demais.Tentar de novo');
+  });
+});
+
+describe('Consumo: trocar o período tira o dia clicado', () => {
+  const seguindo: Responder = (caminho) => {
+    const params = new URLSearchParams(caminho.split('?')[1] ?? '');
+    return corpo(relatorioDoMotor({ range: { start: params.get('start') ?? '2026-10-18', end: params.get('end') ?? '2026-11-16' } }));
+  };
+
+  it('pelos botões de período', async () => {
+    montar({ url: '/consumo?dia=2026-11-15&tipo=review', responder: seguindo });
+    await assentar();
+    await clicar('7 dias');
+    expect(window.location.search).toBe('?inicio=2026-11-10&fim=2026-11-16&tipo=review');
+  });
+
+  it('pelo campo De', async () => {
+    montar({ url: '/consumo?dia=2026-11-15', responder: seguindo });
+    await assentar();
+    await act(async () => { fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-01' } }); });
+    expect(window.location.search).toBe('?inicio=2026-11-01');
+  });
+
+  it('pelo campo Até', async () => {
+    montar({ url: '/consumo?dia=2026-11-15', responder: seguindo });
+    await assentar();
+    await act(async () => { fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2026-11-15' } }); });
+    expect(window.location.search).toBe('?fim=2026-11-15');
   });
 });
 
@@ -483,18 +590,62 @@ describe('Consumo: Baixar CSV', () => {
     const clique = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function registrar(this: HTMLAnchorElement) { cliques.push(this.download); });
     const t = montar({
       url: '/consumo?dia=2026-11-15&autor=ana&q=repo&pagina=2',
-      responder: (caminho) => (caminho.includes('formato=csv') ? corpo('Quando,Tipo\n') : corpo(relatorioDoMotor({ history: { total: 9, page: 1, pages: 2, rows: [operacaoDoMotor(1)] } }))),
+      responder: (caminho) => (caminho.includes('formato=csv') ? arquivo('Quando,Tipo\n', 'farol-consumo-2026-11-16.csv') : corpo(relatorioDoMotor({ history: { total: 9, page: 1, pages: 2, rows: [operacaoDoMotor(1)] } }))),
     });
     await assentar();
     await clicar('Baixar CSV deste recorte');
     await assentar();
     const pedido = t.get.mock.calls.find(([c]) => c.includes('formato=csv'));
     expect(pedido?.[0]).toBe('/api/usage?formato=csv&start=2026-11-15&end=2026-11-15&author=ana&search=repo');
-    expect(pedido?.[2]).toMatchObject({ texto: true });
+    expect(pedido?.[2]).toMatchObject({ texto: true, cabecalhos: ['content-type', 'content-disposition'] });
     expect(criar).toHaveBeenCalledTimes(1);
+    expect(cliques).toEqual(['farol-consumo-2026-11-16.csv']);
+    clique.mockRestore();
+  });
+
+  it('sem o Content-Disposition (o motor em outra origem não o expõe), o nome é o da reserva da tela', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    const cliques: string[] = [];
+    const clique = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function registrar(this: HTMLAnchorElement) { cliques.push(this.download); });
+    montar({ responder: (caminho) => (caminho.includes('formato=csv') ? arquivo('Quando,Tipo\n') : corpo(relatorioDoMotor())) });
+    await assentar();
+    await clicar('Baixar CSV deste recorte');
+    await assentar();
     expect(cliques).toHaveLength(1);
     expect(cliques[0]).toMatch(/^farol-consumo-\d{4}-\d{2}-\d{2}\.csv$/);
     clique.mockRestore();
+  });
+
+  it('a recusa do motor em JSON não vira arquivo: a tela diz a frase dele', async () => {
+    const criar = vi.fn(() => 'blob:x');
+    Object.assign(URL, { createObjectURL: criar, revokeObjectURL: vi.fn() });
+    const clique = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    montar({ responder: (caminho) => (caminho.includes('formato=csv') ? arquivo(JSON.stringify({ ok: false, motivo: 'Período inválido.' }), null, 'application/json; charset=utf-8') : corpo(relatorioDoMotor())) });
+    await assentar();
+    await clicar('Baixar CSV deste recorte');
+    await assentar();
+    expect(screen.getByRole('alert').textContent).toBe('Erro: o motor não entregou o arquivo. O que ele disse: Período inválido.');
+    expect(criar).not.toHaveBeenCalled();
+    expect(clique).not.toHaveBeenCalled();
+    clique.mockRestore();
+  });
+
+  it('enquanto um pedido novo carrega, Baixar CSV espera', async () => {
+    const pendentes: Array<(r: Resposta) => void> = [];
+    let primeira = true;
+    montar({
+      responder: () => {
+        if (primeira) { primeira = false; return corpo(relatorioDoMotor()); }
+        return new Promise<Resposta>((resolver) => { pendentes.push(resolver); });
+      },
+    });
+    await assentar();
+    const baixar = () => screen.getByRole('button', { name: 'Baixar CSV deste recorte' }) as HTMLButtonElement;
+    expect(baixar().disabled).toBe(false);
+    await clicar('7 dias');
+    expect(baixar().disabled).toBe(true);
+    await act(async () => { pendentes[0]?.(corpo(relatorioDoMotor())); await Promise.resolve(); await Promise.resolve(); });
+    expect(baixar().disabled).toBe(false);
   });
 
   it('falha ao baixar diz o erro, sem sair da tela', async () => {

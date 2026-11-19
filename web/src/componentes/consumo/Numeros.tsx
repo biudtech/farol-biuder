@@ -29,7 +29,7 @@ export function numerosDoPeriodo(relatorio: Relatorio): Numero[] {
       nota: completed ? `Em ${inteiro(completed.prs)} ${completed.prs === 1 ? 'PR' : 'PRs'}. Concluída não quer dizer publicada.` : 'O motor não mandou a contagem.',
     },
     {
-      rotulo: 'Sessões de IA',
+      rotulo: 'Execuções de IA',
       valor: inteiro(totals.attempts),
       nota: retries === undefined ? 'Cada tentativa conta.' : `${inteiro(retries)} ${retries === 1 ? 'é retentativa' : 'são retentativas'} de uma operação.`,
     },

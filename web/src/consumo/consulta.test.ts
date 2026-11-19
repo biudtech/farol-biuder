@@ -125,6 +125,11 @@ describe('os períodos prontos', () => {
     expect(caminhoDoRelatorio(comPeriodo(CONSULTA_VAZIA, '2026-11-16', 7))).toBe('/api/usage?start=2026-11-10&end=2026-11-16');
   });
 
+  it('trocar o período tira o dia clicado: ele pode cair fora do período novo', () => {
+    const comODia = { ...CONSULTA_VAZIA, dia: '2026-11-14', tipo: 'review', pagina: 3 };
+    expect(comPeriodo(comODia, '2026-11-16', 7)).toEqual({ ...CONSULTA_VAZIA, tipo: 'review', inicio: '2026-11-10', fim: '2026-11-16', pagina: 1 });
+  });
+
   it('fim que não é dia não muda a consulta', () => {
     expect(comPeriodo(cheia, 'x', 7)).toBe(cheia);
   });
@@ -177,10 +182,19 @@ describe('o clique que vira filtro e as pílulas', () => {
     ]);
     for (const ativo of ativos) expect(ativo.sem.pagina, ativo.chave).toBe(1);
     expect(ativos.find((a) => a.chave === 'dia')?.sem).toEqual({ ...nova, dia: '', pagina: 1 });
-    expect(ativos.find((a) => a.chave === 'periodo')?.sem).toMatchObject({ inicio: '', fim: '', dia: '2026-11-14' });
+    // tirar o período é trocar de período: o dia clicado sai junto
+    expect(ativos.find((a) => a.chave === 'periodo')?.sem).toMatchObject({ inicio: '', fim: '', dia: '' });
     // o período pronto não vira pílula: ele está nos botões do topo
     expect(filtrosAtivos({ ...CONSULTA_VAZIA, inicio: '2026-11-10', fim: '2026-11-16' }, { start: '2026-11-10', end: '2026-11-16' })).toEqual([]);
     expect(filtrosAtivos(CONSULTA_VAZIA, null)).toEqual([]);
+  });
+
+  it('sem o período do motor, as duas datas de um período pronto não viram pílula falsa', () => {
+    // é o instante em que o relatório do período ainda não chegou
+    expect(filtrosAtivos({ ...CONSULTA_VAZIA, inicio: '2026-11-10', fim: '2026-11-16', dia: '2026-11-14' }, null).map((a) => a.chave)).toEqual(['dia']);
+    // o que não é pronto continua virando pílula
+    expect(filtrosAtivos({ ...CONSULTA_VAZIA, inicio: '2026-11-10', fim: '2026-11-15' }, null).map((a) => a.chave)).toEqual(['periodo']);
+    expect(filtrosAtivos({ ...CONSULTA_VAZIA, inicio: '2026-11-10' }, null).map((a) => a.chave)).toEqual(['periodo']);
   });
 });
 

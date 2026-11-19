@@ -85,7 +85,7 @@ describe('o plano de cada perfil do Claude', () => {
     expect(lista.map((p) => [p.id, p.nome, p.selo.texto, p.selo.tom])).toEqual([
       ['a', 'Assinatura A', 'Em uso agora', 'marca'],
       ['b', 'b', 'Com problema: sem_login', 'ruim'],
-      ['k', 'Chave', 'Reserva', 'neutro'],
+      ['k', 'Chave', 'Sem uso agora', 'neutro'],
     ]);
     expect(lista[0]?.janelas).toEqual([
       { nome: 'Sessão', texto: '22% usado, volta 17:00', fracao: 22 },

@@ -857,7 +857,9 @@ de cima para baixo:
 2. a barra de filtros: Buscar sessão, Repositório, Autor do PR, Modelo e Perfil do Claude, e
    "Outro período" (De e Até) que abre;
 3. as pílulas do que está escolhido ("Filtrando:"), cada uma o botão que a tira, e Limpar filtros;
-4. os números do período: custo estimado, revisões concluídas, sessões de IA e tokens de saída;
+4. os números do período: custo estimado, revisões concluídas, execuções de IA (as tentativas,
+   `attempts`) e tokens de saída. As quebras por repositório, modelo e gatilho também contam
+   execuções; "Cada sessão" conta operações;
 5. o plano de cada perfil do Claude, um cartão por perfil com o selo e as janelas do plano;
 6. lado a lado, o custo por dia (uma barra por dia, cada uma um botão que vira o filtro do dia) e
    o custo por repositório (o nome é um botão que vira o filtro de repositório);
@@ -894,7 +896,8 @@ O contrato, lido do motor:
   pelo motor (`claudePerfis.uso[id]`: `lido`, `ok`, `erro`, `desatualizado` e as `janelas`, cada
   uma com `nome`, `usado` de 0 a 1 e `resetTexto`), os problemas (`claudePerfis.problemas`) e o
   perfil de cada sessão em curso (`activeSessions[].perfilId`). O selo, nesta ordem: "Com
-  problema: código", "Em uso agora", "Perfil padrão" ou "Reserva". Uso acima de 100% aparece
+  problema: código", "Em uso agora", "Perfil padrão" ou "Sem uso agora" (neutro: o motor não
+  diz o papel do perfil, e a tela não deduz um). Uso acima de 100% aparece
   como veio, com a barra cheia.
 - **`GET /api/usage`** (`lib/engine/usage-activity.js`, `lib/usage/report.js`,
   `lib/engine/consumo-das-sessoes.js`) lê o diário inteiro. O contrato está em
@@ -929,8 +932,13 @@ Regras que valem para quem mexer nela:
   filtra pelo dia (`dia` no endereço). O motor só sabe recortar por período, então o dia vai
   como `start` e `end` iguais, e a tela faz um segundo pedido, o do período inteiro com os
   mesmos filtros e sem a busca nem a página (`caminhoDoPeriodo`), só para o gráfico por dia e os
-  períodos prontos continuarem mostrando o período. Clicar de novo no mesmo dia ou repositório
-  tira o filtro, e a pílula também.
+  períodos prontos continuarem mostrando o período. Enquanto esse segundo pedido não volta, o
+  gráfico segue com o último relatório do período que a tela teve (com os mesmos filtros), sem
+  desmontar: o foco fica no botão clicado, os períodos prontos seguem valendo e não aparece
+  pílula de período. A tela espera os dois pedidos (barra no topo, CSV desabilitado), e a falha
+  ou a recusa do segundo aparece à parte, como "Gráfico do período", com o motivo. Clicar de
+  novo no mesmo dia ou repositório tira o filtro, e a pílula também. Trocar o período (botão
+  pronto, De, Até ou a pílula do período) tira o dia clicado.
 - **Pílulas.** Uma por filtro ativo (`filtrosAtivos`, `src/consumo/consulta.ts`): período fora
   dos prontos, dia, tipo (de endereço antigo), repositório, autor, modelo, perfil (com o nome
   que a configuração dá) e busca. Tirar uma pílula empilha o endereço, e o foco vai ao título da
@@ -948,15 +956,20 @@ Regras que valem para quem mexer nela:
   veio, e o seletor o mostra com "(valor do endereço)".
 - **O hoje é o do motor.** Os períodos prontos terminam no `range.end` do relatório do período e
   gravam as duas datas no endereço; antes da primeira resposta ficam desabilitados. A tela não
-  lê o relógio, a não ser para o nome do arquivo do CSV (o mesmo dia de Brasília que o motor
-  usa). Fora dos prontos, nenhum botão fica marcado, o período vira pílula e "Outro período"
+  lê o relógio, a não ser para o nome de reserva do arquivo do CSV (o mesmo dia de Brasília que
+  o motor usa). Fora dos prontos, nenhum botão fica marcado, o período vira pílula e "Outro período"
   nasce aberto, com a dica do que o motor faz com uma data só.
 - **Data digitada só vira pedido quando serve.** O campo guarda o que se digita e só manda ao
   endereço um dia que existe, de 1970 em diante (`dataAceita`).
 - **Baixar CSV** pede `GET /api/usage?formato=csv` com o mesmo recorte da tela (filtros, dia e
   busca, sem página), pelo cliente: o pedido leva o Bearer ou passa pelo portão, como todo
   pedido do front, e um link direto para a rota não levaria a credencial. O texto vira arquivo
-  no navegador, com a marca de ordem de bytes, como no Histórico.
+  no navegador, com a marca de ordem de bytes, como no Histórico. O nome é o do
+  `Content-Disposition` do motor (a opção `cabecalhos` do cliente); `nomeDoCsv` é só a reserva
+  para quando ele não chega, que é o caso do motor em outra origem, cujo CORS não expõe o
+  cabeçalho (pelo portão, na mesma origem, ele chega). Período que o motor não aceita volta em
+  JSON (`{ ok: false, motivo }`) também no CSV: a tela diz a frase dele e não baixa nada. Enquanto
+  a tela carrega um pedido novo, o botão fica desabilitado.
 - **Gráfico com alternativa em texto.** As barras são SVG próprio, sem biblioteca, com a altura
   e a largura em atributo do SVG (a CSP recusa `style`). Cada barra do dia é um botão cujo nome
   diz o dia e o valor; a frase do período, o maior dia e o total ficam para o leitor de tela; e

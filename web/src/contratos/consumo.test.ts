@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { lerConsumoDoSnapshot, lerRespostaDoConsumo, type Relatorio } from './consumo';
+import { lerConsumoDoSnapshot, lerCsvDoConsumo, lerRespostaDoConsumo, type Relatorio } from './consumo';
 
 const RAIZ = path.resolve(import.meta.dirname, '../../..');
 const fonte = (arquivo: string): string => fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
@@ -323,5 +323,35 @@ describe('a chave usage do snapshot', () => {
     for (const nome of ['totals: store.totals', 'recentSessions,', 'auditoria: d.auditoria()', 'sessionsSince:']) expect(resumo, nome).toContain(nome);
     // o motor não tem teto de gasto: nem a lista por perfil, nem o gate
     expect(resumo).not.toMatch(/budgets|budgetBlockedFor|profileBudgetStatus/);
+  });
+});
+
+describe('o CSV de GET /api/usage?formato=csv', () => {
+  const csv = (corpo: unknown, cabecalhos: Record<string, string | null> = {}) => lerCsvDoConsumo({ corpo, cabecalhos: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': null, ...cabecalhos } });
+
+  it('o texto do arquivo, com o nome que o motor deu no Content-Disposition', () => {
+    expect(csv('Quando,Tipo\n', { 'content-disposition': 'attachment; filename="farol-consumo-2026-11-16.csv"' })).toEqual({ ok: true, csv: 'Quando,Tipo\n', nome: 'farol-consumo-2026-11-16.csv' });
+    // sem o cabeçalho (o motor em outra origem não o expõe ao navegador), o nome fica com a tela
+    expect(csv('Quando,Tipo\n')).toEqual({ ok: true, csv: 'Quando,Tipo\n', nome: null });
+    // nome que não é um arquivo simples não é seguido
+    for (const ruim of ['attachment; filename="../x.csv"', 'attachment; filename="a/b.csv"', 'attachment; filename=""', 'attachment; filename="x.exe"', 'inline']) {
+      expect(csv('a\n', { 'content-disposition': ruim }), ruim).toEqual({ ok: true, csv: 'a\n', nome: null });
+    }
+  });
+
+  it('a resposta em JSON não é arquivo: a recusa do motor volta com a frase dele', () => {
+    const recusa = JSON.stringify({ ok: false, motivo: 'Período inválido.' });
+    expect(csv(recusa, { 'content-type': 'application/json; charset=utf-8' })).toEqual({ ok: false, motivo: 'Período inválido.' });
+    // mesmo sem o tipo, um corpo que é o objeto JSON da recusa não vira arquivo
+    expect(csv(recusa, { 'content-type': null })).toEqual({ ok: false, motivo: 'Período inválido.' });
+    // JSON que não é a recusa é resposta torta
+    expect(csv(JSON.stringify({ ok: true }), { 'content-type': 'application/json' })).toBeNull();
+    expect(csv('{torto', { 'content-type': 'application/json' })).toBeNull();
+  });
+
+  it('o que não é texto com cabeçalhos é resposta torta', () => {
+    expect(lerCsvDoConsumo('a,b\n')).toBeNull();
+    expect(lerCsvDoConsumo({ corpo: 1, cabecalhos: {} })).toBeNull();
+    expect(lerCsvDoConsumo(null)).toBeNull();
   });
 });

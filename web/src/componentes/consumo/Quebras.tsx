@@ -21,7 +21,9 @@ export function BarraHorizontal({ fracao: largura }: { fracao: number }) {
   );
 }
 
-const sessoes = (n: number | undefined): string => (n === undefined ? 'sem dado' : `${inteiro(n)} ${n === 1 ? 'sessão' : 'sessões'}`);
+// o número das quebras é de tentativas (`attempts`): cada uma é uma execução de IA, não uma sessão
+// da tabela "Cada sessão", que conta operações
+const execucoes = (n: number | undefined): string => (n === undefined ? 'sem dado' : `${inteiro(n)} ${n === 1 ? 'execução' : 'execuções'}`);
 
 // do maior custo para o menor (é formatação); `porUltimo` vai para o fim
 function porCusto<T extends { costUsd?: number }>(lista: readonly T[], porUltimo: (item: T) => boolean = () => false): T[] {
@@ -63,7 +65,7 @@ export const PorRepositorio = memo(function PorRepositorio({ relatorio, escolhid
                 </button>
               ) : <span className={estilos.nomeDaQuebra}>Sem repositório</span>}
               <BarraHorizontal fracao={fracao(repo.costUsd, maior)} />
-              <span className={estilos.valorDaQuebra}><b>{dolar(repo.costUsd)}</b> · {sessoes(repo.attempts)}</span>
+              <span className={estilos.valorDaQuebra}><b>{dolar(repo.costUsd)}</b> · {execucoes(repo.attempts)}</span>
             </li>
           ))}
         </ul>
@@ -92,15 +94,15 @@ export const PorModelo = memo(function PorModelo({ relatorio }: { relatorio: Rel
             <li key={modelo.name} className={estilos.quebra}>
               <span className={estilos.nomeDaQuebra}>{rotuloDoModelo(modelo.name)}</span>
               <BarraHorizontal fracao={fracao(modelo.costUsd, maior)} />
-              <span className={estilos.valorDaQuebra}><b>{dolar(modelo.costUsd)}</b> · {sessoes(modelo.attempts)}</span>
+              <span className={estilos.valorDaQuebra}><b>{dolar(modelo.costUsd)}</b> · {execucoes(modelo.attempts)}</span>
               <span className={`${ui.mini} ${estilos.notaDaQuebra}`}>{tokensDoModelo(modelo)}</span>
             </li>
           ))}
         </ul>
       )}
       <p className={ui.mini}>
-        O custo de cada modelo é o que o provedor mediu para ele; quando a medida não fecha com a sessão, a sessão inteira fica em Sem atribuição por modelo. Uma sessão com dois modelos conta nos dois.
-        {desconhecidas.length ? ` Sessões de custo desconhecido não somam: ${desconhecidas.map((m) => `${inteiro(m.unknownCost)} em ${rotuloDoModelo(m.name)}`).join(', ')}.` : ''}
+        O custo de cada modelo é o que o provedor mediu para ele; quando a medida não fecha com a execução, a execução inteira fica em Sem atribuição por modelo. Uma execução com dois modelos conta nos dois.
+        {desconhecidas.length ? ` Execuções de custo desconhecido não somam: ${desconhecidas.map((m) => `${inteiro(m.unknownCost)} em ${rotuloDoModelo(m.name)}`).join(', ')}.` : ''}
       </p>
     </section>
   );
@@ -120,12 +122,12 @@ export const PorGatilho = memo(function PorGatilho({ relatorio }: { relatorio: R
             <li key={g.name || '(sem)'} className={estilos.quebra}>
               <span className={estilos.nomeDaQuebra}>{rotuloDoGatilho(g.name)}</span>
               <BarraHorizontal fracao={fracao(g.costUsd, maior)} />
-              <span className={estilos.valorDaQuebra}><b>{dolar(g.costUsd)}</b> · {sessoes(g.attempts)}</span>
+              <span className={estilos.valorDaQuebra}><b>{dolar(g.costUsd)}</b> · {execucoes(g.attempts)}</span>
             </li>
           ))}
         </ul>
       ) : null}
-      {ordenados.length ? <p className={ui.mini}>O gatilho é por que a sessão rodou. Registro antigo, sem a marca, conta como primeira revisão; a revisão retomada depois de um reinício também.</p> : null}
+      {ordenados.length ? <p className={ui.mini}>O gatilho é por que a execução rodou. Registro antigo, sem a marca, conta como primeira revisão; a revisão retomada depois de um reinício também.</p> : null}
     </section>
   );
 });

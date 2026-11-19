@@ -29,7 +29,9 @@ export function perfisDoPlano(config: ConfigDoMotor | undefined, perfis: PerfisD
   const lista = config?.claudeProfiles ?? Object.keys(uso).map((id) => ({ id, label: undefined, kind: undefined }));
   return lista.map((perfil) => {
     const problema = perfis?.problemas.find((p) => p.profileId === perfil.id);
-    let selo: PerfilNoPlano['selo'] = { texto: 'Reserva', tom: 'neutro' };
+    // sem problema, sem sessão e sem ser o padrão: o motor não diz o papel do perfil, e o selo
+    // não deduz um
+    let selo: PerfilNoPlano['selo'] = { texto: 'Sem uso agora', tom: 'neutro' };
     if (problema) selo = { texto: `Com problema: ${problema.code}`, tom: 'ruim' };
     else if (emUso.includes(perfil.id)) selo = { texto: 'Em uso agora', tom: 'marca' };
     else if (config?.claudeProfileId === perfil.id) selo = { texto: 'Perfil padrão', tom: 'ok' };
