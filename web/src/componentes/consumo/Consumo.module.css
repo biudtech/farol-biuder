@@ -9,15 +9,15 @@
 .periodos {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--esp-1);
+  padding: var(--esp-1);
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
 .periodo {
   min-height: 40px;
-  padding: 8px 14px;
+  padding: var(--esp-2) var(--esp-4);
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -40,33 +40,33 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 10px 12px;
-  padding: 14px 16px;
+  gap: var(--esp-3) var(--esp-3);
+  padding: var(--esp-4) var(--esp-4);
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
-.campoDaBusca { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.campoDoFiltro { flex: 0 1 180px; min-width: 140px; display: flex; flex-direction: column; gap: 6px; }
+.campoDaBusca { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
+.campoDoFiltro { flex: 0 1 180px; min-width: 140px; display: flex; flex-direction: column; gap: var(--esp-2); }
 .outroPeriodo { flex: 1 1 100%; }
-.outroPeriodo > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 700; padding: 4px 0; }
+.outroPeriodo > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 700; padding: var(--esp-1) 0; }
 .datas {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  padding-top: 8px;
+  gap: var(--esp-3);
+  padding-top: var(--esp-2);
 }
 .erroDoCampo { color: var(--danger-texto); font-size: 13px; font-weight: 600; }
 
 /* as pílulas dos filtros ativos, cada uma com o botão que a tira */
-.ativos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.ativos { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2); font-size: 13px; }
 .filtrando { font-weight: 700; color: var(--muted); }
 .tirar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
   min-height: 36px;
-  padding: 6px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border: 0;
   border-radius: 999px;
   background: var(--text);
@@ -78,13 +78,13 @@
 }
 
 /* ---------- avisos ---------- */
-.novas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.novas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2) var(--esp-3); }
 
 /* ---------- os números ---------- */
 .numeros {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--esp-cartoes);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -92,8 +92,8 @@
 .numeroCartao {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 18px 20px;
+  gap: var(--esp-2);
+  padding: var(--esp-cartao);
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -111,19 +111,19 @@
 .notaDoNumero { font-size: 12px; font-weight: 600; color: var(--apagado); }
 
 /* ---------- blocos lado a lado ---------- */
-.bloco { display: flex; flex-direction: column; gap: 12px; }
+.bloco { display: flex; flex-direction: column; gap: var(--esp-3); }
 .tituloDoBloco { margin: 0; font-size: 18px; font-weight: 800; }
 .grade2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 16px;
+  gap: var(--esp-4);
 }
 .painel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--esp-4);
   min-width: 0;
-  padding: 20px;
+  padding: var(--esp-cartao);
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -134,16 +134,16 @@
 .perfis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
+  gap: var(--esp-4);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .perfil[data-tom="marca"] { border-color: var(--accent); }
-.topoDoPerfil { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.topoDoPerfil { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); }
 .nomeDoPerfil { margin: 0; font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
-.janela { display: flex; flex-direction: column; gap: 6px; }
-.textoDaJanela { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.janela { display: flex; flex-direction: column; gap: var(--esp-2); }
+.textoDaJanela { display: flex; justify-content: space-between; gap: var(--esp-3); font-size: 13px; }
 .textoDaJanela span:last-child { color: var(--muted); text-align: right; }
 
 /* ---------- a barra horizontal (SVG) ---------- */
@@ -152,21 +152,21 @@
 .cheio { fill: var(--accent); }
 
 /* uma linha de quebra: nome, barra e valor */
-.quebras { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.quebras { display: flex; flex-direction: column; gap: var(--esp-3); margin: 0; padding: 0; list-style: none; }
 .quebra {
   display: grid;
   grid-template-columns: minmax(0, 150px) minmax(60px, 1fr) auto;
-  gap: 12px;
+  gap: var(--esp-3);
   align-items: center;
   font-size: 13px;
 }
 .nomeDaQuebra { font-weight: 700; overflow-wrap: anywhere; }
 .valorDaQuebra { color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .valorDaQuebra b { color: var(--text); }
-.notaDaQuebra { grid-column: 1 / -1; margin-top: -6px; }
+.notaDaQuebra { grid-column: 1 / -1; margin-top: calc(-1 * var(--esp-2)); }
 .nomeClicavel {
   min-height: 40px;
-  padding: 6px 8px;
+  padding: var(--esp-2) var(--esp-2);
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -185,7 +185,7 @@
 .dias {
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: var(--esp-1);
   height: 200px;
 }
 .botaoDeBarra {
@@ -195,7 +195,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--esp-2);
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -214,13 +214,13 @@
 .rotuloDoDia { font-size: 12px; font-weight: 700; white-space: nowrap; min-height: 16px; }
 
 /* ---------- cada sessão ---------- */
-.topoDasSessoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.topoDasSessoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-3); }
 .abrir {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
   min-height: 40px;
-  padding: 6px 8px;
+  padding: var(--esp-2) var(--esp-2);
   border: 0;
   background: transparent;
   color: var(--text);
@@ -236,10 +236,10 @@
 .blocosDaSessao {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 20px;
-  padding: 12px 4px 4px;
+  gap: var(--esp-5);
+  padding: var(--esp-3) var(--esp-1) var(--esp-1);
 }
-.blocoDaSessao { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 13px; }
+.blocoDaSessao { display: flex; flex-direction: column; gap: var(--esp-2); min-width: 0; font-size: 13px; }
 .tituloDoBlocoDaSessao { margin: 0; font-size: 13px; font-weight: 800; }
 .faixas { display: block; width: 100%; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
 .faixas svg { display: block; width: 100%; height: 100%; }
@@ -248,25 +248,25 @@
 .faixa[data-tipo="cacheCreation"], .marca[data-tipo="cacheCreation"] { fill: var(--aviso); background: var(--aviso); }
 .faixa[data-tipo="output"], .marca[data-tipo="output"] { fill: var(--info); background: var(--info); }
 .faixa[data-tipo="thinking"], .marca[data-tipo="thinking"] { fill: var(--ok); background: var(--ok); }
-.partes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.parte { display: flex; align-items: center; gap: 8px; }
+.partes { display: flex; flex-direction: column; gap: var(--esp-1); margin: 0; padding: 0; list-style: none; }
+.parte { display: flex; align-items: center; gap: var(--esp-2); }
 .marca { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .parte span:nth-child(2) { flex: 1 1 auto; }
 .parte b { font-variant-numeric: tabular-nums; }
 .etapa {
   display: grid;
   grid-template-columns: minmax(0, 110px) minmax(40px, 1fr) auto;
-  gap: 10px;
+  gap: var(--esp-3);
   align-items: center;
 }
 .etapa span:last-child { color: var(--muted); text-align: right; white-space: nowrap; }
-.links { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.links { display: flex; flex-wrap: wrap; gap: var(--esp-2); padding-top: var(--esp-1); }
 
 /* ---------- detalhe dentro das linhas ---------- */
 .pares {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px 18px;
+  gap: var(--esp-3) var(--esp-5);
   margin: 0;
 }
 .par { min-width: 0; overflow-wrap: anywhere; }
@@ -276,9 +276,9 @@
 .linhas {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--esp-1);
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--esp-5);
   font-size: 14px;
   overflow-wrap: anywhere;
   text-wrap: pretty;
@@ -303,14 +303,14 @@
 }
 .tabela caption {
   caption-side: top;
-  padding: 10px 12px;
+  padding: var(--esp-3) var(--esp-3);
   color: var(--muted);
   font-size: 12.5px;
   text-align: left;
   text-wrap: pretty;
 }
 .tabela th, .tabela td {
-  padding: 8px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-top: 1px solid var(--border);
   text-align: right;
   vertical-align: middle;
@@ -331,11 +331,11 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: var(--esp-2) var(--esp-3);
   font-size: 13px;
   color: var(--muted);
 }
-.botoesDaPagina { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.botoesDaPagina { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2); }
 
 @media (max-width: 760px) {
   .numero { font-size: 26px; }

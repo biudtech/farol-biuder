@@ -4,20 +4,20 @@
    pela Bolinha de ui, e esta folha não pinta cor de estado. */
 
 /* o título da linha cresce, para o resumo e a seta ficarem à direita */
-.cabecaDaLinha { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; margin: 0; font-size: inherit; font-weight: inherit; }
+.cabecaDaLinha { display: flex; align-items: center; gap: var(--esp-4); flex: 1 1 auto; min-width: 0; margin: 0; font-size: inherit; font-weight: inherit; }
 .tituloDaLinha { flex: 1 1 auto; }
 .resumoDaLinha { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
 
 .subtitulo { font-size: 14px; font-weight: 800; }
-.regrasFixas { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; }
+.regrasFixas { margin: 0; padding-left: var(--esp-5); display: flex; flex-direction: column; gap: var(--esp-2); font-size: 14px; line-height: 1.5; }
 
 /* pares rótulo e valor, uma linha cada */
-.pares { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.pares { display: flex; flex-direction: column; gap: var(--esp-2); margin: 0; }
 .par {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 4px 16px;
+  gap: var(--esp-1) var(--esp-4);
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -30,62 +30,62 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--esp-3);
+  padding: var(--esp-3) 0;
   border-bottom: 1px solid var(--borda-suave);
   min-width: 0;
 }
 .sessao:last-child { border-bottom: 0; }
 .texto { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .nome { font-weight: 700; }
-.anuncio { display: flex; align-items: center; gap: 8px; }
+.anuncio { display: flex; align-items: center; gap: var(--esp-2); }
 
 /* os itens com detalhe: perfis do Claude e sites do Jira */
-.itens { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.itens { display: flex; flex-direction: column; gap: var(--esp-3); margin: 0; padding: 0; list-style: none; }
 .item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: var(--esp-3);
+  padding: var(--esp-4) var(--esp-4);
   border: 1px solid var(--borda-suave);
   border-radius: var(--radius-linha);
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.tituloDoItem { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; font-weight: 800; }
+.tituloDoItem { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2) var(--esp-3); font-size: 14px; font-weight: 800; }
 
 /* os formulários */
-.campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.campo { display: flex; flex-direction: column; gap: var(--esp-2); min-width: 0; }
 /* O token do Jira: campo de texto com o valor em bolinhas. Campo de senha o navegador oferece
    ao gerenciador de senhas mesmo com autocomplete="off"; texto mascarado por CSS não. */
 .mascarado { -webkit-text-security: disc; }
-.grade, .desfechos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.opcao { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; min-width: 0; }
-.opcao input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+.grade, .desfechos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--esp-4); }
+.opcao { display: flex; align-items: flex-start; gap: var(--esp-3); font-size: 14px; min-width: 0; }
+.opcao input { flex: none; width: 18px; height: 18px; margin-top: var(--esp-meio); accent-color: var(--accent); }
 
-.orgs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.orgs { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: 0; padding: 0; list-style: none; }
 .org {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px 2px 12px;
+  gap: var(--esp-1);
+  padding: var(--esp-meio) var(--esp-1) var(--esp-meio) var(--esp-3);
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 14px;
   overflow-wrap: anywhere;
 }
-.novaOrg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.novaOrg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-2); }
 .novaOrg .campo { flex: 1 1 220px; max-width: 420px; }
 
 /* o pé do formulário: a contagem à esquerda, Descartar e Salvar à direita */
-.pe { display: flex; flex-direction: column; gap: 10px; }
+.pe { display: flex; flex-direction: column; gap: var(--esp-3); }
 .rodape {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding-top: 12px;
+  gap: var(--esp-2) var(--esp-3);
+  padding-top: var(--esp-3);
   border-top: 1px solid var(--borda-suave);
 }
 
@@ -94,8 +94,8 @@
 .pergunta {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  gap: var(--esp-3);
+  padding: var(--esp-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -103,25 +103,25 @@
   max-width: 560px;
 }
 .tituloDaPergunta { font-size: 15px; font-weight: 800; }
-.botoesDaPergunta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.botoesDaPergunta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--esp-2); }
 
 /* O menu dos assuntos à esquerda e o assunto aberto à direita (redesenho de 19/11/2026). */
-.sistema { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }
+.sistema { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--esp-6); }
 .menu {
   flex: 1 1 240px;
   max-width: 290px;
-  padding: 10px;
+  padding: var(--esp-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.listaDoMenu { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.listaDoMenu { display: flex; flex-direction: column; gap: var(--esp-1); margin: 0; padding: 0; list-style: none; }
 .itemDoMenu {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--esp-1);
   min-height: 44px;
-  padding: 12px 14px;
+  padding: var(--esp-3) var(--esp-4);
   border-radius: 12px;
   color: var(--text);
   text-decoration: none;
@@ -129,53 +129,53 @@
 .itemDoMenu:hover { background: var(--hover); color: var(--text); }
 .itemDoMenu[aria-current="page"] { background: var(--accent-soft); color: var(--accent-texto); }
 .itemDoMenu:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
-.nomeDoMenu { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; }
-.resumoDoMenu { padding-left: 18px; font-size: 12px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
-.paineis { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-.voltar { display: none; align-self: flex-start; font-size: 14px; font-weight: 700; padding: 10px 0; min-height: 44px; }
+.nomeDoMenu { display: flex; align-items: center; gap: var(--esp-2); font-size: 14px; font-weight: 800; }
+.resumoDoMenu { padding-left: var(--esp-5); font-size: 12px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.paineis { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-cartoes); }
+.voltar { display: none; align-self: flex-start; font-size: 14px; font-weight: 700; padding: var(--esp-3) 0; min-height: 44px; }
 .assunto {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px;
+  gap: var(--esp-5);
+  padding: var(--esp-cartao);
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   min-width: 0;
 }
 .assunto[hidden] { display: none; }
-.cabecaDoAssunto { display: flex; flex-direction: column; gap: 4px; }
+.cabecaDoAssunto { display: flex; flex-direction: column; gap: var(--esp-1); }
 .tituloDoAssunto { margin: 0; font-size: 18px; font-weight: 800; }
 .tituloDoAssunto:focus { outline: none; }
 .tituloDoAssunto:focus-visible { outline: 2px solid var(--foco); outline-offset: 4px; }
-.subbloco { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--borda-suave); }
-.frase { margin: 0; padding: 14px 16px; font-size: 15px; font-weight: 600; line-height: 1.5; background: var(--surface-2); border-radius: 12px; }
-.bloco { display: flex; flex-direction: column; gap: 10px; }
+.subbloco { display: flex; flex-direction: column; gap: var(--esp-3); padding-top: var(--esp-4); border-top: 1px solid var(--borda-suave); }
+.frase { margin: 0; padding: var(--esp-4) var(--esp-4); font-size: 15px; font-weight: 600; line-height: 1.5; background: var(--surface-2); border-radius: 12px; }
+.bloco { display: flex; flex-direction: column; gap: var(--esp-3); }
 .formulario {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--esp-3);
+  padding: var(--esp-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-linha);
   min-width: 0;
 }
 .enderecoDoLogin { margin: 0; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
-.ajuste { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+.ajuste { padding: var(--esp-3) var(--esp-4); border-radius: 12px; background: var(--surface-2); }
 .areaDeTexto { min-height: 180px; resize: vertical; line-height: 1.5; font-family: inherit; }
 
 /* os perfis do Claude, na ordem de uso: a linha que abre e o detalhe */
-.perfis { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.perfis { display: flex; flex-direction: column; gap: var(--esp-3); margin: 0; padding: 0; list-style: none; }
 .perfil { border: 1.5px solid var(--border); border-radius: var(--radius-linha); overflow: hidden; }
 .perfil[data-padrao="sim"] { border-color: var(--accent); }
 .cabecaDoPerfil { margin: 0; font-size: inherit; font-weight: inherit; }
 .abreOPerfil {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--esp-3);
   width: 100%;
   min-height: 56px;
-  padding: 12px 16px;
+  padding: var(--esp-3) var(--esp-4);
   border: 0;
   background: var(--surface);
   color: var(--text);
@@ -186,13 +186,13 @@
 .abreOPerfil:hover { background: var(--hover); }
 .abreOPerfil:focus-visible { outline: 2px solid var(--foco); outline-offset: -2px; }
 .posicao { flex: none; width: 22px; font-size: 13px; font-weight: 800; color: var(--muted); }
-.nomeDoPerfil { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.nomeDoPerfil { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-meio); overflow-wrap: anywhere; }
 .seta { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
 .abreOPerfil[aria-expanded="true"] .seta { transform: rotate(180deg); }
-.detalheDoPerfil { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px 50px; }
+.detalheDoPerfil { display: flex; flex-direction: column; gap: var(--esp-4); padding: var(--esp-1) var(--esp-4) var(--esp-4) var(--esp-8); }
 .detalheDoPerfil[hidden] { display: none; }
-.janela { display: flex; flex-direction: column; gap: 6px; }
-.cabecaDaJanela { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13px; }
+.janela { display: flex; flex-direction: column; gap: var(--esp-2); }
+.cabecaDaJanela { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--esp-1) var(--esp-3); font-size: 13px; }
 .barraDoUso { display: block; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .barraDoUso svg { display: block; width: 100%; height: 8px; }
 .cheioDoUso { fill: var(--accent); }
@@ -203,17 +203,17 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding: 12px 14px;
+  gap: var(--esp-3) var(--esp-4);
+  padding: var(--esp-3) var(--esp-4);
   border: 1px solid var(--border);
   border-radius: 12px;
 }
-.textoDaRegra { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
-.gradeDaRegra { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.textoDaRegra { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-1); overflow-wrap: anywhere; }
+.gradeDaRegra { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--esp-3); }
 
 /* as organizações e os projetos de um site do Jira */
-.etiquetas { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.etiqueta { padding: 4px 10px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 700; }
+.etiquetas { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--esp-2); }
+.etiqueta { padding: var(--esp-1) var(--esp-3); border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 700; }
 
 @media (max-width: 760px) {
   .grade, .desfechos { grid-template-columns: 1fr; }
@@ -226,6 +226,6 @@
   .semAssunto .paineis { display: none; }
   .comAssunto .menu { display: none; }
   .comAssunto .voltar { display: inline-flex; align-items: center; }
-  .assunto { padding: 18px 16px; }
-  .detalheDoPerfil { padding-left: 16px; }
+  .assunto { padding: var(--esp-5) var(--esp-4); }
+  .detalheDoPerfil { padding-left: var(--esp-4); }
 }

@@ -59,6 +59,24 @@
   /* contorno de botão sem preenchimento */
   --borda-botao: #7d838c;
   --fonte: var(--fonte-mulish), "Mulish", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* A escala única de espaçamento, base 4 px (20/11/2026). Todo margin, padding e gap dos CSS
+     modules sai daqui; --esp-meio é o respiro mínimo entre rótulo e valor. Não varia com o tema. */
+  --esp-meio: 2px;
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+  --esp-5: 20px;
+  --esp-6: 24px;
+  --esp-7: 32px;
+  --esp-8: 48px;
+  --esp-9: 64px;
+  /* os quatro espaços que precisam ser iguais em todas as telas */
+  --esp-secoes: var(--esp-6);
+  --esp-cartoes: var(--esp-3);
+  --esp-cartao: var(--esp-5);
+  --esp-cabecalho: var(--esp-6);
   color-scheme: light;
 }
 

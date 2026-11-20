@@ -187,7 +187,13 @@ nova que vira texto entra em `src/tema/contraste.test.ts`.
 **Estilo.** CSS Modules e as variáveis de `globals.css`. Sem atributo `style` e sem biblioteca
 de componentes: a CSP de produção não aceita estilo em linha. Para texto sobre fundo de estado
 use as variáveis terminadas em `-texto`, `--foco` para o anel de foco, `--borda-campo` para o
-contorno de campo e `--borda-botao` para o de botão sem preenchimento.
+contorno de campo e `--borda-botao` para o de botão sem preenchimento. Espaçamento (margin,
+padding e gap) só pela escala de `globals.css`, base 4 px: `--esp-meio` (2 px) e `--esp-1` a
+`--esp-9` (4, 8, 12, 16, 20, 24, 32, 48 e 64 px). Os quatro espaços que precisam ser iguais em
+todas as telas têm nome próprio: `--esp-secoes` (entre seções), `--esp-cartoes` (entre cartões),
+`--esp-cartao` (o interno do cartão) e `--esp-cabecalho` (o lateral do cabeçalho e da página).
+Valor solto em px nessas propriedades reprova em `src/tema/espacamento.test.ts` (só o traço de
+1 px fica literal).
 
 **API do Next.** A versão fixada traz a própria documentação em `node_modules/next/dist/docs/`.
 Consulte-a antes de usar uma API do Next: ela mudou entre versões (o antigo `middleware` aqui é

@@ -7,9 +7,9 @@
 .cartao {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--esp-4);
   min-width: 0;
-  padding: 18px 22px;
+  padding: var(--esp-cartao);
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -18,9 +18,9 @@
 .cartao[data-tom="ok"] { border-color: color-mix(in srgb, var(--ok) 40%, var(--surface)); }
 .cartao[data-tom="falha"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--surface)); }
 .cartao[data-tom="aviso"] { border-color: color-mix(in srgb, var(--aviso) 55%, var(--surface)); }
-.cartao[data-compacto="sim"] { gap: 12px; padding: 16px 18px; }
+.cartao[data-compacto="sim"] { gap: var(--esp-3); padding: var(--esp-4) var(--esp-5); }
 
-.cabeca { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.cabeca { display: flex; align-items: flex-start; gap: var(--esp-4); min-width: 0; }
 .avatar {
   flex: 0 0 44px;
   width: 44px;
@@ -36,12 +36,12 @@
   font-weight: 800;
 }
 .avatar[data-pequeno="sim"] { flex-basis: 40px; width: 40px; height: 40px; font-size: 14px; }
-.corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-1); }
 .linhaDaChave {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: var(--esp-1) var(--esp-2);
   min-width: 0;
   font-size: 13px;
   color: var(--muted);
@@ -50,21 +50,21 @@
 a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 .quem { overflow-wrap: anywhere; }
 .meta { overflow-wrap: anywhere; }
-.meta::before { content: "·"; margin-right: 8px; color: var(--apagado); }
+.meta::before { content: "·"; margin-right: var(--esp-2); color: var(--apagado); }
 .titulo { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; text-wrap: pretty; }
 .cartao[data-tom="rodando"] .titulo { font-size: 17px; }
 .cartao[data-compacto="sim"] .titulo { font-size: 15px; }
-.botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--esp-2); }
 .botaoLink { text-decoration: none; white-space: nowrap; }
-.botaoOcupado { gap: 8px; background: var(--accent-soft); border-color: transparent; color: var(--accent-texto); }
+.botaoOcupado { gap: var(--esp-2); background: var(--accent-soft); border-color: transparent; color: var(--accent-texto); }
 .botaoOcupado, .botaoOcupado:hover { cursor: default; background: var(--accent-soft); color: var(--accent-texto); }
 
 /* as pílulas: chips arredondados na cor do estado, com o texto do mesmo estado */
-.pilulas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pilulas { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: 0; padding: 0; list-style: none; }
 .pilula {
   display: inline-block;
   min-width: 0;
-  padding: 6px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-radius: 999px;
   background: var(--neutro-soft);
   color: var(--neutro-texto);
@@ -75,13 +75,13 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 .pilula[data-tom="ok"] { background: var(--ok-soft); color: var(--ok-texto); }
 .pilula[data-tom="aviso"] { background: var(--aviso-soft); color: var(--aviso-texto); }
 .pilula[data-tom="falha"] { background: var(--danger-soft); color: var(--danger-texto); }
-.iconeDaPilula { margin-right: 6px; font-weight: 800; }
-.rotuloDaPilula { margin-right: 4px; font-weight: 600; }
+.iconeDaPilula { margin-right: var(--esp-2); font-weight: 800; }
+.rotuloDaPilula { margin-right: var(--esp-1); font-weight: 600; }
 .rotuloDaPilula::after { content: ":"; }
 
 /* a faixa: a barra única, as etapas e o rodapé */
-.faixa { display: flex; flex-direction: column; gap: 14px; }
-.percentual { display: flex; align-items: center; gap: 16px; }
+.faixa { display: flex; flex-direction: column; gap: var(--esp-4); }
+.percentual { display: flex; align-items: center; gap: var(--esp-4); }
 .numero {
   min-width: 92px;
   font-size: 34px;
@@ -91,7 +91,7 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
   color: var(--accent-texto);
   font-variant-numeric: tabular-nums;
 }
-.colunaDaBarra { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.colunaDaBarra { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
 .barra { position: relative; display: block; height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .barra[data-indefinida="sim"] { height: 6px; }
 .barra svg { display: block; width: 100%; height: 10px; }
@@ -100,8 +100,8 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 .corre { position: absolute; top: 0; bottom: 0; left: -32%; width: 32%; border-radius: 999px; background: var(--accent); animation: correDaFaixa 1.5s ease-in-out infinite; }
 @keyframes correDaFaixa { 0% { left: -32%; } 100% { left: 100%; } }
 
-.etapas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
-.etapa { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--apagado); }
+.etapas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--esp-2); margin: 0; padding: 0; list-style: none; }
+.etapa { display: flex; flex-direction: column; gap: var(--esp-2); min-width: 0; font-size: 12px; font-weight: 600; color: var(--apagado); }
 .tracoDaEtapa { position: relative; display: block; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .etapa[data-estado="feita"] { color: var(--ok-texto); font-weight: 700; }
 .etapa[data-estado="feita"] .tracoDaEtapa { background: var(--ok); }
@@ -119,13 +119,13 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding-top: 12px;
+  gap: var(--esp-2) var(--esp-3);
+  padding-top: var(--esp-3);
   border-top: 1px solid var(--borda-suave);
   font-size: 13px;
   color: var(--muted);
 }
-.textoDoRodape { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.textoDoRodape { display: inline-flex; align-items: center; gap: var(--esp-2); min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 .textoDoRodape[data-tom="fila"] { color: var(--muted); }
 .textoDoRodape[data-tom="ok"] { color: var(--ok-texto); }
 .textoDoRodape[data-tom="falha"] { color: var(--danger-texto); }
@@ -134,9 +134,9 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 .ponto { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 999px; background: var(--ok); }
 .ponto[data-tom="aviso"] { background: var(--aviso); }
 .ponto[data-tom="falha"] { background: var(--danger); }
-.ladoDoRodape { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.tempoEApoio { display: inline-flex; flex-wrap: wrap; gap: 0 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tempo + .apoio::before { content: "·"; margin-right: 6px; }
+.ladoDoRodape { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2) var(--esp-3); }
+.tempoEApoio { display: inline-flex; flex-wrap: wrap; gap: 0 var(--esp-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tempo + .apoio::before { content: "·"; margin-right: var(--esp-2); }
 
 /* Movimento reduzido: o pulso da etapa para, e a barra indefinida vira uma faixa parada. */
 @media (prefers-reduced-motion: reduce) {
@@ -148,7 +148,7 @@ a.chave:hover { color: var(--link-hover); text-decoration: underline; }
 /* Janela estreita: os botões descem para baixo do título, a porcentagem encolhe e as etapas ficam
    só com o traço e o nome menor. */
 @media (max-width: 760px) {
-  .cartao { padding: 16px; }
+  .cartao { padding: var(--esp-4); }
   .cabeca { flex-wrap: wrap; }
   .botoes { flex-basis: 100%; justify-content: flex-start; }
   .numero { min-width: 0; font-size: 28px; }

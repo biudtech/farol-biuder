@@ -2,7 +2,7 @@
 .markdown {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--esp-3);
   min-width: 0;
   font-size: 13.5px;
   line-height: 1.55;
@@ -12,19 +12,19 @@
 .markdown ul, .markdown ol {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-left: 22px;
+  gap: var(--esp-1);
+  padding-left: var(--esp-6);
 }
-.markdown li > ul, .markdown li > ol { margin-top: 4px; }
+.markdown li > ul, .markdown li > ol { margin-top: var(--esp-1); }
 .markdown a { color: var(--info-texto); text-decoration: underline; }
 
-.titulo { margin: 4px 0 0; font-size: 14px; font-weight: 650; }
+.titulo { margin: var(--esp-1) 0 0; font-size: 14px; font-weight: 650; }
 
 .citacao {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 0 2px 12px;
+  gap: var(--esp-2);
+  padding: var(--esp-meio) 0 var(--esp-meio) var(--esp-3);
   border-left: 3px solid var(--borda-campo);
   color: var(--muted);
 }
@@ -35,18 +35,18 @@
   font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
   font-size: 12.5px;
 }
-.codigo { padding: 1px 5px; }
+.codigo { padding: 1px var(--esp-1); }
 .bloco {
-  padding: 10px 12px;
+  padding: var(--esp-3) var(--esp-3);
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.regua { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--border); }
+.regua { width: 100%; margin: var(--esp-meio) 0; border: 0; border-top: 1px solid var(--border); }
 
 .corte {
-  padding: 8px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-radius: 8px;
   background: var(--info-soft);
   color: var(--info-texto);

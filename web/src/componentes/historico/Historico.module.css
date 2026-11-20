@@ -4,7 +4,7 @@
 .historico {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--esp-6);
   min-width: 0;
 }
 
@@ -12,12 +12,12 @@
 .listagem[hidden] { display: none; }
 
 /* a busca sempre à vista e o Filtrar ao lado */
-.consulta { display: flex; flex-direction: column; gap: 10px; }
+.consulta { display: flex; flex-direction: column; gap: var(--esp-3); }
 .busca {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--esp-2);
 }
 .campoDeBusca { flex: 1 1 320px; width: auto; }
 
@@ -37,41 +37,41 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: var(--esp-2) var(--esp-3);
 }
 
 .revisoes {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--esp-3);
   min-width: 0;
 }
 
 .pagina {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--esp-3);
   min-width: 0;
 }
 
 /* o título da linha ocupa o meio, e a hora e a seta ficam na ponta */
 .tituloDaLinha { flex: 1 1 auto; }
 
-.tituloDoVazio { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+.tituloDoVazio { font-size: 16px; font-weight: 800; margin-bottom: var(--esp-1); }
 
 .paginacao {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px 16px;
+  gap: var(--esp-2) var(--esp-4);
 }
 
 /* as pílulas do filtro pelo que foi publicado: botões de 44 px, a escolhida no par da aba ativa */
-.pilulasDeFiltro { display: flex; flex-wrap: wrap; gap: 8px; }
+.pilulasDeFiltro { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
 .pilulaDeFiltro {
   min-height: 44px;
-  padding: 0 16px;
+  padding: 0 var(--esp-4);
   border-radius: 999px;
   border: 1px solid var(--borda-botao);
   background: var(--surface);
@@ -85,15 +85,15 @@
 .pilulaDeFiltro[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-texto); }
 
 /* os grupos por dia e os cartões (o cartão em si é de componentes/cartao) */
-.grupos { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-.grupoDoDia { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.grupos { display: flex; flex-direction: column; gap: var(--esp-secoes); min-width: 0; }
+.grupoDoDia { display: flex; flex-direction: column; gap: var(--esp-cartoes); min-width: 0; }
 .tituloDoDia { font-size: 15px; font-weight: 800; color: var(--muted); }
 .seta { width: 44px; min-height: 44px; padding: 0; }
 .seta svg { transition: transform .15s ease; }
 .seta[data-aberto="sim"] svg { transform: rotate(180deg); }
 .motivoFechado { overflow-wrap: anywhere; }
-.corpoDoCartao { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.acoesDoCartao { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.corpoDoCartao { display: flex; flex-direction: column; gap: var(--esp-4); min-width: 0; }
+.acoesDoCartao { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2); }
 
 @media (prefers-reduced-motion: reduce) {
   .seta svg { transition: none; }
@@ -106,11 +106,11 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--esp-5);
   min-width: 0;
 }
 .voltar { align-self: flex-start; }
-.topoDoDetalhe { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.topoDoDetalhe { display: flex; flex-direction: column; gap: var(--esp-3); min-width: 0; }
 .topoDoDetalhe > p { overflow-wrap: anywhere; white-space: normal; }
 .tituloDoDetalhe { font-size: 26px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
 .frase { font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
@@ -118,19 +118,19 @@
 .campos {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px 18px;
+  gap: var(--esp-2) var(--esp-5);
   margin: 0;
   font-size: 13px;
 }
 .par { min-width: 0; overflow-wrap: anywhere; }
-.criterios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.criterio { display: flex; align-items: baseline; gap: 10px; overflow-wrap: anywhere; }
+.criterios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
+.criterio { display: flex; align-items: baseline; gap: var(--esp-3); overflow-wrap: anywhere; }
 
 /* o achado aberto: o arquivo e a linha, e o trecho do diff daquela linha */
 .localDoAchado { margin: 0; overflow-wrap: anywhere; }
 .trecho {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--esp-3) var(--esp-3);
   background: var(--surface-2);
   border-radius: 6px;
   font-size: 12.5px;
@@ -141,30 +141,30 @@
 .linhaDoTrecho { display: block; }
 .linhaDoTrecho[data-tipo="adicionada"] { color: var(--text); }
 .linhaDoTrecho[data-tipo="contexto"] { color: var(--muted); }
-.numeroDoTrecho { display: inline-block; min-width: 4ch; margin-right: 8px; text-align: right; color: var(--muted); user-select: none; }
+.numeroDoTrecho { display: inline-block; min-width: 4ch; margin-right: var(--esp-2); text-align: right; color: var(--muted); user-select: none; }
 
 /* as rodadas do PR, uma por linha */
-.rodadas { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.rodadas { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: var(--esp-1); overflow-wrap: anywhere; }
 .par dt { color: var(--muted); font-size: 12px; font-weight: 700; }
 .par dd { margin: 0; }
 
 .parecer {
-  padding: 12px;
+  padding: var(--esp-3);
   background: var(--bg);
   border-radius: 8px;
   overflow-wrap: anywhere;
 }
 
-.contestacao { display: flex; flex-direction: column; gap: 12px; }
+.contestacao { display: flex; flex-direction: column; gap: var(--esp-3); }
 .tituloDaContestacao { font-size: 16px; font-weight: 800; color: var(--muted); }
 .formulario {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: var(--esp-3) var(--esp-5);
 }
 .formulario > * { flex: 1 1 220px; min-width: 0; }
 
-.pe { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pe { display: flex; flex-direction: column; align-items: flex-start; gap: var(--esp-2); }
 
 @media (max-width: 760px) {
   .campos { grid-template-columns: 1fr; }
