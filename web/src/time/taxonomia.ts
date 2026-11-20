@@ -14,6 +14,7 @@ export const PAPEIS: readonly Opcao[] = [
   ['techlead', 'Tech Lead'],
   ['arquiteto', 'Arquiteto'],
   ['especialista', 'Especialista'],
+  ['dono_produto', 'Dono do produto'],
 ];
 
 // DOMAINS e DOMAIN_LABEL

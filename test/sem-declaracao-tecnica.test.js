@@ -5,7 +5,8 @@
 // "avaliação técnica atual ausente" e nunca era aprovado sozinho. Regra do dono: a aprovação
 // não depende dele; bloqueiam só violação técnica confirmada e lacuna de leitura (o CI saiu da
 // decisão em 17/11/2026: o revisor nunca espera o CI). Sem declaração não há avaliação técnica configurada, e isso não é
-// violação: vira ressalva. Com declaração, toda lacuna técnica continua bloqueando.
+// violação nem ressalva (desde 20/11/2026): fica só como diagnóstico. Com declaração, toda lacuna
+// técnica continua bloqueando.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -71,10 +72,13 @@ test('a marca de sem declaração tira a lacuna técnica; com declaração a lac
     'lacuna de leitura continua bloqueando sem declaração');
 });
 
-// até 17/11/2026 a conta em espera segurava esta ressalva (motivo `politica`); o `wait` saiu
-test('sem declaração vira ressalva com texto próprio, e não segura o APPROVE', () => {
+// até 17/11/2026 a conta em espera segurava esta ressalva (motivo `politica`); o `wait` saiu.
+// Desde 20/11/2026 (regra do dono) nem ressalva é: o Farol revisa o código pelo mérito,
+// independente de diretriz do projeto, e o resultado sem outro ponto é limpo.
+test('sem declaração não vira ressalva nem motivo, e não segura o APPROVE', () => {
   const textos = attentionPoints(null, result()).map((p) => p.text);
-  assert.ok(textos.some((t) => /não tem declaração técnica cadastrada, então a avaliação técnica automática não rodou/.test(t)), textos.join(' | '));
+  assert.deepEqual(textos, [], 'sem declaração, o resultado sem outro ponto é limpo');
+  assert.ok(!textos.some((t) => /declaração técnica/.test(t)), textos.join(' | '));
   assert.deepEqual(shouldAutoApprove(engineCom('approve'), PEDIDO, result()), { ok: true, motivo: null });
   assert.deepEqual(shouldAutoApprove(engineCom('wait'), PEDIDO, result()), { ok: true, motivo: null }, 'nem o stub antigo em espera segura');
   const vermelho = result({ checksObrigatorios: [{ nome: 'test', estado: 'vermelho' }] });

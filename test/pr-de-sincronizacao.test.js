@@ -189,11 +189,13 @@ function motor(politica = { onClean: 'approve', onCaveats: 'approve', onReject: 
   return e;
 }
 
+const RESSALVA_TECNICA = 'O cache novo não expira: a memória cresce sem limite.';
 function sessao(e, extra) {
   e.runClaudeStream = async () => ({
     text: JSON.stringify({
       protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('approve'), analysisStatus: 'complete', verdict: 'approve',
-      decision: 'needs_decision', cardMet: false, reasons: ['PR sem card no Jira'],
+      // um ponto técnico: desde 20/11/2026 a falta de card não é ressalva (ressalvas.js, prSemCard)
+      decision: 'needs_decision', cardMet: false, reasons: [RESSALVA_TECNICA],
       coverage: { total: 0, reviewed: [], missing: [] },
       payloads: {
         approve: { event: 'APPROVE', body: 'Leitura completa, sem bloqueios.' },
@@ -232,7 +234,7 @@ test('o mesmo resultado num PR de task para bancada continua com ressalvas', asy
   assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
   const r = resolvida(e, 41);
   assert.equal(r.status, 'auto_approved');
-  assert.ok(r.attention.some((p) => p.text === 'PR sem card no Jira'), 'a falta de card segue ressalva fora da sincronização');
+  assert.ok(r.attention.some((p) => p.text === RESSALVA_TECNICA), 'a ressalva segue fora da sincronização');
   assert.equal(r.sincronizacao, null);
 });
 
@@ -249,7 +251,7 @@ test('a marca de sincronização é só do app: a da sessão é descartada', asy
   assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
   const r = resolvida(e, 43);
   assert.equal(r.sincronizacao, null);
-  assert.ok(r.attention.length > 0, 'sem a marca do app, a falta de card segue ressalva');
+  assert.ok(r.attention.length > 0, 'sem a marca do app, a ressalva segue');
 });
 
 test('sincronização com defeito real: o achado vale e a reprovação sai como hoje', async () => {
