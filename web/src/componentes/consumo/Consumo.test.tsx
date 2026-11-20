@@ -58,7 +58,7 @@ function montar({ url = '/consumo', responder = () => corpo(relatorioDoMotor()),
     return dados === null ? { ok: false, falha: 'resposta_invalida', status: 200 } : { ok: true, dados };
   });
   const post = vi.fn();
-  const app = { store, cliente: { get, post }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
+  const app = { store, cliente: { get, post } } as unknown as App;
   const tela = render(<Consumo app={app} />);
   // o CSV não é relatório: fica de fora da lista de pedidos do relatório
   const pedidos = (): string[] => get.mock.calls.map(([caminho]) => caminho).filter((c) => !c.includes('formato=csv'));
@@ -769,14 +769,13 @@ describe('Consumo: estados', () => {
     expect(screen.queryByRole('button', { name: 'Atualizar' })).toBeNull();
   });
 
-  it('os avisos do motor aparecem na região de resultado, e dá para dispensar', async () => {
+  it('os avisos do motor aparecem no anúncio discreto, sem botão de dispensar', async () => {
     const t = montar();
     await assentar();
     act(() => { t.store.trocar({ recados: [{ n: 1, tom: 'erro', texto: 'Buscas pausadas pelo limite do GitHub.' }] as unknown as EstadoDoApp['recados'] }); });
     const regiao = screen.getByRole('status', { name: 'Resultado da última ação e avisos do motor' });
     expect(regiao.textContent).toContain('Buscas pausadas pelo limite do GitHub.');
-    await clicar('Dispensar');
-    expect(regiao.textContent).toBe('');
+    expect(screen.queryByRole('button', { name: 'Dispensar', hidden: true })).toBeNull();
   });
 
   it('o detalhe do período traz as somas e os avisos menores do motor', async () => {

@@ -2,10 +2,11 @@
 
 // As sessões que sumiram sem resultado, nesta aba (src/radar/falhas.ts tem a regra). O motor não
 // guarda a lista: quem vê a sessão sair é a tela, comparando um estado com o anterior. Recarregar
-// a página esquece as falhas, e Dispensar tira uma.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// a página esquece as falhas. Nada pede clique para sumir (regra do dono de 20/11/2026): a falha
+// sai com sessão ou decisão nova do PR, ou sozinha depois de VALIDADE_DA_FALHA_MS.
+import { useEffect, useMemo, useState } from 'react';
 import type { Estacionado, LinhaDoFeed, Pendencia, SessaoAtiva } from '@/contratos/radar';
-import { CARENCIA_MS, falhaSuperada, motivoDaFalha, sumidas, vistaDa, visivel, type Falha, type SessaoVista } from '@/radar/falhas';
+import { CARENCIA_MS, VALIDADE_DA_FALHA_MS, expirada, falhaSuperada, motivoDaFalha, sumidas, vistaDa, visivel, type Falha, type SessaoVista } from '@/radar/falhas';
 
 export type FalhaComMotivo = Falha & { motivo: string };
 
@@ -43,14 +44,21 @@ export function useFalhas({ sessoes, feeds, pendentes, resolvidas, estacionados,
     if (novas.length) setFalhas((antes) => [...antes.filter((f) => !novas.some((n) => n.chave === f.chave)), ...novas]);
   }
 
-  // A falha só aparece depois da carência: a decisão pode chegar no estado seguinte.
+  // A falha só aparece depois da carência (a decisão pode chegar no estado seguinte) e sai
+  // sozinha depois da validade. O relógio acorda no próximo desses instantes.
   const [agora, setAgora] = useState(relogio);
   useEffect(() => {
-    const pendente = falhas.filter((f) => !visivel(f, agora));
-    if (!pendente.length) return undefined;
+    const vivas = falhas.filter((f) => !expirada(f, agora));
+    if (!vivas.length) return undefined;
     // a espera conta do relógio de agora, não do último instante guardado (que pode ser antigo)
-    const espera = Math.max(0, Math.min(...pendente.map((f) => f.sumiuEm + CARENCIA_MS - relogio())));
-    const id = setTimeout(() => setAgora(relogio()), espera + 50);
+    const instantes = vivas.map((f) => (visivel(f, agora) ? f.sumiuEm + CARENCIA_MS + VALIDADE_DA_FALHA_MS : f.sumiuEm + CARENCIA_MS));
+    const espera = Math.max(0, Math.min(...instantes) - relogio());
+    const id = setTimeout(() => {
+      const instante = relogio();
+      setAgora(instante);
+      // a expirada sai da memória da aba também, não só da tela
+      setFalhas((antes) => (antes.some((f) => expirada(f, instante)) ? antes.filter((f) => !expirada(f, instante)) : antes));
+    }, espera + 50);
     return () => clearTimeout(id);
   }, [falhas, agora]);
 
@@ -60,6 +68,5 @@ export function useFalhas({ sessoes, feeds, pendentes, resolvidas, estacionados,
       .map((f) => ({ ...f, motivo: motivoDaFalha(f, estacionados && Object.hasOwn(estacionados, f.chave) ? estacionados[f.chave] : undefined) })),
     [falhas, agora, sessoes, pendentes, resolvidas, estacionados],
   );
-  const dispensar = useCallback((chave: string) => setFalhas((antes) => antes.filter((f) => f.chave !== chave)), []);
-  return { falhas: lista, dispensar };
+  return { falhas: lista };
 }

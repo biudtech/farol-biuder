@@ -21,7 +21,7 @@ import {
   textoDosRecentes, textoDoResultado, textoDoVazio,
 } from '@/historico/consulta';
 import { ABA_INICIAL } from '@/navegacao/abas';
-import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
+import { AnuncioDaTela } from '../radar/AnuncioDaTela';
 import { useAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { Detalhe } from './Detalhe';
@@ -54,7 +54,7 @@ export function Historico({ app = appDoNavegador }: Props) {
   const [tentativaDoDetalhe, setTentativaDoDetalhe] = useState(0);
   const { carregando, pagina, lidaEm, falha, repos, haNovas } = usePagina(app.cliente, consulta, recarga, marca);
   const leitura = useDetalhe(app.cliente, detalhe, pagina?.items, !carregando, tentativaDoDetalhe);
-  const { controle, resultado, dispensar, regiao } = useAcoes(app.cliente);
+  const { controle, resultado, regiao } = useAcoes(app.cliente);
 
   const tituloDaLista = useRef<HTMLHeadingElement>(null);
   const idDaLista = useId();
@@ -232,15 +232,7 @@ export function Historico({ app = appDoNavegador }: Props) {
         />
       ) : null}
 
-      <RegiaoDeResultado
-        regiao={regiao}
-        resultado={resultado}
-        recados={recados}
-        aoDispensar={() => {
-          dispensar();
-          app.dispensarRecados();
-        }}
-      />
+      <AnuncioDaTela regiao={regiao} resultado={resultado} recados={recados} />
     </div>
   );
 }

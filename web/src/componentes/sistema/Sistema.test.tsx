@@ -132,7 +132,7 @@ function montar({ bruto = BRUTO, semEstado = false, conexao = 'conectado', estad
     return ler(propria ?? corpo(rota === '/api/auth/sessions' ? SESSOES : { ok: true }), leitor);
   });
   const esquecerSessao = vi.fn();
-  const app = { store, cliente: { get, post }, dispensarRecados: () => store.trocar({ recados: [] }), esquecerSessao } as unknown as App;
+  const app = { store, cliente: { get, post }, esquecerSessao } as unknown as App;
   const tela = render(<Sistema app={app} caminho={caminho} />);
   emUso = {
     caminho,
@@ -225,7 +225,7 @@ describe('Sistema: o menu e a rota', () => {
     expect(screen.queryByText(/origensPermitidas|hostPublico|localAuth|\(bind\)/)).toBeNull();
     cleanup();
     const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', estadoEmDia: true, snapshot: snapshotDe(BRUTO) });
-    const app = { store, cliente: { get: vi.fn(), post: vi.fn(async () => ({ ok: true, dados: { sessoes: [], descartadas: 0 } })) }, dispensarRecados: vi.fn(), esquecerSessao: vi.fn() } as unknown as App;
+    const app = { store, cliente: { get: vi.fn(), post: vi.fn(async () => ({ ok: true, dados: { sessoes: [], descartadas: 0 } })) }, esquecerSessao: vi.fn() } as unknown as App;
     caminhoDaRota.atual = '/sistema/saude';
     const { container } = render(<SistemaNaRota app={app}><p>página da rota</p></SistemaNaRota>);
     expect(container.textContent).toBe('página da rota');
@@ -284,7 +284,7 @@ describe('Sistema: o menu e a rota', () => {
   it('presa à rota: o caminho do navegador escolhe o assunto, e assunto que não existe mostra a página da rota (o 404)', async () => {
     const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', conexao: 'conectado', estadoEmDia: true, snapshot: snapshotDe(BRUTO) });
     const post = vi.fn(async () => ({ ok: true, dados: { sessoes: [], descartadas: 0 } }));
-    const app = { store, cliente: { get: vi.fn(), post }, dispensarRecados: vi.fn(), esquecerSessao: vi.fn() } as unknown as App;
+    const app = { store, cliente: { get: vi.fn(), post }, esquecerSessao: vi.fn() } as unknown as App;
     caminhoDaRota.atual = '/sistema/ritmo';
     const { container, rerender } = render(<SistemaNaRota app={app}><p>página da rota</p></SistemaNaRota>);
     expect(container.textContent).not.toContain('página da rota');

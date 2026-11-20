@@ -85,7 +85,7 @@ function montar({ url = '/time', responder = () => corpo(TIME), aoPostar = () =>
     return ler(await responder(caminho), leitor);
   });
   const post = vi.fn(async (rota: string, enviado: unknown, leitor: (bruto: unknown) => unknown) => ler(await aoPostar(rota, enviado), leitor));
-  const app = { store, cliente: { get, post }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
+  const app = { store, cliente: { get, post } } as unknown as App;
   const tela = render(<Time app={app} />);
   const pedidos = (): string[] => get.mock.calls.map(([caminho]) => caminho);
   const trocarSnapshot = (novo: Snapshot) => act(() => { store.trocar({ snapshot: novo }); });
@@ -536,7 +536,7 @@ describe('Time: papel e competência', () => {
     await assentar();
     const papel = screen.getByLabelText('Papel') as HTMLSelectElement;
     expect(papel.value).toBe('senior');
-    expect([...papel.options].map((o) => o.textContent)).toEqual(['Sem papel', 'Estágio', 'Júnior', 'Pleno', 'Sênior', 'Tech Lead', 'Arquiteto', 'Especialista']);
+    expect([...papel.options].map((o) => o.textContent)).toEqual(['Sem papel', 'Estágio', 'Júnior', 'Pleno', 'Sênior', 'Tech Lead', 'Arquiteto', 'Especialista', 'Dono do produto']);
     const backend = screen.getByLabelText('Competência em Backend') as HTMLSelectElement;
     expect(backend.value).toBe('avancado');
     expect([...backend.options].map((o) => o.textContent)).toEqual(['Sem informação', 'Básico', 'Intermediário', 'Avançado', 'Autoridade']);

@@ -3,15 +3,16 @@
 import { vi } from 'vitest';
 import type { Pendencia } from '@/contratos/radar';
 import type { Acao } from '@/radar/acoes';
-import type { ControleDeAcoes } from './useAcoes';
+import type { ControleDeAcoes, ResultadoDaAcao } from './useAcoes';
 
 export const URL_DO_PR = 'https://github.com/dono/repo/pull/12';
 
-// `noAr`: alvo para o id da ação que o teste quer ver "enviando".
-export function controleFalso(noAr: Record<string, string> = {}) {
+// `noAr`: alvo para o id da ação que o teste quer ver "enviando"; `resultados`: o resultado que
+// o teste quer ver no lugar da ação.
+export function controleFalso(noAr: Record<string, string> = {}, resultados: Record<string, ResultadoDaAcao> = {}) {
   const disparar = vi.fn(async (acao: Acao) => { void acao; return true; });
   const focarResultado = vi.fn();
-  const controle: ControleDeAcoes = { emCurso: (alvo) => noAr[alvo] ?? null, disparar, focarResultado };
+  const controle: ControleDeAcoes = { emCurso: (alvo) => noAr[alvo] ?? null, resultadoDe: (alvo) => resultados[alvo] ?? null, disparar, focarResultado };
   return { controle, disparar, focarResultado };
 }
 

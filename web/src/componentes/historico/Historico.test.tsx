@@ -38,7 +38,7 @@ function montar({ url = '/historico', responder, snapshot = { decisions: resolvi
     return dados === null ? { ok: false, falha: 'resposta_invalida', status: 200 } : { ok: true, dados };
   });
   const post = vi.fn(async (rota: string, enviado: unknown) => { void rota; void enviado; return ACEITE; });
-  const app = { store, cliente: { get, post }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
+  const app = { store, cliente: { get, post } } as unknown as App;
   const tela = render(<Historico app={app} />);
   const pedidos = (): string[] => get.mock.calls.map(([caminho]) => caminho);
   return { store, get, post, sinais, pedidos, ...tela };

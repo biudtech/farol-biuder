@@ -33,7 +33,7 @@ import {
   ROTULO_DO_TOM, linhaDaConta, linhaDasRegras, linhaDasSessoes, linhaDoJira, linhaDoPerfil, linhaDoRitmo, linhaDosPadroes,
   type EstadoDaLinha,
 } from '@/sistema/linhas';
-import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
+import { AnuncioDaTela } from '../radar/AnuncioDaTela';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { Automacao } from './Automacao';
 import { ContaEPolitica } from './ContaEPolitica';
@@ -174,7 +174,7 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
     if (desfecho.encerrouEstaSessao) app.esquecerSessao('revogada');
     else pedirSessoes();
   }, [app, pedirSessoes]);
-  const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente, aoAceitar);
+  const { controle: acoes, resultado, regiao } = useAcoes(app.cliente, aoAceitar);
 
   const marcar = useCallback((chave: Edicao, alterado: boolean) => {
     setPorSalvar((antes) => {
@@ -287,15 +287,7 @@ export function Sistema({ app = appDoNavegador, caminho = ROTA_DO_SISTEMA }: Pro
         </div>
       )}
 
-      <RegiaoDeResultado
-        regiao={regiao}
-        resultado={resultado}
-        recados={recados}
-        aoDispensar={() => {
-          dispensar();
-          app.dispensarRecados();
-        }}
-      />
+      <AnuncioDaTela regiao={regiao} resultado={resultado} recados={recados} />
     </Pagina>
   );
 }

@@ -158,7 +158,8 @@ empurra.
 nova do feed de uma sessão, que entra no fim do feed dela em `snapshot.activity`) e `toast`
 (o aviso com que o motor diz o desfecho de uma ação ou de uma revisão: `{ kind, text }`, com
 `kind` `info`, `ok` ou `error`; lido em `src/contratos/eventos.ts`, com teto de 400
-caracteres, e guardado em `recados`, os três mais recentes). Os outros (`needs-decision`,
+caracteres, e guardado em `recados`, os três mais recentes, cada um saindo sozinho depois de
+`DURACAO_DO_RECADO_MS`). Os outros (`needs-decision`,
 `new-prs` e afins) passam por `aoEvento`, em `src/estado/app.ts`, e ainda não têm quem os
 leia: é ali que entram. Exceção lançada ali não derruba a conexão: o
 evento é descartado, o fluxo segue e o console recebe um aviso, uma vez.
@@ -220,9 +221,13 @@ Estados: antes do primeiro estado, o esqueleto com "Carregando o estado do motor
 nem na fila), o símbolo da BIUD, "Tudo revisado" e a próxima checagem quando o motor manda
 `nextCheckAt`; primeira checagem em curso, a Fila diz que ainda não terminou, com o spinner;
 primeira checagem que falhou, o erro com o Checar agora, e a Fila não diz que não há nada; chave
-ausente, o erro diz qual, e a seção desenha vazia. No pé da tela fica a região de resultado
-(`aria-live`): o envio em curso, o que o motor respondeu ao pedido e os avisos dele (evento
-`toast`).
+ausente, o erro diz qual, e a seção desenha vazia. Nenhuma notificação eterna (regra do dono de
+20/11/2026): o que o motor respondeu a uma ação aparece no lugar dela, embaixo dos botões
+(`ResultadoNoItem`), e some sozinho depois de `DURACAO_DO_RESULTADO_MS` (`useAcoes`). No pé da
+tela fica o anúncio discreto (`AnuncioDaTela`, `role="status"`, fora da vista e sem botão): o
+envio em curso, o que o motor respondeu e os avisos dele (evento `toast`), para o leitor de tela.
+Ele aparece só quando recebe o foco e tem texto, e tudo nele some sozinho. Nada no app depende
+de clique para sumir.
 
 **Sem mesa e sem espera do CI.** O revisor é autônomo: o front não aprova, não pede mudanças,
 não comenta e não pula pendência (`POST /api/decide` saiu do front), e não há bloco "Precisa de
@@ -251,8 +256,8 @@ Regras que valem para quem mexer nela:
   mostra como texto. Não escreva frase que afirme publicação a partir do `ok`.
 - **Confirmação.** `confirmacaoDa` diz quais ações perguntam antes e com que texto; no Radar,
   só o Cancelar. A pergunta abre no próprio item, fecha com Escape, e fecha sozinha, dizendo por
-  quê, se o motor mudar o item e a ação deixar de ser oferecida. Ao confirmar, o foco vai à
-  região de resultado. Sessão com o cancelamento aceito mostra "Cancelando…" ocupado.
+  quê, se o motor mudar o item e a ação deixar de ser oferecida. Ao confirmar, o foco vai ao
+  anúncio da tela. Sessão com o cancelamento aceito mostra "Cancelando…" ocupado.
 - **Postadas hoje é recorte, não regra.** Entra a resolvida com `action` publicado (`approve`,
   `request_changes`, `comment`: a régua `foiPublicado` do Histórico e do motor) e `resolvedAt`
   no dia de hoje, no fuso do navegador. O desfecho em texto sai de `ROTULO_DA_ACAO` e
@@ -315,8 +320,9 @@ telas: `Cartao` (a casca e o cabeçalho), `Pilulas`, `Faixa`, `Rodape`, `FaixaDa
   e o nome, a feita com ✓ e verde, a atual na primária com `aria-current="step"`, a da falha com
   "!". Por último o rodapé: o que a sessão faz agora à esquerda (no código, "Lendo o código: K
   de N arquivos · agora em" o arquivo da vez, em código) e à direita o tempo decorrido, o típico
-  ("típico N min", da `estimativa`) ou a conta que posta, e a ação (Cancelar, Ver resultado ou
-  Dispensar). O tempo é um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
+  ("típico N min", da `estimativa`) ou a conta que posta, e a ação (Cancelar ou Ver resultado).
+  A falha (a sessão que sumiu sem resultado) não tem botão de dispensar: some sozinha quando chega
+  sessão ou decisão nova do PR, ou depois de `VALIDADE_DA_FALHA_MS` (`src/radar/falhas.ts`). O tempo é um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
   cabeçalho, o avatar e as pílulas não redesenham a cada segundo, e a borda do "sem sinal" vira
   com um disparo só, na hora. Com movimento reduzido o pulso da etapa para e a barra
   indefinida vira uma faixa parada.
@@ -365,7 +371,7 @@ decide quem é de fora: tira esses PRs da Fila e da contagem e os mostra aqui.
   ao X; Tab e Shift+Tab giram dentro dele; ao fechar, o foco volta a quem o abriu (o botão ou a
   pílula), ou ao conteúdo principal se ele saiu da tela. Quando o cartão com o foco sai do
   painel (o PR foi para a revisão), o foco vai ao cartão que ficou no lugar dele, ao último, ou
-  ao X com a lista vazia, nunca à página. Enquanto o painel está aberto, a região de resultado
+  ao X com a lista vazia, nunca à página. Enquanto o painel está aberto, o anúncio discreto
   das ações mora dentro dele, no pé, e sai do pé da página: o envio, o aceite e a recusa do
   "Revisar mesmo assim" são vistos e anunciados no modal.
 - **O cartão de fora.** O cartão único, compacto, abre com o motivo em destaque, na cor do
@@ -688,7 +694,7 @@ O desenho é o enxuto (17/11/2026), com as peças de `src/componentes/ui`:
   da lista chegar, sem dossiê, dossiê sem entradas (sem "Números" nem "Últimas revisões"),
   sem a lista do Time e sem dossiê nem perfil.
 - **Botões ocupados.** Salvar diz "Salvando…" e Remover diz "Removendo…" (`Botao` com
-  `ocupado`), com o spinner e desabilitados. O resultado vai à região de resultado de sempre.
+  `ocupado`), com o spinner e desabilitados. O resultado aparece no lugar da ação e no anúncio da tela, e some sozinho.
 - **Adicionar pessoa.** O botão do topo abre o formulário (`AdicionarPessoa.tsx`): login do
   GitHub obrigatório, conferido na forma do GitHub, e papel opcional. Vai por `people` em
   `POST /api/settings`, o mapa inteiro relido no motor logo antes (`GET /api/state`, `config.people`)

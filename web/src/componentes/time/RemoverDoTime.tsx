@@ -9,6 +9,7 @@ import { confirmacaoDa, idDa, type Acao } from '@/radar/acoes';
 import type { ControleDeAcoes } from '../radar/useAcoes';
 import { Botao, ui } from '../ui';
 import estilos from './Time.module.css';
+import { ResultadoNoItem } from '../radar/ResultadoNoItem';
 
 interface Props {
   acao: Extract<Acao, { tipo: 'removerAutor' }>;
@@ -64,7 +65,7 @@ export function RemoverDoTime({ acao, controle }: Props) {
             primario
             aria-label={`${confirmacao.confirmar}: ${acao.nome}`}
             onClick={() => {
-              // enviou: o botão de remover fica ocupado, e o foco vai à região do resultado
+              // enviou: o botão de remover fica ocupado, e o foco vai ao anúncio da tela
               setPerguntando(false);
               controle.focarResultado();
               void controle.disparar(acao);
@@ -82,6 +83,7 @@ export function RemoverDoTime({ acao, controle }: Props) {
       <Botao fantasma pequeno ocupado={enviando === idDa(acao) ? 'Removendo…' : false} disabled={enviando !== null} onClick={() => setPerguntando(true)} aria-label={enviando === idDa(acao) ? undefined : `Remover ${acao.nome} do Time`}>
         Remover do Time
       </Botao>
+      <ResultadoNoItem resultado={controle.resultadoDe(acao.alvo)} />
     </div>
   );
 }

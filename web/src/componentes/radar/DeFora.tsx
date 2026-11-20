@@ -10,7 +10,7 @@
 //   Revisar de hoje (POST /api/review com a URL do PR).
 // Com zero PRs de fora, o botão e a pílula não aparecem. O painel é um diálogo modal: fecha no X,
 // no Esc e no fundo, prende o foco enquanto aberto e devolve o foco a quem o abriu. O resultado
-// das ações (`resultado`, a região de resultado do Radar) vai dentro dele enquanto está aberto,
+// das ações (`resultado`, o anúncio discreto do Radar) vai dentro dele enquanto está aberto,
 // para ser visto e anunciado no modal; e quando o cartão com o foco sai (o PR foi para a revisão),
 // o foco vai ao cartão seguinte, ou ao X, e nunca fica solto na página.
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
@@ -138,7 +138,7 @@ interface PropsDoPainel {
   aberto: boolean;
   aoFechar: () => void;
   controle: ControleDeAcoes;
-  // a região de resultado das ações, que vem para dentro do painel enquanto ele está aberto
+  // o anúncio discreto das ações, que vem para dentro do painel enquanto ele está aberto
   resultado?: ReactNode;
 }
 

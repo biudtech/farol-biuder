@@ -152,36 +152,40 @@
 
 /* O resultado da última ação fica preso ao pé da janela: quem clicou num cartão lá embaixo
    vê a resposta sem rolar. O fundo é opaco (a cor suave pintada sobre a superfície). */
-.resultado {
-  position: sticky;
-  bottom: 12px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+/* O anúncio discreto da tela (AnuncioDaTela): fora da vista, aparece só com o foco e com texto. */
+.anuncio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-.resultado:empty { display: none; }
-.recado {
-  align-self: stretch;
-  padding: 10px 14px;
+.anuncio:focus:not(:empty) {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  padding: 8px 12px;
   border: 1px solid var(--borda-campo);
-  border-radius: 10px;
-  background: linear-gradient(var(--ok-soft), var(--ok-soft)), var(--surface);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* O resultado de uma ação no lugar dela (ResultadoNoItem): some sozinho. */
+.resultadoNoItem {
+  flex-basis: 100%;
+  margin: 0;
   color: var(--ok-texto);
-  box-shadow: var(--shadow);
-  font-size: 13.5px;
+  font-size: 12.5px;
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-.recado[data-tom="info"] {
-  background: linear-gradient(var(--info-soft), var(--info-soft)), var(--surface);
-  color: var(--info-texto);
-}
-.recado[data-tom="erro"] {
-  background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--surface);
-  color: var(--danger-texto);
-}
+.resultadoNoItem[data-tom="erro"] { color: var(--danger-texto); }
 
 .soLeitor {
   position: absolute;

@@ -25,7 +25,7 @@ import { EmAnalise } from './EmAnalise';
 import { Fila } from './Fila';
 import { Ignorados } from './Ignorados';
 import { PostadasHoje } from './PostadasHoje';
-import { RegiaoDeResultado } from './RegiaoDeResultado';
+import { AnuncioDaTela } from './AnuncioDaTela';
 import { RevisarUmPr } from './RevisarUmPr';
 import { useAcoes } from './useAcoes';
 import { useDesvio } from './useDesvio';
@@ -70,7 +70,7 @@ export function Radar({ app = appDoNavegador }: Props) {
   // a diferença entre o relógio do navegador e o do motor, medida a cada retrato
   const desvio = useDesvio(useApp((e) => e.snapshot?.agora, app));
 
-  const { controle: controleDasAcoes, resultado, dispensar, ignorados, regiao } = useAcoes(app.cliente);
+  const { controle: controleDasAcoes, resultado, ignorados, regiao } = useAcoes(app.cliente);
   const idDoTudoEmDia = useId();
   // o painel De fora da fila: aberto pelo botão flutuante ou pela pílula da Fila
   const painelDeFora = usePainelDeFora();
@@ -86,7 +86,7 @@ export function Radar({ app = appDoNavegador }: Props) {
   // o clique em Revisar vira "Iniciando a revisão." na hora, antes do motor
   const { iniciadas, controle } = useIniciadas(controleDasAcoes, sessoes ?? NENHUM, emEspera);
   // a sessão que some sem resultado: no cartão da fila quando o PR está nela, senão em Em análise
-  const { falhas, dispensar: dispensarFalha } = useFalhas({
+  const { falhas } = useFalhas({
     sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados, desvio,
   });
   const { falhasDaFila, falhasSoltas } = useMemo(() => {
@@ -126,22 +126,11 @@ export function Radar({ app = appDoNavegador }: Props) {
       falhas={falhasDaFila}
       iniciadas={iniciadas}
       controle={controle}
-      aoDispensarFalha={dispensarFalha}
     />
   );
-  // A região de resultado das ações: dentro do painel De fora enquanto ele está aberto (o modal
-  // esconde o resto da página do leitor de tela e cobre o pé da janela), no pé da página fora dele.
-  const regiaoDeResultado = (
-    <RegiaoDeResultado
-      regiao={regiao}
-      resultado={resultado}
-      recados={recados}
-      aoDispensar={() => {
-        dispensar();
-        app.dispensarRecados();
-      }}
-    />
-  );
+  // O anúncio discreto das ações: dentro do painel De fora enquanto ele está aberto (o modal
+  // esconde o resto da página do leitor de tela), no pé da página fora dele. Some sozinho.
+  const regiaoDeResultado = <AnuncioDaTela regiao={regiao} resultado={resultado} recados={recados} />;
   const painelAberto = temEstado && painelDeFora.aberto;
 
   return (
@@ -202,7 +191,6 @@ export function Radar({ app = appDoNavegador }: Props) {
                 iniciadas={iniciadas}
                 desvio={desvio}
                 controle={controle}
-                aoDispensarFalha={dispensarFalha}
                 perfis={perfis}
               />
               {elementoDaFila}

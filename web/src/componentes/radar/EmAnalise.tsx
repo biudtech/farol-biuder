@@ -121,10 +121,10 @@ interface PropsDaFalha {
   falha: Falha & { motivo: string };
   iniciadaEm?: number;
   controle: ControleDeAcoes;
-  aoDispensar: (chave: string) => void;
 }
 
-export function CartaoDaFalha({ falha: f, iniciadaEm, controle, aoDispensar }: PropsDaFalha) {
+// A falha some sozinha (useFalhas): com sessão ou decisão nova do PR, ou depois de um tempo curto.
+export function CartaoDaFalha({ falha: f, iniciadaEm, controle }: PropsDaFalha) {
   const de = nomeDoPr(f.chave);
   const andamento = andamentoDaFalha(f.etapa, f.motivo);
   const tempo = f.inicio ? tempoDecorrido(f.fimNoMotor - f.inicio) : '';
@@ -150,12 +150,7 @@ export function CartaoDaFalha({ falha: f, iniciadaEm, controle, aoDispensar }: P
       pilulas={pilulasDaFalha(f.etapa)}
     >
       {iniciadaEm !== undefined ? <FaixaIniciando desde={iniciadaEm} de={de} /> : (
-        <Faixa
-          andamento={andamento}
-          de={de}
-          tempo={tempo}
-          acao={<Botao pequeno fantasma onClick={() => aoDispensar(f.chave)} aria-label={`Dispensar a falha de ${de}`}>Dispensar</Botao>}
-        />
+        <Faixa andamento={andamento} de={de} tempo={tempo} />
       )}
     </Cartao>
   );
@@ -172,16 +167,14 @@ interface Props {
   // a diferença entre o relógio do navegador e o do motor, em ms (0 sem medida)
   desvio?: number;
   controle: ControleDeAcoes;
-  aoDispensarFalha?: (chave: string) => void;
   // os perfis do Claude (config.claudeProfiles), para dizer o rótulo do perfil de cada sessão
   perfis?: readonly PerfilDoClaude[];
 }
 
 const NENHUMA_FALHA: ReadonlyArray<Falha & { motivo: string }> = [];
 const NENHUMA_INICIADA: ReadonlyMap<string, number> = new Map<string, number>();
-const NADA = (): void => {};
 
-export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, aoDispensarFalha = NADA, perfis }: Props) {
+export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENHUMA_FALHA, iniciadas = NENHUMA_INICIADA, desvio = 0, controle, perfis }: Props) {
   const vazio = !sessoes.length && !falhas.length;
   return (
     <Secao titulo="Em análise" contagem={sessoes.length ? { n: sessoes.length, tom: 'marca', rotulo: sessoes.length === 1 ? 'sessão' : 'sessões' } : undefined}>
@@ -199,7 +192,7 @@ export const EmAnalise = memo(function EmAnalise({ sessoes, feeds, falhas = NENH
             />
           ))}
           {falhas.map((f) => (
-            <CartaoDaFalha key={`falha:${f.chave}`} falha={f} iniciadaEm={iniciadas.get(f.chave)} controle={controle} aoDispensar={aoDispensarFalha} />
+            <CartaoDaFalha key={`falha:${f.chave}`} falha={f} iniciadaEm={iniciadas.get(f.chave)} controle={controle} />
           ))}
         </div>
       )}

@@ -11,6 +11,11 @@ import { etapaDoProgresso } from './cartao';
 // antes disto a sessão que sumiu ainda não conta como falha.
 export const CARENCIA_MS = 3000;
 
+// Nenhuma notificação eterna (regra do dono de 20/11/2026): a falha some sozinha, sem botão de
+// dispensar. Sai antes quando chega sessão ou decisão nova do PR (falhaSuperada); senão, depois
+// deste tempo na tela.
+export const VALIDADE_DA_FALHA_MS = 60000;
+
 export interface SessaoVista {
   id: string;
   chave: string;
@@ -69,5 +74,10 @@ export function motivoDaFalha(f: SessaoVista, parada: Estacionado | undefined): 
 }
 
 export function visivel(f: Falha, agora: number): boolean {
-  return agora - f.sumiuEm >= CARENCIA_MS;
+  return agora - f.sumiuEm >= CARENCIA_MS && !expirada(f, agora);
+}
+
+// A falha que ficou na tela pelo tempo inteiro sai sozinha.
+export function expirada(f: Falha, agora: number): boolean {
+  return agora - f.sumiuEm >= CARENCIA_MS + VALIDADE_DA_FALHA_MS;
 }

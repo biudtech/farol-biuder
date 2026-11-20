@@ -5,7 +5,7 @@
 // aqui antes do POST: o que não é URL de PR do GitHub nem chega ao motor, e o que chega é a
 // URL canônica do PR, não o que foi digitado. Aceito o pedido, o campo esvazia, o painel fecha
 // e o foco volta ao botão "Revisar um PR" (o campo que tinha o foco sumiu com o painel); o
-// resultado sai na região de resultado da tela, que é um role="status" (RegiaoDeResultado).
+// resultado sai no próprio item e no anúncio discreto da tela, um role="status" (AnuncioDaTela).
 import { memo, useId, useRef, useState, type FormEvent } from 'react';
 import { Botao, ui } from '@/componentes/ui';
 import { CHECAR } from '@/radar/acoes';

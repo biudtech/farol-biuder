@@ -21,7 +21,7 @@ import {
 } from '@/consumo/consulta';
 import { perfisDoPlano } from '@/consumo/plano';
 import type { Relatorio } from '@/contratos/consumo';
-import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
+import { AnuncioDaTela } from '../radar/AnuncioDaTela';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
 import { CustoPorDia } from './CustoPorDia';
@@ -210,7 +210,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
         <AuditoriaDoRegistro auditoria={auditoria} />
       </div>
 
-      <RegiaoDeResultado regiao={regiao} resultado={null} recados={recados} aoDispensar={() => app.dispensarRecados()} />
+      <AnuncioDaTela regiao={regiao} resultado={null} recados={recados} />
     </Pagina>
   );
 }

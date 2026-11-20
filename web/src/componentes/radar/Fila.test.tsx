@@ -138,19 +138,16 @@ describe('seção Fila', () => {
     expect(within(cartao).queryByRole('button', { name: `Revisar agora ${NOME}` })).toBeNull();
   });
 
-  it('a última sessão sumiu sem resultado: o cartão da fila mostra a falha, com Tentar de novo, Ignorar e Dispensar', () => {
+  it('a última sessão sumiu sem resultado: o cartão da fila mostra a falha, com Tentar de novo e Ignorar, sem Dispensar', () => {
     const { controle, disparar } = controleFalso();
-    const aoDispensar = vi.fn();
     const falha = { id: 'a1', chave: 'dono/repo#12', inicio: 1000, etapa: 3, cancelada: false, sumiuEm: 61000, fimNoMotor: 61000, motivo: '' };
-    render(<Fila fila={[item()]} emEspera={[]} vazio="" falhas={new Map([['dono/repo#12', falha]])} controle={controle} aoDispensarFalha={aoDispensar} />);
+    render(<Fila fila={[item()]} emEspera={[]} vazio="" falhas={new Map([['dono/repo#12', falha]])} controle={controle} />);
     const cartao = cartoes()[0] as HTMLElement;
     expect(cartao.getAttribute('data-tom')).toBe('falha');
     expect(within(cartao).getByText('A sessão terminou sem resultado.')).toBeTruthy();
     expect(within(cartao).getByText('1 min 00 s')).toBeTruthy();
-    expect(nomes(within(cartao).getAllByRole('button'))).toEqual([`Tentar de novo ${NOME}`, `Ignorar ${NOME}`, `Dispensar a falha de ${NOME}`]);
+    expect(nomes(within(cartao).getAllByRole('button'))).toEqual([`Tentar de novo ${NOME}`, `Ignorar ${NOME}`]);
     fireEvent.click(within(cartao).getByRole('button', { name: `Tentar de novo ${NOME}` }));
     expect(disparar).toHaveBeenCalledWith({ tipo: 'revisar', url: URL_DO_PR, falhou: true, alvo: 'dono/repo#12', nome: NOME });
-    fireEvent.click(within(cartao).getByRole('button', { name: `Dispensar a falha de ${NOME}` }));
-    expect(aoDispensar).toHaveBeenCalledWith('dono/repo#12');
   });
 });

@@ -278,10 +278,9 @@ describe('seção Em análise: o cartão', () => {
 describe('seção Em análise: a sessão que falhou', () => {
   const falha = { id: 'a1', chave: 'dono/repo#12', url: URL_DO_PR, titulo: 'Corrige o cálculo', autor: 'ana', inicio: INICIO, etapa: 2, cancelada: false, sumiuEm: INICIO + 151000, fimNoMotor: INICIO + 151000, motivo: 'limite do plano até 19/11.' };
 
-  it('borda de falha, a etapa onde parou com "!", o motivo, "nada foi publicado", Tentar de novo e Dispensar', () => {
+  it('borda de falha, a etapa onde parou com "!", o motivo, "nada foi publicado" e Tentar de novo, sem Dispensar', () => {
     const { controle, disparar } = controleFalso();
-    const aoDispensar = vi.fn();
-    render(<EmAnalise sessoes={[]} feeds={{}} falhas={[falha]} controle={controle} aoDispensarFalha={aoDispensar} />);
+    render(<EmAnalise sessoes={[]} feeds={{}} falhas={[falha]} controle={controle} />);
     expect(cartao().getAttribute('data-tom')).toBe('falha');
     expect(estados()).toEqual(['feita', 'feita', 'erro', 'falta', 'falta']);
     expect(etapas()[2]?.textContent).toContain('!');
@@ -292,8 +291,8 @@ describe('seção Em análise: a sessão que falhou', () => {
     expect(pilulas()[2]).toBe('\u2013ParecerNada foi publicado');
     fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo PR #12 de dono/repo' }));
     expect(disparar).toHaveBeenCalledWith({ tipo: 'revisar', url: URL_DO_PR, falhou: true, alvo: 'dono/repo#12', nome: 'PR #12 de dono/repo' });
-    fireEvent.click(screen.getByRole('button', { name: 'Dispensar a falha de PR #12 de dono/repo' }));
-    expect(aoDispensar).toHaveBeenCalledWith('dono/repo#12');
+    // nenhuma notificação eterna: a falha some sozinha, sem botão de dispensar
+    expect(screen.queryByRole('button', { name: /Dispensar/ })).toBeNull();
   });
 
   it('sem motivo, a frase fecha sem dois pontos', () => {

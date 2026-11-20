@@ -10,11 +10,12 @@
 // lista chegar.
 //
 // Ao clicar em Revisar agora o cartão vira "Iniciando a revisão." na hora, antes do motor; e o
-// PR cuja última sessão sumiu sem resultado mostra a falha no próprio cartão, com Tentar de novo.
+// PR cuja última sessão sumiu sem resultado mostra a falha no próprio cartão, com Tentar de novo;
+// ela some sozinha (useFalhas), sem botão de dispensar.
 import { memo, type ReactNode } from 'react';
 import type { Retentativa } from '@/contratos/de-fora';
 import type { DetalheDaEspera, EsperaConflito, Estacionado, InicioAutomatico, ItemDaFila, PrEmEspera } from '@/contratos/radar';
-import { Botao, Chip, Secao, Spinner, ui } from '@/componentes/ui';
+import { Chip, Secao, Spinner, ui } from '@/componentes/ui';
 import { andamentoDaFalha, contextoDaFila, pilulasDaFalha, tempoDecorrido, textoDaFila, tomDaFila } from '@/radar/cartao';
 import type { Falha } from '@/radar/falhas';
 import { nomeDoPr, textoDaEspera, textoDoEstacionado } from '@/radar/formato';
@@ -49,12 +50,11 @@ interface Props {
   // os PRs com o Revisar clicado e a sessão ainda não aberta, com a hora do clique
   iniciadas?: ReadonlyMap<string, number>;
   controle: ControleDeAcoes;
-  aoDispensarFalha?: (chave: string) => void;
 }
 
 const NENHUMA: ReadonlyMap<string, never> = new Map<string, never>();
 
-function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falha, iniciadaEm, controle, aoDispensarFalha }: {
+function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falha, iniciadaEm, controle }: {
   pr: ItemDaFila;
   posicao: number;
   parada?: Estacionado;
@@ -64,7 +64,6 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falh
   falha?: Falha & { motivo: string };
   iniciadaEm?: number;
   controle: ControleDeAcoes;
-  aoDispensarFalha?: (chave: string) => void;
 }) {
   const nome = nomeDoPr(pr.key);
   const base = { alvo: pr.key, nome };
@@ -106,7 +105,6 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falh
           andamento={andamentoDaFalha(falha.etapa, falha.motivo)}
           de={nome}
           tempo={falha.inicio ? tempoDecorrido(falha.fimNoMotor - falha.inicio) : ''}
-          acao={aoDispensarFalha ? <Botao pequeno fantasma onClick={() => aoDispensarFalha(pr.key)} aria-label={`Dispensar a falha de ${nome}`}>Dispensar</Botao> : null}
         />
       </Cartao>
     );
@@ -138,7 +136,7 @@ function CartaoDaFila({ pr, posicao, parada, conflito, manual, retentativa, falh
 }
 
 export const Fila = memo(function Fila({
-  fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, emRetentativa, extra, vazio, checando, falhas = NENHUMA, iniciadas = NENHUMA, controle, aoDispensarFalha,
+  fila, emEspera, detalhes, estacionados, inicioAutomatico, emConflito, emRetentativa, extra, vazio, checando, falhas = NENHUMA, iniciadas = NENHUMA, controle,
 }: Props) {
   if (!fila.length && !emEspera.length) {
     return (
@@ -162,7 +160,6 @@ export const Fila = memo(function Fila({
             falha={falhas.get(pr.key)}
             iniciadaEm={iniciadas.get(pr.key)}
             controle={controle}
-            aoDispensarFalha={aoDispensarFalha}
           />
         ))}
         {emEspera.map((pr) => {
