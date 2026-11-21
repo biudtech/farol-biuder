@@ -81,8 +81,10 @@ if [ -n "$MOTOR_PID" ] && ps -o args= --ppid "$MOTOR_PID" 2>/dev/null | grep -q 
 fi
 
 REPO="$($GIT remote get-url origin | sed 's#.*github\.com[:/]##; s#\.git$##')"
-RODADA="$(HOME="$DADOS" timeout 120 gh run list --repo "$REPO" --workflow ci.yml --branch main \
-  --commit "$NOVO" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null)"
+# o artefato só existe quando os três gates passaram naquele commit; commit anterior ao job, ou
+# com o CI vermelho, nunca tem, e fica esperando até a main andar
+RODADA="$(HOME="$DADOS" timeout 120 gh api "repos/$REPO/actions/artifacts?name=front-$NOVO" \
+  --jq '[.artifacts[] | select(.expired == false)][0].workflow_run.id // empty' 2>/dev/null)"
 if [ -z "$RODADA" ]; then
   if [ "$(cat "$AVISADO" 2>/dev/null)" != "$NOVO" ]; then
     echo "$NOVO" >"$AVISADO"

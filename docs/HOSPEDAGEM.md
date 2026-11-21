@@ -949,7 +949,8 @@ no limite de threads da hospedagem compartilhada. A rotina divide o trabalho:
    confere o commit dentro dele, avança o clone, troca o `.next`, reinstala as dependências de
    produção do front só quando o `package.json` ou o `package-lock.json` de `web/` mudaram, e
    reinicia o motor e o front pelo script que os mantém de pé (`FAROL_INICIAR`). Sem o artefato
-   ainda (CI rodando), sai e tenta na rodada seguinte.
+   (CI rodando, CI vermelho ou commit anterior ao job), sai e tenta na rodada seguinte, com uma
+   linha só no log por commit.
 3. **Revisão em curso não é cortada.** Com uma sessão do Claude aberta pelo motor, a troca fica
    para a rodada seguinte.
 4. **A volta é sozinha.** Depois de reiniciar, o motor e o front precisam estar de pé e o motor
