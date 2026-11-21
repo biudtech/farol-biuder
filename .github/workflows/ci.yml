@@ -131,6 +131,52 @@ jobs:
       - name: Provar a imagem com o container de pé
         run: bash tools/provar-imagem.sh farol-biuder-motor:ci
 
+  # O pacote do front para a hospedagem compartilhada (docs/HOSPEDAGEM.md, "A main no ar
+  # sozinha"): lá o build do Next não cabe no limite de threads, então ele sai daqui, já com o
+  # endereço público do motor, e o docs/exemplos/autoatualizar.sh do servidor o baixa. Só na
+  # main, só com os três gates verdes e só com a variável do repositório FAROL_API_PUBLICA
+  # definida. O artefato leva o .next sem o cache e o commit em .next/REVISAO_FAROL, que o
+  # servidor confere antes de trocar. Não escreve no repositório e não usa segredo.
+  pacote-do-front:
+    name: pacote-do-front
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [gate, web, imagem]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.FAROL_API_PUBLICA != ''
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Dependências
+        run: npm ci
+
+      - name: Build com o endereço público do motor
+        run: npm run build
+        env:
+          NEXT_PUBLIC_FAROL_API: ${{ vars.FAROL_API_PUBLICA }}
+
+      - name: Empacotar o .next com o commit
+        run: |
+          echo "${{ github.sha }}" > .next/REVISAO_FAROL
+          tar -czf ../front.tgz --exclude=.next/cache .next
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: front-${{ github.sha }}
+          path: front.tgz
+          retention-days: 14
+          if-no-files-found: error
+
   # Job agregador: é ESTE nome que a proteção da branch exige. Assim dá pra
   # mexer nos jobs de cima sem reconfigurar a regra. Ele exige o gate do motor,
   # o do front e a imagem do container.
