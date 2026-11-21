@@ -883,6 +883,50 @@ acontece com alguém injetando a credencial na frente. Sem portão a resposta é
 A casca do front mostra "Sessão do login da frente" nesse modo, para quem opera não procurar o
 pareamento.
 
+**O Claude Code em dia.** Aqui não há imagem para reconstruir, e o Claude Code não pode
+envelhecer: o motor pede o modelo por apelido, e é o CLI que decide para onde o apelido aponta
+([risco 5](#riscos-conhecidos)); a validade do login que Sistema mostra também vem dele, do
+campo `credential_expires_at` do `/usage`. Medido em 21/11/2026: a versão 2.1.310 responde o
+`/usage` sem esse campo, e a 2.1.325 e a 2.1.330 o mandam. Um binário do Claude Code copiado
+para uma pasta do PATH não se atualiza. A rotina, ao contrário do container (onde
+`DISABLE_AUTOUPDATER=1` vale e o instalador nativo não deve rodar), é a instalação nativa mais
+uma conferência periódica:
+
+1. **Instale a versão nativa uma vez**, com o `HOME` do motor e sem `DISABLE_AUTOUPDATER` no
+   ambiente: `HOME=<base>/dados claude install latest` (com um `claude` qualquer já no PATH).
+   Fica em `<base>/dados/.local/bin/claude`, um link para
+   `<base>/dados/.local/share/claude/versions/<versão>`. O motor põe o `~/.local/bin` na frente
+   do PATH (`server.js`): depois disso é esse `claude` que roda, e o binário antigo pode sair do
+   PATH. Guardá-lo como `<base>/bin/claude.reserva` dá a rede de segurança do passo 2.
+2. **Agende a conferência.** [`docs/exemplos/atualizar-claude.sh`](exemplos/atualizar-claude.sh)
+   roda `claude update`, que troca o link para a versão nova; a sessão em curso continua no
+   arquivo da versão em que abriu. Chame-o a cada rodada do agendador da hospedagem, por
+   exemplo no fim do script que mantém o motor de pé:
+
+   ```sh
+   FAROL_BASE=<base> nohup /bin/sh <base>/atualizar-claude.sh >/dev/null 2>&1 &
+   ```
+
+   Ele confere no máximo uma vez por hora (`FAROL_CLAUDE_INTERVALO_MIN`) e sai na hora nas
+   outras rodadas; `--agora` confere sem olhar o intervalo. `FAROL_DADOS` troca o `HOME` do
+   motor quando ele não é `<base>/dados`. Se depois da conferência o Claude Code nativo não
+   responder a versão, o link passa a apontar para a reserva, quando ela existe, e o motor
+   segue revisando com ela. A linha de erro no log é o aviso de que alguém precisa olhar.
+3. **Onde olhar.** `<base>/log/claude-update.log` só ganha linha quando a versão muda ou quando
+   algo falha (linha com `ERRO`). `<base>/run/claude-update.marca` tem a hora da última
+   conferência: marca velha é agendador parado, e sem agendador a atualização para.
+   `GET /api/doctor` continua dizendo a versão instalada e se ela está mais de três dias atrás
+   da última publicada.
+
+Provado em 21/11/2026 numa hospedagem compartilhada. No `HOME` do motor: a instalação nativa
+(2.1.330), o `claude` do PATH do motor passando a ser o nativo, a validade do login lida e a
+conferência saindo com código 0 sem versão nova para instalar. Num `HOME` temporário, separado
+do motor: a troca de versão pelo script (de 2.1.326 para 2.1.330, com a linha no log), a segunda
+conferência dentro do intervalo saindo sem nada fazer, e o desvio do link para a reserva com o
+nativo quebrado. Não foi exercitado: a troca de versão no `HOME` do motor com sessão em curso
+(não saiu versão nova desde a instalação), e o link voltando da reserva para uma versão nova (na
+prova a reserva já era a última versão, e o link ficou nela).
+
 ## O que não foi provado
 
 - **O login real do `gh`** dentro do container (pede o token da conta revisora) e o motor
