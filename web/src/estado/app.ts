@@ -152,6 +152,17 @@ export interface DependenciasDoApp {
   agora?: () => number;
 }
 
+// Guarda um recado do motor na tela e agenda a saída dele: some sozinho depois de
+// DURACAO_DO_RECADO_MS, sem clique. Se outro estado já o tirou (o teto, a volta ao pareamento),
+// nada muda. Exportada para o teste da tela provar o caminho de verdade.
+export function guardarRecado(store: Store<EstadoDoApp>, recado: RecadoNaTela): void {
+  store.trocar({ recados: [...store.ler().recados, recado].slice(-TETO_DE_RECADOS) });
+  setTimeout(() => {
+    const atuais = store.ler().recados;
+    if (atuais.some((r) => r.n === recado.n)) store.trocar({ recados: atuais.filter((r) => r.n !== recado.n) });
+  }, DURACAO_DO_RECADO_MS);
+}
+
 export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora = () => Date.now() }: DependenciasDoApp): App {
   const store = criarStore<EstadoDoApp>(ESTADO_INICIAL);
   let fecharFluxo: FluxoAberto | null = null;
@@ -191,13 +202,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
         return;
       }
       recadosRecebidos += 1;
-      const n = recadosRecebidos;
-      store.trocar({ recados: [...store.ler().recados, { ...recado, n }].slice(-TETO_DE_RECADOS) });
-      // sai sozinho; se outro estado já o tirou (o teto, a volta ao pareamento), nada muda
-      setTimeout(() => {
-        const atuais = store.ler().recados;
-        if (atuais.some((r) => r.n === n)) store.trocar({ recados: atuais.filter((r) => r.n !== n) });
-      }, DURACAO_DO_RECADO_MS);
+      guardarRecado(store, { ...recado, n: recadosRecebidos });
       return;
     }
     const anterior = store.ler().snapshot;

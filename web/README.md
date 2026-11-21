@@ -229,11 +229,14 @@ nem na fila), o símbolo da BIUD, "Tudo revisado" e a próxima checagem quando o
 primeira checagem que falhou, o erro com o Checar agora, e a Fila não diz que não há nada; chave
 ausente, o erro diz qual, e a seção desenha vazia. Nenhuma notificação eterna (regra do dono de
 20/11/2026): o que o motor respondeu a uma ação aparece no lugar dela, embaixo dos botões
-(`ResultadoNoItem`), e some sozinho depois de `DURACAO_DO_RESULTADO_MS` (`useAcoes`). No pé da
-tela fica o anúncio discreto (`AnuncioDaTela`, `role="status"`, fora da vista e sem botão): o
-envio em curso, o que o motor respondeu e os avisos dele (evento `toast`), para o leitor de tela.
-Ele aparece só quando recebe o foco e tem texto, e tudo nele some sozinho. Nada no app depende
-de clique para sumir.
+(`ResultadoNoItem`), e some sozinho depois de `DURACAO_DO_RESULTADO_MS` (8 s, `useAcoes`). No
+"Revisar um PR" a recusa aparece no painel, junto do campo, até a pessoa editar a URL, e o aceite
+deixa "Na fila" ao lado do botão pelo mesmo tempo; no Time, a recusa do Adicionar e do Salvar
+aparece junto do botão, até a pessoa editar o formulário. No pé da tela fica o anúncio
+(`AnuncioDaTela`, `role="status"`, sem botão): os avisos do motor (evento `toast`) aparecem à vista,
+discretos, e saem sozinhos depois de `DURACAO_DO_RECADO_MS` (8 s, `guardarRecado`); o resultado da
+ação, que já está à vista no lugar dela, fica ali só para o leitor de tela e aparece quando o
+anúncio recebe o foco. Nada no app depende de clique para sumir.
 
 **Sem mesa e sem espera do CI.** O revisor é autônomo: o front não aprova, não pede mudanças,
 não comenta e não pula pendência (`POST /api/decide` saiu do front), e não há bloco "Precisa de
@@ -328,7 +331,9 @@ telas: `Cartao` (a casca e o cabeçalho), `Pilulas`, `Faixa`, `Rodape`, `FaixaDa
   de N arquivos · agora em" o arquivo da vez, em código) e à direita o tempo decorrido, o típico
   ("típico N min", da `estimativa`) ou a conta que posta, e a ação (Cancelar ou Ver resultado).
   A falha (a sessão que sumiu sem resultado) não tem botão de dispensar: some sozinha quando chega
-  sessão ou decisão nova do PR, ou depois de `VALIDADE_DA_FALHA_MS` (`src/radar/falhas.ts`). O tempo é um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
+  sessão ou decisão nova do PR, quando o PR que estava na fila sai dela, ou no teto de
+  `VALIDADE_DA_FALHA_MS` (30 min, `src/radar/falhas.ts`). Ela não deixa rastro no Histórico, que só
+  mostra decisão; a tentativa fica no registro de consumo, com o desfecho. O tempo é um relógio de 1 s só da faixa, que troca o texto sem tirar o foco: o
   cabeçalho, o avatar e as pílulas não redesenham a cada segundo, e a borda do "sem sinal" vira
   com um disparo só, na hora. Com movimento reduzido o pulso da etapa para e a barra
   indefinida vira uma faixa parada.

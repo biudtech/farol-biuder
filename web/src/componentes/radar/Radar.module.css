@@ -150,10 +150,43 @@
 }
 .tituloDoTudoEmDia { font-size: 20px; font-weight: 800; }
 
-/* O resultado da última ação fica preso ao pé da janela: quem clicou num cartão lá embaixo
-   vê a resposta sem rolar. O fundo é opaco (a cor suave pintada sobre a superfície). */
-/* O anúncio discreto da tela (AnuncioDaTela): fora da vista, aparece só com o foco e com texto. */
+/* O anúncio da tela (AnuncioDaTela), preso ao pé da janela: os recados do motor aparecem aqui,
+   discretos, e saem sozinhos (nenhuma notificação eterna). Vazio, não ocupa espaço. O fundo é
+   opaco (a cor suave pintada sobre a superfície). */
 .anuncio {
+  position: sticky;
+  bottom: var(--esp-3);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--esp-2);
+}
+.anuncio:empty { display: none; }
+.anuncio:focus { outline: none; }
+.recado {
+  max-width: 100%;
+  padding: var(--esp-2) var(--esp-3);
+  border: 1px solid var(--borda-campo);
+  border-radius: 10px;
+  background: linear-gradient(var(--ok-soft), var(--ok-soft)), var(--surface);
+  color: var(--ok-texto);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.recado[data-tom="info"] {
+  background: linear-gradient(var(--info-soft), var(--info-soft)), var(--surface);
+  color: var(--info-texto);
+}
+.recado[data-tom="erro"] {
+  background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--surface);
+  color: var(--danger-texto);
+}
+/* o resultado da ação já está à vista no lugar dela: aqui só para o leitor de tela, e à vista
+   quando o anúncio recebe o foco */
+.anuncioOculto {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -161,7 +194,7 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.anuncio:focus:not(:empty) {
+.anuncio:focus .anuncioOculto {
   position: static;
   width: auto;
   height: auto;
@@ -169,11 +202,22 @@
   clip-path: none;
   white-space: normal;
   padding: var(--esp-2) var(--esp-3);
-  border: 1px solid var(--borda-campo);
-  border-radius: 8px;
+  border: 1px solid var(--foco);
+  border-radius: 10px;
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
+}
+
+/* O aceite do "Revisar um PR": "Na fila" ao lado do botão, por alguns segundos. */
+.confirmacaoNoBotao {
+  align-self: center;
+  padding: var(--esp-1) var(--esp-3);
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok-texto);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* O resultado de uma ação no lugar dela (ResultadoNoItem): some sozinho. */

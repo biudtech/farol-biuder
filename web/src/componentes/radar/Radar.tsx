@@ -86,8 +86,9 @@ export function Radar({ app = appDoNavegador }: Props) {
   // o clique em Revisar vira "Iniciando a revisão." na hora, antes do motor
   const { iniciadas, controle } = useIniciadas(controleDasAcoes, sessoes ?? NENHUM, emEspera);
   // a sessão que some sem resultado: no cartão da fila quando o PR está nela, senão em Em análise
+  const chavesDaFila = useMemo(() => new Set((filaDoMotor ?? NENHUM).map((pr) => pr.key)), [filaDoMotor]);
   const { falhas } = useFalhas({
-    sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados, desvio,
+    sessoes: sessoes ?? NENHUM, feeds: feeds ?? SEM_FEEDS, pendentes: decisoes?.pending ?? NENHUM, resolvidas: decisoes?.resolved ?? NENHUM, estacionados, desvio, fila: chavesDaFila,
   });
   const { falhasDaFila, falhasSoltas } = useMemo(() => {
     const naFila = new Set(fila.map((pr) => pr.key));

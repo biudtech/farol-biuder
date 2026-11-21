@@ -24,8 +24,9 @@ export interface Ignorado {
   nome: string;
 }
 
-// quanto tempo o resultado de uma ação fica na tela depois que o motor respondeu
-export const DURACAO_DO_RESULTADO_MS = 6000;
+// quanto tempo o resultado de uma ação fica na tela depois que o motor respondeu (8 s: um erro
+// precisa de tempo para ser lido)
+export const DURACAO_DO_RESULTADO_MS = 8000;
 
 export interface ControleDeAcoes {
   // o id (idDa) da ação que está no ar para o alvo, ou null
