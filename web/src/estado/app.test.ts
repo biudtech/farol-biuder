@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHAVE_DO_TOKEN, criarCofreDoToken } from '@/transporte/token';
-import { JANELA_DA_RECARGA_MS, PRAZO_DO_SAIR_MS, criarApp, type JanelaDoPortao } from './app';
+import { DURACAO_DO_RECADO_MS, JANELA_DA_RECARGA_MS, PRAZO_DO_SAIR_MS, criarApp, type JanelaDoPortao } from './app';
 
 const BASE = 'http://127.0.0.1:47170';
 const TOKEN = 't'.repeat(43);
@@ -132,7 +132,7 @@ describe('sessão do front', () => {
     expect(t.app.store.ler().snapshot?.activity).toEqual({ a1: [{ t: 5, k: 'tool', text: 'lendo o diff' }] });
   });
 
-  it('o toast do motor vira recado na tela: no máximo três, o torto é descartado, e sair os apaga', async () => {
+  it('o toast do motor vira recado na tela: no máximo três, o torto é descartado, sai sozinho, e sair os apaga', async () => {
     const t = montar();
     let fluxo!: ReturnType<typeof fluxoFalso>;
     t.rotas.set('/api/auth/pair', () => json({ ok: true, token: TOKEN }));
@@ -159,8 +159,10 @@ describe('sessão do front', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(t.app.store.ler().recados.map((r) => r.n)).toEqual([2, 3, 4]);
 
-    t.app.dispensarRecados();
+    // nenhuma notificação eterna: cada recado sai sozinho, sem clique
+    await vi.advanceTimersByTimeAsync(DURACAO_DO_RECADO_MS);
     expect(t.app.store.ler().recados).toEqual([]);
+    expect('dispensarRecados' in t.app).toBe(false);
     toast({ kind: 'ok', text: 'cinco' });
     await vi.advanceTimersByTimeAsync(0);
     expect(t.app.store.ler().recados).toHaveLength(1);

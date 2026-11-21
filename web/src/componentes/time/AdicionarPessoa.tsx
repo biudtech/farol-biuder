@@ -12,9 +12,10 @@ import { idDa, type Acao } from '@/radar/acoes';
 import { PAPEIS } from '@/time/taxonomia';
 import { chaveDaPessoa, comPessoaNova, loginDigitado, loginValido, motivoQueImpedeSalvar, type RelerPessoas } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
-import type { ControleDeAcoes } from '../radar/useAcoes';
+import type { ControleDeAcoes, ResultadoDaAcao } from '../radar/useAcoes';
 import { Botao, ui } from '../ui';
 import estilos from './Time.module.css';
+import { ResultadoNoItem } from '../radar/ResultadoNoItem';
 
 // o alvo da ação: um só, para dois envios seguidos não correrem juntos
 export const ALVO_DA_PESSOA_NOVA = 'time:nova';
@@ -54,6 +55,11 @@ export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, rel
   const problema = problemaDoLogin(login, cru, conhecidos);
   const impedimento = motivoQueImpedeSalvar({ cru, conexao, emDia });
   const enviando = controle.emCurso(ALVO_DA_PESSOA_NOVA);
+  // a recusa do motor aparece junto do botão, até a pessoa editar o formulário ou o resultado sair
+  // sozinho (useAcoes): nada invisível, nada eterno
+  const resultado = controle.resultadoDe(ALVO_DA_PESSOA_NOVA);
+  const [erroEditado, setErroEditado] = useState<ResultadoDaAcao | null>(null);
+  const erroDoMotor = resultado?.tom === 'erro' && resultado !== erroEditado ? resultado : null;
   const pessoas = cru && !problema ? comPessoaNova(cru, login, papel) : null;
   const acao: Acao | null = pessoas ? { tipo: 'perfil', alvo: ALVO_DA_PESSOA_NOVA, nome: `@${login}`, login, pessoas, nova: true } : null;
   const mostrarProblema = tentou && problema !== null;
@@ -96,12 +102,12 @@ export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, rel
             placeholder="login"
             aria-invalid={mostrarProblema}
             aria-describedby={mostrarProblema ? idDoProblema : undefined}
-            onChange={(evento) => setTexto(evento.target.value)}
+            onChange={(evento) => { setTexto(evento.target.value); setErroEditado(resultado); }}
           />
         </div>
         <div className={estilos.seletor}>
           <label className={ui.rotulo} htmlFor={idDoPapel}>Papel (opcional)</label>
-          <select id={idDoPapel} className={ui.campo} value={papel} onChange={(evento) => setPapel(evento.target.value)}>
+          <select id={idDoPapel} className={ui.campo} value={papel} onChange={(evento) => { setPapel(evento.target.value); setErroEditado(resultado); }}>
             <option value="">Sem papel</option>
             {PAPEIS.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
           </select>
@@ -118,6 +124,7 @@ export function AdicionarPessoa({ cru, conhecidos, conexao, emDia, controle, rel
           Adicionar ao Time
         </Botao>
         <Botao fantasma onClick={aoFechar}>Cancelar</Botao>
+        <ResultadoNoItem resultado={erroDoMotor} />
       </div>
     </form>
   );

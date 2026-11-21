@@ -1,7 +1,7 @@
 .aviso {
   max-width: 560px;
   margin: 0 auto;
-  padding: 48px 20px;
+  padding: var(--esp-8) var(--esp-5);
   color: var(--muted);
 }
 
@@ -10,8 +10,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 40px 24px;
+  gap: var(--esp-4);
+  padding: var(--esp-8) var(--esp-6);
   text-align: center;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -22,7 +22,7 @@
 
 .primario {
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 var(--esp-5);
   border: 1px solid var(--accent);
   border-radius: var(--radius-botao);
   background: var(--accent);

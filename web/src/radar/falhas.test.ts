@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessaoAtiva } from '@/contratos/radar';
-import { CARENCIA_MS, falhaSuperada, motivoDaFalha, sumidas, vistaDa, visivel } from './falhas';
+import { CARENCIA_MS, VALIDADE_DA_FALHA_MS, expirada, falhaSuperada, motivoDaFalha, sumidas, vistaDa, visivel } from './falhas';
 
 const INICIO = Date.UTC(2026, 10, 16, 14, 0);
 
@@ -46,5 +46,9 @@ describe('a sessão que some sem resultado', () => {
     const f = { id: 'a1', chave: 'k', etapa: 0, cancelada: false, sumiuEm: 1000, fimNoMotor: 1000 };
     expect(visivel(f, 1000 + CARENCIA_MS - 1)).toBe(false);
     expect(visivel(f, 1000 + CARENCIA_MS)).toBe(true);
+    // e sai sozinha depois da validade, sem clique (regra do dono de 20/11/2026)
+    expect(expirada(f, 1000 + CARENCIA_MS + VALIDADE_DA_FALHA_MS - 1)).toBe(false);
+    expect(visivel(f, 1000 + CARENCIA_MS + VALIDADE_DA_FALHA_MS)).toBe(false);
+    expect(expirada(f, 1000 + CARENCIA_MS + VALIDADE_DA_FALHA_MS)).toBe(true);
   });
 });

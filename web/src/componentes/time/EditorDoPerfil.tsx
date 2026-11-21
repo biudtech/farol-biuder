@@ -12,9 +12,10 @@ import { idDa, type Acao } from '@/radar/acoes';
 import { DOMINIOS, NIVEIS, PAPEIS, ehConhecido, type Opcao } from '@/time/taxonomia';
 import { avisoDeIlegiveis, chaveDaPessoa, comPerfil, marcaDoPerfil, motivoQueImpedeSalvar, type RelerPessoas } from '@/time/time';
 import type { Conexao } from '@/transporte/cliente';
-import type { ControleDeAcoes } from '../radar/useAcoes';
+import type { ControleDeAcoes, ResultadoDaAcao } from '../radar/useAcoes';
 import { Botao, ui } from '../ui';
 import estilos from './Time.module.css';
+import { ResultadoNoItem } from '../radar/ResultadoNoItem';
 
 interface Rascunho {
   // a marca do perfil do motor de onde este rascunho partiu
@@ -90,6 +91,11 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
     ...Object.keys(rascunho.dominios).filter((d) => !ehConhecido(DOMINIOS, d)).map((d): Opcao => [d, `${d} (domínio que esta tela não conhece)`]),
   ];
   const enviando = controle.emCurso(alvoDaPessoa(login));
+  // a recusa do motor aparece junto do Salvar, até a pessoa editar o perfil ou o resultado sair
+  // sozinho (useAcoes): nada invisível, nada eterno
+  const resultado = controle.resultadoDe(alvoDaPessoa(login));
+  const [erroEditado, setErroEditado] = useState<ResultadoDaAcao | null>(null);
+  const erroDoMotor = resultado?.tom === 'erro' && resultado !== erroEditado ? resultado : null;
   const acao: Acao | null = cru && alterado
     ? { tipo: 'perfil', alvo: alvoDaPessoa(login), nome: `@${login}`, login, pessoas: comPerfil(cru, login, { papel: rascunho.papel, dominios: rascunho.dominios }) }
     : null;
@@ -104,7 +110,7 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
         <div className={estilos.seletores}>
           <div className={estilos.seletor}>
             <label className={ui.rotulo} htmlFor={idDoPapel}>Papel</label>
-            <select ref={papel} id={idDoPapel} className={ui.campo} value={rascunho.papel} onChange={(evento) => setRascunho({ ...rascunho, papel: evento.target.value })}>
+            <select ref={papel} id={idDoPapel} className={ui.campo} value={rascunho.papel} onChange={(evento) => { setRascunho({ ...rascunho, papel: evento.target.value }); setErroEditado(resultado); }}>
               <option value="">Sem papel</option>
               {opcoesCom(PAPEIS, rascunho.papel).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
             </select>
@@ -118,7 +124,7 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
                   id={`${idDosDominios}-${i}`}
                   className={ui.campo}
                   value={nivel}
-                  onChange={(evento) => setRascunho({ ...rascunho, dominios: { ...rascunho.dominios, [dominio]: evento.target.value } })}
+                  onChange={(evento) => { setRascunho({ ...rascunho, dominios: { ...rascunho.dominios, [dominio]: evento.target.value } }); setErroEditado(resultado); }}
                 >
                   <option value="">Sem informação</option>
                   {opcoesCom(NIVEIS, nivel).map(([valor, nome]) => <option key={valor} value={valor}>{nome}</option>)}
@@ -164,6 +170,7 @@ export function EditorDoPerfil({ login, perfil, cru, ilegiveis, conexao, emDia, 
             >
               Salvar <span className={ui.soLeitor}>papel e competência de @{login}</span>
             </Botao>
+            <ResultadoNoItem resultado={erroDoMotor} />
           </div>
         </>
       ) : null}

@@ -1,8 +1,8 @@
 .indicador {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
+  gap: var(--esp-2);
+  padding: var(--esp-1) var(--esp-3);
   border-radius: 999px;
   font-size: 13px;
   font-weight: 800;

@@ -11,6 +11,12 @@ import { etapaDoProgresso } from './cartao';
 // antes disto a sessão que sumiu ainda não conta como falha.
 export const CARENCIA_MS = 3000;
 
+// Nenhuma notificação eterna (regra do dono de 20/11/2026): a falha some sozinha, sem botão de
+// dispensar. Sai quando chega sessão ou decisão nova do PR (falhaSuperada), quando o PR que estava
+// na fila sai dela (saiuDaFila), ou, no teto, depois deste tempo na tela. A falha não deixa rastro
+// no Histórico (que só mostra decisão); a tentativa fica no registro de consumo, com o desfecho.
+export const VALIDADE_DA_FALHA_MS = 30 * 60 * 1000;
+
 export interface SessaoVista {
   id: string;
   chave: string;
@@ -29,6 +35,8 @@ export interface Falha extends SessaoVista {
   sumiuEm: number;
   // a mesma hora no relógio do motor, para medir a duração contra o começo da sessão
   fimNoMotor: number;
+  // o PR estava na fila do motor quando a sessão sumiu
+  naFila?: boolean;
 }
 
 export function vistaDa(s: SessaoAtiva, feed: readonly LinhaDoFeed[] | undefined, etapaMinima = 0): SessaoVista | null {
@@ -68,6 +76,16 @@ export function motivoDaFalha(f: SessaoVista, parada: Estacionado | undefined): 
   return f.aviso?.trim() ?? '';
 }
 
+// O PR estava na fila quando a sessão sumiu e não está mais: a falha perdeu o lugar e sai.
+export function saiuDaFila(f: Falha, fila: ReadonlySet<string>): boolean {
+  return f.naFila === true && !fila.has(f.chave);
+}
+
 export function visivel(f: Falha, agora: number): boolean {
-  return agora - f.sumiuEm >= CARENCIA_MS;
+  return agora - f.sumiuEm >= CARENCIA_MS && !expirada(f, agora);
+}
+
+// A falha que ficou na tela pelo tempo inteiro sai sozinha.
+export function expirada(f: Falha, agora: number): boolean {
+  return agora - f.sumiuEm >= CARENCIA_MS + VALIDADE_DA_FALHA_MS;
 }

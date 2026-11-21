@@ -1,21 +1,21 @@
 .pagina {
   max-width: 520px;
   margin: 0 auto;
-  padding: 56px 20px 60px;
+  padding: var(--esp-9) var(--esp-5) var(--esp-9);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--esp-5);
 }
 
-.marca { display: flex; align-items: center; gap: 12px; }
+.marca { display: flex; align-items: center; gap: var(--esp-3); }
 .divisor { width: 1px; height: 24px; background: var(--divisor-marca); }
 .nome { font-size: 18px; font-weight: 800; }
 
 .cartao {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px;
+  gap: var(--esp-4);
+  padding: var(--esp-6);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -25,7 +25,7 @@
 .texto { color: var(--muted); font-size: 14px; text-wrap: pretty; }
 
 .aviso {
-  padding: 14px 18px;
+  padding: var(--esp-4) var(--esp-5);
   border-radius: var(--radius-botao);
   background: var(--erro-fundo);
   border: 1px solid var(--erro-borda);
@@ -34,13 +34,13 @@
   text-wrap: pretty;
 }
 
-.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo { display: flex; flex-direction: column; gap: var(--esp-2); }
 .campo label { font-size: 13px; font-weight: 700; color: var(--muted); }
 
 .entrada {
   width: 100%;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 var(--esp-4);
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--borda-campo);
@@ -60,8 +60,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 14px 18px;
+  gap: var(--esp-3);
+  padding: var(--esp-4) var(--esp-5);
   border-radius: var(--radius-botao);
   background: var(--erro-fundo);
   border: 1px solid var(--erro-borda);
@@ -71,15 +71,15 @@
 }
 .erro code { background: transparent; padding: 0; }
 
-.acoes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.acoes { display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; }
 .dica { flex: 1 1 200px; font-size: 13px; color: var(--muted); text-wrap: pretty; }
 
 .botao {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 var(--esp-5);
   border: 1px solid var(--borda-botao);
   border-radius: var(--radius-botao);
   background: var(--surface);
@@ -99,6 +99,6 @@
 .primario:hover { background: var(--accent); filter: brightness(1.08); }
 
 @media (max-width: 480px) {
-  .pagina { padding: 24px 16px 40px; }
-  .cartao { padding: 18px 16px; }
+  .pagina { padding: var(--esp-6) var(--esp-4) var(--esp-8); }
+  .cartao { padding: var(--esp-5) var(--esp-4); }
 }

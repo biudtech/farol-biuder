@@ -51,7 +51,8 @@ test('o bloco do card CHEGA no promptFinal do headless', () => {
 // grafia do fonte passava verde com o argumento fora do lançamento (revisão do PR #350).
 
 test('card não lido com o Jira ligado derruba o cardMet', () => {
-  assert.match(FONTE, /if \(!cardRes\.ok && jiraLigado\) result\.cardMet = false/);
+  // PR sem chave fica `null` (regra do dono de 20/11/2026); qualquer outra falha derruba
+  assert.match(FONTE, /if \(!cardRes\.ok && jiraLigado\) result\.cardMet = cardRes\.code === JIRA_CODES\.SEM_CHAVE \? null : false/);
 });
 
 // A assimetria entre os dois códigos silenciosos é deliberada e frágil: os dois

@@ -11,7 +11,7 @@
   flex: 1 1 220px;
   min-width: 0;
   min-height: 36px;
-  padding: 6px 10px;
+  padding: var(--esp-2) var(--esp-3);
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--borda-campo);
@@ -21,7 +21,7 @@
 .entrada::placeholder { color: var(--muted); opacity: 1; }
 .entrada[aria-invalid="true"] { border-color: var(--danger-texto); }
 .erroDoCampo {
-  padding: 8px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-radius: 8px;
   background: var(--danger-soft);
   color: var(--danger-texto);
@@ -32,7 +32,7 @@
 .bloco {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--esp-3);
   min-width: 0;
 }
 .contagem { color: var(--muted); font-weight: 550; }
@@ -41,7 +41,7 @@
 .lista {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--esp-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -50,9 +50,9 @@
 .cartao {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--esp-2);
   min-width: 0;
-  padding: 14px 16px;
+  padding: var(--esp-4) var(--esp-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -63,7 +63,7 @@
 
 
 .nota {
-  padding: 8px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-radius: 8px;
   background: var(--info-soft);
   color: var(--info-texto);
@@ -73,13 +73,13 @@
 }
 
 
-.botoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.botoes { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
 .botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 36px;
-  padding: 6px 13px;
+  padding: var(--esp-2) var(--esp-3);
   border: 1px solid var(--borda-campo);
   border-radius: 8px;
   background: var(--surface);
@@ -102,8 +102,8 @@
 .confirmacao {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: var(--esp-2);
+  padding: var(--esp-3) var(--esp-4);
   border: 1px solid var(--borda-campo);
   border-radius: 10px;
   background: var(--surface-2);
@@ -114,14 +114,14 @@
 .confirmacaoTitulo { font-weight: 650; }
 
 /* o painel do Revisar um PR: o campo e o Revisar, e embaixo o Checar agora */
-.formDoPainel { display: flex; flex-direction: column; gap: 10px; }
+.formDoPainel { display: flex; flex-direction: column; gap: var(--esp-3); }
 .formDoPainel > button { align-self: flex-start; }
 .checagemDoPainel {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding-top: 12px;
+  gap: var(--esp-2) var(--esp-3);
+  padding-top: var(--esp-3);
   border-top: 1px solid var(--borda-suave);
 }
 
@@ -132,8 +132,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
-  padding: 12px 18px;
+  gap: var(--esp-2) var(--esp-4);
+  padding: var(--esp-3) var(--esp-5);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-linha);
@@ -144,33 +144,35 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 40px 20px;
+  gap: var(--esp-3);
+  padding: var(--esp-8) var(--esp-5);
   text-align: center;
 }
 .tituloDoTudoEmDia { font-size: 20px; font-weight: 800; }
 
-/* O resultado da última ação fica preso ao pé da janela: quem clicou num cartão lá embaixo
-   vê a resposta sem rolar. O fundo é opaco (a cor suave pintada sobre a superfície). */
-.resultado {
+/* O anúncio da tela (AnuncioDaTela), preso ao pé da janela: os recados do motor aparecem aqui,
+   discretos, e saem sozinhos (nenhuma notificação eterna). Vazio, não ocupa espaço. O fundo é
+   opaco (a cor suave pintada sobre a superfície). */
+.anuncio {
   position: sticky;
-  bottom: 12px;
+  bottom: var(--esp-3);
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--esp-2);
 }
-.resultado:empty { display: none; }
+.anuncio:empty { display: none; }
+.anuncio:focus { outline: none; }
 .recado {
-  align-self: stretch;
-  padding: 10px 14px;
+  max-width: 100%;
+  padding: var(--esp-2) var(--esp-3);
   border: 1px solid var(--borda-campo);
   border-radius: 10px;
   background: linear-gradient(var(--ok-soft), var(--ok-soft)), var(--surface);
   color: var(--ok-texto);
   box-shadow: var(--shadow);
-  font-size: 13.5px;
+  font-size: 13px;
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
@@ -182,6 +184,52 @@
   background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--surface);
   color: var(--danger-texto);
 }
+/* o resultado da ação já está à vista no lugar dela: aqui só para o leitor de tela, e à vista
+   quando o anúncio recebe o foco */
+.anuncioOculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.anuncio:focus .anuncioOculto {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  padding: var(--esp-2) var(--esp-3);
+  border: 1px solid var(--foco);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* O aceite do "Revisar um PR": "Na fila" ao lado do botão, por alguns segundos. */
+.confirmacaoNoBotao {
+  align-self: center;
+  padding: var(--esp-1) var(--esp-3);
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok-texto);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* O resultado de uma ação no lugar dela (ResultadoNoItem): some sozinho. */
+.resultadoNoItem {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ok-texto);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.resultadoNoItem[data-tom="erro"] { color: var(--danger-texto); }
 
 .soLeitor {
   position: absolute;
@@ -195,17 +243,17 @@
 /* Janela estreita: alvo de toque maior, e o cartão com menos margem. */
 @media (max-width: 760px) {
   .botao, .entrada { min-height: 44px; }
-  .cartao { padding: 12px; }
+  .cartao { padding: var(--esp-3); }
 }
 
 /* a linha das revisões guardadas sem publicar: discreta, com o link para o Histórico */
-.pendentes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0; }
+.pendentes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-2) var(--esp-4); margin: 0; }
 
 /* a checagem em curso: o spinner pequeno e a contagem do motor numa linha */
-.checagemEmCurso { display: flex; align-items: center; gap: 8px; margin: 0; }
+.checagemEmCurso { display: flex; align-items: center; gap: var(--esp-2); margin: 0; }
 
 /* os cartões de uma seção, um embaixo do outro (o cartão em si é src/componentes/cartao) */
-.cartoes { display: flex; flex-direction: column; gap: 12px; }
+.cartoes { display: flex; flex-direction: column; gap: var(--esp-cartoes); }
 
 /* a posição do PR na fila, no canto do cartão */
 .posicao { font-size: 13px; font-weight: 800; color: var(--muted); white-space: nowrap; }

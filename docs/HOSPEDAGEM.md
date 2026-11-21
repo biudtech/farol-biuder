@@ -495,10 +495,10 @@ kubectl exec <pod> -- sh -c 'chmod 600 ~/.farol/technical-review/repositories.js
 Se o `ls -ln` mostrar outro dono, acerte com `chown 10001:10001` num contexto que rode como
 root. O motor lê o arquivo a cada avaliação: não precisa reiniciar.
 
-Repositório fora do cadastro é revisado e publicado sem avaliação técnica: o resultado aprovável
-leva o ponto "Este repositório não tem declaração técnica cadastrada, então a avaliação técnica
-automática não rodou." (`pontosDoApp`, `lib/engine/ressalvas.js`) e sai como com ressalvas, decidido
-pelo `onCaveats` da conta. Cadastro presente e ilegível não vira "fora do cadastro": a avaliação
+Repositório fora do cadastro é revisado pelo mérito do código e publicado sem avaliação técnica.
+Desde 20/11/2026 (regra do dono) isso não é ressalva nem motivo e não vai ao texto público: o
+estado fica só como diagnóstico (`technicalSummary`, `lib/technical-review/verdict.js`), e o
+resultado sem outro ponto sai limpo. Cadastro presente e ilegível não vira "fora do cadastro": a avaliação
 falha para todo repositório, e a publicação recusa o APPROVE com `technical_review`
 (`lib/technical-review/publication.js`).
 
@@ -547,8 +547,7 @@ também sai à mão. Se o lock da ferramenta mudar de formato, o `pnpm` da image
 ### Quando falta uma parte
 
 - **Sem o cadastro, ou com o repositório fora dele**: nenhuma regra do catálogo é avaliada para
-  ele, a revisão roda e publica, e toda aprovação leva a ressalva de repositório sem declaração
-  técnica: o `onClean` nunca se aplica. Na hora de publicar, a aprovação é conferida contra o
+  ele, a revisão roda pelo mérito do código e publica, sem ressalva por isso. Na hora de publicar, a aprovação é conferida contra o
   commit, a prova e o contexto da revisão (`provaEsgotadaRefusal`,
   `lib/technical-review/publication.js`).
 - **Com o cadastro e sem a ferramenta íntegra**: para o repositório declarado a avaliação falha

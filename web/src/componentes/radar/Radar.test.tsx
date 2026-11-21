@@ -4,12 +4,14 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Pendencia } from '@/contratos/radar';
 import type { Snapshot } from '@/contratos/snapshot';
-import { ESTADO_INICIAL, type App, type EstadoDoApp, type RecadoNaTela } from '@/estado/app';
+import { DURACAO_DO_RECADO_MS, ESTADO_INICIAL, guardarRecado, type App, type EstadoDoApp, type RecadoNaTela } from '@/estado/app';
 import { criarStore } from '@/estado/store';
 import type { RespostaDeAcao } from '@/radar/acoes';
 import type { Resultado } from '@/transporte/cliente';
 import { Radar } from './Radar';
 import { URL_DO_PR, pendencia } from './apoio-de-teste';
+import { DURACAO_DO_RESULTADO_MS } from './useAcoes';
+import { CARENCIA_MS, VALIDADE_DA_FALHA_MS } from '@/radar/falhas';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...resto }: { href: string; children: ReactNode }) => <a href={href} {...resto}>{children}</a>,
@@ -45,7 +47,7 @@ function montar(snapshot: Snapshot | null, resposta: Resultado<RespostaDeAcao> =
   const post = vi.fn(async (rota: string, corpo: unknown) => { void rota; void corpo; return resposta; });
   // o detalhe das postadas (GET /api/decision) fica sem resposta: as pílulas dizem "Carregando"
   const get = vi.fn(() => new Promise(() => {}));
-  const app = { store, cliente: { post, get }, dispensarRecados: () => store.trocar({ recados: [] }) } as unknown as App;
+  const app = { store, cliente: { post, get } } as unknown as App;
   render(<Radar app={app} />);
   return { store, post };
 }
@@ -404,6 +406,42 @@ describe('tela Radar: ações', () => {
     }
   });
 
+  it('a falha some sozinha depois da validade, sem clique e sem decisão nova', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const sessao = { id: 'a1', startedAt: Date.now(), cancellable: true, pr: { key: 'dono/repo#12', url: URL_DO_PR, title: 'Corrige' } };
+      const t = montar(estado({ activeSessions: [sessao] }));
+      act(() => { t.store.trocar({ snapshot: estado() }); });
+      act(() => { vi.advanceTimersByTime(CARENCIA_MS + 100); });
+      expect(screen.getByRole('article').getAttribute('data-tom')).toBe('falha');
+      expect(screen.queryByRole('button', { name: /Dispensar/ })).toBeNull();
+      act(() => { vi.advanceTimersByTime(VALIDADE_DA_FALHA_MS); });
+      expect(screen.queryByText(/terminou sem resultado/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a falha fica até o PR sair da fila, e no teto de 30 min', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      expect(VALIDADE_DA_FALHA_MS).toBe(30 * 60 * 1000);
+      const sessao = { id: 'a1', startedAt: Date.now(), cancellable: true, pr: { key: 'dono/repo#12', url: URL_DO_PR, title: 'Corrige' } };
+      const t = montar(estado({ queue: [pr('dono/repo#12')], activeSessions: [sessao] }));
+      act(() => { t.store.trocar({ snapshot: estado({ queue: [pr('dono/repo#12')] }) }); });
+      act(() => { vi.advanceTimersByTime(CARENCIA_MS + 100); });
+      expect(screen.getByRole('article').getAttribute('data-tom')).toBe('falha');
+      // muito depois do antigo minuto, a falha continua: nada mudou no PR
+      act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
+      expect(screen.getByRole('article').getAttribute('data-tom')).toBe('falha');
+      // o PR saiu da fila: a falha sai junto
+      act(() => { t.store.trocar({ snapshot: estado() }); });
+      expect(screen.queryByText(/terminou sem resultado/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a sessão cancelada que some não vira falha', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     try {
@@ -425,7 +463,7 @@ describe('tela Radar: ações', () => {
     expect(regiao().textContent).toContain('O motor aceitou o pedido');
   });
 
-  it('os avisos do motor entram como texto, com o erro dito em palavra, e Dispensar tira tudo', async () => {
+  it('os avisos do motor entram como texto, com o erro dito em palavra, sem botão de dispensar', async () => {
     const t = montar(estado());
     act(() => {
       t.store.trocar({ recados: [recado(1, 'ok', '<b>aprovado</b>'), recado(2, 'erro', 'Falha ao postar em a/b#2: rede'), recado(3, 'info', 'três')] });
@@ -433,9 +471,9 @@ describe('tela Radar: ações', () => {
     const linhas = [...regiao().querySelectorAll('p')];
     expect(linhas.map((p) => p.textContent)).toEqual(['Aviso do motor: <b>aprovado</b>', 'Erro avisado pelo motor: Falha ao postar em a/b#2: rede', 'Aviso do motor: três']);
     expect(regiao().querySelector('b')).toBeNull();
-    await clicar('Dispensar');
-    expect(regiao().textContent).toBe('');
-    expect(t.store.ler().recados).toEqual([]);
+    // nenhuma notificação eterna: quem tira o recado é o store, sozinho (src/estado/app.test.ts)
+    expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
+    expect(t.store.ler().recados).toHaveLength(3);
   });
 
   it('recusa: a mensagem é a do código que o motor mandou, dita como erro', async () => {
@@ -458,12 +496,44 @@ describe('tela Radar: ações', () => {
     expect(regiao().textContent).toBe('');
   });
 
-  it('o resultado pode ser dispensado', async () => {
+  it('o recado do motor aparece à vista, num aviso discreto, e some sozinho', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = montar(estado());
+      act(() => { guardarRecado(t.store, recado(1, 'erro', 'Falha ao postar em a/b#2: rede')); });
+      const visiveis = () => [...regiao().querySelectorAll('p[data-visivel="sim"]')].map((p) => p.textContent);
+      expect(visiveis()).toEqual(['Erro avisado pelo motor: Falha ao postar em a/b#2: rede']);
+      expect(regiao().getAttribute('role')).toBe('status');
+      expect(screen.queryByRole('button', { name: /Dispensar/ })).toBeNull();
+      act(() => { vi.advanceTimersByTime(DURACAO_DO_RECADO_MS); });
+      expect(visiveis()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('o resultado aparece no lugar da ação e some sozinho, sem clique', async () => {
+    vi.useFakeTimers();
+    try {
+      montar(estado());
+      await clicar('Checar agora');
+      expect(regiao().textContent).toContain('O motor aceitou o pedido: checar agora.');
+      const noItem = () => [...document.querySelectorAll('p[aria-hidden="true"][data-tom]')].map((p) => p.textContent);
+      expect(noItem()).toEqual(['O motor aceitou o pedido: checar agora.']);
+      expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
+      act(() => { vi.advanceTimersByTime(DURACAO_DO_RESULTADO_MS); });
+      expect(regiao().textContent).toBe('');
+      expect(noItem()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('nenhuma região de aviso persistente: o anúncio fica fora da vista e sem botão', () => {
     montar(estado());
-    await clicar('Checar agora');
-    expect(regiao().textContent).toContain('O motor aceitou o pedido: checar agora.');
-    await clicar('Dispensar');
-    expect(regiao().textContent).toBe('');
+    expect(regiao().getAttribute('aria-live')).toBe('polite');
+    expect(regiao().querySelector('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Dispensar/ })).toBeNull();
   });
 
   it('Cancelar a sessão manda o id dela, depois da confirmação, e o foco vai à região do resultado', async () => {

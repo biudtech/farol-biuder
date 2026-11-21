@@ -3,10 +3,11 @@
 // a casca (o painel que abre do botão "Revisar um PR"), o rótulo do campo ("URL do PR"), o
 // texto do botão ("Revisar") e o estado ocupado ("Lendo o PR…", "Checando…").
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHECAR } from '@/radar/acoes';
 import { RevisarUmPr } from './RevisarUmPr';
 import { URL_DO_PR, controleFalso } from './apoio-de-teste';
+import { DURACAO_DO_RESULTADO_MS, type ResultadoDaAcao } from './useAcoes';
 
 afterEach(cleanup);
 
@@ -99,5 +100,39 @@ describe('Revisar um PR', () => {
     const botao = screen.getByRole('button', { name: 'Enviando: Checar agora' }) as HTMLButtonElement;
     expect(botao.disabled).toBe(true);
     expect(botao.textContent).toBe('Checando…');
+  });
+
+  // nenhuma notificação eterna, mas nada invisível (revisão de 21/11/2026)
+  it('a recusa do motor aparece no painel, junto do campo, e some ao editar a URL', async () => {
+    const resultados: Record<string, ResultadoDaAcao> = {};
+    const { controle, disparar } = controleFalso({}, resultados);
+    disparar.mockResolvedValueOnce(false);
+    const { container, rerender } = render(<RevisarUmPr checagem="" controle={controle} />);
+    fireEvent.click(screen.getByText('Revisar um PR'));
+    await pedir(URL_DO_PR);
+    // a resposta do motor chega depois do envio, como no useAcoes
+    resultados['sob-demanda'] = { tom: 'erro', texto: 'Este motor é uma instância isolada e não escreve no GitHub.' };
+    rerender(<RevisarUmPr checagem="" controle={{ ...controle }} />);
+    const erro = () => gaveta(container).querySelector('form p[data-tom="erro"]');
+    expect(erro()?.textContent).toBe('Erro: Este motor é uma instância isolada e não escreve no GitHub.');
+    fireEvent.change(campo(), { target: { value: `${URL_DO_PR}0` } });
+    expect(erro()).toBeNull();
+  });
+
+  it('o aceite fecha o painel e deixa "Na fila" ao lado do botão, que some sozinho', async () => {
+    vi.useFakeTimers();
+    try {
+      const { controle } = controleFalso();
+      const { container } = render(<RevisarUmPr checagem="" controle={controle} />);
+      fireEvent.click(screen.getByText('Revisar um PR'));
+      await pedir(URL_DO_PR);
+      expect(gaveta(container).open).toBe(false);
+      const naFila = () => container.querySelector('[data-visivel="sim"]');
+      expect(naFila()?.textContent).toBe('Na fila');
+      act(() => { vi.advanceTimersByTime(DURACAO_DO_RESULTADO_MS); });
+      expect(naFila()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

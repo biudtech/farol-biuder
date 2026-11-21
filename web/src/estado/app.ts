@@ -49,6 +49,9 @@ export interface RecadoNaTela extends RecadoDoMotor {
 
 // Quantos recados do motor ficam na tela: chegando o quarto, o mais antigo sai.
 export const TETO_DE_RECADOS = 3;
+// Nenhuma notificação eterna (regra do dono de 20/11/2026): o recado sai sozinho depois disto,
+// sem botão de dispensar.
+export const DURACAO_DO_RECADO_MS = 8000;
 
 const SEM_RECADOS: readonly RecadoNaTela[] = Object.freeze([]);
 
@@ -116,8 +119,6 @@ export interface App {
   // A metade local do Sair, para quem já revogou a própria sessão no motor (a lista de
   // sessões da tela Sistema): apaga o token daqui e vai ao pareamento, com o desfecho dito.
   esquecerSessao(saida: Saida): void;
-  // Tira da tela os avisos do motor.
-  dispensarRecados(): void;
   // Na tela de sessão do portão expirada: volta à raiz, onde o portão mostra o login.
   entrarDeNovo(): void;
   // Com o fluxo caído e esperando o recuo, tenta de novo agora. Fora disso não faz nada.
@@ -149,6 +150,17 @@ export interface DependenciasDoApp {
   // ausente no servidor; sem ela a sessão pelo portão não recarrega nada
   portao?: JanelaDoPortao;
   agora?: () => number;
+}
+
+// Guarda um recado do motor na tela e agenda a saída dele: some sozinho depois de
+// DURACAO_DO_RECADO_MS, sem clique. Se outro estado já o tirou (o teto, a volta ao pareamento),
+// nada muda. Exportada para o teste da tela provar o caminho de verdade.
+export function guardarRecado(store: Store<EstadoDoApp>, recado: RecadoNaTela): void {
+  store.trocar({ recados: [...store.ler().recados, recado].slice(-TETO_DE_RECADOS) });
+  setTimeout(() => {
+    const atuais = store.ler().recados;
+    if (atuais.some((r) => r.n === recado.n)) store.trocar({ recados: atuais.filter((r) => r.n !== recado.n) });
+  }, DURACAO_DO_RECADO_MS);
 }
 
 export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora = () => Date.now() }: DependenciasDoApp): App {
@@ -190,7 +202,7 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
         return;
       }
       recadosRecebidos += 1;
-      store.trocar({ recados: [...store.ler().recados, { ...recado, n: recadosRecebidos }].slice(-TETO_DE_RECADOS) });
+      guardarRecado(store, { ...recado, n: recadosRecebidos });
       return;
     }
     const anterior = store.ler().snapshot;
@@ -472,9 +484,6 @@ export function criarApp({ base, cofre, registrar, janela, buscar, portao, agora
       }
       cofre.esquecer(tokenDaSessao);
       voltarAoPareamento('saiu', saida);
-    },
-    dispensarRecados() {
-      store.trocar({ recados: SEM_RECADOS });
     },
     tentarReconectar,
     entrarDeNovo() {

@@ -4,11 +4,13 @@
 // ar, todos ficam desabilitados e o que foi clicado mostra o spinner e diz "Enviando" (ou o
 // texto do processo, como "Cancelando…"). A ação que joga trabalho fora ou apaga (Cancelar,
 // contestação, remover do Time, as do Sistema que pedem) troca os botões por uma pergunta, no
-// próprio item, antes de enviar.
+// próprio item, antes de enviar. O que o motor respondeu aparece embaixo dos botões e some
+// sozinho (ResultadoNoItem).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Spinner, ui } from '@/componentes/ui';
 import { confirmacaoDa, idDa, nomeDa, rotuloDa, type Acao } from '@/radar/acoes';
 import type { ControleDeAcoes } from './useAcoes';
+import { ResultadoNoItem } from './ResultadoNoItem';
 import estilos from './Radar.module.css';
 
 export interface BotaoDoItem {
@@ -97,8 +99,8 @@ export function AcoesDoItem({ botoes, controle, pequeno }: Props) {
             className={classes(ui.botao, ui.primario, pequeno && ui.pequeno)}
             aria-label={`${confirmacao.confirmar}: ${perguntando.nome}`}
             onClick={() => {
-              // enviou: o botão de origem vai estar desabilitado, e o foco vai à região que
-              // diz o resultado (nunca fica solto na página)
+              // enviou: o botão de origem vai estar desabilitado, e o foco vai ao anúncio da
+              // tela, que diz o resultado (nunca fica solto na página)
               origem.current = null;
               setPergunta(null);
               controle.focarResultado();
@@ -150,6 +152,7 @@ export function AcoesDoItem({ botoes, controle, pequeno }: Props) {
           })}
         </div>
       ) : null}
+      {alvo === undefined ? null : <ResultadoNoItem resultado={controle.resultadoDe(alvo)} />}
     </>
   );
 }

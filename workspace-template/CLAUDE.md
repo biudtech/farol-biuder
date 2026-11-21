@@ -154,7 +154,7 @@ Regras:
 - Nada falhou no review → **não escreve nada**.
 
 ## Regras invioláveis
-- **Auto-APPROVE só** quando: (a) zero blockers **e** (b) o card foi lido e atendido. Faltou ler o card → **não** aprove sozinho; pergunte.
+- **Auto-APPROVE só** quando: (a) zero blockers **e** (b) o card foi lido e atendido. Faltou ler o card → **não** aprove sozinho; pergunte. PR sem card não tem (b): vale só (a), com o código revisado pelo mérito.
 - **REQUEST CHANGES e COMMENT nunca** são postados sem minha confirmação explícita para aquele PR.
 - Só marque **blocker** o que você **comprovou no código** e que passa no gate das 8 perguntas do agente. Na dúvida, é não-bloqueante.
 - **Nunca afirme que o review de outra pessoa ou ferramenta errou sem prova em uma linha** (`arquivo:linha`, texto do card/spec, ou contagem medida). Sem prova, cale-se sobre aquilo e faça a sua análise. Contestação nunca é postada sem confirmação humana.

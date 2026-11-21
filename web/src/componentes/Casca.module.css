@@ -3,7 +3,7 @@
   left: 8px;
   top: -48px;
   z-index: 30;
-  padding: 8px 12px;
+  padding: var(--esp-2) var(--esp-3);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
@@ -21,27 +21,27 @@
 .topoDentro {
   max-width: 1360px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--esp-cabecalho);
   min-height: 72px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 32px;
+  gap: var(--esp-2) var(--esp-7);
 }
 
 /* A marca com o respiro do desenho (19/11/2026): o logo, o divisor, "Farol" e a versão do motor
    numa etiqueta ao lado, alinhados pela linha de base. */
-.marca { display: flex; align-items: center; gap: 18px; min-width: 0; padding-right: 8px; color: var(--text); text-decoration: none; }
+.marca { display: flex; align-items: center; gap: var(--esp-5); min-width: 0; padding-right: var(--esp-2); color: var(--text); text-decoration: none; }
 .marca:hover { color: var(--text); }
 .divisor { width: 1px; height: 28px; background: var(--divisor-marca); }
-.nomeEVersao { display: inline-flex; align-items: baseline; gap: 10px; }
+.nomeEVersao { display: inline-flex; align-items: baseline; gap: var(--esp-3); }
 .nome { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; }
-.versao { padding: 3px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700; }
+.versao { padding: var(--esp-1) var(--esp-2); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700; }
 
 .abas { min-width: 0; }
 .abas ul {
   display: flex;
-  gap: 4px;
+  gap: var(--esp-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -49,7 +49,7 @@
 
 .aba {
   display: block;
-  padding: 10px 14px;
+  padding: var(--esp-3) var(--esp-4);
   border-radius: 10px;
   color: var(--muted);
   font-weight: 600;
@@ -64,7 +64,7 @@
   font-weight: 700;
 }
 
-.acoes { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.acoes { margin-left: auto; display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; }
 .origemDaSessao { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
 .botao {
@@ -72,7 +72,7 @@
   align-items: center;
   justify-content: center;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 0 var(--esp-4);
   border: 1px solid var(--borda-botao);
   border-radius: var(--radius-botao);
   background: var(--surface);
@@ -97,16 +97,16 @@
 .conteudo {
   max-width: 1360px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: var(--esp-7) var(--esp-cabecalho) var(--esp-9);
 }
 .conteudo:focus { outline: none; }
-.faixaDeQueda { max-width: 880px; margin: 0 auto 24px; }
+.faixaDeQueda { max-width: 880px; margin: 0 auto var(--esp-6); }
 
 /* Janela estreita: marca e ações na primeira linha, as abas numa linha própria que rola. */
 @media (max-width: 860px) {
-  .topoDentro { padding: 10px 16px; gap: 8px 16px; }
+  .topoDentro { padding: var(--esp-3) var(--esp-4); gap: var(--esp-2) var(--esp-4); }
   .marca { flex: 1 1 auto; }
-  .acoes { gap: 8px; }
+  .acoes { gap: var(--esp-2); }
   .abas {
     order: 3;
     flex: 1 0 100%;
@@ -115,5 +115,5 @@
   }
   .abas::-webkit-scrollbar { display: none; }
   .origemDaSessao { display: none; }
-  .conteudo { padding: 20px 16px 40px; }
+  .conteudo { padding: var(--esp-5) var(--esp-4) var(--esp-8); }
 }

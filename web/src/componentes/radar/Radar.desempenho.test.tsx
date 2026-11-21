@@ -57,7 +57,7 @@ function estado(): Snapshot {
 
 function montar() {
   const store = criarStore<EstadoDoApp>({ ...ESTADO_INICIAL, sessao: 'pareado', snapshot: estado() });
-  const app = { store, cliente: { post: vi.fn(), get: vi.fn(() => new Promise(() => {})) }, dispensarRecados: vi.fn() } as unknown as App;
+  const app = { store, cliente: { post: vi.fn(), get: vi.fn(() => new Promise(() => {})) } } as unknown as App;
   render(<Radar app={app} />);
   return store;
 }

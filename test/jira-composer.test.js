@@ -119,8 +119,17 @@ test('cardBlock descreve o card e nunca vaza credencial', () => {
   assert.ok(bloco.includes('XX-1'));
   assert.ok(bloco.includes('um'));
   assert.ok(!bloco.includes('tok'));
-  const falha = jira.cardBlock({ ok: false, code: JIRA_CODES.SEM_CHAVE, site: null });
+  const falha = jira.cardBlock({ ok: false, code: JIRA_CODES.SEM_CREDENCIAL, site: null });
   assert.ok(falha.includes('não verificável'));
+});
+
+// regra do dono de 20/11/2026: PR sem card é revisado pelo mérito, sem nada a menos
+test('PR sem card: o bloco manda revisar pelo mérito, sem card a comprovar nem motivo', () => {
+  const semCard = jira.cardBlock({ ok: false, code: JIRA_CODES.SEM_CHAVE, site: null });
+  assert.ok(!semCard.includes('não verificável'), semCard);
+  assert.match(semCard, /Este PR não tem card/);
+  assert.match(semCard, /pelo mérito, com o mesmo rigor: correção, bugs, segurança técnica e testes/);
+  assert.match(semCard, /a falta de card não entra em `reasons` nem muda `decision`/);
 });
 
 test('o texto do card vai delimitado e não consegue fechar o próprio delimitador', () => {

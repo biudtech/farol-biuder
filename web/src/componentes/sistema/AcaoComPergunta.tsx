@@ -4,12 +4,13 @@
 // do envio quando a ação pede (confirmacaoDa) e o próprio processo no botão enquanto ela está no
 // ar ("Salvando…", "Encerrando…"). A pergunta fica no lugar do botão, no próprio formulário ou
 // na própria linha: o foco vai ao "Voltar sem enviar" ao abrir, volta ao botão ao cancelar e
-// vai à região de resultado ao enviar (o botão sai da tela).
+// vai ao anúncio da tela ao enviar (o botão sai da tela).
 import { useEffect, useId, useRef, useState } from 'react';
 import { confirmacaoDa, idDa, nomeDa, rotuloDa, type Acao } from '@/radar/acoes';
 import { Botao, ui } from '@/componentes/ui';
 import type { ControleDeAcoes } from '../radar/useAcoes';
 import estilos from './Sistema.module.css';
+import { ResultadoNoItem } from '../radar/ResultadoNoItem';
 
 interface Props {
   acao: Acao;
@@ -105,6 +106,7 @@ export function AcaoComPergunta({ acao, controle, ocupado, primario, pequeno, ro
       >
         {rotulo ?? rotuloDa(acao)}
       </Botao>
+      <ResultadoNoItem resultado={controle.resultadoDe(acao.alvo)} />
     </div>
   );
 }

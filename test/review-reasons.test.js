@@ -153,8 +153,9 @@ test('sessão que não decidiu auto_approve e não escreveu motivo: o card mostr
   assert.match(texto(item.attention[0]), /não marcou o PR como aprovável sem ressalvas nem escreveu o motivo/);
 });
 
+// com card: PR sem card não tem ressalva de card desde 20/11/2026 (test/merito-e-produto.test.js)
 test('card não comprovado: o card mostra a ressalva do card', async () => {
-  const { e } = engineQueAprova(envelope({ decision: 'needs_decision', cardMet: false }));
+  const { e } = engineQueAprova(envelope({ decision: 'needs_decision', cardMet: false, card: 'XX-7' }));
   await e.runHeadlessReview(PR);
   const item = decisoesResolvidas(e)[0];
   // de 16 a 17/10/2026 (PR #244) o card não comprovado era lacuna obrigatória; voltou a ser ressalva

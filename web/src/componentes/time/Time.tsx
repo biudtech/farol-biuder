@@ -18,7 +18,7 @@ import type { App } from '@/estado/app';
 import { app as appDoNavegador, useApp } from '@/estado/instancia';
 import { marcaDasResolvidas, mensagemDaFalha } from '@/historico/consulta';
 import { CAMINHO_DO_ESTADO, chaveDaPessoa, contestacoesDoAutor, filtrarPorNome, lerPessoasDoEstado, perfilDe, quantasPessoas, soComPerfil, textoDoResultado, type RelerPessoas } from '@/time/time';
-import { RegiaoDeResultado } from '../radar/RegiaoDeResultado';
+import { AnuncioDaTela } from '../radar/AnuncioDaTela';
 import { useAcoes, type ControleDeAcoes } from '../radar/useAcoes';
 import { BarraDeCarga, Botao, Esqueleto, Pagina, ui } from '../ui';
 import { AdicionarPessoa } from './AdicionarPessoa';
@@ -68,7 +68,7 @@ export function Time({ app = appDoNavegador }: Props) {
   // o login do Editar papel clicado: o dossiê dele abre com o papel no foco
   const [editarDe, setEditarDe] = useState<string | null>(null);
   const { carregando, time, falha, haNovas } = useTime(app.cliente, recarga, marca);
-  const { controle: acoes, resultado, dispensar, regiao } = useAcoes(app.cliente);
+  const { controle: acoes, resultado, regiao } = useAcoes(app.cliente);
   // a releitura de `people` logo antes de gravar (time.ts): o corpo sai do que o motor tem agora
   const relerPessoas = useCallback<RelerPessoas>(async () => {
     const r = await app.cliente.get(CAMINHO_DO_ESTADO, lerPessoasDoEstado);
@@ -79,11 +79,11 @@ export function Time({ app = appDoNavegador }: Props) {
   // o que a tela tem agora, para a ação que termina depois do desenho
   const agora = useRef({ aberto, time, cru });
   useEffect(() => { agora.current = { aberto, time, cru }; });
-  // o dossiê fechou por causa de uma remoção: o foco fica na região do resultado
+  // o dossiê fechou por causa de uma remoção: o foco fica no anúncio da tela
   const focoNoResultado = useRef(false);
 
   // O salvar de perfil tira o próprio botão da tela quando o estado novo chega: o foco vai
-  // antes à região do resultado. A remoção aceita fecha o dossiê (trocando a entrada do
+  // antes ao anúncio da tela. A remoção aceita fecha o dossiê (trocando a entrada do
   // endereço, para o voltar do navegador não o reabrir), tira a pessoa do que está na tela e
   // pede a lista de novo: quem refaz a lista é o motor.
   const controle = useMemo<ControleDeAcoes>(() => ({
@@ -145,7 +145,7 @@ export function Time({ app = appDoNavegador }: Props) {
   const aoRecarregar = useCallback(() => setRecarga((n) => n + 1), []);
 
   // Ao fechar o dossiê, o foco volta ao botão que o abriu (ou ao título da lista, se a pessoa
-  // não está mais nela). Depois de uma remoção ele fica onde está: na região do resultado.
+  // não está mais nela). Depois de uma remoção ele fica onde está: no anúncio da tela.
   const anterior = useRef<string | null>(aberto);
   useEffect(() => {
     const fechado = anterior.current;
@@ -282,15 +282,7 @@ export function Time({ app = appDoNavegador }: Props) {
         />
       ) : null}
 
-      <RegiaoDeResultado
-        regiao={regiao}
-        resultado={resultado}
-        recados={recados}
-        aoDispensar={() => {
-          dispensar();
-          app.dispensarRecados();
-        }}
-      />
+      <AnuncioDaTela regiao={regiao} resultado={resultado} recados={recados} />
     </div>
   );
 }
