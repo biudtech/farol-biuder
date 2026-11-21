@@ -17,7 +17,7 @@
     "jsonParseCru": 1
   },
   "lib/engine/review.js": {
-    "maxLines": 422,
+    "maxLines": 420,
     "profundidadeExcedida": 3
   },
   "lib/engine/session.js": {
@@ -45,7 +45,7 @@
     "jsonParseCru": 1
   },
   "server.js": {
-    "maxLines": 379,
+    "maxLines": 376,
     "processEnvDireto": 5,
     "ternarioAninhado": 2,
     "tempoMagico": 1,
