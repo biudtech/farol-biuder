@@ -441,3 +441,25 @@ test('label: o primeiro texto ou ferramenta do modelo libera a label', async () 
   assert.equal(await feed.tardia.promessa(), 'eu:revisando');
   assert.equal(feed.adicoes, 1);
 });
+
+test('label: o modelo que só pensa recebe a label pelo prazo de 15 s, sem conteúdo', async () => {
+  const child = filhoStream();
+  spawnImpl = () => child;
+  const timers = [];
+  let adicoes = 0;
+  const tardia = armarLabelTardia({ adicionar: async () => { adicoes += 1; return 'eu:revisando'; }, esperaMs: 15000, setTimer: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimer: () => { } });
+  const p = runClaudeStream(engineFalso(), 'prompt', { onEvent: (e) => { if (liberaALabel(e)) tardia.aoEvento(); } });
+  spawnImpl = null;
+  tardia.aoAdmitir();
+  child.stdout.write(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's-pensa' }) + '\n');
+  child.stdout.write(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'pensando' } } }) + '\n');
+  assert.equal(adicoes, 0, 'nem o init nem o pensamento liberam a label');
+  assert.deepEqual(timers.map((t) => t.ms), [15000]);
+  timers[0].fn();
+  assert.equal(await tardia.promessa(), 'eu:revisando');
+  assert.equal(adicoes, 1, 'o prazo põe a label na sessão viva que ainda não escreveu');
+  child.stdout.write(JSON.stringify({ type: 'result', result: 'ok', session_id: 's-pensa' }) + '\n');
+  child.stdout.once('end', () => child.emit('close', 0));
+  child.stdout.end();
+  await p;
+});
