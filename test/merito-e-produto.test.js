@@ -18,6 +18,8 @@ const { attentionPoints, prSemCard } = await import('../lib/engine/ressalvas.js'
 const { conferirEnvelope } = await import('../lib/engine/envelope-revisao.js');
 const { itensParaQuemMergeia } = await import('../lib/engine/para-quem-mergeia.js');
 const { ehPontoDeProduto } = await import('../lib/engine/ponto-de-produto.js');
+const { ehMotivoDeCard, semFaltaDeCard } = await import('../lib/engine/pr-sem-card.js');
+const { reviewActions } = await import('../lib/engine/decision.js');
 const { technicalSummary } = await import('../lib/technical-review/verdict.js');
 const { provasDaDecisao } = await import('../lib/engine/provas-da-decisao.js');
 const { personProfileBlock } = await import('../lib/engine/review-prompt.js');
@@ -51,11 +53,36 @@ test('sem declaração técnica: nem ressalva, nem motivo, nem texto público', 
 });
 
 test('PR sem card: card não comprovado não vira ressalva, e o motivo de falta de card cai', () => {
-  const r = envelope({ cardMet: false, reasons: ['PR sem card no Jira.', { text: 'O card não foi lido nesta revisão.', kind: 'content' }] });
+  const r = envelope({ cardMet: false, reasons: ['PR sem card no Jira.', { text: 'O card do Jira não foi lido nesta revisão.', kind: 'content' }] });
   assert.equal(prSemCard(r), true);
   assert.deepEqual(textos(r), []);
   // um motivo técnico continua sendo ressalva
   assert.deepEqual(textos({ ...r, reasons: [TECNICO] }), [TECNICO]);
+});
+
+test('"card" de componente de front não é motivo de falta de card: fica, mesmo no PR sem card', () => {
+  const componente = 'O card de produto não trata o erro 500 da API: a tela fica em branco.';
+  assert.equal(ehMotivoDeCard(componente), false);
+  assert.deepEqual(textos(envelope({ reasons: [componente] })), [componente]);
+  for (const t of ['PR sem card', 'O card do Jira não foi encontrado', 'Sem chave do card no título', 'card do PR ausente']) assert.equal(ehMotivoDeCard(t), true, t);
+});
+
+test('PR sem card: o motor grava a decisão sem cardMet false nem motivo de card, e o Panorama não marca ressalva', () => {
+  for (const cardLeitura of [SEM_CHAVE, { ok: false, code: 'desligado' }]) {
+    const r = envelope({ cardMet: false, cardLeitura, reasons: [{ text: 'PR sem card no Jira', kind: 'content' }, { text: TECNICO, kind: 'content' }] });
+    assert.equal(semFaltaDeCard(r), 1);
+    assert.equal(r.cardMet, null);
+    assert.deepEqual(r.reasons.map((x) => x.text), [TECNICO]);
+  }
+  const limpo = envelope({ cardMet: false, cardLeitura: { ok: false, code: 'desligado' }, reasons: ['PR sem card'] });
+  semFaltaDeCard(limpo);
+  const engine = { decisions: { pending: [] } };
+  const resolvida = { key: 'org/r#1', status: 'auto_approved', action: 'approve', resolvedAt: 1, cardMet: limpo.cardMet, reasons: limpo.reasons, attention: [] };
+  assert.equal(reviewActions(engine, [resolvida])['org/r#1'].caveats, false, 'aprovado limpo no Panorama');
+  // com card ilegível a régua de hoje fica: cardMet false segue ressalva
+  const comCard = envelope({ cardMet: false, cardLeitura: { ok: false, code: 'sem_credencial' }, reasons: ['PR sem card'] });
+  assert.equal(semFaltaDeCard(comCard), 0);
+  assert.equal(comCard.cardMet, false);
 });
 
 test('PR com card: a régua de hoje continua valendo', () => {
@@ -77,33 +104,37 @@ test('Jira desligado: sem card no envelope não é ressalva; com card, a régua 
   assert.equal(prSemCard(envelope({ cardLeitura: undefined })), false, 'sem a leitura do motor, nada muda');
 });
 
-test('item de produto não chega ao texto público, aos motivos nem à ressalva', () => {
+test('item puramente de produto não chega ao texto público, aos motivos nem à ressalva', () => {
+  const ESCOLHA = 'Isso é uma escolha de produto: a tela deveria esconder o selo?';
   const r = conferirEnvelope(envelope({
     reasons: [PERGUNTA, TECNICO],
-    paraQuemMergeia: [EFEITO, 'O PR liga em produção a criação de conta sem passo humano.'],
+    paraQuemMergeia: [ESCOLHA, EFEITO, 'O PR liga em produção a criação de conta sem passo humano.'],
     payloads: {
-      approve: { event: 'APPROVE', body: 'O cálculo novo está correto.', comments: [
-        { path: 'a.js', line: 3, side: 'RIGHT', body: 'Isso é uma escolha de produto: a tela deveria esconder o selo?' },
-        { path: 'a.js', line: 9, side: 'RIGHT', body: 'Este laço relê o arquivo a cada item.' }] },
-      request_changes: { event: 'REQUEST_CHANGES', body: '', comments: [] },
-      comment: { event: 'COMMENT', body: '', comments: [{ path: 'a.js', line: 3, side: 'RIGHT', body: 'Decisões de produto pendentes.' }] },
+      approve: { event: 'APPROVE', body: 'O cálculo novo está correto.', comments: [] },
+      request_changes: { event: 'REQUEST_CHANGES', body: 'Corrija o laço antes do merge.', comments: [
+        { path: 'a.js', line: 3, side: 'RIGHT', body: 'Decisão de produto à parte, este laço relê o arquivo a cada item.' }] },
+      comment: { event: 'COMMENT', body: '', comments: [] },
     },
   }));
   assert.deepEqual(r.reasons, [TECNICO]);
-  assert.deepEqual(r.paraQuemMergeia, ['O PR liga em produção a criação de conta sem passo humano.']);
-  assert.ok(!r.payloads.approve.body.includes(EFEITO), 'o item de produto não é anexado ao APPROVE');
+  // EFEITO fala de segurança: fica, como ponto técnico
+  assert.deepEqual(r.paraQuemMergeia, [EFEITO, 'O PR liga em produção a criação de conta sem passo humano.']);
+  assert.ok(!r.payloads.approve.body.includes(ESCOLHA), 'o item de produto não é anexado ao APPROVE');
   assert.match(r.payloads.approve.body, /criação de conta sem passo humano/, 'o item de segurança continua anexado');
-  assert.deepEqual(r.payloads.approve.comments.map((c) => c.line), [9]);
-  assert.deepEqual(r.payloads.comment.comments, []);
+  // comentário de linha ancora achado: nunca sai pelo filtro
+  assert.equal(r.payloads.request_changes.comments.length, 1);
   const pontos = textos(r).join(' | ');
-  assert.ok(!/produto/.test(pontos), pontos);
-  assert.ok(!provasDaDecisao(r).paraQuemMergeia.includes(EFEITO));
+  assert.ok(!pontos.includes(ESCOLHA) && !pontos.includes(PERGUNTA), pontos);
+  assert.ok(!provasDaDecisao(r).paraQuemMergeia.includes(ESCOLHA));
 });
 
-test('a marca de produto é estreita: ponto técnico sobre funcionalidade de produto segue', () => {
-  for (const t of [PERGUNTA, EFEITO, 'Questão de produto: manter o filtro?', 'escolhas de produto em aberto']) assert.ok(ehPontoDeProduto(t), t);
-  for (const t of [TECNICO, 'O produto da multiplicação estoura o inteiro de 32 bits.', 'A tela de produto não trata o erro 500.']) assert.ok(!ehPontoDeProduto(t), t);
-  assert.deepEqual(itensParaQuemMergeia({ paraQuemMergeia: [EFEITO] }), []);
+test('a marca de produto é estreita: segurança, correção, defeito e negação ficam, em qualquer ordem', () => {
+  for (const t of [PERGUNTA, 'Questão de produto: manter o filtro?', 'escolhas de produto em aberto', 'Decisão de produto: o selo some depois de 30 dias.']) assert.ok(ehPontoDeProduto(t), t);
+  for (const t of [TECNICO, EFEITO, 'Aceitar esse efeito é uma decisão de segurança e produto.',
+    'O produto da multiplicação estoura o inteiro de 32 bits.', 'A tela de produto não trata o erro 500.',
+    'Isto não é decisão de produto: o filtro descarta registros válidos.', 'Pergunta de produto: o bug do total some com o filtro?']) assert.ok(!ehPontoDeProduto(t), t);
+  assert.deepEqual(itensParaQuemMergeia({ paraQuemMergeia: [PERGUNTA] }), []);
+  assert.deepEqual(itensParaQuemMergeia({ paraQuemMergeia: [EFEITO] }), [EFEITO]);
 });
 
 test('o papel "Dono do produto" é aceito no Time e chega ao prompt', () => {
