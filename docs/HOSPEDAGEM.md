@@ -944,15 +944,19 @@ no limite de threads da hospedagem compartilhada. A rotina divide o trabalho:
    FAROL_BASE=<base> FAROL_DADOS=<base>/dados nohup /bin/sh <base>/autoatualizar.sh >/dev/null 2>&1 &
    ```
 
-   No máximo a cada 5 minutos (`FAROL_ATUALIZAR_INTERVALO_MIN`) ele busca a `main`. Com commit
+   No máximo a cada 4 minutos (`FAROL_ATUALIZAR_INTERVALO_MIN`; 4 e não 5 para não pular rodada
+   de um agendador de 5 em 5 minutos) ele busca a `main`. Com commit
    novo, que descende do que está no ar, baixa o artefato pelo `gh` logado no `HOME` do motor,
    confere o commit dentro dele, avança o clone, troca o `.next`, reinstala as dependências de
    produção do front só quando o `package.json` ou o `package-lock.json` de `web/` mudaram, e
    reinicia o motor e o front pelo script que os mantém de pé (`FAROL_INICIAR`). Sem o artefato
    (CI rodando, CI vermelho ou commit anterior ao job), sai e tenta na rodada seguinte, com uma
    linha só no log por commit.
-3. **Revisão em curso não é cortada.** Com uma sessão do Claude aberta pelo motor, a troca fica
-   para a rodada seguinte.
+3. **Revisão em curso é preservada enquanto der.** Com uma sessão do Claude aberta pelo motor, a
+   troca fica para a rodada seguinte, até 60 minutos para o mesmo commit
+   (`FAROL_ATUALIZAR_ESPERA_MAX_MIN`): com a fila cheia sempre haveria sessão aberta, e a versão
+   nova nunca entraria. Passada a espera, a troca sai (com uma linha no log), e a retomada durável
+   do motor continua a revisão interrompida depois da subida.
 4. **A volta é sozinha.** Depois de reiniciar, o motor e o front precisam estar de pé e o motor
    precisa responder `/api/health` pelo socket (`FAROL_MOTOR_SOCKET`) em até um minuto. Se não,
    o clone volta ao commit anterior, o `.next` anterior volta, as dependências são refeitas
