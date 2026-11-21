@@ -252,7 +252,7 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
               padrao={padrao === perfil.id}
               pronto={saude?.claudeAuth.find((p) => p.id === perfil.id)?.ready}
               uso={perfis && Object.hasOwn(perfis.uso, perfil.id) ? perfis.uso[perfil.id] : undefined}
-              limite={perfis && Object.hasOwn(perfis.limites, perfil.id) ? perfis.limites[perfil.id] : undefined}
+              limite={perfis?.limites && Object.hasOwn(perfis.limites, perfil.id) ? perfis.limites[perfil.id] : undefined}
               cliente={cliente}
               controle={controle}
               subir={i > 0 ? acaoDeSubir(perfil) : null}

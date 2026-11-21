@@ -308,7 +308,8 @@ export interface LimiteDoPerfil {
 export interface PerfisDoClaude {
   problemas: ProblemaDePerfil[];
   uso: Record<string, UsoDoPlano>;
-  limites: Record<string, LimiteDoPerfil>;
+  // o leitor sempre devolve; opcional para quem monta o objeto à mão (os testes)
+  limites?: Record<string, LimiteDoPerfil>;
 }
 
 const lerJanela: LeitorDeItem<JanelaDoPlano> = (v) => {
