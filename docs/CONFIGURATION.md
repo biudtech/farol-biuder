@@ -537,10 +537,17 @@ de chave de API não entra.
   desatualizada.
 - O percentual só pesa em 100%: antes de abrir a sessão automática, o motor confere o uso da
   assinatura que a sessão vai usar (`lib/engine/uso-antes-da-sessao.js`, teste em
-  `test/uso-antes-da-sessao.test.js`). A leitura guardada vale por dois minutos; sem ela, o
-  motor lê na hora e espera no máximo 15 segundos. Uma janela que barra o modelo da revisão em
-  100% registra o limite até o reset dela, como a sessão que bate no limite: a troca de perfil
-  e a espera da fila seguem iguais, e o PR volta sem sessão, sem label e sem gastar tentativa.
+  `test/uso-antes-da-sessao.test.js`). A leitura guardada vale por dois minutos; sem ela, só o
+  PR que começa a leitura espera, no máximo 5 segundos, e com uma leitura já em curso (ou fora
+  do prazo) vale a guardada de até 10 minutos, ou nenhuma. Uma janela que barra o modelo da
+  revisão em 100% registra o limite até o reset dela, como a sessão que bate no limite: a troca
+  de perfil e a espera da fila seguem iguais, e o PR volta sem sessão, sem label e sem gastar
+  tentativa. O reset tem teto por janela (a sessão volta em até 5 horas, a semana em até 7
+  dias): a janela cheia com o reset passado, além do teto ou sem data e já passado hoje (que o
+  texto faria virar amanhã, logo depois do reset, enquanto o servidor ainda mostra 100%) não
+  trava até ele, e espera um recuo de 2 minutos para ler de novo. A trava vinda do uso lido é
+  relida a cada 5 minutos enquanto dura e sai quando a janela deixa os 100%; a da sessão que
+  bateu no limite não é relida.
   A sessão e a semana com todos os modelos barram qualquer modelo; a semana de um modelo só
   ("Current week (Fable)") barra só quando todo modelo que a revisão pode usar é daquela
   família (o fixo da configuração, ou os do Auto, hoje o Opus), e nunca o padrão da assinatura

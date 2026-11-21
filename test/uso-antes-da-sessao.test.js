@@ -200,3 +200,133 @@ test('perfil padrão cheio passa para o próximo, que é conferido também; a te
   assert.equal(e.sessoesAbertas, 1, 'os dois cheios: a fila espera o reset mais cedo');
   assert.equal(e.retryAfterNet.get('o/r#9').notBefore, reset);
 });
+
+// --- revisão de 21/11/2026 ------------------------------------------------------------------
+
+// o reset sem data, no formato do CLI, em UTC: "5:50pm (UTC)"
+function horaSemData(ms) {
+  const d = new Date(ms);
+  const h = d.getUTCHours();
+  return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')}${h < 12 ? 'am' : 'pm'} (UTC)`;
+}
+const MINUTO = 60000;
+const RECUO_COM_FOLGA = () => Date.now() + TEMPOS.CLAUDE_USO_RECUO_MS + 5000;
+
+test('reset sem data que acabou de passar vira o dia seguinte, e marca a virada', () => {
+  const agora = Date.parse('2026-11-21T17:52:00Z');
+  const [j] = uso.resumirUso('Current session: 100% used · resets 5:50pm (UTC)', agora);
+  assert.equal(new Date(j.reset).toISOString(), '2026-11-22T17:50:00.000Z');
+  assert.equal(j.virouODia, true);
+  const [semVirar] = uso.resumirUso('Current session: 100% used · resets 6:50pm (UTC)', agora);
+  assert.equal(semVirar.virouODia, undefined, 'a forma da janela de sempre não muda');
+});
+
+test('logo depois do reset sem data, com o servidor ainda em 100%: recuo curto, nunca ~24 h', async () => {
+  const e = engineBase();
+  const passou = Math.floor((Date.now() - 2 * MINUTO) / MINUTO) * MINUTO;
+  await guardarUso(e, PERFIS[0], `Current session: 100% used · resets ${horaSemData(passou)}`);
+  await e.runOneHeadless(prDe('o/r#20'), 'eu');
+  assert.equal(e.sessoesAbertas, 0, 'a sessão ainda morreria: o PR espera o recuo');
+  const ate = e.limiteDoPlanoAte('eu');
+  assert.ok(ate > Date.now() && ate <= RECUO_COM_FOLGA(), `recuo curto, e não o dia seguinte (${new Date(ate).toISOString()})`);
+  assert.equal(e.linhas.filter((l) => l.includes('leio de novo')).length, 1);
+});
+
+test('o teto por janela: sessão além de 5 h e semana além de 7 dias não travam até o reset', async () => {
+  const sessao = engineBase();
+  const seisHoras = Math.floor((Date.now() + 6 * TEMPOS.HORA_MS) / MINUTO) * MINUTO;
+  await guardarUso(sessao, PERFIS[0], textoDoUso({ sessao: 100, reset: seisHoras }));
+  await antes.limiteAntesDaSessao(sessao, 'eu');
+  assert.ok(sessao.limiteDoPlanoAte('eu') <= RECUO_COM_FOLGA(), 'a sessão volta em até 5 h');
+
+  const semanaLonga = engineBase();
+  const oitoDias = Math.floor((Date.now() + 8 * 24 * TEMPOS.HORA_MS) / MINUTO) * MINUTO;
+  await guardarUso(semanaLonga, PERFIS[0], textoDoUso({ semana: 100, reset: oitoDias }));
+  await antes.limiteAntesDaSessao(semanaLonga, 'eu');
+  assert.ok(semanaLonga.limiteDoPlanoAte('eu') <= RECUO_COM_FOLGA());
+
+  const semana = engineBase();
+  const tresDias = Math.floor((Date.now() + 3 * 24 * TEMPOS.HORA_MS) / MINUTO) * MINUTO;
+  await guardarUso(semana, PERFIS[0], `Current week (all models): 100% used · resets ${resetTexto(tresDias)}`);
+  await antes.limiteAntesDaSessao(semana, 'eu');
+  assert.equal(semana.limiteDoPlanoAte('eu'), tresDias, 'dentro do teto, trava até o reset');
+});
+
+// uma leitura que só termina quando o teste solta
+function leituraPresa(texto) {
+  const r = { leituras: 0, soltar: () => {} };
+  r.rodar = () => { r.leituras += 1; return new Promise((resolve) => { r.soltar = () => resolve(saida(texto)); }); };
+  return r;
+}
+
+test('com uma leitura em curso, o PR seguinte não espera: usa a guardada de até 10 min', async () => {
+  const e = engineBase();
+  await guardarUso(e, PERFIS[0], textoDoUso({ sessao: 100 }));
+  e.usosDoPlano.get('a').leitura.em -= 5 * MINUTO;
+  const presa = leituraPresa(textoDoUso());
+  const primeiro = antes.limiteAntesDaSessao(e, 'eu', { rodar: presa.rodar, prazoMs: 10000 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const inicio = Date.now();
+  const ate = await antes.limiteAntesDaSessao(e, 'eu', { rodar: presa.rodar, prazoMs: 10000 });
+  assert.ok(Date.now() - inicio < 1000, 'o segundo não esperou a leitura em curso');
+  assert.ok(ate > Date.now(), 'a guardada de cinco minutos em 100% ainda decide');
+  assert.equal(presa.leituras, 1, 'uma leitura só');
+  presa.soltar();
+  await primeiro;
+});
+
+test('com uma leitura em curso e a guardada velha demais, o PR seguinte segue sem travar e sem esperar', async () => {
+  const e = engineBase();
+  await guardarUso(e, PERFIS[0], textoDoUso({ sessao: 100 }));
+  e.usosDoPlano.get('a').leitura.em -= 11 * MINUTO;
+  const presa = leituraPresa(textoDoUso());
+  const primeiro = antes.limiteAntesDaSessao(e, 'eu', { rodar: presa.rodar, prazoMs: 10000 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const inicio = Date.now();
+  assert.equal(await antes.limiteAntesDaSessao(e, 'eu', { rodar: presa.rodar, prazoMs: 10000 }), 0);
+  assert.ok(Date.now() - inicio < 1000);
+  presa.soltar();
+  await primeiro;
+});
+
+test('o primeiro PR espera a leitura nova no máximo 5 s, e a guardada serve por até 10 min', () => {
+  assert.equal(TEMPOS.CLAUDE_USO_ANTES_PRAZO_MS, 5000);
+  assert.equal(TEMPOS.CLAUDE_USO_ANTES_VELHA_MS, 10 * MINUTO);
+});
+
+// envelhece a trava e a leitura guardada como se `ms` tivesse passado
+function envelhecer(e, ms) {
+  e.limitesDePlano.get('dir:a').em -= ms;
+  e.usosDoPlano.get('a').leitura.em -= ms;
+}
+
+test('a trava vinda do uso é relida a cada 5 min e sai quando a janela deixa os 100%', async () => {
+  const e = engineBase();
+  await guardarUso(e, PERFIS[0], textoDoUso({ sessao: 100 }));
+  assert.ok(await antes.limiteAntesDaSessao(e, 'eu') > Date.now());
+  let leituras = 0;
+  const livre = async () => { leituras += 1; return saida(textoDoUso({ sessao: 40 })); };
+  assert.ok(await antes.limiteAntesDaSessao(e, 'eu', { rodar: livre }) > Date.now(), 'antes dos 5 min nem relê');
+  assert.equal(leituras, 0);
+  envelhecer(e, TEMPOS.CLAUDE_USO_RECONFERIR_MS + 1);
+  assert.equal(await antes.limiteAntesDaSessao(e, 'eu', { rodar: livre }), 0, 'a janela saiu de 100%: a trava sai');
+  assert.equal(leituras, 1);
+  assert.equal(e.linhas.filter((l) => l.includes('saiu de 100%')).length, 1);
+});
+
+test('a trava vinda do uso que continua em 100% fica; a da sessão que bateu no limite nem é relida', async () => {
+  const cheia = engineBase();
+  await guardarUso(cheia, PERFIS[0], textoDoUso({ sessao: 100 }));
+  const ate = await antes.limiteAntesDaSessao(cheia, 'eu');
+  envelhecer(cheia, TEMPOS.CLAUDE_USO_RECONFERIR_MS + 1);
+  assert.equal(await antes.limiteAntesDaSessao(cheia, 'eu', { rodar: async () => saida(textoDoUso({ sessao: 100 })) }), ate);
+
+  const real = engineBase();
+  const lim = await import('../lib/engine/limite-plano.js');
+  const reset = Date.now() + TEMPOS.HORA_MS;
+  lim.registrarLimite(real, 'eu', reset, Date.now() - TEMPOS.HORA_MS, { auth: { kind: 'dir', id: 'a' } });
+  let leituras = 0;
+  const vazia = async () => { leituras += 1; return saida(textoDoUso({ sessao: 0 })); };
+  assert.equal(await antes.limiteAntesDaSessao(real, 'eu', { rodar: vazia }), reset);
+  assert.equal(leituras, 0, 'a recusa real da sessão segue como antes');
+});
