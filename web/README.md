@@ -1302,7 +1302,10 @@ Regras que valem para quem mexer nela:
   da assinatura (Testar e a validade lida pelo motor) e para a credencial do Jira (Testar a
   conexão).
 - **Qual perfil está em uso agora não vem no snapshot.** A troca no limite do plano é do motor
-  (`escolherPerfil`) e não sai para a tela: ela mostra a ordem de uso e o padrão.
+  (`escolherPerfil`) e não sai para a tela: ela mostra a ordem de uso e o padrão. O que sai é o
+  perfil no limite (`claudePerfis.limites`, `limitesParaTela`): a linha ganha o chip "No limite
+  do plano" e, aberta, diz até quando; quando a fila parou pelo uso lido antes da sessão
+  (`origem: "uso"`), diz também a janela que estava em 100%.
 - **Os últimos cards lidos são só os das 30 decisões do snapshot.** O motor não guarda leitura
   de card por site; a tela liga o card ao site pela organização do PR e pela chave do projeto.
 - **A rota da conta não devolve a conta gravada.** `POST /api/accounts/edit` responde só

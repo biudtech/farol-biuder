@@ -11,7 +11,7 @@
 // a chave de API.
 import { useId, useState } from 'react';
 import { Botao, Chip, ui, type Tom } from '@/componentes/ui';
-import { lerTesteDePerfil, type CampoDoTeste, type ConfigDoSistema, type PerfilDoClaude as Perfil, type PerfisDoClaude, type Saude, type TesteDePerfil, type UsoDoPlano } from '@/contratos/sistema';
+import { lerTesteDePerfil, type CampoDoTeste, type ConfigDoSistema, type PerfilDoClaude as Perfil, type LimiteDoPerfil, type PerfisDoClaude, type Saude, type TesteDePerfil, type UsoDoPlano } from '@/contratos/sistema';
 import type { Acao } from '@/radar/acoes';
 import { dataHora } from '@/radar/formato';
 import { SO_PELA_API, entraPorLogin } from '@/sistema/login-web';
@@ -51,6 +51,17 @@ function textoDoLogin(uso: UsoDoPlano | undefined): string | null {
   const quando = dataHora(uso.venceEm) || 'data não informada';
   if (uso.faixaDoLogin === 'vencido') return `Vencido em ${quando}: o login precisa ser refeito.`;
   return uso.faixaDoLogin ? `Vence em ${quando}: refaça o login antes disso.` : `Vale até ${quando}.`;
+}
+
+// Por que a fila parou neste perfil: o uso lido antes da sessão (com a janela) ou a sessão que
+// bateu no limite. null quando o perfil está livre.
+export function textoDoLimite(limite: LimiteDoPerfil | undefined): string | null {
+  if (!limite) return null;
+  const quando = dataHora(limite.ate) || 'hora não informada';
+  if (limite.origem === 'uso') {
+    return `Fila automática parada pelo uso do plano lido antes da sessão${limite.janela ? ` (janela ${limite.janela} em 100%)` : ''}: volta em ${quando}, sem abrir sessão até lá.`;
+  }
+  return `Uma sessão bateu no limite do plano: volta em ${quando}${limite.estimado ? ' (hora estimada: o Claude não informou o reset)' : ''}.`;
 }
 
 function textoDoCampo(campo: CampoDoTeste): string {
@@ -93,7 +104,8 @@ function UsoDaJanela({ nome, usado, volta, desatualizado }: { nome: string; usad
   );
 }
 
-function estadoDoPerfil(perfil: Perfil, pronto: boolean | undefined, uso: UsoDoPlano | undefined): { tom: Tom; texto: string } {
+function estadoDoPerfil(perfil: Perfil, pronto: boolean | undefined, uso: UsoDoPlano | undefined, limite?: LimiteDoPerfil): { tom: Tom; texto: string } {
+  if (limite) return { tom: 'aviso', texto: 'No limite do plano' };
   if (perfil.kind === 'apikey') {
     if (perfil.temChave === true) return { tom: 'ok', texto: 'Chave presente' };
     return { tom: perfil.temChave === false ? 'ruim' : 'neutro', texto: perfil.temChave === false ? 'Sem chave' : 'Sem dado' };
@@ -109,6 +121,7 @@ interface PropsDoPerfil {
   padrao: boolean;
   pronto: boolean | undefined;
   uso: UsoDoPlano | undefined;
+  limite?: LimiteDoPerfil;
   cliente: Pick<Cliente, 'post'>;
   controle: ControleDeAcoes;
   subir: Acao | null;
@@ -118,14 +131,15 @@ interface PropsDoPerfil {
   nomeDoOutro(id: string): string;
 }
 
-function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento, nomeDoOutro }: PropsDoPerfil) {
+function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, limite, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento, nomeDoOutro }: PropsDoPerfil) {
   const [aberto, setAberto] = useState(false);
   const teste = useChamada<TesteDePerfil>();
   const idDoDetalhe = useId();
   const nome = nomeDoPerfil(perfil);
   const login = textoDoLogin(uso);
   const deChave = perfil.kind === 'apikey';
-  const estado = estadoDoPerfil(perfil, pronto, uso);
+  const estado = estadoDoPerfil(perfil, pronto, uso, limite);
+  const parada = textoDoLimite(limite);
 
   return (
     <li className={estilos.perfil} data-padrao={padrao ? 'sim' : undefined}>
@@ -146,6 +160,7 @@ function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, cliente, controle
         )) : null}
         <dl className={estilos.pares}>
           <Par nome="Na ordem de uso">{padrao ? `${posicao}º, o perfil padrão: a sessão começa por ele` : `${posicao}º: entra quando os de cima estão no limite do plano`}</Par>
+          {parada ? <Par nome="Limite do plano">{parada}</Par> : null}
           <Par nome="Credencial">{textoDaCredencial(perfil, pronto)}</Par>
           {login ? <Par nome="Validade do login">{login}</Par> : null}
           {!deChave && !login ? <Par nome="Validade do login">O motor ainda não leu a validade deste login.</Par> : null}
@@ -237,6 +252,7 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
               padrao={padrao === perfil.id}
               pronto={saude?.claudeAuth.find((p) => p.id === perfil.id)?.ready}
               uso={perfis && Object.hasOwn(perfis.uso, perfil.id) ? perfis.uso[perfil.id] : undefined}
+              limite={perfis && Object.hasOwn(perfis.limites, perfil.id) ? perfis.limites[perfil.id] : undefined}
               cliente={cliente}
               controle={controle}
               subir={i > 0 ? acaoDeSubir(perfil) : null}

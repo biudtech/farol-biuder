@@ -893,6 +893,14 @@ describe('Sistema: Claude', () => {
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
+  it('o perfil parado pelo uso lido antes da sessão diz a janela e a hora da volta', async () => {
+    montar({ bruto: { ...BRUTO, claudePerfis: { ...BRUTO.claudePerfis, limites: { plano: { ate: 1766000000000, estimado: false, origem: 'uso', janela: 'Semana' } } } } });
+    await assentar();
+    expect(perfil('Assinatura').getByText('No limite do plano')).toBeTruthy();
+    await abrir('Assinatura');
+    expect(perfil('Assinatura').getByText(/^Fila automática parada pelo uso do plano lido antes da sessão \(janela Semana em 100%\): volta em /)).toBeTruthy();
+  });
+
   it('o perfil por chave de API não tem Refazer login: a tela diz que a chave é só pela API', async () => {
     montar();
     await assentar();
