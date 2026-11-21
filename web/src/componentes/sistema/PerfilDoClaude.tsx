@@ -115,7 +115,12 @@ function LinhaNoPainel({ linha }: { linha: LinhaDoPainel }) {
         <span className={ui.mini}>
           {linha.padrao ? `${linha.posicao}º na ordem, o perfil padrão` : `${linha.posicao}º na ordem`}
         </span>
-        {linha.noLimiteAte ? <Chip pequeno tom="aviso">No limite do plano até {linha.noLimiteAte}</Chip> : null}
+        {linha.noLimite ? (
+          <span className={estilos.seloComTexto}>
+            <Chip pequeno tom="aviso">No limite do plano</Chip>
+            <span className={ui.mini}>{linha.noLimite}</span>
+          </span>
+        ) : null}
       </div>
       <div className={estilos.janelasDoPainel}>
         {linha.janelas.map((janela, i) => (
@@ -125,7 +130,8 @@ function LinhaNoPainel({ linha }: { linha: LinhaDoPainel }) {
       </div>
       <p className={estilos.validadeDoPainel}>
         <span className={estilos.nome}>Login</span>
-        <Chip pequeno tom={linha.validade.tom}>{linha.validade.texto}</Chip>
+        <Chip pequeno tom={linha.validade.tom}>{linha.validade.selo}</Chip>
+        <span className={estilos.textoDaValidade}>{linha.validade.texto}</span>
       </p>
     </li>
   );
@@ -264,7 +270,7 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
         </ol>
       ) : null}
       <p className={ui.mini}>
-        O motor começa pelo primeiro perfil da lista que não está no limite do plano e, no limite, passa sozinho para o próximo. O quadro acima mostra o uso do plano e a validade do login de cada um; clique num perfil para ver o detalhe e as ações.
+        O motor começa pelo primeiro perfil da lista que não está no limite do plano e, no limite, passa sozinho para o próximo. {painel.length ? 'O quadro acima mostra o uso do plano e a validade do login de cada um; clique num perfil para ver o detalhe e as ações.' : 'Clique num perfil para ver o uso do plano, a validade do login e as ações.'}
       </p>
       {segredos > 0 ? (
         <p className={ui.erro} role="alert">

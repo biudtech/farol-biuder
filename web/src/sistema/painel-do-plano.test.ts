@@ -1,10 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lerConfigDoSistema, type PerfisDoClaude, type UsoDoPlano } from '@/contratos/sistema';
-import { SEM_VALIDADE_NO_CLI, VALIDADE_NAO_LIDA, linhasDoPainel, validadeDoLogin } from './painel-do-plano';
+import { SEM_VALIDADE_NO_CLI, VALIDADE_NAO_LIDA, VALIDADE_SEM_LEITURA, linhasDoPainel, validadeDoLogin } from './painel-do-plano';
 
-const raiz = (arquivo: string): string => fs.readFileSync(path.resolve(import.meta.dirname, '../../..', arquivo), 'utf8');
 const FUSO = 'America/Sao_Paulo';
 const VENCE = Date.UTC(2026, 10, 27, 4, 45);
 
@@ -16,25 +13,25 @@ const uso = (extra: Partial<UsoDoPlano> = {}): UsoDoPlano => ({ lido: true, ok: 
 const perfis = (mapa: Record<string, UsoDoPlano>, limites: PerfisDoClaude['limites'] = {}): PerfisDoClaude => ({ problemas: [], uso: mapa, limites });
 
 describe('a validade do login no painel', () => {
-  it('lê o campo que o motor tira do /usage do Claude Code', () => {
-    expect(raiz('lib/engine/uso-do-plano.js')).toContain('j?.credential_expires_at');
-  });
-
   it('com a validade: vale até, vence em e vencido, cada um com o seu tom', () => {
-    expect(validadeDoLogin(uso({ venceEm: VENCE }), FUSO)).toEqual({ texto: 'Vale até 27/11, 01:45.', tom: 'ok' });
-    expect(validadeDoLogin(uso({ venceEm: VENCE, faixaDoLogin: 'perto' }), FUSO)).toEqual({ texto: 'Vence em 27/11, 01:45: refaça o login antes disso.', tom: 'aviso' });
-    expect(validadeDoLogin(uso({ venceEm: VENCE, faixaDoLogin: 'vencido' }), FUSO)).toEqual({ texto: 'Vencido em 27/11, 01:45: o login precisa ser refeito.', tom: 'ruim' });
+    expect(validadeDoLogin(uso({ venceEm: VENCE }), FUSO)).toEqual({ selo: 'Vale', texto: 'Vale até 27/11, 01:45.', tom: 'ok' });
+    expect(validadeDoLogin(uso({ venceEm: VENCE, faixaDoLogin: 'perto' }), FUSO)).toEqual({ selo: 'Vence logo', texto: 'Vence em 27/11, 01:45: refaça o login antes disso.', tom: 'aviso' });
+    expect(validadeDoLogin(uso({ venceEm: VENCE, faixaDoLogin: 'vencido' }), FUSO)).toEqual({ selo: 'Vencido', texto: 'Vencido em 27/11, 01:45: o login precisa ser refeito.', tom: 'ruim' });
   });
 
   it('uso lido sem validade é o Claude Code que não informa, e não leitura por vir', () => {
-    expect(validadeDoLogin(uso({ venceEm: 0 }), FUSO)).toEqual({ texto: SEM_VALIDADE_NO_CLI, tom: 'aviso' });
+    expect(validadeDoLogin(uso({ venceEm: 0 }), FUSO)).toEqual({ selo: 'Sem validade', texto: SEM_VALIDADE_NO_CLI, tom: 'aviso' });
     expect(validadeDoLogin(uso(), FUSO).texto).toBe(SEM_VALIDADE_NO_CLI);
   });
 
-  it('sem leitura, ou com a leitura que falhou, a validade ainda não foi lida', () => {
-    expect(validadeDoLogin(undefined, FUSO)).toEqual({ texto: VALIDADE_NAO_LIDA, tom: 'neutro' });
+  it('sem leitura nenhuma, a validade ainda não foi lida', () => {
+    expect(validadeDoLogin(undefined, FUSO)).toEqual({ selo: 'Não lida', texto: VALIDADE_NAO_LIDA, tom: 'neutro' });
     expect(validadeDoLogin({ lido: false, janelas: [] }, FUSO).texto).toBe(VALIDADE_NAO_LIDA);
-    expect(validadeDoLogin({ lido: true, ok: false, erro: 'o Claude Code não respondeu a tempo', janelas: [] }, FUSO).texto).toBe(VALIDADE_NAO_LIDA);
+  });
+
+  it('a leitura que falhou não promete validade por vir: manda olhar o motivo', () => {
+    // como o motor manda o login ausente (leituraDaSaida, lib/engine/uso-do-plano.js)
+    expect(validadeDoLogin({ lido: true, ok: false, erro: 'sem login válido nesta pasta', venceEm: 0, janelas: [] }, FUSO)).toEqual({ selo: 'Leitura falhou', texto: VALIDADE_SEM_LEITURA, tom: 'aviso' });
   });
 });
 
@@ -66,18 +63,24 @@ describe('as linhas do painel', () => {
       'O motor ainda não leu o uso do plano deste perfil.',
       'Chave de API: não tem janela de plano.',
     ]);
-    expect(linhas[2]?.validade).toEqual({ texto: 'Chave de API: não tem login para renovar.', tom: 'neutro' });
+    expect(linhas[2]?.validade).toEqual({ selo: 'Chave de API', texto: 'Não tem login para renovar.', tom: 'neutro' });
   });
 
   it('o perfil no limite do plano leva a hora da volta, e a leitura velha é marcada', () => {
     const [linha] = linhasDoPainel(ler({ claudeProfileId: 'a', claudeProfiles: [A] }), perfis({ a: uso({ desatualizado: true }) }, { a: { ate: VENCE, origem: 'uso', janela: 'Semana' } }), FUSO);
-    expect(linha?.noLimiteAte).toBe('27/11, 01:45');
+    expect(linha?.noLimite).toBe('volta em 27/11, 01:45');
     expect(linha?.desatualizado).toBe(true);
+  });
+
+  it('a hora estimada do limite é dita como estimada', () => {
+    const [linha] = linhasDoPainel(ler({ claudeProfileId: 'a', claudeProfiles: [A] }), perfis({}, { a: { ate: VENCE, estimado: true } }), FUSO);
+    expect(linha?.noLimite).toBe('volta em 27/11, 01:45 (hora estimada)');
   });
 
   it('não lê uso nem limite de chave herdada do protótipo', () => {
     const [linha] = linhasDoPainel(ler({ claudeProfileId: 'toString', claudeProfiles: [{ id: 'toString', label: 'Estranho', kind: 'dir' }] }), perfis({}), FUSO);
-    expect(linha?.janelas).toEqual([]);
-    expect(linha?.noLimiteAte).toBeUndefined();
+    expect(linha?.semJanela).toBe('O motor ainda não leu o uso do plano deste perfil.');
+    expect(linha?.validade.texto).toBe(VALIDADE_NAO_LIDA);
+    expect(linha?.noLimite).toBeUndefined();
   });
 });

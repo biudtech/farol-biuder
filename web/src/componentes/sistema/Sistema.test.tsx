@@ -902,10 +902,10 @@ describe('Sistema: Claude', () => {
     expect(resto).toEqual([]);
     expect(assinatura).toContain('Assinatura1º na ordem, o perfil padrão');
     expect(assinatura).toContain('Sessão40% usado, volta às 18h');
-    expect(assinatura).toMatch(/LoginVale até \d{2}\/\d{2}, \d{2}:\d{2}\.$/);
+    expect(assinatura).toMatch(/LoginValeVale até \d{2}\/\d{2}, \d{2}:\d{2}\.$/);
     expect(chave).toContain('Chave2º na ordem');
     expect(chave).toContain('Chave de API: não tem janela de plano.');
-    expect(chave).toContain('Chave de API: não tem login para renovar.');
+    expect(chave).toContain('LoginChave de APINão tem login para renovar.');
     // nenhum perfil foi aberto
     expect(perfil('Assinatura').getByRole('button', { name: /^Assinatura/ }).getAttribute('aria-expanded')).toBe('false');
   });
@@ -914,16 +914,16 @@ describe('Sistema: Claude', () => {
     const semValidade = { ...BRUTO.claudePerfis.uso.plano, venceEm: 0 };
     montar({ bruto: { ...BRUTO, claudePerfis: { ...BRUTO.claudePerfis, uso: { plano: semValidade } } } });
     await assentar();
-    expect(painel()[0]).toContain('O Claude Code instalado no motor não informou a validade deste login (versão antiga não informa): atualize o Claude Code do motor.');
+    expect(painel()[0]).toContain('Sem validadeO Claude Code do motor respondeu o uso sem a validade deste login. Versões antigas não informam: confira a versão instalada no motor.');
     await abrir('Assinatura');
-    expect(perfil('Assinatura').getByText(/^O Claude Code instalado no motor não informou a validade deste login/)).toBeTruthy();
+    expect(perfil('Assinatura').getByText(/^O Claude Code do motor respondeu o uso sem a validade deste login/)).toBeTruthy();
     expect(secao(CLAUDE).textContent).not.toContain('O motor ainda não leu a validade');
   });
 
   it('o painel marca o perfil no limite do plano com a hora da volta', async () => {
     montar({ bruto: { ...BRUTO, claudePerfis: { ...BRUTO.claudePerfis, limites: { plano: { ate: 1766000000000, estimado: false, origem: 'uso', janela: 'Semana' } } } } });
     await assentar();
-    expect(painel()[0]).toMatch(/No limite do plano até \d{2}\/\d{2}, \d{2}:\d{2}/);
+    expect(painel()[0]).toMatch(/No limite do planovolta em \d{2}\/\d{2}, \d{2}:\d{2}/);
   });
 
   it('o perfil parado pelo uso lido antes da sessão diz a janela e a hora da volta', async () => {

@@ -9,7 +9,7 @@
 //
 // A validade vem do campo `credential_expires_at` do `/usage` do Claude Code. Medido em
 // 21/11/2026: a versão 2.1.310 responde as janelas sem esse campo, e a 2.1.325 o manda. Por isso
-// "uso lido e sem validade" não é "ainda não leu": é o Claude Code do motor que não informa, e
+// "uso lido e sem validade" não é "ainda não leu": o Claude Code do motor respondeu sem ela, e
 // a tela diz isso em vez de prometer uma leitura que não vem.
 import type { Tom } from '@/componentes/ui';
 import type { ConfigDoSistema, LimiteDoPerfil, PerfisDoClaude, UsoDoPlano } from '@/contratos/sistema';
@@ -24,6 +24,8 @@ export interface JanelaDoPainel {
 }
 
 export interface ValidadeDoPainel {
+  // o selo curto (o chip não quebra linha) e a frase inteira, que vai em texto comum
+  selo: string;
   texto: string;
   tom: Tom;
 }
@@ -39,24 +41,27 @@ export interface LinhaDoPainel {
   semJanela?: string;
   desatualizado: boolean;
   validade: ValidadeDoPainel;
-  // a hora em que o perfil volta, quando ele está no limite do plano
-  noLimiteAte?: string;
+  // quando o perfil volta, se ele está no limite do plano: a frase já diz se a hora é estimada
+  noLimite?: string;
 }
 
-export const SEM_VALIDADE_NO_CLI = 'O Claude Code instalado no motor não informou a validade deste login (versão antiga não informa): atualize o Claude Code do motor.';
+export const SEM_VALIDADE_NO_CLI = 'O Claude Code do motor respondeu o uso sem a validade deste login. Versões antigas não informam: confira a versão instalada no motor.';
+export const VALIDADE_SEM_LEITURA = 'A validade não veio: a leitura do uso do plano falhou. Se o motivo for falta de login, refaça o login.';
 export const VALIDADE_NAO_LIDA = 'O motor ainda não leu a validade deste login.';
 
 // A frase da validade do login de um perfil de assinatura, com o tom do selo.
 export function validadeDoLogin(uso: UsoDoPlano | undefined, fuso?: string): ValidadeDoPainel {
   if (uso?.venceEm) {
     const quando = dataHora(uso.venceEm, fuso) || 'data não informada';
-    if (uso.faixaDoLogin === 'vencido') return { texto: `Vencido em ${quando}: o login precisa ser refeito.`, tom: 'ruim' };
-    if (uso.faixaDoLogin) return { texto: `Vence em ${quando}: refaça o login antes disso.`, tom: 'aviso' };
-    return { texto: `Vale até ${quando}.`, tom: 'ok' };
+    if (uso.faixaDoLogin === 'vencido') return { selo: 'Vencido', texto: `Vencido em ${quando}: o login precisa ser refeito.`, tom: 'ruim' };
+    if (uso.faixaDoLogin) return { selo: 'Vence logo', texto: `Vence em ${quando}: refaça o login antes disso.`, tom: 'aviso' };
+    return { selo: 'Vale', texto: `Vale até ${quando}.`, tom: 'ok' };
   }
-  // o CLI respondeu as janelas e não mandou a validade: esperar não resolve
-  if (uso?.lido && uso.ok !== false) return { texto: SEM_VALIDADE_NO_CLI, tom: 'aviso' };
-  return { texto: VALIDADE_NAO_LIDA, tom: 'neutro' };
+  // a leitura falhou (sem login na pasta, CLI que não respondeu): esperar não traz a validade
+  if (uso?.lido && uso.ok === false) return { selo: 'Leitura falhou', texto: VALIDADE_SEM_LEITURA, tom: 'aviso' };
+  // o CLI respondeu as janelas e não mandou a validade: esperar também não resolve
+  if (uso?.lido) return { selo: 'Sem validade', texto: SEM_VALIDADE_NO_CLI, tom: 'aviso' };
+  return { selo: 'Não lida', texto: VALIDADE_NAO_LIDA, tom: 'neutro' };
 }
 
 function janelasDoUso(uso: UsoDoPlano | undefined): JanelaDoPainel[] {
@@ -93,10 +98,10 @@ export function linhasDoPainel(config: ConfigDoSistema | undefined, perfis: Perf
       deChave,
       janelas,
       desatualizado: uso?.desatualizado === true,
-      validade: deChave ? { texto: 'Chave de API: não tem login para renovar.', tom: 'neutro' } : validadeDoLogin(uso, fuso),
+      validade: deChave ? { selo: 'Chave de API', texto: 'Não tem login para renovar.', tom: 'neutro' } : validadeDoLogin(uso, fuso),
     };
     if (!janelas.length) linha.semJanela = motivoSemJanela(deChave, uso);
-    if (limite) linha.noLimiteAte = dataHora(limite.ate, fuso) || 'hora não informada';
+    if (limite) linha.noLimite = `volta em ${dataHora(limite.ate, fuso) || 'hora não informada'}${limite.estimado ? ' (hora estimada)' : ''}`;
     return linha;
   });
 }
