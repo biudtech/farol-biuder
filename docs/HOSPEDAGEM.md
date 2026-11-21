@@ -927,6 +927,41 @@ nativo quebrado. Não foi exercitado: a troca de versão no `HOME` do motor com 
 (não saiu versão nova desde a instalação), e o link voltando da reserva para uma versão nova (na
 prova a reserva já era a última versão, e o link ficou nela).
 
+**A main no ar sozinha.** Sem imagem, a versão no ar é o clone em `<base>/app`, e cada merge na
+`main` precisaria de alguém publicando à mão. O front é a parte difícil: o build do Next não cabe
+no limite de threads da hospedagem compartilhada. A rotina divide o trabalho:
+
+1. **O CI empacota o front.** O job `pacote-do-front` (`.github/workflows/ci.yml`) roda só em
+   push na `main`, depois do `gate`, do `web` e da `imagem` verdes, e só com a variável do
+   repositório `FAROL_API_PUBLICA` definida (o endereço público do motor, que o Next grava no
+   build): `gh variable set FAROL_API_PUBLICA --body https://<host público>`. Ele publica o
+   artefato `front-<commit>`, com o `.next` sem o cache e o commit em `.next/REVISAO_FAROL`, por
+   14 dias. Commit com o CI vermelho não gera artefato, e por isso nunca entra no ar.
+2. **O servidor puxa.** [`docs/exemplos/autoatualizar.sh`](exemplos/autoatualizar.sh), chamado a
+   cada rodada do agendador junto com o do Claude Code:
+
+   ```sh
+   FAROL_BASE=<base> FAROL_DADOS=<base>/dados nohup /bin/sh <base>/autoatualizar.sh >/dev/null 2>&1 &
+   ```
+
+   No máximo a cada 5 minutos (`FAROL_ATUALIZAR_INTERVALO_MIN`) ele busca a `main`. Com commit
+   novo, que descende do que está no ar, baixa o artefato pelo `gh` logado no `HOME` do motor,
+   confere o commit dentro dele, avança o clone, troca o `.next`, reinstala as dependências de
+   produção do front só quando o `package.json` ou o `package-lock.json` de `web/` mudaram, e
+   reinicia o motor e o front pelo script que os mantém de pé (`FAROL_INICIAR`). Sem o artefato
+   ainda (CI rodando), sai e tenta na rodada seguinte.
+3. **Revisão em curso não é cortada.** Com uma sessão do Claude aberta pelo motor, a troca fica
+   para a rodada seguinte.
+4. **A volta é sozinha.** Depois de reiniciar, o motor e o front precisam estar de pé e o motor
+   precisa responder `/api/health` pelo socket (`FAROL_MOTOR_SOCKET`) em até um minuto. Se não,
+   o clone volta ao commit anterior, o `.next` anterior volta, as dependências são refeitas
+   quando mudaram, e o commit recusado entra em `<base>/run/autoatualizar.recusados`, para não
+   ser tentado de novo: o próximo commit da `main` é.
+5. **Onde olhar.** `<base>/log/autoatualizar.log` ganha linha quando a versão muda, quando um
+   commit passa a esperar o CI e quando algo falha (linha com `ERRO`). `<base>/run/autoatualizar.marca`
+   é a última conferência. Commit que não descende do que está no ar (história reescrita) para a
+   rotina com `ERRO` até alguém trocar à mão.
+
 ## O que não foi provado
 
 - **O login real do `gh`** dentro do container (pede o token da conta revisora) e o motor
