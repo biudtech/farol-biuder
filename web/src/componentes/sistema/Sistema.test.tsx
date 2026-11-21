@@ -893,37 +893,42 @@ describe('Sistema: Claude', () => {
     expect(t.container.innerHTML).not.toContain('/home/farol');
   });
 
-  const painel = () => within(na(CLAUDE).getByRole('list', { name: 'Plano, validade do login e ordem de uso de cada perfil' })).getAllByRole('listitem').map((li) => li.textContent ?? '');
+  const cartoes = () => within(lista()).getAllByRole('listitem').map((li) => li.textContent ?? '');
 
-  it('o painel mostra sem clique a cota, a validade do login e a ordem de cada perfil', async () => {
+  it('cada perfil mostra sem clique a cota, a validade do login e o Subir na ordem, uma vez só', async () => {
     montar();
     await assentar();
-    const [assinatura, chave, ...resto] = painel();
-    expect(resto).toEqual([]);
-    expect(assinatura).toContain('Assinatura1º na ordem, o perfil padrão');
-    expect(assinatura).toContain('Sessão40% usado, volta às 18h');
-    expect(assinatura).toMatch(/LoginValeVale até \d{2}\/\d{2}, \d{2}:\d{2}\.$/);
-    expect(chave).toContain('Chave2º na ordem');
-    expect(chave).toContain('Chave de API: não tem janela de plano.');
-    expect(chave).toContain('LoginChave de APINão tem login para renovar.');
     // nenhum perfil foi aberto
     expect(perfil('Assinatura').getByRole('button', { name: /^Assinatura/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(perfil('Chave').getByRole('button', { name: /^Chave/ }).getAttribute('aria-expanded')).toBe('false');
+    const [assinatura, chave, ...resto] = cartoes();
+    expect(resto).toEqual([]);
+    expect(assinatura).toContain('Sessão40% usado, volta às 18h');
+    expect(assinatura).toMatch(/LoginValeVale até \d{2}\/\d{2}, \d{2}:\d{2}\./);
+    expect(chave).toContain('Chave de API: não tem janela de plano.');
+    expect(chave).toContain('LoginNão se aplicaChave de API: não tem login para renovar.');
+    // o Subir na ordem fica à vista no perfil que não é o primeiro
+    expect(perfil('Chave').getByRole('button', { name: 'Subir Chave na ordem de uso' })).toBeTruthy();
+    expect(perfil('Assinatura').queryByRole('button', { name: /na ordem de uso/ })).toBeNull();
+    // uma lista só no assunto, e o uso do plano aparece uma vez, também com o perfil aberto
+    expect(na(CLAUDE).getAllByRole('list')).toHaveLength(1);
+    await abrir('Assinatura');
+    expect(perfil('Assinatura').getAllByText('40% usado, volta às 18h')).toHaveLength(1);
+    expect(perfil('Assinatura').getAllByText(/^Vale até /)).toHaveLength(1);
   });
 
-  it('uso lido sem validade: o painel e o perfil dizem que o Claude Code do motor não informa', async () => {
+  it('uso lido sem validade: o perfil diz que o Claude Code do motor não informa', async () => {
     const semValidade = { ...BRUTO.claudePerfis.uso.plano, venceEm: 0 };
     montar({ bruto: { ...BRUTO, claudePerfis: { ...BRUTO.claudePerfis, uso: { plano: semValidade } } } });
     await assentar();
-    expect(painel()[0]).toContain('Sem validadeO Claude Code do motor respondeu o uso sem a validade deste login. Versões antigas não informam: confira a versão instalada no motor.');
-    await abrir('Assinatura');
-    expect(perfil('Assinatura').getByText(/^O Claude Code do motor respondeu o uso sem a validade deste login/)).toBeTruthy();
+    expect(cartoes()[0]).toContain('Sem validadeO Claude Code do motor respondeu o uso sem a validade deste login. Versões antigas não informam: confira a versão instalada no motor.');
     expect(secao(CLAUDE).textContent).not.toContain('O motor ainda não leu a validade');
   });
 
-  it('o painel marca o perfil no limite do plano com a hora da volta', async () => {
+  it('o perfil no limite do plano mostra sem clique a hora da volta', async () => {
     montar({ bruto: { ...BRUTO, claudePerfis: { ...BRUTO.claudePerfis, limites: { plano: { ate: 1766000000000, estimado: false, origem: 'uso', janela: 'Semana' } } } } });
     await assentar();
-    expect(painel()[0]).toMatch(/No limite do planovolta em \d{2}\/\d{2}, \d{2}:\d{2}/);
+    expect(cartoes()[0]).toMatch(/No limite do plano: volta em \d{2}\/\d{2}, \d{2}:\d{2}\./);
   });
 
   it('o perfil parado pelo uso lido antes da sessão diz a janela e a hora da volta', async () => {
@@ -953,7 +958,7 @@ describe('Sistema: Claude', () => {
     expect(within(lista()).queryByRole('button', { name: /teto/i })).toBeNull();
     expect(within(lista()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
       '1AssinaturaAssinatura · perfil padrãoPronto', 'Testar o perfil Assinatura', 'Refazer o login do perfil Assinatura',
-      '2ChaveChave de APIChave presente', 'Testar o perfil Chave', 'Subir Chave na ordem de uso',
+      '2ChaveChave de APIChave presente', 'Subir Chave na ordem de uso', 'Testar o perfil Chave',
     ]);
     expect(secao(CLAUDE).textContent).not.toMatch(/US\$|20,00|2026-11-01|01\/11\/2026|[Tt]eto|pausar/);
     // e o valor do teto nem entra no store

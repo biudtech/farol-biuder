@@ -1,5 +1,5 @@
-// O painel do assunto Claude: de cada perfil, na ordem de uso, a cota do plano, a validade do
-// login e a posição, sem clique. Sem React. Pedido do dono de 21/11/2026: "sinto falta da tela
+// O que cada perfil do assunto Claude mostra sem clique: a cota do plano, a validade do login
+// e a volta do limite, na ordem de uso. Sem React. Pedido do dono de 21/11/2026: "sinto falta da tela
 // onde mostra a cota da assinatura, quando vamos ter que renovar a credencial e ordem de
 // consumo" (os três dados existiam, mas dentro de cada perfil fechado).
 //
@@ -98,7 +98,7 @@ export function linhasDoPainel(config: ConfigDoSistema | undefined, perfis: Perf
       deChave,
       janelas,
       desatualizado: uso?.desatualizado === true,
-      validade: deChave ? { selo: 'Chave de API', texto: 'Não tem login para renovar.', tom: 'neutro' } : validadeDoLogin(uso, fuso),
+      validade: deChave ? { selo: 'Não se aplica', texto: 'Chave de API: não tem login para renovar.', tom: 'neutro' } : validadeDoLogin(uso, fuso),
     };
     if (!janelas.length) linha.semJanela = motivoSemJanela(deChave, uso);
     if (limite) linha.noLimite = `volta em ${dataHora(limite.ate, fuso) || 'hora não informada'}${limite.estimado ? ' (hora estimada)' : ''}`;
