@@ -9,7 +9,7 @@
 # passaram naquele commit: commit sem CI verde nunca entra no ar.
 #
 # Uso, a cada rodada do agendador (o intervalo é conferido aqui dentro):
-#   FAROL_BASE=<base> /bin/sh autoatualizar.sh          confere no máximo a cada 5 minutos
+#   FAROL_BASE=<base> /bin/sh autoatualizar.sh          confere no máximo a cada 4 minutos
 #   FAROL_BASE=<base> /bin/sh autoatualizar.sh --agora  confere sem olhar o intervalo
 #
 # Espera em <base>: app/ (o clone do repositório, com o front em app/web), run/ com motor.pid,
@@ -17,11 +17,12 @@
 #
 # Variáveis: FAROL_BASE (obrigatória), FAROL_DADOS (o HOME do motor, onde mora o login do gh;
 # padrão <base>/dados), FAROL_INICIAR (padrão <base>/iniciar.sh), FAROL_MOTOR_SOCKET (padrão
-# <base>/run/motor.sock), FAROL_ATUALIZAR_INTERVALO_MIN (padrão 5) e FAROL_NODE_BIN (a pasta do
-# node e do npm, quando não estão no PATH).
+# <base>/run/motor.sock), FAROL_ATUALIZAR_INTERVALO_MIN (padrão 4), FAROL_ATUALIZAR_ESPERA_MAX_MIN
+# (padrão 60) e FAROL_NODE_BIN (a pasta do node e do npm, quando não estão no PATH).
 #
-# Revisão em curso não é cortada: com uma sessão do Claude aberta pelo motor, a troca fica para
-# a rodada seguinte. Depois de trocar, o motor e o front precisam estar de pé e o motor precisa
+# Revisão em curso é preservada enquanto der: com uma sessão do Claude aberta pelo motor, a troca
+# fica para a rodada seguinte, até a espera máxima para o mesmo commit; passada ela, a troca sai e
+# a retomada durável do motor continua a revisão. Depois de trocar, o motor e o front precisam estar de pé e o motor precisa
 # responder /api/health em até um minuto. Se não, tudo volta ao commit anterior (código, .next e
 # dependências), o commit recusado vai para run/autoatualizar.recusados e não é tentado de novo:
 # o próximo commit da main é.
@@ -35,7 +36,10 @@ DADOS="${FAROL_DADOS:-$BASE/dados}"
 APP="$BASE/app"
 INICIAR="${FAROL_INICIAR:-$BASE/iniciar.sh}"
 SOCKET="${FAROL_MOTOR_SOCKET:-$BASE/run/motor.sock}"
-INTERVALO_MIN="${FAROL_ATUALIZAR_INTERVALO_MIN:-5}"
+# 4, e não 5: o agendador de 5 em 5 minutos encontra a marca com 4min50s e pularia uma rodada
+INTERVALO_MIN="${FAROL_ATUALIZAR_INTERVALO_MIN:-4}"
+ESPERA_MAX_MIN="${FAROL_ATUALIZAR_ESPERA_MAX_MIN:-60}"
+ADIADO="$BASE/run/autoatualizar.adiado"
 LOG="$BASE/log/autoatualizar.log"
 MARCA="$BASE/run/autoatualizar.marca"
 TRAVA="$BASE/run/autoatualizar.trava"
@@ -74,10 +78,17 @@ if ! $GIT merge-base --is-ancestor "$ATUAL" "$NOVO"; then
   exit 1
 fi
 
-# revisão em curso: a sessão do Claude é filha do motor
+# revisão em curso: a sessão do Claude é filha do motor. A troca espera, mas não para sempre:
+# com a fila cheia sempre haveria sessão aberta. Passada a espera máxima para o mesmo commit, a
+# troca sai, e a retomada durável do motor continua a revisão interrompida depois da subida.
 MOTOR_PID="$(cat "$BASE/run/motor.pid" 2>/dev/null)"
 if [ -n "$MOTOR_PID" ] && ps -o args= --ppid "$MOTOR_PID" 2>/dev/null | grep -q 'output-format stream-json'; then
-  exit 0
+  if [ "$(cat "$ADIADO" 2>/dev/null)" != "$NOVO" ]; then
+    echo "$NOVO" >"$ADIADO"
+    exit 0
+  fi
+  [ -z "$(find "$ADIADO" -mmin +"$ESPERA_MAX_MIN" 2>/dev/null)" ] && exit 0
+  anotar "$(curto "$NOVO") esperou $ESPERA_MAX_MIN minutos por revisão em curso; troca sai e a revisão é retomada depois"
 fi
 
 REPO="$($GIT remote get-url origin | sed 's#.*github\.com[:/]##; s#\.git$##')"
