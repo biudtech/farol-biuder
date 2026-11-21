@@ -1,8 +1,8 @@
 'use client';
 
-// Os perfis do Claude no assunto Claude. No topo, o painel (src/sistema/painel-do-plano.ts): de
-// cada perfil, sem clique, o uso do plano, a validade do login e a posição na ordem. Abaixo, os
-// perfis na ordem em que o motor os usa (src/sistema/perfis.ts),
+// Os perfis do Claude no assunto Claude, numa lista só e na ordem em que o motor os usa
+// (src/sistema/perfis.ts). Cada perfil mostra sem clique o uso do plano, a validade do login
+// (src/sistema/painel-do-plano.ts) e o Subir na ordem; o resto fica no detalhe,
 // cada um fechado numa linha com a posição, o nome, o tipo e o estado, e aberto num clique com o
 // uso do plano, a validade do login, qual é o padrão e as ações: Testar, Refazer login (só o de
 // assinatura, pelo fluxo login-web do motor) e Subir na ordem. O perfil por chave de API não tem
@@ -17,7 +17,7 @@ import { lerTesteDePerfil, type CampoDoTeste, type ConfigDoSistema, type PerfilD
 import type { Acao } from '@/radar/acoes';
 import { dataHora } from '@/radar/formato';
 import { SO_PELA_API, entraPorLogin } from '@/sistema/login-web';
-import { linhasDoPainel, validadeDoLogin, type LinhaDoPainel } from '@/sistema/painel-do-plano';
+import { linhasDoPainel, type LinhaDoPainel } from '@/sistema/painel-do-plano';
 import { corpoDeSubir, idDoPadrao, impedimentoDaOrdem, nomeDoPerfil, ordemDeUso } from '@/sistema/perfis';
 import type { Cliente } from '@/transporte/cliente';
 import type { ControleDeAcoes } from '../radar/useAcoes';
@@ -99,44 +99,6 @@ function BarraDaJanela({ rotulo, pct, volta, desatualizado }: { rotulo: string; 
   );
 }
 
-function UsoDaJanela({ nome, usado, volta, desatualizado }: { nome: string; usado: number | undefined; volta?: string; desatualizado?: boolean }) {
-  const pct = usado === undefined ? null : Math.max(0, Math.min(100, Math.round(usado * 100)));
-  return <BarraDaJanela rotulo={`Uso do plano: ${nome}`} pct={pct} volta={volta} desatualizado={desatualizado} />;
-}
-
-// O painel: a cota, a validade do login e a ordem de uso de todos os perfis, sem clique
-// (src/sistema/painel-do-plano.ts). O detalhe e as ações continuam em cada perfil, abaixo.
-function LinhaNoPainel({ linha }: { linha: LinhaDoPainel }) {
-  return (
-    <li className={estilos.linhaDoPainel} data-padrao={linha.padrao ? 'sim' : undefined}>
-      <span className={estilos.posicao} aria-hidden="true">{linha.posicao}</span>
-      <div className={estilos.nomeDoPerfil}>
-        <span className={estilos.nome}>{linha.nome}</span>
-        <span className={ui.mini}>
-          {linha.padrao ? `${linha.posicao}º na ordem, o perfil padrão` : `${linha.posicao}º na ordem`}
-        </span>
-        {linha.noLimite ? (
-          <span className={estilos.seloComTexto}>
-            <Chip pequeno tom="aviso">No limite do plano</Chip>
-            <span className={ui.mini}>{linha.noLimite}</span>
-          </span>
-        ) : null}
-      </div>
-      <div className={estilos.janelasDoPainel}>
-        {linha.janelas.map((janela, i) => (
-          <BarraDaJanela key={i} rotulo={janela.nome} pct={janela.pct} volta={janela.volta} desatualizado={linha.desatualizado} />
-        ))}
-        {linha.semJanela ? <p className={ui.mini}>{linha.semJanela}</p> : null}
-      </div>
-      <p className={estilos.validadeDoPainel}>
-        <span className={estilos.nome}>Login</span>
-        <Chip pequeno tom={linha.validade.tom}>{linha.validade.selo}</Chip>
-        <span className={estilos.textoDaValidade}>{linha.validade.texto}</span>
-      </p>
-    </li>
-  );
-}
-
 function estadoDoPerfil(perfil: Perfil, pronto: boolean | undefined, uso: UsoDoPlano | undefined, limite?: LimiteDoPerfil): { tom: Tom; texto: string } {
   if (limite) return { tom: 'aviso', texto: 'No limite do plano' };
   if (perfil.kind === 'apikey') {
@@ -150,6 +112,8 @@ function estadoDoPerfil(perfil: Perfil, pronto: boolean | undefined, uso: UsoDoP
 
 interface PropsDoPerfil {
   perfil: Perfil;
+  // o que o perfil mostra sem clique: janelas do plano, validade do login e volta do limite
+  linha: LinhaDoPainel | undefined;
   posicao: number;
   padrao: boolean;
   pronto: boolean | undefined;
@@ -164,7 +128,7 @@ interface PropsDoPerfil {
   nomeDoOutro(id: string): string;
 }
 
-function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, limite, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento, nomeDoOutro }: PropsDoPerfil) {
+function LinhaDoPerfil({ perfil, linha, posicao, padrao, pronto, uso, limite, cliente, controle, subir, impedimentoDaOrdem: semOrdem, impedimento, nomeDoOutro }: PropsDoPerfil) {
   const [aberto, setAberto] = useState(false);
   const teste = useChamada<TesteDePerfil>();
   const idDoDetalhe = useId();
@@ -186,18 +150,31 @@ function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, limite, cliente, 
           <svg className={estilos.seta} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" /></svg>
         </button>
       </h3>
+      {linha ? (
+        <div className={estilos.resumoDoPerfil}>
+          {linha.janelas.map((janela, i) => (
+            <BarraDaJanela key={i} rotulo={janela.nome} pct={janela.pct} volta={janela.volta} desatualizado={linha.desatualizado} />
+          ))}
+          {linha.semJanela ? <p className={ui.mini}>{linha.semJanela}</p> : null}
+          {linha.noLimite ? <p className={ui.mini}>No limite do plano: {linha.noLimite}.</p> : null}
+          <div className={estilos.peDoResumo}>
+            <p className={estilos.validadeDoPainel}>
+              <span className={estilos.nome}>Login</span>
+              <Chip pequeno tom={linha.validade.tom}>{linha.validade.selo}</Chip>
+              <span className={estilos.textoDaValidade}>{linha.validade.texto}</span>
+            </p>
+            {subir && !semOrdem && !impedimento ? <AcaoComPergunta acao={subir} controle={controle} ocupado="Subindo…" pequeno /> : null}
+          </div>
+          {posicao > 1 && semOrdem ? <p className={ui.nota}>Subir na ordem fechado: {semOrdem}</p> : null}
+          {posicao > 1 && !semOrdem && impedimento ? <p className={ui.nota}>Subir na ordem fechado: {impedimento}</p> : null}
+        </div>
+      ) : null}
       <div id={idDoDetalhe} className={estilos.detalheDoPerfil} hidden={!aberto}>
-        {uso?.lido && uso.ok !== false ? uso.janelas.map((janela, i) => (
-          <UsoDaJanela key={i} nome={janela.nome ?? 'janela'} usado={janela.usado} volta={janela.resetTexto} desatualizado={uso.desatualizado} />
-        )) : null}
         <dl className={estilos.pares}>
           <Par nome="Na ordem de uso">{padrao ? `${posicao}º, o perfil padrão: a sessão começa por ele` : `${posicao}º: entra quando os de cima estão no limite do plano`}</Par>
           {parada ? <Par nome="Limite do plano">{parada}</Par> : null}
           <Par nome="Credencial">{textoDaCredencial(perfil, pronto)}</Par>
-          {!deChave ? <Par nome="Validade do login">{validadeDoLogin(uso).texto}</Par> : null}
           {perfil.baseUrl ? <Par nome="Endereço para onde a chave vai">{perfil.baseUrl}</Par> : null}
-          {uso?.lido && uso.ok === false ? <Par nome="Uso do plano">O motor não conseguiu ler o uso do plano{uso.erro ? `: ${uso.erro}` : ''}.</Par> : null}
-          {!uso?.lido && !deChave ? <Par nome="Uso do plano">O motor ainda não leu o uso do plano deste perfil.</Par> : null}
         </dl>
 
         <p className={ui.mini}>
@@ -214,10 +191,7 @@ function LinhaDoPerfil({ perfil, posicao, padrao, pronto, uso, limite, cliente, 
           >
             Testar
           </Botao>
-          {subir && !semOrdem && !impedimento ? <AcaoComPergunta acao={subir} controle={controle} ocupado="Subindo…" pequeno /> : null}
         </div>
-        {posicao > 1 && semOrdem ? <p className={ui.nota}>Subir na ordem fechado: {semOrdem}</p> : null}
-        {posicao > 1 && !semOrdem && impedimento ? <p className={ui.nota}>Subir na ordem fechado: {impedimento}</p> : null}
         <div role="status" aria-live="polite" aria-label={`Resultado do teste do perfil ${nome}`}>
           {teste.carregando ? <p className={ui.mini}>O motor está testando o perfil.</p> : null}
           {!teste.carregando && teste.erro ? <p className={ui.erro}>Erro: {teste.erro}</p> : null}
@@ -264,13 +238,8 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
 
   return (
     <>
-      {painel.length ? (
-        <ol className={estilos.painel} aria-label="Plano, validade do login e ordem de uso de cada perfil">
-          {painel.map((linha) => <LinhaNoPainel key={linha.id} linha={linha} />)}
-        </ol>
-      ) : null}
       <p className={ui.mini}>
-        O motor começa pelo primeiro perfil da lista que não está no limite do plano e, no limite, passa sozinho para o próximo. {painel.length ? 'O quadro acima mostra o uso do plano e a validade do login de cada um; clique num perfil para ver o detalhe e as ações.' : 'Clique num perfil para ver o uso do plano, a validade do login e as ações.'}
+        O motor começa pelo primeiro perfil da lista que não está no limite do plano e, no limite, passa sozinho para o próximo. Cada perfil mostra o uso do plano e a validade do login; Subir na ordem troca o perfil de lugar com o de cima, e o clique no nome abre o detalhe e as outras ações.
       </p>
       {segredos > 0 ? (
         <p className={ui.erro} role="alert">
@@ -286,6 +255,7 @@ export function PerfilDoClaude({ cliente, config, perfis, saude, controle, imped
             <LinhaDoPerfil
               key={perfil.id}
               perfil={perfil}
+              linha={painel.find((l) => l.id === perfil.id)}
               posicao={i + 1}
               padrao={padrao === perfil.id}
               pronto={saude?.claudeAuth.find((p) => p.id === perfil.id)?.ready}

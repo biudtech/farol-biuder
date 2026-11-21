@@ -202,6 +202,18 @@
   min-width: 0;
 }
 .campo:disabled { opacity: .7; }
+/* a seta nativa do select ignora o padding e cola na borda: a daqui fica à distância do texto.
+   Desenhada com gradiente, porque a CSP não deixa estilo em linha nem imagem de fora */
+select.campo {
+  appearance: none;
+  padding-right: calc(var(--esp-4) * 2 + var(--esp-3));
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: right calc(var(--esp-4) + 6px) center, right var(--esp-4) center;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+}
 .marcador { display: flex; align-items: center; gap: var(--esp-3); font-size: 14px; }
 
 /* ---------- caixas ---------- */

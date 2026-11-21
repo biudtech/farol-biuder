@@ -63,7 +63,7 @@ describe('as linhas do painel', () => {
       'O motor ainda não leu o uso do plano deste perfil.',
       'Chave de API: não tem janela de plano.',
     ]);
-    expect(linhas[2]?.validade).toEqual({ selo: 'Chave de API', texto: 'Não tem login para renovar.', tom: 'neutro' });
+    expect(linhas[2]?.validade).toEqual({ selo: 'Não se aplica', texto: 'Chave de API: não tem login para renovar.', tom: 'neutro' });
   });
 
   it('o perfil no limite do plano leva a hora da volta, e a leitura velha é marcada', () => {
