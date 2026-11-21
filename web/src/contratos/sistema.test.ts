@@ -198,6 +198,11 @@ describe('leitores do snapshot', () => {
     expect(lerPerfisDoClaude({ problemas: [{ escopo: 'padrao', user: '', profileId: 'x', code: 'perfil-inexistente' }, {}], uso: { plano: { lido: true, ok: true, erro: '', em: 1, venceEm: 99, faixaDoLogin: 'perto', desatualizado: false, lidaEm: 1, janelas: [{ id: 's', nome: 'Sessão', usado: 0.4, reset: 5, resetTexto: 'às 18h' }] }, torto: 3, novo: { lido: false } } }, vi.fn())).toEqual({
       problemas: [{ profileId: 'x', code: 'perfil-inexistente' }],
       uso: { plano: { lido: true, ok: true, venceEm: 99, faixaDoLogin: 'perto', desatualizado: false, lidaEm: 1, janelas: [{ nome: 'Sessão', usado: 0.4, resetTexto: 'às 18h' }] }, novo: { lido: false, janelas: [] } },
+      limites: {},
+    });
+    // o perfil no limite: a hora, e a janela quando a fila parou pelo uso lido antes da sessão
+    expect(lerPerfisDoClaude({ problemas: [], uso: {}, limites: { plano: { ate: 5, estimado: false, origem: 'uso', janela: 'Semana', dir: '/x' }, torto: { ate: 'logo' } } }, vi.fn())?.limites).toEqual({
+      plano: { ate: 5, estimado: false, origem: 'uso', janela: 'Semana' },
     });
     expect(lerPerfisDoClaude(null, vi.fn())).toBeUndefined();
   });

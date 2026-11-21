@@ -535,9 +535,30 @@ de chave de API não entra.
   aparece em vermelho. Renovar é fazer o login de novo ([acima](#login-da-assinatura-pela-api)).
 - Quando o CLI não responde, a última leitura boa fica na tela por até uma hora, marcada como
   desatualizada.
-- O percentual é informação, não gate: a fila só espera quando o plano chega ao limite. O
-  texto do uso é em inglês e não é contrato do Claude Code; se mudar, a tela diz que o uso não
-  foi lido.
+- O percentual só pesa em 100%: antes de abrir a sessão automática, o motor confere o uso da
+  assinatura que a sessão vai usar (`lib/engine/uso-antes-da-sessao.js`, teste em
+  `test/uso-antes-da-sessao.test.js`). A leitura guardada vale por dois minutos; sem ela, só o
+  PR que começa a leitura espera, no máximo 5 segundos, e com uma leitura já em curso (ou fora
+  do prazo) vale a guardada de até 10 minutos, ou nenhuma. Uma janela que barra o modelo da
+  revisão em 100% registra o limite até o reset dela, como a sessão que bate no limite: a troca
+  de perfil e a espera da fila seguem iguais, e o PR volta sem sessão, sem label e sem gastar
+  tentativa. O reset tem teto por janela (a sessão volta em até 5 horas, a semana em até 7
+  dias): a janela cheia com o reset passado, além do teto ou sem data e já passado hoje (que o
+  texto faria virar amanhã, logo depois do reset, enquanto o servidor ainda mostra 100%) não
+  trava até ele, e espera um recuo de 2 minutos para ler de novo. A trava vinda do uso lido é
+  relida a cada 5 minutos enquanto dura e sai quando a janela deixa os 100%; a da sessão que
+  bateu no limite não é relida.
+  A sessão e a semana com todos os modelos barram qualquer modelo; a semana de um modelo só
+  ("Current week (Fable)") barra só quando todo modelo que a revisão pode usar é daquela
+  família (o fixo da configuração, ou os do Auto, hoje o Opus), e nunca o padrão da assinatura
+  nem o "best", de família desconhecida. Leitura que falha, que passa do prazo, sem janela, de
+  login vencido, desatualizada ou sem hora de reset legível não trava. O clique manual não
+  consulta o uso. Uma linha no `farol.log` por mudança de estado do perfil, e o Sistema mostra
+  no perfil a janela e a hora da volta (`limites` em `claudePerfis`). Com uso extra contratado
+  na assinatura, a janela em 100% ainda responde, e o motor espera o reset do mesmo jeito: o
+  clique manual passa.
+- O texto do uso é em inglês e não é contrato do Claude Code; se mudar, a tela diz que o uso não
+  foi lido, e a conferência antes da sessão não trava.
 
 A leitura dentro do container não foi medida com um Claude Code real neste repositório.
 

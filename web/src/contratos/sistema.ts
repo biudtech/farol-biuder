@@ -296,9 +296,20 @@ export interface ProblemaDePerfil {
   code: string;
 }
 
+// O perfil no limite do plano (limitesParaTela, lib/engine/limite-plano.js): até quando, se a
+// hora é estimada e, com `origem` "uso", a janela do uso lido antes da sessão que parou a fila.
+export interface LimiteDoPerfil {
+  ate: number;
+  estimado?: boolean;
+  origem?: string;
+  janela?: string;
+}
+
 export interface PerfisDoClaude {
   problemas: ProblemaDePerfil[];
   uso: Record<string, UsoDoPlano>;
+  // o leitor sempre devolve; opcional para quem monta o objeto à mão (os testes)
+  limites?: Record<string, LimiteDoPerfil>;
 }
 
 const lerJanela: LeitorDeItem<JanelaDoPlano> = (v) => {
@@ -320,6 +331,16 @@ function lerUso(v: unknown): UsoDoPlano | undefined {
   });
 }
 
+function lerLimite(v: unknown): LimiteDoPerfil | undefined {
+  if (!ehObjeto(v) || !ehNumero(v.ate)) return undefined;
+  return semAusentes({
+    ate: v.ate,
+    estimado: campo(v.estimado, ehBooleano),
+    origem: campo(v.origem, ehTexto) || undefined,
+    janela: campo(v.janela, ehTexto) || undefined,
+  });
+}
+
 const lerProblema: LeitorDeItem<ProblemaDePerfil> = (v) => (
   ehObjeto(v) && ehTexto(v.profileId) && ehTexto(v.code) ? { profileId: v.profileId, code: v.code } : undefined
 );
@@ -331,7 +352,12 @@ export const lerPerfisDoClaude: Leitor<PerfisDoClaude> = (valor) => {
     const lido = lerUso(bruto);
     if (lido) uso.push([id, lido]);
   }
-  return { problemas: lerItens(valor.problemas, lerProblema)?.itens ?? [], uso: Object.fromEntries(uso) };
+  const limites: Array<[string, LimiteDoPerfil]> = [];
+  for (const [id, bruto] of Object.entries(ehObjeto(valor.limites) ? valor.limites : {})) {
+    const lido = lerLimite(bruto);
+    if (lido) limites.push([id, lido]);
+  }
+  return { problemas: lerItens(valor.problemas, lerProblema)?.itens ?? [], uso: Object.fromEntries(uso), limites: Object.fromEntries(limites) };
 };
 
 // ---------- `jiraSites`: os sites do Jira ----------

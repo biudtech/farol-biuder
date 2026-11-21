@@ -215,10 +215,11 @@ for (const reason of ['fetch failed', 'process timeout', 'quota exceeded', 'auth
     });
   });
 }
-test('primeiro evento da sessão: a tag entra e, na falha seguinte, sai depois (ordem add, remove)', async () => {
+// desde 21/11/2026 quem libera a tag é o primeiro conteúdo do modelo (`doModelo`, session.js)
+test('primeiro conteúdo do modelo: a tag entra e, na falha seguinte, sai depois (ordem add, remove)', async () => {
   const e = engine();
   e.runClaudeStream = async (_prompt, opts) => {
-    opts.onEvent({ kind: 'info', text: 'sessão viva' });
+    opts.onEvent({ kind: 'text', text: 'lendo o diff', doModelo: true });
     await new Promise(r => setTimeout(r, 20));
     throw new Error('fetch failed');
   };
@@ -227,6 +228,19 @@ test('primeiro evento da sessão: a tag entra e, na falha seguinte, sai depois (
     const ordem = calls.filter(args => args.includes('--add-label') || args.includes('--remove-label'))
       .map(args => (args.includes('--add-label') ? 'add' : 'remove'));
     assert.deepEqual(ordem, ['add', 'remove']);
+    assert.equal(labels.size, 0); semResultado(e);
+  });
+});
+test('o init e a mensagem sintética do limite não põem a tag na sessão que morre logo', async () => {
+  const e = engine();
+  e.runClaudeStream = async (_prompt, opts) => {
+    opts.onEvent({ kind: 'info', text: 'sessão do Claude iniciada' });
+    opts.onEvent({ kind: 'text', text: "You've hit your limit · resets 5:50pm", doModelo: false });
+    throw new Error("sessão retornou erro: You've hit your limit · resets 5:50pm");
+  };
+  await comTags(e, async ({ labels, calls }) => {
+    await assert.rejects(e.runHeadlessReview({ ...PR }), /hit your limit/);
+    assert.equal(calls.some(args => args.includes('--add-label')), false);
     assert.equal(labels.size, 0); semResultado(e);
   });
 });
