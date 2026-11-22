@@ -13,6 +13,7 @@ const { PROFILE_FILE, profileFor } = await import('../lib/technical-review/profi
 const { approvalGaps } = await import('../lib/technical-review/evidence.js');
 const { approvalRefusal } = await import('../lib/technical-review/publication.js');
 const { finishTechnicalReview, technicalPrompt, audit, technicalRuntime } = await import('../lib/technical-review/runtime.js');
+const { raizDoPacote } = await import('../lib/technical-review/toolchain.js');
 const { shouldAutoApprove } = await import('../lib/engine/decision.js');
 const { decisionForUi } = await import('../lib/engine/public-review.js');
 const { debtVerdict } = await import('../lib/technical-review/debt.js');
@@ -237,7 +238,9 @@ test('projeção mostra resultado técnico sem expor catálogo ou achados privad
 
 const toolHome = path.join(os.homedir(), '.farol', 'toolchains', `eng-behaviour@${TOOL.version}`);
 test('ferramenta real acusa supressão e exige julgamento sem tocar o consumidor', {
-  skip: !fs.existsSync(path.join(toolHome, 'dist', 'index.js')) && 'runtime privado não instalado neste executor',
+  // o pacote mora na pasta do tool.json (raizDoPacote): olhar a raiz pulava o teste em silêncio
+  // mesmo com a ferramenta instalada, desde que ela passou a vir do engineering-standards
+  skip: !fs.existsSync(path.join(raizDoPacote(toolHome), 'dist', 'index.js')) && 'runtime privado não instalado neste executor',
 }, async () => {
   const repo = path.join(root, 'consumer');
   fs.mkdirSync(repo);
