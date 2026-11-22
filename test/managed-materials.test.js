@@ -14,6 +14,7 @@ const life = await import('../lib/technical-review/cleanup.js');
 const records = await import('../lib/technical-review/material-record.js');
 const { manager, enqueue } = await import('../lib/technical-review/material-maintenance.js');
 const { processProbe } = await import('../lib/technical-review/material-process.js');
+const { raizDoPacote } = await import('../lib/technical-review/toolchain.js');
 const { recoveryProcesses } = await import('../lib/review-source/recovery-owner.js');
 after(() => { life.pararManutencaoMaterial(); fs.rmSync(home, { recursive: true, force: true }); });
 
@@ -170,10 +171,10 @@ test('manutenção inicia sem outra revisão e recupera remoção pendente', asy
 test('worker real registra consumo e liberação espera sua conclusão', async () => {
   const snapshot = material(), id = 'worker-real';
   const fixture = fs.mkdtempSync(path.join(home, 'avaliador-'));
-  fs.mkdirSync(path.join(fixture, 'dist'));
-  fs.writeFileSync(path.join(fixture, 'package.json'), '{"type":"module"}');
+  fs.mkdirSync(path.join(raizDoPacote(fixture), 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(raizDoPacote(fixture), 'package.json'), '{"type":"module"}');
   const entered = path.join(fixture, 'entrou'), resume = path.join(fixture, 'continuar');
-  fs.writeFileSync(path.join(fixture, 'dist/index.js'), `import fs from 'node:fs';
+  fs.writeFileSync(path.join(raizDoPacote(fixture), 'dist/index.js'), `import fs from 'node:fs';
 export const parseDeclaration=async()=>({scopes:[]});export const loadBundledCatalog=async()=>({});
 export const validarAssessment=x=>x;export const renderExcerpt=()=>'';
 export async function runAudit(){fs.writeFileSync(${JSON.stringify(entered)},'ok');
@@ -243,9 +244,9 @@ test('abort do avaliador sem confirmação de término conserva lease e material
   const { audit } = await import('../lib/technical-review/runtime.js');
   const snapshot = material(), controller = new AbortController();
   const fixture = fs.mkdtempSync(path.join(home, 'avaliador-abort-'));
-  fs.mkdirSync(path.join(fixture, 'dist')); fs.writeFileSync(path.join(fixture, 'package.json'), '{"type":"module"}');
+  fs.mkdirSync(path.join(raizDoPacote(fixture), 'dist'), { recursive: true }); fs.writeFileSync(path.join(raizDoPacote(fixture), 'package.json'), '{"type":"module"}');
   const entered = path.join(fixture, 'entrou');
-  fs.writeFileSync(path.join(fixture, 'dist/index.js'), `import fs from 'node:fs';
+  fs.writeFileSync(path.join(raizDoPacote(fixture), 'dist/index.js'), `import fs from 'node:fs';
 export const parseDeclaration=async()=>({scopes:[]});export const loadBundledCatalog=async()=>({});
 export const validarAssessment=x=>x;export const renderExcerpt=()=>'';
 export async function runAudit(){fs.writeFileSync(${JSON.stringify(entered)},'ok');await new Promise(resolve=>setTimeout(resolve,20000));return {catalogFingerprint:'fixture',rules:[]};}`);
