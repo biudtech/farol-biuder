@@ -8,6 +8,7 @@ process.env.FAROL_HOME = path.join(root, 'home');
 const { STATE_DIR } = await import('../lib/paths.js');
 const { cleanup, criarMaterial } = await import('../lib/technical-review/cleanup.js');
 const { finishTechnicalReview } = await import('../lib/technical-review/runtime.js');
+const { raizDoPacote } = await import('../lib/technical-review/toolchain.js');
 const { snapshotFor } = await import('../lib/technical-review/material.js');
 const { reviewSnapshot, objecoesMudaram, impressaoDasObjecoes } = await import('../lib/technical-review/reviews.js');
 const { setup } = await import('../lib/technical-review/setup.js');
@@ -83,7 +84,7 @@ test('instalação interrompida pode ser refeita e preserva a cópia anterior', 
   fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, 'anterior.txt'), 'preservar');
   const verify = async directory => {
-    assert.equal(fs.readFileSync(path.join(directory, TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
+    assert.equal(fs.readFileSync(path.join(raizDoPacote(directory), TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
     return directory;
   };
   let fail = true;

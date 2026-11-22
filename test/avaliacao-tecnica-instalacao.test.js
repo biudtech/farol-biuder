@@ -17,6 +17,7 @@ process.env.FAROL_HOME = path.join(root, 'home');
 const { setup, step, removerSobras, TRAVA } = await import('../lib/technical-review/setup.js');
 const { FalhaDoPasso, origemDoGitHub, origemComCredencial, origemComConsulta, origemMostrada, falhaDoClone, falhaDoCheckout, falhaDaConstrucao } = await import('../lib/technical-review/setup-falhas.js');
 const { TOOL, technicalGap, technicalSummary, ehLacunaDura } = await import('../lib/technical-review/verdict.js');
+const { raizDoPacote } = await import('../lib/technical-review/toolchain.js');
 const { FLAGS_GIT_ISOLADO, FLAGS_CREDENCIAL_DO_GH } = await import('../lib/git-isolado.js');
 const { resumoDoCadastro } = await import('../lib/technical-review/profiles.js');
 const estadoMod = await import('../lib/technical-review/estado.js');
@@ -28,7 +29,7 @@ const TRAVESSAO = /[–—]/;
 let serie = 0;
 const novoHome = () => path.join(root, `caso-${++serie}`, 'toolchains', `eng-behaviour@${TOOL.version}`);
 const verify = async (directory) => {
-  assert.equal(fs.readFileSync(path.join(directory, TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
+  assert.equal(fs.readFileSync(path.join(raizDoPacote(directory), TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
   return directory;
 };
 // O dublê do passo: registra a chamada e simula a construção.
@@ -43,6 +44,24 @@ function gravador(falhar = () => null) {
   return { chamadas, run };
 }
 const entradas = (home) => fs.readdirSync(path.dirname(home));
+
+// Desde 21/11/2026 a ferramenta mora em eng-behaviour/ do biudtech/engineering-standards: o clone
+// inteiro fica como instalação (é nele que o git confere o commit), e o pacote é a subpasta.
+test('a ferramenta vem do engineering-standards e é construída na pasta do pacote', async () => {
+  assert.equal(TOOL.origem, 'https://github.com/biudtech/engineering-standards.git');
+  assert.equal(TOOL.pasta, 'eng-behaviour');
+  assert.equal(raizDoPacote('/x/toolchains/eng-behaviour@0.17.0'), path.join('/x/toolchains/eng-behaviour@0.17.0', 'eng-behaviour'));
+  const home = novoHome();
+  const { chamadas, run } = gravador();
+  assert.equal(await setup([], { home, run, verify }), home);
+  const construcao = chamadas.filter((c) => c.binary === 'pnpm');
+  assert.equal(construcao.length, TOOL.construcao.length);
+  for (const c of construcao) assert.equal(path.basename(c.cwd), TOOL.pasta, 'a construção roda na pasta do pacote');
+  for (const c of chamadas.filter((x) => x.binary === 'git' && !x.args.includes('clone'))) {
+    assert.notEqual(path.basename(c.cwd), TOOL.pasta, 'o git roda na raiz do clone');
+  }
+  assert.equal(fs.readFileSync(path.join(home, TOOL.pasta, TOOL.buildStamp), 'utf8').trim(), TOOL.commit, 'o carimbo fica no pacote');
+});
 
 test('a origem do GitHub é clonada com o git isolado e a credencial do gh, sem token em argumento', async () => {
   const home = novoHome();
@@ -235,8 +254,8 @@ test('se a pasta passou a validar durante a instalação, ela não é trocada', 
   // outra via instala a válida enquanto esta constrói
   const { run } = gravador((b, a) => {
     if (a.includes('build')) {
-      fs.mkdirSync(path.join(home, path.dirname(TOOL.buildStamp)), { recursive: true });
-      fs.writeFileSync(path.join(home, TOOL.buildStamp), TOOL.commit + '\n');
+      fs.mkdirSync(path.join(raizDoPacote(home), path.dirname(TOOL.buildStamp)), { recursive: true });
+      fs.writeFileSync(path.join(raizDoPacote(home), TOOL.buildStamp), TOOL.commit + '\n');
       fs.writeFileSync(path.join(home, 'marca.txt'), 'a outra');
       valida = true;
     }

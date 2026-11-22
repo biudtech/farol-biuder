@@ -1,7 +1,8 @@
 {
   "pacote": "eng-behaviour",
-  "commit": "ed3e1535cb84faf572fe66c6dc13a1af441588ee",
-  "origem": "https://github.com/biudtech/eng-behaviour.git",
+  "commit": "18261fd451a755a3bb25b65ef703550ae7decc27",
+  "origem": "https://github.com/biudtech/engineering-standards.git",
+  "pasta": "eng-behaviour",
   "construcao": [
     [
       "pnpm",

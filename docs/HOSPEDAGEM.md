@@ -360,7 +360,7 @@ Os comandos são os do Docker; no orquestrador, o equivalente. `IMAGEM` é a ima
 
 Cada PR revisado de um repositório cadastrado passa pela avaliação técnica, com a ferramenta
 `eng-behaviour` no commit fixado em `lib/technical-review/tool.json` (hoje a 0.17.0, commit
-`ed3e1535cb84`). São duas peças, e as duas moram no volume, em `~/.farol`: a ferramenta, que é
+`18261fd451a7` do `biudtech/engineering-standards`, pasta `eng-behaviour/`). São duas peças, e as duas moram no volume, em `~/.farol`: a ferramenta, que é
 código privado da BIUD e por isso não entra na imagem (o build não leva segredo), e o cadastro
 dos repositórios. Postas uma vez, sobrevivem a reinício e a troca de imagem: na prova, o
 `docker restart` e um container novo de uma imagem reconstruída, sobre o mesmo volume, acharam
@@ -385,11 +385,11 @@ Pré-requisito: o `gh` do container logado na conta revisora (passo 5 da
 Confira e instale, como o usuário do motor (o `docker exec` já entra como ele):
 
 ```sh
-docker exec farol gh repo view biudtech/eng-behaviour --json name
+docker exec farol gh repo view biudtech/engineering-standards --json name
 docker exec farol node lib/technical-review/setup.js
 ```
 
-O `setup.js` clona `https://github.com/biudtech/eng-behaviour.git` com o `git` isolado do motor
+O `setup.js` clona `https://github.com/biudtech/engineering-standards.git` com o `git` isolado do motor
 e a credencial do `gh` (`credential.helper=!gh auth git-credential`, a mesma da busca das fontes
 de revisão), confere que o commit do pino existe, faz checkout dele, roda
 `pnpm install --frozen-lockfile` e `pnpm build`, e só então põe a pasta pronta em
@@ -408,8 +408,8 @@ anterior, se havia, ficou como estava". As que quem opera vai encontrar:
 
 | causa | começo da mensagem |
 |---|---|
-| o `gh` sem login, ou a conta sem acesso ao repositório | `sem acesso ao repositório da ferramenta técnica (https://github.com/biudtech/eng-behaviour.git): o gh não está logado, ou a conta logada não enxerga esse repositório. Confira com "gh auth status" e "gh repo view biudtech/eng-behaviour", como o usuário do motor.` |
-| sem rede até o GitHub | `falha de rede no clone da ferramenta técnica: https://github.com/biudtech/eng-behaviour.git não respondeu.` |
+| o `gh` sem login, ou a conta sem acesso ao repositório | `sem acesso ao repositório da ferramenta técnica (https://github.com/biudtech/engineering-standards.git): o gh não está logado, ou a conta logada não enxerga esse repositório. Confira com "gh auth status" e "gh repo view biudtech/engineering-standards", como o usuário do motor.` |
+| sem rede até o GitHub | `falha de rede no clone da ferramenta técnica: https://github.com/biudtech/engineering-standards.git não respondeu.` |
 | o `gh` não instalado | `o "gh" não está instalado ou não está no PATH do usuário que roda a instalação` |
 | commit do pino fora da origem | `o commit do pino (ed3e1535..., em lib/technical-review/tool.json) não existe em <origem>` |
 | `pnpm` ausente | `o gerenciador de pacotes "pnpm" não está instalado ou não está no PATH` |
@@ -508,9 +508,9 @@ falha para todo repositório, e a publicação recusa o APPROVE com `technical_r
 e o cadastro do exemplo:
 
 ```json
-{ "ferramenta": "integra", "versao": "0.17.0", "commit": "ed3e1535cb84faf572fe66c6dc13a1af441588ee",
+{ "ferramenta": "integra", "versao": "0.17.0", "commit": "18261fd451a7faf572fe66c6dc13a1af441588ee",
   "cadastro": "legivel", "repositorios": 1, "pronta": true,
-  "detalhe": "ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit ed3e1535cb84); 1 repositório declarado" }
+  "detalhe": "ferramenta instalada e íntegra (eng-behaviour 0.17.0, commit 18261fd451a7); 1 repositório declarado" }
 ```
 
 `ferramenta` é `integra`, `ausente` ou `nao-comprovada` (a pasta existe, mas não é o checkout
@@ -527,7 +527,7 @@ hospedada ligada, a linha vai também ao stderr (o `docker logs`). Medido na pro
 do exemplo e sem a ferramenta:
 
 ```
-[farol] avaliação técnica: ferramenta ausente (eng-behaviour 0.17.0, commit ed3e1535cb84 não instalada); 1 repositório declarado: a avaliação técnica dos repositórios declarados falha: nenhuma regra é avaliada, a sessão de revisão é orientada a não aprovar e nenhuma aprovação deles sai como limpa, até a ferramenta íntegra ser instalada. Instale no volume, dentro do container e como o usuário do motor: node lib/technical-review/setup.js (docs/HOSPEDAGEM.md).
+[farol] avaliação técnica: ferramenta ausente (eng-behaviour 0.17.0, commit 18261fd451a7 não instalada); 1 repositório declarado: a avaliação técnica dos repositórios declarados falha: nenhuma regra é avaliada, a sessão de revisão é orientada a não aprovar e nenhuma aprovação deles sai como limpa, até a ferramenta íntegra ser instalada. Instale no volume, dentro do container e como o usuário do motor: node lib/technical-review/setup.js (docs/HOSPEDAGEM.md).
 ```
 
 O resumo do log no diagnóstico classifica a linha como "Avaliação técnica sem a ferramenta
