@@ -594,8 +594,11 @@ rodadas presas seguidas (`MAX_RODADAS_PRESAS`, `lib/engine/review.js`), a espera
 
 A avaliação técnica de cada PR revisado usa a cópia da BIUD do catálogo de regras,
 `eng-behaviour`. O pino está em `lib/technical-review/tool.json`: origem
-`https://github.com/biudtech/eng-behaviour.git`, um commit fixo e a construção
-(`pnpm install --frozen-lockfile` e `pnpm build`).
+`https://github.com/biudtech/engineering-standards.git`, a pasta `eng-behaviour/` (`pasta`), um
+commit fixo e a construção (`pnpm install --frozen-lockfile` e `pnpm build`), que roda dentro
+da pasta. O clone inteiro fica como instalação, porque é nele que o `git` confere o commit e a
+árvore limpa. Até 21/11/2026 a ferramenta era o repositório `biudtech/eng-behaviour`, apagado
+depois que ela passou a morar no `engineering-standards`.
 
 A instalação é explícita: `node lib/technical-review/setup.js`, opcionalmente com
 `--source <caminho ou URL>`. Ela clona a origem numa pasta de preparo (`.install-*`, ao lado),
@@ -609,7 +612,7 @@ os dois, com o `pnpm` na versão que o `Dockerfile` fixa.
   (`credential.helper=!gh auth git-credential`), a mesma lista da busca das fontes de revisão
   (`FLAGS_CREDENCIAL_DO_GH`, `lib/git-isolado.js`). O token não vai em argumento, em URL nem no
   log: o `git` o pede ao `gh` na hora. Pré-requisito: a conta logada no `gh` enxerga
-  `biudtech/eng-behaviour` (`gh repo view biudtech/eng-behaviour`). Origem com usuário ou
+  `biudtech/engineering-standards` (`gh repo view biudtech/engineering-standards`). Origem com usuário ou
   token na URL é recusada antes de rodar qualquer comando. Caminho local e origem fora do
   GitHub seguem com o `git` comum, sem credencial.
 - **Origem com `?` ou `#`** também é recusada antes de qualquer comando, e a mensagem não a

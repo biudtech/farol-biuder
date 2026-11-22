@@ -17,6 +17,7 @@ process.env.FAROL_HOME = path.join(root, 'home');
 const { setup, step, removerSobras, TRAVA } = await import('../lib/technical-review/setup.js');
 const { FalhaDoPasso, origemDoGitHub, origemComCredencial, origemComConsulta, origemMostrada, falhaDoClone, falhaDoCheckout, falhaDaConstrucao } = await import('../lib/technical-review/setup-falhas.js');
 const { TOOL, technicalGap, technicalSummary, ehLacunaDura } = await import('../lib/technical-review/verdict.js');
+const { raizDoPacote } = await import('../lib/technical-review/toolchain.js');
 const { FLAGS_GIT_ISOLADO, FLAGS_CREDENCIAL_DO_GH } = await import('../lib/git-isolado.js');
 const { resumoDoCadastro } = await import('../lib/technical-review/profiles.js');
 const estadoMod = await import('../lib/technical-review/estado.js');
@@ -28,7 +29,7 @@ const TRAVESSAO = /[–—]/;
 let serie = 0;
 const novoHome = () => path.join(root, `caso-${++serie}`, 'toolchains', `eng-behaviour@${TOOL.version}`);
 const verify = async (directory) => {
-  assert.equal(fs.readFileSync(path.join(directory, TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
+  assert.equal(fs.readFileSync(path.join(raizDoPacote(directory), TOOL.buildStamp), 'utf8').trim(), TOOL.commit);
   return directory;
 };
 // O dublê do passo: registra a chamada e simula a construção.
@@ -43,6 +44,24 @@ function gravador(falhar = () => null) {
   return { chamadas, run };
 }
 const entradas = (home) => fs.readdirSync(path.dirname(home));
+
+// Desde 21/11/2026 a ferramenta mora em eng-behaviour/ do biudtech/engineering-standards: o clone
+// inteiro fica como instalação (é nele que o git confere o commit), e o pacote é a subpasta.
+test('a ferramenta vem do engineering-standards e é construída na pasta do pacote', async () => {
+  assert.equal(TOOL.origem, 'https://github.com/biudtech/engineering-standards.git');
+  assert.equal(TOOL.pasta, 'eng-behaviour');
+  assert.equal(raizDoPacote('/x/toolchains/eng-behaviour@0.17.0'), path.join('/x/toolchains/eng-behaviour@0.17.0', 'eng-behaviour'));
+  const home = novoHome();
+  const { chamadas, run } = gravador();
+  assert.equal(await setup([], { home, run, verify }), home);
+  const construcao = chamadas.filter((c) => c.binary === 'pnpm');
+  assert.equal(construcao.length, TOOL.construcao.length);
+  for (const c of construcao) assert.equal(path.basename(c.cwd), TOOL.pasta, 'a construção roda na pasta do pacote');
+  for (const c of chamadas.filter((x) => x.binary === 'git' && !x.args.includes('clone'))) {
+    assert.notEqual(path.basename(c.cwd), TOOL.pasta, 'o git roda na raiz do clone');
+  }
+  assert.equal(fs.readFileSync(path.join(home, TOOL.pasta, TOOL.buildStamp), 'utf8').trim(), TOOL.commit, 'o carimbo fica no pacote');
+});
 
 test('a origem do GitHub é clonada com o git isolado e a credencial do gh, sem token em argumento', async () => {
   const home = novoHome();
@@ -125,13 +144,13 @@ test('origem com consulta ou fragmento é recusada antes de qualquer comando, se
 
 // Cada causa com a saída real do comando que a produz (git 2.39 e pnpm 10, com LC_ALL=C).
 const CAUSAS = [
-  { nome: 'sem login do gh', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^sem acesso ao repositório da ferramenta técnica \(https:\/\/github\.com\/biudtech\/eng-behaviour\.git\): o gh não está logado, ou a conta logada não enxerga esse repositório\. Confira com "gh auth status" e "gh repo view biudtech\/eng-behaviour"/ },
+  { nome: 'sem login do gh', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^sem acesso ao repositório da ferramenta técnica \(https:\/\/github\.com\/biudtech\/engineering-standards\.git\): o gh não está logado, ou a conta logada não enxerga esse repositório\. Confira com "gh auth status" e "gh repo view biudtech\/engineering-standards"/ },
   { nome: 'conta sem acesso', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "remote: Repository not found.\nfatal: repository 'https://github.com/biudtech/eng-behaviour.git/' not found\n" }, espera: /^sem acesso ao repositório da ferramenta técnica/ },
   { nome: 'rede no clone', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "fatal: unable to access 'https://github.com/biudtech/eng-behaviour.git/': Could not resolve host: github.com\n" }, espera: /^falha de rede no clone da ferramenta técnica/ },
   { nome: 'gh ausente no clone', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "/bin/sh: 1: gh: not found\nfatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^o "gh" não está instalado ou não está no PATH/ },
   { nome: 'gh ausente no clone (bash)', quando: (b, a) => a.includes('clone'), falha: { tipo: 'saiu', codigo: 128, saida: "sh: gh: command not found\nfatal: could not read Username for 'https://github.com': terminal prompts disabled\n" }, espera: /^o "gh" não está instalado ou não está no PATH/ },
   { nome: 'git ausente', quando: (b, a) => a.includes('clone'), falha: { tipo: 'ausente' }, espera: /^o "git" não está instalado/ },
-  { nome: 'commit do pino fora da origem', quando: (b, a) => a.includes('cat-file'), falha: { tipo: 'saiu', codigo: 128, saida: 'fatal: Not a valid object name\n' }, espera: new RegExp(`^o commit do pino \\(${TOOL.commit}, em lib/technical-review/tool\\.json\\) não existe em https://github\\.com/biudtech/eng-behaviour\\.git`) },
+  { nome: 'commit do pino fora da origem', quando: (b, a) => a.includes('cat-file'), falha: { tipo: 'saiu', codigo: 128, saida: 'fatal: Not a valid object name\n' }, espera: new RegExp(`^o commit do pino \\(${TOOL.commit}, em lib/technical-review/tool\\.json\\) não existe em https://github\\.com/biudtech/engineering-standards\\.git`) },
   { nome: 'checkout que falha depois de o commit existir', quando: (b, a) => a.includes('checkout'), falha: { tipo: 'saiu', codigo: 1, saida: 'error: unable to create file x: No space left on device\n' }, espera: new RegExp(`^o checkout do commit do pino \\(${TOOL.commit}\\) não terminou: o git saiu com código 1`) },
   { nome: 'gerenciador de pacotes ausente', quando: (b) => b === 'pnpm', falha: { tipo: 'ausente' }, espera: /^o gerenciador de pacotes "pnpm" não está instalado ou não está no PATH: a construção da ferramenta técnica roda "pnpm install --frozen-lockfile"/ },
   { nome: 'rede no install', quando: (b) => b === 'pnpm', falha: { tipo: 'saiu', codigo: 1, saida: ' ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/yaml: request to https://registry.npmjs.org/yaml failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org\n' }, espera: /^falha de rede em "pnpm install --frozen-lockfile": o registro de pacotes não respondeu/ },
@@ -235,8 +254,8 @@ test('se a pasta passou a validar durante a instalação, ela não é trocada', 
   // outra via instala a válida enquanto esta constrói
   const { run } = gravador((b, a) => {
     if (a.includes('build')) {
-      fs.mkdirSync(path.join(home, path.dirname(TOOL.buildStamp)), { recursive: true });
-      fs.writeFileSync(path.join(home, TOOL.buildStamp), TOOL.commit + '\n');
+      fs.mkdirSync(path.join(raizDoPacote(home), path.dirname(TOOL.buildStamp)), { recursive: true });
+      fs.writeFileSync(path.join(raizDoPacote(home), TOOL.buildStamp), TOOL.commit + '\n');
       fs.writeFileSync(path.join(home, 'marca.txt'), 'a outra');
       valida = true;
     }
