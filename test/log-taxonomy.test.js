@@ -51,7 +51,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 25, 'são 25 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo, a da linha do boot da avaliação técnica e a do registro de consumo fora do banco');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 26, 'são 26 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo, a da linha do boot da avaliação técnica, a do registro de consumo fora do banco e a do processo encerrado pelo sistema');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
