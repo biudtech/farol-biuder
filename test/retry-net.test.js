@@ -147,6 +147,23 @@ test('runOneHeadless: falha não-transitória depois de uma transitória TIRA o 
   assert.equal(e.autoReviewParked.has(pr.key), true, 'falha não-transitória estaciona e espera ação manual');
 });
 
+// 23/11/2026, Hostinger: o limite de memória da conta matava o claude com SIGKILL e o PR
+// estacionava como falha não classificada. Agora volta para a fila, com o teto de 3.
+test('runOneHeadless: sessão encerrada pelo sistema entra no retry e estaciona como esgotado depois do teto', async () => {
+  const e = engineBase();
+  e.prState = async () => 'OPEN';
+  const pr = prDe('biudtech/biud-esg#833');
+  e.runHeadlessReview = async () => { throw new Error('claude encerrado pelo sistema (sinal SIGKILL): sem saida'); };
+  for (let i = 1; i <= 3; i++) {
+    await e.runOneHeadless(pr, 'eu');
+    assert.equal(e.autoReviewParked.has(pr.key), false, `tentativa ${i}: não estaciona antes do teto`);
+    assert.equal(e.retryAfterNet.get(pr.key)?.tries, i);
+  }
+  await e.runOneHeadless(pr, 'eu');
+  assert.equal(e.autoReviewParked.has(pr.key), true, 'passado o teto, estaciona em vez de relançar para sempre');
+  assert.equal(e.parkedMotivos[pr.key]?.tipo, 'esgotado');
+});
+
 test('runOneHeadless: falha não-transitória sem retry anterior segue estacionando igual', async () => {
   const e = engineBase();
   e.prState = async () => 'OPEN';

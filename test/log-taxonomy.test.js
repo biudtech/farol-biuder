@@ -808,12 +808,15 @@ test('a linha de falha que a sessão anexa ao farol.log leva o fuso, como as do 
   assert.deepEqual(linha, { ts: '2026-11-18 20:50:51', level: 'ERROR', msg: 'review o/r#1: jq falhou' });
 });
 
-// 23/11/2026: o texto antigo (antes da mensagem dizer o sinal) segue no farol.log e no
-// registro de falhas; o Diagnóstico tem de ler as duas formas.
+// 23/11/2026: o texto antigo (antes da mensagem dizer o sinal) segue nas linhas do farol.log
+// e no motivo de estacionamento, que são relidos pela taxonomia. O registro durável de falha
+// grava a classe na hora, então os registros antigos seguem como foram classificados.
 test('processo morto por sinal: forma nova e forma antiga casam processo-encerrado', () => {
   const antiga = 'claude saiu com código null: Ignoring 23 permissions.allow entries from .claude/settings.json: this workspace has not been trusted.';
   const nova = 'claude encerrado pelo sistema (sinal SIGKILL): sem saida';
-  for (const m of [antiga, nova]) {
+  // o claude roda embaixo de /bin/sh -lc: neto morto por sinal sai como 128 + sinal
+  const peloShell = ['claude saiu com código 137: sem saida', 'claude saiu com código 143: sem saida'];
+  for (const m of [antiga, nova, ...peloShell]) {
     const c = classify(m);
     assert.equal(c.id, 'processo-encerrado');
     assert.equal(c.kind, 'transitorio');
