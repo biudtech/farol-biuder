@@ -51,7 +51,7 @@ const MSG = {
 test('CLASSES: toda classe tem os cinco campos e um kind válido', () => {
   const KINDS = ['operacional', 'espera-reset', 'transitorio', 'permanente'];
   const GRUPOS = ['operacional', 'ambiente', 'credencial', 'rede', 'app'];
-  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 25, 'são 25 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo, a da linha do boot da avaliação técnica e a do registro de consumo fora do banco');
+  assert.ok(Array.isArray(CLASSES) && CLASSES.length === 26, 'são 26 classes, incluindo a migração dos vistos sem decisão, a recusa da política de uso do modelo, a da linha do boot da avaliação técnica, a do registro de consumo fora do banco e a do processo encerrado pelo sistema');
   for (const c of CLASSES) {
     assert.equal(typeof c.id, 'string');
     assert.ok(c.label, `${c.id} precisa de label humano`);
@@ -73,7 +73,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
     // limite-da-organizacao ANTES de limite-plano: várias frases de teto da organização
     // contêm "usage limit" e seriam lidas como limite de janela (test/limite-do-claude.test.js)
     'restart-fila', 'console-fechado', 'telemetria-anormal', 'limite-da-organizacao', 'limite-plano',
-    'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
+    'processos-indisponiveis', 'processo-encerrado', 'assinatura-bloqueada', 'sem-perfil-de-chave',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem',
     'avaliacao-tecnica-quebrada', 'ferramenta'
@@ -806,4 +806,21 @@ test('a linha de falha que a sessão anexa ao farol.log leva o fuso, como as do 
   assert.match(comando, /date '\+%Y-%m-%d %H:%M:%S %:z'/);
   const linha = parseLine('[2026-11-18 20:50:51 -03:00] [ERROR] review o/r#1: jq falhou');
   assert.deepEqual(linha, { ts: '2026-11-18 20:50:51', level: 'ERROR', msg: 'review o/r#1: jq falhou' });
+});
+
+// 23/11/2026: o texto antigo (antes da mensagem dizer o sinal) segue nas linhas do farol.log
+// e no motivo de estacionamento, que são relidos pela taxonomia. O registro durável de falha
+// grava a classe na hora, então os registros antigos seguem como foram classificados.
+test('processo morto por sinal: forma nova e forma antiga casam processo-encerrado', () => {
+  const antiga = 'claude saiu com código null: Ignoring 23 permissions.allow entries from .claude/settings.json: this workspace has not been trusted.';
+  const nova = 'claude encerrado pelo sistema (sinal SIGKILL): sem saida';
+  // o claude roda embaixo de /bin/sh -lc: neto morto por sinal sai como 128 + sinal
+  const peloShell = ['claude saiu com código 137: sem saida', 'claude saiu com código 143: sem saida'];
+  for (const m of [antiga, nova, ...peloShell]) {
+    const c = classify(m);
+    assert.equal(c.id, 'processo-encerrado');
+    assert.equal(c.kind, 'transitorio');
+  }
+  // código numérico segue em ferramenta
+  assert.equal(classify('claude saiu com código 1: x').id, 'ferramenta');
 });
