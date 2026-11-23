@@ -73,7 +73,7 @@ test('CLASSES: a ordem é a documentada (primeira que casar vence)', () => {
     // limite-da-organizacao ANTES de limite-plano: várias frases de teto da organização
     // contêm "usage limit" e seriam lidas como limite de janela (test/limite-do-claude.test.js)
     'restart-fila', 'console-fechado', 'telemetria-anormal', 'limite-da-organizacao', 'limite-plano',
-    'processos-indisponiveis', 'assinatura-bloqueada', 'sem-perfil-de-chave',
+    'processos-indisponiveis', 'processo-encerrado', 'assinatura-bloqueada', 'sem-perfil-de-chave',
     'oauth-expirado', 'credencial-invalida', 'credito-insuficiente', 'recusa-de-seguranca', 'resultado-invalido', 'rate-limit-github', 'rede', 'github-indisponivel',
     'provedor-indisponivel', 'arquivo-local-preso', 'token-gh', 'skip-permissions-root', 'tempo-esgotado', 'migracao-vistos', 'busca-sem-mensagem',
     'avaliacao-tecnica-quebrada', 'ferramenta'
@@ -806,4 +806,18 @@ test('a linha de falha que a sessão anexa ao farol.log leva o fuso, como as do 
   assert.match(comando, /date '\+%Y-%m-%d %H:%M:%S %:z'/);
   const linha = parseLine('[2026-11-18 20:50:51 -03:00] [ERROR] review o/r#1: jq falhou');
   assert.deepEqual(linha, { ts: '2026-11-18 20:50:51', level: 'ERROR', msg: 'review o/r#1: jq falhou' });
+});
+
+// 23/11/2026: o texto antigo (antes da mensagem dizer o sinal) segue no farol.log e no
+// registro de falhas; o Diagnóstico tem de ler as duas formas.
+test('processo morto por sinal: forma nova e forma antiga casam processo-encerrado', () => {
+  const antiga = 'claude saiu com código null: Ignoring 23 permissions.allow entries from .claude/settings.json: this workspace has not been trusted.';
+  const nova = 'claude encerrado pelo sistema (sinal SIGKILL): sem saida';
+  for (const m of [antiga, nova]) {
+    const c = classify(m);
+    assert.equal(c.id, 'processo-encerrado');
+    assert.equal(c.kind, 'transitorio');
+  }
+  // código numérico segue em ferramenta
+  assert.equal(classify('claude saiu com código 1: x').id, 'ferramenta');
 });

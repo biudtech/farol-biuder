@@ -72,3 +72,24 @@ test('evento result com is_error: mensagem cortada, detalhe inteiro', async () =
     return true;
   });
 });
+
+// 23/11/2026, Hostinger: 22 revisões caíram com "claude saiu com código null" e foram
+// estacionadas como falha não classificada. O código null é processo morto por sinal de
+// fora do Farol (o limite de memória da conta mata com SIGKILL); o stderr só trazia um
+// aviso sem relação, que virava o motivo. A mensagem tem de dizer o sinal.
+test('claude morto por sinal: a mensagem diz o sinal e casa a classe transitória', async () => {
+  const { classify } = await import('../lib/log-taxonomy.js');
+  const c = filho();
+  spawnImpl = () => c;
+  const p = runClaudeStream(engineFalso(), 'prompt', { id: 'a-sinal' });
+  spawnImpl = null;
+  c.stderr.emit('data', 'aviso qualquer do claude');
+  c.stdout.once('end', () => c.emit('close', null, 'SIGKILL'));
+  c.stdout.end();
+  await assert.rejects(p, (err) => {
+    assert.match(err.message, /^claude encerrado pelo sistema \(sinal SIGKILL\): /);
+    assert.equal(classify(err.message).id, 'processo-encerrado');
+    assert.equal(classify(err.message).kind, 'transitorio');
+    return true;
+  });
+});

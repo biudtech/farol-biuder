@@ -22,7 +22,7 @@
       "Grep",
       "Glob",
       "WebFetch",
-      "Write(state/**)",
+      "Edit(state/**)",
       "Task"
     ],
     "deny": [
