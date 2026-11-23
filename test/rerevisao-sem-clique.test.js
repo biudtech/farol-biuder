@@ -246,7 +246,7 @@ test('4: dispensa por outra pessoa no mesmo commit abre a segunda análise, com 
   try {
     assert.deepEqual(await e.staleForReview(PR), {
       stale: true, head: H1, lastState: 'DISMISSED',
-      dispensa: { por: 'colega', mensagem: 'The merge-base changed after approval.' },
+      dispensa: { por: 'colega', mensagem: 'The merge-base changed after approval.', reviewId: 77 },
     });
   } finally { io.run = runReal; }
   const timeline = chamadas.find(a => a.includes('/timeline'));
@@ -261,14 +261,18 @@ test('4: dispensa feita pela própria conta (retirada do pedido) não abre anál
   } finally { io.run = runReal; }
 });
 
-test('4: sem saber quem dispensou (timeline falhou ou sem evento), não relança', async () => {
-  for (const caso of [{ timelineOk: false }, { eventos: [] }]) {
-    const e = engineBase();
-    ioDaDispensa({ por: 'colega', ...caso });
-    try {
-      assert.deepEqual(await e.staleForReview(PR), { stale: false, head: H1, lastState: 'DISMISSED' });
-    } finally { io.run = runReal; }
-  }
+test('4: sem saber quem dispensou, não relança; a falha da timeline volta sem head e não entra no cache', async () => {
+  const e = engineBase();
+  ioDaDispensa({ eventos: [] });
+  try {
+    assert.deepEqual(await e.staleForReview(PR), { stale: false, head: H1, lastState: 'DISMISSED' });
+  } finally { io.run = runReal; }
+  const f = engineBase();
+  ioDaDispensa({ por: 'colega', timelineOk: false });
+  try {
+    assert.deepEqual(await f.staleForReview(PR), { stale: false, head: '', lastState: '' },
+      'sem head, o lerSeMudou não guarda, e o ciclo seguinte lê a timeline de novo');
+  } finally { io.run = runReal; }
 });
 
 test('4: vale a dispensa mais recente deste review quando a timeline traz mais de uma', async () => {
@@ -279,13 +283,31 @@ test('4: vale a dispensa mais recente deste review quando a timeline traz mais d
   } finally { io.run = runReal; }
 });
 
-test('4: a segunda análise sai uma vez por commit (âncora), e o motivo vai para a sessão como dado', () => {
+test('4: a segunda análise sai mesmo com a âncora de commit novo no head, e uma vez só por commit', () => {
   const e = engineBase();
-  e.staleInfo[KEY] = { stale: true, head: H1, lastState: 'DISMISSED', dispensa: { por: 'colega', mensagem: 'corrigido na #815' } };
+  e.staleInfo[KEY] = { stale: true, head: H1, lastState: 'DISMISSED', dispensa: { por: 'colega', mensagem: 'corrigido na #815', reviewId: 77 } };
   e.headQuietoDesde[KEY] = { head: H1, at: QUIETO };
+  // o review dispensado veio de uma re-revisão: a âncora de commit novo já está em H1
+  e.reReviewLaunched[KEY] = { head: H1, dia: '', rodadas: 1, at: AGORA - 3600e3 };
   const alvos = e.reReviewTargets(semInflight, AGORA);
-  assert.equal(alvos.length, 1);
+  assert.equal(alvos.length, 1, 'a âncora de commit novo não segura a segunda análise');
   assert.equal(alvos[0]._headRound, H1);
-  e.reReviewLaunched[KEY] = { head: H1, at: AGORA };
+  e.reReviewLaunched[KEY] = { head: H1, dia: '', rodadas: 2, at: AGORA, dispensaHead: H1 };
   assert.equal(e.reReviewTargets(semInflight, AGORA).length, 0, 'dispensar de novo o mesmo commit não abre terceira análise');
+});
+
+test('4: o relançamento grava a marca da dispensa, avisa uma vez e registra a rodada como extra', async () => {
+  const e = engineBase();
+  e.staleInfo[KEY] = { stale: true, head: H1, lastState: 'DISMISSED', dispensa: { por: 'colega', mensagem: 'm', reviewId: 77 } };
+  e.headQuietoDesde[KEY] = { head: H1, at: QUIETO };
+  e.saveReReviewLaunched = () => { };
+  e.bloqueiaAutomatico = async () => false;
+  e.headless = [];
+  e.enqueueHeadless = (item) => { e.headless.push(item); };
+  const { avisarRelancamento, comMarcaDaDispensa } = await import('../lib/engine/rereview-stale.js');
+  const pr = { ...PR, _headRound: H1 };
+  assert.equal(comMarcaDaDispensa(e, pr, { head: H1 }).dispensaHead, H1);
+  avisarRelancamento(e, [pr]);
+  assert.match(e.toasts.at(-1), /teve a sua revisão dispensada/);
+  assert.equal(e.logs.filter(l => l.startsWith('INFO') && l.includes('dispensada por @colega')).length, 1);
 });
