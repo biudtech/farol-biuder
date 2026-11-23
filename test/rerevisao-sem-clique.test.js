@@ -214,3 +214,78 @@ test('3: observarHead mantém o carimbo antigo quando o head não mudou e não c
   observarHead(e, 'acme/r#2', '', 30);
   assert.equal(e.headQuietoDesde['acme/r#2'], undefined);
 });
+
+/* ---------- 4. review dispensado por outra pessoa no mesmo commit (23/11/2026) ---------- */
+
+// Regra do dono de 23/11/2026: "se teve dismiss no review, logo deveria receber uma segunda
+// análise". Medido no mesmo dia: aprovações do Farol dispensadas no mesmo commit ("The
+// merge-base changed after approval.", tenant-company#567) e pedidos de mudança dispensados
+// por um colega com o motivo escrito ficavam sem nova análise, porque o gatilho só olhava
+// commit novo. A dispensa feita pela própria conta (a retirada automática do pedido de
+// mudanças) não conta.
+function ioDaDispensa({ por, mensagem = 'motivo', timelineOk = true, eventos = null }) {
+  const chamadas = [];
+  io.run = async (_cmd, args) => {
+    const a = args.join(' ');
+    chamadas.push(a);
+    if (a.includes('--json headRefOid')) return { ok: true, code: 0, stdout: `${H1}\n`, stderr: '' };
+    if (a.includes('/reviews')) return { ok: true, code: 0, stdout: JSON.stringify({ state: 'DISMISSED', commit: H1, id: 77 }), stderr: '' };
+    if (a.includes('/timeline')) {
+      if (!timelineOk) return { ok: false, code: 1, stdout: '', stderr: 'falhou' };
+      const linhas = eventos || [{ por, mensagem }];
+      return { ok: true, code: 0, stdout: linhas.map(l => JSON.stringify(l)).join('\n') + '\n', stderr: '' };
+    }
+    return { ok: false, code: 1, stdout: '', stderr: 'inesperado' };
+  };
+  return chamadas;
+}
+
+test('4: dispensa por outra pessoa no mesmo commit abre a segunda análise, com quem e o motivo', async () => {
+  const e = engineBase();
+  const chamadas = ioDaDispensa({ por: 'colega', mensagem: 'The merge-base changed after approval.' });
+  try {
+    assert.deepEqual(await e.staleForReview(PR), {
+      stale: true, head: H1, lastState: 'DISMISSED',
+      dispensa: { por: 'colega', mensagem: 'The merge-base changed after approval.' },
+    });
+  } finally { io.run = runReal; }
+  const timeline = chamadas.find(a => a.includes('/timeline'));
+  assert.match(timeline, /review_id == 77/, 'só a dispensa DESTE review conta');
+});
+
+test('4: dispensa feita pela própria conta (retirada do pedido) não abre análise nenhuma', async () => {
+  const e = engineBase();
+  ioDaDispensa({ por: 'EU', mensagem: 'Retiro o pedido de mudanças; isso não é aprovação.' });
+  try {
+    assert.deepEqual(await e.staleForReview(PR), { stale: false, head: H1, lastState: 'DISMISSED' });
+  } finally { io.run = runReal; }
+});
+
+test('4: sem saber quem dispensou (timeline falhou ou sem evento), não relança', async () => {
+  for (const caso of [{ timelineOk: false }, { eventos: [] }]) {
+    const e = engineBase();
+    ioDaDispensa({ por: 'colega', ...caso });
+    try {
+      assert.deepEqual(await e.staleForReview(PR), { stale: false, head: H1, lastState: 'DISMISSED' });
+    } finally { io.run = runReal; }
+  }
+});
+
+test('4: vale a dispensa mais recente deste review quando a timeline traz mais de uma', async () => {
+  const e = engineBase();
+  ioDaDispensa({ eventos: [{ por: 'colega', mensagem: 'a' }, { por: 'eu', mensagem: 'b' }] });
+  try {
+    assert.equal((await e.staleForReview(PR)).stale, false, 'a última foi da própria conta');
+  } finally { io.run = runReal; }
+});
+
+test('4: a segunda análise sai uma vez por commit (âncora), e o motivo vai para a sessão como dado', () => {
+  const e = engineBase();
+  e.staleInfo[KEY] = { stale: true, head: H1, lastState: 'DISMISSED', dispensa: { por: 'colega', mensagem: 'corrigido na #815' } };
+  e.headQuietoDesde[KEY] = { head: H1, at: QUIETO };
+  const alvos = e.reReviewTargets(semInflight, AGORA);
+  assert.equal(alvos.length, 1);
+  assert.equal(alvos[0]._headRound, H1);
+  e.reReviewLaunched[KEY] = { head: H1, at: AGORA };
+  assert.equal(e.reReviewTargets(semInflight, AGORA).length, 0, 'dispensar de novo o mesmo commit não abre terceira análise');
+});
