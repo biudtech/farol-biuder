@@ -827,7 +827,8 @@ describe('Consumo: as revisões que não publicaram', () => {
   });
 
   it('motor anterior ao registro (sem o campo): a seção não aparece, em vez de afirmar que não houve', async () => {
-    const { ocorrencias: _semCampo, ...antigo } = relatorioDoMotor();
+    const antigo = relatorioDoMotor();
+    delete antigo.ocorrencias;
     montar({ responder: () => corpo(antigo) });
     await assentar();
     expect(screen.queryByRole('heading', { name: 'Revisões que não publicaram' })).toBeNull();
