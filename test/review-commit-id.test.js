@@ -175,7 +175,8 @@ test('runHeadlessReview usa knownHead quando o fetch do headSha falha', async ()
     requested: true, title: 'fix(auth): fecha o redirect', author: 'dev', knownHead: KNOWN
   });
 
-  assert.deepEqual(shasConsultados, [KNOWN],
+  // a conferência antes de abrir a sessão (vigia-sessao.js) também pergunta, pelo mesmo head
+  assert.deepEqual([...new Set(shasConsultados)], [KNOWN],
     'sem o fallback o dedup consultaria com sha vazio e o round anterior silenciaria este');
   assert.equal(postados.length, 1);
   assert.equal(postados[0].commit_id, KNOWN, 'o fallback também ancora o review postado');
@@ -214,7 +215,8 @@ test('runHeadlessReview usa knownHead quando o headSha devolve vazio (o caminho 
     requested: true, title: 'fix(auth): fecha o redirect', author: 'dev', knownHead: KNOWN
   });
 
-  assert.deepEqual(shasConsultados, [KNOWN],
+  // a conferência antes de abrir a sessão (vigia-sessao.js) também pergunta, pelo mesmo head
+  assert.deepEqual([...new Set(shasConsultados)], [KNOWN],
     'head vazio é falha de leitura, não prova de que não há head: o knownHead vence');
   assert.equal(postados.length, 1);
   assert.equal(postados[0].commit_id, KNOWN);
