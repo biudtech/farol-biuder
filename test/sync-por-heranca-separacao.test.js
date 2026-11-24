@@ -34,8 +34,8 @@ test('diferente da foto: a ler', () => {
 });
 
 test('renomeado: conta pelo caminho novo e pelo antigo', () => {
-  assert.deepEqual(separar({ arquivos: [f('novo.json', { status: 'renamed', previousPath: 'velho.json' })], mexidosNaBase: ['velho.json'] }).aLer, ['novo.json']);
-  assert.deepEqual(separar({ arquivos: [f('novo.json', { status: 'renamed', previousPath: 'velho.json' })] }).herdados, ['novo.json']);
+  assert.deepEqual(separar({ arquivos: [f('novo.md', { status: 'renamed', previousPath: 'velho.md' })], mexidosNaBase: ['velho.md'] }).aLer, ['novo.md']);
+  assert.deepEqual(separar({ arquivos: [f('novo.md', { status: 'renamed', previousPath: 'velho.md' })] }).herdados, ['novo.md']);
 });
 
 test('protegido: a ler mesmo idêntico', () => {
@@ -63,9 +63,10 @@ test('importa arquivo que a base mudou, fora do diff: volta à leitura', () => {
   assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mexidosNaBase: ['src/util.ts'], mapa }).aLer, ['src/a.ts']);
 });
 
-test('pacote externo não resolvido não devolve à leitura', () => {
+test('pacote externo não resolvido, declarado no package.json, não devolve à leitura', () => {
   const mapa = mapaLimpo(['src/a.ts'], { unresolved: [{ from: 'src/a.ts', specifier: 'react' }] });
-  assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa }).herdados, ['src/a.ts']);
+  const pacotes = { porPasta: { '': ['react'] }, workspace: [] };
+  assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa, pacotes }).herdados, ['src/a.ts']);
 });
 
 test('dependência transitiva: importa um herdado que voltou à leitura', () => {
@@ -73,9 +74,9 @@ test('dependência transitiva: importa um herdado que voltou à leitura', () => 
   assert.deepEqual(separar({ arquivos: [f('src/a.ts'), f('src/b.ts'), f('src/m.ts')], diferemDaFoto: ['src/m.ts'], mapa }).herdados, []);
 });
 
-test('código sem conferência de dependência volta; dado sem import herda', () => {
+test('código sem conferência de dependência volta; só o não código da lista fechada herda', () => {
   assert.deepEqual(separar({ arquivos: [f('src/a.ts'), f('app/x.py'), f('prisma/schema.prisma'), f('docs/x.md')], mapa: null }).herdados,
-    ['prisma/schema.prisma', 'docs/x.md']);
+    ['docs/x.md']);
   const textual = { files: [{ path: 'src/a.ts', backend: 'textual', limitations: [] }], relations: [], unresolved: [] };
   assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa: textual }).aLer, ['src/a.ts']);
   const degradado = { files: [{ path: 'src/a.ts', backend: 'babel', limitations: ['parse-error'] }], relations: [], unresolved: [] };
