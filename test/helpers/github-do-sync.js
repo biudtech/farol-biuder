@@ -26,6 +26,9 @@ function cenarioDoSync(over = {}) {
     base: 'development', baseOid: BASE_PONTA, cross: false,
     commits: [commitDaOrigem(1), mergeDoSync()],
     refs: { homologation: PONTA_DA_HOMOLOGATION },
+    // os PRs mesclados associados ao commit da foto: por padrão, a foto é o merge commit de um PR
+    // mesclado na homologation (como o #1480 no engine-ai#1489)
+    prsDaFoto: [{ number: 1480, base: 'homologation', mergeCommit: FOTO }],
     comparacoes: {
       // o primeiro pai do merge está na linhagem da base
       [`${P1}...${BASE_PONTA}`]: { behind: 0, mergeBase: P1, files: [] },
@@ -55,11 +58,12 @@ function dadosDaConsulta(c) {
 // Responde só ao que é do sync; o resto devolve undefined, para quem compõe o stub responder.
 function respostaDoSync(c, args) {
   const sub = (args || []).join(' ');
-  const doSync = (sub.startsWith('api graphql') && sub.includes('parents')) || sub.includes('/compare/')
+  const doSync = (sub.startsWith('api graphql') && (sub.includes('parents') || sub.includes('mergeCommit'))) || sub.includes('/compare/')
     || sub.includes('/git/ref/heads/') || sub.includes('/git/matching-refs/heads/release_');
   if (!doSync) return undefined;
   c.chamadas.push(sub);
   if (c.falhas.some((f) => sub.includes(f))) return { ok: false, code: 1, stdout: '', stderr: 'HTTP 502' };
+  if (sub.startsWith('api graphql') && sub.includes('mergeCommit')) return ok(c.prsDaFoto);
   if (sub.startsWith('api graphql')) return ok(dadosDaConsulta(c));
   const comparacao = /compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})/.exec(sub);
   if (comparacao) {

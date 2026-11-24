@@ -69,6 +69,7 @@ test('mensagem que cita a bancada: ela vence a ordem fixa', async () => {
   const c = cenarioDoSync({ commits: [commitDaOrigem(1), mergeDoSync({ mensagem: `Merge pull request #12 from biudtech/${bancada}` })] });
   c.refs[bancada] = pontaDaBancada;
   c.comparacoes[`${FOTO}...${pontaDaBancada}`] = { behind: 0, mergeBase: FOTO, files: [] };
+  c.prsDaFoto = [{ number: 12, base: bancada, mergeCommit: FOTO }];
   assert.equal((await ler(c)).origem, bancada);
 });
 
@@ -79,6 +80,7 @@ test('sem citação: a primeira da ordem fixa que contém a foto, e a bancada s�
   const bancada = 'release_prd_2026.11';
   const soNaBancada = cenarioDoSync({ commits: [commitDaOrigem(1), mergeDoSync({ mensagem: 'Merge commit' })], refs: { [bancada]: sha('bf') } });
   soNaBancada.comparacoes[`${FOTO}...${sha('bf')}`] = { behind: 0, mergeBase: FOTO, files: [] };
+  soNaBancada.prsDaFoto = [{ number: 13, base: bancada, mergeCommit: FOTO }];
   assert.equal((await ler(soNaBancada)).origem, bancada);
 });
 
@@ -125,4 +127,37 @@ test('branchesCitadas e ordemDasCandidatas', () => {
   assert.deepEqual(branchesCitadas(''), []);
   assert.deepEqual(ordemDasCandidatas(['production', 'development'], 'development', ['release_prd_b', 'release_hmg_a']),
     ['production', 'homologation', 'main', 'master', 'release_hmg_a', 'release_prd_b']);
+});
+
+// A foto só vale como estado revisado da origem (decisão do dono de 24/11/2026, anti-objetivo
+// "aprovar o que ninguém leu"): a ponta atual da origem, ou o merge commit de um PR mesclado nela.
+test('foto no meio da história da origem (nem a ponta nem merge commit de PR): não herda nada', async () => {
+  const c = cenarioDoSync({ prsDaFoto: [{ number: 77, base: 'homologation', mergeCommit: sha('77') }] });
+  assert.equal(await ler(c), null);
+  assert.equal(await ler(cenarioDoSync({ prsDaFoto: [] })), null, 'commit sem PR mesclado associado');
+});
+
+test('foto que é o merge commit de um PR mesclado em outra base: não herda', async () => {
+  const c = cenarioDoSync({ prsDaFoto: [{ number: 78, base: 'feat/rascunho', mergeCommit: FOTO }] });
+  assert.equal(await ler(c), null);
+});
+
+test('foto que é o merge commit de um PR mesclado na origem: herda', async () => {
+  const c = cenarioDoSync({ prsDaFoto: [{ number: 1480, base: 'homologation', mergeCommit: FOTO }] });
+  const p = await ler(c);
+  assert.equal(p.origem, 'homologation');
+  assert.equal(p.foto, FOTO);
+});
+
+test('foto que é a ponta atual da origem: herda, sem ler o PR associado', async () => {
+  const c = cenarioDoSync({ refs: { homologation: FOTO }, prsDaFoto: [] });
+  c.comparacoes[`${FOTO}...${FOTO}`] = { behind: 0, mergeBase: FOTO, files: [] };
+  assert.equal((await ler(c)).foto, FOTO);
+  assert.equal(c.chamadas.some((x) => x.includes('mergeCommit')), false);
+});
+
+test('leitura do PR associado à foto que falha ou vem torta: não herda', async () => {
+  assert.equal(await ler(cenarioDoSync({ falhas: ['mergeCommit'] })), null);
+  assert.equal(await ler(cenarioDoSync({ prsDaFoto: { torto: true } })), null);
+  assert.equal(await ler(cenarioDoSync({ prsDaFoto: [{ number: 'x', base: 'homologation', mergeCommit: FOTO }] })), null);
 });
