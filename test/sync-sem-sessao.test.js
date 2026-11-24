@@ -55,7 +55,7 @@ const arquivo = (p) => ({ path: p, sha: 'd'.repeat(40), status: 'modified', patc
 const ARQUIVOS = [arquivo('docs/a.md'), arquivo('docs/b.md'), arquivo('docs/c.md')];
 function fonte() {
   return { status: 'complete', manifest: { H: HEAD, B: BASE_PONTA, M: 'a'.repeat(40), files: ARQUIVOS, limitations: [] }, reader: {},
-    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, files: ARQUIVOS, changedFiles: ARQUIVOS.length },
+    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, baseRef: 'development', files: ARQUIVOS, changedFiles: ARQUIVOS.length },
     release: async () => {} };
 }
 
@@ -66,6 +66,9 @@ beforeEach(() => {
   limpezas = 0;
   sourceRuntime.prepareSources = async () => fonte();
   sourceRuntime.buildMap = async () => ({ complete: true, head: { files: [], relations: [], unresolved: [] }, previous: { files: [], relations: [], unresolved: [] } });
+  // a avaliação técnica aprovada, com regra que rodou: o que a pré-checagem exige (verdict.js)
+  technicalRuntime.prepareTechnicalReview = async (_e, pr, head) => ({ repo: pr.repo, head, toolHome: 'fixture', snapshot: 'fixture', base: 'b'.repeat(40),
+    initial: { verdict: 'pass', rules: [{ rule: 'fixture', verdict: 'pass' }], findings: [], excerpt: '' } });
   const limpar = technicalRuntime.cleanup;
   technicalRuntime.cleanup = (ctx) => { if (ctx) limpezas += 1; return limpar(ctx); };
 });
@@ -168,7 +171,7 @@ for (const [nome, ajuste, prDoCaso] of [
 }
 
 test('achado técnico só nos herdados não impede', async () => {
-  technicalRuntime.prepareTechnicalReview = async (_e, pr, head) => ({ repo: pr.repo, head, toolHome: 'fixture', snapshot: 'fixture', base: 'b'.repeat(40), initial: { rules: [], findings: [{ rule: 'r', file: 'docs/a.md' }], excerpt: '' } });
+  technicalRuntime.prepareTechnicalReview = async (_e, pr, head) => ({ repo: pr.repo, head, toolHome: 'fixture', snapshot: 'fixture', base: 'b'.repeat(40), initial: { verdict: 'pass', rules: [{ rule: 'r', verdict: 'pass' }], findings: [{ rule: 'r', file: 'docs/a.md' }], excerpt: '' } });
   const e = await revisar(15);
   assert.equal(e.sessoes, 0);
   assert.equal(decisao(e, 15).caminho, 'sync_por_heranca_sem_sessao');
@@ -215,8 +218,8 @@ test('candidato e tecnicaSoNosHerdados são puros e conservadores', () => {
   assert.equal(candidato({ ativa: true, changed: [], sync }, null), false);
   assert.equal(tecnicaSoNosHerdados({ semDeclaracao: true }, ['a']), true);
   assert.equal(tecnicaSoNosHerdados({ error: 'x' }, ['a']), false);
-  assert.equal(tecnicaSoNosHerdados({ initial: { findings: [{ file: 'a' }] } }, ['a']), true);
-  assert.equal(tecnicaSoNosHerdados({ initial: { findings: [{ rule: 'sem arquivo' }] } }, ['a']), false);
+  assert.equal(tecnicaSoNosHerdados({ initial: { verdict: 'pass', rules: [{ rule: 'r', verdict: 'pass' }], findings: [{ file: 'a' }] } }, ['a']), true);
+  assert.equal(tecnicaSoNosHerdados({ initial: { verdict: 'pass', rules: [{ rule: 'r', verdict: 'pass' }], findings: [{ rule: 'sem arquivo' }] } }, ['a']), false);
   assert.equal(tecnicaSoNosHerdados({}, ['a']), false, 'sem o resultado inicial não dá para saber');
 });
 
@@ -225,11 +228,16 @@ test('candidato e tecnicaSoNosHerdados são puros e conservadores', () => {
 test('pré-checagem técnica: erro, regra reprovada sem achado e regra de julgamento pendente barram', () => {
   const herdados = ['docs/a.md'];
   const inicial = (initial) => tecnicaSoNosHerdados({ initial }, herdados);
-  assert.equal(inicial({ error: 'falhou', rules: [], findings: [] }), false, 'initial.error');
-  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [] }), false, 'regra reprovada sem achado');
-  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [{ rule: 'core.x', file: 'docs/a.md' }] }), true, 'reprovada só no herdado');
-  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'not-run' }], findings: [] }), false, 'julgamento pendente');
-  assert.equal(inicial({ rules: [{ rule: 'frontend.component.named-structural-branches', verdict: 'not-run' }], findings: [] }), true,
+  assert.equal(inicial({ verdict: 'pass', error: 'falhou', rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), false, 'initial.error');
+  assert.equal(inicial({ verdict: 'pass', rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [] }), false, 'regra reprovada sem achado');
+  assert.equal(inicial({ verdict: 'fail', rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [{ rule: 'core.x', file: 'docs/a.md' }] }), false, 'veredito fail barra');
+  assert.equal(inicial({ verdict: 'pass', rules: [{ rule: 'core.x', verdict: 'not-run' }], findings: [] }), false, 'julgamento pendente');
+  assert.equal(inicial({ verdict: 'pass', rules: [{ rule: 'frontend.component.named-structural-branches', verdict: 'not-run' }], findings: [] }), true,
     'regra de organização pendente não segura, como no caminho normal');
-  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), true);
+  assert.equal(inicial({ verdict: 'pass', rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), true);
+  // segunda revisão independente: só o veredito aprovado, com regra que rodou, passa
+  assert.equal(inicial({ verdict: 'fail', rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), false, 'veredito fail sem regra reprovada');
+  assert.equal(inicial({ verdict: 'not-run', rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), false, 'veredito not-run');
+  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), false, 'veredito ausente');
+  assert.equal(inicial({ verdict: 'pass', rules: [], findings: [] }), false, 'regras vazias: aplicabilidade não comprovada');
 });
