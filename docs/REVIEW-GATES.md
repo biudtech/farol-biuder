@@ -461,17 +461,22 @@ comum (fora de `compare <foto>...<primeiro pai>`), não depende de nada que o sy
 (`lib/engine/dependencia-do-sync.js`, fechado por padrão) e não tem achado bloqueante aberto de
 rodada anterior (`arquivosComBloqueioAberto`, `lib/engine/review-rounds.js`). A dependência:
 
+- mudou é o que difere da foto (dentro ou fora do diff), o que está a ler e o que a base mexeu;
 - código JS e TS volta se qualquer caminho de imports do mapa, por qualquer arquivo, dentro ou
-  fora do diff (o barril que reexporta um misturado), chega a um arquivo a ler, a um que a base
-  mudou, a um herdado que voltou, a código que o mapa não leu por inteiro ou a um import sem
-  destino que pode ser do repositório: relativo, alias, ou não relativo cujo pacote não está em
-  `dependencies`, `devDependencies` ou `peerDependencies` do `package.json` mais próximo ou da
-  raiz, ou é do workspace. Sem `package.json` legível, todo import não relativo sem destino volta;
-- só herdam sem conferência `.md`, `.mdx`, `.txt`, imagens, `.pdf` e `.csv`; todo o resto volta,
-  inclusive `.json`, `.yaml` e `.yml`;
-- configuração global (`tsconfig*.json`, `package.json`, `pnpm-workspace.yaml`, lockfiles,
-  `nest-cli.json`, configurações de build) misturada, bloqueada ou mexida pela base devolve todo
-  código herdado; o esquema do Prisma mudado devolve quem chega a `@prisma/client` pelo grafo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
+  fora do diff (o barril que reexporta um misturado), chega a algo que mudou, a um herdado que
+  voltou por dependência, a código que o mapa não leu por inteiro (o `import()` e o `require`
+  literais não contam) ou a um import sem destino que pode ser do repositório: relativo, alias
+  (marcado pelo mapa ou casando um prefixo dos `paths` dos tsconfig), primeiro segmento que
+  existe sob o `baseUrl`, ou pacote que o `package.json` mais próximo e o da raiz não declaram ou
+  que é do repositório (`workspace:`, `file:`, `link:`, `portal:`, nome de pacote local). Sem
+  `package.json` ou tsconfig legível, a regra fica conservadora;
+- herdam sem conferência `.md`, `.txt`, imagens, `.pdf` e `.csv`; o `.mdx` só sem import; dado e
+  estilo idênticos (`.json` fora da configuração global, YAML, CSS e afins, GraphQL) herdam e não
+  contaminam quem os importa, menos o estilo que importa algo que mudou; o resto volta;
+- configuração global que mudou devolve todo código herdado; o esquema do Prisma que mudou
+  (qualquer `.prisma`, a pasta `prisma/`, `prisma.config.*`, o `prisma.schema` do
+  `package.json`) devolve quem chega a `@prisma/client` pelo grafo. A consulta de procedência só
+  roda com a base contínua ou bancada pelo nome lido no preparo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
 falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
 hoje, sem log.
 
@@ -496,8 +501,9 @@ arquivo estiver na lista do motor e a evidência não citar o contexto alterado
 **Sem nenhum arquivo a ler** (`lib/engine/sync-sem-sessao.js`): APPROVE de texto fixo, sem sessão,
 pelo mesmo fluxo do diff vazio (`lib/engine/aprovacao-sem-sessao.js`). Só com a política da conta
 que aprova sozinha, `reviewRoundsMode` diferente de `enforce` e a origem do dono; a avaliação
-técnica roda antes e qualquer achado fora dos herdados, a falha dela, regra reprovada sem achado
-ou regra de julgamento pendente que bloquearia no caminho normal abre a sessão. O PR da
+técnica roda antes e só deixa passar o veredito aprovado, com regras que rodaram: achado fora dos
+herdados, a falha dela, regra reprovada sem achado ou regra de julgamento pendente que bloquearia
+no caminho normal abre a sessão. O PR da
 própria conta, a decisão de gente no head e a label de outra conta encerram sem postar; o head que
 andou marca `stale_head`; o dedup por head e todos os portões de `postReview` valem. A publicação
 técnica aceita o APPROVE só pela prova da memória do motor (`syncPorHeranca`, com a marca

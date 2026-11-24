@@ -117,27 +117,42 @@ Para cada arquivo do inventário do PR (diff contra a base):
      2). A conferência usa o que o motor já tem para devolver herdado à leitura (a releitura de
      `inheritanceForContext` e o `revalidarAusenciaHerdada` em `analysis-source.js`, e o mapa de
      importação do contexto); arquivo cuja dependência não deu para conferir volta à leitura.
-     Detalhamento da decisão 2 (24/11/2026, depois da revisão independente), fechado por padrão:
+     Detalhamento da decisão 2 (24/11/2026, depois de duas revisões independentes), fechado por
+     padrão. MUDOU é o que difere da foto (dentro ou fora do diff: o arquivo que a resolução do
+     merge devolveu à versão da base some do diff, mas não é a foto), o que está a ler e o que a
+     base mexeu:
      - código que o mapa lê (JS e TS): volta se QUALQUER caminho de imports do mapa, passando por
        qualquer arquivo, dentro ou fora do diff (o barril `index.ts` que reexporta um misturado),
-       chega a um arquivo a ler, a um arquivo que a base mudou, a um herdado que voltou, a um
-       arquivo de código que o mapa não leu por inteiro ou a um import sem destino que pode ser do
-       repositório;
-     - import não relativo sem destino só é pacote externo quando o nome (o primeiro segmento, ou
-       `@escopo/nome`) está em `dependencies`, `devDependencies` ou `peerDependencies` do
-       `package.json` mais próximo ou da raiz, e não é pacote do workspace (nome de um
-       `package.json` do repositório, ou dependência `workspace:`). Builtin do Node é externo.
-       Sem `package.json` legível, todo import não relativo sem destino volta;
-     - linguagem fechada por padrão: herdam sem conferência só `.md`, `.mdx`, `.txt`, imagens
-       (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.ico`), `.pdf` e `.csv`. Todo o resto
-       volta, inclusive `.json`, `.yaml` e `.yml` (o código pode lê-los em execução sem import que
-       o mapa veja);
+       chega a algo que mudou, a um herdado que voltou por dependência, a código que o mapa não
+       leu por inteiro ou a um import sem destino que pode ser do repositório. O `import()` e o
+       `require` literais não deixam o arquivo como não lido (o mapa resolveu o destino); o não
+       literal vira import sem destino e volta;
+     - import não relativo sem destino é do repositório quando casa um prefixo de alias (as
+       chaves de `compilerOptions.paths` dos tsconfig, seguindo `extends` relativo) ou quando o
+       primeiro segmento existe sob o `baseUrl` de um tsconfig, mesmo com pacote declarado de
+       mesmo nome. tsconfig que não dá para ler deixa a regra conservadora (todo import não
+       relativo sem destino volta). Fora disso, só é pacote externo quando o nome está em
+       `dependencies`, `devDependencies` ou `peerDependencies` do `package.json` mais próximo ou
+       da raiz e não é pacote do repositório (nome de um `package.json` local, dependência
+       `workspace:`, `file:`, `link:` ou `portal:`, pela chave). Builtin do Node é externo. Sem
+       `package.json` legível, volta;
+     - herdam sem conferência só `.md`, `.txt`, imagens (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`,
+       `.webp`, `.ico`), `.pdf` e `.csv`. O `.mdx` herda só como texto simples, sem linha de
+       import;
+     - dado e estilo (`.json` fora da configuração global, `.yaml`, `.yml`, `.css`, `.scss`,
+       `.sass`, `.less`, `.graphql`, `.gql`) idênticos à foto herdam e não contaminam quem os
+       importa: o consumidor lê o mesmo conteúdo revisado na origem. O estilo com `@import`,
+       `@use` ou `@forward` de algo que mudou (ou de `~pacote`, ou sem texto legível) volta. Só o
+       dado ou estilo que mudou contamina quem o importa pelo grafo;
+     - todo o resto volta (`.swift`, `.dart`, `.c`, `.sh`, `.sql`, linguagem desconhecida);
      - configuração global (`tsconfig*.json`, `package.json`, `pnpm-workspace.yaml`, os lockfiles,
-       `nest-cli.json` e `next`, `vite`, `webpack` e `babel.config.*`) misturada, bloqueada ou
-       mexida pela base: todo código herdado volta. A configuração idêntica à foto vai à leitura,
-       mas não derruba o código;
-     - esquema do Prisma (`schema.prisma`) misturado, bloqueado ou mexido pela base: volta quem
-       importa `@prisma/client` ou chega pelo grafo a quem o importa;
+       `nest-cli.json` e `next`, `vite`, `webpack` e `babel.config.*`) que mudou: todo código
+       herdado volta. A configuração idêntica à foto vai à leitura, mas não derruba o código;
+     - esquema do Prisma que mudou (qualquer `.prisma`, qualquer arquivo sob uma pasta `prisma/`,
+       migrações inclusive, `prisma.config.*` e o `prisma.schema` do `package.json` da raiz):
+       volta quem importa `@prisma/client` ou chega pelo grafo a quem o importa.
+     A consulta de procedência só roda quando o nome da base, lido no preparo das fontes, é uma
+     branch contínua ou bancada; o mapa que o sync monta é só o do head;
   4. o arquivo **não tem achado bloqueante aberto** de rodada anterior do mesmo PR
      (`review-rounds.js`): com achado aberto, ele volta à leitura, para a sessão conferir se
      ainda vale.
@@ -232,7 +247,12 @@ Levantadas pela revisão do desenho por um construtor independente, que mediu o 
    linguagem é fechada por padrão; configuração global e esquema do Prisma mudados devolvem o
    código que depende deles. A pré-checagem técnica do caminho sem sessão barra também regra
    reprovada sem achado, regra de julgamento pendente e erro da avaliação, para nunca ser mais
-   frouxa que o caminho normal.
+   frouxa que o caminho normal. A segunda revisão independente acrescentou: o que difere da foto
+   fora do diff conta como mudado; o esquema do Prisma é qualquer arquivo dele; `baseUrl`, aliases
+   do tsconfig e dependência local marcam o import do repositório; o `.mdx` com import volta; o
+   dado ou estilo idêntico herda sem contaminar (substitui "JSON e YAML sempre voltam"); o import
+   literal não deixa o arquivo como não lido; e o caminho sem sessão exige a avaliação técnica com
+   veredito aprovado e regras que rodaram.
 3. O arquivo com **achado bloqueante aberto** de rodada anterior **volta à leitura**.
 4. (24/11/2026, depois da revisão final da implementação, pelo anti-objetivo "aprovar o que ninguém
    leu") A **foto** só vale quando é a ponta atual da origem ou o merge commit de um PR mesclado
