@@ -102,6 +102,12 @@ test('alias ambíguo: mais de uma chave casa e o destino do mapa não é o da ch
   assert.deepEqual(sep({ arquivos: [f('src/a.ts')], pacotes: semAlvos,
     mapa: { files: parse(['src/a.ts', 'libs/ui/botao.ts']), relations: [{ from: 'src/a.ts', to: 'libs/ui/botao.ts', specifier: '@/components/botao' }], unresolved: [] } }).herdados,
     [], 'sem os alvos, não dá para conferir');
+  // alvo com mais de um `*` é inválido no TypeScript: não dá destino, e o import volta como ambíguo
+  const invalido = [{ chave: '@/*', alvos: ['src/*'], base: '' }, { chave: '@/components/*', alvos: ['libs/*/ui/*'], base: '' }];
+  const comInvalido = { ...PACOTES, prefixosDeAlias: invalido.map((a) => a.chave), aliases: invalido, textos: textosPadrao() };
+  assert.deepEqual(sep({ arquivos: [f('src/a.ts')], pacotes: comInvalido,
+    mapa: { files: parse(['src/a.ts', 'libs/botao/ui/botao.ts']), relations: [{ from: 'src/a.ts', to: 'libs/botao/ui/botao.ts', specifier: '@/components/botao' }], unresolved: [] } }).herdados,
+    [], 'alvo com dois curingas volta à leitura');
 });
 
 test('chave "~*" sem barra casa com qualquer import que comece com ~', () => {
