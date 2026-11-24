@@ -251,14 +251,21 @@ SQLite. O mesmo comando funciona com o motor parado (provado no WSL em 17/11/202
 fechado, sem `-wal` nem `-shm`, cópia íntegra com 600); nesse caso a conexão só de leitura deixa
 um `-wal` vazio e um `-shm` ao lado do banco, que o motor reaproveita na próxima subida. Com o
 motor parado, os arquivos também podem ser copiados como estão (o fechamento ordenado já devolve
-o WAL ao `.db`). O backup contínuo (Litestream ou cópia agendada para o S3) é o lote de backup,
-ainda não feito: hoje a cópia do banco é a cópia do volume.
+o WAL ao `.db`). O backup contínuo para fora da máquina (Litestream ou cópia agendada para o S3)
+é o lote de backup, ainda não feito: no container a cópia do banco é a cópia do volume, e na
+hospedagem compartilhada há a cópia diária na própria máquina
+([o backup do registro](#hospedagem-compartilhada-sem-docker)).
 
-**Retenção: decisão pendente.** As sessões não têm poda, como no JSON de antes: o banco cresce
-uns 700 bytes por sessão registrada. Os motivos de falha seguem com o teto de 500. O histórico
-das decisões segue com o teto de 3.000 (a mais antiga sai quando entra uma nova), com uns 78 KB
-por decisão no histórico real, quase tudo o inventário do diff. Apagar linhas não encolhe o
-arquivo: o espaço é reaproveitado pelas próximas.
+**Retenção.** As sessões não têm poda, como no JSON de antes: o banco cresce uns 700 bytes por
+sessão registrada. Os motivos de falha seguem com o teto de 500. O histórico das decisões segue
+com o teto de 3.000 (a mais antiga sai quando entra uma nova), com uns 78 KB por decisão no
+histórico real, quase tudo o inventário do diff, e o recorte leve de todas na memória do motor:
+subir o teto pesa no disco e no heap. Para a tela de Consumo não perder nada com o teto, a sessão
+grava o autor do PR e o card lido na própria linha desde 24/11/2026 (o detalhe em
+[`CONSUMO-REVIEWS.md`](CONSUMO-REVIEWS.md#get-apiusage)); o que some com a decisão descartada é só
+o que é dela (etapas, arquivos lidos e o link para o detalhe). No ritmo medido na hospedagem em
+24/11/2026 (perto de 90 decisões por dia), o teto chega em cerca de um mês. Apagar linhas não
+encolhe o arquivo: o espaço é reaproveitado pelas próximas.
 
 ## O config.json da instância
 
@@ -966,6 +973,32 @@ no limite de threads da hospedagem compartilhada. A rotina divide o trabalho:
    commit passa a esperar o CI e quando algo falha (linha com `ERRO`). `<base>/run/autoatualizar.marca`
    é a última conferência. Commit que não descende do que está no ar (história reescrita) para a
    rotina com `ERRO` até alguém trocar à mão.
+
+**O backup do registro.** Sem volume para copiar, o registro (o `telemetria.db`, o `usage.json` e o
+`decisions.json`) ganha uma cópia diária na própria máquina pelo
+[`docs/exemplos/backup-telemetria.mjs`](exemplos/backup-telemetria.mjs): a cópia consistente do
+SQLite (a mesma de "Copiar com o motor de pé"), aberta e conferida antes de entrar na rotação (7
+diárias, 5 semanais e 6 mensais, em `<base>/backup`, com modo 700 e 600). Copie-o para a base e
+chame-o a cada rodada do agendador, conferindo a marca do dia antes de subir o Node:
+
+   ```
+   [ "$(cat <base>/run/backup.ultima 2>/dev/null)" != "$(TZ=America/Sao_Paulo date +%F)" ] &&
+     FAROL_BASE=<base> FAROL_DADOS=<base>/dados nohup node <base>/backup-telemetria.mjs >/dev/null 2>>"<base>/log/backup.log" &
+   ```
+
+A marca no shell não é zelo: a hospedagem limita as threads do usuário, e um Node subindo a cada
+minuto só para ver que já copiou falhava ao abrir thread com uma revisão no pico (medido em
+24/11/2026). Cópia que falha não grava a marca, e a rodada seguinte tenta de novo. Cada rodada dá
+uma linha em `<base>/log/backup.log` (`ok` com as contagens, ou `ERRO` com o motivo). Restaurar é
+parar o motor, descompactar o `telemetria.db.gz` da data no lugar do banco (sem `-wal` nem `-shm`
+ao lado) e subir. A cópia na mesma máquina não cobre a perda da conta: essa é do backup da
+hospedagem.
+
+**O agendador não pode ser um shell longo.** Medido na hospedagem em 23 e 24/11/2026: o laço em
+`sh` que rodava as rotinas a cada minuto levava SIGKILL de fora com 60 minutos de vida, sem linha
+de saída, enquanto processos Node da mesma conta vivem dias. O laço que fica de pé é em Node
+(chama a rodada a cada minuto e sai pelo `exit` com uma linha no log); o cron da hospedagem fica de
+reserva para religá-lo.
 
 ## O que não foi provado
 

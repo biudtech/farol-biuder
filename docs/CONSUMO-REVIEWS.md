@@ -27,7 +27,13 @@ arquivo SQLite, `~/.farol/workspace/state/telemetria.db` (`lib/telemetria/`). O 
 banco uma vez, com WAL e `synchronous=FULL`, e só os módulos de `lib/telemetria/` têm SQL. Registrar uma sessão é um `INSERT`
 numa transação, e não mais a regravação do arquivo inteiro (5,5 MB na instância real, a cada
 sessão). A tentativa aberta é uma linha que o parcial atualiza e o fechamento apaga; o desfecho
-marcado depois (`marcarDesfecho`) atualiza a linha mais recente daquele id.
+marcado depois (`marcarDesfecho`) atualiza a linha mais recente daquele id. Com `seEra` ele só
+troca a linha que está naquele desfecho: é como a revisão que termina sem resultado (estacionada
+por esgotar as tentativas ou por falha permanente, `estacionar` em `lib/engine/review.js`) troca o
+`ok` da sessão dela por `erro`. A sessão tinha concluído e a falha veio num passo seguinte (a
+continuação na mesma conversa, o reparo do envelope), e a auditoria contava o custo como
+resultado (6 linhas na hospedagem, em 23/11/2026). O `parcial` de quem morreu no meio fica, e a
+falha que vai ao retry não marca nada, porque a tentativa seguinte retoma a mesma conversa.
 
 | tabela | o que guarda |
 |---|---|
@@ -148,6 +154,12 @@ Desde 19/11/2026 (redesenho, lote 2):
   `decisaoId`, `etapas` (`[{ id, label, ms }]`), `card` e `arquivosLidos` (das provas), cada um
   só quando a decisão o tem. A rodada que ainda não decidiu, e o pushback, ficam sem eles. Com o
   histórico indisponível o relatório sai igual, sem autor e sem esses campos.
+- Desde 24/11/2026 a sessão grava na própria linha o autor do PR (`author`, o login sem caixa) e o
+  card lido (`card`), pelas marcas `farol_autor` e `farol_card` do evento (`camposDaTentativa`,
+  `lib/engine/usage-desfechos.js`, que só aceita a forma de login e de chave). O da linha vale; só
+  a linha antiga, sem eles, ainda os busca nas decisões. Assim o filtro `author`, a coluna e o card
+  não somem quando a decisão sai pelo teto de 3.000 do histórico; o que sai com ela é o que é dela
+  (`decisaoId`, `etapas` e `arquivosLidos`). O card da decisão, quando existe, continua valendo.
 - `history.pageSize` diz o tamanho da página usado.
 
 Como ler:
