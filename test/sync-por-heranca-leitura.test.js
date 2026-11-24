@@ -27,13 +27,15 @@ const pr = { key: 'acme/api#1', repo: 'acme/api', number: 1 };
 const arquivo = (p, extra = {}) => ({ path: p, sha: 'd'.repeat(40), status: 'modified', patch: '@@ -1 +1 @@\n-old\n+new', patchStatus: 'available', ...extra });
 const ARQUIVOS = [arquivo('src/a.ts'), arquivo('src/b.ts'), arquivo('docs/x.md')];
 let cenario;
+let baseDoPr;
+let opcoesDoMapa;
 let chamadasDoMapa;
 let e;
 const id = 's1';
 
 function fonte() {
   return { status: 'complete', manifest: { H: HEAD, B: BASE_PONTA, M: 'c'.repeat(40), files: ARQUIVOS, limitations: [] }, reader: {},
-    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, files: ARQUIVOS, changedFiles: ARQUIVOS.length },
+    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, baseRef: baseDoPr, files: ARQUIVOS, changedFiles: ARQUIVOS.length },
     release: async () => {} };
 }
 const mapa = (complete = true) => ({ complete, head: { files: [{ path: 'src/a.ts', backend: 'babel', limitations: [] }, { path: 'src/b.ts', backend: 'babel', limitations: [] }],
@@ -49,9 +51,11 @@ beforeEach(() => {
   cenario = cenarioDoSync();
   cenario.comparacoes[`${FOTO}...${HEAD}`] = { behind: 0, mergeBase: FOTO, files: ['src/a.ts'] };
   chamadasDoMapa = 0;
+  baseDoPr = 'development';
+  opcoesDoMapa = null;
   io.run = stubDoSync(cenario);
   sourceRuntime.prepareSources = async () => fonte();
-  sourceRuntime.buildMap = async () => { chamadasDoMapa += 1; return mapa(); };
+  sourceRuntime.buildMap = async (_fonte, opcoes) => { chamadasDoMapa += 1; opcoesDoMapa = opcoes; return mapa(); };
   e = motor();
   fs.rmSync(path.join(home, 'workspace', 'state', 'file-proof'), { recursive: true, force: true });
 });
@@ -112,4 +116,25 @@ test('modo assist com mapa incompleto: os herdados voltam e o sync sai', async (
 test('prova com origem do sync não herda pela prova do PR', () => {
   const prova = { head: 'f'.repeat(40), files: [arquivo('src/b.ts')], reviewed: ['src/b.ts'], origens: { 'src/b.ts': { origem: 'homologation', foto: FOTO } } };
   assert.deepEqual(splitByProof([arquivo('src/b.ts')], prova).changed, ['src/b.ts']);
+});
+
+// Revisão independente de 24/11/2026: o PR comum não paga a consulta de procedência nem o mapa.
+test('base que não é contínua nem bancada: nem consulta a procedência', async () => {
+  baseDoPr = 'feat/qualquer';
+  const r = await prepareReviewReading(e, pr, id, HEAD);
+  assert.equal(r.inheritance.sync, undefined);
+  assert.equal(cenario.chamadas.length, 0);
+  assert.equal(chamadasDoMapa, 0);
+});
+
+test('sem o nome da base no preparo: nem consulta a procedência', async () => {
+  baseDoPr = undefined;
+  const r = await prepareReviewReading(e, pr, id, HEAD);
+  assert.equal(r.inheritance.sync, undefined);
+  assert.equal(cenario.chamadas.length, 0);
+});
+
+test('com o contexto desligado, o mapa do sync monta só o lado do head', async () => {
+  await prepareReviewReading(e, pr, id, HEAD);
+  assert.equal(opcoesDoMapa.soHead, true);
 });
