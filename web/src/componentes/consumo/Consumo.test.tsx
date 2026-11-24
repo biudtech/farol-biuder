@@ -826,10 +826,17 @@ describe('Consumo: as revisões que não publicaram', () => {
     expect(screen.queryByRole('region', { name: TABELA })).toBeNull();
   });
 
+  it('motor anterior ao registro (sem o campo): a seção não aparece, em vez de afirmar que não houve', async () => {
+    const { ocorrencias: _semCampo, ...antigo } = relatorioDoMotor();
+    montar({ responder: () => corpo(antigo) });
+    await assentar();
+    expect(screen.queryByRole('heading', { name: 'Revisões que não publicaram' })).toBeNull();
+  });
+
   it('cada ocorrência numa linha: a hora de Brasília, o PR com link, a frase do motor, a origem e a sessão', async () => {
     const ocorrencias = [
       { at: Date.UTC(2026, 10, 16, 16, 19), ref: 'dono/repo#64', tipo: 'nao_iniciada', motivo: 'pr_mergeado', texto: 'A revisão não chegou a abrir a sessão do Claude: o PR já tinha sido mergeado.', origem: 'clique', sessao: 'a-9' },
-      { at: Date.UTC(2026, 10, 16, 16, 11), ref: 'dono/repo#64', tipo: 'interrompida', motivo: 'sessao_caiu', texto: 'A sessão do Claude caiu e a revisão vai ser tentada de novo: a sessão caiu por um problema passageiro.', origem: 'inventada', classe: 'rede' },
+      { at: Date.UTC(2026, 10, 16, 16, 11), ref: 'dono/repo#64', tipo: 'interrompida', motivo: 'sessao_caiu', texto: 'A revisão caiu e vai ser tentada de novo: um problema passageiro interrompeu a revisão.', origem: 'inventada', classe: 'rede' },
     ];
     montar({ responder: () => corpo(relatorioDoMotor({ ocorrencias })) });
     await assentar();
