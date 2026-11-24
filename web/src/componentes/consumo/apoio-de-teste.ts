@@ -68,6 +68,8 @@ export function relatorioDoMotor(extra: Record<string, unknown> = {}): Record<st
     ],
     history: { total: 2, page: 0, pages: 1, pageSize: 8, rows: [operacaoDoMotor(12), operacaoDoMotor(7, { kind: 'pushback', gatilho: 'contestacao', model: 'Opus 5', status: 'erro', costUsd: 0, costSource: 'desconhecido' })] },
     incomplete: false,
+    // o motor desde 24/11/2026 sempre manda as revisões que não publicaram (ocorrencias-da-revisao.js)
+    ocorrencias: [],
     ...extra,
   };
 }

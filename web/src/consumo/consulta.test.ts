@@ -79,7 +79,7 @@ describe('o pedido ao motor', () => {
     const diario = fonte('lib/usage/activity.js');
     expect(diario).toContain("const author = String(query.author || '').trim().toLowerCase();");
     expect(diario).toContain("const FILTER_FIELDS = ['account', 'provider', 'model', 'kind', 'device', 'profile'];");
-    expect(fonte('lib/engine/usage-activity.js')).toContain("if (formatos[0] !== 'csv') return { status: 200, body: await usageActivity(engine, params) };");
+    expect(fonte('lib/engine/usage-activity.js')).toContain("if (formatos[0] !== 'csv') return { status: 200, body: comOcorrencias(engine, await usageActivity(engine, params), params) };");
   });
 
   it('os parâmetros são os que o motor lê', () => {
@@ -221,7 +221,7 @@ describe('as datas do campo', () => {
 describe('as frases', () => {
   const base: Relatorio = {
     range: { start: '2026-10-18', end: '2026-11-16' }, totals: { attempts: 4, costUsd: 3.75 }, series: [], byKind: [], models: [],
-    history: { total: 9, page: 1, pages: 2, rows: [], descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, descartados: 0,
+    history: { total: 9, page: 1, pages: 2, rows: [], descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, ocorrencias: [], descartados: 0,
   };
 
   it('o período com as duas pontas e a contagem de dias', () => {

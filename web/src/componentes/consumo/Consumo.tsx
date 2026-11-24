@@ -3,7 +3,8 @@
 // A tela Consumo (redesenho, lote 5): no topo os períodos prontos; a barra de filtros (busca,
 // repositório, autor, modelo e perfil) e as pílulas do que está escolhido; os números do período;
 // o plano de cada perfil do Claude; o custo por dia e por repositório (clicáveis: o clique vira
-// filtro); por modelo e por gatilho; e cada sessão, paginada, com a linha que abre e Baixar CSV.
+// filtro); por modelo e por gatilho; cada sessão, paginada, com a linha que abre e Baixar CSV; e as
+// revisões que terminaram sem publicar no período, com o motivo que o motor registrou.
 //
 // O período vem de GET /api/usage, onde quem soma, filtra e pagina é o motor. Com um dia clicado
 // vão dois pedidos: o do dia (tudo na tela) e o do período inteiro, só para o gráfico por dia e os
@@ -27,6 +28,7 @@ import { AuditoriaDoRegistro } from './AuditoriaDoRegistro';
 import { CustoPorDia } from './CustoPorDia';
 import { BarraDeFiltros, Periodos, Pilulas } from './Filtros';
 import { Numeros, PlanoDosPerfis } from './Numeros';
+import { Ocorrencias } from './Ocorrencias';
 import { PorGatilho, PorModelo, PorRepositorio } from './Quebras';
 import { DetalhesDoPeriodo, notasDoPeriodo } from './ResumoDoPeriodo';
 import { BaixarCsv, Sessoes } from './Sessoes';
@@ -201,6 +203,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
             rotuloDoPerfil={rotuloDoPerfil}
             baixar={<BaixarCsv cliente={app.cliente} consulta={consulta} esperando={esperando} />}
           />
+          {relatorio.ocorrencias ? <Ocorrencias ocorrencias={relatorio.ocorrencias} /> : null}
           {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
         </div>
       ) : null}

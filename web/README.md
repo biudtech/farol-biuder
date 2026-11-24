@@ -884,7 +884,11 @@ de cima para baixo:
 8. "Cada sessão": a tabela paginada, uma linha por operação, que abre com os tokens por tipo, o
    tempo por etapa, as tentativas, os arquivos lidos, o card, Ver no Histórico e Abrir o PR, e
    o botão Baixar CSV;
-9. fechadas numa linha cada (`Linha`): Detalhes do período, Sessões recentes e Auditoria do
+9. "Revisões que não publicaram" (24/11/2026): as revisões do período e do repositório que
+   terminaram sem publicar e sem decisão no histórico, uma por linha, com a hora de Brasília, o PR
+   (link para o GitHub), a frase do motor, a origem e a sessão. Vazio: "Nenhuma revisão terminou
+   sem publicar no período.";
+10. fechadas numa linha cada (`Linha`): Detalhes do período, Sessões recentes e Auditoria do
    registro.
 
 | Parte | Componente | De onde vem |
@@ -894,6 +898,7 @@ de cima para baixo:
 | Custo por dia e a tabela "Ver em tabela" | `CustoPorDia.tsx` | `series` (com dia clicado, do segundo pedido) |
 | Por repositório, por modelo e por gatilho | `Quebras.tsx` | `repos`, `models` e `porGatilho` |
 | Cada sessão, Baixar CSV | `Sessoes.tsx` (`src/consumo/sessao.ts`) | `history`; `formato=csv` |
+| Revisões que não publicaram | `Ocorrencias.tsx` | `ocorrencias` (ausente ou torto vira lista vazia; o item torto fica de fora) |
 | Detalhes do período e as notas | `ResumoDoPeriodo.tsx` | `totals`, `completed`, `retries`, `unidentified`, `incomplete`, `sinceDay` |
 | Sessões recentes | `SessoesRecentes.tsx`, `TabelaDeExecucoes.tsx` | `usage.recentSessions` do snapshot |
 | Auditoria do registro | `AuditoriaDoRegistro.tsx` | `usage.auditoria` do snapshot |

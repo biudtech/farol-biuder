@@ -257,7 +257,10 @@ hospedagem compartilhada há a cópia diária na própria máquina
 ([o backup do registro](#hospedagem-compartilhada-sem-docker)).
 
 **Retenção.** As sessões não têm poda, como no JSON de antes: o banco cresce uns 700 bytes por
-sessão registrada. Os motivos de falha seguem com o teto de 500. O histórico das decisões segue
+sessão registrada. Os motivos de falha seguem com o teto de 500. As ocorrências da revisão (a
+tabela `ocorrencias`, desde 24/11/2026: a revisão que terminou sem publicar, com o motivo,
+[`CONSUMO-REVIEWS.md`](CONSUMO-REVIEWS.md#as-revisões-que-não-publicaram)) têm teto de 5.000, e as
+mais antigas saem. O histórico das decisões segue
 com o teto de 3.000 (a mais antiga sai quando entra uma nova), com uns 78 KB por decisão no
 histórico real, quase tudo o inventário do diff, e o recorte leve de todas na memória do motor:
 subir o teto pesa no disco e no heap. Para a tela de Consumo não perder nada com o teto, a sessão

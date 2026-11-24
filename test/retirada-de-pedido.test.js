@@ -310,8 +310,12 @@ test('head que andou durante a sessão segura a retirada', async () => {
   const e = motor();
   await rodadaQuePede(e, 12);
   sessaoQueResolve(e);
-  let leituras = 0;
-  e.headSha = async () => (leituras++ === 0 ? HEAD : HEAD_NOVO);
+  // a conferência antes de abrir a sessão (vigia-sessao.js, 24/11/2026) também lê o head: ele
+  // muda quando a sessão abre, e é a releitura antes de postar que vê o novo
+  let sessaoAberta = false;
+  const stream = e.runClaudeStream;
+  e.runClaudeStream = async (...args) => { sessaoAberta = true; return stream(...args); };
+  e.headSha = async () => (sessaoAberta ? HEAD_NOVO : HEAD);
   await e.runHeadlessReview(PR(12));
   assert.deepEqual(eventos(), []);
 });

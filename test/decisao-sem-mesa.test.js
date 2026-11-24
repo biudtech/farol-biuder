@@ -412,8 +412,12 @@ test('defeito com o head que andou durante a sessão: nada é postado, o round s
   gh.headDepois = HEAD_NOVO;
   sessao(e);
   // o head lido no começo é o HEAD; a releitura antes de postar devolve o novo
-  let leituras = 0;
-  e.headSha = async () => (leituras++ === 0 ? HEAD : HEAD_NOVO);
+  // a conferência antes de abrir a sessão (vigia-sessao.js, 24/11/2026) também lê o head: ele
+  // muda quando a sessão abre, e é a releitura antes de postar que vê o novo
+  let sessaoAberta = false;
+  const stream = e.runClaudeStream;
+  e.runClaudeStream = async (...args) => { sessaoAberta = true; return stream(...args); };
+  e.headSha = async () => (sessaoAberta ? HEAD_NOVO : HEAD);
   await e.runHeadlessReview(PR(14));
   assert.deepEqual(envios, []);
   assert.equal(pendente(e, 14).blockedKind, 'stale_head');
@@ -422,8 +426,15 @@ test('defeito com o head que andou durante a sessão: nada é postado, o round s
 test('pedido de mudanças pelo defeito que já está no GitHub neste head: não duplica', async () => {
   const e = motor();
   technicalRuntime.finishTechnicalReview = violacao();
-  gh.meusReviews = [{ state: 'CHANGES_REQUESTED', submitted_at: '2026-10-18T12:00:00Z', commit_id: HEAD }];
-  await revisar(e, 15);
+  // o pedido chega ao GitHub com a sessão rodando: o já existente antes nem abre a sessão
+  // (a conferência antes de abrir, vigia-sessao.js, 24/11/2026); o dedup na postagem é o que fica
+  sessao(e);
+  const stream = e.runClaudeStream;
+  e.runClaudeStream = async (...args) => {
+    gh.meusReviews = [{ state: 'CHANGES_REQUESTED', submitted_at: '2026-10-18T12:00:00Z', commit_id: HEAD }];
+    return stream(...args);
+  };
+  await e.runHeadlessReview(PR(15));
   assert.deepEqual(envios, []);
   assert.equal(resolvida(e, 15).status, 'already_reviewed');
 });

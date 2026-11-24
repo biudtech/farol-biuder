@@ -66,8 +66,13 @@ function envelopeApprove() {
 
 // engine com sessão stubada; postReview vira espião em vez de lançar, porque aqui o
 // ponto do teste é justamente saber SE postou.
-function engineCom(envelope, { meusReviews, head, policyReject = 'wait', policyApprove = 'wait' } = {}) {
+// `soDuranteASessao`: o review da conta só aparece depois que a sessão abre. Desde 24/11/2026 a
+// conferência antes de abrir a sessão (vigia-sessao.js, conferirAntesDeAbrir) encerra sem sessão a
+// revisão de um head que eu já decidi; o dedup na hora de postar continua valendo para o review
+// que chega com a sessão rodando, que é o que estes casos exercitam.
+function engineCom(envelope, { meusReviews, head, policyReject = 'wait', policyApprove = 'wait', soDuranteASessao = false } = {}) {
   const e = new Engine();
+  let sessaoAberta = false;
   e.decisions = { pending: [], resolved: [] };
   const postados = [];
   e.accountForPr = () => 'trabalho';
@@ -76,9 +81,9 @@ function engineCom(envelope, { meusReviews, head, policyReject = 'wait', policyA
   e.scopeLabel = () => 'Conta Trabalho';
   e.writeMemory = () => { };
   e.headSha = async () => head;
-  e.myReviewsWithTime = async () => meusReviews;
+  e.myReviewsWithTime = async () => (sessaoAberta || !soDuranteASessao ? meusReviews : []);
   e.postReview = async (pr, payload) => { postados.push(payload); return { ok: true }; };
-  e.runClaudeStream = async () => ({ text: JSON.stringify({ result: JSON.stringify(envelope) }), sessionId: 's1' });
+  e.runClaudeStream = async () => { sessaoAberta = true; return { text: JSON.stringify({ result: JSON.stringify(envelope) }), sessionId: 's1' }; };
   e.postados = postados;
   return e;
 }
@@ -106,7 +111,7 @@ test('parecer decisivo oposto publicado durante a sessão encerra qualquer nova 
     [envelopeReject(), 'APPROVED', { policyReject: 'request_changes' }],
   ];
   for (const [envelope, state, policy] of casos) {
-    const e = engineCom(envelope, { meusReviews: revisao(state, HEAD_NOVO), head: HEAD_NOVO, ...policy });
+    const e = engineCom(envelope, { meusReviews: revisao(state, HEAD_NOVO), head: HEAD_NOVO, soDuranteASessao: true, ...policy });
     await e.runHeadlessReview({ ...PR });
     assert.equal(e.postados.length, 0);
     assert.equal(decisoesResolvidas(e)[0].status, 'already_reviewed');
@@ -151,7 +156,7 @@ test('REGRESSÃO #742: 2º round com achado novo em head novo POSTA, mesmo já t
 
 test('mesmo head: segue sem repostar (não regride o dedup que existe por motivo real)', async () => {
   const e = engineCom(envelopeReject(), {
-    meusReviews: revisao('CHANGES_REQUESTED', HEAD_NOVO), head: HEAD_NOVO, policyReject: 'request_changes'
+    meusReviews: revisao('CHANGES_REQUESTED', HEAD_NOVO), head: HEAD_NOVO, policyReject: 'request_changes', soDuranteASessao: true
   });
   await e.runHeadlessReview(PR);
   assert.equal(e.postados.length, 0, 'a mesma rodada não vira review duplicado');

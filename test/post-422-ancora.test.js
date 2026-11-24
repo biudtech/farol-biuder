@@ -223,18 +223,28 @@ function engineDeRevisao({ heads, policyApprove = 'approve' }) {
   e.writeMemory = () => { };
   e.saveDecisions = () => { };
   e.pushState = () => { };
-  e.headSha = async () => (fila.length > 1 ? fila.shift() : fila[0]);
+  // a conferência antes de abrir a sessão (vigia-sessao.js, 24/11/2026) também lê o head: a fila
+  // só anda quando a sessão abre, e as leituras de antes dela veem o head do começo
+  let sessaoAberta = false;
+  e.headSha = async () => {
+    if (!sessaoAberta) return fila[0];
+    return fila.length > 1 ? fila.shift() : fila[0];
+  };
   e.myReviewsWithTime = async () => [];
   e.postReview = async (pr, payload) => { postados.push(payload); return { ok: true }; };
-  e.runClaudeStream = async () => ({
-    text: JSON.stringify({
-      result: JSON.stringify({
-        protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('approve'), analysisStatus: 'complete', coverage: { total: 1, reviewed: ['a.ts'], missing: [] }, alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'fixture sintética sem consumidor' }], verdict: 'approve', decision: 'auto_approve', cardMet: true, reasons: [],
-        reportMarkdown: 'relatório',
-        payloads: { approve: { event: 'APPROVE', body: 'A matriz de permissões fecha.' } }
-      })
-    }), sessionId: 's1'
-  });
+  e.runClaudeStream = async () => {
+    if (!sessaoAberta && fila.length > 1) fila.shift();
+    sessaoAberta = true;
+    return {
+      text: JSON.stringify({
+        result: JSON.stringify({
+          protocolo: { prReviewer: 'rodou' }, ...criteriaFixture('approve'), analysisStatus: 'complete', coverage: { total: 1, reviewed: ['a.ts'], missing: [] }, alcance: [{ alterado: 'a.ts', chamadores: [], semChamador: 'fixture sintética sem consumidor' }], verdict: 'approve', decision: 'auto_approve', cardMet: true, reasons: [],
+          reportMarkdown: 'relatório',
+          payloads: { approve: { event: 'APPROVE', body: 'A matriz de permissões fecha.' } }
+        })
+      }), sessionId: 's1'
+    };
+  };
   e.postados = postados;
   return e;
 }
