@@ -10,10 +10,12 @@
 # vizinhos (vigia.mjs, atualizar-claude.sh, autoatualizar.sh, backup-telemetria.mjs), e cria run/
 # (modo 700: pids, sockets e marcas) e log/.
 #
-# O que é da instância vai em <base>/hospedagem.env, lido aqui se existir (shell, sem segredo, fora
-# do repositório). Variáveis: FAROL_BASE (padrão: a pasta deste arquivo), FAROL_DADOS (o HOME do
-# motor, padrão <base>/dados) e FAROL_NODE_BIN (a pasta do node e do npm; padrão a do Node 24 da
-# CloudLinux, /opt/alt/alt-nodejs24/root/usr/bin). Exemplo de hospedagem.env:
+# O que é da instância vai em <base>/hospedagem.env, lido a cada rodada se existir (shell, sem
+# segredo, fora do repositório), para duas variáveis: FAROL_DADOS (o HOME do motor, padrão
+# <base>/dados) e FAROL_NODE_BIN (a pasta do node e do npm; padrão a do Node 24 da CloudLinux,
+# /opt/alt/alt-nodejs24/root/usr/bin). As duas são exportadas aos scripts que a rodada chama;
+# qualquer outro ajuste deles (FAROL_MOTOR_SOCKET, por exemplo) precisa de export no arquivo.
+# A base é FAROL_BASE ou a pasta deste arquivo. Exemplo de hospedagem.env:
 #   FAROL_DADOS=/home/<usuario>/farol/home
 set -u
 BASE="${FAROL_BASE:-$(cd "$(dirname "$0")" && pwd)}"
@@ -39,14 +41,23 @@ chmod 700 "$BASE/run"
 vivo() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
 
 # Uma rodada por vez: o vigia e o cron podem chegar juntos, e duas rodadas subiriam dois motores
-# (o segundo morre no socket, mas grava o pid dele por cima e o motor real fica sem dono). A trava
-# esquecida por uma rodada morta sai depois de 10 minutos.
+# (o segundo morre no socket, mas grava o pid dele por cima e o motor real fica sem dono). Com a
+# trava ocupada, espera até 20 s antes de desistir: a rodada leva segundos, e o autoatualizar.sh,
+# que acabou de parar o motor, conta com esta rodada para subi-lo. A trava esquecida por uma rodada
+# morta sai depois de 10 minutos.
 TRAVA="$BASE/run/iniciar.trava"
-if ! mkdir "$TRAVA" 2>/dev/null; then
-  [ -n "$(find "$TRAVA" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rmdir "$TRAVA" 2>/dev/null
-  exit 0
-fi
+espera=0
+until mkdir "$TRAVA" 2>/dev/null; do
+  espera=$((espera + 1))
+  if [ "$espera" -gt 20 ]; then
+    [ -n "$(find "$TRAVA" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rmdir "$TRAVA" 2>/dev/null
+    exit 0
+  fi
+  sleep 1
+done
 trap 'rmdir "$TRAVA" 2>/dev/null' EXIT
+# o TERM do vigia (rodada que passou do teto) vira saída, e a saída solta a trava
+trap 'exit 143' TERM INT HUP
 
 # O vigia roda esta rodada a cada minuto, porque o cron da hospedagem roda em intervalos soltos (em
 # 21/11/2026 ficou quase uma hora parado e a main nova não entrou no ar). O cron segue como
@@ -89,9 +100,9 @@ nohup /bin/sh "$BASE/atualizar-claude.sh" >/dev/null 2>&1 &
 # (de Brasília) é conferida aqui, no sh: subir um Node a cada minuto só para ele ver que já copiou
 # gasta threads, e com uma revisão no pico o Node nem abre (medido em 24/11/2026: falhou o
 # uv_thread_create). Cópia que falha não grava a marca e grava run/backup.espera: uma hora sem
-# chamar, para a falha não virar uma por minuto.
+# chamar, para a falha não virar uma por minuto. Com uma cópia em curso (a trava dela), também não.
 if [ "$(cat "$BASE/run/backup.ultima" 2>/dev/null)" != "$(TZ=America/Sao_Paulo date +%F)" ] &&
-  [ -z "$(find "$BASE/run/backup.espera" -mmin -60 2>/dev/null)" ]; then
+  [ -z "$(find "$BASE/run/backup.espera" -mmin -60 2>/dev/null)" ] && [ ! -d "$BASE/run/backup.trava" ]; then
   nohup "$NODE" --no-warnings "$BASE/backup-telemetria.mjs" >/dev/null 2>>"$BASE/log/backup.log" &
 fi
 

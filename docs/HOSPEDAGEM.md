@@ -1009,7 +1009,8 @@ reserva para religá-lo.
 - [`docs/exemplos/iniciar.sh`](exemplos/iniciar.sh), a rodada: sobe o vigia, o motor e o front que
   estiverem parados, com os tetos de thread e de memória da hospedagem, e chama o
   `atualizar-claude.sh`, o backup do dia (com a marca conferida no shell) e o `autoatualizar.sh`.
-  Uma rodada por vez (trava em `<base>/run/iniciar.trava`, que vence em 10 minutos);
+  Uma rodada por vez (trava em `<base>/run/iniciar.trava`: a rodada que chega com ela ocupada espera
+  até 20 s, e a esquecida vence em 10 minutos);
 - [`docs/exemplos/vigia.mjs`](exemplos/vigia.mjs), o vigia: roda a rodada a cada minuto, com teto
   de 5 minutos por rodada, e grava início, saída e sinal em `<base>/log/vigia.log` (sumir sem linha
   de saída é SIGKILL de fora).
@@ -1018,8 +1019,10 @@ Copie os dois para a base, ao lado dos outros scripts, e agende no cron da hospe
 `/bin/sh <base>/iniciar.sh`, sem variável: a base é a pasta do script. O que é da instância vai em
 `<base>/hospedagem.env`, um arquivo de shell sem segredo e fora do repositório, lido pela rodada:
 `FAROL_DADOS` quando o HOME do motor não é `<base>/dados`, e `FAROL_NODE_BIN` quando o Node 24 não
-está em `/opt/alt/alt-nodejs24/root/usr/bin`. A rodada exporta `FAROL_BASE`, `FAROL_DADOS` e
-`FAROL_NODE_BIN` para o vigia e para os scripts que chama. Para trocar o vigia, mate o processo do
+está em `/opt/alt/alt-nodejs24/root/usr/bin`. A rodada relê o arquivo a cada vez e exporta
+`FAROL_BASE`, `FAROL_DADOS` e `FAROL_NODE_BIN` para o vigia e para os scripts que chama; outro
+ajuste dos scripts (o `FAROL_MOTOR_SOCKET` do `autoatualizar.sh`, por exemplo) precisa de `export`
+no arquivo. Para trocar o vigia, mate o processo do
 `<base>/run/vigia.pid` com TERM: a próxima rodada do cron sobe o novo.
 
 ## O que não foi provado

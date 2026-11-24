@@ -41,19 +41,29 @@ for (const sinal of ['SIGHUP', 'SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2', 'SIGPI
 }
 process.on('uncaughtException', (erro) => log(`excecao ${erro?.message ?? erro}`));
 
+// O ambiente da rodada: o do vigia, sem o FAROL_DADOS e o FAROL_NODE_BIN que a rodada que o subiu
+// exportou. A rodada os relê do hospedagem.env a cada vez, e o arquivo editado vale já na seguinte.
+function ambienteDaRodada() {
+  const { FAROL_DADOS: _dados, FAROL_NODE_BIN: _node, ...resto } = process.env;
+  return { ...resto, FAROL_BASE: BASE };
+}
+
 function rodada() {
   return new Promise((resolve) => {
     let filho;
     try {
-      filho = spawn('/bin/sh', [path.join(BASE, 'iniciar.sh')], { stdio: 'ignore', env: { ...process.env, FAROL_BASE: BASE } });
+      filho = spawn('/bin/sh', [path.join(BASE, 'iniciar.sh')], { stdio: 'ignore', env: ambienteDaRodada() });
     } catch (erro) {
       log(`iniciar nao abriu: ${erro.message}`);
       resolve();
       return;
     }
+    // TERM antes do KILL: o trap do iniciar.sh solta a trava, e a rodada seguinte não espera 10 min
+    let mata = null;
     const teto = setTimeout(() => {
       log('iniciar passou do teto; encerrado');
-      filho.kill('SIGKILL');
+      filho.kill('SIGTERM');
+      mata = setTimeout(() => filho.kill('SIGKILL'), 5_000);
     }, TETO_RODADA_MS);
     filho.on('error', (erro) => {
       clearTimeout(teto);
@@ -62,6 +72,7 @@ function rodada() {
     });
     filho.on('close', (code, signal) => {
       clearTimeout(teto);
+      clearTimeout(mata);
       if (code !== 0) log(`iniciar rc=${code ?? `sinal ${signal}`}`);
       resolve();
     });
