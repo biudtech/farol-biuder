@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { separarHerdados } = await import('../lib/engine/sync-por-heranca.js');
-const { pacotesDoRepositorio } = await import('../lib/engine/dependencia-do-sync.js');
+const { pacotesDoRepositorio } = await import('../lib/engine/repositorio-do-sync.js');
 
 const f = (caminho) => ({ path: caminho, sha: 'e'.repeat(40), status: 'modified' });
 const parseado = (paths) => paths.map((p) => ({ path: p, backend: 'babel', limitations: [] }));
@@ -59,9 +59,10 @@ test('o package.json mais próximo vale junto com o da raiz', () => {
   assert.deepEqual(r.aLer, ['apps/web/b.ts']);
 });
 
-test('linguagem fechada por padrão: só o não código da lista herda', () => {
-  const herdam = ['docs/a.md', 'docs/b.mdx', 'notas.txt', 'img/a.png', 'img/b.jpg', 'img/c.jpeg', 'img/d.gif', 'img/e.svg', 'img/f.webp', 'favicon.ico', 'manual.pdf', 'dados.csv'];
-  const voltam = ['ios/App.swift', 'lib/main.dart', 'src/a.c', 'src/a.h', 'scripts/x.sh', '.github/ci.yml', 'db/x.sql', 'arquivo.desconhecido', 'config/x.json', 'config/y.yaml', 'app/x.py'];
+test('linguagem fechada por padrão: só o não código da lista e o dado idêntico herdam', () => {
+  const herdam = ['docs/a.md', 'notas.txt', 'img/a.png', 'img/b.jpg', 'img/c.jpeg', 'img/d.gif', 'img/e.svg', 'img/f.webp', 'favicon.ico', 'manual.pdf', 'dados.csv',
+    '.github/ci.yml', 'config/x.json', 'config/y.yaml', 'api/schema.graphql', 'api/q.gql'];
+  const voltam = ['ios/App.swift', 'lib/main.dart', 'src/a.c', 'src/a.h', 'scripts/x.sh', 'db/x.sql', 'arquivo.desconhecido', 'app/x.py', 'docs/b.mdx', 'src/a.css'];
   const r = separar({ arquivos: [...herdam, ...voltam].map(f), pacotes: PACOTES });
   assert.deepEqual(r.herdados, herdam);
   assert.deepEqual(r.aLer, voltam);
@@ -114,6 +115,8 @@ test('pacotesDoRepositorio lê cada package.json, os pacotes do workspace e recu
   }));
   assert.deepEqual(p.porPasta, { '': ['react', '@biudtech/lib'], 'apps/api': ['@nestjs/core'] });
   assert.deepEqual(p.workspace.sort(), ['@biudtech/api', '@biudtech/lib']);
+  assert.deepEqual(p.prefixosDeAlias, []);
+  assert.deepEqual(p.segmentosDoBaseUrl, []);
   assert.equal(await pacotesDoRepositorio(fonte({ 'package.json': '{ torto' })), null);
   assert.equal(await pacotesDoRepositorio(fonte({ 'apps/x/package.json': '{}' })), null, 'sem o da raiz');
   assert.equal(await pacotesDoRepositorio(fonte({ 'package.json': '{}' }, false)), null, 'árvore incompleta');
