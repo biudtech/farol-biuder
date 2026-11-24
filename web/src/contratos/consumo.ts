@@ -4,7 +4,8 @@
 //   inteiro. O motor não tem teto de gasto (saiu em 16/11/2026): a chave não traz teto nem
 //   bloqueio, e a lista de teto por perfil que um motor antigo ainda mande não é lida;
 // - GET /api/usage (lib/engine/usage-activity.js e lib/usage/report.js): o relatório de um
-//   período, com as somas, a série por dia, as quebras e uma página do diário.
+//   período, com as somas, a série por dia, as quebras, uma página do diário e as revisões que
+//   terminaram sem publicar (`ocorrencias`).
 //
 // Toda soma daqui é do motor. A tela não soma itens: mostra o que veio.
 import {
@@ -314,6 +315,41 @@ function textos(v: unknown): string[] {
   return Array.isArray(v) ? v.filter(ehTextoComConteudo) : [];
 }
 
+// Uma revisão que terminou sem publicar e sem decisão no histórico (ocorrencias-da-revisao.js,
+// 24/11/2026): o PR mergeado antes de a sessão abrir, o commit novo durante ela, a queda da
+// sessão, o cancelamento... `texto` é a frase do motor, em português, que a tela mostra como veio.
+export interface Ocorrencia {
+  at: number;
+  // a chave do PR (dono/repo#n)
+  ref: string;
+  // nao_iniciada, encerrada, interrompida ou sem_resultado
+  tipo: string;
+  // o motivo do catálogo do motor (pr_mergeado, commit_novo, sessao_caiu...)
+  motivo: string;
+  texto: string;
+  // retentativa, lote, clique, commit_novo, rodada_extra ou fila
+  origem?: string;
+  // o id da revisão (a do Consumo), quando ela chegou a ter um
+  sessao?: string;
+  head?: string;
+  etapa?: string;
+  // a classe da falha (lib/log-taxonomy.js), na queda e na falha
+  classe?: string;
+}
+
+const lerOcorrencia: LeitorDeItem<Ocorrencia> = (v) => {
+  if (!ehObjeto(v) || !ehNumero(v.at) || v.at <= 0) return undefined;
+  if (!ehTextoComConteudo(v.ref) || !ehTextoComConteudo(v.tipo) || !ehTextoComConteudo(v.motivo) || !ehTextoComConteudo(v.texto)) return undefined;
+  return semAusentes({
+    at: v.at, ref: v.ref, tipo: v.tipo, motivo: v.motivo, texto: v.texto,
+    origem: campo(v.origem, ehTextoComConteudo),
+    sessao: campo(v.sessao, ehTextoComConteudo),
+    head: campo(v.head, ehTextoComConteudo),
+    etapa: campo(v.etapa, ehTextoComConteudo),
+    classe: campo(v.classe, ehTextoComConteudo),
+  });
+};
+
 // O relatório de um período (activityReport).
 export interface Relatorio {
   // o período que o motor usou, com o dia definido por ele (o fuso de FUSO_DO_DIA,
@@ -340,6 +376,9 @@ export interface Relatorio {
   sinceDay?: string;
   // o diário tem menos sessões do que o agregado do motor contou
   incomplete?: boolean;
+  // as revisões que terminaram sem publicar no período e no repositório, a mais nova primeiro (até
+  // 200); ausente ou torto vira lista vazia, e o item torto fica de fora
+  ocorrencias: Ocorrencia[];
   // Não vem do motor: quantos itens de `series`, `byKind`, `models` e `repos` a tela não leu.
   descartados: number;
 }
@@ -419,6 +458,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
     unidentified: campo(bruto.unidentified, ehContagem),
     sinceDay: campo(bruto.sinceDay, ehDia),
     incomplete: campo(bruto.incomplete, ehBooleano),
+    ocorrencias: lerItens(bruto.ocorrencias, lerOcorrencia)?.itens ?? [],
     descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0) + (repos?.descartados ?? 0) + (porGatilho?.descartados ?? 0),
   });
   return { ok: true, relatorio };

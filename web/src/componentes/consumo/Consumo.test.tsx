@@ -97,6 +97,7 @@ describe('Consumo: a tela', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Consumo' })).toBeTruthy();
     expect([...document.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
       'Plano de cada perfil do Claude', 'Custo por dia', 'Por repositório', 'Por modelo', 'Para que foi o gasto', 'Cada sessão',
+      'Revisões que não publicaram',
     ]);
     expect(screen.getByRole('search', { name: 'Busca e filtros do consumo' })).toBeTruthy();
     for (const nome of ['Buscar sessão', 'Repositório', 'Autor do PR', 'Modelo', 'Perfil do Claude']) expect(screen.getByLabelText(nome)).toBeTruthy();
@@ -812,5 +813,31 @@ describe('Consumo: a auditoria e as sessões recentes, do snapshot', () => {
     montar({ snapshot: snapshotCom(consumoDoMotor({ budgets: [antigo] })) });
     await assentar();
     expect(document.body.textContent).not.toMatch(/[Tt]eto de gasto|[Pp]ausad|orçamento|Assinatura do time/);
+  });
+});
+
+describe('Consumo: as revisões que não publicaram', () => {
+  const TABELA = 'Tabela das revisões que não publicaram';
+
+  it('sem ocorrência no período, a seção diz isso', async () => {
+    montar();
+    await assentar();
+    expect(painel('Revisões que não publicaram').textContent).toContain('Nenhuma revisão terminou sem publicar no período.');
+    expect(screen.queryByRole('region', { name: TABELA })).toBeNull();
+  });
+
+  it('cada ocorrência numa linha: a hora de Brasília, o PR com link, a frase do motor, a origem e a sessão', async () => {
+    const ocorrencias = [
+      { at: Date.UTC(2026, 10, 16, 16, 19), ref: 'dono/repo#64', tipo: 'nao_iniciada', motivo: 'pr_mergeado', texto: 'A revisão não chegou a abrir a sessão do Claude: o PR já tinha sido mergeado.', origem: 'clique', sessao: 'a-9' },
+      { at: Date.UTC(2026, 10, 16, 16, 11), ref: 'dono/repo#64', tipo: 'interrompida', motivo: 'sessao_caiu', texto: 'A sessão do Claude caiu e a revisão vai ser tentada de novo: a sessão caiu por um problema passageiro.', origem: 'inventada', classe: 'rede' },
+    ];
+    montar({ responder: () => corpo(relatorioDoMotor({ ocorrencias })) });
+    await assentar();
+    expect(linhasDa(TABELA)).toEqual([
+      ['16/11/2026, 13:19', 'dono/repo#64 (abre em nova aba)', ocorrencias[0]?.texto, 'Clique seu', 'a-9'],
+      ['16/11/2026, 13:11', 'dono/repo#64 (abre em nova aba)', ocorrencias[1]?.texto, 'Sem registro', 'Sem sessão'],
+    ]);
+    const link = within(tabela(TABELA)).getAllByRole('link', { hidden: true })[0] as HTMLAnchorElement;
+    expect(link.href).toBe('https://github.com/dono/repo/pull/64');
   });
 });

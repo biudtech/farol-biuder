@@ -126,7 +126,8 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
   it('a recusa de período responde 200 com { ok: false, motivo }, também no CSV, e sem código nem campo', () => {
     const rota = fonte('lib/engine/usage-activity.js');
     expect(rota).toContain("{ ok: false, motivo: 'Selecione um intervalo válido, sem datas futuras.' }");
-    expect(rota).toContain('if (formatos[0] !== \'csv\') return { status: 200, body: await usageActivity(engine, params) };');
+    expect(rota).toContain('if (formatos[0] !== \'csv\') return { status: 200, body: comOcorrencias(engine, await usageActivity(engine, params), params) };');
+    expect(rota).toContain('if (!report.ok) return report;');
     expect(rota).toContain('if (!recorte.ok) return { status: 200, body: recorte };');
     expect(fonte('lib/http-server.js')).toContain("if (p === '/api/usage' && req.method === 'GET') return enviarHistorico(res, send, await usageDaRota(engine, url.searchParams));");
   });
@@ -137,6 +138,35 @@ describe('GET /api/usage: o leitor lê o que o motor monta', () => {
     expect(rota.match(/code:/g)).toHaveLength(1);
     expect(rota.match(/campo:/g)).toHaveLength(1);
     expect(rota).toContain("if (formatos.length > 1 || (formatos.length === 1 && !['', 'csv'].includes(formatos[0]))) {\n    return { status: 400, body: { ok: false, code: 'parametro_invalido', campo: 'formato' } };");
+  });
+});
+
+describe('GET /api/usage: as revisões que não publicaram (24/11/2026)', () => {
+  const comOcorrencias = async (ocorrencias: unknown): Promise<Relatorio> => {
+    const relatar = await relatorDoMotor();
+    const bruto = { ...(relatar([{ device: 'local', rows: SESSOES }], {}, AGORA) as Record<string, unknown>), ocorrencias };
+    const lido = lerRespostaDoConsumo(bruto);
+    if (!lido?.ok) throw new Error('o leitor não leu o relatório');
+    return lido.relatorio;
+  };
+
+  it('lê cada ocorrência como o motor a projeta, e descarta a torta', async () => {
+    const boa = { at: AGORA - HORA, ref: 'dono/repo#64', tipo: 'nao_iniciada', motivo: 'pr_mergeado', texto: 'A revisão não chegou a abrir a sessão do Claude: o PR já tinha sido mergeado.', origem: 'clique', sessao: id(9), head: 'a'.repeat(40), etapa: 'antes_da_sessao' };
+    const semOrigem = { at: boa.at, ref: boa.ref, tipo: boa.tipo, motivo: boa.motivo, texto: boa.texto, sessao: boa.sessao, head: boa.head, etapa: boa.etapa, classe: 'rede' };
+    const r = await comOcorrencias([boa, { ...boa, at: 'ontem' }, { ...boa, texto: '' }, { ...boa, ref: 7 }, null, { ...boa, classe: 'rede', origem: 3 }]);
+    expect(r.ocorrencias).toEqual([boa, semOrigem]);
+  });
+
+  it('ausente ou fora de forma vira lista vazia, e o relatório continua', async () => {
+    expect((await comOcorrencias(undefined)).ocorrencias).toEqual([]);
+    expect((await comOcorrencias({ a: 1 })).ocorrencias).toEqual([]);
+  });
+
+  it('os campos e os textos vêm do módulo do motor, e o CSV não os leva', () => {
+    const modulo = fonte('lib/engine/ocorrencias-da-revisao.js');
+    expect(modulo).toContain("const CAMPOS_DA_TELA = ['at', 'ref', 'sessao', 'tipo', 'motivo', 'texto', 'origem', 'head', 'etapa', 'classe'];");
+    expect(modulo).toContain("pr_mergeado: 'o PR já tinha sido mergeado',");
+    expect(fonte('lib/engine/consumo-das-sessoes.js')).not.toContain('ocorrencia');
   });
 });
 
@@ -225,7 +255,7 @@ describe('GET /api/usage: forma inesperada', () => {
     const lido = lerRespostaDoConsumo(minimo);
     expect(lido).toEqual({
       ok: true,
-      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, descartados: 0 },
+      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, ocorrencias: [], descartados: 0 },
     });
   });
 
