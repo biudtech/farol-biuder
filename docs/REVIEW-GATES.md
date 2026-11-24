@@ -457,10 +457,21 @@ de fork e a lista de commits veio inteira (até 100):
 **Herdado e a ler** (`lib/engine/sync-por-heranca.js`, com a régua comum de
 `lib/engine/regua-de-heranca.js`). Um arquivo do diff é herdado quando, ao mesmo tempo, é idêntico
 à foto (fora de `compare <foto>...<head>`), a base da resolução não mexeu nele desde o ancestral
-comum (fora de `compare <foto>...<primeiro pai>`), não importa arquivo a ler nem arquivo que a base
-mudou (até o ponto fixo, pelo mapa de importação; código cuja dependência não deu para conferir
-volta, inclusive o import relativo ou por alias do repositório que ficou sem destino) e não tem achado bloqueante aberto de rodada anterior (`arquivosComBloqueioAberto`,
-`lib/engine/review-rounds.js`). Protegido, removido e sem blob vão sempre à leitura. Leitura que
+comum (fora de `compare <foto>...<primeiro pai>`), não depende de nada que o sync mudou
+(`lib/engine/dependencia-do-sync.js`, fechado por padrão) e não tem achado bloqueante aberto de
+rodada anterior (`arquivosComBloqueioAberto`, `lib/engine/review-rounds.js`). A dependência:
+
+- código JS e TS volta se qualquer caminho de imports do mapa, por qualquer arquivo, dentro ou
+  fora do diff (o barril que reexporta um misturado), chega a um arquivo a ler, a um que a base
+  mudou, a um herdado que voltou, a código que o mapa não leu por inteiro ou a um import sem
+  destino que pode ser do repositório: relativo, alias, ou não relativo cujo pacote não está em
+  `dependencies`, `devDependencies` ou `peerDependencies` do `package.json` mais próximo ou da
+  raiz, ou é do workspace. Sem `package.json` legível, todo import não relativo sem destino volta;
+- só herdam sem conferência `.md`, `.mdx`, `.txt`, imagens, `.pdf` e `.csv`; todo o resto volta,
+  inclusive `.json`, `.yaml` e `.yml`;
+- configuração global (`tsconfig*.json`, `package.json`, `pnpm-workspace.yaml`, lockfiles,
+  `nest-cli.json`, configurações de build) misturada, bloqueada ou mexida pela base devolve todo
+  código herdado; o esquema do Prisma mudado devolve quem chega a `@prisma/client` pelo grafo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
 falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
 hoje, sem log.
 
@@ -485,7 +496,8 @@ arquivo estiver na lista do motor e a evidência não citar o contexto alterado
 **Sem nenhum arquivo a ler** (`lib/engine/sync-sem-sessao.js`): APPROVE de texto fixo, sem sessão,
 pelo mesmo fluxo do diff vazio (`lib/engine/aprovacao-sem-sessao.js`). Só com a política da conta
 que aprova sozinha, `reviewRoundsMode` diferente de `enforce` e a origem do dono; a avaliação
-técnica roda antes e qualquer achado fora dos herdados, ou a falha dela, abre a sessão. O PR da
+técnica roda antes e qualquer achado fora dos herdados, a falha dela, regra reprovada sem achado
+ou regra de julgamento pendente que bloquearia no caminho normal abre a sessão. O PR da
 própria conta, a decisão de gente no head e a label de outra conta encerram sem postar; o head que
 andou marca `stale_head`; o dedup por head e todos os portões de `postReview` valem. A publicação
 técnica aceita o APPROVE só pela prova da memória do motor (`syncPorHeranca`, com a marca

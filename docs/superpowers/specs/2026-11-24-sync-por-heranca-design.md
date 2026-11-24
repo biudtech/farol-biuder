@@ -116,7 +116,28 @@ Para cada arquivo do inventário do PR (diff contra a base):
      misturados) nem um arquivo que a base mudou desde o ancestral comum (a mesma medição do item
      2). A conferência usa o que o motor já tem para devolver herdado à leitura (a releitura de
      `inheritanceForContext` e o `revalidarAusenciaHerdada` em `analysis-source.js`, e o mapa de
-     importação do contexto); arquivo cuja dependência não deu para conferir volta à leitura;
+     importação do contexto); arquivo cuja dependência não deu para conferir volta à leitura.
+     Detalhamento da decisão 2 (24/11/2026, depois da revisão independente), fechado por padrão:
+     - código que o mapa lê (JS e TS): volta se QUALQUER caminho de imports do mapa, passando por
+       qualquer arquivo, dentro ou fora do diff (o barril `index.ts` que reexporta um misturado),
+       chega a um arquivo a ler, a um arquivo que a base mudou, a um herdado que voltou, a um
+       arquivo de código que o mapa não leu por inteiro ou a um import sem destino que pode ser do
+       repositório;
+     - import não relativo sem destino só é pacote externo quando o nome (o primeiro segmento, ou
+       `@escopo/nome`) está em `dependencies`, `devDependencies` ou `peerDependencies` do
+       `package.json` mais próximo ou da raiz, e não é pacote do workspace (nome de um
+       `package.json` do repositório, ou dependência `workspace:`). Builtin do Node é externo.
+       Sem `package.json` legível, todo import não relativo sem destino volta;
+     - linguagem fechada por padrão: herdam sem conferência só `.md`, `.mdx`, `.txt`, imagens
+       (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.ico`), `.pdf` e `.csv`. Todo o resto
+       volta, inclusive `.json`, `.yaml` e `.yml` (o código pode lê-los em execução sem import que
+       o mapa veja);
+     - configuração global (`tsconfig*.json`, `package.json`, `pnpm-workspace.yaml`, os lockfiles,
+       `nest-cli.json` e `next`, `vite`, `webpack` e `babel.config.*`) misturada, bloqueada ou
+       mexida pela base: todo código herdado volta. A configuração idêntica à foto vai à leitura,
+       mas não derruba o código;
+     - esquema do Prisma (`schema.prisma`) misturado, bloqueado ou mexido pela base: volta quem
+       importa `@prisma/client` ou chega pelo grafo a quem o importa;
   4. o arquivo **não tem achado bloqueante aberto** de rodada anterior do mesmo PR
      (`review-rounds.js`): com achado aberto, ele volta à leitura, para a sessão conferir se
      ainda vale.
@@ -205,6 +226,13 @@ Levantadas pela revisão do desenho por um construtor independente, que mediu o 
    do merge commit), não a ponta atual da base.
 2. O arquivo herdado que **depende** de algo que o sync mudou (importa um misturado, ou um arquivo
    que a base mudou) **volta à leitura**. Isto deixa a decisão sem sessão mais rara, de propósito.
+   Detalhada em 24/11/2026, depois da revisão independente da implementação (seção 2, item 3): a
+   dependência segue o grafo de imports inteiro, inclusive por arquivos fora do diff; import sem
+   destino só é pacote externo quando o `package.json` o declara e não é do workspace; a
+   linguagem é fechada por padrão; configuração global e esquema do Prisma mudados devolvem o
+   código que depende deles. A pré-checagem técnica do caminho sem sessão barra também regra
+   reprovada sem achado, regra de julgamento pendente e erro da avaliação, para nunca ser mais
+   frouxa que o caminho normal.
 3. O arquivo com **achado bloqueante aberto** de rodada anterior **volta à leitura**.
 4. (24/11/2026, depois da revisão final da implementação, pelo anti-objetivo "aprovar o que ninguém
    leu") A **foto** só vale quando é a ponta atual da origem ou o merge commit de um PR mesclado
