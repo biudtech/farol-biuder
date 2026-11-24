@@ -213,6 +213,27 @@ revise.)
   alguém vai perguntar depois).
 - O consumo não muda de forma: a sessão menor aparece como sessão menor.
 
+## Risco residual aceito
+
+O mundo fechado segue o que o mapa de imports e uma busca de texto conservadora conseguem ver. Fica
+de fora o acoplamento sem import:
+
+- token de injeção por string (o módulo do Nest que registra o provedor muda, e o serviço herdado
+  que o injeta por `@Inject('TOKEN')` não importa o módulo);
+- registro por efeito colateral (o arquivo que se registra ao ser carregado);
+- convenção de pasta (o framework que carrega tudo de `pages/`, `routes/` ou `migrations/`);
+- `declare global` num `.ts` comum (o `.d.ts` já tem impacto global; o `.ts` não);
+- `var(--x)` de CSS global, definido num arquivo e usado noutro sem `@import`;
+- glob em string (`'src/**/*.entity.ts'`) que a configuração ou o código lê;
+- leitura escondida que a busca de texto não pega (`readFileSync` renomeado no import,
+  `fs-extra`, `readdirSync`, processo filho).
+
+É aceitável porque, quando o arquivo mudado está no diff, a sessão o lê: é a mesma garantia de um PR
+comum, em que a revisão também lê o que mudou e não relê o que o código consome por convenção. O pior
+caso é o conflito semântico de merge entre um arquivo herdado e um mudado sem import entre eles, e
+todos os portões de postagem continuam valendo (credencial, linguagem, PR próprio, dedup por head,
+head que andou, instância isolada e a avaliação técnica na publicação).
+
 ## Testes que travam a regra
 
 - Detecção: head contínuo (o caso de hoje), head `sync/*` com merge da origem, merge cujo segundo
@@ -258,7 +279,11 @@ Levantadas pela revisão do desenho por um construtor independente, que mediu o 
    veredito aprovado e regras que rodaram. A revisão final trocou o caso a caso pelo princípio do
    mundo fechado (seção 2, item 3): o arquivo mudado que não é código, documentação, esquema do
    Prisma nem dado ou estilo importado por código tem impacto global, e o herdado só herda sem
-   nenhuma referência que o mapa não vê.
+   nenhuma referência que o mapa não vê. Na revisão do mundo fechado: o código dentro de uma pasta
+   `prisma/` também contamina pelo grafo, a documentação ou imagem importada por código contamina
+   quando muda, o caminho antigo de todo renomeado conta como mudado, os lockfiles são reconhecidos
+   pelo nome exato, e o texto é lido só dos candidatos, com teto de 300 arquivos e 30 s (o que fica
+   sem texto volta à leitura). O acoplamento sem import é risco residual aceito (seção própria).
 3. O arquivo com **achado bloqueante aberto** de rodada anterior **volta à leitura**.
 4. (24/11/2026, depois da revisão final da implementação, pelo anti-objetivo "aprovar o que ninguém
    leu") A **foto** só vale quando é a ponta atual da origem ou o merge commit de um PR mesclado

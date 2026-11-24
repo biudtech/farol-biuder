@@ -478,7 +478,12 @@ rodada anterior (`arquivosComBloqueioAberto`, `lib/engine/review-rounds.js`). A 
   (`import.meta.glob`, `require.context`, `new URL(` com `import.meta.url`, `new Worker(`, leitura
   pelo `fs`); estilo herdado só herda sem `@import`, `@use`, `@forward`, `composes: ... from`,
   `@apply`, `@tailwind` nem `url(` que não é `data:`; dado herdado só sem `#import` nem `$ref`; o
-  `.mdx` só sem import; sem texto, volta. A consulta de procedência só
+  `.mdx` só sem import; sem texto, volta (o texto é lido só dos candidatos, até 300 arquivos e
+  30 s). O código numa pasta `prisma/` e a documentação ou imagem importada por código também
+  contaminam pelo grafo, e o caminho antigo do renomeado conta como mudado. O acoplamento sem import
+  (token de injeção por string, convenção de pasta, `declare global` em `.ts` comum, CSS global,
+  glob em string) é risco residual aceito: o arquivo mudado no diff a sessão lê, como num PR comum,
+  e todos os portões de postagem valem. A consulta de procedência só
   roda com a base contínua ou bancada pelo nome lido no preparo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
 falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
 hoje, sem log.
