@@ -119,8 +119,8 @@ Recebem o engine como contexto. Os que decidem postagem estão na seção do inv
 | Assunto | Arquivos |
 |---|---|
 | Ciclo de uma revisão | `review.js` (lançamento, fila, ciclo), `headless-fila.js`, `porta-de-execucao.js`, `revisao-em-curso.js`, `analysis-source.js` (o preparo das fontes e do contexto), `review-prompt.js` (o prompt), `fanout.js` (os lotes de PR grande), `session.js` e `claude-child.js` (a sessão e o stream), `envelope-revisao.js`, `reparo-envelope.js`, `review-output.js` (a saída pública única), `desfecho-da-revisao.js`, `etapas-revisao.js` |
-| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `diff-vazio-de-linhagem.js` (o PR de diff vazio que só alinha a história, decidido sem sessão), `ressalvas.js`, `pr-de-sincronizacao.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
-| Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
+| Gate e postagem | `approval-policy.js`, `decision.js`, `postagem-portao.js`, `credencial-no-texto.js`, `public-review.js`, `public-review-text.js`, `instancia-isolada.js`, `pr-proprio.js`, `espera-pr-proprio.js`, `desfecho-automatico.js`, `desfecho-sem-mesa.js` (o desfecho sem mesa: rodadas extras e o COMMENT neutro), `diff-vazio-de-linhagem.js` (o PR de diff vazio que só alinha a história, decidido sem sessão), `aprovacao-sem-sessao.js` (o fluxo comum da aprovação sem sessão), `sync-sem-sessao.js` (o sync por herança sem nada a ler), `ressalvas.js`, `pr-de-sincronizacao.js`, `procedencia-do-sync.js` (a origem e a foto do sync), `registro-do-sync.js`, `gate-espera.js`, `espera-ci.js`, `postagem-recuo.js`, `postagem-retentativa.js`, `postagem-recusada.js`, `retirada-de-pedido.js`, `review-head-policy.js` (a regra do dedup por head), `comentario-proprio.js`, `chaves-de-postagem.js` |
+| Prova e cobertura | `file-proof.js`, `read-evidence.js`, `pr-scope.js`, `pr-inventory.js`, `alcance.js`, `alcance-contexto.js`, `ambiente-nao-lido.js`, `prova-do-repositorio.js`, `sync-por-heranca.js` (herdados e a ler no sync), `dependencia-do-sync.js` (a regra de dependência do herdado), `repositorio-do-sync.js` (os pacotes, os tsconfig e os textos que ela lê), `regua-de-heranca.js` (a comparação com a foto da origem), `provas-da-decisao.js`, `busca-da-prova.js`, `espera-prova.js`, `recuperacao-prova.js`, `recuperacao-head.js`, `verification-checkpoint.js`, `checkpoint-da-sessao.js` |
 | Achados e rodadas | `review-findings.js`, `review-findings-contract.js`, `review-rounds.js`, `review-round-store.js`, `trecho-do-achado.js` (o trecho do diff de cada achado, lido no desfecho e gravado nas provas), `review-criteria.js`, `review-consistency.js`, `heranca-de-producao.js`, `estado-desmentido.js` |
 | Fila, sinais e labels | `checagem-em-curso.js` (a contagem das organizações do ciclo de monitoramento, a chave `checagem` do snapshot), `gh-queries.js`, `skip-review.js` (saída de cena e decisão de gente no head), `segurado-por-gente.js` (o registro de quem segurou e quando), `de-fora.js` (a projeção `deFora` e `emRetentativa` do snapshot), `pedido-de-revisao.js`, `review-scope.js` (regras por organização e autor), `vigia-sessao.js`, `label-tardia.js`, `labels-a-tirar.js`, `label-propria-orfa.js`, `relogio-da-label.js`, `espera-conflito.js`, `checks-exigidos.js`, `baseline.js`, `vistos-reconciliacao.js` |
 | Re-revisão e retomada | `rereview-stale.js`, `rereview-ancora.js`, `head-novo.js`, `destrava.js`, `pendencia-commit-novo.js`, `review-retry.js`, `retry-da-revisao.js`, `retomada-duravel.js`, `retomada-varredura.js`, `cancelamento-revisao.js` |
@@ -242,7 +242,28 @@ COMMENT neutro, no formato do desfecho sem mesa, confere gente, label, estado e 
 publica como `commented_inconclusive`, sem escrever no dossiê. A decisão
 fica no histórico com `caminho: 'diff_vazio_linhagem'` (projetado para a tela) e `linhagem`
 (`commits` e `mergeCommits`), e uma linha INFO no `farol.log`. Travado em
-`test/diff-vazio-de-linhagem.test.js`.
+`test/diff-vazio-de-linhagem.test.js`. O fluxo da aprovação sem sessão mora em
+`lib/engine/aprovacao-sem-sessao.js`, comum a este caminho e ao sync por herança.
+
+**Sync por herança** (decisão do dono de 24/11/2026, detalhe em
+[`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md#sync-por-herança)). No PR de sincronização, o motor
+mede antes da sessão a procedência (`lib/engine/procedencia-do-sync.js`): head contínuo, ou head
+de trabalho (`sync/*`) cujo merge commit mais recente traz como segundo pai a foto de uma branch
+contínua ou bancada, com o primeiro pai na linhagem da base. A foto só vale como estado revisado
+da origem: a ponta atual dela, ou o merge commit de um PR mesclado nela (commit no meio da
+história da origem não é foto, e a revisão é completa). O arquivo do diff idêntico à foto, que
+a base no momento do merge (o primeiro pai, nunca a ponta atual) não mexeu, que não importa nada
+que o sync mudou e que não tem bloqueio aberto de rodada anterior é herdado
+(`lib/engine/sync-por-heranca.js`): entra como terceira fonte de herança, fica em
+`coverage.inherited` pela marca do motor (`result.herancaDoSync`; a do modelo é descartada) e não
+é lido nem cobrado. A sessão lê o resto; o achado técnico num herdado é dívida herdada da origem e
+não bloqueia. Sem nenhum arquivo a ler, sai APPROVE de texto fixo sem sessão
+(`lib/engine/sync-sem-sessao.js`), com as mesmas condições e portões do diff vazio, a avaliação
+técnica rodada antes (achado fora dos herdados abre a sessão) e a prova `syncPorHeranca` na
+memória do motor. Falta de dado nunca vira herança. A decisão leva `caminho: 'sync_por_heranca'`
+(ou `'sync_por_heranca_sem_sessao'`) e `herancaSync`, e uma linha INFO no `farol.log`. Travado em
+`test/procedencia-do-sync.test.js`, `test/sync-por-heranca-*.test.js`, `test/sync-sem-sessao.test.js`
+e `test/sync-engine-ai-1489.test.js`.
 
 **Decisão sem mesa.** Regra do dono de 17/11/2026: o revisor nunca espera decisão de gente, e não
 existe mais mesa ("Precisa de você"). `config.conta` traz `autoReview` (o liga e desliga do

@@ -14,6 +14,7 @@ seção diz a regra e o arquivo em que ela mora.
 - [O CI não decide](#o-ci-não-decide)
 - [Check herdado da base](#check-herdado-da-base)
 - [PR de sincronização](#pr-de-sincronização)
+- [Sync por herança](#sync-por-herança)
 - [Dedup por head](#dedup-por-head)
 - [Head que anda](#head-que-anda)
 - [PR da própria conta](#pr-da-própria-conta)
@@ -419,10 +420,111 @@ muda (lacuna exigida, análise, inventário, coerência), e com defeito real val
 de postagem (credencial, linguagem, PR próprio, instância isolada, dedup por head, head que andou,
 PR mergeado ou fechado) não leem a marca.
 
-O prompt não muda: o protocolo da sessão já trata o "sync de linhagem" (item 3bis de
-`workspace-template/CLAUDE.md` e `prompts/pr-review-auto.md`), sem cobrar card.
+O protocolo da sessão já trata o "sync de linhagem" (item 3bis de
+`workspace-template/CLAUDE.md` e `prompts/pr-review-auto.md`), sem cobrar card. Quando o motor
+mede a herança do sync, a sessão lê só o que não foi herdado ([Sync por herança](#sync-por-herança)).
 
 Travado em `test/pr-de-sincronizacao.test.js`.
+
+## Sync por herança
+
+Decisão do dono de 24/11/2026 (desenho em
+`docs/superpowers/specs/2026-11-24-sync-por-heranca-design.md`). Medido em `engine-ai#1489`: um
+sync de 65 arquivos, dos quais 57 idênticos à ponta da origem, passava por revisão completa. Agora
+o motor herda sem leitura o que já foi revisado nos PRs de origem, e a sessão lê só o resto.
+
+**A procedência** (`lib/engine/procedencia-do-sync.js`), medida antes da sessão, em
+`prepareReviewReading` (`lib/engine/analysis-source.js`). A base é contínua ou bancada, o PR não é
+de fork e a lista de commits veio inteira (até 100):
+
+- head contínuo diferente da base: a origem é o head, a foto é a ponta dele e a régua da base é a
+  base do PR;
+- head de trabalho (`sync/*` ou qualquer nome): a foto é o segundo pai do merge commit mais
+  recente do PR, o primeiro pai tem de estar na linhagem da base, e a origem é a branch contínua
+  ou bancada que contém a foto (a que a mensagem do merge cita; sem citação, a primeira da ordem
+  `production`, `homologation`, `development`, `main`, `master`, bancadas). A régua da base é o
+  primeiro pai: a base no momento do merge, contra a qual o conflito foi resolvido, e nunca a
+  ponta atual;
+- a foto só vale como estado revisado da origem (decisão do dono de 24/11/2026, pelo
+  anti-objetivo "aprovar o que ninguém leu"): a ponta atual da origem, ou o merge commit de um PR
+  mesclado nela (`associatedPullRequests(states: MERGED)` do commit da foto, com `baseRefName`
+  igual à origem e `mergeCommit.oid` igual à foto). Commit no meio da história da origem (o meio
+  de uma branch de feature já mesclada, por exemplo) nunca foi revisado como estado e não é foto;
+  leitura que falha ou vem torta também não. Sem foto, não há herança e a revisão é completa;
+- os outros commits seguem o critério de [PR de sincronização](#pr-de-sincronização): cada um já
+  entrou por outro PR mesclado numa branch contínua ou bancada.
+
+**Herdado e a ler** (`lib/engine/sync-por-heranca.js`, com a régua comum de
+`lib/engine/regua-de-heranca.js`). Um arquivo do diff é herdado quando, ao mesmo tempo, é idêntico
+à foto (fora de `compare <foto>...<head>`), a base da resolução não mexeu nele desde o ancestral
+comum (fora de `compare <foto>...<primeiro pai>`), não depende de nada que o sync mudou
+(`lib/engine/dependencia-do-sync.js`, fechado por padrão) e não tem achado bloqueante aberto de
+rodada anterior (`arquivosComBloqueioAberto`, `lib/engine/review-rounds.js`). A dependência:
+
+- princípio do mundo fechado: o herdado só herda quando a regra sabe que nada de que ele depende
+  mudou. Mudou é o que difere da foto (dentro ou fora do diff), o que está a ler e o que a base
+  mexeu;
+- classe do mudado: código JS e TS (fora `.d.ts` e configuração) e dado ou estilo importado por
+  código contaminam pelo grafo; documentação e imagem não têm efeito; o esquema do Prisma (qualquer
+  `.prisma`, a pasta `prisma/`, `prisma.config.*`, o `prisma.schema` do `package.json`) devolve
+  quem chega a `@prisma/client`; QUALQUER OUTRO tem impacto global (configuração de qualquer
+  ferramenta, `.d.ts`, workflow, `.env*`, `.sql` fora do Prisma, script, extensão desconhecida, sem
+  extensão, dado ou estilo que nenhum código importa) e devolve todo herdado que não é
+  documentação ou imagem;
+- código herdado volta se alcança pelo grafo algo que mudou, um herdado que voltou, código que o
+  mapa não leu por inteiro (o `import()` e o `require` literais não contam) ou import sem destino
+  que pode ser do repositório (relativo, alias, chave de `paths`, `baseUrl`, pacote não declarado
+  ou local), se o alias é ambíguo, ou se o texto tem leitura que o mapa não vê
+  (`import.meta.glob`, `require.context`, `new URL(` com `import.meta.url`, `new Worker(`, leitura
+  pelo `fs`); estilo herdado só herda sem `@import`, `@use`, `@forward`, `composes: ... from`,
+  `@apply`, `@tailwind` nem `url(` que não é `data:`; dado herdado só sem `#import` nem `$ref`; o
+  `.mdx` só sem import; sem texto, volta (o texto é lido só dos candidatos, até 300 arquivos e
+  30 s). O código numa pasta `prisma/` e a documentação ou imagem importada por código também
+  contaminam pelo grafo, e o caminho antigo do renomeado conta como mudado. O acoplamento sem import
+  (token de injeção por string, convenção de pasta, `declare global` em `.ts` comum, CSS global,
+  glob em string) é risco residual aceito: o arquivo mudado no diff a sessão lê, como num PR comum,
+  e todos os portões de postagem valem. A consulta de procedência só
+  roda com a base contínua ou bancada pelo nome lido no preparo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
+falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
+hoje, sem log.
+
+**O que a sessão recebe.** A herança do sync entra como terceira fonte (`juntarHerancas`), com a
+origem e a foto em `origens`: o fan-out e as métricas contam só os arquivos a ler, a materialização
+dos patches fica sem os herdados (o `.source.json` segue inteiro, para a sessão abrir um herdado se
+precisar), e o bloco de prova lista os herdados como "idêntico à ponta da `<origem>` (commit
+`<foto>`), já revisado nos PRs de origem". Depois da sessão, `prepararCoberturaParaOGate`
+(`lib/engine/file-proof.js`) põe cada herdado em `coverage.inherited`, mesmo o que a sessão
+declarou ter lido, e grava a marca do motor `result.herancaDoSync` (a que vier do modelo é
+descartada). O alcance é cobrado só dos arquivos a ler, o herdado nunca entra no índice de provas
+entre PRs, e a prova do PR guarda a origem do sync sem que a rodada seguinte a herde: cada rodada
+mede de novo. A marca `sincronizacao` passa a vir desta medição (`sincronizacaoDoSync`,
+`lib/engine/registro-do-sync.js`), o que deixa limpa também a sincronização de head de trabalho.
+
+**Achado em arquivo herdado.** O achado automático da avaliação técnica num herdado vira dívida
+herdada da origem (`classificarPorLinhas`, `lib/technical-review/divida-fora-das-linhas.js`, com
+linha ou sem): informa, não bloqueia. O da sessão marcado `herdadoDaOrigem` só é rebaixado se o
+arquivo estiver na lista do motor e a evidência não citar o contexto alterado
+(`aplicarHerancaDoSync`, `lib/engine/heranca-de-producao.js`).
+
+**Sem nenhum arquivo a ler** (`lib/engine/sync-sem-sessao.js`): APPROVE de texto fixo, sem sessão,
+pelo mesmo fluxo do diff vazio (`lib/engine/aprovacao-sem-sessao.js`). Só com a política da conta
+que aprova sozinha, `reviewRoundsMode` diferente de `enforce` e a origem do dono; a avaliação
+técnica roda antes e só deixa passar o veredito aprovado, com regras que rodaram: achado fora dos
+herdados, a falha dela, regra reprovada sem achado ou regra de julgamento pendente que bloquearia
+no caminho normal abre a sessão. O PR da
+própria conta, a decisão de gente no head e a label de outra conta encerram sem postar; o head que
+andou marca `stale_head`; o dedup por head e todos os portões de `postReview` valem. A publicação
+técnica aceita o APPROVE só pela prova da memória do motor (`syncPorHeranca`, com a marca
+`ORIGEM_SYNC_POR_HERANCA`, sem relatório e no mesmo commit).
+
+**O registro.** A decisão leva `caminho: 'sync_por_heranca'` (ou `'sync_por_heranca_sem_sessao'`)
+e `herancaSync` (`origem`, `foto`, `herdados`, `lidos`), projetados para a tela, e uma linha INFO
+no `farol.log` por decisão.
+
+Travado em `test/regua-de-heranca.test.js`, `test/procedencia-do-sync.test.js`,
+`test/sync-por-heranca-*.test.js`, `test/divida-herdada-do-sync.test.js`,
+`test/aprovacao-sem-sessao.test.js`, `test/sync-sem-sessao.test.js` e
+`test/sync-engine-ai-1489.test.js`.
 
 ## Dedup por head
 
