@@ -81,6 +81,13 @@ para head e base contínuas):
     contém essa foto (o `compare <origem>...<foto>` com `behind_by` 0 a partir da foto, ou seja,
     a foto é ancestral da ponta da origem). Com mais de um merge commit candidato, vale o mais
     recente na lista de commits do PR; sem nenhum, não há origem.
+  - a foto só vale como **estado revisado da origem** (decisão 4 do dono): a ponta atual da
+    origem, ou o merge commit de um PR **mesclado** cuja base é a própria origem
+    (`associatedPullRequests(states: MERGED)` do commit da foto com `baseRefName` igual à origem e
+    `mergeCommit.oid` igual à foto). Commit no meio da história da origem, que não é nem a ponta
+    nem o merge commit de um PR mesclado nela, não é foto: sem herança, revisão completa. Leitura
+    que falha, ou que vem torta, também não vale como foto. No head contínuo a foto é a ponta, e a
+    regra vale por definição.
 - Os commits do PR que **não** são merge commits do próprio sync seguem a regra atual: cada um já
   entrou por um PR mesclado, que não é este, numa branch contínua ou bancada.
 - Qualquer leitura que falhe, venha torta ou cortada (mais de 100 commits na consulta GraphQL,
@@ -199,6 +206,12 @@ Levantadas pela revisão do desenho por um construtor independente, que mediu o 
 2. O arquivo herdado que **depende** de algo que o sync mudou (importa um misturado, ou um arquivo
    que a base mudou) **volta à leitura**. Isto deixa a decisão sem sessão mais rara, de propósito.
 3. O arquivo com **achado bloqueante aberto** de rodada anterior **volta à leitura**.
+4. (24/11/2026, depois da revisão final da implementação, pelo anti-objetivo "aprovar o que ninguém
+   leu") A **foto** só vale quando é a ponta atual da origem ou o merge commit de um PR mesclado
+   na própria origem. Um commit intermediário da história da origem (por exemplo, um commit do
+   meio de uma branch de feature já mesclada) nunca foi revisado como estado, e não é foto.
+   Conferido no caso real: a foto do `engine-ai#1489` (`158c3d8`) é o merge commit do PR #1480,
+   mesclado na `homologation`, e continua herdando.
 
 Decisões minhas, que o dono pode rever: com mais de uma branch contínua contendo a foto, a origem é
 a que a mensagem do merge cita, e sem citação a primeira da ordem `production`, `homologation`,

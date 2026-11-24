@@ -445,6 +445,12 @@ de fork e a lista de commits veio inteira (até 100):
   `production`, `homologation`, `development`, `main`, `master`, bancadas). A régua da base é o
   primeiro pai: a base no momento do merge, contra a qual o conflito foi resolvido, e nunca a
   ponta atual;
+- a foto só vale como estado revisado da origem (decisão do dono de 24/11/2026, pelo
+  anti-objetivo "aprovar o que ninguém leu"): a ponta atual da origem, ou o merge commit de um PR
+  mesclado nela (`associatedPullRequests(states: MERGED)` do commit da foto, com `baseRefName`
+  igual à origem e `mergeCommit.oid` igual à foto). Commit no meio da história da origem (o meio
+  de uma branch de feature já mesclada, por exemplo) nunca foi revisado como estado e não é foto;
+  leitura que falha ou vem torta também não. Sem foto, não há herança e a revisão é completa;
 - os outros commits seguem o critério de [PR de sincronização](#pr-de-sincronização): cada um já
   entrou por outro PR mesclado numa branch contínua ou bancada.
 

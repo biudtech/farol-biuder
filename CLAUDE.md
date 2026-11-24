@@ -249,7 +249,9 @@ fica no histórico com `caminho: 'diff_vazio_linhagem'` (projetado para a tela) 
 [`docs/REVIEW-GATES.md`](docs/REVIEW-GATES.md#sync-por-herança)). No PR de sincronização, o motor
 mede antes da sessão a procedência (`lib/engine/procedencia-do-sync.js`): head contínuo, ou head
 de trabalho (`sync/*`) cujo merge commit mais recente traz como segundo pai a foto de uma branch
-contínua ou bancada, com o primeiro pai na linhagem da base. O arquivo do diff idêntico à foto, que
+contínua ou bancada, com o primeiro pai na linhagem da base. A foto só vale como estado revisado
+da origem: a ponta atual dela, ou o merge commit de um PR mesclado nela (commit no meio da
+história da origem não é foto, e a revisão é completa). O arquivo do diff idêntico à foto, que
 a base no momento do merge (o primeiro pai, nunca a ponta atual) não mexeu, que não importa nada
 que o sync mudou e que não tem bloqueio aberto de rodada anterior é herdado
 (`lib/engine/sync-por-heranca.js`): entra como terceira fonte de herança, fica em
