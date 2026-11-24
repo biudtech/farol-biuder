@@ -52,7 +52,7 @@ after(() => { io.run = runReal; try { fs.rmSync(FAROL_HOME, { recursive: true, f
 afterEach(() => { Object.assign(sourceRuntime, originalSource); Object.assign(technicalRuntime, originalTecnica); });
 
 const arquivo = (p) => ({ path: p, sha: 'd'.repeat(40), status: 'modified', patch: '@@ -1 +1 @@\n-old\n+new', patchStatus: 'available' });
-const ARQUIVOS = [arquivo('docs/a.md'), arquivo('docs/b.md'), arquivo('prisma/schema.prisma')];
+const ARQUIVOS = [arquivo('docs/a.md'), arquivo('docs/b.md'), arquivo('docs/c.md')];
 function fonte() {
   return { status: 'complete', manifest: { H: HEAD, B: BASE_PONTA, M: 'a'.repeat(40), files: ARQUIVOS, limitations: [] }, reader: {},
     inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, files: ARQUIVOS, changedFiles: ARQUIVOS.length },
@@ -218,4 +218,18 @@ test('candidato e tecnicaSoNosHerdados são puros e conservadores', () => {
   assert.equal(tecnicaSoNosHerdados({ initial: { findings: [{ file: 'a' }] } }, ['a']), true);
   assert.equal(tecnicaSoNosHerdados({ initial: { findings: [{ rule: 'sem arquivo' }] } }, ['a']), false);
   assert.equal(tecnicaSoNosHerdados({}, ['a']), false, 'sem o resultado inicial não dá para saber');
+});
+
+// Revisão independente de 24/11/2026: a pré-checagem do caminho sem sessão nunca é mais frouxa que o
+// caminho normal (technicalGap, lib/technical-review/verdict.js).
+test('pré-checagem técnica: erro, regra reprovada sem achado e regra de julgamento pendente barram', () => {
+  const herdados = ['docs/a.md'];
+  const inicial = (initial) => tecnicaSoNosHerdados({ initial }, herdados);
+  assert.equal(inicial({ error: 'falhou', rules: [], findings: [] }), false, 'initial.error');
+  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [] }), false, 'regra reprovada sem achado');
+  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'fail' }], findings: [{ rule: 'core.x', file: 'docs/a.md' }] }), true, 'reprovada só no herdado');
+  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'not-run' }], findings: [] }), false, 'julgamento pendente');
+  assert.equal(inicial({ rules: [{ rule: 'frontend.component.named-structural-branches', verdict: 'not-run' }], findings: [] }), true,
+    'regra de organização pendente não segura, como no caminho normal');
+  assert.equal(inicial({ rules: [{ rule: 'core.x', verdict: 'pass' }], findings: [] }), true);
 });
