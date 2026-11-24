@@ -979,7 +979,8 @@ no limite de threads da hospedagem compartilhada. A rotina divide o trabalho:
 [`docs/exemplos/backup-telemetria.mjs`](exemplos/backup-telemetria.mjs): a cópia consistente do
 SQLite (a mesma de "Copiar com o motor de pé"), aberta e conferida antes de entrar na rotação (7
 diárias, 5 semanais e 6 mensais, em `<base>/backup`, com modo 700 e 600). Copie-o para a base e
-chame-o a cada rodada do agendador, conferindo a marca do dia antes de subir o Node:
+chame-o a cada rodada do agendador, conferindo a marca do dia antes de subir o Node (a rodada
+versionada, abaixo, já faz isso):
 
    ```
    [ "$(cat <base>/run/backup.ultima 2>/dev/null)" != "$(TZ=America/Sao_Paulo date +%F)" ] &&
@@ -1002,6 +1003,27 @@ hospedagem.
 de saída, enquanto processos Node da mesma conta vivem dias. O laço que fica de pé é em Node
 (chama a rodada a cada minuto e sai pelo `exit` com uma linha no log); o cron da hospedagem fica de
 reserva para religá-lo.
+
+**A rodada e o vigia.** Os dois arquivos que mantêm tudo de pé estão versionados:
+
+- [`docs/exemplos/iniciar.sh`](exemplos/iniciar.sh), a rodada: sobe o vigia, o motor e o front que
+  estiverem parados, com os tetos de thread e de memória da hospedagem, e chama o
+  `atualizar-claude.sh`, o backup do dia (com a marca conferida no shell) e o `autoatualizar.sh`.
+  Uma rodada por vez (trava em `<base>/run/iniciar.trava`: a rodada que chega com ela ocupada espera
+  até 20 s, e a esquecida vence em 10 minutos);
+- [`docs/exemplos/vigia.mjs`](exemplos/vigia.mjs), o vigia: roda a rodada a cada minuto, com teto
+  de 5 minutos por rodada, e grava início, saída e sinal em `<base>/log/vigia.log` (sumir sem linha
+  de saída é SIGKILL de fora).
+
+Copie os dois para a base, ao lado dos outros scripts, e agende no cron da hospedagem só
+`/bin/sh <base>/iniciar.sh`, sem variável: a base é a pasta do script. O que é da instância vai em
+`<base>/hospedagem.env`, um arquivo de shell sem segredo e fora do repositório, lido pela rodada:
+`FAROL_DADOS` quando o HOME do motor não é `<base>/dados`, e `FAROL_NODE_BIN` quando o Node 24 não
+está em `/opt/alt/alt-nodejs24/root/usr/bin`. A rodada relê o arquivo a cada vez e exporta
+`FAROL_BASE`, `FAROL_DADOS` e `FAROL_NODE_BIN` para o vigia e para os scripts que chama; outro
+ajuste dos scripts (o `FAROL_MOTOR_SOCKET` do `autoatualizar.sh`, por exemplo) precisa de `export`
+no arquivo. Para trocar o vigia, mate o processo do
+`<base>/run/vigia.pid` com TERM: a próxima rodada do cron sobe o novo.
 
 ## O que não foi provado
 
