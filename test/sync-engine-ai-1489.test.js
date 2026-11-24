@@ -49,7 +49,10 @@ beforeEach(() => {
   caso = casoEngineAi1489();
   const { arquivos, cenario, BASE_PONTA, mapa } = caso;
   const reader = { tree: async () => ({ complete: true, entries: [{ path: 'package.json', type: 'blob' }] }),
-    read: async (p) => (p === 'package.json' ? { status: 'available', text: caso.packageJson } : { status: 'unavailable' }) };
+    read: async (p) => {
+      const texto = p === 'package.json' ? caso.packageJson : caso.pacotes.textos[p];
+      return typeof texto === 'string' ? { status: 'available', text: texto } : { status: 'unavailable' };
+    } };
   sourceRuntime.prepareSources = async () => ({ status: 'complete', reader,
     manifest: { H: HEAD, B: BASE_PONTA, M: 'a'.repeat(40), files: arquivos, limitations: [] },
     inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, baseRef: 'development', files: arquivos, changedFiles: arquivos.length, additions: 65, deletions: 65 },
@@ -107,14 +110,14 @@ async function revisar(opcoes) {
 }
 
 test('contra a base no momento do merge: 55 herdados e 10 a ler, antes da dependência', () => {
-  const { arquivos, diferemDaFoto, mexidosNaBase, mapa } = caso;
-  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa: semRelacoes(mapa) });
+  const { arquivos, diferemDaFoto, mexidosNaBase, mapa, pacotes } = caso;
+  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa: semRelacoes(mapa), pacotes });
   assert.deepEqual([r.herdados.length, r.aLer.length], [55, 10]);
 });
 
 test('contra a ponta atual da development seriam 24 e 41', () => {
-  const { arquivos, diferemDaFoto, mexidosDesdeAPonta, mapa } = caso;
-  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase: mexidosDesdeAPonta, bloqueados: new Set(), mapa: semRelacoes(mapa) });
+  const { arquivos, diferemDaFoto, mexidosDesdeAPonta, mapa, pacotes } = caso;
+  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase: mexidosDesdeAPonta, bloqueados: new Set(), mapa: semRelacoes(mapa), pacotes });
   assert.deepEqual([r.herdados.length, r.aLer.length], [24, 41]);
 });
 

@@ -17,7 +17,9 @@ const MISTURADOS = [
   'prisma/schema.prisma',
   'common/zone-ownership/mapa-de-zonas.ts',
   'apps/engine-ai/src/mia-whatsapp/whatsapp-chat.service.ts',
-  ...Array.from({ length: 5 }, (_, i) => `apps/engine-ai/src/misturado/misturado-${i + 1}.ts`),
+  // como no caso real: um documento misturado (sem impacto global) e testes .ts
+  'ARCHITECTURE.md',
+  ...Array.from({ length: 4 }, (_, i) => `apps/engine-ai/src/misturado/misturado-${i + 1}.spec.ts`),
 ];
 const GUARDA = 'apps/engine-ai/src/zonas/zona.guard.ts';
 const PAINEL = 'apps/engine-ai/src/turno/painel-do-turno.ts';
@@ -31,7 +33,9 @@ const PELO_BARRIL = modulo(9);
 const TRADUCOES = ['apps/engine-ai/src/i18n/pt-01.json', 'apps/engine-ai/src/i18n/pt-02.json'];
 const COM_TRADUCAO = modulo(10);
 const BARRIL = 'apps/engine-ai/src/herdado/index.ts';
-const PACOTES = { porPasta: { '': ['@nestjs/common', '@prisma/client'] }, workspace: [] };
+const PACOTES = { porPasta: { '': ['@nestjs/common', '@prisma/client'] }, workspace: [], prefixosDeAlias: [], aliases: [], segmentosDoBaseUrl: [] };
+// o texto de cada arquivo, que o mundo fechado lê nos herdados: nenhum tem leitura escondida
+const textoDe = (p) => (p.endsWith('.json') ? '{"ola": "olá"}' : "import { Injectable } from '@nestjs/common';");
 const PACKAGE_JSON = JSON.stringify({ dependencies: { '@nestjs/common': '10.0.0', '@prisma/client': '5.0.0' } });
 // os 57 idênticos à foto: os dois que a base tocou primeiro, depois o resto
 const TOCADOS_NA_BASE = ['apps/engine-ai/src/herdado/modulo-01.ts', 'docs/herdado/nota-01.md'];
@@ -46,6 +50,7 @@ const IDENTICOS = [
 function casoEngineAi1489() {
   const caminhos = [...MISTURADOS, ...IDENTICOS];
   const arquivos = caminhos.map(arquivo);
+  const pacotes = { ...PACOTES, textos: Object.fromEntries(caminhos.map((p) => [p, textoDe(p)])) };
   const diferemDaFoto = [...MISTURADOS];
   const mexidosNaBase = [...TOCADOS_NA_BASE, APAGADO_NA_BASE];
   const mexidosDesdeAPonta = [...IDENTICOS.slice(0, 33), APAGADO_NA_BASE];
@@ -66,7 +71,7 @@ function casoEngineAi1489() {
   cenario.comparacoes[`${FOTO}...${HEAD_DO_SYNC}`] = { behind: 0, mergeBase: FOTO, files: diferemDaFoto };
   cenario.comparacoes[`${FOTO}...${P1}`] = { behind: 2, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosNaBase };
   cenario.comparacoes[`${FOTO}...${BASE_PONTA}`] = { behind: 9, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosDesdeAPonta };
-  return { arquivos, diferemDaFoto, mexidosNaBase, mexidosDesdeAPonta, mapa, pacotes: PACOTES, packageJson: PACKAGE_JSON, cenario, BASE_PONTA,
+  return { arquivos, diferemDaFoto, mexidosNaBase, mexidosDesdeAPonta, mapa, pacotes, packageJson: PACKAGE_JSON, cenario, BASE_PONTA,
     GUARDA, PAINEL, REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL, TRADUCOES, COM_TRADUCAO };
 }
 
