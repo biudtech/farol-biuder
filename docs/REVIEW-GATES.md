@@ -453,7 +453,7 @@ de fork e a lista de commits veio inteira (até 100):
 à foto (fora de `compare <foto>...<head>`), a base da resolução não mexeu nele desde o ancestral
 comum (fora de `compare <foto>...<primeiro pai>`), não importa arquivo a ler nem arquivo que a base
 mudou (até o ponto fixo, pelo mapa de importação; código cuja dependência não deu para conferir
-volta) e não tem achado bloqueante aberto de rodada anterior (`arquivosComBloqueioAberto`,
+volta, inclusive o import relativo ou por alias do repositório que ficou sem destino) e não tem achado bloqueante aberto de rodada anterior (`arquivosComBloqueioAberto`,
 `lib/engine/review-rounds.js`). Protegido, removido e sem blob vão sempre à leitura. Leitura que
 falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
 hoje, sem log.

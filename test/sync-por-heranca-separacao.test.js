@@ -112,3 +112,36 @@ test('arquivosComBloqueioAberto: os arquivos dos bloqueios da fronteira; memóri
   fs.writeFileSync(path.join(pasta, encodeURIComponent(store.scopeFor(outro.key, 'eu'))), 'não é pasta');
   assert.equal(arquivosComBloqueioAberto(engine, outro), null);
 });
+
+// Revisão final de 24/11/2026: import por alias que o mapa não resolveu é dependência do repositório
+// que não deu para conferir (o arquivo que a base apagou, importado pelo alias), e não pacote externo.
+test('import por alias que o mapa não resolveu: volta à leitura', () => {
+  const mapa = mapaLimpo(['src/guard.ts'], { unresolved: [{ from: 'src/guard.ts', specifier: '@common/mapa-de-zonas', alias: true }] });
+  assert.deepEqual(separar({ arquivos: [f('src/guard.ts')], mapa }).aLer, ['src/guard.ts']);
+});
+
+test('mapa com alias não interpretado: import não relativo sem destino volta à leitura', () => {
+  const mapa = mapaLimpo(['src/a.ts'], { unresolved: [{ from: 'src/a.ts', specifier: '@app/qualquer' }],
+    limitations: ['tsconfig.json: extends não expandido; resolução de aliases é parcial.'] });
+  assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa }).aLer, ['src/a.ts']);
+});
+
+test('o mapa marca o import que casou um alias e não achou destino', async () => {
+  const { buildMap } = await import('../lib/review-context/map.js');
+  const { createHash } = await import('node:crypto');
+  const digest = (t) => createHash('sha1').update(t).digest('hex');
+  const arvore = {
+    'tsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: '.', paths: { '@common/*': ['common/*'] } } }),
+    'src/guard.ts': "import { zonas } from '@common/apagado'; import React from 'react'; export const g = zonas;",
+  };
+  const fonte = { manifest: { scope: { host: 'github.com', account: 'f', repo: 'o/r', repositoryId: 1 }, H: 'a'.repeat(40), B: 'b'.repeat(40), M: 'c'.repeat(40) },
+    reader: {
+      tree: async () => ({ complete: true, entries: Object.entries(arvore).map(([p, t]) => ({ path: p, blob: digest(t), type: 'blob', size: t.length })) }),
+      read: async (p) => (typeof arvore[p] === 'string' ? { status: 'available', text: arvore[p], path: p, blob: digest(arvore[p]), commit: 'a'.repeat(40) } : { status: 'unavailable' }),
+    } };
+  const mapa = await buildMap(fonte);
+  const alias = mapa.head.unresolved.find((u) => u.specifier === '@common/apagado');
+  const pacote = mapa.head.unresolved.find((u) => u.specifier === 'react');
+  assert.equal(alias.alias, true);
+  assert.equal(pacote.alias, undefined);
+});
