@@ -211,7 +211,9 @@ describe('GET /api/usage: o que o redesenho acrescentou (lote 2)', () => {
     }
     const diario = fonte('lib/usage/activity.js');
     expect(diario).toContain('duration: number(s.at) - number(s.iniciadaEm), durationKnown: number(s.iniciadaEm) > 0,');
-    expect(diario).toContain("modelParts: modelParts(s), gatilho: gatilhoDaLinha({ kind, gatilho: s.gatilho }), author: '',");
+    expect(diario).toContain('modelParts: modelParts(s), gatilho: gatilhoDaLinha({ kind, gatilho: s.gatilho }),');
+    expect(diario).toContain('author: text(s.author).toLowerCase(),');
+    expect(diario).toContain('if (text(s.card)) item.card = text(s.card);');
     expect(fonte('lib/usage/report.js')).toContain("repos: aggregateRepos(attempts), porGatilho: aggregate(attempts, 'gatilho'),");
   });
 });
