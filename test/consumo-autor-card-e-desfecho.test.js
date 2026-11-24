@@ -3,7 +3,8 @@
 //    e a tela de Consumo os lê dali; só a linha antiga, sem eles, ainda os busca nas decisões, que
 //    guardam até 3.000 e descartam as mais antigas;
 //  - a revisão que termina sem resultado depois de uma sessão concluída troca o `ok` dessa sessão
-//    por `erro` (marcarDesfecho com `seEra`), sem apagar o `parcial` de quem morreu no meio.
+//    por `erro` (marcarDesfecho com `seEra`, em todas as linhas da sessão e em todas as tentativas
+//    da série), sem apagar o `parcial` de quem morreu no meio.
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -21,6 +22,8 @@ const { camposDaTentativa, autorDaSessao, cardDaSessao } = await import('../lib/
 const { activityReport } = await import('../lib/usage/report.js');
 const { comDetalheDaDecisao, consumoEmCsv } = await import('../lib/engine/consumo-das-sessoes.js');
 const { sessoesDoDiario, fecharTelemetria, iniciarConsumo } = await import('../lib/engine/telemetria-do-motor.js');
+const { sessoesDaSerie } = await import('../lib/engine/falhas.js');
+const reviewMod = (await import('../lib/engine/review.js')).default;
 
 after(() => { banco.fecharTodos(); fs.rmSync(FAROL_HOME, { recursive: true, force: true }); });
 
@@ -67,14 +70,20 @@ test('sem decisão da rodada (descartada pelo teto), o card da linha continua na
   assert.match(csv.split('\n')[1], /,o\/r#1,dev,PROJ-9,/);
 });
 
-test('desfecho condicional no JSON: só a linha em ok vira erro', () => {
+test('desfecho condicional no JSON: todas as linhas da sessão em ok viram erro, o parcial fica', () => {
   const eng = { usage: usage.defaultUsage(), usageSessions: { sessions: [] }, config: {}, pushState() { }, log() { } };
+  // a sessão principal e a continuação na mesma conversa gravam com o mesmo id
   usage.recordUsage(eng, ID(3), 'eu', uso(2), 'claude-opus-5', '', 'o/r#3');
+  usage.recordUsage(eng, ID(3), 'eu', uso(1), 'claude-opus-5', '', 'o/r#3');
+  usage.recordUsage(eng, ID(3), 'eu', { usage: { input_tokens: 1, output_tokens: 1 }, farol_parcial: true }, 'claude-opus-5', '', 'o/r#3');
   usage.recordUsage(eng, ID(4), 'eu', { usage: { input_tokens: 1, output_tokens: 1 }, farol_parcial: true }, 'claude-opus-5', '', 'o/r#4');
-  assert.equal(usage.marcarDesfecho(eng, ID(3), 'erro', 'ok'), true);
+  assert.equal(usage.marcarDesfecho(eng, ID(3), 'erro', 'ok'), true, 'a mais recente é parcial, e as ok de antes mudam assim mesmo');
   assert.equal(usage.marcarDesfecho(eng, ID(4), 'erro', 'ok'), false, 'o parcial fica');
   assert.equal(usage.marcarDesfecho(eng, ID(3), 'erro', 'inventado'), false);
-  assert.deepEqual(eng.usageSessions.sessions.map((s) => s.status), ['erro', 'parcial']);
+  assert.deepEqual(eng.usageSessions.sessions.map((s) => s.status), ['erro', 'erro', 'parcial', 'parcial']);
+  // sem seEra continua trocando só a mais recente
+  assert.equal(usage.marcarDesfecho(eng, ID(3), 'cancelada'), true);
+  assert.deepEqual(eng.usageSessions.sessions.map((s) => s.status), ['erro', 'erro', 'cancelada', 'parcial']);
 });
 
 test('desfecho condicional no banco e na fila do que o banco recusou', () => {
@@ -84,20 +93,41 @@ test('desfecho condicional no banco e na fila do que o banco recusou', () => {
     const db = e.telemetria.db;
     db.exec('DELETE FROM sessoes');
     e.recordUsage(ID(5), 'dev', uso(5), 'claude-opus-5-5', 'p1', 'o/r#5');
+    e.recordUsage(ID(5), 'dev', { usage: { input_tokens: 1, output_tokens: 1 }, farol_parcial: true }, 'claude-opus-5-5', 'p1', 'o/r#5');
     e.recordUsage(ID(6), 'dev', { usage: { input_tokens: 1, output_tokens: 1 }, farol_parcial: true }, 'claude-opus-5-5', 'p1', 'o/r#6');
-    assert.equal(e.marcarDesfecho(ID(5), 'erro', 'ok'), true);
+    assert.equal(e.marcarDesfecho(ID(5), 'erro', 'ok'), true, 'a principal ok, antes do parcial da continuação');
     assert.equal(e.marcarDesfecho(ID(6), 'erro', 'ok'), false);
-    assert.equal(e.marcarDesfecho(ID(5), 'cancelada', 'ok'), false, 'já não está em ok');
+    assert.equal(e.marcarDesfecho(ID(5), 'cancelada', 'ok'), false, 'já não há linha em ok');
 
-    // o banco recusa: a linha fica pendente em memória e a condição vale sobre ela
+    // o banco recusa: as linhas ficam pendentes em memória, e a condição vale nelas e no banco
     db.exec("CREATE TRIGGER disco_cheio BEFORE INSERT ON sessoes BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END;");
     e.recordUsage(ID(7), 'dev', uso(7), 'claude-opus-5-5', 'p1', 'o/r#7');
+    e.recordUsage(ID(7), 'dev', { usage: { input_tokens: 1, output_tokens: 1 }, farol_parcial: true }, 'claude-opus-5-5', 'p1', 'o/r#7');
     assert.equal(e.marcarDesfecho(ID(7), 'erro', 'ok'), true);
-    assert.equal(e.marcarDesfecho(ID(7), 'descartada', 'ok'), false);
     db.exec('DROP TRIGGER disco_cheio');
     e.recordUsage(ID(8), 'dev', uso(8), 'claude-opus-5-5', 'p1', 'o/r#8');
-    assert.deepEqual(sessoesDoDiario(e).map((s) => [s.ref, s.status]),
-      [['o/r#5', 'erro'], ['o/r#6', 'parcial'], ['o/r#7', 'erro'], ['o/r#8', 'ok']]);
-    assert.deepEqual(db.prepare('SELECT status FROM sessoes ORDER BY seq').all().map((r) => r.status), ['erro', 'parcial', 'erro', 'ok']);
+    const esperado = [['o/r#5', 'erro'], ['o/r#5', 'parcial'], ['o/r#6', 'parcial'], ['o/r#7', 'erro'], ['o/r#7', 'parcial'], ['o/r#8', 'ok']];
+    assert.deepEqual(sessoesDoDiario(e).map((s) => [s.ref, s.status]), esperado);
+    assert.deepEqual(db.prepare('SELECT ref, status FROM sessoes ORDER BY seq').all().map((r) => [r.ref, r.status]), esperado);
   } finally { fecharTelemetria(e); }
+});
+
+test('a série de tentativas guarda as sessões, e o estacionamento sem resultado marca todas', () => {
+  assert.deepEqual(sessoesDaSerie(null, ID(1)), [ID(1)]);
+  assert.deepEqual(sessoesDaSerie({ sessoes: [ID(1), ID(2)] }, ID(2)), [ID(1), ID(2)], 'sem repetir');
+  assert.deepEqual(sessoesDaSerie({ sessoes: [ID(1)] }, ''), [ID(1)], 'sem vazio');
+  assert.equal(sessoesDaSerie({ sessoes: Array.from({ length: 30 }, (_, i) => ID(100 + i)) }, ID(1)).length, 20);
+
+  const marcadas = [];
+  const engine = {
+    retryAfterNet: new Map([['o/r#9', { tries: 2, sessoes: [ID(1), ID(2)] }]]), autoReviewParked: new Set(), parkedMotivos: {},
+    saveAutoReviewParked() { }, marcarDesfecho: (id, st, seEra) => { marcadas.push([id, st, seEra]); return true; },
+  };
+  reviewMod.estacionar(engine, 'o/r#9', 'falhou', 'esgotado', 'h1', ID(3));
+  assert.deepEqual(marcadas, [[ID(1), 'erro', 'ok'], [ID(2), 'erro', 'ok'], [ID(3), 'erro', 'ok']]);
+  assert.equal(engine.retryAfterNet.has('o/r#9'), false);
+  marcadas.length = 0;
+  reviewMod.estacionar(engine, 'o/r#9', 'cancelada por você', 'cancelado', 'h1');
+  reviewMod.estacionar(engine, 'o/r#9', 'a label saiu', 'label-retirada', 'h1');
+  assert.deepEqual(marcadas, [], 'cancelamento e label retirada não mexem no desfecho do consumo');
 });

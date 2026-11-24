@@ -983,15 +983,18 @@ chame-o a cada rodada do agendador, conferindo a marca do dia antes de subir o N
 
    ```
    [ "$(cat <base>/run/backup.ultima 2>/dev/null)" != "$(TZ=America/Sao_Paulo date +%F)" ] &&
+     [ -z "$(find <base>/run/backup.espera -mmin -60 2>/dev/null)" ] &&
      FAROL_BASE=<base> FAROL_DADOS=<base>/dados nohup node <base>/backup-telemetria.mjs >/dev/null 2>>"<base>/log/backup.log" &
    ```
 
 A marca no shell não é zelo: a hospedagem limita as threads do usuário, e um Node subindo a cada
 minuto só para ver que já copiou falhava ao abrir thread com uma revisão no pico (medido em
-24/11/2026). Cópia que falha não grava a marca, e a rodada seguinte tenta de novo. Cada rodada dá
-uma linha em `<base>/log/backup.log` (`ok` com as contagens, ou `ERRO` com o motivo). Restaurar é
-parar o motor, descompactar o `telemetria.db.gz` da data no lugar do banco (sem `-wal` nem `-shm`
-ao lado) e subir. A cópia na mesma máquina não cobre a perda da conta: essa é do backup da
+24/11/2026). Cópia que falha não grava a marca e grava `<base>/run/backup.espera`: a receita deixa de
+chamar por uma hora, e então tenta de novo. Cada rodada dá uma linha em `<base>/log/backup.log`
+(`ok` com as contagens, ou `ERRO` com o motivo). Restaurar é parar o motor, descompactar o
+`telemetria.db.gz` da data no lugar do banco (sem `-wal` nem `-shm` ao lado), subir e rodar o
+backup uma vez com `--agora`: o banco restaurado tem menos sessões que a última cópia, e só o
+`--agora` aceita a queda. A cópia na mesma máquina não cobre a perda da conta: essa é do backup da
 hospedagem.
 
 **O agendador não pode ser um shell longo.** Medido na hospedagem em 23 e 24/11/2026: o laço em
