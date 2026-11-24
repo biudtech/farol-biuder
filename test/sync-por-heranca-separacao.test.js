@@ -19,7 +19,10 @@ after(() => fs.rmSync(home, { recursive: true, force: true }));
 
 const f = (caminho, extra = {}) => ({ path: caminho, sha: 'e'.repeat(40), status: 'modified', ...extra });
 const mapaLimpo = (paths, extra = {}) => ({ files: paths.map((p) => ({ path: p, backend: 'babel', limitations: [] })), relations: [], unresolved: [], ...extra });
-const separar = (over) => separarHerdados({ arquivos: [], diferemDaFoto: [], mexidosNaBase: [], bloqueados: new Set(), mapa: null, ...over });
+// mundo fechado: o código herdado só herda com o texto lido (aqui, um texto neutro para todo arquivo)
+const TEXTOS = new Proxy({}, { get: (_, k) => (typeof k === 'string' ? 'export const x = 1;' : undefined) });
+const PADRAO = { porPasta: { '': [] }, workspace: [], prefixosDeAlias: [], aliases: [], segmentosDoBaseUrl: [], textos: TEXTOS };
+const separar = (over) => separarHerdados({ arquivos: [], diferemDaFoto: [], mexidosNaBase: [], bloqueados: new Set(), mapa: null, pacotes: PADRAO, ...over });
 
 test('idêntico à foto e base intocada: herdado', () => {
   assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa: mapaLimpo(['src/a.ts']) }).herdados, ['src/a.ts']);
@@ -65,7 +68,7 @@ test('importa arquivo que a base mudou, fora do diff: volta à leitura', () => {
 
 test('pacote externo não resolvido, declarado no package.json, não devolve à leitura', () => {
   const mapa = mapaLimpo(['src/a.ts'], { unresolved: [{ from: 'src/a.ts', specifier: 'react' }] });
-  const pacotes = { porPasta: { '': ['react'] }, workspace: [] };
+  const pacotes = { ...PADRAO, porPasta: { '': ['react'] } };
   assert.deepEqual(separar({ arquivos: [f('src/a.ts')], mapa, pacotes }).herdados, ['src/a.ts']);
 });
 
@@ -93,8 +96,8 @@ test('contextoAlterado junta o que a base mexeu e o que ficou a ler', () => {
 
 test('voltamPorDependencia é pura e chega ao ponto fixo', () => {
   const mapa = mapaLimpo(['a.ts', 'b.ts'], { relations: [{ from: 'a.ts', to: 'b.ts' }, { from: 'b.ts', to: 'c.ts' }] });
-  assert.deepEqual([...voltamPorDependencia(['a.ts', 'b.ts'], new Set(['c.ts']), mapa)].sort(), ['a.ts', 'b.ts']);
-  assert.deepEqual([...voltamPorDependencia(['a.ts'], new Set(), mapaLimpo(['a.ts']))], []);
+  assert.deepEqual([...voltamPorDependencia(['a.ts', 'b.ts'], new Set(['c.ts']), mapa, PADRAO)].sort(), ['a.ts', 'b.ts']);
+  assert.deepEqual([...voltamPorDependencia(['a.ts'], new Set(), mapaLimpo(['a.ts']), PADRAO)], []);
 });
 
 test('arquivosComBloqueioAberto: os arquivos dos bloqueios da fronteira; memória ilegível dá null', () => {

@@ -13,7 +13,8 @@ const { pacotesDoRepositorio } = await import('../lib/engine/repositorio-do-sync
 const f = (caminho) => ({ path: caminho, sha: 'e'.repeat(40), status: 'modified' });
 const parseado = (paths) => paths.map((p) => ({ path: p, backend: 'babel', limitations: [] }));
 const separar = (over) => separarHerdados({ arquivos: [], diferemDaFoto: [], mexidosNaBase: [], bloqueados: new Set(), mapa: null, pacotes: null, ...over });
-const PACOTES = { porPasta: { '': ['react', '@prisma/client', '@nestjs/common'] }, workspace: [] };
+const TEXTOS = new Proxy({}, { get: (_, k) => (typeof k === 'string' ? 'export const x = 1;' : undefined) });
+const PACOTES = { porPasta: { '': ['react', '@prisma/client', '@nestjs/common'] }, workspace: [], textos: TEXTOS };
 
 test('a sonda da revisão: barril fora do diff, import pelo baseUrl e Swift voltam à leitura', () => {
   const arquivos = [f('src/x.ts'), f('src/m.ts'), f('src/y.ts'), f('src/z.swift')];
@@ -51,7 +52,7 @@ test('import não resolvido que pode ser do repositório: volta', () => {
 });
 
 test('o package.json mais próximo vale junto com o da raiz', () => {
-  const pacotes = { porPasta: { '': ['react'], 'apps/api': ['@nestjs/core'] }, workspace: [] };
+  const pacotes = { porPasta: { '': ['react'], 'apps/api': ['@nestjs/core'] }, workspace: [], textos: TEXTOS };
   const mapa = { files: parseado(['apps/api/src/a.ts', 'apps/web/b.ts']), relations: [],
     unresolved: [{ from: 'apps/api/src/a.ts', specifier: '@nestjs/core' }, { from: 'apps/api/src/a.ts', specifier: 'react' }, { from: 'apps/web/b.ts', specifier: '@nestjs/core' }] };
   const r = separar({ arquivos: [f('apps/api/src/a.ts'), f('apps/web/b.ts')], mapa, pacotes });
@@ -63,7 +64,8 @@ test('linguagem fechada por padrão: só o não código da lista e o dado idênt
   const herdam = ['docs/a.md', 'notas.txt', 'img/a.png', 'img/b.jpg', 'img/c.jpeg', 'img/d.gif', 'img/e.svg', 'img/f.webp', 'favicon.ico', 'manual.pdf', 'dados.csv',
     '.github/ci.yml', 'config/x.json', 'config/y.yaml', 'api/schema.graphql', 'api/q.gql'];
   const voltam = ['ios/App.swift', 'lib/main.dart', 'src/a.c', 'src/a.h', 'scripts/x.sh', 'db/x.sql', 'arquivo.desconhecido', 'app/x.py', 'docs/b.mdx', 'src/a.css'];
-  const r = separar({ arquivos: [...herdam, ...voltam].map(f), pacotes: PACOTES });
+  const textos = { '.github/ci.yml': 'on: push', 'config/x.json': '{}', 'config/y.yaml': 'a: 1', 'api/schema.graphql': 'type A { a: Int }', 'api/q.gql': 'query Q { a }' };
+  const r = separar({ arquivos: [...herdam, ...voltam].map(f), pacotes: { ...PACOTES, textos }, mapa: { files: [], relations: [], unresolved: [] } });
   assert.deepEqual(r.herdados, herdam);
   assert.deepEqual(r.aLer, voltam);
 });

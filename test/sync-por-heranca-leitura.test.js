@@ -34,7 +34,11 @@ let e;
 const id = 's1';
 
 function fonte() {
-  return { status: 'complete', manifest: { H: HEAD, B: BASE_PONTA, M: 'c'.repeat(40), files: ARQUIVOS, limitations: [] }, reader: {},
+  // o leitor da fonte: o package.json da raiz e o texto de cada arquivo (o mundo fechado o exige)
+  const arvore = { 'package.json': '{}', ...Object.fromEntries(ARQUIVOS.map((a) => [a.path, 'export const x = 1;'])) };
+  const reader = { tree: async () => ({ complete: true, entries: Object.keys(arvore).map((p) => ({ path: p, type: 'blob' })) }),
+    read: async (p) => (p in arvore ? { status: 'available', text: arvore[p] } : { status: 'unavailable' }) };
+  return { status: 'complete', manifest: { H: HEAD, B: BASE_PONTA, M: 'c'.repeat(40), files: ARQUIVOS, limitations: [] }, reader,
     inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, baseRef: baseDoPr, files: ARQUIVOS, changedFiles: ARQUIVOS.length },
     release: async () => {} };
 }

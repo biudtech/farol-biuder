@@ -11,7 +11,8 @@ const { pacotesDoRepositorio } = await import('../lib/engine/repositorio-do-sync
 
 const f = (caminho) => ({ path: caminho, sha: 'e'.repeat(40), status: 'modified' });
 const parse = (ps, limitations = []) => ps.map((p) => ({ path: p, backend: 'babel', limitations }));
-const PACOTES = { porPasta: { '': ['react', 'config', '@prisma/client'] }, workspace: [], prefixosDeAlias: [], segmentosDoBaseUrl: [] };
+const TEXTOS = new Proxy({}, { get: (_, k) => (typeof k === 'string' ? 'export const x = 1;' : undefined) });
+const PACOTES = { porPasta: { '': ['react', 'config', '@prisma/client'] }, workspace: [], prefixosDeAlias: [], segmentosDoBaseUrl: [], textos: TEXTOS };
 const sep = (o) => separarHerdados({ arquivos: [], diferemDaFoto: [], mexidosNaBase: [], bloqueados: new Set(), mapa: null, pacotes: PACOTES, ...o });
 const DINAMICO = 'Import dinâmico não comprova execução ou conjunto completo de dependências.';
 const COMMONJS = 'CommonJS é candidato sintático; require pode estar sombreado e a resolução exige confirmação.';
@@ -60,7 +61,7 @@ test('E: .mdx herda só como texto simples, sem import', () => {
 });
 
 test('I: estilo e dado idênticos herdam e não contaminam quem os importa', () => {
-  const textos = { 'src/Btn.module.css': '.btn { color: red; }\n' };
+  const textos = { 'src/Btn.tsx': 'export const Btn = 1;', 'src/Btn.module.css': '.btn { color: red; }\n', 'src/dados.json': '{"a": 1}' };
   const r = sep({ arquivos: [f('src/Btn.tsx'), f('src/Btn.module.css'), f('src/dados.json')], pacotes: { ...PACOTES, textos },
     mapa: { files: parse(['src/Btn.tsx']), relations: [{ from: 'src/Btn.tsx', to: 'src/Btn.module.css' }, { from: 'src/Btn.tsx', to: 'src/dados.json' }],
       unresolved: [{ from: 'src/Btn.tsx', specifier: 'react' }] } });
@@ -73,7 +74,7 @@ test('I: dado que mudou contamina quem o importa', () => {
   assert.deepEqual(r.herdados, []);
 });
 
-test('I: estilo com @import, @use ou @forward de arquivo que mudou volta', () => {
+test('I e mundo fechado: estilo com qualquer referência volta, e estilo mudado sem importador é global', () => {
   const textos = {
     'src/a.scss': "@use 'variaveis';\n.a { color: $cor; }\n",
     'src/b.scss': "@use './limpo';\n",
@@ -83,8 +84,8 @@ test('I: estilo com @import, @use ou @forward de arquivo que mudou volta', () =>
   };
   const r = sep({ arquivos: ['src/a.scss', 'src/b.scss', 'src/c.css', 'src/d.scss', 'src/e.scss', 'src/sem-texto.less'].map(f),
     mexidosNaBase: ['src/_variaveis.scss', 'src/tema.css'], pacotes: { ...PACOTES, textos } });
-  assert.deepEqual(r.herdados, ['src/b.scss', 'src/e.scss']);
-  assert.deepEqual(r.aLer, ['src/a.scss', 'src/c.css', 'src/d.scss', 'src/sem-texto.less']);
+  assert.deepEqual(r.herdados, []);
+  assert.deepEqual(r.aLer, ['src/a.scss', 'src/b.scss', 'src/c.css', 'src/d.scss', 'src/e.scss', 'src/sem-texto.less']);
 });
 
 test('J: import dinâmico ou require literal resolvido não deixa o arquivo como não lido', () => {
@@ -101,10 +102,10 @@ test('K: com a limitação de alias, os prefixos lidos do tsconfig decidem', () 
   const LIMITACAO = ['tsconfig.json: extends não expandido; resolução de aliases é parcial.'];
   const caso = (specifier, prefixosDeAlias) => sep({ arquivos: [f('src/a.tsx')], pacotes: { ...PACOTES, prefixosDeAlias },
     mapa: { files: parse(['src/a.tsx']), relations: [], unresolved: [{ from: 'src/a.tsx', specifier }], limitations: LIMITACAO } }).herdados;
-  assert.deepEqual(caso('react', ['@app/']), ['src/a.tsx'], 'pacote declarado que não casa com prefixo');
-  assert.deepEqual(caso('@app/modulo', ['@app/']), [], 'casa com prefixo');
+  assert.deepEqual(caso('react', ['@app/*']), ['src/a.tsx'], 'pacote declarado que não casa com prefixo');
+  assert.deepEqual(caso('@app/modulo', ['@app/*']), [], 'casa com prefixo');
   assert.deepEqual(caso('react', undefined), [], 'sem tsconfig lido, a regra conservadora');
-  assert.deepEqual(caso('react', ['']), [], 'alias curinga "*" casa tudo');
+  assert.deepEqual(caso('react', ['*']), [], 'alias curinga "*" casa tudo');
 });
 
 function fonte(arvore) {
@@ -123,7 +124,7 @@ test('pacotesDoRepositorio: dependência local, prisma.schema, baseUrl, aliases 
   }), ['docs/a.mdx']);
   assert.deepEqual(p.workspace.sort(), ['outro', 'p3', 'shared']);
   assert.equal(p.esquemaDoPackage, 'db/main.prisma');
-  assert.deepEqual(p.prefixosDeAlias, ['@app/']);
+  assert.deepEqual(p.prefixosDeAlias, ['@app/*']);
   assert.deepEqual(p.segmentosDoBaseUrl.sort(), ['config', 'main']);
   assert.deepEqual(p.textos, { 'docs/a.mdx': '# a' });
   const quebrado = await pacotesDoRepositorio(fonte({ 'package.json': '{}', 'tsconfig.json': '{ "extends": "./falta.json" }' }));
