@@ -1252,7 +1252,7 @@ class Engine extends EventEmitter {
   recordUsage(id, account, resultEvent, model, profileId, ref) { return usageMod.recordUsage(this, id, account, tentativasMod.comInicioDaTentativa(this, resultEvent), model, profileId, ref); }
   // corrige o DESFECHO de uma sessão já registrada (o gasto continua contado; o que
   // muda é se ele virou resultado). Ver a seção de auditoria no lib/engine/usage.js.
-  marcarDesfecho(id, status) { return usageMod.marcarDesfecho(this, id, status); }
+  marcarDesfecho(id, status, seEra) { return usageMod.marcarDesfecho(this, id, status, seEra ?? null); }
   // registro durável de falha por sessão, fora do farol.log (lib/engine/falhas.js)
   registrarFalha(dados) { return falhasMod.registrarFalha(this, dados); }
   falhasRecentes(opcoes) { return falhasMod.falhasRecentes(this, opcoes); }

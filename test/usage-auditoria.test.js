@@ -189,7 +189,7 @@ test('sessao antiga sem costSource conta como MEDIDA, que e o que ela era', () =
 const SERVER = fs.readFileSync(path.join(import.meta.dirname, '..', 'server.js'), 'utf8');
 
 test('a fachada existe no engine', () => {
-  assert.match(SERVER, /marcarDesfecho\(id, status\) \{ return usageMod\.marcarDesfecho\(this, id, status\); \}/);
+  assert.match(SERVER, /marcarDesfecho\(id, status, seEra\) \{ return usageMod\.marcarDesfecho\(this, id, status, seEra \?\? null\); \}/);
 });
 
 test('o resumo da aba Consumo carrega a auditoria', () => {
