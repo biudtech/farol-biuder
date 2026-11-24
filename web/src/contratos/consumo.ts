@@ -377,8 +377,9 @@ export interface Relatorio {
   // o diário tem menos sessões do que o agregado do motor contou
   incomplete?: boolean;
   // as revisões que terminaram sem publicar no período e no repositório, a mais nova primeiro (até
-  // 200); ausente ou torto vira lista vazia, e o item torto fica de fora
-  ocorrencias: Ocorrencia[];
+  // 200). Ausente é motor anterior ao registro, e fica null: a tela não afirma "nenhuma" sem o
+  // motor ter dito. Lista torta vira vazia, e o item torto fica de fora
+  ocorrencias: Ocorrencia[] | null;
   // Não vem do motor: quantos itens de `series`, `byKind`, `models` e `repos` a tela não leu.
   descartados: number;
 }
@@ -458,7 +459,7 @@ export function lerRespostaDoConsumo(bruto: unknown): RespostaDoConsumo | null {
     unidentified: campo(bruto.unidentified, ehContagem),
     sinceDay: campo(bruto.sinceDay, ehDia),
     incomplete: campo(bruto.incomplete, ehBooleano),
-    ocorrencias: lerItens(bruto.ocorrencias, lerOcorrencia)?.itens ?? [],
+    ocorrencias: bruto.ocorrencias === undefined ? null : (lerItens(bruto.ocorrencias, lerOcorrencia)?.itens ?? []),
     descartados: (series?.descartados ?? 0) + (byKind?.descartados ?? 0) + (models?.descartados ?? 0) + (repos?.descartados ?? 0) + (porGatilho?.descartados ?? 0),
   });
   return { ok: true, relatorio };

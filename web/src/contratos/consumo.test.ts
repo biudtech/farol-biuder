@@ -158,7 +158,7 @@ describe('GET /api/usage: as revisões que não publicaram (24/11/2026)', () => 
   });
 
   it('ausente ou fora de forma vira lista vazia, e o relatório continua', async () => {
-    expect((await comOcorrencias(undefined)).ocorrencias).toEqual([]);
+    expect((await comOcorrencias(undefined)).ocorrencias, 'motor anterior ao registro: a tela não afirma nada').toBeNull();
     expect((await comOcorrencias({ a: 1 })).ocorrencias).toEqual([]);
   });
 
@@ -255,7 +255,7 @@ describe('GET /api/usage: forma inesperada', () => {
     const lido = lerRespostaDoConsumo(minimo);
     expect(lido).toEqual({
       ok: true,
-      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, ocorrencias: [], descartados: 0 },
+      relatorio: { range: minimo.range, totals: {}, series: [], byKind: [], models: [], history: { ...minimo.history, descartados: 0 }, options: { kind: [], model: [], repo: [], author: [], profile: [] }, ocorrencias: null, descartados: 0 },
     });
   });
 

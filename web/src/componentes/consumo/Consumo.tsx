@@ -203,7 +203,7 @@ export function Consumo({ app = appDoNavegador }: Props) {
             rotuloDoPerfil={rotuloDoPerfil}
             baixar={<BaixarCsv cliente={app.cliente} consulta={consulta} esperando={esperando} />}
           />
-          <Ocorrencias ocorrencias={relatorio.ocorrencias} />
+          {relatorio.ocorrencias ? <Ocorrencias ocorrencias={relatorio.ocorrencias} /> : null}
           {semExecucao ? null : <DetalhesDoPeriodo relatorio={relatorio} />}
         </div>
       ) : null}

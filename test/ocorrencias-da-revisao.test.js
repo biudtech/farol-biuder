@@ -287,17 +287,39 @@ test('estacionar registra cancelado, label retirada, esgotado e falha; outro tip
   assert.equal(esgotado.sessao, 'a-42');
   assert.equal(esgotado.classe, 'rede');
   assert.equal(esgotado.erro, 'ECONNRESET ao falar com a API');
-  assert.equal(e.linhas.filter((l) => l.startsWith('[INFO]')).length, 4);
+  // esgotado e falha permanente já têm o ERROR do runOneHeadless: a ocorrência não escreve outra linha
+  assert.equal(e.linhas.filter((l) => l.startsWith('[INFO]')).length, 2);
 });
 
 test('queda da sessão: a passageira vira interrompida com a classe; a permanente fica para o estacionamento', () => {
   const e = Object.assign(motorDeBolso(), { accountForPr: () => 'eu' });
   const err = Object.assign(new Error('ECONNRESET: socket hang up'), { sessaoFarol: 'a-50', etapas: { totalMs: 9, stages: [{ id: 'fontes', label: 'Fontes', ms: 9 }] } });
-  falhas.registrarFalhaDaRevisao(e, PR(50, { automaticRetry: true }), err, 'review');
+  falhas.registrarFalhaDaRevisao(e, PR(50, { automaticRetry: true }), err, 'review', true);
   const [o] = e.ocorrenciasEmMemoria;
   assert.deepEqual([o.tipo, o.motivo, o.sessao, o.classe, o.retentativa, o.origem, o.etapa], ['interrompida', 'sessao_caiu', 'a-50', 'rede', true, 'retentativa', 'fontes']);
   falhas.registrarFalhaDaRevisao(e, PR(51), new Error('Claude Code process exited with code 1'), 'review');
+  // a passageira que não vai ao retry (teto de tentativas) fica para o `sem_resultado` do estacionamento
+  falhas.registrarFalhaDaRevisao(e, PR(52), Object.assign(new Error('ECONNRESET: socket hang up'), { sessaoFarol: 'a-52' }), 'review', false);
   assert.equal(e.ocorrenciasEmMemoria.length, 1);
+  assert.equal(e.linhas.filter((l) => l.startsWith('[INFO]')).length, 0, 'a queda já tem o WARN do runOneHeadless');
+});
+
+// revisão independente de 24/11/2026: a última queda gravava "vai ser tentada de novo" e, logo
+// depois, "tentativas esgotadas", para o mesmo evento
+test('queda passageira no teto de tentativas: só sem_resultado, sem a interrompida que promete retry', async () => {
+  for (const [tries, esperado] of [[0, [['interrompida', 'sessao_caiu']]], [3, [['sem_resultado', 'tentativas_esgotadas']]]]) {
+    const e = motor();
+    e.log = () => { };
+    e.prState = async () => 'OPEN';
+    e.prEstadoELabels = async () => ({ estado: 'OPEN', labels: [] });
+    e.headSha = async () => HEAD;
+    e.myReviewStates = async () => [];
+    e.runClaudeStream = async () => { sessoes += 1; throw new Error('ECONNRESET: socket hang up'); };
+    const pr = PR(70 + tries);
+    if (tries) e.retryAfterNet.set(pr.key, { tries, pr });
+    await e.runOneHeadless(pr, 'eu');
+    assert.deepEqual((e.ocorrenciasEmMemoria || []).map((o) => [o.tipo, o.motivo]), esperado, `tentativas=${tries}`);
+  }
 });
 
 test('recusa na boca: pedido retirado e decisão de gente viram nao_iniciada', () => {

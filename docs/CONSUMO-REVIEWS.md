@@ -198,8 +198,8 @@ os dois ("A revisão não chegou a abrir a sessão do Claude: o PR já tinha sid
 | `tipo` | Quando |
 |---|---|
 | `nao_iniciada` | A revisão nem abriu a sessão do Claude |
-| `encerrada` | A sessão abriu e foi encerrada antes do fim |
-| `interrompida` | A sessão caiu por algo passageiro e vai ao retry (até o teto de tentativas) |
+| `encerrada` | A revisão foi encerrada antes do fim (pelo vigia, por você ou pela label retirada) |
+| `interrompida` | A revisão caiu por algo passageiro e vai mesmo ao retry |
 | `sem_resultado` | A revisão parou sem resultado: tentativas esgotadas ou falha permanente |
 
 Os motivos e onde cada um nasce:
@@ -214,9 +214,10 @@ Os motivos e onde cada um nasce:
 - `pedido_retirado` e `decisao_de_gente`: a recusa na boca da sessão (`lib/engine/skip-review.js`)
   e a retentativa segurada por gente no head ou pelo pedido retirado (`review-retry.js`);
 - `label_retirada` e `cancelada_por_voce`: o estacionamento (`estacionar`, `lib/engine/review.js`);
-- `sessao_caiu`: a queda passageira da sessão (`registrarFalhaDaRevisao`, `lib/engine/falhas.js`),
-  com a `classe` da falha (`lib/log-taxonomy.js`). A queda permanente não gera esta: gera a do
-  estacionamento;
+- `sessao_caiu`: a queda passageira que vai ao retry (`registrarFalhaDaRevisao`,
+  `lib/engine/falhas.js`, quando o `runOneHeadless` decide que ainda há tentativa), com a `classe`
+  da falha (`lib/log-taxonomy.js`). A queda que esgota as tentativas e a permanente não geram esta:
+  geram só a do estacionamento;
 - `tentativas_esgotadas` e `falha_permanente`: o estacionamento, com a classe e o texto do erro
   (mascarado, até 500 caracteres; o texto não vai para a tela).
 
@@ -226,15 +227,19 @@ A `origem` diz de onde veio a revisão: `retentativa` (o relançamento depois de
 `etapa` é onde ela estava (`fila`, `retentativa`, `antes_da_sessao` ou a etapa da revisão).
 
 Os desfechos que já viram decisão no histórico (`already_reviewed`, `already_merged`,
-`approval_not_needed`...) não geram ocorrência: o histórico já os conta. A queda passageira que
-esgota as tentativas gera duas, a `interrompida` de cada queda e a `sem_resultado` do fim.
+`approval_not_needed`...) não geram ocorrência: o histórico já os conta. Uma série de quedas
+passageiras gera a `interrompida` de cada queda que voltou ao retry e, se esgotar, a
+`sem_resultado` da última, nunca as duas para a mesma queda. A conferência antes de abrir roda
+antes do prazo da label de revisão: o PR que ela encerra não ganha a label.
 
 Onde mora: a tabela `ocorrencias` do banco da telemetria, com teto de 5.000 (as mais antigas
 saem), pela mesma fila do que o banco recusou (`telemetria-pendentes.js`, assunto
 `ocorrencias`); sem o banco, a memória do motor, com teto de 200, que o reinício zera. Cada
-ocorrência escreve também UMA linha INFO no `farol.log` ("revisão de dono/repo#64 terminou sem
-publicar: ... (origem: clique, sessão a-...)"): é o motivo de uma decisão que alguém vai perguntar
-depois, que o invariante 3 permite. O registro nunca lança. A tela de Consumo as mostra na seção
+ocorrência escreve também uma linha INFO no `farol.log` ("revisão de dono/repo#64 terminou sem
+publicar: ... (origem: clique, sessão a-...)"), o motivo de uma decisão que alguém vai perguntar
+depois, que o invariante 3 permite. Os eventos que já têm linha própria (o WARN da queda, o ERROR
+do esgotado e da falha permanente, o INFO do automático segurado por gente) não ganham uma
+segunda. A resposta sem o campo `ocorrencias` (motor anterior a este registro) não mostra a seção. O registro nunca lança. A tela de Consumo as mostra na seção
 "Revisões que não publicaram", pelo período e pelo repositório escolhidos.
 
 ## Saída pública única (`reviewSingleOutput`)
