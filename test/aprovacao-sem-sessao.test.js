@@ -34,7 +34,9 @@ const { Engine } = await import('../server.js');
 const { isolateTechnicalTool } = await import('./helpers/technical-proof.js');
 isolateTechnicalTool();
 const { ORIGEM_DIFF_VAZIO } = await import('../lib/technical-review/publication.js');
-const { aprovarSemSessao, resultadoSemSessao } = await import('../lib/engine/aprovacao-sem-sessao.js');
+const { resultadoSemSessao } = await import('../lib/engine/aprovacao-sem-sessao.js');
+// a boca do APPROVE mora no diff vazio: é a via de postagem conhecida (test/postagem-fiacao-fonte.test.js)
+const { aprovarSemSessao } = await import('../lib/engine/diff-vazio-de-linhagem.js');
 
 after(() => { io.run = runReal; try { fs.rmSync(FAROL_HOME, { recursive: true, force: true }); } catch { /* best-effort */ } });
 beforeEach(() => { envios = []; gh = { postFalha: '' }; });
