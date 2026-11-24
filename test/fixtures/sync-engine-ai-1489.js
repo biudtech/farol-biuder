@@ -6,6 +6,7 @@
 // repositórios que importam `@prisma/client` (e o serviço que os importa) voltam à leitura, e um
 // módulo que importa um barril fora do diff (`herdado/index.ts`, que reexporta o mapa de zonas
 // misturado) também volta. Todo `.ts` importa `@nestjs/common`, declarado no package.json da raiz.
+// Duas traduções `.json` idênticas à foto herdam, e o módulo que importa uma delas também.
 import { FOTO, P1, BASE_PONTA, HEAD_DO_SYNC, cenarioDoSync, commitDaOrigem, mergeDoSync } from '../helpers/github-do-sync.js';
 
 const doisDigitos = (n) => String(n).padStart(2, '0');
@@ -26,6 +27,9 @@ const modulo = (n) => `apps/engine-ai/src/herdado/modulo-${String(n).padStart(2,
 const REPOSITORIOS_PRISMA = [2, 3, 4, 5, 6, 7].map(modulo);
 const SERVICO_DO_PRISMA = modulo(8);
 const PELO_BARRIL = modulo(9);
+// dado idêntico importado por um módulo: herda e não contamina quem o importa
+const TRADUCOES = ['apps/engine-ai/src/i18n/pt-01.json', 'apps/engine-ai/src/i18n/pt-02.json'];
+const COM_TRADUCAO = modulo(10);
 const BARRIL = 'apps/engine-ai/src/herdado/index.ts';
 const PACOTES = { porPasta: { '': ['@nestjs/common', '@prisma/client'] }, workspace: [] };
 const PACKAGE_JSON = JSON.stringify({ dependencies: { '@nestjs/common': '10.0.0', '@prisma/client': '5.0.0' } });
@@ -34,7 +38,8 @@ const TOCADOS_NA_BASE = ['apps/engine-ai/src/herdado/modulo-01.ts', 'docs/herdad
 const IDENTICOS = [
   ...TOCADOS_NA_BASE,
   ...Array.from({ length: 39 }, (_, i) => `apps/engine-ai/src/herdado/modulo-${doisDigitos(i + 2)}.ts`),
-  ...Array.from({ length: 14 }, (_, i) => `docs/herdado/nota-${doisDigitos(i + 2)}.md`),
+  ...Array.from({ length: 12 }, (_, i) => `docs/herdado/nota-${doisDigitos(i + 2)}.md`),
+  ...TRADUCOES,
   GUARDA, PAINEL,
 ];
 
@@ -48,7 +53,7 @@ function casoEngineAi1489() {
   const mapa = {
     files: [...codigo, BARRIL].map((path) => ({ path, backend: 'babel', limitations: [] })),
     relations: [{ from: GUARDA, to: 'common/zone-ownership/mapa-de-zonas.ts' }, { from: SERVICO_DO_PRISMA, to: REPOSITORIOS_PRISMA[0] },
-      { from: PELO_BARRIL, to: BARRIL }, { from: BARRIL, to: 'common/zone-ownership/mapa-de-zonas.ts' }],
+      { from: PELO_BARRIL, to: BARRIL }, { from: COM_TRADUCAO, to: TRADUCOES[0] }, { from: BARRIL, to: 'common/zone-ownership/mapa-de-zonas.ts' }],
     unresolved: [{ from: PAINEL, specifier: './quadros-do-turno' },
       ...codigo.map((from) => ({ from, specifier: '@nestjs/common' })),
       ...REPOSITORIOS_PRISMA.map((from) => ({ from, specifier: '@prisma/client' }))],
@@ -62,7 +67,7 @@ function casoEngineAi1489() {
   cenario.comparacoes[`${FOTO}...${P1}`] = { behind: 2, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosNaBase };
   cenario.comparacoes[`${FOTO}...${BASE_PONTA}`] = { behind: 9, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosDesdeAPonta };
   return { arquivos, diferemDaFoto, mexidosNaBase, mexidosDesdeAPonta, mapa, pacotes: PACOTES, packageJson: PACKAGE_JSON, cenario, BASE_PONTA,
-    GUARDA, PAINEL, REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL };
+    GUARDA, PAINEL, REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL, TRADUCOES, COM_TRADUCAO };
 }
 
 export { casoEngineAi1489 };

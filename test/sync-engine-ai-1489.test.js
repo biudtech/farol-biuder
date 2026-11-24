@@ -52,7 +52,7 @@ beforeEach(() => {
     read: async (p) => (p === 'package.json' ? { status: 'available', text: caso.packageJson } : { status: 'unavailable' }) };
   sourceRuntime.prepareSources = async () => ({ status: 'complete', reader,
     manifest: { H: HEAD, B: BASE_PONTA, M: 'a'.repeat(40), files: arquivos, limitations: [] },
-    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, files: arquivos, changedFiles: arquivos.length, additions: 65, deletions: 65 },
+    inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, baseRef: 'development', files: arquivos, changedFiles: arquivos.length, additions: 65, deletions: 65 },
     release: async () => {} });
   sourceRuntime.buildMap = async () => ({ complete: true, head: mapa, previous: { files: [], relations: [], unresolved: [] } });
   cenario.chamadas.length = 0;
@@ -123,6 +123,7 @@ test('com a regra de dependência por cima: 45 herdados e 20 a ler', () => {
   const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa, pacotes });
   assert.deepEqual([r.herdados.length, r.aLer.length], [45, 20]);
   for (const p of [GUARDA, PAINEL, ...REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL]) assert.ok(r.aLer.includes(p), p);
+  for (const p of [...caso.TRADUCOES, caso.COM_TRADUCAO]) assert.ok(r.herdados.includes(p), `${p} herda: o dado idêntico não contamina`);
   const semPacotes = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa, pacotes: null });
   assert.equal(semPacotes.herdados.filter((p) => p.endsWith('.ts')).length, 0, 'sem package.json legível, o código com import de pacote volta');
 });
