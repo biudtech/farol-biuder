@@ -1,6 +1,7 @@
 // O caso real do sync por herança, na forma do engine-ai#1489 (24/11/2026): contra a base no momento
-// do merge, 55 herdados e 10 a ler antes da regra de dependência; com ela, 53 e 12. Contra a ponta
-// atual da development seriam 24 e 41, e é por isso que a régua é o primeiro pai do merge.
+// do merge, 55 herdados e 10 a ler antes da regra de dependência; com ela (o grafo inteiro, o esquema
+// do Prisma misturado e o barril fora do diff), 45 e 20. Contra a ponta atual da development seriam
+// 24 e 41, e é por isso que a régua é o primeiro pai do merge.
 import { criteriaFixture } from './helpers/criteria-fixture.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,7 +48,9 @@ beforeEach(() => {
   fs.rmSync(path.join(FAROL_HOME, 'workspace', 'state', 'file-proof'), { recursive: true, force: true });
   caso = casoEngineAi1489();
   const { arquivos, cenario, BASE_PONTA, mapa } = caso;
-  sourceRuntime.prepareSources = async () => ({ status: 'complete', reader: {},
+  const reader = { tree: async () => ({ complete: true, entries: [{ path: 'package.json', type: 'blob' }] }),
+    read: async (p) => (p === 'package.json' ? { status: 'available', text: caso.packageJson } : { status: 'unavailable' }) };
+  sourceRuntime.prepareSources = async () => ({ status: 'complete', reader,
     manifest: { H: HEAD, B: BASE_PONTA, M: 'a'.repeat(40), files: arquivos, limitations: [] },
     inventory: { status: 'complete', headSha: HEAD, baseSha: BASE_PONTA, files: arquivos, changedFiles: arquivos.length, additions: 65, deletions: 65 },
     release: async () => {} });
@@ -80,7 +83,7 @@ function motor({ sessao = 'approve', achado } = {}) {
   e.prompts = [];
   e.runClaudeStream = async (prompt) => {
     e.prompts.push(prompt);
-    const aLer = separarHerdados({ arquivos: caso.arquivos, diferemDaFoto: caso.diferemDaFoto, mexidosNaBase: caso.mexidosNaBase, bloqueados: new Set(), mapa: caso.mapa }).aLer;
+    const aLer = separarHerdados({ arquivos: caso.arquivos, diferemDaFoto: caso.diferemDaFoto, mexidosNaBase: caso.mexidosNaBase, bloqueados: new Set(), mapa: caso.mapa, pacotes: caso.pacotes }).aLer;
     const alcance = aLer.filter((p) => p.endsWith('.ts')).map((alterado) => ({ alterado, chamadores: [], semChamador: 'sem uso fora do diff nesta fixture' }));
     const findings = achado ? [{ severity: 'blocking', causa: 'defeito_codigo', file: achado, line: 1, title: 'Migração sem índice',
       summary: 'A resolução do conflito tirou o índice da tabela.', evidence: 'prisma/schema.prisma:1',
@@ -115,22 +118,24 @@ test('contra a ponta atual da development seriam 24 e 41', () => {
   assert.deepEqual([r.herdados.length, r.aLer.length], [24, 41]);
 });
 
-test('com a regra de dependência por cima: 53 herdados e 12 a ler', () => {
-  const { arquivos, diferemDaFoto, mexidosNaBase, mapa, GUARDA, PAINEL } = caso;
-  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa });
-  assert.deepEqual([r.herdados.length, r.aLer.length], [53, 12]);
-  assert.ok(r.aLer.includes(GUARDA) && r.aLer.includes(PAINEL));
+test('com a regra de dependência por cima: 45 herdados e 20 a ler', () => {
+  const { arquivos, diferemDaFoto, mexidosNaBase, mapa, pacotes, GUARDA, PAINEL, REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL } = caso;
+  const r = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa, pacotes });
+  assert.deepEqual([r.herdados.length, r.aLer.length], [45, 20]);
+  for (const p of [GUARDA, PAINEL, ...REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL]) assert.ok(r.aLer.includes(p), p);
+  const semPacotes = separarHerdados({ arquivos, diferemDaFoto, mexidosNaBase, bloqueados: new Set(), mapa, pacotes: null });
+  assert.equal(semPacotes.herdados.filter((p) => p.endsWith('.ts')).length, 0, 'sem package.json legível, o código com import de pacote volta');
 });
 
-test('a revisão inteira: a sessão lê 12, o motor cobre 53, aprovação limpa com o caminho do sync', async () => {
+test('a revisão inteira: a sessão lê 20, o motor cobre 45, aprovação limpa com o caminho do sync', async () => {
   const e = await revisar();
   assert.equal(e.prompts.length, 1);
-  assert.match(e.prompts[0], /ALTERADOS desde a leitura anterior \(12\)/);
-  assert.match(e.prompts[0], /Arquivos herdados do sync \(53\)/);
+  assert.match(e.prompts[0], /ALTERADOS desde a leitura anterior \(20\)/);
+  assert.match(e.prompts[0], /Arquivos herdados do sync \(45\)/);
   const d = decisao(e);
   assert.equal(d.status, 'auto_approved', JSON.stringify(d.reasons));
   assert.equal(d.caminho, 'sync_por_heranca');
-  assert.deepEqual(e.decisionForUi(d).herancaSync, { origem: 'homologation', foto: FOTO, herdados: 53, lidos: 12 });
+  assert.deepEqual(e.decisionForUi(d).herancaSync, { origem: 'homologation', foto: FOTO, herdados: 45, lidos: 20 });
   assert.equal(d.inventarioDiff.files.length, 65);
   assert.deepEqual(envios.map((p) => p.event), ['APPROVE']);
   assert.ok(caso.cenario.chamadas.some((c) => c.includes(`compare/${FOTO}...${P1}`)));
@@ -141,5 +146,5 @@ test('com defeito num arquivo lido: a reprovação de sempre', async () => {
   const e = await revisar({ sessao: 'request_changes', achado: 'prisma/schema.prisma' });
   assert.equal(decisao(e).status, 'auto_rejected', JSON.stringify(decisao(e).reasons));
   assert.deepEqual(envios.map((p) => p.event), ['REQUEST_CHANGES']);
-  assert.match(e.prompts[0], /Arquivos herdados do sync \(53\)/, 'a rodada mediu o sync');
+  assert.match(e.prompts[0], /Arquivos herdados do sync \(45\)/, 'a rodada mediu o sync');
 });

@@ -2,7 +2,10 @@
 // na development"): 65 arquivos no diff, 57 idênticos à ponta da homologation que o merge trouxe e
 // 8 misturados. Contra a base no momento do merge (o primeiro pai), a base tinha tocado 2 dos 57 e
 // apagado o `quadros-do-turno.ts`; contra a ponta atual da development, seriam 33 dos 57. Os nomes
-// sem registro no caso real são sintéticos e determinísticos.
+// sem registro no caso real são sintéticos e determinísticos. O `schema.prisma` é misturado: os
+// repositórios que importam `@prisma/client` (e o serviço que os importa) voltam à leitura, e um
+// módulo que importa um barril fora do diff (`herdado/index.ts`, que reexporta o mapa de zonas
+// misturado) também volta. Todo `.ts` importa `@nestjs/common`, declarado no package.json da raiz.
 import { FOTO, P1, BASE_PONTA, HEAD_DO_SYNC, cenarioDoSync, commitDaOrigem, mergeDoSync } from '../helpers/github-do-sync.js';
 
 const doisDigitos = (n) => String(n).padStart(2, '0');
@@ -18,6 +21,14 @@ const MISTURADOS = [
 const GUARDA = 'apps/engine-ai/src/zonas/zona.guard.ts';
 const PAINEL = 'apps/engine-ai/src/turno/painel-do-turno.ts';
 const APAGADO_NA_BASE = 'apps/engine-ai/src/turno/quadros-do-turno.ts';
+const modulo = (n) => `apps/engine-ai/src/herdado/modulo-${String(n).padStart(2, '0')}.ts`;
+// os repositórios do Prisma, o serviço que importa um deles e o módulo que importa o barril
+const REPOSITORIOS_PRISMA = [2, 3, 4, 5, 6, 7].map(modulo);
+const SERVICO_DO_PRISMA = modulo(8);
+const PELO_BARRIL = modulo(9);
+const BARRIL = 'apps/engine-ai/src/herdado/index.ts';
+const PACOTES = { porPasta: { '': ['@nestjs/common', '@prisma/client'] }, workspace: [] };
+const PACKAGE_JSON = JSON.stringify({ dependencies: { '@nestjs/common': '10.0.0', '@prisma/client': '5.0.0' } });
 // os 57 idênticos à foto: os dois que a base tocou primeiro, depois o resto
 const TOCADOS_NA_BASE = ['apps/engine-ai/src/herdado/modulo-01.ts', 'docs/herdado/nota-01.md'];
 const IDENTICOS = [
@@ -35,9 +46,12 @@ function casoEngineAi1489() {
   const mexidosDesdeAPonta = [...IDENTICOS.slice(0, 33), APAGADO_NA_BASE];
   const codigo = caminhos.filter((p) => p.endsWith('.ts'));
   const mapa = {
-    files: codigo.map((path) => ({ path, backend: 'babel', limitations: [] })),
-    relations: [{ from: GUARDA, to: 'common/zone-ownership/mapa-de-zonas.ts' }],
-    unresolved: [{ from: PAINEL, specifier: './quadros-do-turno' }],
+    files: [...codigo, BARRIL].map((path) => ({ path, backend: 'babel', limitations: [] })),
+    relations: [{ from: GUARDA, to: 'common/zone-ownership/mapa-de-zonas.ts' }, { from: SERVICO_DO_PRISMA, to: REPOSITORIOS_PRISMA[0] },
+      { from: PELO_BARRIL, to: BARRIL }, { from: BARRIL, to: 'common/zone-ownership/mapa-de-zonas.ts' }],
+    unresolved: [{ from: PAINEL, specifier: './quadros-do-turno' },
+      ...codigo.map((from) => ({ from, specifier: '@nestjs/common' })),
+      ...REPOSITORIOS_PRISMA.map((from) => ({ from, specifier: '@prisma/client' }))],
   };
   const cenario = cenarioDoSync({
     numero: 1489,
@@ -47,7 +61,8 @@ function casoEngineAi1489() {
   cenario.comparacoes[`${FOTO}...${HEAD_DO_SYNC}`] = { behind: 0, mergeBase: FOTO, files: diferemDaFoto };
   cenario.comparacoes[`${FOTO}...${P1}`] = { behind: 2, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosNaBase };
   cenario.comparacoes[`${FOTO}...${BASE_PONTA}`] = { behind: 9, mergeBase: 'a0c0'.padEnd(40, '0'), files: mexidosDesdeAPonta };
-  return { arquivos, diferemDaFoto, mexidosNaBase, mexidosDesdeAPonta, mapa, cenario, BASE_PONTA, GUARDA, PAINEL };
+  return { arquivos, diferemDaFoto, mexidosNaBase, mexidosDesdeAPonta, mapa, pacotes: PACOTES, packageJson: PACKAGE_JSON, cenario, BASE_PONTA,
+    GUARDA, PAINEL, REPOSITORIOS_PRISMA, SERVICO_DO_PRISMA, PELO_BARRIL };
 }
 
 export { casoEngineAi1489 };
