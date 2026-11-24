@@ -117,40 +117,43 @@ Para cada arquivo do inventário do PR (diff contra a base):
      2). A conferência usa o que o motor já tem para devolver herdado à leitura (a releitura de
      `inheritanceForContext` e o `revalidarAusenciaHerdada` em `analysis-source.js`, e o mapa de
      importação do contexto); arquivo cuja dependência não deu para conferir volta à leitura.
-     Detalhamento da decisão 2 (24/11/2026, depois de duas revisões independentes), fechado por
-     padrão. MUDOU é o que difere da foto (dentro ou fora do diff: o arquivo que a resolução do
-     merge devolveu à versão da base some do diff, mas não é a foto), o que está a ler e o que a
-     base mexeu:
-     - código que o mapa lê (JS e TS): volta se QUALQUER caminho de imports do mapa, passando por
-       qualquer arquivo, dentro ou fora do diff (o barril `index.ts` que reexporta um misturado),
-       chega a algo que mudou, a um herdado que voltou por dependência, a código que o mapa não
-       leu por inteiro ou a um import sem destino que pode ser do repositório. O `import()` e o
-       `require` literais não deixam o arquivo como não lido (o mapa resolveu o destino); o não
-       literal vira import sem destino e volta;
-     - import não relativo sem destino é do repositório quando casa um prefixo de alias (as
-       chaves de `compilerOptions.paths` dos tsconfig, seguindo `extends` relativo) ou quando o
-       primeiro segmento existe sob o `baseUrl` de um tsconfig, mesmo com pacote declarado de
-       mesmo nome. tsconfig que não dá para ler deixa a regra conservadora (todo import não
-       relativo sem destino volta). Fora disso, só é pacote externo quando o nome está em
-       `dependencies`, `devDependencies` ou `peerDependencies` do `package.json` mais próximo ou
-       da raiz e não é pacote do repositório (nome de um `package.json` local, dependência
-       `workspace:`, `file:`, `link:` ou `portal:`, pela chave). Builtin do Node é externo. Sem
-       `package.json` legível, volta;
-     - herdam sem conferência só `.md`, `.txt`, imagens (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`,
-       `.webp`, `.ico`), `.pdf` e `.csv`. O `.mdx` herda só como texto simples, sem linha de
-       import;
-     - dado e estilo (`.json` fora da configuração global, `.yaml`, `.yml`, `.css`, `.scss`,
-       `.sass`, `.less`, `.graphql`, `.gql`) idênticos à foto herdam e não contaminam quem os
-       importa: o consumidor lê o mesmo conteúdo revisado na origem. O estilo com `@import`,
-       `@use` ou `@forward` de algo que mudou (ou de `~pacote`, ou sem texto legível) volta. Só o
-       dado ou estilo que mudou contamina quem o importa pelo grafo;
-     - todo o resto volta (`.swift`, `.dart`, `.c`, `.sh`, `.sql`, linguagem desconhecida);
-     - configuração global (`tsconfig*.json`, `package.json`, `pnpm-workspace.yaml`, os lockfiles,
-       `nest-cli.json` e `next`, `vite`, `webpack` e `babel.config.*`) que mudou: todo código
-       herdado volta. A configuração idêntica à foto vai à leitura, mas não derruba o código;
-     - esquema do Prisma que mudou (qualquer `.prisma`, qualquer arquivo sob uma pasta `prisma/`,
-       migrações inclusive, `prisma.config.*` e o `prisma.schema` do `package.json` da raiz):
-       volta quem importa `@prisma/client` ou chega pelo grafo a quem o importa.
+     Detalhamento da decisão 2 (24/11/2026, depois de três revisões independentes): princípio do
+     MUNDO FECHADO. O herdado só herda quando a regra sabe, por construção, que nada de que ele
+     depende mudou; caso a caso, a lista de formas que escapam não fecha. MUDOU é o que difere da
+     foto, está a ler ou foi mexido pela base, dentro ou fora do diff (o arquivo que a resolução do
+     merge devolveu à versão da base some do diff, mas não é a foto). Cada arquivo mudado cai numa
+     classe:
+     - código JS ou TS (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts`, fora `.d.ts`
+       e configuração): contamina pelo grafo de imports do mapa;
+     - documentação e imagem (`.md`, `.txt`, imagens, `.pdf`, `.csv`): sem efeito;
+     - esquema do Prisma (qualquer `.prisma`, qualquer arquivo sob uma pasta `prisma/`, migrações
+       inclusive, `prisma.config.*` e o `prisma.schema` do `package.json`): volta quem chega pelo
+       grafo a `@prisma/client`;
+     - dado e estilo que algum código importa pelo grafo: contaminam pelo grafo;
+     - QUALQUER OUTRO: IMPACTO GLOBAL. Toda configuração, de qualquer ferramenta (reconhecida pela
+       forma do nome: `package.json`, lockfile, `tsconfig*` e `jsconfig*`, `*.config.*`, `.algumarc`),
+       todo `.d.ts`, workflow, `.env*`, `.sql` fora do Prisma, script, extensão desconhecida,
+       arquivo sem extensão, e o dado ou estilo que nenhum código importa pelo grafo (o lido por
+       `fs`, o estilo importado por outro estilo). Com impacto global, todo herdado volta à
+       leitura, menos documentação e imagem idênticas (e o `.mdx` sem import).
+     O herdado, por classe, sem impacto global:
+     - documentação e imagem herdam; o `.mdx` só como texto simples, sem linha de import;
+     - código volta se alcança pelo grafo algo que mudou, um herdado que voltou, código que o mapa
+       não leu por inteiro (o `import()` e o `require` literais não contam) ou um import sem
+       destino que pode ser do repositório (relativo, alias marcado pelo mapa ou casando uma chave
+       de `paths`, com `"x*"` casando tudo o que começa com `x`, primeiro segmento sob o `baseUrl`,
+       pacote não declarado ou do repositório); se o alias é ambíguo (mais de uma chave de `paths`
+       casa e o destino do mapa não é o da chave mais longa); ou se o texto tem leitura que o mapa
+       não vê (`import.meta.glob`, `require.context`, `new URL(` com `import.meta.url`,
+       `new Worker(`, `readFileSync(`, `readFile(`, `createReadStream(`, `fs.promises`). Sem
+       texto, volta;
+     - estilo herda só sem nenhuma referência: `@import`, `@use`, `@forward`, `composes:` com
+       `from`, `@apply`, `@tailwind` e `url(` que não é `data:`. Sem texto, volta;
+     - dado herda só sem `#import` nem `$ref`. Sem texto, volta;
+     - configuração, `.d.ts` e o resto voltam, sem contaminar quem os importa (o conteúdo é o
+       revisado na origem).
+     Pacotes, tsconfig e textos vêm da árvore do head (`extends` relativo seguido, em texto ou em
+     lista); sem `package.json` ou tsconfig legível, a regra fica conservadora.
      A consulta de procedência só roda quando o nome da base, lido no preparo das fontes, é uma
      branch contínua ou bancada; o mapa que o sync monta é só o do head;
   4. o arquivo **não tem achado bloqueante aberto** de rodada anterior do mesmo PR
@@ -252,7 +255,10 @@ Levantadas pela revisão do desenho por um construtor independente, que mediu o 
    do tsconfig e dependência local marcam o import do repositório; o `.mdx` com import volta; o
    dado ou estilo idêntico herda sem contaminar (substitui "JSON e YAML sempre voltam"); o import
    literal não deixa o arquivo como não lido; e o caminho sem sessão exige a avaliação técnica com
-   veredito aprovado e regras que rodaram.
+   veredito aprovado e regras que rodaram. A revisão final trocou o caso a caso pelo princípio do
+   mundo fechado (seção 2, item 3): o arquivo mudado que não é código, documentação, esquema do
+   Prisma nem dado ou estilo importado por código tem impacto global, e o herdado só herda sem
+   nenhuma referência que o mapa não vê.
 3. O arquivo com **achado bloqueante aberto** de rodada anterior **volta à leitura**.
 4. (24/11/2026, depois da revisão final da implementação, pelo anti-objetivo "aprovar o que ninguém
    leu") A **foto** só vale quando é a ponta atual da origem ou o merge commit de um PR mesclado

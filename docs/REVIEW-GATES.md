@@ -461,21 +461,24 @@ comum (fora de `compare <foto>...<primeiro pai>`), não depende de nada que o sy
 (`lib/engine/dependencia-do-sync.js`, fechado por padrão) e não tem achado bloqueante aberto de
 rodada anterior (`arquivosComBloqueioAberto`, `lib/engine/review-rounds.js`). A dependência:
 
-- mudou é o que difere da foto (dentro ou fora do diff), o que está a ler e o que a base mexeu;
-- código JS e TS volta se qualquer caminho de imports do mapa, por qualquer arquivo, dentro ou
-  fora do diff (o barril que reexporta um misturado), chega a algo que mudou, a um herdado que
-  voltou por dependência, a código que o mapa não leu por inteiro (o `import()` e o `require`
-  literais não contam) ou a um import sem destino que pode ser do repositório: relativo, alias
-  (marcado pelo mapa ou casando um prefixo dos `paths` dos tsconfig), primeiro segmento que
-  existe sob o `baseUrl`, ou pacote que o `package.json` mais próximo e o da raiz não declaram ou
-  que é do repositório (`workspace:`, `file:`, `link:`, `portal:`, nome de pacote local). Sem
-  `package.json` ou tsconfig legível, a regra fica conservadora;
-- herdam sem conferência `.md`, `.txt`, imagens, `.pdf` e `.csv`; o `.mdx` só sem import; dado e
-  estilo idênticos (`.json` fora da configuração global, YAML, CSS e afins, GraphQL) herdam e não
-  contaminam quem os importa, menos o estilo que importa algo que mudou; o resto volta;
-- configuração global que mudou devolve todo código herdado; o esquema do Prisma que mudou
-  (qualquer `.prisma`, a pasta `prisma/`, `prisma.config.*`, o `prisma.schema` do
-  `package.json`) devolve quem chega a `@prisma/client` pelo grafo. A consulta de procedência só
+- princípio do mundo fechado: o herdado só herda quando a regra sabe que nada de que ele depende
+  mudou. Mudou é o que difere da foto (dentro ou fora do diff), o que está a ler e o que a base
+  mexeu;
+- classe do mudado: código JS e TS (fora `.d.ts` e configuração) e dado ou estilo importado por
+  código contaminam pelo grafo; documentação e imagem não têm efeito; o esquema do Prisma (qualquer
+  `.prisma`, a pasta `prisma/`, `prisma.config.*`, o `prisma.schema` do `package.json`) devolve
+  quem chega a `@prisma/client`; QUALQUER OUTRO tem impacto global (configuração de qualquer
+  ferramenta, `.d.ts`, workflow, `.env*`, `.sql` fora do Prisma, script, extensão desconhecida, sem
+  extensão, dado ou estilo que nenhum código importa) e devolve todo herdado que não é
+  documentação ou imagem;
+- código herdado volta se alcança pelo grafo algo que mudou, um herdado que voltou, código que o
+  mapa não leu por inteiro (o `import()` e o `require` literais não contam) ou import sem destino
+  que pode ser do repositório (relativo, alias, chave de `paths`, `baseUrl`, pacote não declarado
+  ou local), se o alias é ambíguo, ou se o texto tem leitura que o mapa não vê
+  (`import.meta.glob`, `require.context`, `new URL(` com `import.meta.url`, `new Worker(`, leitura
+  pelo `fs`); estilo herdado só herda sem `@import`, `@use`, `@forward`, `composes: ... from`,
+  `@apply`, `@tailwind` nem `url(` que não é `data:`; dado herdado só sem `#import` nem `$ref`; o
+  `.mdx` só sem import; sem texto, volta. A consulta de procedência só
   roda com a base contínua ou bancada pelo nome lido no preparo. Protegido, removido e sem blob vão sempre à leitura. Leitura que
 falha, resposta torta ou comparação com 300 arquivos ou mais: não há herança, e a revisão é a de
 hoje, sem log.
